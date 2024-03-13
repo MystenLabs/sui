@@ -122,8 +122,8 @@ Return the value of a base raised to a power
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64 {
-    <b>let</b> res = 1;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_pow">pow</a>(<b>mut</b> base: u64, <b>mut</b> exponent: u8): u64 {
+    <b>let</b> <b>mut</b> res = 1;
     <b>while</b> (exponent &gt;= 1) {
         <b>if</b> (exponent % 2 == 0) {
             base = base * base;
@@ -183,9 +183,9 @@ math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64 {
-    <b>let</b> bit = 1u128 &lt;&lt; 64;
-    <b>let</b> res = 0u128;
-    <b>let</b> x = (x <b>as</b> u128);
+    <b>let</b> <b>mut</b> bit = 1u128 &lt;&lt; 64;
+    <b>let</b> <b>mut</b> res = 0u128;
+    <b>let</b> <b>mut</b> x = (x <b>as</b> u128);
 
     <b>while</b> (bit != 0) {
         <b>if</b> (x &gt;= res + bit) {
@@ -246,9 +246,9 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128 {
-    <b>let</b> bit = 1u256 &lt;&lt; 128;
-    <b>let</b> res = 0u256;
-    <b>let</b> x = (x <b>as</b> u256);
+    <b>let</b> <b>mut</b> bit = 1u256 &lt;&lt; 128;
+    <b>let</b> <b>mut</b> res = 0u256;
+    <b>let</b> <b>mut</b> x = (x <b>as</b> u256);
 
     <b>while</b> (bit != 0) {
         <b>if</b> (x &gt;= res + bit) {

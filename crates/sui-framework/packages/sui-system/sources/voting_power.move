@@ -8,10 +8,10 @@ module sui_system::voting_power {
     use sui::math;
     use sui::math::divide_and_round_up;
 
-    friend sui_system::validator_set;
+    /* friend sui_system::validator_set; */
 
-    #[test_only]
-    friend sui_system::voting_power_tests;
+    /* #[test_only] */
+    /* friend sui_system::voting_power_tests; */
 
     #[allow(unused_field)]
     /// Deprecated. Use VotingPowerInfoV2 instead.
@@ -49,7 +49,7 @@ module sui_system::voting_power {
     /// Set the voting power of all validators.
     /// Each validator's voting power is initialized using their stake. We then attempt to cap their voting power
     /// at `MAX_VOTING_POWER`. If `MAX_VOTING_POWER` is not a feasible cap, we pick the lowest possible cap.
-    public(friend) fun set_voting_power(validators: &mut vector<Validator>) {
+    public(package) fun set_voting_power(validators: &mut vector<Validator>) {
         // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
         // have 100%. So we bound the threshold_pct to be always enough to find a solution.
         let threshold = math::min(

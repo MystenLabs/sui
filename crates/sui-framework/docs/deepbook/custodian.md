@@ -165,7 +165,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_balance">account_balance</a>&lt;Asset&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_balance">account_balance</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;Asset&gt;,
     user: ID
 ): (u64, u64) {
@@ -199,7 +199,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt; {
     <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt; {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         account_balances: <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
@@ -226,7 +226,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;Asset&gt;,
     quantity: u64,
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
@@ -255,7 +255,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
     quantity: Balance&lt;T&gt;,
@@ -284,7 +284,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
     quantity: u64,
@@ -313,7 +313,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
     quantity: Balance&lt;T&gt;,
@@ -342,7 +342,7 @@ Create an <code><a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
     quantity: u64,
@@ -372,7 +372,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_lock_balance">lock_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_lock_balance">lock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian.md#0xdee9_custodian_AccountCap">AccountCap</a>,
     quantity: u64,
@@ -402,7 +402,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_unlock_balance">unlock_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_unlock_balance">unlock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
     quantity: u64,
@@ -431,7 +431,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_available_balance">account_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): u64 {
@@ -458,7 +458,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian.md#0xdee9_custodian_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian.md#0xdee9_custodian_Custodian">Custodian</a>&lt;T&gt;,
     user: ID,
 ): u64 {

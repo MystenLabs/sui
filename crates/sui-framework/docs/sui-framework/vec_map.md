@@ -469,13 +469,13 @@ The output keys and values are stored in insertion order, *not* sorted by key.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_into_keys_values">into_keys_values</a>&lt;K: <b>copy</b>, V&gt;(self: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;V&gt;) {
-    <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a> { contents } = self;
+    <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a> { <b>mut</b> contents } = self;
     // reverse the <a href="../move-stdlib/vector.md#0x1_vector">vector</a> so the output keys and values will appear in insertion order
     <a href="../move-stdlib/vector.md#0x1_vector_reverse">vector::reverse</a>(&<b>mut</b> contents);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&contents);
-    <b>let</b> keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>let</b> values = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> values = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
     <b>while</b> (i &lt; n) {
         <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_Entry">Entry</a> { key, value } = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> contents);
         <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> keys, key);
@@ -509,9 +509,9 @@ Do not assume any particular ordering.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_keys">keys</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt; {
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.contents);
-    <b>let</b> keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
     <b>while</b> (i &lt; n) {
         <b>let</b> entry = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.contents, i);
         <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> keys, entry.key);
@@ -543,7 +543,7 @@ Note that map entries are stored in insertion order, *not* sorted by key.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;, key: &K): Option&lt;u64&gt; {
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = <a href="../sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self);
     <b>while</b> (i &lt; n) {
         <b>if</b> (&<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.contents, i).key == key) {

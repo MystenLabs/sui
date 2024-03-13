@@ -707,8 +707,8 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
     <b>assert</b>!(n &gt; 0, <a href="../sui-framework/coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>);
     <b>assert</b>!(n &lt;= <a href="../sui-framework/coin.md#0x2_coin_value">value</a>(self), <a href="../sui-framework/coin.md#0x2_coin_ENotEnough">ENotEnough</a>);
 
-    <b>let</b> vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> split_amount = <a href="../sui-framework/coin.md#0x2_coin_value">value</a>(self) / n;
     <b>while</b> (i &lt; n - 1) {
         <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> vec, <a href="../sui-framework/coin.md#0x2_coin_split">split</a>(self, split_amount, ctx));
@@ -989,12 +989,12 @@ from interacting with the specified coin type as an input to a transaction.
    addr: <b>address</b>,
    _ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> type =
+    <b>let</b> `type` =
         <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()));
     <a href="../sui-framework/deny_list.md#0x2_deny_list_add">deny_list::add</a>(
         <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
         <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        type,
+        `type`,
         addr,
     )
 }
@@ -1027,12 +1027,12 @@ Aborts with <code>ENotFrozen</code> if the address is not already in the list.
    addr: <b>address</b>,
    _ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> type =
+    <b>let</b> `type` =
         <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()));
     <a href="../sui-framework/deny_list.md#0x2_deny_list_remove">deny_list::remove</a>(
         <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
         <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        type,
+        `type`,
         addr,
     )
 }
@@ -1066,11 +1066,11 @@ return false if given a non-coin type.
     <b>let</b> name = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
     <b>if</b> (<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">type_name::is_primitive</a>(&name)) <b>return</b> <b>false</b>;
 
-    <b>let</b> type = <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name));
+    <b>let</b> `type` = <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name));
     <a href="../sui-framework/deny_list.md#0x2_deny_list_contains">deny_list::contains</a>(
         freezer,
         <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        type,
+        `type`,
         addr,
     )
 }

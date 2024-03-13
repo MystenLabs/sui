@@ -13,7 +13,7 @@ module sui::deny_list {
     use sui::bag::{Self, Bag};
     use sui::vec_set::{Self, VecSet};
 
-    friend sui::coin;
+    /* friend sui::coin; */
 
     /// Trying to create a deny list object when not called by the system address.
     const ENotSystemAddress: u64 = 0;
@@ -46,7 +46,7 @@ module sui::deny_list {
     /// from interacting with instances of that type as an input to a transaction. For coins,
     /// the type specified is the type of the coin, not the coin type itself. For example,
     /// "00...0123::my_coin::MY_COIN" would be the type, not "00...02::coin::Coin".
-    public(friend) fun add(
+    public(package) fun add(
         deny_list: &mut DenyList,
         per_type_index: u64,
         `type`: vector<u8>,
@@ -77,7 +77,7 @@ module sui::deny_list {
 
     /// Removes a previously denied address from the list.
     /// Aborts with `ENotDenied` if the address is not on the list.
-    public(friend) fun remove(
+    public(package) fun remove(
         deny_list: &mut DenyList,
         per_type_index: u64,
         `type`: vector<u8>,
@@ -102,7 +102,7 @@ module sui::deny_list {
     }
 
     /// Returns true iff the given address is denied for the given type.
-    public(friend) fun contains(
+    public(package) fun contains(
         deny_list: &DenyList,
         per_type_index: u64,
         `type`: vector<u8>,

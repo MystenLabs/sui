@@ -25,14 +25,14 @@ module sui_system::validator_set {
     use sui::bag::Bag;
     use sui::bag;
 
-    friend sui_system::genesis;
-    friend sui_system::sui_system_state_inner;
+    /* friend sui_system::genesis; */
+    /* friend sui_system::sui_system_state_inner; */
 
-    #[test_only]
-    friend sui_system::validator_set_tests;
+    /* #[test_only] */
+    /* friend sui_system::validator_set_tests; */
 
-    #[test_only]
-    friend sui_system::stake_tests;
+    /* #[test_only] */
+    /* friend sui_system::stake_tests; */
 
     public struct ValidatorSet has store {
         /// Total amount of stake from all active validators at the beginning of the epoch.
@@ -149,7 +149,7 @@ module sui_system::validator_set {
 
     // ==== initialization at genesis ====
 
-    public(friend) fun new(init_active_validators: vector<Validator>, ctx: &mut TxContext): ValidatorSet {
+    public(package) fun new(init_active_validators: vector<Validator>, ctx: &mut TxContext): ValidatorSet {
         let total_stake = calculate_total_stakes(&init_active_validators);
         let mut staking_pool_mappings = table::new(ctx);
         let num_validators = vector::length(&init_active_validators);
@@ -178,7 +178,7 @@ module sui_system::validator_set {
     // ==== functions to add or remove validators ====
 
     /// Called by `sui_system` to add a new validator candidate.
-    public(friend) fun request_add_validator_candidate(
+    public(package) fun request_add_validator_candidate(
         self: &mut ValidatorSet,
         validator: Validator,
         ctx: &mut TxContext,
@@ -207,7 +207,7 @@ module sui_system::validator_set {
     }
 
     /// Called by `sui_system` to remove a validator candidate, and move them to `inactive_validators`.
-    public(friend) fun request_remove_validator_candidate(self: &mut ValidatorSet, ctx: &mut TxContext) {
+    public(package) fun request_remove_validator_candidate(self: &mut ValidatorSet, ctx: &mut TxContext) {
         let validator_address = tx_context::sender(ctx);
          assert!(
             table::contains(&self.validator_candidates, validator_address),
@@ -235,7 +235,7 @@ module sui_system::validator_set {
 
     /// Called by `sui_system` to add a new validator to `pending_active_validators`, which will be
     /// processed at the end of epoch.
-    public(friend) fun request_add_validator(self: &mut ValidatorSet, min_joining_stake_amount: u64, ctx: &TxContext) {
+    public(package) fun request_add_validator(self: &mut ValidatorSet, min_joining_stake_amount: u64, ctx: &TxContext) {
         let validator_address = tx_context::sender(ctx);
         assert!(
             table::contains(&self.validator_candidates, validator_address),
@@ -254,7 +254,7 @@ module sui_system::validator_set {
         table_vec::push_back(&mut self.pending_active_validators, validator);
     }
 
-    public(friend) fun assert_no_pending_or_active_duplicates(self: &ValidatorSet, validator: &Validator) {
+    public(package) fun assert_no_pending_or_active_duplicates(self: &ValidatorSet, validator: &Validator) {
         // Validator here must be active or pending, and thus must be identified as duplicate exactly once.
         assert!(
             count_duplicates_vec(&self.active_validators, validator) +
@@ -267,7 +267,7 @@ module sui_system::validator_set {
     /// The index of the validator is added to `pending_removals` and
     /// will be processed at the end of epoch.
     /// Only an active validator can request to be removed.
-    public(friend) fun request_remove_validator(
+    public(package) fun request_remove_validator(
         self: &mut ValidatorSet,
         ctx: &TxContext,
     ) {
@@ -289,7 +289,7 @@ module sui_system::validator_set {
     /// This request is added to the validator's staking pool's pending stake entries, processed at the end
     /// of the epoch.
     /// Aborts in case the staking amount is smaller than MIN_STAKING_THRESHOLD
-    public(friend) fun request_add_stake(
+    public(package) fun request_add_stake(
         self: &mut ValidatorSet,
         validator_address: address,
         stake: Balance<SUI>,
@@ -307,7 +307,7 @@ module sui_system::validator_set {
     ///    staking pool's pending stake withdraw entries, processed at the end of the epoch.
     /// 2. If the `staked_sui` was staked with a validator that is no longer active,
     ///    the stake and any rewards corresponding to it will be immediately processed.
-    public(friend) fun request_withdraw_stake(
+    public(package) fun request_withdraw_stake(
         self: &mut ValidatorSet,
         staked_sui: StakedSui,
         ctx: &TxContext,
@@ -327,7 +327,7 @@ module sui_system::validator_set {
 
     // ==== validator config setting functions ====
 
-    public(friend) fun request_set_commission_rate(
+    public(package) fun request_set_commission_rate(
         self: &mut ValidatorSet,
         new_commission_rate: u64,
         ctx: &TxContext,
@@ -347,7 +347,7 @@ module sui_system::validator_set {
     ///   3. Process pending stake deposits, and withdraws.
     ///   4. Process pending validator application and withdraws.
     ///   5. At the end, we calculate the total stake for the new epoch.
-    public(friend) fun advance_epoch(
+    public(package) fun advance_epoch(
         self: &mut ValidatorSet,
         computation_reward: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
@@ -559,7 +559,7 @@ module sui_system::validator_set {
         &self.staking_pool_mappings
     }
 
-    public(friend) fun pool_exchange_rates(
+    public(package) fun pool_exchange_rates(
         self: &mut ValidatorSet, pool_id: &ID
     ) : &Table<u64, PoolTokenExchangeRate> {
         let validator =
@@ -575,12 +575,12 @@ module sui_system::validator_set {
     }
 
     /// Get the total number of validators in the next epoch.
-    public(friend) fun next_epoch_validator_count(self: &ValidatorSet): u64 {
+    public(package) fun next_epoch_validator_count(self: &ValidatorSet): u64 {
         vector::length(&self.active_validators) - vector::length(&self.pending_removals) + table_vec::length(&self.pending_active_validators)
     }
 
     /// Returns true iff the address exists in active validators.
-    public(friend) fun is_active_validator_by_sui_address(
+    public(package) fun is_active_validator_by_sui_address(
         self: &ValidatorSet,
         validator_address: address,
     ): bool {
@@ -596,7 +596,7 @@ module sui_system::validator_set {
         is_duplicate_validator(&self.active_validators, new_validator)
     }
 
-    public(friend) fun is_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
+    public(package) fun is_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
         count_duplicates_vec(validators, new_validator) > 0
     }
 
@@ -691,7 +691,7 @@ module sui_system::validator_set {
         res
     }
 
-    public(friend) fun get_validator_mut(
+    public(package) fun get_validator_mut(
         validators: &mut vector<Validator>,
         validator_address: address,
     ): &mut Validator {
@@ -726,7 +726,7 @@ module sui_system::validator_set {
         validator_wrapper::load_validator_maybe_upgrade(wrapper)
     }
 
-    public(friend) fun get_validator_mut_with_verified_cap(
+    public(package) fun get_validator_mut_with_verified_cap(
         self: &mut ValidatorSet,
         verified_cap: &ValidatorOperationCap,
         include_candidate: bool,
@@ -734,7 +734,7 @@ module sui_system::validator_set {
         get_active_or_pending_or_candidate_validator_mut(self, *validator_cap::verified_operation_cap_address(verified_cap), include_candidate)
     }
 
-    public(friend) fun get_validator_mut_with_ctx(
+    public(package) fun get_validator_mut_with_ctx(
         self: &mut ValidatorSet,
         ctx: &TxContext,
     ): &mut Validator {
@@ -742,7 +742,7 @@ module sui_system::validator_set {
         get_active_or_pending_or_candidate_validator_mut(self, validator_address, false)
     }
 
-    public(friend) fun get_validator_mut_with_ctx_including_candidates(
+    public(package) fun get_validator_mut_with_ctx_including_candidates(
         self: &mut ValidatorSet,
         ctx: &TxContext,
     ): &mut Validator {
@@ -760,7 +760,7 @@ module sui_system::validator_set {
         vector::borrow(validators, validator_index)
     }
 
-    public(friend) fun get_active_or_pending_or_candidate_validator_ref(
+    public(package) fun get_active_or_pending_or_candidate_validator_ref(
         self: &mut ValidatorSet,
         validator_address: address,
         which_validator: u8,
@@ -811,7 +811,7 @@ module sui_system::validator_set {
     /// Verify the capability is valid for a Validator.
     /// If `active_validator_only` is true, only verify the Cap for an active validator.
     /// Otherwise, verify the Cap for au either active or pending validator.
-    public(friend) fun verify_cap(
+    public(package) fun verify_cap(
         self: &mut ValidatorSet,
         cap: &UnverifiedValidatorOperationCap,
         which_validator: u8,
@@ -1255,7 +1255,7 @@ module sui_system::validator_set {
         table::contains(&self.inactive_validators, staking_pool_id)
     }
 
-    public(friend) fun active_validator_addresses(self: &ValidatorSet): vector<address> {
+    public(package) fun active_validator_addresses(self: &ValidatorSet): vector<address> {
         let vs = &self.active_validators;
         let mut res = vector[];
         let mut i = 0;

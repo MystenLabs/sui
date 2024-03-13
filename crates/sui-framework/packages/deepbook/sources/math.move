@@ -6,23 +6,23 @@ module deepbook::math {
     const FLOAT_SCALING: u64 = 1_000_000_000;
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
 
-    friend deepbook::clob;
-    friend deepbook::clob_v2;
-    friend deepbook::critbit;
+    /* friend deepbook::clob; */
+    /* friend deepbook::clob_v2; */
+    /* friend deepbook::critbit; */
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUnderflow: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // multiply two floating numbers
-    public(friend) fun unsafe_mul(x: u64, y: u64): u64 {
+    public(package) fun unsafe_mul(x: u64, y: u64): u64 {
         let (_, result) = unsafe_mul_round(x, y);
         result
     }
 
     // multiply two floating numbers
     // also returns whether the result is rounded down
-    public(friend) fun unsafe_mul_round(x: u64, y: u64): (bool, u64) {
+    public(package) fun unsafe_mul_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
         let y = (y as u128);
         let mut is_round_down = true;
@@ -47,14 +47,14 @@ module deepbook::math {
     }
 
     // divide two floating numbers
-    public(friend) fun unsafe_div(x: u64, y: u64): u64 {
+    public(package) fun unsafe_div(x: u64, y: u64): u64 {
         let (_, result) = unsafe_div_round(x, y);
         result
     }
 
     // divide two floating numbers
     // also returns whether the result is rounded down
-    public(friend) fun unsafe_div_round(x: u64, y: u64): (bool, u64) {
+    public(package) fun unsafe_div_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
         let y = (y as u128);
         let mut is_round_down = true;
@@ -70,7 +70,7 @@ module deepbook::math {
         (is_round_down, result)
     }
 
-    public(friend) fun count_leading_zeros(mut x: u128): u8 {
+    public(package) fun count_leading_zeros(mut x: u128): u8 {
         if (x == 0) {
             128
         } else {

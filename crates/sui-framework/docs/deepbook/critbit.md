@@ -287,7 +287,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> TxContext): <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_new">new</a>&lt;V: store&gt;(ctx: &<b>mut</b> TxContext): <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
     <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
         root: <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>,
         internal_nodes: <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
@@ -319,7 +319,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_size">size</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): u64 {
     <a href="../sui-framework/table.md#0x2_table_length">table::length</a>(&tree.leaves)
 }
 </code></pre>
@@ -343,7 +343,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): bool {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;): bool {
     <a href="../sui-framework/table.md#0x2_table_is_empty">table::is_empty</a>(&tree.leaves)
 }
 </code></pre>
@@ -420,10 +420,10 @@ title: Module `0xdee9::critbit`
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_previous_leaf">previous_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): (u64, u64) {
-    <b>let</b> (_, index) = <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>(tree, key);
+    <b>let</b> (_, <b>mut</b> index) = <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>(tree, key);
     <b>assert</b>!(index != <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>, <a href="critbit.md#0xdee9_critbit_ELeafNotExist">ELeafNotExist</a>);
-    <b>let</b> ptr = <a href="critbit.md#0xdee9_critbit_MAX_U64">MAX_U64</a> - index;
-    <b>let</b> parent = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, index).parent;
+    <b>let</b> <b>mut</b> ptr = <a href="critbit.md#0xdee9_critbit_MAX_U64">MAX_U64</a> - index;
+    <b>let</b> <b>mut</b> parent = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, index).parent;
     <b>while</b> (parent != <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a> && <a href="critbit.md#0xdee9_critbit_is_left_child">is_left_child</a>(tree, parent, ptr)){
         ptr = parent;
         parent = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.internal_nodes, ptr).parent;
@@ -457,10 +457,10 @@ title: Module `0xdee9::critbit`
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): (u64, u64) {
-    <b>let</b> (_, index) = <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>(tree, key);
+    <b>let</b> (_, <b>mut</b> index) = <a href="critbit.md#0xdee9_critbit_find_leaf">find_leaf</a>(tree, key);
     <b>assert</b>!(index != <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>, <a href="critbit.md#0xdee9_critbit_ELeafNotExist">ELeafNotExist</a>);
-    <b>let</b> ptr = <a href="critbit.md#0xdee9_critbit_MAX_U64">MAX_U64</a> - index;
-    <b>let</b> parent = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, index).parent;
+    <b>let</b> <b>mut</b> ptr = <a href="critbit.md#0xdee9_critbit_MAX_U64">MAX_U64</a> - index;
+    <b>let</b> <b>mut</b> parent = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.leaves, index).parent;
     <b>while</b> (parent != <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a> && !<a href="critbit.md#0xdee9_critbit_is_left_child">is_left_child</a>(tree, parent, ptr)){
         ptr = parent;
         parent = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.internal_nodes, ptr).parent;
@@ -494,7 +494,7 @@ title: Module `0xdee9::critbit`
 
 
 <pre><code><b>fun</b> <a href="critbit.md#0xdee9_critbit_left_most_leaf">left_most_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, root: u64): u64 {
-    <b>let</b> ptr = root;
+    <b>let</b> <b>mut</b> ptr = root;
     <b>while</b> (ptr &lt; <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>){
         ptr = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(& tree.internal_nodes, ptr).left_child;
     };
@@ -522,7 +522,7 @@ title: Module `0xdee9::critbit`
 
 
 <pre><code><b>fun</b> <a href="critbit.md#0xdee9_critbit_right_most_leaf">right_most_leaf</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, root: u64): u64 {
-    <b>let</b> ptr = root;
+    <b>let</b> <b>mut</b> ptr = root;
     <b>while</b> (ptr &lt; <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>){
         ptr = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(& tree.internal_nodes, ptr).right_child;
     };
@@ -549,7 +549,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64, value: V): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_insert_leaf">insert_leaf</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64, value: V): u64 {
     <b>let</b> new_leaf = <a href="critbit.md#0xdee9_critbit_Leaf">Leaf</a>&lt;V&gt;{
         key,
         value,
@@ -588,8 +588,8 @@ title: Module `0xdee9::critbit`
     tree.next_internal_node_index = tree.next_internal_node_index + 1;
     <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> tree.internal_nodes, new_internal_node_index, new_internal_node);
 
-    <b>let</b> ptr = tree.root;
-    <b>let</b> new_internal_node_parent_index = <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>;
+    <b>let</b> <b>mut</b> ptr = tree.root;
+    <b>let</b> <b>mut</b> new_internal_node_parent_index = <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>;
     // Search position of the new <b>internal</b> node
     <b>while</b> (ptr &lt; <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>) {
         <b>let</b> internal_node = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&tree.internal_nodes, ptr);
@@ -682,7 +682,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_find_closest_key">find_closest_key</a>&lt;V: store&gt;(tree: & <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): u64 {
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_is_empty">is_empty</a>(tree)) {
         <b>return</b> 0
     };
@@ -711,7 +711,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): V {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_remove_leaf_by_index">remove_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): V {
     <b>let</b> key = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(& tree.leaves, index).key;
     <b>if</b> (tree.min_leaf == index) {
         <b>let</b> (_, index) = <a href="critbit.md#0xdee9_critbit_next_leaf">next_leaf</a>(tree, key);
@@ -722,7 +722,7 @@ title: Module `0xdee9::critbit`
         tree.max_leaf = index;
     };
 
-    <b>let</b> is_left_child_;
+    <b>let</b> <b>mut</b> is_left_child_;
     <b>let</b> <a href="critbit.md#0xdee9_critbit_Leaf">Leaf</a>&lt;V&gt; {key: _, value, parent: removed_leaf_parent_index} = <a href="../sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> tree.leaves, index);
 
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_size">size</a>(tree) == 0) {
@@ -783,7 +783,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_borrow_mut_leaf_by_index">borrow_mut_leaf_by_index</a>&lt;V: store&gt;(tree: &<b>mut</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, index: u64): &<b>mut</b> V {
     <b>let</b> entry = <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> tree.leaves, index);
     &<b>mut</b> entry.value
 }
@@ -859,7 +859,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_drop">drop</a>&lt;V: store + drop&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_drop">drop</a>&lt;V: store + drop&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
     <b>let</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
         root: _,
         internal_nodes,
@@ -894,7 +894,7 @@ title: Module `0xdee9::critbit`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
     <b>assert</b>!(<a href="../sui-framework/table.md#0x2_table_length">table::length</a>(&tree.leaves) == 0, 0);
 
     <b>let</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
@@ -932,7 +932,7 @@ title: Module `0xdee9::critbit`
 
 
 <pre><code><b>fun</b> <a href="critbit.md#0xdee9_critbit_get_closest_leaf_index_by_key">get_closest_leaf_index_by_key</a>&lt;V: store&gt;(tree: &<a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;, key: u64): u64 {
-    <b>let</b> ptr = tree.root;
+    <b>let</b> <b>mut</b> ptr = tree.root;
     // <b>if</b> tree is empty, <b>return</b> the patrition index
     <b>if</b>(ptr == <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>) <b>return</b> <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>;
     <b>while</b> (ptr &lt; <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>){

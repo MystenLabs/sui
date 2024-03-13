@@ -172,7 +172,7 @@ the permission to create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
     <b>let</b> id = <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx);
     <b>let</b> owner = <a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&id);
     <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> { id, owner }
@@ -281,7 +281,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;Asset&gt;,
     owner: <b>address</b>
 ): (u64, u64) {
@@ -315,7 +315,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; {
     <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         account_balances: <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
@@ -342,7 +342,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;Asset&gt;,
     quantity: u64,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
@@ -371,7 +371,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
     quantity: Balance&lt;T&gt;,
@@ -400,7 +400,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     quantity: u64,
@@ -429,7 +429,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     quantity: Balance&lt;T&gt;,
@@ -458,7 +458,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
     quantity: u64,
@@ -488,7 +488,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     quantity: u64,
@@ -518,7 +518,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
     quantity: u64,
@@ -547,7 +547,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): u64 {
@@ -574,7 +574,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): u64 {

@@ -100,7 +100,7 @@ module sui::kiosk {
     // - `place_internal`
     // - `lock_internal`
     // - `uid_mut_internal`
-    friend sui::kiosk_extension;
+    /* friend sui::kiosk_extension; */
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -473,19 +473,19 @@ module sui::kiosk {
     // === Internal Core ===
 
     /// Internal: "lock" an item disabling the `take` action.
-    public(friend) fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
+    public(package) fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
         df::add(&mut self.id, Lock { id: object::id(&item) }, true);
         place_internal(self, item)
     }
 
     /// Internal: "place" an item to the Kiosk and increment the item count.
-    public(friend) fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
+    public(package) fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
         self.item_count = self.item_count + 1;
         dof::add(&mut self.id, Item { id: object::id(&item) }, item)
     }
 
     /// Internal: get a mutable access to the UID.
-    public(friend) fun uid_mut_internal(self: &mut Kiosk): &mut UID {
+    public(package) fun uid_mut_internal(self: &mut Kiosk): &mut UID {
         &mut self.id
     }
 

@@ -318,7 +318,7 @@ This should only be called once from <code><a href="../sui-framework/clock.md#0x
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock">clock</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock">clock</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_CLOCK_OBJECT_ID">SUI_CLOCK_OBJECT_ID</a> }
     }
@@ -346,7 +346,7 @@ This should only be called once from <code><a href="../sui-framework/authenticat
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_AUTHENTICATOR_STATE_ID">SUI_AUTHENTICATOR_STATE_ID</a> }
     }
@@ -374,7 +374,7 @@ This should only be called once from <code><a href="../sui-framework/random.md#0
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_randomness_state">randomness_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_randomness_state">randomness_state</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_RANDOM_ID">SUI_RANDOM_ID</a> }
     }
@@ -402,7 +402,7 @@ This should only be called once from <code><a href="../sui-framework/deny_list.m
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a> }
     }
@@ -710,7 +710,7 @@ Generate a new UID specifically used for creating a UID from a hash
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_record_new_uid">record_new_uid</a>(bytes);
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> { id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes } }
 }

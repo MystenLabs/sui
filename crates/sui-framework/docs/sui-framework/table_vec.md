@@ -122,7 +122,7 @@ Return a TableVec of size one containing element <code>e</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_singleton">singleton</a>&lt;Element: store&gt;(e: Element, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt; {
-    <b>let</b> t = <a href="../sui-framework/table_vec.md#0x2_table_vec_empty">empty</a>(ctx);
+    <b>let</b> <b>mut</b> t = <a href="../sui-framework/table_vec.md#0x2_table_vec_empty">empty</a>(ctx);
     <a href="../sui-framework/table_vec.md#0x2_table_vec_push_back">push_back</a>(&<b>mut</b> t, e);
     t
 }

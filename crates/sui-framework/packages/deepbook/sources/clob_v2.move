@@ -22,7 +22,7 @@ module deepbook::clob_v2 {
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
     use deepbook::math::Self as clob_math;
 
-    friend deepbook::order_query;
+    /* friend deepbook::order_query; */
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EIncorrectPoolOwner: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
@@ -2221,7 +2221,7 @@ module deepbook::clob_v2 {
         balance::value(&pool.quote_asset_trading_fees)
     }
 
-    public(friend) fun clone_order(order: &Order): Order {
+    public(package) fun clone_order(order: &Order): Order {
         Order {
             order_id: order.order_id,
             client_order_id: order.client_order_id,

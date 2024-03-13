@@ -14,8 +14,8 @@ module sui_system::staking_pool {
     use sui::bag::Bag;
     use sui::bag;
 
-    friend sui_system::validator;
-    friend sui_system::validator_set;
+    /* friend sui_system::validator; */
+    /* friend sui_system::validator_set; */
 
     /// StakedSui objects cannot be split to below this amount.
     const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
@@ -91,7 +91,7 @@ module sui_system::staking_pool {
     // ==== initializer ====
 
     /// Create a new, empty staking pool.
-    public(friend) fun new(ctx: &mut TxContext) : StakingPool {
+    public(package) fun new(ctx: &mut TxContext) : StakingPool {
         let exchange_rates = table::new(ctx);
         StakingPool {
             id: object::new(ctx),
@@ -111,7 +111,7 @@ module sui_system::staking_pool {
     // ==== stake requests ====
 
     /// Request to stake to a staking pool. The stake starts counting at the beginning of the next epoch,
-    public(friend) fun request_add_stake(
+    public(package) fun request_add_stake(
         pool: &mut StakingPool,
         stake: Balance<SUI>,
         stake_activation_epoch: u64,
@@ -133,7 +133,7 @@ module sui_system::staking_pool {
     /// Request to withdraw the given stake plus rewards from a staking pool.
     /// Both the principal and corresponding rewards in SUI are withdrawn.
     /// A proportional amount of pool token withdraw is recorded and processed at epoch change time.
-    public(friend) fun request_withdraw_stake(
+    public(package) fun request_withdraw_stake(
         pool: &mut StakingPool,
         staked_sui: StakedSui,
         ctx: &TxContext
@@ -161,7 +161,7 @@ module sui_system::staking_pool {
     /// Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
     /// tokens using exchange rate at staking epoch.
     /// Returns values are amount of pool tokens withdrawn and withdrawn principal portion of SUI.
-    public(friend) fun withdraw_from_principal(
+    public(package) fun withdraw_from_principal(
         pool: &StakingPool,
         staked_sui: StakedSui,
     ) : (u64, Balance<SUI>) {
@@ -193,12 +193,12 @@ module sui_system::staking_pool {
     // ==== functions called at epoch boundaries ===
 
     /// Called at epoch advancement times to add rewards (in SUI) to the staking pool.
-    public(friend) fun deposit_rewards(pool: &mut StakingPool, rewards: Balance<SUI>) {
+    public(package) fun deposit_rewards(pool: &mut StakingPool, rewards: Balance<SUI>) {
         pool.sui_balance = pool.sui_balance + balance::value(&rewards);
         balance::join(&mut pool.rewards_pool, rewards);
     }
 
-    public(friend) fun process_pending_stakes_and_withdraws(pool: &mut StakingPool, ctx: &TxContext) {
+    public(package) fun process_pending_stakes_and_withdraws(pool: &mut StakingPool, ctx: &TxContext) {
         let new_epoch = tx_context::epoch(ctx) + 1;
         process_pending_stake_withdraw(pool);
         process_pending_stake(pool);
@@ -220,7 +220,7 @@ module sui_system::staking_pool {
     }
 
     /// Called at epoch boundaries to process the pending stake.
-    public(friend) fun process_pending_stake(pool: &mut StakingPool) {
+    public(package) fun process_pending_stake(pool: &mut StakingPool) {
         // Use the most up to date exchange rate with the rewards deposited and withdraws effectuated.
         let latest_exchange_rate =
             PoolTokenExchangeRate { sui_amount: pool.sui_balance, pool_token_amount: pool.pool_token_balance };
@@ -258,7 +258,7 @@ module sui_system::staking_pool {
     // ==== preactive pool related ====
 
     /// Called by `validator` module to activate a staking pool.
-    public(friend) fun activate_staking_pool(pool: &mut StakingPool, activation_epoch: u64) {
+    public(package) fun activate_staking_pool(pool: &mut StakingPool, activation_epoch: u64) {
         // Add the initial exchange rate to the table.
         table::add(
             &mut pool.exchange_rates,
@@ -277,7 +277,7 @@ module sui_system::staking_pool {
     /// Deactivate a staking pool by setting the `deactivation_epoch`. After
     /// this pool deactivation, the pool stops earning rewards. Only stake
     /// withdraws can be made to the pool.
-    public(friend) fun deactivate_staking_pool(pool: &mut StakingPool, deactivation_epoch: u64) {
+    public(package) fun deactivate_staking_pool(pool: &mut StakingPool, deactivation_epoch: u64) {
         // We can't deactivate an already deactivated pool.
         assert!(!is_inactive(pool), EDeactivationOfInactivePool);
         pool.deactivation_epoch = option::some(deactivation_epoch);
@@ -381,7 +381,7 @@ module sui_system::staking_pool {
         staking_pool.pending_total_sui_withdraw
     }
 
-    public(friend) fun exchange_rates(pool: &StakingPool): &Table<u64, PoolTokenExchangeRate> {
+    public(package) fun exchange_rates(pool: &StakingPool): &Table<u64, PoolTokenExchangeRate> {
         &pool.exchange_rates
     }
 

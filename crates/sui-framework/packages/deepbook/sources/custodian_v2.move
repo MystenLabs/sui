@@ -8,7 +8,7 @@ module deepbook::custodian_v2 {
     use sui::table::{Self, Table};
     use sui::tx_context::TxContext;
 
-    friend deepbook::clob_v2;
+    /* friend deepbook::clob_v2; */
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     #[test_only]
@@ -42,7 +42,7 @@ module deepbook::custodian_v2 {
 
     /// Create an admin `AccountCap` that can be used across all DeepBook pools, and has
     /// the permission to create new `AccountCap`s that can access the same source of funds
-    public(friend) fun mint_account_cap(ctx: &mut TxContext): AccountCap {
+    public(package) fun mint_account_cap(ctx: &mut TxContext): AccountCap {
         let id = object::new(ctx);
         let owner = object::uid_to_address(&id);
         AccountCap { id, owner }
@@ -71,7 +71,7 @@ module deepbook::custodian_v2 {
         account_cap.owner
     }
 
-    public(friend) fun account_balance<Asset>(
+    public(package) fun account_balance<Asset>(
         custodian: &Custodian<Asset>,
         owner: address
     ): (u64, u64) {
@@ -85,14 +85,14 @@ module deepbook::custodian_v2 {
         (avail_balance, locked_balance)
     }
 
-    public(friend) fun new<T>(ctx: &mut TxContext): Custodian<T> {
+    public(package) fun new<T>(ctx: &mut TxContext): Custodian<T> {
         Custodian<T> {
             id: object::new(ctx),
             account_balances: table::new(ctx),
         }
     }
 
-    public(friend) fun withdraw_asset<Asset>(
+    public(package) fun withdraw_asset<Asset>(
         custodian: &mut Custodian<Asset>,
         quantity: u64,
         account_cap: &AccountCap,
@@ -101,7 +101,7 @@ module deepbook::custodian_v2 {
         coin::from_balance(decrease_user_available_balance<Asset>(custodian, account_cap, quantity), ctx)
     }
 
-    public(friend) fun increase_user_available_balance<T>(
+    public(package) fun increase_user_available_balance<T>(
         custodian: &mut Custodian<T>,
         owner: address,
         quantity: Balance<T>,
@@ -110,7 +110,7 @@ module deepbook::custodian_v2 {
         balance::join(&mut account.available_balance, quantity);
     }
 
-    public(friend) fun decrease_user_available_balance<T>(
+    public(package) fun decrease_user_available_balance<T>(
         custodian: &mut Custodian<T>,
         account_cap: &AccountCap,
         quantity: u64,
@@ -119,7 +119,7 @@ module deepbook::custodian_v2 {
         balance::split(&mut account.available_balance, quantity)
     }
 
-    public(friend) fun increase_user_locked_balance<T>(
+    public(package) fun increase_user_locked_balance<T>(
         custodian: &mut Custodian<T>,
         account_cap: &AccountCap,
         quantity: Balance<T>,
@@ -128,7 +128,7 @@ module deepbook::custodian_v2 {
         balance::join(&mut account.locked_balance, quantity);
     }
 
-    public(friend) fun decrease_user_locked_balance<T>(
+    public(package) fun decrease_user_locked_balance<T>(
         custodian: &mut Custodian<T>,
         owner: address,
         quantity: u64,
@@ -138,7 +138,7 @@ module deepbook::custodian_v2 {
     }
 
     /// Move `quantity` from the unlocked balance of `user` to the locked balance of `user`
-    public(friend) fun lock_balance<T>(
+    public(package) fun lock_balance<T>(
         custodian: &mut Custodian<T>,
         account_cap: &AccountCap,
         quantity: u64,
@@ -148,7 +148,7 @@ module deepbook::custodian_v2 {
     }
 
     /// Move `quantity` from the locked balance of `user` to the unlocked balance of `user`
-    public(friend) fun unlock_balance<T>(
+    public(package) fun unlock_balance<T>(
         custodian: &mut Custodian<T>,
         owner: address,
         quantity: u64,
@@ -157,14 +157,14 @@ module deepbook::custodian_v2 {
         increase_user_available_balance<T>(custodian, owner, locked_balance)
     }
 
-    public(friend) fun account_available_balance<T>(
+    public(package) fun account_available_balance<T>(
         custodian: &Custodian<T>,
         owner: address,
     ): u64 {
         balance::value(&table::borrow(&custodian.account_balances, owner).available_balance)
     }
 
-    public(friend) fun account_locked_balance<T>(
+    public(package) fun account_locked_balance<T>(
         custodian: &Custodian<T>,
         owner: address,
     ): u64 {
@@ -197,10 +197,10 @@ module deepbook::custodian_v2 {
         table::borrow(&custodian.account_balances, owner)
     }
 
-    #[test_only]
-    friend deepbook::clob_test;
-    #[test_only]
-    friend deepbook::order_query_tests;
+    /* #[test_only] */
+    /* friend deepbook::clob_test; */
+    /* #[test_only] */
+    /* friend deepbook::order_query_tests; */
     #[test_only]
     use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
     #[test_only]
@@ -219,7 +219,7 @@ module deepbook::custodian_v2 {
     public struct USD {}
 
     #[test_only]
-    public(friend) fun assert_user_balance<T>(
+    public(package) fun assert_user_balance<T>(
         custodian: &Custodian<T>,
         owner: address,
         available_balance: u64,
@@ -238,7 +238,7 @@ module deepbook::custodian_v2 {
     }
 
     #[test_only]
-    public(friend) fun test_increase_user_available_balance<T>(
+    public(package) fun test_increase_user_available_balance<T>(
         custodian: &mut Custodian<T>,
         owner: address,
         quantity: u64,
@@ -247,7 +247,7 @@ module deepbook::custodian_v2 {
     }
 
     #[test_only]
-    public(friend) fun deposit<T>(
+    public(package) fun deposit<T>(
         custodian: &mut Custodian<T>,
         coin: Coin<T>,
         owner: address,

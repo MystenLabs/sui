@@ -406,7 +406,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_freeze_object_impl">freeze_object_impl</a>&lt;T: key&gt;(obj: T);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_freeze_object_impl">freeze_object_impl</a>&lt;T: key&gt;(obj: T);
 </code></pre>
 
 
@@ -428,7 +428,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_share_object_impl">share_object_impl</a>&lt;T: key&gt;(obj: T);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_share_object_impl">share_object_impl</a>&lt;T: key&gt;(obj: T);
 </code></pre>
 
 
@@ -450,7 +450,7 @@ Return the object ID that the given <code><a href="../sui-framework/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_transfer_impl">transfer_impl</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_transfer_impl">transfer_impl</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
 </code></pre>
 
 

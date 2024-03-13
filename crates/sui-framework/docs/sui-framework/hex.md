@@ -67,7 +67,7 @@ Encode <code>bytes</code> in lowercase hex
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/hex.md#0x2_hex_encode">encode</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
-    <b>let</b> (i, r, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bytes));
+    <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bytes));
     <b>let</b> hex_vector = <a href="../sui-framework/hex.md#0x2_hex_HEX">HEX</a>;
     <b>while</b> (i &lt; l) {
         <a href="../move-stdlib/vector.md#0x1_vector_append">vector::append</a>(
@@ -106,7 +106,7 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/hex.md#0x2_hex_decode">decode</a>(<a href="../sui-framework/hex.md#0x2_hex">hex</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
-    <b>let</b> (i, r, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&<a href="../sui-framework/hex.md#0x2_hex">hex</a>));
+    <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&<a href="../sui-framework/hex.md#0x2_hex">hex</a>));
     <b>assert</b>!(l % 2 == 0, <a href="../sui-framework/hex.md#0x2_hex_EInvalidHexLength">EInvalidHexLength</a>);
     <b>while</b> (i &lt; l) {
         <b>let</b> decimal = (<a href="../sui-framework/hex.md#0x2_hex_decode_byte">decode_byte</a>(*<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&<a href="../sui-framework/hex.md#0x2_hex">hex</a>, i)) * 16) +

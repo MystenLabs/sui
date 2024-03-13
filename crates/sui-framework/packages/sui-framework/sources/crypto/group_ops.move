@@ -7,7 +7,7 @@ module sui::group_ops {
     use std::vector;
     use sui::bcs;
 
-    friend sui::bls12381;
+    /* friend sui::bls12381; */
 
     #[allow(unused_const)]
     const ENotSupported: u64 = 0; // Operation is not supported by the network.
@@ -35,34 +35,34 @@ module sui::group_ops {
     }
 
     // Fails if the bytes are not a valid group element and 'is_trusted' is false.
-    public(friend) fun from_bytes<G>(`type`: u8, bytes: &vector<u8>, is_trusted: bool): Element<G> {
+    public(package) fun from_bytes<G>(`type`: u8, bytes: &vector<u8>, is_trusted: bool): Element<G> {
         assert!(is_trusted || internal_validate(`type`, bytes), EInvalidInput);
         Element<G> { bytes: *bytes }
     }
 
-    public(friend) fun add<G>(`type`: u8, e1: &Element<G>, e2: &Element<G>): Element<G> {
+    public(package) fun add<G>(`type`: u8, e1: &Element<G>, e2: &Element<G>): Element<G> {
         Element<G> { bytes: internal_add(`type`, &e1.bytes, &e2.bytes) }
     }
 
-    public(friend) fun sub<G>(`type`: u8, e1: &Element<G>, e2: &Element<G>): Element<G> {
+    public(package) fun sub<G>(`type`: u8, e1: &Element<G>, e2: &Element<G>): Element<G> {
         Element<G> { bytes: internal_sub(`type`, &e1.bytes, &e2.bytes) }
     }
 
-    public(friend) fun mul<S, G>(`type`: u8, scalar: &Element<S>, e: &Element<G>): Element<G> {
+    public(package) fun mul<S, G>(`type`: u8, scalar: &Element<S>, e: &Element<G>): Element<G> {
         Element<G> { bytes: internal_mul(`type`, &scalar.bytes, &e.bytes) }
     }
 
     /// Fails if scalar = 0. Else returns 1/scalar * e.
-    public(friend) fun div<S, G>(`type`: u8, scalar: &Element<S>, e: &Element<G>): Element<G> {
+    public(package) fun div<S, G>(`type`: u8, scalar: &Element<S>, e: &Element<G>): Element<G> {
         Element<G> { bytes: internal_div(`type`, &scalar.bytes, &e.bytes) }
     }
 
-    public(friend) fun hash_to<G>(`type`: u8, m: &vector<u8>): Element<G> {
+    public(package) fun hash_to<G>(`type`: u8, m: &vector<u8>): Element<G> {
         Element<G> { bytes: internal_hash_to(`type`, m) }
     }
 
     /// Aborts with `EInputTooLong` if the vectors are too long.
-    public(friend) fun multi_scalar_multiplication<S, G>(`type`: u8, scalars: &vector<Element<S>>, elements: &vector<Element<G>>): Element<G> {
+    public(package) fun multi_scalar_multiplication<S, G>(`type`: u8, scalars: &vector<Element<S>>, elements: &vector<Element<G>>): Element<G> {
         assert!(vector::length(scalars) > 0, EInvalidInput);
         assert!(vector::length(scalars) == vector::length(elements), EInvalidInput);
 
@@ -79,7 +79,7 @@ module sui::group_ops {
         Element<G> { bytes: internal_multi_scalar_mul(`type`, &scalars_bytes, &elements_bytes) }
     }
 
-    public(friend) fun pairing<G1, G2, G3>(`type`: u8, e1: &Element<G1>, e2: &Element<G2>): Element<G3> {
+    public(package) fun pairing<G1, G2, G3>(`type`: u8, e1: &Element<G1>, e2: &Element<G2>): Element<G3> {
         Element<G3> { bytes: internal_pairing(`type`, &e1.bytes, &e2.bytes) }
     }
 
@@ -106,7 +106,7 @@ module sui::group_ops {
     native fun internal_pairing(`type`:u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
 
     // Helper function for encoding a given u64 number as bytes in a given buffer.
-    public(friend) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {
+    public(package) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {
         let buffer_len = vector::length(buffer);
         assert!(buffer_len > 7, EInvalidBufferLength);
         let x_as_bytes = bcs::to_bytes(&x); // little endian

@@ -2093,7 +2093,7 @@ module deepbook::clob_test {
         end(test)
     }
 
-    fun test_withdraw_fees_(test: Scenario): TransactionEffects {
+    fun test_withdraw_fees_(mut test: Scenario): TransactionEffects {
         let (alice, bob) = people();
         let owner = @0xF;
         // setup pool and custodian
@@ -2110,7 +2110,7 @@ module deepbook::clob_test {
         };
         next_tx(&mut test, alice);
         {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
             let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
@@ -2138,7 +2138,7 @@ module deepbook::clob_test {
         next_tx(&mut test, bob);
         // Buys some sui from alice
         {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, bob);
             let clock = test::take_shared<Clock>(&test);
 
@@ -2172,7 +2172,7 @@ module deepbook::clob_test {
         // Alice cancels orders
         next_tx(&mut test, alice);
         {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
             let (_, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
@@ -2191,7 +2191,7 @@ module deepbook::clob_test {
 
         next_tx(&mut test, owner);
         {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let pool_cap = test::take_from_address<PoolOwnerCap>(&test, owner);
             let fees = clob::withdraw_fees(&pool_cap, &mut pool, test::ctx(&mut test));
             let amount = coin::burn_for_testing(fees);
@@ -2205,7 +2205,7 @@ module deepbook::clob_test {
         end(test)
     }
 
-    fun test_withdraw_fees_with_incorrect_pool_owner_(test: Scenario): TransactionEffects {
+    fun test_withdraw_fees_with_incorrect_pool_owner_(mut test: Scenario): TransactionEffects {
         let (alice, bob) = people();
         let owner = @0xF;
         // setup pool and custodian
@@ -2222,7 +2222,7 @@ module deepbook::clob_test {
         mint_account_cap_transfer(bob, test::ctx(&mut test));
 
         next_tx(&mut test, alice); {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
             let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
@@ -2250,7 +2250,7 @@ module deepbook::clob_test {
 
         // Buys some sui from alice
         next_tx(&mut test, bob); {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, bob);
             let clock = test::take_shared<Clock>(&test);
 
@@ -2284,7 +2284,7 @@ module deepbook::clob_test {
 
         // Alice cancels orders
         next_tx(&mut test, alice); {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
             let (_, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
@@ -2302,7 +2302,7 @@ module deepbook::clob_test {
         };
 
         next_tx(&mut test, owner); {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let pool_cap = test::take_from_address<PoolOwnerCap>(&test, alice);
             let fees = clob::withdraw_fees(&pool_cap, &mut pool, test::ctx(&mut test));
             let _ = coin::burn_for_testing(fees);
@@ -2311,7 +2311,7 @@ module deepbook::clob_test {
         }
     }
 
-    fun test_pool_with_small_fee_example_(test: Scenario): TransactionEffects {
+    fun test_pool_with_small_fee_example_(mut test: Scenario): TransactionEffects {
         let (alice, bob) = people();
         let owner = @0xF;
         // setup pool and custodian
@@ -2409,7 +2409,7 @@ module deepbook::clob_test {
 
         next_tx(&mut test, owner);
         {
-            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
             let pool_cap = test::take_from_address<PoolOwnerCap>(&test, owner);
             let fees = clob::withdraw_fees(&pool_cap, &mut pool, test::ctx(&mut test));
             let amount = coin::burn_for_testing(fees);

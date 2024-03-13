@@ -138,7 +138,7 @@ This should be called only once during genesis creation.
         ctx
     );
     <a href="../sui-framework/transfer.md#0x2_transfer_public_freeze_object">transfer::public_freeze_object</a>(metadata);
-    <b>let</b> supply = <a href="../sui-framework/coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury);
+    <b>let</b> <b>mut</b> supply = <a href="../sui-framework/coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury);
     <b>let</b> total_sui = <a href="../sui-framework/balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> supply, <a href="../sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>);
     <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">balance::destroy_supply</a>(supply);
     total_sui

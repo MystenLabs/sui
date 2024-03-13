@@ -120,9 +120,9 @@ Create a new priority queue from the input entry vectors.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_new">new</a>&lt;T: drop&gt;(entries: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt;) : <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_new">new</a>&lt;T: drop&gt;(<b>mut</b> entries: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt;) : <a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt; {
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&entries);
-    <b>let</b> i = len / 2;
+    <b>let</b> <b>mut</b> i = len / 2;
     // Max heapify from the first node that is a parent (node at len / 2).
     <b>while</b> (i &gt; 0) {
         i = i - 1;
@@ -234,11 +234,11 @@ Insert a new entry into the queue.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(p: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, v: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(<b>mut</b> p: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <b>mut</b> v: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&p);
     <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&v) == len, 0);
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> priority = <a href="../move-stdlib/vector.md#0x1_vector_remove">vector::remove</a>(&<b>mut</b> p, 0);
         <b>let</b> value = <a href="../move-stdlib/vector.md#0x1_vector_remove">vector::remove</a>(&<b>mut</b> v, 0);
@@ -314,7 +314,7 @@ do satisfy the max heap property.
     <b>assert</b>!(i &lt; len, 1);
     <b>let</b> left = i * 2 + 1;
     <b>let</b> right = left + 1;
-    <b>let</b> max = i;
+    <b>let</b> <b>mut</b> max = i;
     // Find the node <b>with</b> highest priority among node `i` and its two children.
     <b>if</b> (left &lt; len && <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(v, left).priority&gt; <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(v, max).priority) {
         max = left;
@@ -354,8 +354,8 @@ do satisfy the max heap property.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_priorities">priorities</a>&lt;T: drop&gt;(pq: &<a href="../sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&pq.entries)) {
         <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> res, <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&pq.entries, i).priority);
         i = i +1;

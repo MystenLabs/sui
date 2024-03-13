@@ -282,7 +282,7 @@ Returns bytes of the four components of the <code><a href="groth16.md#0x2_groth1
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_pvk_to_bytes">pvk_to_bytes</a>(pvk: <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt; {
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
     <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> res, pvk.vk_gamma_abc_g1_bytes);
     <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> res, pvk.alpha_g1_beta_g2_bytes);
     <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> res, pvk.gamma_g2_neg_pc_bytes);
