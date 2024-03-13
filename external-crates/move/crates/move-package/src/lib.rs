@@ -114,11 +114,11 @@ pub struct LintFlag {
         global = true,
         group = "lint-level"
     )]
-    pub no_lint: bool,
+    no_lint: bool,
 
     /// If `true`, enables extra linters
     #[clap(name = "lint", long = "lint", global = true, group = "lint-level")]
-    pub lint: bool,
+    lint: bool,
 }
 
 impl LintFlag {
