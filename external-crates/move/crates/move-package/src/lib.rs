@@ -11,7 +11,7 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::*;
 use lock_file::LockFile;
 use move_compiler::{
@@ -106,29 +106,25 @@ pub struct BuildConfig {
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
-#[clap(group(
-    clap::ArgGroup::new("location")
-        .required(false)
-        .args(&["no_lint", "lint"]),
-))]
 pub struct LintFlag {
     /// If `true`, disable linters
-    #[arg(long)]
+    #[clap(name = "no-lint", long = "no-lint", global = true)]
     pub no_lint: bool,
     /// If `true`, enables extra linters
-    #[arg(long)]
+    #[clap(name = "lint", long = "lint", global = true)]
     pub lint: bool,
 }
 
 impl LintFlag {
-    pub fn level(&self) -> LintLevel {
+    // TODO we really should find a way for clap to generate these
+    pub fn level(&self) -> Result<LintLevel> {
         let Self { no_lint, lint } = self;
-        match (*no_lint, *lint) {
+        Ok(match (*no_lint, *lint) {
             (true, false) => LintLevel::None,
             (false, false) => LintLevel::Default,
             (false, true) => LintLevel::All,
-            (true, true) => unreachable!(),
-        }
+            (true, true) => bail!("Cannot set both --no-lint and --lint flags"),
+        })
     }
 }
 

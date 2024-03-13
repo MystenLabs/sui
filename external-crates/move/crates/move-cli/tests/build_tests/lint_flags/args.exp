@@ -1,0 +1,8 @@
+Command `new --path . foo`:
+Command `build --lint`:
+BUILDING foo
+Command `build --no-lint`:
+BUILDING foo
+Command `build --lint --no-lint`:
+BUILDING foo
+Error: Cannot set both --no-lint and --lint flags
