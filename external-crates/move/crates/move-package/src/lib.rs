@@ -105,7 +105,9 @@ pub struct BuildConfig {
     pub lint_flag: LintFlag,
 }
 
-#[derive(Parser, Debug, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
+#[derive(
+    Parser, Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default,
+)]
 pub struct LintFlag {
     /// If `true`, disable linters
     #[clap(
