@@ -219,6 +219,7 @@ pub struct AuthorityMetrics {
 
     execute_certificate_with_effects_latency: Histogram,
     internal_execution_latency: Histogram,
+    execution_load_input_objects_latency: Histogram,
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
     db_checkpoint_latency: Histogram,
@@ -416,6 +417,13 @@ impl AuthorityMetrics {
             internal_execution_latency: register_histogram_with_registry!(
                 "authority_state_internal_execution_latency",
                 "Latency of actual certificate executions",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            execution_load_input_objects_latency: register_histogram_with_registry!(
+                "authority_state_execution_load_input_objects_latency",
+                "Latency of loading input objects for execution",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -1140,6 +1148,10 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
         let _scope = monitored_scope("Execution::load_input_objects");
+        let _metrics_guard = self
+            .metrics
+            .execution_load_input_objects_latency
+            .start_timer();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
         if certificate.data().transaction_data().is_end_of_epoch_tx() {
             self.input_loader
