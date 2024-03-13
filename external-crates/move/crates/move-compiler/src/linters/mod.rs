@@ -7,6 +7,8 @@ use crate::{command_line::compiler::Visitor, diagnostics::codes::WarningFilter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
+    // No linters
+    None,
     // Run only the default linters
     Default,
     // Run all linters
@@ -22,6 +24,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
+        LintLevel::None => vec![],
         LintLevel::Default | LintLevel::All => {
             vec![]
         }

@@ -36,6 +36,7 @@ use crate::{
     lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
+use move_compiler::linters::LintLevel;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
@@ -100,13 +101,35 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
-    /// If `true`, disable linters
-    #[clap(long, global = true)]
-    pub no_lint: bool,
+    #[clap(flatten)]
+    pub lint_flag: LintFlag,
+}
 
+#[derive(Parser, Debug, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
+#[clap(group(
+    clap::ArgGroup::new("location")
+        .required(false)
+        .args(&["no_lint", "lint"]),
+))]
+pub struct LintFlag {
+    /// If `true`, disable linters
+    #[arg(long)]
+    pub no_lint: bool,
     /// If `true`, enables extra linters
-    #[clap(long, global = true)]
+    #[arg(long)]
     pub lint: bool,
+}
+
+impl LintFlag {
+    pub fn level(&self) -> LintLevel {
+        let Self { no_lint, lint } = self;
+        match (*no_lint, *lint) {
+            (true, false) => LintLevel::None,
+            (false, false) => LintLevel::Default,
+            (false, true) => LintLevel::All,
+            (true, true) => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]

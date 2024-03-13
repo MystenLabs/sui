@@ -127,6 +127,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
+        LintLevel::None => vec![],
         LintLevel::Default | LintLevel::All => {
             vec![
                 share_owned::ShareOwnedVerifier.visitor(),
