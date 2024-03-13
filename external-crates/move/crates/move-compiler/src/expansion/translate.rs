@@ -567,10 +567,11 @@ fn top_level_address_(
             debug_assert!(name_res.is_ok());
             Address::anonymous(loc, bytes)
         }
+        // This should have been handled elsewhere in alias resolution for user-provided paths, and
+        // should never occur in compiler-generated ones.
         P::LeadingNameAccess_::GlobalAddress(name) => {
-            context.env.add_diag(diag!(
-                Syntax::InvalidAddress,
-                (loc, "Top-level addresses cannot start with '::'")
+            context.env.add_diag(ice!(
+                (loc, "Found an address in top-level address position that uses a global name")
             ));
             Address::NamedUnassigned(name)
         }
@@ -601,13 +602,14 @@ fn top_level_address_opt(context: &mut DefnContext, ln: P::LeadingNameAccess) ->
             debug_assert!(name_res.is_ok());
             Some(Address::anonymous(loc, bytes))
         }
-        P::LeadingNameAccess_::GlobalAddress(name) => {
-            context.env.add_diag(diag!(
-                Syntax::InvalidAddress,
-                (loc, "Top-level addresses cannot start with '::'")
+        // This should have been handled elsewhere in alias resolution for user-provided paths, and
+        // should never occur in compiler-generated ones.
+        P::LeadingNameAccess_::GlobalAddress(_) => {
+            context.env.add_diag(ice!(
+                (loc, "Found an address in top-level address position that uses a global name")
             ));
-            Some(Address::NamedUnassigned(name))
-        }
+            None
+        },
         P::LeadingNameAccess_::Name(name) => {
             let addr = named_address_mapping.get(&name.value).copied()?;
             Some(make_address(context, name, loc, addr))
