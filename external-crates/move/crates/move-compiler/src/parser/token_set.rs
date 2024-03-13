@@ -46,7 +46,13 @@ pub static MODULE_MEMBER_OR_MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     token_set
 });
 
-const PARAM_STARTS: [Tok; 3] = [Tok::Identifier, Tok::Mut, Tok::SyntaxIdentifier];
+const PARAM_STARTS: [Tok; 5] = [
+    Tok::Identifier,
+    Tok::Mut,
+    Tok::SyntaxIdentifier,
+    Tok::LParen,
+    Tok::RestrictedIdentifier,
+];
 
 pub static PARAM_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&PARAM_STARTS));
 
@@ -82,13 +88,16 @@ const EXP_STARTS: [Tok; 27] = [
 
 pub static EXP_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&EXP_STARTS));
 
-const TYPE_STARTS: [Tok; 6] = [
+const TYPE_STARTS: [Tok; 9] = [
     Tok::Identifier,
     Tok::Amp,
     Tok::AmpMut,
+    Tok::LParen,   // tuple
+    Tok::NumValue, // package address
     Tok::Pipe,
-    Tok::LParen,
+    Tok::PipePipe,
     Tok::SyntaxIdentifier,
+    Tok::RestrictedIdentifier,
 ];
 
 pub static TYPE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&TYPE_STARTS));

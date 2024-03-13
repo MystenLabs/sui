@@ -350,6 +350,7 @@ where
                             break;
                         }
                     }
+                    adjust_token(context.tokens, end_token);
                 }
                 Err(diag) => {
                     let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
@@ -1037,7 +1038,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
-            &TokenSet::from([Tok::Mut, Tok::Identifier]),
+            &TokenSet::from([Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_bind,
             "a field binding",
         );
@@ -1047,7 +1048,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LBrace,
             Tok::RBrace,
-            &TokenSet::from([Tok::Mut, Tok::Identifier]),
+            &TokenSet::from([Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_bind_field,
             "a field binding",
         );
@@ -1250,8 +1251,12 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     let mut last_semicolon_loc = None;
     let mut eopt = None;
     while context.tokens.peek() != Tok::RBrace {
+        // this helps when a sequence contains a comma-separated list without the ending token (in
+        // which case the parser would be likely fast-forwarded to EOF)
+        context.stop_set.add(Tok::Semicolon);
         match parse_sequence_item(context) {
             Ok(item) => {
+                context.stop_set.remove(Tok::Semicolon);
                 if context.tokens.peek() == Tok::RBrace {
                     // If the sequence ends with an expression that is not
                     // followed by a semicolon, split out that expression
@@ -1281,6 +1286,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 }
             }
             Err(diag) => {
+                context.stop_set.remove(Tok::Semicolon);
                 let at_stop_set = skip_sequence(context, *diag);
                 if at_stop_set {
                     break;
@@ -1734,7 +1740,7 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
                 context,
                 Tok::LBrace,
                 Tok::RBrace,
-                &TokenSet::from([Tok::Identifier]),
+                &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
                 parse_exp_field,
                 "a field expression",
             );
@@ -2581,7 +2587,11 @@ fn parse_optional_type_parameters(context: &mut Context) -> Vec<(Name, Vec<Abili
             context,
             Tok::Less,
             Tok::Greater,
-            &TokenSet::from([Tok::Identifier, Tok::SyntaxIdentifier]),
+            &TokenSet::from([
+                Tok::Identifier,
+                Tok::SyntaxIdentifier,
+                Tok::RestrictedIdentifier,
+            ]),
             parse_type_parameter,
             "a type parameter",
         )
@@ -2600,7 +2610,7 @@ fn parse_struct_type_parameters(
             context,
             Tok::Less,
             Tok::Greater,
-            &TokenSet::from([Tok::Identifier]),
+            &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_type_parameter_with_phantom_decl,
             "a type parameter",
         ))
@@ -2661,7 +2671,6 @@ fn parse_function_decl(
             Err(diag)
         })
         .ok();
-
     if let Err(diag) = parse_acquires(context) {
         context.advance_until_at_stop_set(Some(*diag));
     }
@@ -2982,7 +2991,7 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
             context,
             Tok::LBrace,
             Tok::RBrace,
-            &TokenSet::from([Tok::Identifier]),
+            &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_field_annot,
             "a field",
         );
