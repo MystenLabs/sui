@@ -113,7 +113,7 @@ pub struct ModuleAccess {
 /// A parsed PTB command consisting of the command and the parsed arguments to the command.
 #[derive(Debug, Clone)]
 pub enum ParsedPTBCommand {
-    TransferObjects(Spanned<Argument>, Spanned<Vec<Spanned<Argument>>>),
+    TransferObjects(Spanned<Vec<Spanned<Argument>>>, Spanned<Argument>),
     SplitCoins(Spanned<Argument>, Spanned<Vec<Spanned<Argument>>>),
     MergeCoins(Spanned<Argument>, Spanned<Vec<Spanned<Argument>>>),
     MakeMoveVec(Spanned<ParsedType>, Spanned<Vec<Spanned<Argument>>>),
@@ -246,10 +246,11 @@ fn delimited_list<T: fmt::Display>(
 impl fmt::Display for ParsedPTBCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParsedPTBCommand::TransferObjects(arg, args) => {
-                write!(f, "{TRANSFER_OBJECTS} {} [", arg.value)?;
+            ParsedPTBCommand::TransferObjects(args, arg) => {
+                write!(f, "{TRANSFER_OBJECTS} [")?;
                 delimited_list(f, ", ", args.value.iter().map(|x| &x.value))?;
-                write!(f, "]")
+                write!(f, "]")?;
+                write!(f, " {}", arg.value)
             }
             ParsedPTBCommand::SplitCoins(arg, args) => {
                 write!(f, "{SPLIT_COINS} {} [", arg.value)?;

@@ -255,14 +255,14 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 /// Methods for parsing commands
 impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Parse a transfer-objects command.
-    /// The expected format is: `--transfer-objects <to> [<from>, ...]`
+    /// The expected format is: `--transfer-objects [<from>, ...] <to>`
     fn parse_transfer_objects(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
-        let transfer_to = self.parse_argument()?;
         let transfer_froms = self.parse_array()?;
+        let transfer_to = self.parse_argument()?;
         let sp = transfer_to.span.widen(transfer_froms.span);
         Ok(sp.wrap(ParsedPTBCommand::TransferObjects(
-            transfer_to,
             transfer_froms,
+            transfer_to,
         )))
     }
 
@@ -730,7 +730,7 @@ mod tests {
 
     #[test]
     fn test_parse() {
-        let input = "--transfer-objects a [b, c]";
+        let input = "--transfer-objects [b, c] a";
         let mut x = shlex::split(input).unwrap();
         x.push("--gas-budget 1".to_owned());
         let parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
@@ -910,9 +910,9 @@ mod tests {
             // Upgrade
             "--upgrade foo @0x1",
             // Transfer objects
-            "--transfer-objects a [b, c]",
-            "--transfer-objects a [b]",
-            "--transfer-objects a.0 [b]",
+            "--transfer-objects [b, c] a",
+            "--transfer-objects [b] a",
+            "--transfer-objects [b] a.0",
             // Split coins
             "--split-coins a [b, c]",
             "--split-coins a [c]",
@@ -966,6 +966,7 @@ mod tests {
             "--transfer-objects a",
             "--transfer-objects [b]",
             "--transfer-objects",
+            "--transfer-objects [a] [b]",
             // Split coins
             "--split-coins a",
             "--split-coins [b]",
