@@ -5,10 +5,10 @@ use consensus_config::AuthorityIndex;
 use rstest::rstest;
 use tempfile::TempDir;
 
-use super::{mem_store::MemStore, rocksdb_store::RocksDBStore, Store};
+use super::{mem_store::MemStore, rocksdb_store::RocksDBStore, Store, WriteBatch};
 use crate::{
     block::{BlockDigest, BlockRef, TestBlock, VerifiedBlock},
-    commit::TrustedCommit,
+    commit::{CommitDigest, TrustedCommit},
 };
 
 /// Test fixture for store tests. Wraps around various store implementations.
@@ -51,7 +51,9 @@ async fn read_and_contain_blocks(
         VerifiedBlock::new_for_test(TestBlock::new(1, 2).build()),
         VerifiedBlock::new_for_test(TestBlock::new(2, 3).build()),
     ];
-    store.write(written_blocks.clone(), vec![], vec![]).unwrap();
+    store
+        .write(WriteBatch::default().blocks(written_blocks.clone()))
+        .unwrap();
 
     {
         let refs = vec![written_blocks[0].reference()];
@@ -118,7 +120,9 @@ async fn scan_blocks(
         VerifiedBlock::new_for_test(TestBlock::new(13, 2).build()),
         VerifiedBlock::new_for_test(TestBlock::new(13, 1).build()),
     ];
-    store.write(written_blocks.clone(), vec![], vec![]).unwrap();
+    store
+        .write(WriteBatch::default().blocks(written_blocks.clone()))
+        .unwrap();
 
     {
         let scanned_blocks = store
@@ -145,7 +149,7 @@ async fn scan_blocks(
         VerifiedBlock::new_for_test(TestBlock::new(16, 3).build()),
     ];
     store
-        .write(additional_blocks.clone(), vec![], vec![])
+        .write(WriteBatch::default().blocks(additional_blocks.clone()))
         .unwrap();
 
     {
@@ -199,27 +203,31 @@ async fn read_and_scan_commits(
     let written_commits = vec![
         TrustedCommit::new_for_test(
             1,
+            CommitDigest::MIN,
             BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
         TrustedCommit::new_for_test(
             2,
+            CommitDigest::MIN,
             BlockRef::new(2, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
         TrustedCommit::new_for_test(
             3,
+            CommitDigest::MIN,
             BlockRef::new(3, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
         TrustedCommit::new_for_test(
             4,
+            CommitDigest::MIN,
             BlockRef::new(4, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
     ];
     store
-        .write(vec![], written_commits.clone(), vec![])
+        .write(WriteBatch::default().commits(written_commits.clone()))
         .unwrap();
 
     {
@@ -236,13 +244,15 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits(20)
+            .scan_commits(20..25)
             .expect("Scan commits should not fail");
         assert!(scanned_commits.is_empty(), "{:?}", scanned_commits);
     }
 
     {
-        let scanned_commits = store.scan_commits(3).expect("Scan commits should not fail");
+        let scanned_commits = store
+            .scan_commits(3..5)
+            .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 2, "{:?}", scanned_commits);
         assert_eq!(
             scanned_commits,
@@ -251,7 +261,20 @@ async fn read_and_scan_commits(
     }
 
     {
-        let scanned_commits = store.scan_commits(0).expect("Scan commits should not fail");
+        let scanned_commits = store
+            .scan_commits(0..3)
+            .expect("Scan commits should not fail");
+        assert_eq!(scanned_commits.len(), 2, "{:?}", scanned_commits);
+        assert_eq!(
+            scanned_commits,
+            vec![written_commits[0].clone(), written_commits[1].clone()]
+        );
+    }
+
+    {
+        let scanned_commits = store
+            .scan_commits(0..5)
+            .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 4, "{:?}", scanned_commits);
         assert_eq!(scanned_commits, written_commits,);
     }

@@ -188,6 +188,7 @@ mod test {
         dag_state::DagState,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
+        CommitConsumer,
     };
 
     #[tokio::test]
@@ -209,8 +210,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            0, // last_processed_index
+            CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
         );

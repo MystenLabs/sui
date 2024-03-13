@@ -35,6 +35,10 @@ use crate::{
 // TODO: Move to protocol config once initial value is finalized.
 const NUM_LEADERS_PER_ROUND: usize = 1;
 
+// Maximum number of commit votes to include in a block.
+// TODO: Move to protocol config, and verify in BlockVerifier.
+const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
+
 pub(crate) struct Core {
     context: Arc<Context>,
     /// The threshold clock that is used to keep track of the current round
@@ -270,13 +274,19 @@ impl Core {
         // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
         // Probably proposing for all the intermediate rounds might not make much sense.
 
-        // 1. Consume the ancestors to be included in proposal
+        // Consume the ancestors to be included in proposal
         let ancestors = self.ancestors_to_propose(clock_round, now);
 
-        // 2. Consume the next transactions to be included.
+        // Consume the next transactions to be included.
         let transactions = self.transaction_consumer.next();
 
-        // 3. Create the block and insert to storage.
+        // Consume the commit votes to be included.
+        let commit_votes = self
+            .dag_state
+            .write()
+            .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
+
+        // Create the block and insert to storage.
         let block = Block::V1(BlockV1::new(
             self.context.committee.epoch(),
             clock_round,
@@ -284,6 +294,7 @@ impl Core {
             now,
             ancestors,
             transactions,
+            commit_votes,
         ));
         let signed_block =
             SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
@@ -293,24 +304,24 @@ impl Core {
         // Unnecessary to verify own blocks.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
 
-        // 4. Add to the threshold clock and pending ancestors
+        // Add to the threshold clock and pending ancestors
         self.threshold_clock.add_block(verified_block.reference());
         self.pending_ancestors
             .entry(verified_block.round())
             .or_default()
             .push(verified_block.clone());
 
-        // 5. Accept the block into BlockManager and DagState.
+        // Accept the block into BlockManager and DagState.
         let (accepted_blocks, missing) = self
             .block_manager
             .try_accept_blocks(vec![verified_block.clone()]);
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
-        // 6. Ensure the new block and its ancestors are persisted, before broadcasting it.
+        // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
-        // 7. Update internal state.
+        // Update internal state.
         self.last_proposed_block = verified_block.clone();
 
         tracing::info!("Created block {}", verified_block);
@@ -514,8 +525,12 @@ mod test {
 
     use super::*;
     use crate::{
-        block::TestBlock, block_verifier::NoopBlockVerifier, commit::CommitAPI as _,
-        storage::mem_store::MemStore, transaction::TransactionClient,
+        block::TestBlock,
+        block_verifier::NoopBlockVerifier,
+        commit::CommitAPI as _,
+        storage::{mem_store::MemStore, WriteBatch},
+        transaction::TransactionClient,
+        CommitConsumer, CommitIndex,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -547,7 +562,7 @@ mod test {
         }
         // write them in store
         store
-            .write(all_blocks, vec![], vec![])
+            .write(WriteBatch::default().blocks(all_blocks))
             .expect("Storage error");
 
         // create dag state after all blocks have been written to store
@@ -561,8 +576,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            0, // last_processed_index
+            CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
         );
@@ -617,7 +631,7 @@ mod test {
         // as soon as the new block for round 5 is proposed.
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
-        let all_stored_commits = store.scan_commits(0).unwrap();
+        let all_stored_commits = store.scan_commits(0..CommitIndex::MAX).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
     }
 
@@ -659,7 +673,7 @@ mod test {
 
         // write them in store
         store
-            .write(all_blocks, vec![], vec![])
+            .write(WriteBatch::default().blocks(all_blocks))
             .expect("Storage error");
 
         // create dag state after all blocks have been written to store
@@ -673,8 +687,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            0, // last_processed_index
+            CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
         );
@@ -732,7 +745,7 @@ mod test {
         // as the new block for round 4 is proposed.
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
-        let all_stored_commits = store.scan_commits(0).unwrap();
+        let all_stored_commits = store.scan_commits(0..CommitIndex::MAX).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
     }
 
@@ -764,8 +777,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            0, // last_processed_index
+            CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
         );
@@ -797,7 +809,7 @@ mod test {
             }
         }
 
-        // trigger the try_new_block - that should return now a new block
+        // a new block should have been created during recovery.
         let block = block_receiver
             .recv()
             .await
@@ -864,8 +876,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            0, // last_processed_index
+            CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
         );
@@ -960,7 +971,7 @@ mod test {
             last_round_blocks = this_round_blocks;
         }
 
-        // Try to create the blocks for round 4 by calling the try_new_block method. No block should be created as the
+        // Try to create the blocks for round 4 by calling the try_propose() method. No block should be created as the
         // leader - authority 3 - hasn't proposed any block.
         for (core, _, _, _) in cores.iter_mut() {
             core.add_blocks(last_round_blocks.clone()).unwrap();
@@ -982,7 +993,7 @@ mod test {
             // There are 1 leader rounds with rounds completed up to and including
             // round 4
             assert_eq!(last_commit.index(), 1);
-            let all_stored_commits = core.store.scan_commits(0).unwrap();
+            let all_stored_commits = core.store.scan_commits(0..CommitIndex::MAX).unwrap();
             assert_eq!(all_stored_commits.len(), 1);
         }
     }
@@ -1057,7 +1068,7 @@ mod test {
             // round 9. Round 10 blocks will only include their own blocks, so the
             // 8th leader will not be committed.
             assert_eq!(last_commit.index(), 7);
-            let all_stored_commits = core.store.scan_commits(0).unwrap();
+            let all_stored_commits = core.store.scan_commits(0..CommitIndex::MAX).unwrap();
             assert_eq!(all_stored_commits.len(), 7);
         }
     }
@@ -1131,7 +1142,7 @@ mod test {
         // round 10. However because there were no blocks produced for authority 3
         // 2 leader rounds will be skipped.
         assert_eq!(last_commit.index(), 6);
-        let all_stored_commits = core.store.scan_commits(0).unwrap();
+        let all_stored_commits = core.store.scan_commits(0..CommitIndex::MAX).unwrap();
         assert_eq!(all_stored_commits.len(), 6);
     }
 
@@ -1173,8 +1184,7 @@ mod test {
             let (commit_sender, commit_receiver) = unbounded_channel();
             let commit_observer = CommitObserver::new(
                 context.clone(),
-                commit_sender.clone(),
-                0, // last_processed_index
+                CommitConsumer::new(commit_sender.clone(), 0, 0),
                 dag_state.clone(),
                 store.clone(),
             );
