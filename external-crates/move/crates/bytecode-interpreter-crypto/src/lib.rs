@@ -1,5 +1,3 @@
-// Copyright (c) The Diem Core Contributors
-// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 //! This file duplicates the code in the diem-crypto crate to support
@@ -38,8 +36,6 @@ pub fn sha3_256_of(bytes: &[u8]) -> Vec<u8> {
 
 // Ed25519
 fn validate_public_key(bytes: &[u8]) -> bool {
-    // We need to access the Edwards point which is not directly accessible from
-    // ed25519_dalek::PublicKey, so we need to do some custom deserialization.
     if bytes.len() != ED25519_PUBLIC_KEY_LENGTH {
         return false;
     }
@@ -53,8 +49,6 @@ fn validate_public_key(bytes: &[u8]) -> bool {
         Some(point) => point,
     };
 
-    // Check if the point lies on a small subgroup. This is required
-    // when using curves with a small cofactor (in ed25519, cofactor = 8).
     !point.is_small_order()
 }
 
@@ -76,7 +70,6 @@ fn validate_signature(bytes: &[u8]) -> bool {
             _ => (),
         }
     }
-    // As this stage S == L which implies a non canonical S.
     false
 }
 
