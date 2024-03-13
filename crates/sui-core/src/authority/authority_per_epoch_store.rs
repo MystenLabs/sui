@@ -3068,7 +3068,9 @@ impl AuthorityPerEpochStore {
                             authority.concise()
                         );
                         match bcs::from_bytes(bytes) {
-                            Ok(message) => randomness_manager.add_message(batch, message)?,
+                            Ok(message) => {
+                                randomness_manager.add_message(batch, authority, message)?
+                            }
                             Err(e) => {
                                 warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
@@ -3101,9 +3103,11 @@ impl AuthorityPerEpochStore {
                             authority.concise()
                         );
                         match bcs::from_bytes(bytes) {
-                            Ok(confirmation) => {
-                                randomness_manager.add_confirmation(batch, confirmation)?
-                            }
+                            Ok(confirmation) => randomness_manager.add_confirmation(
+                                batch,
+                                authority,
+                                confirmation,
+                            )?,
                             Err(e) => {
                                 warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",

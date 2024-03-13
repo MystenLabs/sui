@@ -20,7 +20,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::OnceCell;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::DBBatch;
 use typed_store::Map;
 
@@ -60,6 +60,7 @@ pub struct Inner {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Arc<ConsensusAdapter>,
     network_handle: sui_network::randomness::Handle,
+    authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
 
     // State for DKG.
     dkg_start_time: OnceCell<Instant>,
@@ -70,7 +71,6 @@ pub struct Inner {
     dkg_output: OnceCell<dkg::Output<PkG, EncG>>,
 
     // State for randomness generation.
-    authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
     next_randomness_round: RandomnessRound,
 }
 
@@ -186,13 +186,13 @@ impl RandomnessManager {
             epoch_store: epoch_store_weak,
             consensus_adapter,
             network_handle,
+            authority_info,
             dkg_start_time: OnceCell::new(),
             party,
             processed_messages: BTreeMap::new(),
             used_messages: OnceCell::new(),
             confirmations: BTreeMap::new(),
             dkg_output: OnceCell::new(),
-            authority_info,
             next_randomness_round: RandomnessRound(0),
         };
         let dkg_output = tables
@@ -289,17 +289,29 @@ impl RandomnessManager {
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
-    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
-        self.inner.lock().unwrap().add_message(batch, msg)
+    pub fn add_message(
+        &self,
+        batch: &mut DBBatch,
+        authority: &AuthorityName,
+        msg: dkg::Message<PkG, EncG>,
+    ) -> SuiResult {
+        self.inner
+            .lock()
+            .unwrap()
+            .add_message(batch, authority, msg)
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
     pub fn add_confirmation(
         &self,
         batch: &mut DBBatch,
+        authority: &AuthorityName,
         conf: dkg::Confirmation<EncG>,
     ) -> SuiResult {
-        self.inner.lock().unwrap().add_confirmation(batch, conf)
+        self.inner
+            .lock()
+            .unwrap()
+            .add_confirmation(batch, authority, conf)
     }
 
     /// Reserves the next available round number for randomness generation. Once the given
@@ -479,9 +491,22 @@ impl Inner {
         Ok(())
     }
 
-    pub fn add_message(&mut self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
+    pub fn add_message(
+        &mut self,
+        batch: &mut DBBatch,
+        authority: &AuthorityName,
+        msg: dkg::Message<PkG, EncG>,
+    ) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
+            return Ok(());
+        }
+        let Some((_, party_id)) = self.authority_info.get(authority) else {
+            error!("random beacon: received DKG Message from unknown authority: {authority:?}");
+            return Ok(());
+        };
+        if *party_id != msg.sender {
+            warn!("ignoring equivocating DKG Message from authority {authority:?} pretending to be PartyId {party_id:?}");
             return Ok(());
         }
         match self.party.process_message(msg, &mut rand::thread_rng()) {
@@ -503,10 +528,21 @@ impl Inner {
     pub fn add_confirmation(
         &mut self,
         batch: &mut DBBatch,
+        authority: &AuthorityName,
         conf: dkg::Confirmation<EncG>,
     ) -> SuiResult {
         if self.dkg_output.initialized() {
             // Once we have completed DKG, no more `Confirmation`s are needed.
+            return Ok(());
+        }
+        let Some((_, party_id)) = self.authority_info.get(authority) else {
+            error!(
+                "random beacon: received DKG Confirmation from unknown authority: {authority:?}"
+            );
+            return Ok(());
+        };
+        if *party_id != conf.sender {
+            warn!("ignoring equivocating DKG Confirmation from authority {authority:?} pretending to be PartyId {party_id:?}");
             return Ok(());
         }
         self.confirmations.insert(conf.sender, conf.clone());
@@ -647,9 +683,9 @@ mod tests {
                 .unwrap()
                 .dkg_processed_messages
                 .batch();
-            for dkg_message in dkg_messages.iter().cloned() {
+            for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
-                    .add_message(&mut batch, dkg_message)
+                    .add_message(&mut batch, &epoch_stores[j].name, dkg_message)
                     .unwrap();
             }
             randomness_managers[i].advance_dkg(&mut batch).unwrap();
@@ -671,9 +707,9 @@ mod tests {
         }
         for i in 0..randomness_managers.len() {
             let mut batch = epoch_stores[i].tables().unwrap().dkg_confirmations.batch();
-            for dkg_confirmation in dkg_confirmations.iter().cloned() {
+            for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
                 randomness_managers[i]
-                    .add_confirmation(&mut batch, dkg_confirmation)
+                    .add_confirmation(&mut batch, &epoch_stores[j].name, dkg_confirmation)
                     .unwrap();
             }
             randomness_managers[i].advance_dkg(&mut batch).unwrap();
