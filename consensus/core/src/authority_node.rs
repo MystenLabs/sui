@@ -178,7 +178,9 @@ where
             synchronizer: synchronizer.clone(),
             dag_state,
         });
-        network_manager.install_service(network_keypair, network_service);
+        network_manager
+            .install_service(network_keypair, network_service)
+            .await;
 
         Self {
             context,
