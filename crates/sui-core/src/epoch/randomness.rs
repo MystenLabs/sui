@@ -8,6 +8,7 @@ use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_tbls::{dkg, nodes};
+use narwhal_types::Round;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
@@ -68,7 +69,7 @@ pub struct Inner {
     processed_messages: BTreeMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
     used_messages: OnceCell<dkg::UsedProcessedMessages<PkG, EncG>>,
     confirmations: BTreeMap<PartyId, dkg::Confirmation<EncG>>,
-    dkg_output: OnceCell<dkg::Output<PkG, EncG>>,
+    dkg_output: OnceCell<Option<dkg::Output<PkG, EncG>>>,
 
     // State for randomness generation.
     next_randomness_round: RandomnessRound,
@@ -210,7 +211,7 @@ impl RandomnessManager {
                 .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
             inner
                 .dkg_output
-                .set(dkg_output.clone())
+                .set(Some(dkg_output.clone()))
                 .expect("setting new OnceCell should succeed");
             inner.network_handle.update_epoch(
                 committee.epoch(),
@@ -284,8 +285,8 @@ impl RandomnessManager {
 
     /// Processes all received messages and advances the randomness DKG state machine when possible,
     /// sending out a dkg::Confirmation and generating final output.
-    pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
-        self.inner.lock().unwrap().advance_dkg(batch)
+    pub fn advance_dkg(&self, batch: &mut DBBatch, round: Round) -> SuiResult {
+        self.inner.lock().unwrap().advance_dkg(batch, round)
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
@@ -339,9 +340,20 @@ impl RandomnessManager {
             .notify_randomness_in_checkpoint(round)
     }
 
-    /// Returns true if DKG has completed.
-    pub fn is_dkg_completed(&self) -> bool {
+    /// Returns true if DKG is over for this epoch, whether due to success or failure.
+    pub fn is_dkg_closed(&self) -> bool {
         self.inner.lock().unwrap().dkg_output.initialized()
+    }
+
+    /// Returns true if DKG has completed successfully.
+    pub fn is_dkg_successful(&self) -> bool {
+        self.inner
+            .lock()
+            .unwrap()
+            .dkg_output
+            .get()
+            .and_then(|opt| opt.as_ref())
+            .is_some()
     }
 
     fn randomness_dkg_info_from_committee(
@@ -383,7 +395,7 @@ impl RandomnessManager {
 impl Inner {
     pub fn start_dkg(&mut self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
-            // DKG already started (or completed).
+            // DKG already started (or completed or failed).
             return Ok(());
         }
         let _ = self.dkg_start_time.set(Instant::now());
@@ -403,7 +415,7 @@ impl Inner {
         Ok(())
     }
 
-    pub fn advance_dkg(&mut self, batch: &mut DBBatch) -> SuiResult {
+    pub fn advance_dkg(&mut self, batch: &mut DBBatch, round: Round) -> SuiResult {
         let epoch_store = self.epoch_store()?;
 
         // Once we have enough ProcessedMessages, send a Confirmation.
@@ -470,7 +482,7 @@ impl Inner {
                             .set(elapsed as i64);
                     }
                     self.dkg_output
-                        .set(output.clone())
+                        .set(Some(output.clone()))
                         .expect("checked above that `dkg_output` is uninitialized");
                     self.network_handle.update_epoch(
                         epoch_store.committee().epoch(),
@@ -486,6 +498,20 @@ impl Inner {
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
             }
+        }
+
+        // If we ran out of time, mark DKG as failed.
+        if !self.dkg_output.initialized()
+            && round
+                > epoch_store
+                    .protocol_config()
+                    .random_beacon_dkg_timeout_round()
+                    .into()
+        {
+            error!("random beacon: DKG timed out. Randomness disabled for this epoch. All randomness-using transactions will fail.");
+            self.dkg_output
+                .set(None)
+                .expect("checked above that `dkg_output` is uninitialized");
         }
 
         Ok(())
@@ -723,7 +749,9 @@ mod tests {
                 .lock()
                 .unwrap()
                 .dkg_output
-                .initialized());
+                .get()
+                .flatten()
+                .is_some());
         }
     }
 }

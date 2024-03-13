@@ -1509,11 +1509,10 @@ impl AuthorityPerEpochStore {
         &self,
         cert: &VerifiedExecutableTransaction,
         commit_round: Round,
-        generating_randomness: bool,
+        dkg_closed: bool,
     ) -> Option<DeferralKey> {
-        // Defer transaction if it uses randomness but we are not yet generating randomness.
-        if !generating_randomness && self.randomness_state_enabled() && cert.is_randomness_reader()
-        {
+        // Defer transaction if it uses randomness but DKG has not yet closed.
+        if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
             return Some(DeferralKey::new_for_randomness(commit_round));
         }
 
@@ -2379,25 +2378,16 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // Generate randomness for this commit if:
-        // 1. randomness is enabled
-        // 2. DKG is completed
-        // 3. we are still accepting certs
-        let generate_randomness = self.randomness_state_enabled()
+        // If DKG is closed, we should now load any previously-deferred randomness-using tx
+        // so we can decide what to do with them (execute or ignore, depending on whether
+        // DKG was successful).
+        let dkg_closed = self.randomness_state_enabled()
             && self
                 .randomness_manager
                 .get()
                 .expect("randomness manager should exist if randomness is enabled")
-                .is_dkg_completed()
-            // It is ok to just release lock here as functions called by this one are the
-            // only place that transition into RejectAllCerts state, and this function
-            // itself is always executed from consensus task.
-            && self
-                .get_reconfig_state_read_lock_guard()
-                .should_accept_tx();
-
-        // If randomness will be generated, load any previously-deferred randomness-using tx.
-        if generate_randomness {
+                .is_dkg_closed();
+        if dkg_closed {
             let deferred_randomness_tx =
                 self.load_deferred_transactions_for_randomness(&mut batch)?;
             previously_deferred_tx_digests.extend(deferred_randomness_tx.iter().map(|tx| {
@@ -2453,6 +2443,23 @@ impl AuthorityPerEpochStore {
             .chain(sequenced_randomness_transactions)
             .collect();
 
+        // Generate randomness for this commit if:
+        // 1. randomness is enabled
+        // 2. DKG is completed successfully
+        // 3. we are still accepting certs
+        let generate_randomness = dkg_closed
+            && self
+                .randomness_manager
+                .get()
+                .expect("randomness manager should exist if randomness is enabled")
+                .is_dkg_successful()
+            // It is ok to just release lock here as functions called by this one are the
+            // only place that transition into RejectAllCerts state, and this function
+            // itself is always executed from consensus task.
+            && self
+                .get_reconfig_state_read_lock_guard()
+                .should_accept_tx();
+
         let (
             transactions_to_schedule,
             notifications,
@@ -2469,6 +2476,7 @@ impl AuthorityPerEpochStore {
                 cache_reader,
                 commit_round,
                 previously_deferred_tx_digests,
+                dkg_closed,
                 generate_randomness,
             )
             .await?;
@@ -2643,6 +2651,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
         previously_deferred_tx_digests: HashSet<TransactionDigest>,
+        dkg_closed: bool,
         generate_randomness: bool,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
@@ -2652,6 +2661,10 @@ impl AuthorityPerEpochStore {
         Option<RandomnessRound>, // round number for generated randomness
         bool,                    // true if final round
     )> {
+        if generate_randomness {
+            assert!(dkg_closed); // invariant check
+        }
+
         let mut verified_certificates = Vec::with_capacity(transactions.len());
         let mut notifications = Vec::with_capacity(transactions.len());
         let mut deferred_tx_roots = Vec::with_capacity(transactions.len());
@@ -2729,6 +2742,7 @@ impl AuthorityPerEpochStore {
                     checkpoint_service,
                     commit_round,
                     &previously_deferred_tx_digests,
+                    dkg_closed,
                     generate_randomness,
                 )
                 .await?
@@ -2774,7 +2788,7 @@ impl AuthorityPerEpochStore {
 
         if randomness_state_updated {
             if let Some(randomness_manager) = self.randomness_manager.get() {
-                randomness_manager.advance_dkg(batch)?;
+                randomness_manager.advance_dkg(batch, commit_round)?;
             }
         }
 
@@ -2908,6 +2922,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         commit_round: Round,
         previously_deferred_tx_digests: &HashSet<TransactionDigest>,
+        dkg_closed: bool,
         generating_randomness: bool,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
@@ -2965,13 +2980,28 @@ impl AuthorityPerEpochStore {
                 }
 
                 if let Some(deferral_key) =
-                    self.should_defer(&certificate, commit_round, generating_randomness)
+                    self.should_defer(&certificate, commit_round, dkg_closed)
                 {
                     debug!(
                         "Deferring consensus certificate for transaction {:?} until {deferral_key:?}",
                         certificate.digest(),
                     );
                     return Ok(ConsensusCertificateResult::Deferred(deferral_key));
+                }
+
+                if dkg_closed
+                    && !generating_randomness
+                    && self.randomness_state_enabled()
+                    && certificate.is_randomness_reader()
+                {
+                    // TODO-DNS is it sufficient to just ignore a cert here that we won't ever be
+                    // able to execute this epoch, or are there other data structures that need
+                    // to be cleaned up?
+                    debug!(
+                        "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
+                        certificate.digest(),
+                    );
+                    return Ok(ConsensusCertificateResult::Ignored);
                 }
 
                 if certificate.contains_shared_object() {
