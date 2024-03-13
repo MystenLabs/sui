@@ -15,6 +15,7 @@ use crate::IndexerError;
 
 const GET_PARTITION_SQL: &str = r"
 SELECT parent.relname                                            AS table_name,
+       MIN(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS first_partition,
        MAX(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS last_partition
 FROM pg_inherits
          JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
@@ -65,11 +66,13 @@ impl PgPartitionManager {
         Ok(manager)
     }
 
-    pub fn get_table_partitions(&self) -> Result<BTreeMap<String, u64>, IndexerError> {
+    pub fn get_table_partitions(&self) -> Result<BTreeMap<String, (u64, u64)>, IndexerError> {
         #[derive(QueryableByName, Debug, Clone)]
         struct PartitionedTable {
             #[diesel(sql_type = VarChar)]
             table_name: String,
+            #[diesel(sql_type = BigInt)]
+            first_partition: i64,
             #[diesel(sql_type = BigInt)]
             last_partition: i64,
         }
@@ -80,16 +83,23 @@ impl PgPartitionManager {
                 conn
             ))?
             .into_iter()
-            .map(|table: PartitionedTable| (table.table_name, table.last_partition as u64))
+            .map(|table: PartitionedTable| {
+                (
+                    table.table_name,
+                    (table.first_partition as u64, table.last_partition as u64),
+                )
+            })
             .collect(),
         )
     }
 
-    pub fn advance_table_epoch_partition(
+    pub fn advance_and_prune_epoch_partition(
         &self,
         table: String,
+        first_partition: u64,
         last_partition: u64,
         data: &EpochPartitionData,
+        epochs_to_keep: Option<u64>,
     ) -> Result<(), IndexerError> {
         if data.next_epoch == 0 {
             tracing::info!("Epoch 0 partition has been created in the initial setup.");
@@ -115,6 +125,25 @@ impl PgPartitionManager {
                 "Advanced epoch partition for table {} from {} to {}",
                 table, last_partition, data.next_epoch
             );
+
+            // prune old partitions beyond the retention period
+            if let Some(epochs_to_keep) = epochs_to_keep {
+                for epoch in first_partition..(data.next_epoch - epochs_to_keep + 1) {
+                    transactional_blocking_with_retry!(
+                        &self.cp,
+                        |conn| {
+                            RunQueryDsl::execute(
+                                diesel::sql_query("CALL drop_partition($1, $2)")
+                                    .bind::<diesel::sql_types::Text, _>(table.clone())
+                                    .bind::<diesel::sql_types::BigInt, _>(epoch as i64),
+                                conn,
+                            )
+                        },
+                        Duration::from_secs(10)
+                    )?;
+                    info!("Dropped epoch partition {} for table {}", epoch, table);
+                }
+            }
         } else if last_partition != data.next_epoch {
             // skip when the partition is already advanced once, which is possible when indexer
             // crashes and restarts; error otherwise.
