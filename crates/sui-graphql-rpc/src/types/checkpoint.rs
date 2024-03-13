@@ -230,9 +230,8 @@ impl Checkpoint {
         }))
     }
 
-    /// Look up a `Checkpoint` in the database, optionally filtered by sequence number. Otherwise,
-    /// the latest checkpoint is fetched. This method takes a connection, so that it can be used in
-    /// an execute_repeatable transaction.
+    /// Look up a `Checkpoint` in the database and retrieve its `timestamp_ms` field. This method
+    /// takes a connection, so that it can be used within a transaction.
     pub(crate) fn query_timestamp(
         conn: &mut Conn,
         seq_num: i64,
