@@ -16,7 +16,7 @@ use super::system_state_summary::SystemStateSummary;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
-use async_graphql::dataloader::{Loader, DataLoader};
+use async_graphql::dataloader::{DataLoader, Loader};
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
@@ -32,7 +32,7 @@ pub(crate) struct Epoch {
 
 /// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
 /// cursor.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug, Ord, PartialOrd)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub(crate) struct EpochKey {
     pub epoch_id: u64,
     pub checkpoint_viewed_at: Option<u64>,
@@ -280,7 +280,8 @@ impl Epoch {
             dl.load_one(EpochKey {
                 epoch_id,
                 checkpoint_viewed_at,
-            }).await
+            })
+            .await
         } else {
             Self::query_latest_at(ctx.data_unchecked(), checkpoint_viewed_at).await
         }
