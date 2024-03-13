@@ -105,7 +105,7 @@ module sui::random {
         let epoch = tx_context::epoch(ctx);
         let inner = load_inner_mut(self);
         if (inner.randomness_round == 0 && inner.epoch == 0 &&
-                vector::is_empty(&inner.random_bytes)) {
+            vector::is_empty(&inner.random_bytes)) {
             // First update should be for round zero.
             assert!(new_round == 0, EInvalidRandomnessUpdate);
         } else {
@@ -272,7 +272,7 @@ module sui::random {
         (u128_in_range(g, (min as u128), (max as u128), 9) as u8)
     }
 
-    /// Shuffle a vector using the random generator.
+    /// Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
     public fun shuffle<T>(g: &mut RandomGenerator, v: &mut vector<T>) {
         let n = (vector::length(v) as u32);
         if (n == 0) {
@@ -280,7 +280,7 @@ module sui::random {
         };
         let i: u32 = 0;
         while (i < (n - 1)) {
-            let j = generate_u32_in_range(g, i, n-1);
+            let j = generate_u32_in_range(g, i, n - 1);
             vector::swap(v, (i as u64), (j as u64));
             i = i + 1;
         };
@@ -300,5 +300,4 @@ module sui::random {
     public fun generator_buffer(r: &RandomGenerator): &vector<u8> {
         &r.buffer
     }
-
 }

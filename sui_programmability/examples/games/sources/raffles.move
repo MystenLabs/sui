@@ -3,7 +3,7 @@
 
 /// Basic raffles games that depends on Sui randomness.
 ///
-/// Anyone can create a new lottery game with an end time and a price. After the end time, anyone can trigger
+/// Anyone can create a new raffle game with an end time and a price. After the end time, anyone can trigger
 /// a function to determine the winner, and the winner gets the entire balance of the game.
 ///
 /// - raffle_with_tickets uses tickets which could be transferred to other accounts, used as NFTs, etc.
@@ -104,7 +104,7 @@ module games::raffle_with_tickets {
     }
 
     public fun destroy_ticket(ticket: Ticket) {
-        let Ticket { id, game_id:  _, participant_index: _} = ticket;
+        let Ticket { id, game_id: _, participant_index: _ } = ticket;
         object::delete(id);
     }
 
@@ -150,6 +150,9 @@ module games::small_raffle {
     const EGameInProgress: u64 = 0;
     const EGameAlreadyCompleted: u64 = 1;
     const EInvalidAmount: u64 = 2;
+    const EReachedMaxParticipants: u64 = 3;
+
+    const MaxParticipants: u32 = 500;
 
     /// Game represents a set of parameters of a single game.
     struct Game has key {
@@ -181,7 +184,7 @@ module games::small_raffle {
     /// Gas based attacks are not possible since the gas cost of this function is independent of the winner.
     entry fun close(game: Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
-        let Game { id, cost_in_sui: _, participants, end_time: _, balance , participants_table } = game;
+        let Game { id, cost_in_sui: _, participants, end_time: _, balance, participants_table } = game;
         if (participants > 0) {
             let generator = new_generator(r, ctx);
             let winner = random::generate_u32_in_range(&mut generator, 1, participants);
@@ -192,7 +195,6 @@ module games::small_raffle {
             balance::destroy_zero(balance);
         };
 
-        // TODO: will this work with 10K objects?
         let i = 1;
         while (i <= participants) {
             table::remove(&mut participants_table, i);
@@ -206,6 +208,7 @@ module games::small_raffle {
     public fun play(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.end_time > clock::timestamp_ms(clock), EGameAlreadyCompleted);
         assert!(coin::value(&coin) == game.cost_in_sui, EInvalidAmount);
+        assert!(game.participants < MaxParticipants, EReachedMaxParticipants);
 
         game.participants = game.participants + 1;
         coin::put(&mut game.balance, coin);
