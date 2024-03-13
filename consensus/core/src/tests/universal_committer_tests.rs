@@ -234,8 +234,7 @@ fn direct_skip_no_leader_votes() {
     let voting_round_wave_1 = leader_round_wave_1 + 1;
     dag_builder
         .layer(voting_round_wave_1)
-        .no_leader_link(leader_round_wave_1, 0)
-        .build();
+        .no_leader_link(leader_round_wave_1, vec![]);
 
     let decision_round_wave_1 = committer.committers[0].decision_round(1);
     dag_builder.layer(decision_round_wave_1).build();
@@ -271,7 +270,7 @@ fn direct_skip_missing_leader_block() {
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     dag_builder
         .layer(leader_round_wave_1)
-        .no_leader_block(0)
+        .no_leader_block(vec![])
         .build();
 
     // Add enough blocks to reach the decision round of wave 1.
@@ -698,7 +697,7 @@ fn basic_test_setup() -> (
 // TODO: Make this the basic_test_setup()
 fn basic_dag_builder_test_setup() -> (DagBuilder, super::UniversalCommitter) {
     telemetry_subscribers::init_for_testing();
-    let dag_builder = DagBuilder::new(4);
+    let dag_builder = DagBuilder::new(Context::new_for_test(4).0);
 
     // Create committer without pipelining and only 1 leader per leader round
     let committer =

@@ -215,28 +215,6 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
     }
 }
 
-impl From<&str> for AuthorityIndex {
-    fn from(value: &str) -> Self {
-        str_to_authority_index(value).unwrap()
-    }
-}
-// Helper function to convert a string representation (e.g., 'A' or '[26]') to an AuthorityIndex
-fn str_to_authority_index(input: &str) -> Option<AuthorityIndex> {
-    if input.starts_with('[') && input.ends_with(']') && input.len() > 2 {
-        input[1..input.len() - 1]
-            .parse::<u32>()
-            .ok()
-            .map(AuthorityIndex::new_for_test)
-    } else if input.len() == 1 && input.chars().next()?.is_ascii_uppercase() {
-        // Handle single uppercase ASCII alphabetic character
-        let alpha_char = input.chars().next().unwrap();
-        let index = alpha_char as u32 - 'A' as u32;
-        Some(AuthorityIndex::new_for_test(index))
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,23 +238,5 @@ mod tests {
         assert_eq!(committee.total_stake(), 45);
         assert_eq!(committee.quorum_threshold(), 31);
         assert_eq!(committee.validity_threshold(), 15);
-    }
-
-    #[test]
-    fn test_str_to_authority_index() {
-        assert_eq!(AuthorityIndex::from("A"), AuthorityIndex::new_for_test(0));
-        assert_eq!(AuthorityIndex::from("Z"), AuthorityIndex::new_for_test(25));
-        assert_eq!(
-            AuthorityIndex::from("[26]"),
-            AuthorityIndex::new_for_test(26)
-        );
-        assert_eq!(
-            AuthorityIndex::from("[100]"),
-            AuthorityIndex::new_for_test(100)
-        );
-        assert_eq!(str_to_authority_index("a"), None);
-        assert_eq!(str_to_authority_index("0"), None);
-        assert_eq!(str_to_authority_index(" "), None);
-        assert_eq!(str_to_authority_index("!"), None);
     }
 }

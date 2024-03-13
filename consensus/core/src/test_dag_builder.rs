@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
@@ -32,14 +32,14 @@ pub(crate) struct DagBuilder {
     // The current set of ancestors that any new layer will attempt to connect to.
     pub last_ancestors: Vec<BlockRef>,
 
-    // All blocks written to dag state to pretty print or to be retreived for testing.
+    // All blocks written to dag state to pretty print or to be retrieved for testing.
     pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
 }
 
 #[allow(unused)]
 impl DagBuilder {
-    pub(crate) fn new(num_authorities: usize) -> Self {
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
+    pub(crate) fn new(context: Context) -> Self {
+        let context = Arc::new(context);
         let leader_schedule = LeaderSchedule::new(context.clone());
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -100,9 +100,11 @@ impl DagBuilder {
     }
 
     // TODO: confirm pipelined & multi-leader cases work properly
-    pub(crate) fn get_all_leader_blocks(&mut self, num_rounds: u32) -> Vec<VerifiedBlock> {
+    // Leader blocks start from round 1 as we do not consider any blocks from genesis
+    // roudn as a leader block.
+    pub(crate) fn get_all_leader_blocks(&mut self, end_round: u32) -> Vec<VerifiedBlock> {
         let mut blocks = Vec::new();
-        for round in 1..=num_rounds {
+        for round in 1..=end_round {
             for leader_offset in 0..self.number_of_leaders {
                 if self.pipeline || round % self.wave_length == 0 {
                     let slot = Slot::new(
@@ -119,6 +121,9 @@ impl DagBuilder {
     }
 
     // TODO: merge into layer builder?
+    // This method allows the user to specify specific links to ancestors. The
+    // layer is written to dag state and the blocks are cached in [`DagBuilder`]
+    // state.
     pub(crate) fn layer_with_connections(
         &mut self,
         connections: Vec<(AuthorityIndex, Vec<BlockRef>)>,
@@ -131,7 +136,7 @@ impl DagBuilder {
             let block = VerifiedBlock::new_for_test(
                 TestBlock::new(round, author)
                     .set_ancestors(ancestors)
-                    .set_timestamp_ms(base_ts + (author + round) as u64)
+                    .set_timestamp_ms(base_ts + author as u64)
                     .build(),
             );
             references.push(block.reference());
@@ -164,15 +169,19 @@ pub struct LayerBuilder<'a> {
     // Skip leader block proposal
     no_leader_block: bool,
     // Used for leader based configurations
-    leader_offset: Option<u32>,
+    specified_leader_link_offsets: Option<Vec<u32>>,
+    specified_leader_block_offsets: Option<Vec<u32>>,
     leader_round: Option<Round>,
 
     // All ancestors will be linked to the current layer
     fully_linked_ancestors: bool,
-    // Only 2f+1 ancestors will be linked to the current layer
+    // Only 2f+1 random ancestors will be linked to the current layer using a
+    // seed, if provided
     min_ancestor_links: bool,
-    // Add random weak links to the current layer
+    min_ancestor_links_random_seed: Option<u64>,
+    // Add random weak links to the current layer using a seed, if provided
     random_weak_links: bool,
+    random_weak_links_random_seed: Option<u64>,
 
     // Ancestors to link to the current layer
     ancestors: Vec<BlockRef>,
@@ -196,11 +205,14 @@ impl<'a> LayerBuilder<'a> {
             skip_ancestor_links: None,
             no_leader_link: false,
             no_leader_block: false,
-            leader_offset: None,
+            specified_leader_link_offsets: None,
+            specified_leader_block_offsets: None,
             leader_round: None,
             fully_linked_ancestors: true,
             min_ancestor_links: false,
+            min_ancestor_links_random_seed: None,
             random_weak_links: false,
+            random_weak_links_random_seed: None,
             ancestors,
             blocks: vec![],
         }
@@ -208,46 +220,60 @@ impl<'a> LayerBuilder<'a> {
 
     // Configuration methods
 
-    // Only link 2f+1 ancestors to the current layer round
-    pub fn min_ancestor_links(mut self) -> Self {
+    // Only link 2f+1 random ancestors to the current layer round using a seed,
+    // if provided
+    // note: configuration is terminal and layer will be built after this call.
+    pub fn min_ancestor_links(mut self, seed: Option<u64>) {
         self.min_ancestor_links = true;
+        self.min_ancestor_links_random_seed = seed;
         self.fully_linked_ancestors = false;
-        self
+        self.build()
     }
 
     // No links will be created between the specified ancestors and the specified
     // authorities at the layer round.
-    pub fn skip_ancestor_links(mut self, ancestors_to_skip: Vec<AuthorityIndex>) -> Self {
+    // note: configuration is terminal and layer will be built after this call.
+    pub fn skip_ancestor_links(mut self, ancestors_to_skip: Vec<AuthorityIndex>) {
         // authorities must be specified for this to apply
         assert!(self.specified_authorities.is_some());
         self.skip_ancestor_links = Some(ancestors_to_skip);
         self.fully_linked_ancestors = false;
-        self
+        self.build()
     }
 
-    // Add random weak links to the current layer round
-    pub fn random_weak_links(mut self) -> Self {
+    // Add random weak links to the current layer round using a seed, if provided
+    pub fn random_weak_links(mut self, seed: Option<u64>) -> Self {
         self.random_weak_links = true;
+        self.random_weak_links_random_seed = seed;
         self
     }
 
     // Should be called when building a leader round. Will ensure leader block is missing.
-    pub fn no_leader_block(mut self, leader_offset: u32) -> Self {
+    // A list of specified leader offsets can be provided to skip those leaders.
+    // If none are provided all potential leaders for the round will be skipped.
+    pub fn no_leader_block(mut self, specified_leader_offsets: Vec<u32>) -> Self {
         self.no_leader_block = true;
-        self.leader_offset = Some(leader_offset);
+        self.specified_leader_block_offsets = Some(specified_leader_offsets);
         self
     }
 
     // Should be called when building a voting round. Will ensure vote is missing.
-    pub fn no_leader_link(mut self, leader_round: Round, leader_offset: u32) -> Self {
+    // A list of specified leader offsets can be provided to skip those leader links.
+    // If none are provided all potential leaders for the round will be skipped.
+    // note: configuration is terminal and layer will be built after this call.
+    pub fn no_leader_link(mut self, leader_round: Round, specified_leader_offsets: Vec<u32>) {
         self.no_leader_link = true;
-        self.leader_offset = Some(leader_offset);
+        self.specified_leader_link_offsets = Some(specified_leader_offsets);
         self.leader_round = Some(leader_round);
         self.fully_linked_ancestors = false;
-        self
+        self.build()
     }
 
     pub fn authorities(mut self, authorities: Vec<AuthorityIndex>) -> Self {
+        assert!(
+            self.specified_authorities.is_none(),
+            "Specified authorities already set"
+        );
         self.specified_authorities = Some(authorities);
         self
     }
@@ -285,7 +311,8 @@ impl<'a> LayerBuilder<'a> {
                     .collect()
             };
 
-            // todo: investigate if these configurations can be called for the same layer
+            // todo: investigate if these configurations can be called in combination
+            // for the same layer
             let mut connections = if self.fully_linked_ancestors {
                 self.configure_fully_linked_ancestors()
             } else if self.min_ancestor_links {
@@ -326,7 +353,13 @@ impl<'a> LayerBuilder<'a> {
             .authorities()
             .map(|authority| authority.0)
             .collect();
-        authorities.shuffle(&mut thread_rng());
+
+        // Initialize the RNG with a seed for reproducibility, if provided
+        let mut rng = match self.min_ancestor_links_random_seed {
+            Some(s) => StdRng::seed_from_u64(s),
+            None => StdRng::from_entropy(),
+        };
+        authorities.shuffle(&mut rng);
 
         authorities
             .into_iter()
@@ -337,7 +370,7 @@ impl<'a> LayerBuilder<'a> {
 
     // TODO: configure layer round randomly connected with weak links.
     fn configure_random_weak_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
-        vec![]
+        unimplemented!("configure_random_weak_links");
     }
 
     // Layer round misses link to leader, but other blocks are fully connected with ancestors.
@@ -346,12 +379,28 @@ impl<'a> LayerBuilder<'a> {
         authorities: Vec<AuthorityIndex>,
         round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
-        let missing_leader = self.dag_builder.leader_schedule.elect_leader(
-            self.leader_round.expect("leader round should be set"),
-            self.leader_offset.expect("leader_offset should be set"),
-        );
+        let mut missing_leaders = Vec::new();
+        let mut specified_leader_offsets = self
+            .specified_leader_link_offsets
+            .clone()
+            .expect("specified_leader_offsets should be set");
+        let leader_round = self.leader_round.expect("leader round should be set");
 
-        self.configure_skipped_ancestor_links(authorities, vec![missing_leader])
+        // When no specified leader offsets are available, all leaders are
+        // expected to be missing.
+        if specified_leader_offsets.is_empty() {
+            specified_leader_offsets.extend(0..self.dag_builder.number_of_leaders);
+        }
+
+        for leader_offset in specified_leader_offsets {
+            missing_leaders.push(
+                self.dag_builder
+                    .leader_schedule
+                    .elect_leader(leader_round, leader_offset),
+            );
+        }
+
+        self.configure_skipped_ancestor_links(authorities, missing_leaders)
     }
 
     fn configure_fully_linked_ancestors(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
@@ -436,11 +485,27 @@ impl<'a> LayerBuilder<'a> {
             return true;
         }
         if self.no_leader_block {
-            let leader = self.dag_builder.leader_schedule.elect_leader(
-                round,
-                self.leader_offset.expect("leader_offset should be set"),
-            );
-            return leader == authority;
+            let mut specified_leader_offsets = self
+                .specified_leader_block_offsets
+                .clone()
+                .expect("specified_leader_block_offsets should be set");
+
+            // When no specified leader offsets are available, all leaders are
+            // expected to be skipped.
+            if specified_leader_offsets.is_empty() {
+                specified_leader_offsets.extend(0..self.dag_builder.number_of_leaders);
+            }
+
+            for leader_offset in specified_leader_offsets {
+                let leader = self
+                    .dag_builder
+                    .leader_schedule
+                    .elect_leader(round, leader_offset);
+
+                if leader == authority {
+                    return true;
+                }
+            }
         }
         false
     }

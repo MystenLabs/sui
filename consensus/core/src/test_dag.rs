@@ -50,7 +50,7 @@ pub(crate) fn build_dag(
                 let base_ts = round as BlockTimestampMs * 1000;
                 let block = VerifiedBlock::new_for_test(
                     TestBlock::new(round, author_idx)
-                        .set_timestamp_ms(base_ts + (author_idx + round) as u64)
+                        .set_timestamp_ms(base_ts + author_idx as u64)
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );

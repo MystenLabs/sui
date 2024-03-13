@@ -16,6 +16,7 @@ use nom::{
 
 use crate::{
     block::{BlockRef, Round, Slot},
+    context::Context,
     test_dag_builder::DagBuilder,
 };
 
@@ -26,7 +27,8 @@ pub(crate) fn parse_dag(dag_string: &str) -> IResult<&str, DagBuilder> {
     let (input, _) = tuple((tag("DAG"), multispace0, char('{')))(dag_string)?;
 
     let (mut input, num_authors) = parse_genesis(input)?;
-    let mut dag_builder = DagBuilder::new(num_authors as usize);
+
+    let mut dag_builder = DagBuilder::new(Context::new_for_test(num_authors as usize).0);
 
     // Parse subsequent rounds
     loop {
@@ -169,7 +171,13 @@ fn parse_author_and_connections(input: &str) -> IResult<&str, (AuthorityIndex, V
         terminated(char(']'), opt(char(','))),
     )(input)?;
     let (input, _) = opt(multispace1)(input)?;
-    Ok((input, (author.into(), connections)))
+    Ok((
+        input,
+        (
+            str_to_authority_index(author).expect("Invalid authority index"),
+            connections,
+        ),
+    ))
 }
 
 fn parse_block(input: &str) -> IResult<&str, &str> {
@@ -210,7 +218,11 @@ fn parse_authority_count(input: &str) -> IResult<&str, u32> {
 fn parse_slot(input: &str) -> IResult<&str, Slot> {
     let parse_authority = map_res(
         take_while_m_n(1, 1, |c: char| c.is_alphabetic() && c.is_uppercase()),
-        |letter: &str| Ok::<_, nom::error::ErrorKind>(AuthorityIndex::from(letter)),
+        |letter: &str| {
+            Ok::<_, nom::error::ErrorKind>(
+                str_to_authority_index(letter).expect("Invalid authority index"),
+            )
+        },
     );
 
     let parse_round = map_res(digit1, |digits: &str| digits.parse::<Round>());
@@ -219,6 +231,23 @@ fn parse_slot(input: &str) -> IResult<&str, Slot> {
 
     let (input, (authority, round)) = parser(input)?;
     Ok((input, Slot::new(round, authority)))
+}
+
+// Helper function to convert a string representation (e.g., 'A' or '[26]') to an AuthorityIndex
+fn str_to_authority_index(input: &str) -> Option<AuthorityIndex> {
+    if input.starts_with('[') && input.ends_with(']') && input.len() > 2 {
+        input[1..input.len() - 1]
+            .parse::<u32>()
+            .ok()
+            .map(AuthorityIndex::new_for_test)
+    } else if input.len() == 1 && input.chars().next()?.is_ascii_uppercase() {
+        // Handle single uppercase ASCII alphabetic character
+        let alpha_char = input.chars().next().unwrap();
+        let index = alpha_char as u32 - 'A' as u32;
+        Some(AuthorityIndex::new_for_test(index))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -280,14 +309,14 @@ mod tests {
         assert!(result.is_ok());
         let (_, slot) = result.unwrap();
 
-        assert_eq!(slot.authority, AuthorityIndex::from("A"));
+        assert_eq!(slot.authority, str_to_authority_index("A").unwrap());
         assert_eq!(slot.round, 0);
     }
 
     #[test]
     fn test_all_round_parsing() {
         let dag_str = "Round 1 : { * }";
-        let dag_builder = DagBuilder::new(4);
+        let dag_builder = DagBuilder::new(Context::new_for_test(4).0);
         let result = parse_round(dag_str, &dag_builder);
         assert!(result.is_ok());
         let (_, (round, connections)) = result.unwrap();
@@ -306,7 +335,7 @@ mod tests {
             B -> [*, A0],
             C -> [-A0],
         }";
-        let dag_builder = DagBuilder::new(4);
+        let dag_builder = DagBuilder::new(Context::new_for_test(4).0);
         let result = parse_round(dag_str, &dag_builder);
         assert!(result.is_ok());
         let (_, (round, connections)) = result.unwrap();
@@ -333,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_parse_author_and_connections() {
-        let expected_authority = AuthorityIndex::from("A");
+        let expected_authority = str_to_authority_index("A").unwrap();
 
         // case 1: all authorities
         let dag_str = "A -> [*]";
@@ -368,5 +397,29 @@ mod tests {
         assert_eq!(actual_connections, ["*", "A0", "-B0"]);
 
         // todo: case 5: byzantine case of multiple blocks per slot; [*]; timestamp=1
+    }
+
+    #[test]
+    fn test_str_to_authority_index() {
+        assert_eq!(
+            str_to_authority_index("A"),
+            Some(AuthorityIndex::new_for_test(0))
+        );
+        assert_eq!(
+            str_to_authority_index("Z"),
+            Some(AuthorityIndex::new_for_test(25))
+        );
+        assert_eq!(
+            str_to_authority_index("[26]"),
+            Some(AuthorityIndex::new_for_test(26))
+        );
+        assert_eq!(
+            str_to_authority_index("[100]"),
+            Some(AuthorityIndex::new_for_test(100))
+        );
+        assert_eq!(str_to_authority_index("a"), None);
+        assert_eq!(str_to_authority_index("0"), None);
+        assert_eq!(str_to_authority_index(" "), None);
+        assert_eq!(str_to_authority_index("!"), None);
     }
 }
