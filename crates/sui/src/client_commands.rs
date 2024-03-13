@@ -3,7 +3,7 @@
 
 use crate::client_ptb::ptb::PTB;
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
     str::FromStr,
@@ -51,7 +51,7 @@ use sui_sdk::{
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
-    digests::TransactionDigest,
+    digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
     gas_coin::GasCoin,
@@ -60,8 +60,11 @@ use sui_types::{
     move_package::UpgradeCap,
     object::Owner,
     parse_sui_type_tag,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::GenericSignature,
-    transaction::{SenderSignedData, Transaction, TransactionData, TransactionDataAPI},
+    transaction::{
+        SenderSignedData, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+    },
 };
 
 use json_to_table::json_to_table;
@@ -1205,22 +1208,35 @@ impl SuiClientCommands {
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
-                let from = context.get_object_owner(&object_id).await?;
-                let to = get_identity_address(Some(to), context)?;
                 let client = context.get_client().await?;
+                let sender = context.get_object_owner(&object_id).await?;
+                let recipient = get_identity_address(Some(to), context)?;
+
+                let mut ptb = ProgrammableTransactionBuilder::new();
+                ptb.transfer_object(recipient, context.get_object_ref(object_id).await?)?;
+                // finish building the transaction block by calling finish on the ptb
+                let builder = ptb.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(builder);
+                let gas_price = client.read_api().get_reference_gas_price().await?;
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
                 } else {
-                    let tx = client
-                        .transaction_builder()
-                        .transfer_object(from, object_id, gas, max_gas_budget(context).await?, to)
-                        .await?;
+                    let tx = TransactionData::new_with_gas_coins(
+                        tx_kind.clone(),
+                        sender,
+                        vec![],
+                        max_gas_budget(context).await?,
+                        gas_price,
+                    );
                     estimate_gas_budget(context, tx).await?
                 };
-                let data = client
-                    .transaction_builder()
-                    .transfer_object(from, object_id, gas, gas_budget, to)
-                    .await?;
+                let data = TransactionData::new_with_gas_coins(
+                    tx_kind,
+                    sender,
+                    vec![select_gas_coins(context, gas, gas_budget, sender).await?],
+                    gas_budget,
+                    gas_price,
+                );
                 serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
@@ -2722,4 +2738,23 @@ pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::
         Some(Some(sui_json_rpc_types::SuiProtocolConfigValue::U64(y))) => *y,
         _ => MAX_GAS_BUDGET,
     })
+}
+
+/// Select the gas coins
+async fn select_gas_coins(
+    context: &mut WalletContext,
+    gas: Option<ObjectID>,
+    gas_budget: u64,
+    sender: SuiAddress,
+) -> Result<(ObjectID, SequenceNumber, ObjectDigest), anyhow::Error> {
+    // find the gas coins if we have no gas coin given
+    if let Some(gas) = gas {
+        Ok(context.get_object_ref(gas).await?)
+    } else {
+        Ok(context
+            .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
+            .await?
+            .1
+            .object_ref())
+    }
 }
