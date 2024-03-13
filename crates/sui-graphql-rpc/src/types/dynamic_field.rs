@@ -335,7 +335,7 @@ fn dynamic_fields_query(
         View::Consistent,
         lhs,
         rhs,
-        Some(page),
+        page,
         move |query| apply_filter(query, parent, parent_version),
         move |newer| {
             if let Some(parent_version) = parent_version {

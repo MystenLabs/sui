@@ -385,7 +385,7 @@ fn coins_query(
         View::Consistent,
         lhs,
         rhs,
-        Some(page),
+        page,
         move |query| apply_filter(query, &coin_type, owner),
         move |newer| newer,
     )

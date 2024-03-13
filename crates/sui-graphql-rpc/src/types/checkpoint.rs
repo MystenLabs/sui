@@ -233,22 +233,16 @@ impl Checkpoint {
     /// Look up a `Checkpoint` in the database, optionally filtered by sequence number. Otherwise,
     /// the latest checkpoint is fetched. This method takes a connection, so that it can be used in
     /// an execute_repeatable transaction.
-    pub(crate) fn query_stored(
+    pub(crate) fn query_timestamp(
         conn: &mut Conn,
-        seq_num: Option<i64>,
-    ) -> Result<StoredCheckpoint, diesel::result::Error> {
+        seq_num: i64,
+    ) -> Result<i64, diesel::result::Error> {
         use checkpoints::dsl;
 
-        let stored: StoredCheckpoint = conn.first(move || {
-            let mut query = dsl::checkpoints
-                .order_by(dsl::sequence_number.desc())
-                .into_boxed();
-
-            if let Some(seq_num) = seq_num {
-                query = query.filter(dsl::sequence_number.eq(seq_num));
-            }
-
-            query
+        let stored = conn.first(move || {
+            dsl::checkpoints
+                .select(dsl::timestamp_ms)
+                .filter(dsl::sequence_number.eq(seq_num))
         })?;
 
         Ok(stored)

@@ -404,15 +404,12 @@ impl OwnerImpl {
     }
 
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        Ok(NameService::reverse_resolve_to_name(
-            ctx.data_unchecked::<Db>(),
-            ctx.data_unchecked::<NameServiceConfig>(),
-            self.address,
-            self.checkpoint_viewed_at,
+        Ok(
+            NameService::reverse_resolve_to_name(ctx, self.address, self.checkpoint_viewed_at)
+                .await
+                .extend()?
+                .map(|d| d.to_string()),
         )
-        .await
-        .extend()?
-        .map(|d| d.to_string()))
     }
 
     pub(crate) async fn suins_registrations(

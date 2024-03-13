@@ -336,18 +336,25 @@ impl NameService {
     ///
     /// For leaf domains, the `NameRecord` is returned only if its parent is valid and not expired.
     pub(crate) async fn resolve_to_record(
-        db: &Db,
-        config: &NameServiceConfig,
+        ctx: &Context<'_>,
         domain: &Domain,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<NameRecord>, Error> {
+        let config = ctx.data_unchecked::<NameServiceConfig>();
+        // Create a page with a bound of 2 to fetch the domain's NameRecord and potentially its parent's
+        let page: Page<object::Cursor> =
+            Page::from_params(ctx.data_unchecked(), Some(2), None, None, None).map_err(|_| {
+                Error::Internal("Page size of 2 is incompatible with configured limits".to_string())
+            })?;
+
         let record_id: SuiAddress = config.record_field_id(&domain.0).into();
         let parent_record_id: SuiAddress = config.record_field_id(&domain.0.parent()).into();
 
         // Query for the domain's NameRecord and parent NameRecord if applicable. The checkpoint's
         // timestamp is also fetched. These values are used to determine if the domain is expired.
         let Some(query) = Self::query_domain_expiration(
-            db,
+            ctx.data_unchecked(),
+            page,
             record_id,
             if domain.0.is_subdomain() {
                 Some(parent_record_id)
@@ -399,15 +406,20 @@ impl NameService {
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
     /// for, or `None` if the data was requested at the latest checkpoint.
     pub(crate) async fn reverse_resolve_to_name(
-        db: &Db,
-        config: &NameServiceConfig,
+        ctx: &Context<'_>,
         address: SuiAddress,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<NativeDomain>, Error> {
+        let config = ctx.data_unchecked::<NameServiceConfig>();
+
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
-        let Some(object) =
-            MoveObject::query(db, reverse_record_id.into(), ObjectLookupKey::Latest).await?
+        let Some(object) = MoveObject::query(
+            ctx.data_unchecked(),
+            reverse_record_id.into(),
+            ObjectLookupKey::Latest,
+        )
+        .await?
         else {
             return Ok(None);
         };
@@ -421,8 +433,7 @@ impl NameService {
 
         // We attempt to resolve the domain to a record, and if it fails, we return None. That way
         // we can validate that the name has not expired and is still valid.
-        let Some(_) = Self::resolve_to_record(db, config, &domain, checkpoint_viewed_at).await?
-        else {
+        let Some(_) = Self::resolve_to_record(ctx, &domain, checkpoint_viewed_at).await? else {
             return Ok(None);
         };
 
@@ -433,6 +444,7 @@ impl NameService {
     /// the checkpoint bound.
     async fn query_domain_expiration(
         db: &Db,
+        page: Page<object::Cursor>,
         record_id: SuiAddress,
         parent_record_id: Option<SuiAddress>,
         checkpoint_viewed_at: Option<u64>,
@@ -457,13 +469,13 @@ impl NameService {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                let checkpoint = Checkpoint::query_stored(conn, Some(rhs as i64))?;
+                let timestamp_ms = Checkpoint::query_timestamp(conn, rhs as i64)?;
 
                 let sql = build_objects_query(
                     crate::consistency::View::Consistent,
                     lhs as i64,
                     rhs as i64,
-                    None,
+                    &page,
                     move |query| filter.apply(query),
                     move |newer| newer,
                 );
@@ -471,11 +483,11 @@ impl NameService {
                 let objects: Vec<StoredHistoryObject> =
                     conn.results(move || sql.clone().into_boxed())?;
 
-                Ok(Some((checkpoint, objects)))
+                Ok(Some((timestamp_ms, objects)))
             })
             .await?;
 
-        let Some((checkpoint, results)) = response else {
+        let Some((timestamp_ms, results)) = response else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));
@@ -504,7 +516,7 @@ impl NameService {
         Ok(Some(DomainExpiration {
             parent_name_record,
             name_record,
-            checkpoint_timestamp_ms: checkpoint.timestamp_ms as u64,
+            checkpoint_timestamp_ms: timestamp_ms as u64,
         }))
     }
 }
