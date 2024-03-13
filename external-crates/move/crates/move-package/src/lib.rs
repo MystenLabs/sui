@@ -128,26 +128,32 @@ impl LintFlag {
         no_lint: true,
         lint: false,
     };
-    const LEVEL_DEFAULT: Self = Self {
+    pub const LEVEL_DEFAULT: Self = Self {
         no_lint: false,
         lint: false,
     };
-    const LEVEL_ALL: Self = Self {
+    pub const LEVEL_ALL: Self = Self {
         no_lint: false,
         lint: true,
     };
 
-    pub fn get(&self) -> LintLevel {
+    pub fn get(self) -> LintLevel {
         match self {
-            &Self::LEVEL_NONE => LintLevel::None,
-            &Self::LEVEL_DEFAULT => LintLevel::Default,
-            &Self::LEVEL_ALL => LintLevel::All,
+            Self::LEVEL_NONE => LintLevel::None,
+            Self::LEVEL_DEFAULT => LintLevel::Default,
+            Self::LEVEL_ALL => LintLevel::All,
             _ => unreachable!(),
         }
     }
 
     pub fn set(&mut self, level: LintLevel) {
-        *self = match level {
+        *self = level.into();
+    }
+}
+
+impl From<LintLevel> for LintFlag {
+    fn from(level: LintLevel) -> Self {
+        match level {
             LintLevel::None => Self::LEVEL_NONE,
             LintLevel::Default => Self::LEVEL_DEFAULT,
             LintLevel::All => Self::LEVEL_ALL,

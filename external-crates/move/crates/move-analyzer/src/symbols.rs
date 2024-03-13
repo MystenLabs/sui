@@ -90,6 +90,7 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     editions::Flavor,
     expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+    linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
     shared::{Identifier, Name},
@@ -662,7 +663,7 @@ impl SymbolicatorRunner {
         ide_files_root: VfsPath,
         symbols: Arc<Mutex<Symbols>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
-        lint: bool,
+        lint: LintLevel,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -960,13 +961,13 @@ impl Symbols {
 pub fn get_symbols(
     ide_files_root: VfsPath,
     pkg_path: &Path,
-    lint: bool,
+    lint: LintLevel,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let build_config = move_package::BuildConfig {
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: Some(Flavor::Sui),
-        no_lint: !lint,
+        lint_flag: lint.into(),
         ..Default::default()
     };
 
@@ -3519,7 +3520,7 @@ fn docstring_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -3790,7 +3791,7 @@ fn symbols_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -4831,7 +4832,7 @@ fn const_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5071,7 +5072,7 @@ fn imports_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5273,7 +5274,7 @@ fn module_access_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5428,7 +5429,7 @@ fn parse_error_test() {
     path.push("tests/parse-error");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5513,7 +5514,7 @@ fn parse_error_with_deps_test() {
     path.push("tests/parse-error-dep");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5562,7 +5563,7 @@ fn pretype_error_test() {
     path.push("tests/pre-type-error");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5597,7 +5598,7 @@ fn pretype_error_with_deps_test() {
     path.push("tests/pre-type-error-dep");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5695,7 +5696,7 @@ fn dot_call_test() {
     path.push("tests/move-2024");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -6025,7 +6026,7 @@ fn mod_ident_uniform_test() {
     path.push("tests/mod-ident-uniform");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), LintLevel::None).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
