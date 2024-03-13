@@ -330,10 +330,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
 
-    // Enable v2 of Headers for Narwhal
-    #[serde(skip_serializing_if = "is_false")]
-    narwhal_header_v2: bool,
-
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
@@ -1109,17 +1105,8 @@ impl ProtocolConfig {
         self.enable_jwk_consensus_updates()
     }
 
-    pub fn narwhal_header_v2(&self) -> bool {
-        self.feature_flags.narwhal_header_v2
-    }
-
     pub fn random_beacon(&self) -> bool {
-        let ret = self.feature_flags.random_beacon;
-        if ret {
-            // random beacon requires narwhal v2 headers
-            assert!(self.feature_flags.narwhal_header_v2);
-        }
-        ret
+        self.feature_flags.random_beacon
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -1823,7 +1810,6 @@ impl ProtocolConfig {
                     }
                     // Only enable random beacon on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
                         cfg.random_beacon_reduction_lower_bound = Some(1600);
                     }

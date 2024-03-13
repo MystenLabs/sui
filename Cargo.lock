@@ -7490,7 +7490,6 @@ name = "narwhal-config"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
- "fastcrypto-tbls",
  "insta",
  "match_opt",
  "mysten-network",
@@ -7513,7 +7512,6 @@ dependencies = [
  "bincode",
  "criterion",
  "fastcrypto",
- "fastcrypto-tbls",
  "hex-literal 0.3.4",
  "proptest",
  "proptest-derive",
@@ -7646,7 +7644,6 @@ dependencies = [
  "criterion",
  "dashmap",
  "fastcrypto",
- "fastcrypto-tbls",
  "futures",
  "governor",
  "indexmap 2.1.0",
@@ -7688,7 +7685,6 @@ name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
- "fastcrypto-tbls",
  "futures",
  "lru 0.10.0",
  "mysten-common",
@@ -7751,7 +7747,6 @@ dependencies = [
  "derive_builder",
  "enum_dispatch",
  "fastcrypto",
- "fastcrypto-tbls",
  "futures",
  "indexmap 2.1.0",
  "mockall",
