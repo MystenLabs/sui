@@ -36,7 +36,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
@@ -1704,5 +1704,56 @@ impl FromStr for GenericSignature {
     type Err = eyre::Report;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::decode_base64(s).map_err(|e| eyre!("Fail to decode base64 {}", e.to_string()))
+    }
+}
+
+//
+// Types for randomness generation
+//
+pub type RandomnessSignature = fastcrypto_tbls::types::Signature;
+pub type RandomnessPartialSignature = fastcrypto_tbls::tbls::PartialSignature<RandomnessSignature>;
+pub type RandomnessPrivateKey =
+    fastcrypto_tbls::ecies::PrivateKey<fastcrypto::groups::bls12381::G2Element>;
+
+/// Round number of generated randomness.
+#[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RandomnessRound(pub u64);
+
+impl Display for RandomnessRound {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::ops::Add for RandomnessRound {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+}
+
+impl std::ops::Add<u64> for RandomnessRound {
+    type Output = Self;
+    fn add(self, other: u64) -> Self {
+        Self(self.0 + other)
+    }
+}
+
+impl RandomnessRound {
+    pub fn new(round: u64) -> Self {
+        Self(round)
+    }
+
+    pub fn checked_add(self, rhs: u64) -> Option<Self> {
+        self.0.checked_add(rhs).map(Self)
+    }
+
+    pub fn signature_message(&self) -> Vec<u8> {
+        "random_beacon round "
+            .as_bytes()
+            .iter()
+            .cloned()
+            .chain(bcs::to_bytes(&self.0).expect("serialization should not fail"))
+            .collect()
     }
 }

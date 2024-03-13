@@ -1,5 +1,5 @@
 #[test_only]
-module a::vector_tests {
+module A::vector_tests {
     use std::vector as V;
 
     public struct R has store { }

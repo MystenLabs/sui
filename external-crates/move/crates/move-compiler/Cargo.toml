@@ -33,6 +33,7 @@ move-ir-to-bytecode.workspace = true
 move-borrow-graph.workspace = true
 move-bytecode-source-map.workspace = true
 move-command-line-common.workspace = true
+move-proc-macros.workspace = true
 
 [dev-dependencies]
 move-stdlib.workspace = true

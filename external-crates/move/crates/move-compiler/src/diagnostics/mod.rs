@@ -91,10 +91,12 @@ enum UnprefixedWarningFilters {
     Empty,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
 enum MigrationChange {
     AddMut,
     AddPublic,
+    Backquote(String),
+    AddGlobalQual,
 }
 
 // All of the migration changes
@@ -521,6 +523,10 @@ impl Diagnostic {
         &self.info
     }
 
+    pub fn primary_msg(&self) -> &str {
+        &self.primary_label.1
+    }
+
     pub fn is_migration(&self) -> bool {
         const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
         self.info.category() == MIGRATION_CATEGORY
@@ -571,6 +577,18 @@ macro_rules! ice {
             $crate::diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*);
         diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
         diag
+    }}
+}
+
+#[macro_export]
+macro_rules! ice_assert {
+    ($env: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
+        if !$cond {
+            $env.add_diag($crate::ice!((
+                $loc,
+                format!($($arg)*),
+            )));
+        }
     }}
 }
 
@@ -786,6 +804,8 @@ impl Migration {
         const CAT: u8 = Category::Migration as u8;
         const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
+        const NEEDS_BACKTICKS: u8 = codes::Migration::NeedsRestrictedIdentifier as u8;
+        const NEEDS_GLOBAL_QUAL: u8 = codes::Migration::NeedsGlobalQualification as u8;
 
         let (file_id, line, col) = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
@@ -793,6 +813,13 @@ impl Migration {
         match (diag.info().category(), diag.info().code()) {
             (CAT, NEEDS_MUT) => line_change_entry.push((col, MigrationChange::AddMut)),
             (CAT, NEEDS_PUBLIC) => line_change_entry.push((col, MigrationChange::AddPublic)),
+            (CAT, NEEDS_BACKTICKS) => {
+                let old_name = diag.primary_msg().to_string();
+                line_change_entry.push((col, MigrationChange::Backquote(old_name)))
+            }
+            (CAT, NEEDS_GLOBAL_QUAL) => {
+                line_change_entry.push((col, MigrationChange::AddGlobalQual))
+            }
             _ => unreachable!(),
         }
     }
@@ -826,6 +853,14 @@ impl Migration {
                     }
                     MigrationChange::AddPublic => {
                         output = format!("public {}{}", rest, output);
+                        line_prefix = &line_prefix[..*col];
+                    }
+                    MigrationChange::Backquote(old_name) => {
+                        output = format!("`{}`{}{}", old_name, &rest[old_name.len()..], output);
+                        line_prefix = &line_prefix[..*col];
+                    }
+                    MigrationChange::AddGlobalQual => {
+                        output = format!("::{}{}", rest, output);
                         line_prefix = &line_prefix[..*col];
                     }
                 }
@@ -908,7 +943,10 @@ impl Migration {
     ) -> BTreeMap<usize, BTreeSet<MigrationChange>> {
         let mut migration_set: BTreeMap<usize, BTreeSet<MigrationChange>> = BTreeMap::new();
         for (col, change) in change_list {
-            migration_set.entry(*col).or_default().insert(*change);
+            migration_set
+                .entry(*col)
+                .or_default()
+                .insert(change.clone());
         }
         migration_set
     }

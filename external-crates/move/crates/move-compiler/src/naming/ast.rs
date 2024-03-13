@@ -6,12 +6,12 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
-        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Value, Value_,
-        Visibility,
+        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, Value,
+        Value_, Visibility,
     },
     parser::ast::{
-        self as P, Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName,
-        UnaryOp, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        self as P, Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp,
+        ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
@@ -312,7 +312,7 @@ pub struct BlockLabel {
 pub enum LValue_ {
     Ignore,
     Var {
-        mut_: Mutability,
+        mut_: Option<Mutability>,
         var: Var,
         unused_binding: bool,
     },
@@ -1196,9 +1196,7 @@ impl AstDebug for FunctionSignature {
         type_parameters.ast_debug(w);
         w.write("(");
         w.comma(parameters, |w, (mut_, v, st)| {
-            if mut_.is_some() {
-                w.write("mut ");
-            }
+            mut_.ast_debug(w);
             v.ast_debug(w);
             w.write(": ");
             st.ast_debug(w);
@@ -1705,8 +1703,8 @@ impl AstDebug for LValue_ {
                 var,
                 unused_binding,
             } => {
-                if mut_.is_some() {
-                    w.write("mut ");
+                if let Some(mut_) = mut_ {
+                    mut_.ast_debug(w);
                 }
                 var.ast_debug(w);
                 if *unused_binding {

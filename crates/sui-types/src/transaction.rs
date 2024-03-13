@@ -7,8 +7,8 @@ use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
-    ToFromBytes,
+    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
+    SuiSignatureInner, ToFromBytes,
 };
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
@@ -241,7 +241,7 @@ pub struct RandomnessStateUpdate {
     /// Epoch of the randomness state update transaction
     pub epoch: u64,
     /// Randomness round of the update
-    pub randomness_round: u64,
+    pub randomness_round: RandomnessRound,
     /// Updated random bytes
     pub random_bytes: Vec<u8>,
     /// The initial version of the randomness object that it was shared at.
@@ -2359,12 +2359,41 @@ impl<S> Envelope<SenderSignedData, S> {
             .into_iter()
     }
 
+    // Returns the primary key for this transaction.
+    pub fn key(&self) -> TransactionKey {
+        match &self.data().intent_message().value.kind() {
+            TransactionKind::RandomnessStateUpdate(rsu) => {
+                TransactionKey::RandomnessRound(rsu.epoch, rsu.randomness_round)
+            }
+            _ => TransactionKey::Digest(*self.digest()),
+        }
+    }
+
+    // Returns non-Digest keys that could be used to refer to this transaction.
+    //
+    // At the moment this returns a single Option for efficiency, but if more key types are added,
+    // the return type could change to Vec<TransactionKey>.
+    pub fn non_digest_key(&self) -> Option<TransactionKey> {
+        match &self.data().intent_message().value.kind() {
+            TransactionKind::RandomnessStateUpdate(rsu) => Some(TransactionKey::RandomnessRound(
+                rsu.epoch,
+                rsu.randomness_round,
+            )),
+            _ => None,
+        }
+    }
+
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
     }
 
     pub fn is_sponsored_tx(&self) -> bool {
         self.data().intent_message().value.is_sponsored_tx()
+    }
+
+    pub fn is_randomness_reader(&self) -> bool {
+        self.shared_input_objects()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 }
 
@@ -2499,7 +2528,7 @@ impl VerifiedTransaction {
 
     pub fn new_randomness_state_update(
         epoch: u64,
-        randomness_round: u64,
+        randomness_round: RandomnessRound,
         random_bytes: Vec<u8>,
         randomness_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
@@ -3046,5 +3075,23 @@ impl Display for CertifiedTransaction {
         )?;
         write!(writer, "{}", &self.data().intent_message().value.kind())?;
         write!(f, "{}", writer)
+    }
+}
+
+/// TransactionKey uniquely identifies a transaction across all epochs.
+/// Note that a single transaction may have multiple keys, for example a RandomnessStateUpdate
+/// could be identified by both `Digest` and `RandomnessRound`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum TransactionKey {
+    Digest(TransactionDigest),
+    RandomnessRound(EpochId, RandomnessRound),
+}
+
+impl TransactionKey {
+    pub fn unwrap_digest(&self) -> &TransactionDigest {
+        match self {
+            TransactionKey::Digest(d) => d,
+            _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
+        }
     }
 }

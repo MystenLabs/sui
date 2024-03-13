@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use move_binary_format::{file_format::StructFieldInformation, CompiledModule};
 use move_core_types::identifier::Identifier;
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::to_value;
+use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::{prelude::*, JsValue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -18,27 +18,51 @@ pub fn version() -> String {
 }
 
 #[wasm_bindgen]
-/// Deserialize the bytecode into a JSON string.
-pub fn deserialize(binary: String) -> Result<JsValue, JsErr> {
-    let bytes = hex::decode(binary)?;
-    let compiled_module = CompiledModule::deserialize_with_defaults(&bytes[..])?;
-    let serialized = serde_json::to_string(&compiled_module)?;
-    Ok(to_value(&serialized)?)
+/// Deserialize the `Uint8Array`` bytecode into a JSON object.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+///
+/// const json = template.deserialize( binary );
+/// console.log( json, json.identifiers );
+/// ```
+pub fn deserialize(binary: &[u8]) -> Result<JsValue, JsErr> {
+    let compiled_module = CompiledModule::deserialize_with_defaults(binary)?;
+    Ok(to_value(&compiled_module)?)
 }
 
 #[wasm_bindgen]
-/// Perform an operation on a bytecode string - deserialize, patch the identifiers
-/// and serialize back to a bytecode string.
-pub fn update_identifiers(binary: String, map: JsValue) -> Result<JsValue, JsErr> {
-    let bytes = hex::decode(binary)?;
-    let updates: HashMap<String, String> = serde_wasm_bindgen::from_value(map)?;
-    let mut compiled_module = CompiledModule::deserialize_with_defaults(&bytes[..])?;
+/// Update the identifiers in the module bytecode, given a map of old -> new identifiers.
+/// Returns the updated bytecode.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+///
+/// const updated = template.update_identifiers( binary, {
+///     'TEMPLATE': 'NEW_VALUE',
+///     'template': 'new_value',
+///     'Name':     'NewName'
+/// });
+/// ```
+pub fn update_identifiers(binary: &[u8], map: JsValue) -> Result<Box<[u8]>, JsErr> {
+    let mut updates: HashMap<String, String> = serde_wasm_bindgen::from_value(map)?;
+    let mut compiled_module = CompiledModule::deserialize_with_defaults(binary)?;
 
     // First update the identifiers.
     for ident in compiled_module.identifiers.iter_mut() {
         let old = ident.to_string();
-        if let Some(new) = updates.get(&old) {
-            *ident = Identifier::new(new.clone()).map_err(|err| JsErr {
+        if updates.contains_key(&old) {
+            let new = updates.remove(&old).unwrap();
+
+            // Check if the new identifier is valid. Return a proper error if not.
+            if !Identifier::is_valid(&new) {
+                return Err(JsErr {
+                    display: format!("Invalid identifier: {}", new),
+                    message: "Invalid identifier".to_string(),
+                });
+            }
+
+            *ident = Identifier::new(new).map_err(|err| JsErr {
                 display: format!("{}", err),
                 message: err.to_string(),
             })?;
@@ -91,13 +115,42 @@ pub fn update_identifiers(binary: String, map: JsValue) -> Result<JsValue, JsErr
             message: err.to_string(),
         })?;
 
-    Ok(to_value(&hex::encode(binary))?)
+    Ok(binary.into())
 }
 
 #[wasm_bindgen]
-/// Serialize the JSON module into a HEX string.
-pub fn serialize(json_module: String) -> Result<JsValue, JsErr> {
-    let compiled_module: CompiledModule = serde_json::from_str(json_module.as_str())?;
+/// Updates a constant in the constant pool. Because constants don't have names,
+/// the only way to identify them is by their type and value.
+///
+/// The value of a constant is BCS-encoded and the type is a string representation
+/// of the `SignatureToken` enum. String identifier for `SignatureToken` is a
+/// capitalized version of the type: U8, Address, Vector(Bool), Vector(U8), etc.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+/// import { bcs } from '@mysten/bcs';
+///
+/// let binary = template.update_constants(
+///     binary, // Uint8Array
+///     bcs.u64().serialize(0).toBytes(),      // new value
+///     bcs.u64().serialize(100000).toBytes(), // old value
+///     'U64'                                  // type
+/// );
+/// ```
+pub fn update_constants(
+    binary: &[u8],
+    new_value: &[u8],
+    expected_value: &[u8],
+    expected_type: String,
+) -> Result<Box<[u8]>, JsErr> {
+    let mut compiled_module = CompiledModule::deserialize_with_defaults(&binary)?;
+
+    compiled_module.constant_pool.iter_mut().for_each(|handle| {
+        if handle.data == expected_value && expected_type == format!("{:?}", handle.type_) {
+            handle.data = new_value.to_vec();
+        };
+    });
+
     let mut binary = Vec::new();
     compiled_module
         .serialize(&mut binary)
@@ -105,7 +158,54 @@ pub fn serialize(json_module: String) -> Result<JsValue, JsErr> {
             display: format!("{}", err),
             message: err.to_string(),
         })?;
-    Ok(to_value(&hex::encode(binary))?)
+
+    Ok(binary.into())
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+/// A transformed constant from the constant pool.
+pub struct Constant {
+    type_: String,
+    value_bcs: Box<[u8]>,
+}
+
+#[wasm_bindgen]
+/// Convenience method to analyze the constant pool; returns all constants in order
+/// with their type and BCS value.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+///
+/// let consts = template.get_constants(binary);
+/// ```
+pub fn get_constants(binary: &[u8]) -> Result<JsValue, JsErr> {
+    let compiled_module = CompiledModule::deserialize_with_defaults(&binary)?;
+    let constants: Vec<Constant> = compiled_module
+        .constant_pool
+        .into_iter()
+        .map(|constant| Constant {
+            type_: format!("{:?}", constant.type_),
+            value_bcs: constant.data.into(),
+        })
+        .collect();
+
+    Ok(to_value(&constants)?)
+}
+
+#[wasm_bindgen]
+/// Serialize the JSON module into a `Uint8Array` (bytecode).
+pub fn serialize(json_module: JsValue) -> Result<Box<[u8]>, JsErr> {
+    let compiled_module: CompiledModule = from_value(json_module)?;
+    let mut binary = Vec::new();
+    compiled_module
+        .serialize(&mut binary)
+        .map_err(|err| JsErr {
+            display: format!("{}", err),
+            message: err.to_string(),
+        })?;
+
+    Ok(binary.into())
 }
 
 #[derive(Serialize, Deserialize)]
@@ -117,17 +217,17 @@ pub struct JsErr {
     display: String,
 }
 
+impl Into<JsValue> for JsErr {
+    fn into(self) -> JsValue {
+        to_value(&self).unwrap()
+    }
+}
+
 impl<T: std::error::Error> From<T> for JsErr {
     fn from(err: T) -> Self {
         JsErr {
             display: format!("{}", err),
             message: err.to_string(),
         }
-    }
-}
-
-impl From<JsErr> for JsValue {
-    fn from(err: JsErr) -> Self {
-        to_value(&err).unwrap()
     }
 }

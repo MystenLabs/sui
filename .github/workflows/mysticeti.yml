@@ -9,6 +9,9 @@ env:
   # Enable Mysticeti in tests.
   CONSENSUS: "mysticeti"
 
+  # Reduce logging noise.
+  RUST_LOG: "error"
+
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
   #

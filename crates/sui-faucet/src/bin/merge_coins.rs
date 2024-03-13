@@ -13,7 +13,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let mut wallet = create_wallet_context(60).await?;
+    let mut wallet = create_wallet_context(60)?;
     let active_address = wallet
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
@@ -123,8 +123,8 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
     Ok(())
 }
 
-pub async fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyhow::Error> {
+pub fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    WalletContext::new(&wallet_conf, Some(Duration::from_secs(timeout_secs)), None).await
+    WalletContext::new(&wallet_conf, Some(Duration::from_secs(timeout_secs)), None)
 }

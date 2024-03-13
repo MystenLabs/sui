@@ -5,10 +5,10 @@
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    editions::{Edition, FeatureGate, Flavor},
+    editions::{FeatureGate, Flavor},
     expansion::ast::{
         Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
-        ModuleIdent, ModuleIdent_, Value_, Visibility,
+        ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     ice,
     naming::ast::{
@@ -28,7 +28,7 @@ use crate::{
     typing::{
         ast as T,
         core::{
-            self, make_tvar, public_testing_visibility, Context, Local, PublicForTesting,
+            self, make_tvar, public_testing_visibility, Context, PublicForTesting,
             ResolvedFunctionType, Subst,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, recursive_structs,
@@ -37,6 +37,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
@@ -255,9 +256,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     let body = if macro_.is_some() {
         sp(n_body.loc, T::FunctionBody_::Macro)
     } else {
-        let body = function_body(context, n_body);
-        unused_let_muts(context);
-        body
+        function_body(context, n_body)
     };
     context.current_function = None;
     context.in_macro_function = false;
@@ -357,7 +356,6 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.return_type = Some(signature.clone());
 
     let mut value = exp(context, Box::new(nvalue));
-    unused_let_muts(context);
     subtype(
         context,
         signature.loc,
@@ -396,6 +394,7 @@ mod check_valid_constant {
         },
     };
     use move_ir_types::location::*;
+    use move_proc_macros::growing_stack;
 
     pub(crate) fn signature<T: ToString, F: FnOnce() -> T>(
         context: &mut Context,
@@ -455,6 +454,7 @@ mod check_valid_constant {
         exp_(context, &e.exp)
     }
 
+    #[growing_stack]
     fn exp_(context: &mut Context, sp!(loc, e_): &T::UnannotatedExp) {
         use T::UnannotatedExp_ as E;
         const REFERENCE_CASE: &str = "References (and reference operations) are";
@@ -585,12 +585,14 @@ mod check_valid_constant {
         }
     }
 
+    #[growing_stack]
     fn sequence(context: &mut Context, (_, seq): &T::Sequence) {
         for item in seq {
             sequence_item(context, item)
         }
     }
 
+    #[growing_stack]
     fn sequence_item(context: &mut Context, sp!(loc, item_): &T::SequenceItem) {
         use T::SequenceItem_ as S;
         let error_case = match &item_ {
@@ -1171,6 +1173,7 @@ enum SeqCase {
     },
 }
 
+#[growing_stack]
 fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence {
     use N::SequenceItem_ as NS;
     use T::SequenceItem_ as TS;
@@ -1239,6 +1242,7 @@ fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
     es.into_iter().map(|e| *exp(context, Box::new(e))).collect()
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
@@ -1616,6 +1620,101 @@ fn binop(
     use T::UnannotatedExp_ as TE;
     let msg = || format!("Incompatible arguments to '{}'", &bop);
     let (ty, operand_ty) = match &bop.value {
+        Eq | Neq
+            if context
+                .env
+                .supports_feature(context.current_package(), FeatureGate::AutoborrowEq) =>
+        {
+            let lhs_type = core::ready_tvars(&context.subst, el.ty.clone());
+            let rhs_type = core::ready_tvars(&context.subst, er.ty.clone());
+            let (lhs_ref, lhs_inner) = match lhs_type {
+                sp!(_, Type_::Ref(lhs_mut, lhs)) => (Some(lhs_mut), *lhs),
+                lhs => (None, lhs),
+            };
+            let (rhs_ref, rhs_inner) = match rhs_type {
+                sp!(_, Type_::Ref(rhs_mut, rhs)) => (Some(rhs_mut), *rhs),
+                rhs => (None, rhs),
+            };
+            let ty = join(context, bop.loc, msg, lhs_inner.clone(), rhs_inner.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            let (out_lhs, eq_ty, out_rhs) = match (lhs_ref, rhs_ref) {
+                (None, None) => {
+                    // If both are values, they need drop but otherwise we are done.
+                    let ability_msg = Some(format!(
+                        "'{}' requires the '{}' ability as the value is consumed. Try \
+                                 borrowing the values with '&' first.'",
+                        &bop,
+                        Ability_::Drop,
+                    ));
+                    context.add_ability_constraint(
+                        el.exp.loc,
+                        ability_msg.clone(),
+                        lhs_inner,
+                        Ability_::Drop,
+                    );
+                    context.add_ability_constraint(
+                        er.exp.loc,
+                        ability_msg,
+                        rhs_inner,
+                        Ability_::Drop,
+                    );
+                    (el, ty, er)
+                }
+                (None, Some(_)) => {
+                    // If lhs is a value and rhs is a ref, we treat them as imm. refs.
+                    let out_lhs =
+                        exp_to_borrow(context, loc, /* mut_ */ false, el, ty.clone());
+                    let out_type = sp(bop.loc, Type_::Ref(false, Box::new(ty)));
+                    (out_lhs, out_type, er)
+                }
+                (Some(_), None) => {
+                    // If rhs is a value and lhs is a ref, we treat them as imm. refs.
+                    let out_rhs =
+                        exp_to_borrow(context, loc, /* mut_ */ false, er, ty.clone());
+                    let out_type = sp(bop.loc, Type_::Ref(false, Box::new(ty)));
+                    (el, out_type, out_rhs)
+                }
+                (Some(_), Some(_)) => {
+                    // We can just compute the join type in this case, because they will match or
+                    // be promoted to imm. refs.
+                    let out_type = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+                    (el, out_type, er)
+                }
+            };
+            // The `eq_ty` is used in `hlir` to do freezing.
+            return Box::new(T::exp(
+                Type_::bool(loc),
+                sp(loc, TE::BinopExp(out_lhs, bop, Box::new(eq_ty), out_rhs)),
+            ));
+        }
+        Eq | Neq => {
+            let ability_msg = Some(format!(
+                "'{}' requires the '{}' ability as the value is consumed. Try \
+                         borrowing the values with '&' first.'",
+                &bop,
+                Ability_::Drop,
+            ));
+            context.add_ability_constraint(
+                el.exp.loc,
+                ability_msg.clone(),
+                el.ty.clone(),
+                Ability_::Drop,
+            );
+            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
+            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            (Type_::bool(loc), ty)
+        }
+
+        And | Or => {
+            let msg = || format!("Invalid argument to '{}'", &bop);
+            let lloc = el.exp.loc;
+            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
+            let rloc = er.exp.loc;
+            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
+            (Type_::bool(loc), Type_::bool(loc))
+        }
+
         Sub | Add | Mul | Mod | Div => {
             context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
@@ -1643,34 +1742,6 @@ fn binop(
             context.add_ordered_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
             let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             (Type_::bool(loc), operand_ty)
-        }
-
-        Eq | Neq => {
-            let ability_msg = Some(format!(
-                "'{}' requires the '{}' ability as the value is consumed. Try \
-                         borrowing the values with '&' first.'",
-                &bop,
-                Ability_::Drop,
-            ));
-            context.add_ability_constraint(
-                el.exp.loc,
-                ability_msg.clone(),
-                el.ty.clone(),
-                Ability_::Drop,
-            );
-            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
-            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-            context.add_single_type_constraint(loc, msg(), ty.clone());
-            (Type_::bool(loc), ty)
-        }
-
-        And | Or => {
-            let msg = || format!("Invalid argument to '{}'", &bop);
-            let lloc = el.exp.loc;
-            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
-            let rloc = er.exp.loc;
-            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
-            (Type_::bool(loc), Type_::bool(loc))
         }
 
         Range | Implies | Iff => {
@@ -1858,11 +1929,11 @@ fn lvalue(
         } => {
             let var_ty = match case {
                 C::Bind => {
-                    context.declare_local(mut_, var, ty.clone());
+                    context.declare_local(mut_.unwrap(), var, ty.clone());
                     ty
                 }
                 C::Assign => {
-                    check_mutability(context, loc, "assignment", &var);
+                    assert!(mut_.is_none());
                     let var_ty = context.get_local_type(&var);
                     subtype(
                         context,
@@ -1875,6 +1946,7 @@ fn lvalue(
                 }
             };
             TL::Var {
+                mut_,
                 var,
                 ty: Box::new(var_ty),
                 unused_binding,
@@ -1964,26 +2036,6 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
         Ability_::Drop,
     );
     res_ty
-}
-
-fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
-    let (decl_loc, mut_) = context.mark_mutable_usage(eloc, v);
-    if mut_.is_none() {
-        let v = &v.value.name;
-        let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
-        let decl_msg =
-            format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
-        if context.env.edition(context.current_package()) == Edition::E2024_MIGRATION {
-            context
-                .env
-                .add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone()),))
-        }
-        context.env.add_diag(diag!(
-            TypeSafety::InvalidImmVariableUsage,
-            (eloc, usage_msg),
-            (decl_loc, decl_msg),
-        ))
-    }
 }
 
 //**************************************************************************************************
@@ -2241,6 +2293,7 @@ impl ExpDotted {
     }
 }
 
+#[growing_stack]
 fn process_exp_dotted(
     context: &mut Context,
     constraint_verb: Option<&str>,
@@ -2692,7 +2745,7 @@ fn exp_to_borrow(
     loc: Loc,
     mut_: bool,
     eb: Box<T::Exp>,
-    cur_ty: Type,
+    base_type: Type,
 ) -> Box<T::Exp> {
     use Type_::*;
     use T::UnannotatedExp_ as TE;
@@ -2700,12 +2753,7 @@ fn exp_to_borrow(
     let eb_ty = eb.ty;
     let sp!(ebloc, eb_) = eb.exp;
     let e_ = match eb_ {
-        TE::Use(v) => {
-            if mut_ {
-                check_mutability(context, loc, "mutable borrow", &v);
-            }
-            TE::BorrowLocal(mut_, v)
-        }
+        TE::Use(v) => TE::BorrowLocal(mut_, v),
         eb_ => {
             match &eb_ {
                 TE::Move { from_user, .. } | TE::Copy { from_user, .. } => {
@@ -2716,7 +2764,7 @@ fn exp_to_borrow(
             TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
         }
     };
-    let ty = sp(loc, Ref(mut_, Box::new(cur_ty)));
+    let ty = sp(loc, Ref(mut_, Box::new(base_type)));
     Box::new(T::exp(ty, sp(loc, e_)))
 }
 
@@ -3317,7 +3365,7 @@ fn expand_macro(
                 .map(|(sp!(vloc, v_), e)| {
                     let lvalue_ = match v_ {
                         Some(var_) => N::LValue_::Var {
-                            mut_: None,
+                            mut_: Some(Mutability::Either),
                             var: sp(vloc, var_),
                             unused_binding: false,
                         },
@@ -3400,31 +3448,6 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 //**************************************************************************************************
 // Follow-up warnings
 //**************************************************************************************************
-
-/// Generates warnings for unused mut declerations
-/// Should be called at the end of functions/constants
-fn unused_let_muts(context: &mut Context) {
-    let locals = context.take_locals();
-    let supports_let_mut = context
-        .env
-        .supports_feature(context.current_package, FeatureGate::LetMut);
-    if !supports_let_mut {
-        return;
-    }
-    for (v, local) in locals {
-        let Local { mut_, used_mut, .. } = local;
-        let Some(mut_loc) = mut_ else { continue };
-        if used_mut.is_none() && !v.value.starts_with_underscore() {
-            let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
-            let mut_msg = "Consider removing the 'mut' declaration here";
-            context.env.add_diag(diag!(
-                UnusedItem::MutModifier,
-                (v.loc, decl_msg),
-                (mut_loc, mut_msg)
-            ))
-        }
-    }
-}
 
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.

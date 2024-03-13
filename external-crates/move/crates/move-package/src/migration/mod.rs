@@ -20,7 +20,7 @@ pub const EDITION_SELECT_PROMPT: &str = "Please select one of the following edit
 
 pub static EDITION_OPTIONS: Lazy<BTreeMap<String, Edition>> = Lazy::new(|| {
     let mut map = BTreeMap::new();
-    map.insert("1".to_string(), Edition::E2024_ALPHA);
+    map.insert("1".to_string(), Edition::E2024_BETA);
     map.insert("2".to_string(), Edition::LEGACY);
     map
 });
@@ -87,17 +87,20 @@ impl<'a, W: Write, R: BufRead> MigrationContext<'a, W, R> {
 
         match edition {
             Edition::LEGACY => {
-                self.build_plan.record_package_edition(edition)?;
-                self.terminal.writeln(EDITION_RECORDED_MSG)?;
+                self.terminal.newline()?;
                 self.terminal.newline()?;
                 self.terminal.writeln(MIGRATION_RERUN)?;
                 self.terminal.newline()?;
-            }
-            Edition::E2024_ALPHA => {
                 self.build_plan.record_package_edition(edition)?;
                 self.terminal.writeln(EDITION_RECORDED_MSG)?;
                 self.terminal.newline()?;
+            }
+            Edition::E2024_BETA => {
+                self.terminal.newline()?;
+                self.terminal.newline()?;
                 self.perform_upgrade()?;
+                self.build_plan.record_package_edition(edition)?;
+                self.terminal.writeln(EDITION_RECORDED_MSG)?;
             }
             _ => unreachable!(),
         }

@@ -41,10 +41,13 @@ use std::{
 };
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
+use sui_types::crypto::RandomnessRound;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::task::JoinHandle;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -1137,12 +1140,11 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
         let _scope = monitored_scope("Execution::load_input_objects");
-        let tx_digest = certificate.digest();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
         if certificate.data().transaction_data().is_end_of_epoch_tx() {
             self.input_loader
                 .read_objects_for_synchronous_execution(
-                    tx_digest,
+                    certificate.digest(),
                     input_objects,
                     epoch_store.protocol_config(),
                 )
@@ -1151,7 +1153,7 @@ impl AuthorityState {
             self.input_loader
                 .read_objects_for_execution(
                     epoch_store.as_ref(),
-                    tx_digest,
+                    &certificate.key(),
                     input_objects,
                     epoch_store.epoch(),
                 )
@@ -1405,10 +1407,10 @@ impl AuthorityState {
             monitored_scope("Execution::commit_certificate");
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
+        let tx_key = certificate.key();
         let tx_digest = certificate.digest();
         let input_object_count = inner_temporary_store.input_objects.len();
         let shared_object_count = effects.input_shared_objects().len();
-        let digest = *certificate.digest();
 
         let output_keys = inner_temporary_store.get_output_keys(effects);
 
@@ -1437,6 +1439,7 @@ impl AuthorityState {
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
         epoch_store.insert_tx_cert_and_effects_signature(
+            &tx_key,
             tx_digest,
             certificate.certificate_sig(),
             effects_sig.as_ref(),
@@ -1468,7 +1471,7 @@ impl AuthorityState {
         // This provides necessary information to transaction manager to start executing
         // additional ready transactions.
         self.transaction_manager
-            .notify_commit(&digest, output_keys, epoch_store);
+            .notify_commit(tx_digest, output_keys, epoch_store);
 
         self.update_metrics(certificate, input_object_count, shared_object_count);
 
@@ -4712,6 +4715,93 @@ impl AuthorityState {
         self.execution_cache
             .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         Ok(())
+    }
+}
+
+pub struct RandomnessRoundReceiver {
+    authority_state: Arc<AuthorityState>,
+    randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
+}
+
+impl RandomnessRoundReceiver {
+    pub fn spawn(
+        authority_state: Arc<AuthorityState>,
+        randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
+    ) -> JoinHandle<()> {
+        let rrr = RandomnessRoundReceiver {
+            authority_state,
+            randomness_rx,
+        };
+        spawn_monitored_task!(rrr.run())
+    }
+
+    async fn run(mut self) {
+        info!("RandomnessRoundReceiver event loop started");
+
+        loop {
+            tokio::select! {
+                maybe_recv = self.randomness_rx.recv() => {
+                    if let Some((epoch, round, bytes)) = maybe_recv {
+                        self.handle_new_randomness(epoch, round, bytes);
+                    } else {
+                        break;
+                    }
+                },
+            }
+        }
+
+        info!("RandomnessRoundReceiver event loop ended");
+    }
+
+    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
+    fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
+        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+        if epoch_store.epoch() != epoch {
+            warn!(
+                "dropping randomness for epoch {epoch}, round {round}, because we are in epoch {}",
+                epoch_store.epoch()
+            );
+            return;
+        }
+        let transaction = VerifiedTransaction::new_randomness_state_update(
+            epoch,
+            round,
+            bytes,
+            epoch_store
+                .epoch_start_config()
+                .randomness_obj_initial_shared_version()
+                .expect("randomness state obj must exist"),
+        );
+        debug!(
+            "created randomness state update transaction with digest: {:?}",
+            transaction.digest()
+        );
+        let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
+        let digest = *transaction.digest();
+
+        // Send transaction to TransactionManager for execution.
+        self.authority_state
+            .transaction_manager()
+            .enqueue(vec![transaction], &epoch_store);
+
+        let authority_state = self.authority_state.clone();
+        spawn_monitored_task!(async move {
+            // Wait for transaction execution in a separate task, to avoid deadlock in case of
+            // out-of-order randomness generation. (Each RandomnessStateUpdate depends on the
+            // output of the RandomnessStateUpdate from the previous round.)
+            let Ok(mut effects) = authority_state
+                .execution_cache
+                .notify_read_executed_effects(&[digest])
+                .await
+            else {
+                panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
+            };
+            let effects = effects.pop().expect("should return effects");
+            if *effects.status() != ExecutionStatus::Success {
+                panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+            }
+            debug!("successfully executed randomness state update transaction at epoch {epoch}, round {round}");
+        });
     }
 }
 

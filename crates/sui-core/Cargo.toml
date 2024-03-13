@@ -49,6 +49,7 @@ tokio-stream.workspace = true
 tracing.workspace = true
 twox-hash.workspace = true
 
+anemo.workspace = true
 fastcrypto.workspace = true
 fastcrypto-tbls.workspace = true
 fastcrypto-zkp.workspace = true

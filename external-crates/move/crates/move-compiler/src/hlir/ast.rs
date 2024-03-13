@@ -4,7 +4,9 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent},
+    expansion::ast::{
+        ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
+    },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, StructTypeParameter, TParam},
     parser::ast::{
         self as P, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
@@ -78,7 +80,7 @@ pub struct Constant {
     pub attributes: Attributes,
     pub loc: Loc,
     pub signature: BaseType,
-    pub value: (UniqueMap<Var, SingleType>, Block),
+    pub value: (UniqueMap<Var, (Mutability, SingleType)>, Block),
 }
 
 //**************************************************************************************************
@@ -96,7 +98,7 @@ pub enum Visibility {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<TParam>,
-    pub parameters: Vec<(Var, SingleType)>,
+    pub parameters: Vec<(Mutability, Var, SingleType)>,
     pub return_type: Type,
 }
 
@@ -104,7 +106,7 @@ pub struct FunctionSignature {
 pub enum FunctionBody_ {
     Native,
     Defined {
-        locals: UniqueMap<Var, SingleType>,
+        locals: UniqueMap<Var, (Mutability, SingleType)>,
         body: Block,
     },
 }
@@ -212,7 +214,7 @@ pub struct Label(pub usize);
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command_ {
-    Assign(Vec<LValue>, Exp),
+    Assign(AssignCase, Vec<LValue>, Exp),
     Mutate(Box<Exp>, Box<Exp>),
     Abort(Exp),
     Return {
@@ -240,10 +242,22 @@ pub type Command = Spanned<Command_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LValue_ {
     Ignore,
-    Var(Var, Box<SingleType>),
+    Var {
+        var: Var,
+        ty: Box<SingleType>,
+        unused_assignment: bool,
+    },
     Unpack(StructName, Vec<BaseType>, Vec<(Field, LValue)>),
 }
 pub type LValue = Spanned<LValue_>;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum AssignCase {
+    // from a let binding
+    Let,
+    // from an actual assignment
+    Update,
+}
 
 //**************************************************************************************************
 // Expressions
@@ -354,7 +368,7 @@ impl FunctionSignature {
     pub fn is_parameter(&self, v: &Var) -> bool {
         self.parameters
             .iter()
-            .any(|(parameter_name, _)| parameter_name == v)
+            .any(|(_, parameter_name, _)| parameter_name == v)
     }
 }
 
@@ -394,7 +408,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
             Abort(_) | Return { .. } | Jump { .. } | JumpIf { .. } => true,
         }
     }
@@ -403,7 +417,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } | Jump { .. } | JumpIf { .. } => {
+            Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } | Jump { .. } | JumpIf { .. } => {
                 false
             }
             Abort(_) | Return { .. } => true,
@@ -414,7 +428,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Assign(ls, e) => ls.is_empty() && e.is_unit(),
+            Assign(_, ls, e) => ls.is_empty() && e.is_unit(),
             IgnoreAndPop { exp: e, .. } => e.is_unit(),
 
             Mutate(_, _) | Return { .. } | Abort(_) | JumpIf { .. } | Jump { .. } => false,
@@ -427,7 +441,7 @@ impl Command_ {
         let mut successors = BTreeSet::new();
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } => {
+            Mutate(_, _) | Assign(_, _, _) | IgnoreAndPop { .. } => {
                 panic!("ICE Should not be last command in block")
             }
             Abort(_) | Return { .. } => (),
@@ -447,7 +461,7 @@ impl Command_ {
     pub fn is_hlir_terminal(&self) -> bool {
         use Command_::*;
         match self {
-            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
             Break(_) | Continue(_) | Abort(_) | Return { .. } => true,
             Jump { .. } | JumpIf { .. } => panic!("ICE found jump/jump-if in hlir"),
         }
@@ -912,19 +926,20 @@ impl AstDebug for (FunctionName, &Function) {
     }
 }
 
-impl AstDebug for (UniqueMap<Var, SingleType>, Block) {
+impl AstDebug for (UniqueMap<Var, (Mutability, SingleType)>, Block) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (locals, body) = self;
         (locals, body).ast_debug(w)
     }
 }
 
-impl AstDebug for (&UniqueMap<Var, SingleType>, &Block) {
+impl AstDebug for (&UniqueMap<Var, (Mutability, SingleType)>, &Block) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (locals, body) = self;
         w.write("locals:");
         w.indent(4, |w| {
-            w.list(*locals, ",", |w, (_, v, st)| {
+            w.list(*locals, ",", |w, (_, v, (mut_, st))| {
+                mut_.ast_debug(w);
                 w.write(&format!("{}: ", v));
                 st.ast_debug(w);
                 true
@@ -944,7 +959,8 @@ impl AstDebug for FunctionSignature {
         } = self;
         type_parameters.ast_debug(w);
         w.write("(");
-        w.comma(parameters, |w, (v, st)| {
+        w.comma(parameters, |w, (mut_, v, st)| {
+            mut_.ast_debug(w);
             v.ast_debug(w);
             w.write(": ");
             st.ast_debug(w);
@@ -1149,7 +1165,11 @@ impl AstDebug for Command_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use Command_ as C;
         match self {
-            C::Assign(lvalues, rhs) => {
+            C::Assign(case, lvalues, rhs) => {
+                match case {
+                    AssignCase::Let => w.write("let "),
+                    AssignCase::Update => w.write("update "),
+                };
                 lvalues.ast_debug(w);
                 w.write(" = ");
                 rhs.ast_debug(w);
@@ -1397,12 +1417,20 @@ impl AstDebug for LValue_ {
         use LValue_ as L;
         match self {
             L::Ignore => w.write("_"),
-            L::Var(v, st) => {
-                w.write("(");
-                v.ast_debug(w);
-                w.write(": ");
-                st.ast_debug(w);
-                w.write(")");
+            L::Var {
+                var,
+                ty,
+                unused_assignment,
+            } => {
+                w.annotate(
+                    |w| {
+                        var.ast_debug(w);
+                        if *unused_assignment {
+                            w.write("#unused")
+                        }
+                    },
+                    ty,
+                );
             }
             L::Unpack(s, tys, fields) => {
                 w.write(&format!("{}", s));

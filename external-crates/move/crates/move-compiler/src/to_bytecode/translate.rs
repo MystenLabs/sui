@@ -7,7 +7,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_},
+    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
         ast::{BuiltinTypeName_, StructTypeParameter, TParam},
@@ -24,6 +24,7 @@ use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::account_address::AccountAddress as MoveAddress;
 use move_ir_types::{ast as IR, location::*};
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -31,7 +32,7 @@ use std::{
 };
 
 type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
-type CollectedInfo = (Vec<(Var, H::SingleType)>, Attributes);
+type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &mut CompilationEnv,
@@ -284,7 +285,7 @@ fn function_info_map(
     let (params, attributes) = collected_function_infos.get_(&name).unwrap();
     let parameters = params
         .iter()
-        .map(|(v, ty)| var_info(&local_map, *v, ty.clone()))
+        .map(|(_mut, v, ty)| var_info(&local_map, *v, ty.clone()))
         .collect();
     let function_info = FunctionInfo {
         parameters,
@@ -505,7 +506,7 @@ fn function_signature(context: &mut Context, sig: H::FunctionSignature) -> IR::F
     let formals = sig
         .parameters
         .into_iter()
-        .map(|(v, st)| (var(v), single_type(context, st)))
+        .map(|(_mut, v, st)| (var(v), single_type(context, st)))
         .collect();
     let type_parameters = fun_type_parameters(sig.type_parameters);
     IR::FunctionSignature {
@@ -520,7 +521,7 @@ fn seen_structs(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, StructName
     seen_structs_type(&mut seen, &sig.return_type);
     sig.parameters
         .iter()
-        .for_each(|(_, st)| seen_structs_single_type(&mut seen, st));
+        .for_each(|(_, _, st)| seen_structs_single_type(&mut seen, st));
     seen
 }
 
@@ -565,25 +566,25 @@ fn seen_structs_base_type(
 fn function_body(
     context: &mut Context,
     f: &FunctionName,
-    parameters: Vec<(Var, H::SingleType)>,
-    mut locals_map: UniqueMap<Var, H::SingleType>,
+    parameters: Vec<(Mutability, Var, H::SingleType)>,
+    mut locals_map: UniqueMap<Var, (Mutability, H::SingleType)>,
     block_info: BTreeMap<H::Label, G::BlockInfo>,
     start: H::Label,
     blocks_map: H::BasicBlocks,
 ) -> (Vec<(IR::Var, IR::Type)>, IR::BytecodeBlocks) {
     parameters
         .iter()
-        .for_each(|(var, _)| assert!(locals_map.remove(var).is_some()));
+        .for_each(|(_, var, _)| assert!(locals_map.remove(var).is_some()));
     let mut locals = locals_map
         .into_iter()
-        .filter(|(_, ty)| {
+        .filter(|(_, (_, ty))| {
             // filter out any locals generated for unreachable code
             let bt = match &ty.value {
                 H::SingleType_::Base(b) | H::SingleType_::Ref(_, b) => b,
             };
             !matches!(&bt.value, H::BaseType_::Unreachable)
         })
-        .map(|(v, ty)| (var(v), single_type(context, ty)))
+        .map(|(v, (_, ty))| (var(v), single_type(context, ty)))
         .collect();
     let mut blocks = blocks_map.into_iter().collect::<Vec<_>>();
     blocks.sort_by_key(|(lbl, _)| *lbl);
@@ -774,7 +775,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
     use H::Command_ as C;
     use IR::Bytecode_ as B;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             exp(context, code, e);
             lvalues(context, code, ls);
         }
@@ -829,12 +830,19 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
     use H::LValue_ as L;
     use IR::Bytecode_ as B;
     match l_ {
-        L::Ignore => {
-            code.push(sp(loc, B::Pop));
+        L::Ignore => code.push(sp(loc, B::Pop)),
+        L::Var {
+            var: v,
+            unused_assignment,
+            ty,
+        } => {
+            if unused_assignment && ty.value.abilities(loc).has_ability_(Ability_::Drop) {
+                code.push(sp(loc, B::Pop));
+            } else {
+                code.push(sp(loc, B::StLoc(var(v))));
+            }
         }
-        L::Var(v, _) => {
-            code.push(sp(loc, B::StLoc(var(v))));
-        }
+
         L::Unpack(s, tys, field_ls) if field_ls.is_empty() => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
             code.push(sp(loc, B::Unpack(n, base_types(context, tys))));
@@ -855,6 +863,7 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
 // Expressions
 //**************************************************************************************************
 
+#[growing_stack]
 fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use Value_ as V;
     use H::UnannotatedExp_ as E;

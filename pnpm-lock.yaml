@@ -1644,10 +1644,11 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
-  sdk/move-binary-format-wasm/pkg: {}
-
   sdk/move-bytecode-template:
     devDependencies:
+      '@mysten/bcs':
+        specifier: workspace:*
+        version: link:../bcs
       '@mysten/build-scripts':
         specifier: workspace:*
         version: link:../build-scripts

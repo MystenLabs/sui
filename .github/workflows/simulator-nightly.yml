@@ -96,12 +96,23 @@ jobs:
         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
 
-    - name: Get current sui-core oncall
-      id: pagerduty
-      uses: mxie/pagerduty-oncall-action@main 
-      with:
-        token: ${{ secrets.PAGERDUTY_ACCESS_KEY }}
-        schedule-id: PGCQ3YS # sui-core
+    - name: Get current oncall
+      run: |
+        export current_oncall=$(curl -s --request GET \
+          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          --header 'Accept: application/json' \
+          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+          --header 'Content-Type: application/json' \
+          | jq '.oncalls[].user.summary' | tr -d '"')
+        echo "current_oncall=$(echo ${current_oncall})" >> $GITHUB_ENV
+
+        export oncall_name=$(curl -s --request GET \
+          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          --header 'Accept: application/json' \
+          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+          --header 'Content-Type: application/json' \
+          | jq '.oncalls[].escalation_policy.summary' | tr -d '"')
+        echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
@@ -112,15 +123,18 @@ jobs:
 
     - name: Get slack id for the oncall
       run: |
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ steps.pagerduty.outputs.person }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV        
 
     - name: Post to slack
       uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        WORKFLOW_CONCLUSION: ${{ env.workflow_conclusion }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
+        SLACK_ID: ${{ env.slack_id }}
+        ONCALL_NAME: ${{ env.oncall_name }}
       with:
         channel-id: 'simtest-nightly'
         payload: |
@@ -151,7 +165,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<@${{ env.slack_id }}> (current sui-core oncall), please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
+                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
                 }
               }
             ]

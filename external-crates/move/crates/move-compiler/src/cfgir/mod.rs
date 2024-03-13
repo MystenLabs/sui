@@ -15,17 +15,19 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
     parser::ast::StructName,
     shared::{unique_map::UniqueMap, CompilationEnv, Name},
 };
 use cfg::*;
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
+    pub package: Option<Symbol>,
     pub module: ModuleIdent,
     pub member: MemberName,
     pub struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
@@ -33,7 +35,7 @@ pub struct CFGContext<'a> {
     pub entry: Option<Loc>,
     pub visibility: Visibility,
     pub signature: &'a FunctionSignature,
-    pub locals: &'a UniqueMap<Var, SingleType>,
+    pub locals: &'a UniqueMap<Var, (Mutability, SingleType)>,
     pub infinite_loop_starts: &'a BTreeSet<Label>,
 }
 

@@ -63,7 +63,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
-use sui_types::crypto::get_authority_key_pair;
+use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages_checkpoint::{
@@ -628,7 +628,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_epoch = self.get_latest_epoch_id()?;
                 let tx = VerifiedTransaction::new_randomness_state_update(
                     latest_epoch,
-                    randomness_round,
+                    RandomnessRound(randomness_round),
                     random_bytes,
                     SequenceNumber::from_u64(randomness_initial_version),
                 );
