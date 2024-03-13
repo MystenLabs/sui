@@ -35,6 +35,10 @@ use crate::{
 // TODO: Move to protocol config once initial value is finalized.
 const NUM_LEADERS_PER_ROUND: usize = 1;
 
+// Maximum number of commit votes to include in a block.
+// TODO: Move to protocol config, and verify in BlockVerifier.
+const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
+
 pub(crate) struct Core {
     context: Arc<Context>,
     /// The threshold clock that is used to keep track of the current round
@@ -270,16 +274,19 @@ impl Core {
         // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
         // Probably proposing for all the intermediate rounds might not make much sense.
 
-        // 1. Consume the ancestors to be included in proposal
+        // Consume the ancestors to be included in proposal
         let ancestors = self.ancestors_to_propose(clock_round, now);
 
-        // 2. Consume the next transactions to be included.
+        // Consume the next transactions to be included.
         let transactions = self.transaction_consumer.next();
 
-        // 3. Consume the commit votes to be included.
-        let commit_votes = self.dag_state.write().commit_votes(100);
+        // Consume the commit votes to be included.
+        let commit_votes = self
+            .dag_state
+            .write()
+            .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
-        // 3. Create the block and insert to storage.
+        // Create the block and insert to storage.
         let block = Block::V1(BlockV1::new(
             self.context.committee.epoch(),
             clock_round,
@@ -297,24 +304,24 @@ impl Core {
         // Unnecessary to verify own blocks.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
 
-        // 4. Add to the threshold clock and pending ancestors
+        // Add to the threshold clock and pending ancestors
         self.threshold_clock.add_block(verified_block.reference());
         self.pending_ancestors
             .entry(verified_block.round())
             .or_default()
             .push(verified_block.clone());
 
-        // 5. Accept the block into BlockManager and DagState.
+        // Accept the block into BlockManager and DagState.
         let (accepted_blocks, missing) = self
             .block_manager
             .try_accept_blocks(vec![verified_block.clone()]);
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
-        // 6. Ensure the new block and its ancestors are persisted, before broadcasting it.
+        // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
-        // 7. Update internal state.
+        // Update internal state.
         self.last_proposed_block = verified_block.clone();
 
         tracing::info!("Created block {}", verified_block);

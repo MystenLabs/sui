@@ -14,7 +14,7 @@ use tracing::error;
 
 use crate::{
     block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitIndex, CommitRef, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRef, TrustedCommit},
     context::Context,
     storage::{Store, WriteBatch},
 };
@@ -370,7 +370,7 @@ impl DagState {
         self.commits_to_write.push(commit);
     }
 
-    pub(crate) fn commit_votes(&mut self, limit: usize) -> Vec<CommitRef> {
+    pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitRef> {
         let mut votes = Vec::new();
         while !self.commits_to_vote.is_empty() && votes.len() < limit {
             votes.push(self.commits_to_vote.pop_front().unwrap());
@@ -383,6 +383,14 @@ impl DagState {
         match &self.last_commit {
             Some(commit) => commit.index(),
             None => 0,
+        }
+    }
+
+    /// Digest of the last commit.
+    pub(crate) fn last_commit_digest(&self) -> CommitDigest {
+        match &self.last_commit {
+            Some(commit) => commit.digest(),
+            None => CommitDigest::MIN,
         }
     }
 
@@ -858,6 +866,7 @@ mod test {
             }
             commits.push(TrustedCommit::new_for_test(
                 round as CommitIndex,
+                CommitDigest::MIN,
                 blocks.last().unwrap().reference(),
                 vec![],
             ));

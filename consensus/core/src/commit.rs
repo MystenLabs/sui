@@ -55,9 +55,15 @@ pub(crate) enum Commit {
 
 impl Commit {
     /// Create a new commit.
-    pub(crate) fn new(index: CommitIndex, leader: BlockRef, blocks: Vec<BlockRef>) -> Self {
+    pub(crate) fn new(
+        index: CommitIndex,
+        previous_digest: CommitDigest,
+        leader: BlockRef,
+        blocks: Vec<BlockRef>,
+    ) -> Self {
         Commit::V1(CommitV1 {
             index,
+            previous_digest,
             leader,
             blocks,
         })
@@ -74,6 +80,7 @@ impl Commit {
 pub(crate) trait CommitAPI {
     fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
+    fn previous_digest(&self) -> CommitDigest;
     fn leader(&self) -> BlockRef;
     fn blocks(&self) -> &[BlockRef];
 }
@@ -85,6 +92,9 @@ pub(crate) struct CommitV1 {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
     index: CommitIndex,
+    /// Digest of the previous commit.
+    /// Set to CommitDigest::MIN for the first commit after genesis.
+    previous_digest: CommitDigest,
     /// A reference to the the commit leader.
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
@@ -98,6 +108,10 @@ impl CommitAPI for CommitV1 {
 
     fn index(&self) -> CommitIndex {
         self.index
+    }
+
+    fn previous_digest(&self) -> CommitDigest {
+        self.previous_digest
     }
 
     fn leader(&self) -> BlockRef {
@@ -136,10 +150,11 @@ impl TrustedCommit {
     #[cfg(test)]
     pub(crate) fn new_for_test(
         index: CommitIndex,
+        previous_digest: CommitDigest,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
-        let commit = Commit::new(index, leader, blocks);
+        let commit = Commit::new(index, previous_digest, leader, blocks);
         let serialized = commit.serialize().unwrap();
         Self::new_trusted(commit, serialized)
     }
@@ -176,11 +191,7 @@ impl Deref for TrustedCommit {
     }
 }
 
-/// Digest of a `VerifiedBlock` or verified `SignedBlock`, which covers the `Block` and its
-/// signature.
-///
-/// Note: the signature algorithm is assumed to be non-malleable, so it is impossible for another
-/// party to create an altered but valid signature, producing an equivocating `BlockDigest`.
+/// Digest of a consensus commit.
 #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitDigest([u8; consensus_config::DIGEST_LENGTH]);
 
@@ -491,7 +502,12 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
-        let commit = TrustedCommit::new_for_test(commit_index, leader_ref, blocks.clone());
+        let commit = TrustedCommit::new_for_test(
+            commit_index,
+            CommitDigest::MIN,
+            leader_ref,
+            blocks.clone(),
+        );
 
         let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
         assert_eq!(subdag.leader, leader_ref);
