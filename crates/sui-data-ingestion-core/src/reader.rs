@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::create_remote_store_client;
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
 use anyhow::Result;
 use futures::StreamExt;
@@ -8,7 +9,7 @@ use mysten_metrics::spawn_monitored_task;
 use notify::RecursiveMode;
 use notify::Watcher;
 use object_store::path::Path;
-use object_store::{parse_url_opts, ObjectStore, RetryConfig};
+use object_store::ObjectStore;
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
@@ -22,7 +23,6 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
-use url::Url;
 
 pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
 
@@ -88,26 +88,8 @@ impl CheckpointReader {
             .remote_store_url
             .clone()
             .expect("remote store url must be set");
-        let store = if self.remote_store_options.is_empty() {
-            let retry_config = RetryConfig {
-                max_retries: 0,
-                retry_timeout: Duration::from_secs(10),
-                ..Default::default()
-            };
-            let http_store = object_store::http::HttpBuilder::new()
-                .with_url(url)
-                .with_retry(retry_config)
-                .build()
-                .expect("failed to parse remote store config");
-            Box::new(http_store)
-        } else {
-            parse_url_opts(
-                &Url::parse(&url).expect("failed to parse remote store url"),
-                self.remote_store_options.clone(),
-            )
-            .expect("failed to parse remote store config")
-            .0
-        };
+        let store = create_remote_store_client(url, self.remote_store_options.clone())
+            .expect("failed to create remote store client");
 
         spawn_monitored_task!(async move {
             let mut checkpoint_stream = (start_checkpoint..u64::MAX)
