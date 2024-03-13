@@ -247,7 +247,9 @@ impl Query {
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = ctx.data()?;
 
-        Epoch::query(ctx, id, *checkpoint_viewed_at).await.extend()
+        Epoch::query(ctx, id, Some(*checkpoint_viewed_at))
+            .await
+            .extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available

@@ -135,7 +135,8 @@ pub(crate) struct AppState {
 
 /// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
 /// cross-query consistency.
-pub(crate) type CheckpointWatermark = Arc<AtomicU64>;
+#[derive(Clone)]
+pub(crate) struct CheckpointWatermark(pub Arc<AtomicU64>);
 
 impl AppState {
     fn new(
@@ -296,7 +297,7 @@ impl ServerBuilder {
         let (address, schema, db_reader, router) = self.build_components();
 
         // Start the background task to update a shared `CheckpointViewedAt`
-        let checkpoint_watermark: CheckpointWatermark = Arc::new(AtomicU64::new(0));
+        let checkpoint_watermark = CheckpointWatermark(Arc::new(AtomicU64::new(0)));
 
         let app = router
             .layer(axum::extract::Extension(schema))
@@ -445,7 +446,7 @@ pub fn export_schema() -> String {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    watermark: axum::Extension<Arc<AtomicU64>>,
+    watermark: axum::Extension<CheckpointWatermark>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -458,7 +459,7 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let checkpoint_viewed_at = watermark.load(Relaxed);
+    let checkpoint_viewed_at = watermark.0 .0.load(Relaxed);
 
     // This wrapping is done to delineate the watermark from potentially other u64 types.
     req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
@@ -555,7 +556,7 @@ async fn get_or_init_server_start_time() -> &'static Instant {
 /// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
 pub(crate) async fn update_watermark(
     db: &Db,
-    checkpoint_viewed_at: Arc<AtomicU64>,
+    checkpoint_viewed_at: CheckpointWatermark,
     metrics: Metrics,
     sleep_ms: tokio::time::Duration,
     cancellation_token: CancellationToken,
@@ -576,7 +577,7 @@ pub(crate) async fn update_watermark(
             };
 
         if let Some(checkpoint) = new_checkpoint_viewed_at {
-            checkpoint_viewed_at.store(checkpoint, Relaxed);
+            checkpoint_viewed_at.0.store(checkpoint, Relaxed);
         }
 
         tokio::time::sleep(sleep_ms).await;
