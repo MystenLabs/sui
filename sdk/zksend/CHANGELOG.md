@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.3.1
+
+### Patch Changes
+
+- b82832279b: Add isClaimTransaction helper
+
 ## 0.3.0
 
 ### Minor Changes
