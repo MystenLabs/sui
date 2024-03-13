@@ -4,7 +4,7 @@
 use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_compiler::editions::Edition;
-use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
+use move_package::BuildConfig as MoveBuildConfig;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -80,7 +80,7 @@ fn build_packages(
         generate_docs: true,
         warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
-        lint_flag: LintFlag::LEVEL_NONE,
+        no_lint: true,
         default_edition: Some(Edition::E2024_BETA),
         ..Default::default()
     };
@@ -102,7 +102,7 @@ fn build_packages(
         test_mode: true,
         warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
-        lint_flag: LintFlag::LEVEL_NONE,
+        no_lint: true,
         default_edition: Some(Edition::E2024_BETA),
         ..Default::default()
     };
