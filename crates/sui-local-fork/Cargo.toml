@@ -1,0 +1,21 @@
+[package]
+name = "sui-local-fork"
+edition = "2021"
+version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+jsonrpsee.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+
+sui-core.workspace = true
+sui-node.workspace = true
+typed-store.workspace = true
+sui-types.workspace = true
+sui-replay.workspace = true
+sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
+sui-json-rpc-types.workspace = true
+fastcrypto.workspace = true

@@ -34,7 +34,7 @@ use tracing::error;
 
 /// This trait defines the interfaces for fetching data from some local or remote store
 #[async_trait]
-pub(crate) trait DataFetcher {
+pub trait DataFetcher {
     #![allow(implied_bounds_entailment)]
     /// Fetch the specified versions of objects
     async fn multi_get_versioned(

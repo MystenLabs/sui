@@ -32,6 +32,7 @@ use std::{
     sync::Mutex,
 };
 use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_core::authority::AuthorityStore;
 use sui_core::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
@@ -1024,6 +1025,13 @@ impl LocalExec {
         Ok((sandbox_state, d.node_state_dump))
     }
 
+    pub async fn execute_local_fork_transaction(
+        &mut self,
+        transaction: Transaction,
+        forked_epoch: EpochId,
+    ) {
+    }
+
     pub async fn execute_transaction(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -1051,6 +1059,29 @@ impl LocalExec {
             ids.retain(|id| *id != DEEPBOOK_PACKAGE_ID)
         }
         ids
+    }
+
+    async fn resolve_fork_tx_components(
+        &self,
+        transaction: Transaction,
+        forked_epoch: EpochId,
+        sui_address: SuiAddress,
+        input_objs: Vec<InputObjectKind>,
+    ) {
+        // 1. For all input objects, check the local store for an object with the objectID
+        for object in input_objs {
+            match object {
+                InputObjectKind::MovePackage(id) => {}
+                InputObjectKind::ImmOrOwnedMoveObject((id, seq, digest)) => {}
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                } => {}
+            }
+        }
+        // 2. For those that are not found, get the Sequence number of that object at the forked epoch
+        // 3. Download the objects at the forked epoch version into our local package store
     }
 
     /// This is the only function which accesses the network during execution
@@ -1444,6 +1475,14 @@ impl LocalExec {
         self.fetcher
             .get_epoch_start_timestamp_and_rgp(epoch_id)
             .await
+    }
+
+    fn get_sequences_at_epoch(
+        &self,
+        forked_epoch: EpochId,
+        input_objects: InputObjects,
+    ) -> Vec<(ObjectID, SequenceNumber)> {
+        todo!()
     }
 
     async fn resolve_tx_components(

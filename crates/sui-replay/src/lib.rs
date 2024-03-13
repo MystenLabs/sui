@@ -13,9 +13,8 @@ use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
 
-use crate::replay::ExecutionSandboxState;
-use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
+use crate::replay::{ExecutionSandboxState, LocalExec};
 use move_vm_config::runtime::get_default_output_filepath;
 use std::env;
 use std::io::BufRead;
@@ -26,11 +25,11 @@ use sui_protocol_config::Chain;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
-mod data_fetcher;
+pub mod data_fetcher;
 mod displays;
 pub mod fuzz;
 pub mod fuzz_mutations;
-mod replay;
+pub mod replay;
 pub mod transaction_provider;
 pub mod types;
 
