@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{dry_run, max_gas_budget},
+    client_commands::{estimate_gas_budget, max_gas_budget},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
@@ -147,7 +147,7 @@ impl PTB {
                 max_gas_budget(context).await?,
                 gas_price,
             );
-            dry_run(context, tx).await?
+            estimate_gas_budget(context, tx).await?
         };
 
         // find the gas coins if we have no gas coin given

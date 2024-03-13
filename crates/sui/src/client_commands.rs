@@ -122,6 +122,7 @@ macro_rules! serialize_or_execute {
 
 /// Only to be used within CLI
 pub const MAX_GAS_BUDGET: u64 = 50_000_000_000;
+pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -991,7 +992,7 @@ impl SuiClientCommands {
                             max_gas_budget(context).await?,
                         )
                         .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1065,7 +1066,7 @@ impl SuiClientCommands {
                             max_gas_budget(context).await?,
                         )
                         .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1181,7 +1182,7 @@ impl SuiClientCommands {
                         context,
                     )
                     .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let tx_data = construct_move_call_transaction(
                     package, &module, &function, type_args, gas, gas_budget, args, context,
@@ -1214,7 +1215,7 @@ impl SuiClientCommands {
                         .transaction_builder()
                         .transfer_object(from, object_id, gas, max_gas_budget(context).await?, to)
                         .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1247,7 +1248,7 @@ impl SuiClientCommands {
                         .transaction_builder()
                         .transfer_sui(from, object_id, max_gas_budget(context).await?, to, amount)
                         .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1308,7 +1309,7 @@ impl SuiClientCommands {
                             max_gas_budget(context).await?,
                         )
                         .await?;
-                    dry_run(context, data).await?
+                    estimate_gas_budget(context, data).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1367,7 +1368,7 @@ impl SuiClientCommands {
                             max_gas_budget(context).await?,
                         )
                         .await?;
-                    dry_run(context, data).await?
+                    estimate_gas_budget(context, data).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1408,7 +1409,7 @@ impl SuiClientCommands {
                             max_gas_budget(context).await?,
                         )
                         .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -1566,7 +1567,7 @@ impl SuiClientCommands {
                             return Err(anyhow!("Exactly one of `count` and `amounts` must be present for split-coin command."));
                         }
                     };
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = match (amounts, count) {
                     (Some(amounts), None) => {
@@ -1619,7 +1620,7 @@ impl SuiClientCommands {
                             max_gas_budget(context).await?,
                         )
                         .await?;
-                    dry_run(context, tx).await?
+                    estimate_gas_budget(context, tx).await?
                 };
                 let data = client
                     .transaction_builder()
@@ -2690,13 +2691,21 @@ fn format_balance(value: u128, coin_decimals: u8, format_decimals: usize) -> Str
     }
 }
 
-pub(crate) async fn dry_run(
+/// Call a dry run with the transaction data to get the estimated gas budget.
+/// The final gas budget is the dry run gas budget + 10% margin.
+pub(crate) async fn estimate_gas_budget(
     context: &mut WalletContext,
     tx: TransactionData,
 ) -> Result<u64, anyhow::Error> {
     let client = context.get_client().await?;
-    let dry_run = client.read_api().dry_run_transaction_block(tx).await?;
-    Ok(dry_run.effects.gas_cost_summary().gas_used())
+    let dry_run = client.read_api().dry_run_transaction_block(tx).await
+        .map_err(|e| anyhow!("Dry run failed, could not automatically determine the gas budget. Please pass in the --gas-budget argument to provide a gas budget.\nComplete error is: {e}"))?;
+    // use the logic from TS SDK to add an overhead over the gas estimate from the dry run
+    let buffer = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
+    let gas_with_buffer = (dry_run.effects.gas_cost_summary().computation_cost + buffer) as i64;
+    let net_gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage();
+    let gas_estimate = std::cmp::max(gas_with_buffer, net_gas_usage);
+    Ok(gas_estimate.try_into()?)
 }
 
 pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::Error> {
