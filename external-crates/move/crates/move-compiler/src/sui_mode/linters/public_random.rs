@@ -15,6 +15,7 @@ use crate::{
     shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::ast as T,
 };
+use crate::sui_mode::SUI_ADDR_NAME;
 
 use super::{
     LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
@@ -55,6 +56,15 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
+    fn visit_module_custom(
+        &mut self,
+        _ident: ModuleIdent,
+        mdef: &mut T::ModuleDefinition,
+    ) -> bool {
+        // skips if true
+        mdef.attributes.is_test_or_test_only()
+    }
+
     fn visit_function_custom(
         &mut self,
         module: ModuleIdent,
@@ -63,15 +73,15 @@ impl TypingVisitorContext for Context<'_> {
     ) -> bool {
         if fdef.attributes.is_test_or_test_only()
             || !matches!(fdef.visibility, Visibility::Public(_))
-            || is_sui_module(module)
+            || module.value.address.is(SUI_ADDR_NAME)
         {
-            return false;
+            return true;
         }
         for (_, _, t) in &fdef.signature.parameters {
             if let Some(struct_name) = is_random_or_random_generator(t) {
                 let tloc = t.loc;
                 let msg =
-                    format!("Public function '{fname}' accepts '{struct_name}' as a parameter");
+                    format!("'public' function '{fname}' accepts '{struct_name}' as a parameter");
                 let mut d = diag!(PUBLIC_RANDOM_DIAG, (tloc, msg));
                 let note = format!("Functions that accept '{}::{}::{}' as a parameter might be abused by attackers by inspecting the results of randomness",
                                    SUI_PKG_NAME, RANDOM_MOD_NAME, struct_name);
@@ -81,7 +91,7 @@ impl TypingVisitorContext for Context<'_> {
                 return true;
             }
         }
-        false
+        true
     }
 }
 
@@ -99,17 +109,5 @@ fn is_random_or_random_generator(sp!(_, t): &N::Type) -> Option<&str> {
             }
         }
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => None,
-    }
-}
-
-fn is_sui_module(module: ModuleIdent) -> bool {
-    let sp!(_, ModuleIdent_ { address, module: _ }) = module;
-    match address {
-        Address::Numerical {
-            name: Some(sp!(_, name)),
-            ..
-        }
-        | Address::NamedUnassigned(sp!(_, name)) => name == symbol!("sui"),
-        _ => false,
     }
 }
