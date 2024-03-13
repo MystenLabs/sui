@@ -4,13 +4,13 @@
 //! This analysis flags uses of random::Random and random::RandomGenerator in public functions.
 
 use crate::diagnostics::WarningFilters;
-use crate::expansion::ast::{Address, ModuleIdent};
+use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::FunctionName;
 use crate::typing::visitor::{TypingVisitorConstructor, TypingVisitorContext};
 use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
-    expansion::ast::{ModuleIdent_, Visibility},
+    expansion::ast::Visibility,
     naming::ast as N,
     shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::ast as T,
