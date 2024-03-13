@@ -1161,6 +1161,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | <Value>
 //          | "(" Comma<Exp> ")"
 //          | "(" <Exp> ":" <Type> ")"
+//          | "(" <Exp> "as" <Type> ")"
 //          | <BlockLabel> ":" <Exp>
 //          | "{" <Sequence>
 //          | "if" "(" <Exp> ")" <Exp> "else" (<BlockLabel> ":")? "{" <Exp> "}"
@@ -1259,6 +1260,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 
         // "(" Comma<Exp> ")"
         // "(" <Exp> ":" <Type> ")"
+        // "(" <Exp> "as" <Type> ")"
         Tok::LParen => {
             let list_loc = context.tokens.start_loc();
             context.tokens.advance()?; // consume the LParen
@@ -1272,6 +1274,10 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                     let ty = parse_type(context)?;
                     consume_token(context.tokens, Tok::RParen)?;
                     Exp_::Annotate(Box::new(e), ty)
+                } else if match_token(context.tokens, Tok::As)? {
+                    let ty = parse_type(context)?;
+                    consume_token(context.tokens, Tok::RParen)?;
+                    Exp_::Cast(Box::new(e), ty)
                 } else {
                     if context.tokens.peek() != Tok::RParen {
                         consume_token(context.tokens, Tok::Comma)?;
@@ -1651,7 +1657,6 @@ fn at_start_of_exp(context: &mut Context) -> bool {
 //          | <LambdaBindList> "->" <Type> "{" <Sequence>
 //          | <Quantifier>                  spec only
 //          | <BinOpExp>
-//          | <BinOpExp> "as" <Exp>
 //          | <UnaryExp> "=" <Exp>
 fn parse_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
@@ -1694,25 +1699,24 @@ fn parse_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         }
         Tok::Identifier if is_quant(context) => parse_quant(context)?,
         _ => {
-            // This could be either an assignment, a cast, or a binary operator
+            // This could be either an assignment or a binary operator
             // expression.
             let lhs = parse_unary_exp(context)?;
             if context.tokens.peek() == Tok::Equal {
-                // <UnaryExp> "=" <Exp>
                 context.tokens.advance()?; // consume the "="
                 let rhs = Box::new(parse_exp(context)?);
                 Exp_::Assign(Box::new(lhs), rhs)
             } else {
-                // <BinOpExp>
-                // <BinOpExp> "as" <Exp>
-                let e = parse_binop_exp(context, lhs, /* min_prec */ 1)?;
-                if context.tokens.peek() == Tok::As {
+                let lhs = if context.tokens.peek() == Tok::As {
                     context.tokens.advance()?; // consume the "as"
                     let ty = parse_type(context)?;
-                    Exp_::Cast(Box::new(e), ty)
+                    let lhs_ = Exp_::Cast(Box::new(lhs), ty);
+                    let end_loc = context.tokens.previous_end_loc();
+                    spanned(context.tokens.file_hash(), start_loc, end_loc, lhs_)
                 } else {
-                    return Ok(e);
-                }
+                    lhs
+                };
+                return parse_binop_exp(context, lhs, /* min_prec */ 1);
             }
         }
     };
@@ -3323,7 +3327,7 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
         ));
     }
 
-    s.push_str(context.tokens.content());
+    s.push_str(dbg!(context.tokens.content()));
     context.tokens.advance()?;
 
     let mut count = 1;
