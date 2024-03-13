@@ -51,13 +51,13 @@ struct DefnContext<'env, 'map> {
     module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     env: &'env mut CompilationEnv,
     address_conflicts: BTreeSet<Symbol>,
+    current_package: Option<Symbol>,
 }
 
 struct Context<'env, 'map> {
     defn_context: DefnContext<'env, 'map>,
     address: Option<Address>,
     is_source_definition: bool,
-    current_package: Option<Symbol>,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
     all_filter_alls: WarningFilters,
@@ -81,12 +81,12 @@ impl<'env, 'map> Context<'env, 'map> {
             named_address_mapping: None,
             address_conflicts,
             module_members,
+            current_package: None,
         };
         Context {
             defn_context,
             address: None,
             is_source_definition: false,
-            current_package: None,
             all_filter_alls,
             path_expander: None,
         }
@@ -96,15 +96,20 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.env
     }
 
+    fn current_package(&mut self) -> Option<Symbol> {
+        self.defn_context.current_package
+    }
+
     fn cur_address(&self) -> &Address {
         self.address.as_ref().unwrap()
     }
 
     pub fn new_alias_map_builder(&mut self) -> AliasMapBuilder {
+        let current_package = self.current_package();
         let new_paths = self
             .defn_context
             .env
-            .supports_feature(self.current_package, FeatureGate::Move2024Paths);
+            .supports_feature(current_package, FeatureGate::Move2024Paths);
         if new_paths {
             AliasMapBuilder::namespaced()
         } else {
@@ -290,7 +295,7 @@ const IMPLICIT_SUI_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[
 ];
 
 fn default_aliases(context: &mut Context) -> AliasMapBuilder {
-    let current_package = context.current_package;
+    let current_package = context.current_package();
     let mut builder = context.new_alias_map_builder();
     if !context
         .env()
@@ -368,6 +373,7 @@ pub fn program(
         named_address_mapping: None,
         module_members: UniqueMap::new(),
         address_conflicts,
+        current_package: None,
     };
 
     let module_members = {
@@ -418,7 +424,7 @@ pub fn program(
         def,
     } in source_definitions
     {
-        context.current_package = package;
+        context.defn_context.current_package = package;
         let named_address_map = named_address_maps.get(named_address_map);
         if context
             .env()
@@ -453,7 +459,7 @@ pub fn program(
         def,
     } in lib_definitions
     {
-        context.current_package = package;
+        context.defn_context.current_package = package;
         let named_address_map = named_address_maps.get(named_address_map);
         if context
             .env()
@@ -479,7 +485,7 @@ pub fn program(
         }
     }
 
-    context.current_package = None;
+    context.defn_context.current_package = None;
 
     // Finalization
     //
@@ -561,11 +567,13 @@ fn top_level_address_(
             debug_assert!(name_res.is_ok());
             Address::anonymous(loc, bytes)
         }
+        // This should have been handled elsewhere in alias resolution for user-provided paths, and
+        // should never occur in compiler-generated ones.
         P::LeadingNameAccess_::GlobalAddress(name) => {
-            context.env.add_diag(diag!(
-                Syntax::InvalidAddress,
-                (loc, "Top-level addresses cannot start with '::'")
-            ));
+            context.env.add_diag(ice!((
+                loc,
+                "Found an address in top-level address position that uses a global name"
+            )));
             Address::NamedUnassigned(name)
         }
         P::LeadingNameAccess_::Name(name) => {
@@ -582,6 +590,31 @@ fn top_level_address_(
                     Address::NamedUnassigned(name)
                 }
             }
+        }
+    }
+}
+
+fn top_level_address_opt(context: &mut DefnContext, ln: P::LeadingNameAccess) -> Option<Address> {
+    let name_res = check_valid_address_name(context, &ln);
+    let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
+    let sp!(loc, ln_) = ln;
+    match ln_ {
+        P::LeadingNameAccess_::AnonymousAddress(bytes) => {
+            debug_assert!(name_res.is_ok());
+            Some(Address::anonymous(loc, bytes))
+        }
+        // This should have been handled elsewhere in alias resolution for user-provided paths, and
+        // should never occur in compiler-generated ones.
+        P::LeadingNameAccess_::GlobalAddress(_) => {
+            context.env.add_diag(ice!((
+                loc,
+                "Found an address in top-level address position that uses a global name"
+            )));
+            None
+        }
+        P::LeadingNameAccess_::Name(name) => {
+            let addr = named_address_mapping.get(&name.value).copied()?;
+            Some(make_address(context, name, loc, addr))
         }
     }
 }
@@ -1031,7 +1064,7 @@ fn attribute(
 fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let filters = warning_filter(context, attributes);
     let is_dep = !context.is_source_definition || {
-        let pkg = context.current_package;
+        let pkg = context.current_package();
         context.env().package_config(pkg).is_dependency
     };
     if is_dep {
@@ -1664,6 +1697,28 @@ impl Move2024PathExpander {
                             sp(ident_loc, ModuleIdent_::new(address, ModuleName(next_name)));
                         ModuleAccess(loc, EN::ModuleAccess(mident, last_name))
                     }
+                    // In Move Legacy, we always treated three-place names as fully-qualified. For
+                    // migration mode, if we could have gotten the correct result doing so, we emit
+                    // a migration change to globally-qualify that path and remediate the error.
+                    result @ ModuleIdent(_, _)
+                        if context.env.edition(context.current_package)
+                            == Edition::E2024_MIGRATION =>
+                    {
+                        if let Some(address) = top_level_address_opt(context, root_name) {
+                            context.env.add_diag(diag!(
+                                Migration::NeedsGlobalQualification,
+                                (root_name.loc, "Must globally qualify name")
+                            ));
+                            let mident =
+                                sp(ident_loc, ModuleIdent_::new(address, ModuleName(next_name)));
+                            ModuleAccess(loc, EN::ModuleAccess(mident, last_name))
+                        } else {
+                            ResolutionFailure(
+                                Box::new(result),
+                                InvalidKind("an address".to_string()),
+                            )
+                        }
+                    }
                     result @ (ModuleIdent(_, _) | ModuleAccess(_, _)) => {
                         ResolutionFailure(Box::new(result), InvalidKind("an address".to_string()))
                     }
@@ -1739,7 +1794,6 @@ impl PathExpander for Move2024PathExpander {
                             return None;
                         }
                     };
-
                     match result {
                         AccessChainResult::ModuleIdent(_, mident) => {
                             if context.module_members.get(&mident).is_none() {
@@ -2152,7 +2206,7 @@ fn use_(
             ty,
             method,
         } => {
-            let pkg = context.current_package;
+            let pkg = context.current_package();
             context.env().check_feature(pkg, FeatureGate::DotCall, loc);
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
@@ -2634,7 +2688,7 @@ fn function_(
         ));
     }
     if let Some(macro_loc) = macro_ {
-        let current_package = context.current_package;
+        let current_package = context.current_package();
         context
             .env()
             .check_feature(current_package, FeatureGate::MacroFuns, macro_loc);
@@ -3035,7 +3089,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         },
 
         pdotted_ @ PE::Index(_, _) => {
-            let cur_pkg = context.current_package;
+            let cur_pkg = context.current_package();
             let supports_paths = context
                 .env()
                 .supports_feature(cur_pkg, FeatureGate::Move2024Paths);
@@ -3071,7 +3125,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
-                    let pkg = context.current_package;
+                    let pkg = context.current_package();
                     context.env().check_feature(pkg, FeatureGate::DotCall, loc);
                     let tys_opt = optional_types(context, ptys_opt);
                     let ers = sp(rloc, exps(context, prs));
@@ -3189,7 +3243,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
             }
         }
         E::ExpDotted_::Dot(_, _) | E::ExpDotted_::Index(_, _) => {
-            let current_package = context.current_package;
+            let current_package = context.current_package();
             context
                 .env()
                 .check_feature(current_package, FeatureGate::Move2024Paths, cloc);
@@ -3212,7 +3266,7 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
             EE::Dot(lhs, field)
         }
         PE::Index(plhs, sp!(argloc, args)) => {
-            let cur_pkg = context.current_package;
+            let cur_pkg = context.current_package();
             context
                 .env()
                 .check_feature(cur_pkg, FeatureGate::Move2024Paths, loc);
@@ -3499,7 +3553,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             ))
         }
         PE::Call(pn, None, ptys_opt, sp!(_, exprs)) => {
-            let pkg = context.current_package;
+            let pkg = context.current_package();
             context
                 .env()
                 .check_feature(pkg, FeatureGate::PositionalFields, loc);
@@ -3544,7 +3598,7 @@ fn assign_unpack_fields(
 }
 
 fn mutability(context: &mut Context, _loc: Loc, pmut: P::Mutability) -> E::Mutability {
-    let pkg = context.current_package;
+    let pkg = context.current_package();
     let supports_let_mut = context.env().supports_feature(pkg, FeatureGate::LetMut);
     match pmut {
         Some(loc) => {

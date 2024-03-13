@@ -87,17 +87,20 @@ impl<'a, W: Write, R: BufRead> MigrationContext<'a, W, R> {
 
         match edition {
             Edition::LEGACY => {
-                self.build_plan.record_package_edition(edition)?;
-                self.terminal.writeln(EDITION_RECORDED_MSG)?;
+                self.terminal.newline()?;
                 self.terminal.newline()?;
                 self.terminal.writeln(MIGRATION_RERUN)?;
                 self.terminal.newline()?;
-            }
-            Edition::E2024_BETA => {
                 self.build_plan.record_package_edition(edition)?;
                 self.terminal.writeln(EDITION_RECORDED_MSG)?;
                 self.terminal.newline()?;
+            }
+            Edition::E2024_BETA => {
+                self.terminal.newline()?;
+                self.terminal.newline()?;
                 self.perform_upgrade()?;
+                self.build_plan.record_package_edition(edition)?;
+                self.terminal.writeln(EDITION_RECORDED_MSG)?;
             }
             _ => unreachable!(),
         }

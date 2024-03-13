@@ -1,1 +1,2 @@
 migrate
+> diff -s Move.toml Move.toml.expected
