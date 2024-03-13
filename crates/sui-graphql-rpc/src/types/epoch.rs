@@ -30,6 +30,8 @@ pub(crate) struct Epoch {
     pub checkpoint_viewed_at: Option<u64>,
 }
 
+/// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
+/// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug, Ord, PartialOrd)]
 pub(crate) struct EpochKey {
     pub epoch_id: u64,
@@ -284,8 +286,9 @@ impl Epoch {
         }
     }
 
-    /// Look up an `Epoch` in the database, optionally filtered by its Epoch ID. If no ID is
-    /// supplied, defaults to fetching the latest epoch.
+    /// Look up the latest `Epoch` from the database, optionally filtered by a consistency cursor
+    /// (querying for a consistency cursor in the past looks for the latest epoch as of that
+    /// cursor).
     pub(crate) async fn query_latest_at(
         db: &Db,
         checkpoint_viewed_at: Option<u64>,
