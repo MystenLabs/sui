@@ -23,7 +23,8 @@ module deepbook::clob_v2 {
     use deepbook::math::Self as clob_math;
 
     friend deepbook::order_query;
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
+
+    // === Error codes ===
     const EInvalidFeeRateRebateRate: u64 = 2;
     const EInvalidOrderId: u64 = 3;
     const EUnauthorizedCancel: u64 = 4;
@@ -45,36 +46,35 @@ module deepbook::clob_v2 {
     const EInvalidTickSizeLotSize: u64 = 20;
     const EInvalidSelfMatchingPreventionArg: u64 = 21;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
+    // === Error codes ===
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
+    // === Constants ===
+
     const FLOAT_SCALING: u64 = 1_000_000_000;
-    // Self-Trade Prevention option
-    // Cancel older (resting) order in full. Continue to execute the newer taking order.
+    /// Self-Trade Prevention option
+    /// Cancel older (resting) order in full. Continue to execute the newer taking order.
     const CANCEL_OLDEST: u8 = 0;
-    // Restrictions on limit orders.
+    /// Restrictions on limit orders.
     const NO_RESTRICTION: u8 = 0;
-    // Mandates that whatever amount of an order that can be executed in the current transaction, be filled and then the rest of the order canceled.
+    /// Mandates that whatever amount of an order that can be executed in the current transaction, be filled and then the rest of the order canceled.
     const IMMEDIATE_OR_CANCEL: u8 = 1;
-    // Mandates that the entire order size be filled in the current transaction. Otherwise, the order is canceled.
+    /// Mandates that the entire order size be filled in the current transaction. Otherwise, the order is canceled.
     const FILL_OR_KILL: u8 = 2;
-    // Mandates that the entire order be passive. Otherwise, cancel the order.
+    /// Mandates that the entire order be passive. Otherwise, cancel the order.
     const POST_OR_ABORT: u8 = 3;
     const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
-    #[test_only]
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+
     const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
     const REFERENCE_MAKER_REBATE_RATE: u64 = 1_500_000;
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
-    #[test_only]
-    const PREVENT_SELF_MATCHING_DEFAULT: u8 = 0;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
+    #[test_only] const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    #[test_only] const PREVENT_SELF_MATCHING_DEFAULT: u8 = 0;
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
+    // === Events ===
 
     /// Emitted when a new pool is created
     struct PoolCreated has copy, store, drop {
@@ -83,7 +83,7 @@ module deepbook::clob_v2 {
         base_asset: TypeName,
         quote_asset: TypeName,
         taker_fee_rate: u64,
-        // 10^9 scaling
+        /// 10^9 scaling
         maker_rebate_rate: u64,
         tick_size: u64,
         lot_size: u64,
@@ -206,66 +206,66 @@ module deepbook::clob_v2 {
         maker_rebates: u64
     }
 
-    // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
+    // === Events ===
 
     struct Order has store, drop {
-        // For each pool, order id is incremental and unique for each opening order.
-        // Orders that are submitted earlier has lower order ids.
-        // 64 bits are sufficient for order ids whereas 32 bits are not.
-        // Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
-        // The highest bit of the order id is used to denote the order type, 0 for bid, 1 for ask.
+        /// For each pool, order id is incremental and unique for each opening order.
+        /// Orders that are submitted earlier has lower order ids.
+        /// 64 bits are sufficient for order ids whereas 32 bits are not.
+        /// Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
+        /// The highest bit of the order id is used to denote the order type, 0 for bid, 1 for ask.
         order_id: u64,
         client_order_id: u64,
-        // Only used for limit orders.
+        /// Only used for limit orders.
         price: u64,
-        // quantity when the order first placed in
+        /// quantity when the order first placed in
         original_quantity: u64,
-        // quantity of the order currently held
+        /// quantity of the order currently held
         quantity: u64,
         is_bid: bool,
         /// Order can only be canceled by the `AccountCap` with this owner ID
         owner: address,
-        // Expiration timestamp in ms.
+        /// Expiration timestamp in ms.
         expire_timestamp: u64,
-        // reserved field for prevent self_matching
+        /// reserved field for prevent self_matching
         self_matching_prevention: u8
     }
 
     struct TickLevel has store {
         price: u64,
-        // The key is order's order_id.
+        /// The key is order's order_id.
         open_orders: LinkedTable<u64, Order>,
     }
 
     struct Pool<phantom BaseAsset, phantom QuoteAsset> has key, store {
-        // The key to the following Critbit Tree are order prices.
+        /// The key to the following Critbit Tree are order prices.
         id: UID,
-        // All open bid orders.
+        /// All open bid orders.
         bids: CritbitTree<TickLevel>,
-        // All open ask orders.
+        /// All open ask orders.
         asks: CritbitTree<TickLevel>,
-        // Order id of the next bid order, starting from 0.
+        /// Order id of the next bid order, starting from 0.
         next_bid_order_id: u64,
-        // Order id of the next ask order, starting from 1<<63.
+        /// Order id of the next ask order, starting from 1<<63.
         next_ask_order_id: u64,
-        // Map from AccountCap owner ID -> (map from order id -> order price)
+        /// Map from AccountCap owner ID -> (map from order id -> order price)
         usr_open_orders: Table<address, LinkedTable<u64, u64>>,
-        // taker_fee_rate should be strictly greater than maker_rebate_rate.
-        // The difference between taker_fee_rate and maker_rabate_rate goes to the protocol.
-        // 10^9 scaling
+        /// taker_fee_rate should be strictly greater than maker_rebate_rate.
+        /// The difference between taker_fee_rate and maker_rabate_rate goes to the protocol.
+        /// 10^9 scaling
         taker_fee_rate: u64,
-        // 10^9 scaling
+        /// 10^9 scaling
         maker_rebate_rate: u64,
         tick_size: u64,
         lot_size: u64,
-        // other pool info
+        /// other pool info
         base_custodian: Custodian<BaseAsset>,
         quote_custodian: Custodian<QuoteAsset>,
-        // Stores the fee paid to create this pool. These funds are not accessible.
+        /// Stores the fee paid to create this pool. These funds are not accessible.
         creation_fee: Balance<SUI>,
-        // Deprecated.
+        /// Deprecated.
         base_asset_trading_fees: Balance<BaseAsset>,
-        // Stores the trading fees paid in `QuoteAsset`. These funds are not accessible in the V1 of the Pools, but V2 Pools are accessible.
+        /// Stores the trading fees paid in `QuoteAsset`. These funds are not accessible in the V1 of the Pools, but V2 Pools are accessible.
         quote_asset_trading_fees: Balance<QuoteAsset>,
     }
 
@@ -286,8 +286,8 @@ module deepbook::clob_v2 {
     /// 0x18d871e3c3da99046dfc0d3de612c5d88859bc03b8f0568bd127d0e70dbc58be
     struct PoolOwnerCap has key, store {
         id: UID,
-        /// The owner of this AccountCap. Note: this is
-        /// derived from an object ID, not a user address
+        /// The owner of this AccountCap. Note: this is derived from an object
+        /// ID, not a user address.
         owner: address
     }
 
@@ -329,39 +329,8 @@ module deepbook::clob_v2 {
         object::delete(id)
     }
 
-    fun destroy_empty_level(level: TickLevel) {
-        let TickLevel {
-            price: _,
-            open_orders: orders,
-        } = level;
-
-        linked_table::destroy_empty(orders);
-    }
-
     public fun create_account(ctx: &mut TxContext): AccountCap {
         mint_account_cap(ctx)
-    }
-
-    #[allow(lint(self_transfer, share_owned))]
-    fun create_pool_<BaseAsset, QuoteAsset>(
-        taker_fee_rate: u64,
-        maker_rebate_rate: u64,
-        tick_size: u64,
-        lot_size: u64,
-        creation_fee: Balance<SUI>,
-        ctx: &mut TxContext,
-    ) {
-        let (pool, pool_owner_cap) = create_pool_with_return_<BaseAsset, QuoteAsset>(
-            taker_fee_rate,
-            maker_rebate_rate,
-            tick_size,
-            lot_size,
-            creation_fee,
-            ctx
-        );
-
-        transfer::public_transfer(pool_owner_cap, tx_context::sender(ctx));
-        transfer::share_object(pool);
     }
 
     public fun create_pool<BaseAsset, QuoteAsset>(
@@ -399,63 +368,6 @@ module deepbook::clob_v2 {
             coin::into_balance(creation_fee),
             ctx
         )
-    }
-
-    /// Helper function that all the create pools now call to create pools.
-    fun create_pool_with_return_<BaseAsset, QuoteAsset>(
-        taker_fee_rate: u64,
-        maker_rebate_rate: u64,
-        tick_size: u64,
-        lot_size: u64,
-        creation_fee: Balance<SUI>,
-        ctx: &mut TxContext,
-    ): (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
-        assert!(balance::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
-
-        let base_type_name = type_name::get<BaseAsset>();
-        let quote_type_name = type_name::get<QuoteAsset>();
-
-        assert!(clob_math::unsafe_mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
-        assert!(base_type_name != quote_type_name, EInvalidPair);
-        assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
-
-        let pool_uid = object::new(ctx);
-        let pool_id = *object::uid_as_inner(&pool_uid);
-
-        // Creates the capability to mark a pool owner.
-        let id = object::new(ctx);
-        let owner = object::uid_to_address(&id);
-        let pool_owner_cap = PoolOwnerCap {
-            id,
-            owner
-        };
-
-        event::emit(PoolCreated {
-            pool_id,
-            base_asset: base_type_name,
-            quote_asset: quote_type_name,
-            taker_fee_rate,
-            maker_rebate_rate,
-            tick_size,
-            lot_size,
-        });
-        (Pool<BaseAsset, QuoteAsset> {
-            id: pool_uid,
-            bids: critbit::new(ctx),
-            asks: critbit::new(ctx),
-            next_bid_order_id: MIN_BID_ORDER_ID,
-            next_ask_order_id: MIN_ASK_ORDER_ID,
-            usr_open_orders: table::new(ctx),
-            taker_fee_rate,
-            maker_rebate_rate,
-            tick_size,
-            lot_size,
-            base_custodian: custodian::new<BaseAsset>(ctx),
-            quote_custodian: custodian::new<QuoteAsset>(ctx),
-            creation_fee,
-            base_asset_trading_fees: balance::zero(),
-            quote_asset_trading_fees: balance::zero(),
-        }, pool_owner_cap)
     }
 
     /// Function for creating an external pool. This API can be used to wrap deepbook pools into other objects.
@@ -694,6 +606,170 @@ module deepbook::clob_v2 {
         );
         let val = balance::value(&base_asset_balance);
         (coin::from_balance(base_asset_balance, ctx), coin::from_balance(quote_asset_balance, ctx), val, option::extract(&mut matched_order_metadata))
+    }
+
+    /// Place a market order to the order book.
+    public fun place_market_order<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        quantity: u64,
+        is_bid: bool,
+        base_coin: Coin<BaseAsset>,
+        quote_coin: Coin<QuoteAsset>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
+        let (base_coin, quote_coin, _metadata) = place_market_order_int(
+            pool,
+            account_cap,
+            client_order_id,
+            quantity,
+            is_bid,
+            base_coin,
+            quote_coin,
+            clock,
+            false, // don't return metadata
+            ctx
+        );
+        (base_coin, quote_coin)
+    }
+
+    public fun place_market_order_with_metadata<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        quantity: u64,
+        is_bid: bool,
+        base_coin: Coin<BaseAsset>,
+        quote_coin: Coin<QuoteAsset>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
+        let (base_coin, quote_coin, metadata) = place_market_order_int(
+            pool,
+            account_cap,
+            client_order_id,
+            quantity,
+            is_bid,
+            base_coin,
+            quote_coin,
+            clock,
+            true, // return metadata
+            ctx
+        );
+        (base_coin, quote_coin, option::extract(&mut metadata))
+    }
+
+    /// Place a limit order to the order book.
+    ///
+    /// - Returns (base quantity filled, quote quantity filled, whether a maker
+    /// order is being placed, order id of the maker order).
+    /// - When the limit order is not successfully placed, we return false to
+    /// indicate that and also returns a meaningless order_id 0.
+    /// - When the limit order is successfully placed, we return true to indicate
+    /// that and also the corresponding order_id.
+    /// So please check that boolean value first before using the order id.
+    public fun place_limit_order<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        price: u64,
+        quantity: u64,
+        self_matching_prevention: u8,
+        is_bid: bool,
+        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        restriction: u8,
+        clock: &Clock,
+        account_cap: &AccountCap,
+        ctx: &mut TxContext
+    ): (u64, u64, bool, u64) {
+        let (base_quantity_filled, quote_quantity_filled, is_success, order_id, _meta_data) = place_limit_order_int(
+            pool,
+            client_order_id,
+            price,
+            quantity,
+            self_matching_prevention,
+            is_bid,
+            expire_timestamp, // Expiration timestamp in ms in absolute value inclusive.
+            restriction,
+            clock,
+            account_cap,
+            false, // don't compute metadata
+            ctx
+        );
+        (base_quantity_filled, quote_quantity_filled, is_success, order_id)
+    }
+
+    /// Place a limit order to the order book.
+    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
+    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
+    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
+    /// So please check that boolean value first before using the order id.
+    public fun place_limit_order_with_metadata<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        price: u64,
+        quantity: u64,
+        self_matching_prevention: u8,
+        is_bid: bool,
+        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        restriction: u8,
+        clock: &Clock,
+        account_cap: &AccountCap,
+        ctx: &mut TxContext
+    ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
+        let (base_quantity_filled, quote_quantity_filled, is_success, order_id, meta_data) = place_limit_order_int(
+            pool,
+            client_order_id,
+            price,
+            quantity,
+            self_matching_prevention,
+            is_bid,
+            expire_timestamp, // Expiration timestamp in ms in absolute value inclusive.
+            restriction,
+            clock,
+            account_cap,
+            true, // return metadata
+            ctx
+        );
+        (base_quantity_filled, quote_quantity_filled, is_success, order_id, option::extract(&mut meta_data))
+    }
+
+    /// Cancel and opening order.
+    /// Abort if order_id is invalid or if the order is not submitted by the transaction sender.
+    public fun cancel_order<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        order_id: u64,
+        account_cap: &AccountCap
+    ) {
+        // First check the highest bit of the order id to see whether it's bid or ask.
+        // Then retrieve the price using the order id.
+        // Using the price to retrieve the corresponding PriceLevel from the bids / asks Critbit Tree.
+        // Retrieve and remove the order from open orders of the PriceLevel.
+        let owner = account_owner(account_cap);
+        assert!(contains(&pool.usr_open_orders, owner), EInvalidUser);
+        let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
+        assert!(linked_table::contains(usr_open_orders, order_id), EInvalidOrderId);
+        let tick_price = *linked_table::borrow(usr_open_orders, order_id);
+        let is_bid = order_is_bid(order_id);
+        let (tick_exists, tick_index) = find_leaf(
+            if (is_bid) { &pool.bids } else { &pool.asks },
+            tick_price);
+        assert!(tick_exists, EInvalidOrderId);
+        let order = remove_order(
+            if (is_bid) { &mut pool.bids } else { &mut pool.asks },
+            usr_open_orders,
+            tick_index,
+            order_id,
+            owner
+        );
+        if (is_bid) {
+            let (_, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+            custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
+        } else {
+            custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
+        };
+        emit_order_canceled<BaseAsset, QuoteAsset>(*object::uid_as_inner(&pool.id), &order);
     }
 
     fun match_bid_with_quote_quantity<BaseAsset, QuoteAsset>(
@@ -1060,663 +1136,6 @@ module deepbook::clob_v2 {
             });
         };
         return (base_balance_filled, quote_balance_left, if(compute_metadata) option::some(matched_order_metadata) else option::none())
-    }
-
-    fun match_ask<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
-        price_limit: u64,
-        current_timestamp: u64,
-        base_balance: Balance<BaseAsset>,
-        compute_metadata: bool,
-    ): (Balance<BaseAsset>, Balance<QuoteAsset>, Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>) {
-        let pool_id = *object::uid_as_inner(&pool.id);
-        let base_balance_left = base_balance;
-        // Base balance received by taker, taking into account of taker commission.
-        let quote_balance_filled = balance::zero<QuoteAsset>();
-        let all_open_orders = &mut pool.bids;
-        let matched_order_metadata = vector::empty<MatchedOrderMetadata<BaseAsset, QuoteAsset>>();
-        if (critbit::is_empty(all_open_orders)) {
-            return (base_balance_left, quote_balance_filled, option::none())
-        };
-        let (tick_price, tick_index) = max_leaf(all_open_orders);
-        let canceled_order_events = vector[];
-        while (!is_empty<TickLevel>(all_open_orders) && tick_price >= price_limit) {
-            let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
-            let order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
-            while (!linked_table::is_empty(&tick_level.open_orders)) {
-                let maker_order = linked_table::borrow(&tick_level.open_orders, order_id);
-                let maker_base_quantity = maker_order.quantity;
-                let skip_order = false;
-
-                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
-                    skip_order = true;
-                    let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
-                    custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
-                    let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
-                        client_order_id: maker_order.client_order_id,
-                        order_id: maker_order.order_id,
-                        is_bid: maker_order.is_bid,
-                        owner: maker_order.owner,
-                        original_quantity: maker_order.original_quantity,
-                        base_asset_quantity_canceled: maker_order.quantity,
-                        price: maker_order.price
-                    };
-                    vector::push_back(&mut canceled_order_events, canceled_order_event);
-                } else {
-                    let taker_base_quantity_remaining = balance::value(&base_balance_left);
-                    let filled_base_quantity =
-                        if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
-                        else { taker_base_quantity_remaining };
-                    // If a bit is rounded down, the pool will take this as a fee.
-                    let (is_round_down, filled_quote_quantity) = clob_math::unsafe_mul_round(filled_base_quantity, maker_order.price);
-                    if (is_round_down) {
-                        let rounded_down_quantity = custodian::decrease_user_locked_balance<QuoteAsset>(
-                            &mut pool.quote_custodian,
-                            maker_order.owner,
-                            1
-                        );
-                        balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
-                    };
-
-                    // if maker_rebate = 0 due to underflow, maker will not receive a rebate
-                    let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
-                    // if taker_commission = 0 due to underflow, round it up to 1
-                    let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
-                        filled_quote_quantity,
-                        pool.taker_fee_rate
-                    );
-                    if (is_round_down) taker_commission = taker_commission + 1;
-
-                    maker_base_quantity = maker_base_quantity - filled_base_quantity;
-                    // maker in bid side, decrease maker's locked quote asset, increase maker's available base asset
-                    let locked_quote_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
-                        &mut pool.quote_custodian,
-                        maker_order.owner,
-                        filled_quote_quantity
-                    );
-                    let taker_commission_balance = balance::split(
-                        &mut locked_quote_balance,
-                        taker_commission,
-                    );
-                    custodian::increase_user_available_balance<QuoteAsset>(
-                        &mut pool.quote_custodian,
-                        maker_order.owner,
-                        balance::split(
-                            &mut taker_commission_balance,
-                            maker_rebate,
-                        ),
-                    );
-                    balance::join(&mut pool.quote_asset_trading_fees, taker_commission_balance);
-                    balance::join(&mut quote_balance_filled, locked_quote_balance);
-
-                    custodian::increase_user_available_balance<BaseAsset>(
-                        &mut pool.base_custodian,
-                        maker_order.owner,
-                        balance::split(
-                            &mut base_balance_left,
-                            filled_base_quantity,
-                        ),
-                    );
-                    emit_order_filled<BaseAsset, QuoteAsset>(
-                        *object::uid_as_inner(&pool.id),
-                        client_order_id,
-                        account_owner(account_cap),
-                        maker_order,
-                        filled_base_quantity,
-                        taker_commission,
-                        maker_rebate
-                    );
-                    if(compute_metadata) {
-                        vector::push_back(
-                            &mut matched_order_metadata,
-                            matched_order_metadata(
-                                *object::uid_as_inner(&pool.id),
-                                account_owner(account_cap),
-                                maker_order,
-                                filled_base_quantity,
-                                taker_commission,
-                                maker_rebate
-                            )
-                        );
-                    }
-                };
-
-                if (skip_order || maker_base_quantity == 0) {
-                    // Remove the maker order.
-                    let old_order_id = order_id;
-                    let maybe_order_id = linked_table::next(&tick_level.open_orders, order_id);
-                    if (!option::is_none(maybe_order_id)) {
-                        order_id = *option::borrow(maybe_order_id);
-                    };
-                    let usr_open_order_ids = table::borrow_mut(&mut pool.usr_open_orders, maker_order.owner);
-                    linked_table::remove(usr_open_order_ids, old_order_id);
-                    linked_table::remove(&mut tick_level.open_orders, old_order_id);
-                } else {
-                    // Update the maker order.
-                    let maker_order_mut = linked_table::borrow_mut(
-                        &mut tick_level.open_orders,
-                        order_id);
-                    maker_order_mut.quantity = maker_base_quantity;
-                };
-                if (balance::value(&base_balance_left) == 0) {
-                    break
-                };
-            };
-            if (linked_table::is_empty(&tick_level.open_orders)) {
-                (tick_price, _) = previous_leaf(all_open_orders, tick_price);
-                destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
-                (_, tick_index) = find_leaf(all_open_orders, tick_price);
-            };
-            if (balance::value(&base_balance_left) == 0) {
-                break
-            };
-        };
-
-        if (!vector::is_empty(&canceled_order_events)) {
-            event::emit(AllOrdersCanceled<BaseAsset, QuoteAsset> {
-                pool_id,
-                orders_canceled: canceled_order_events,
-            });
-        };
-
-        return (base_balance_left, quote_balance_filled, if(compute_metadata) option::some(matched_order_metadata) else option::none())
-    }
-
-    /// Place a market order to the order book.
-    public fun place_market_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
-        quantity: u64,
-        is_bid: bool,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
-    ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
-        let (base_coin, quote_coin, _metadata) = place_market_order_int(
-            pool,
-            account_cap,
-            client_order_id,
-            quantity,
-            is_bid,
-            base_coin,
-            quote_coin,
-            clock,
-            false, // don't return metadata
-            ctx
-        );
-        (base_coin, quote_coin)
-    }
-
-    public fun place_market_order_with_metadata<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
-        quantity: u64,
-        is_bid: bool,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        ctx: &mut TxContext,
-    ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        let (base_coin, quote_coin, metadata) = place_market_order_int(
-            pool,
-            account_cap,
-            client_order_id,
-            quantity,
-            is_bid,
-            base_coin,
-            quote_coin,
-            clock,
-            true, // return metadata
-            ctx
-        );
-        (base_coin, quote_coin, option::extract(&mut metadata))
-    }
-
-    /// Place a market order to the order book.
-    fun place_market_order_int<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
-        quantity: u64,
-        is_bid: bool,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
-        clock: &Clock,
-        compute_metadata: bool,
-        ctx: &mut TxContext,
-    ): (Coin<BaseAsset>, Coin<QuoteAsset>, Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>) {
-        // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
-        // Take market bid order for example.
-        // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
-        // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
-        // Open orders that are being filled are removed from the order book.
-        // We stop the iteration untill all quantities are filled.
-        // If the total quantity of open orders at the lowest price level is not large enough to fully fill the market order,
-        // we move on to the next price level by calling next_leaf on the asks Critbit Tree and repeat the same procedure.
-        // Continue iterating over the price levels in ascending order until the market order is completely filled.
-        // If ther market order cannot be completely filled even after consuming all the open ask orders,
-        // the unfilled quantity will be cancelled.
-        // Market ask order follows similar procedure.
-        // The difference is that market ask order is matched against the open bid orders.
-        // We start with the bid PriceLevel with the highest price by calling max_leaf on the bids Critbit Tree.
-        // The inner loop for iterating over the open orders in ascending orders of order id is the same as above.
-        // Then iterate over the price levels in descending order until the market order is completely filled.
-        assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
-        assert!(quantity != 0, EInvalidQuantity);
-        let metadata;
-        if (is_bid) {
-            let (base_balance_filled, quote_balance_left, matched_order_metadata) = match_bid(
-                pool,
-                account_cap,
-                client_order_id,
-                quantity,
-                MAX_PRICE,
-                clock::timestamp_ms(clock),
-                coin::into_balance(quote_coin),
-                compute_metadata
-            );
-            join(
-                &mut base_coin,
-                coin::from_balance(base_balance_filled, ctx),
-            );
-            quote_coin = coin::from_balance(quote_balance_left, ctx);
-            metadata = matched_order_metadata;
-        } else {
-            assert!(quantity <= coin::value(&base_coin), EInsufficientBaseCoin);
-            let base_coin_to_sell = coin::split(&mut base_coin, quantity, ctx);
-            let (base_balance_left, quote_balance_filled, matched_order_metadata) = match_ask(
-                pool,
-                account_cap,
-                client_order_id,
-                MIN_PRICE,
-                clock::timestamp_ms(clock),
-                coin::into_balance(base_coin_to_sell),
-                compute_metadata
-            );
-            join(
-                &mut base_coin,
-                coin::from_balance(base_balance_left, ctx));
-            join(
-                &mut quote_coin,
-                coin::from_balance(quote_balance_filled, ctx),
-            );
-            metadata = matched_order_metadata;
-        };
-        (base_coin, quote_coin, metadata)
-    }
-
-    /// Injects a maker order to the order book.
-    /// Returns the order id.
-    fun inject_limit_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        price: u64,
-        original_quantity: u64,
-        quantity: u64,
-        is_bid: bool,
-        self_matching_prevention: u8,
-        expire_timestamp: u64,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
-    ): u64 {
-        let owner = account_owner(account_cap);
-        let order_id: u64;
-        let open_orders: &mut CritbitTree<TickLevel>;
-        if (is_bid) {
-            let quote_quantity = clob_math::mul(quantity, price);
-            custodian::lock_balance<QuoteAsset>(&mut pool.quote_custodian, account_cap, quote_quantity);
-            order_id = pool.next_bid_order_id;
-            pool.next_bid_order_id = pool.next_bid_order_id + 1;
-            open_orders = &mut pool.bids;
-        } else {
-            custodian::lock_balance<BaseAsset>(&mut pool.base_custodian, account_cap, quantity);
-            order_id = pool.next_ask_order_id;
-            pool.next_ask_order_id = pool.next_ask_order_id + 1;
-            open_orders = &mut pool.asks;
-        };
-        let order = Order {
-            order_id,
-            client_order_id,
-            price,
-            original_quantity,
-            quantity,
-            is_bid,
-            owner,
-            expire_timestamp,
-            self_matching_prevention
-        };
-        let (tick_exists, tick_index) = find_leaf(open_orders, price);
-        if (!tick_exists) {
-            tick_index = insert_leaf(
-                open_orders,
-                price,
-                TickLevel {
-                    price,
-                    open_orders: linked_table::new(ctx),
-                });
-        };
-
-        let tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
-        linked_table::push_back(&mut tick_level.open_orders, order_id, order);
-        event::emit(OrderPlaced<BaseAsset, QuoteAsset> {
-            pool_id: *object::uid_as_inner(&pool.id),
-            order_id,
-            client_order_id,
-            is_bid,
-            owner,
-            original_quantity,
-            base_asset_quantity_placed: quantity,
-            price,
-            expire_timestamp
-        });
-        if (!contains(&pool.usr_open_orders, owner)) {
-            add(&mut pool.usr_open_orders, owner, linked_table::new(ctx));
-        };
-        linked_table::push_back(borrow_mut(&mut pool.usr_open_orders, owner), order_id, price);
-
-        return order_id
-    }
-
-    /// Place a limit order to the order book.
-    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
-    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
-    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
-    /// So please check that boolean value first before using the order id.
-    public fun place_limit_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        price: u64,
-        quantity: u64,
-        self_matching_prevention: u8,
-        is_bid: bool,
-        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-        restriction: u8,
-        clock: &Clock,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
-    ): (u64, u64, bool, u64) {
-        let (base_quantity_filled, quote_quantity_filled, is_success, order_id, _meta_data) = place_limit_order_int(
-            pool,
-            client_order_id,
-            price,
-            quantity,
-            self_matching_prevention,
-            is_bid,
-            expire_timestamp, // Expiration timestamp in ms in absolute value inclusive.
-            restriction,
-            clock,
-            account_cap,
-            false, // don't compute metadata
-            ctx
-        );
-        (base_quantity_filled, quote_quantity_filled, is_success, order_id)
-    }
-
-    /// Place a limit order to the order book.
-    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
-    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
-    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
-    /// So please check that boolean value first before using the order id.
-    public fun place_limit_order_with_metadata<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        price: u64,
-        quantity: u64,
-        self_matching_prevention: u8,
-        is_bid: bool,
-        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-        restriction: u8,
-        clock: &Clock,
-        account_cap: &AccountCap,
-        ctx: &mut TxContext
-    ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        let (base_quantity_filled, quote_quantity_filled, is_success, order_id, meta_data) = place_limit_order_int(
-            pool,
-            client_order_id,
-            price,
-            quantity,
-            self_matching_prevention,
-            is_bid,
-            expire_timestamp, // Expiration timestamp in ms in absolute value inclusive.
-            restriction,
-            clock,
-            account_cap,
-            true, // return metadata
-            ctx
-        );
-        (base_quantity_filled, quote_quantity_filled, is_success, order_id, option::extract(&mut meta_data))
-    }
-
-    fun place_limit_order_int<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        client_order_id: u64,
-        price: u64,
-        quantity: u64,
-        self_matching_prevention: u8,
-        is_bid: bool,
-        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
-        restriction: u8,
-        clock: &Clock,
-        account_cap: &AccountCap,
-        compute_metadata: bool,
-        ctx: &mut TxContext
-    ): (u64, u64, bool, u64, Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>) {
-        // If limit bid order, check whether the price is lower than the lowest ask order by checking the min_leaf of asks Critbit Tree.
-        // If so, assign the sequence id of the order to be next_bid_order_id and increment next_bid_order_id by 1.
-        // Inject the new order to the bids Critbit Tree according to the price and order id.
-        // Otherwise, find the price level from the asks Critbit Tree that is no greater than the input price.
-        // Match the bid order against the asks Critbit Tree in the same way as a market order but up until the price level found in the previous step.
-        // If the bid order is not completely filled, inject the remaining quantity to the bids Critbit Tree according to the input price and order id.
-        // If limit ask order, vice versa.
-        assert!(self_matching_prevention == CANCEL_OLDEST, EInvalidSelfMatchingPreventionArg);
-        assert!(quantity > 0, EInvalidQuantity);
-        assert!(price > 0, EInvalidPrice);
-        assert!(price % pool.tick_size == 0, EInvalidPrice);
-        assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
-        assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
-        let owner = account_owner(account_cap);
-        let original_quantity = quantity;
-        let base_quantity_filled;
-        let quote_quantity_filled;
-        let meta_data = if (is_bid) {
-            let quote_quantity_original = custodian::account_available_balance<QuoteAsset>(
-                &pool.quote_custodian,
-                owner
-            );
-            let quote_balance = custodian::decrease_user_available_balance<QuoteAsset>(
-                &mut pool.quote_custodian,
-                account_cap,
-                quote_quantity_original,
-            );
-            let (base_balance_filled, quote_balance_left, matched_order_metadata) = match_bid(
-                pool,
-                account_cap,
-                client_order_id,
-                quantity,
-                price,
-                clock::timestamp_ms(clock),
-                quote_balance,
-                compute_metadata
-            );
-            base_quantity_filled = balance::value(&base_balance_filled);
-            quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
-
-            custodian::increase_user_available_balance<BaseAsset>(
-                &mut pool.base_custodian,
-                owner,
-                base_balance_filled,
-            );
-            custodian::increase_user_available_balance<QuoteAsset>(
-                &mut pool.quote_custodian,
-                owner,
-                quote_balance_left,
-            );
-
-            matched_order_metadata
-        } else {
-            let base_balance = custodian::decrease_user_available_balance<BaseAsset>(
-                &mut pool.base_custodian,
-                account_cap,
-                quantity,
-            );
-            let (base_balance_left, quote_balance_filled, matched_order_metadata) = match_ask(
-                pool,
-                account_cap,
-                client_order_id,
-                price,
-                clock::timestamp_ms(clock),
-                base_balance,
-                compute_metadata
-            );
-
-            base_quantity_filled = quantity - balance::value(&base_balance_left);
-            quote_quantity_filled = balance::value(&quote_balance_filled);
-
-            custodian::increase_user_available_balance<BaseAsset>(
-                &mut pool.base_custodian,
-                owner,
-                base_balance_left,
-            );
-            custodian::increase_user_available_balance<QuoteAsset>(
-                &mut pool.quote_custodian,
-                owner,
-                quote_balance_filled,
-            );
-            matched_order_metadata
-        };
-
-        let order_id;
-        if (restriction == IMMEDIATE_OR_CANCEL) {
-            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
-        };
-        if (restriction == FILL_OR_KILL) {
-            assert!(base_quantity_filled == quantity, EOrderCannotBeFullyFilled);
-            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
-        };
-        if (restriction == POST_OR_ABORT) {
-            assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
-            order_id = inject_limit_order(
-                pool,
-                client_order_id,
-                price,
-                original_quantity,
-                quantity,
-                is_bid,
-                self_matching_prevention,
-                expire_timestamp,
-                account_cap,
-                ctx
-            );
-            return (base_quantity_filled, quote_quantity_filled, true, order_id, meta_data)
-        } else {
-            assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
-            if (quantity > base_quantity_filled) {
-                order_id = inject_limit_order(
-                    pool,
-                    client_order_id,
-                    price,
-                    original_quantity,
-                    quantity - base_quantity_filled,
-                    is_bid,
-                    self_matching_prevention,
-                    expire_timestamp,
-                    account_cap,
-                    ctx
-                );
-                return (base_quantity_filled, quote_quantity_filled, true, order_id, meta_data)
-            };
-            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
-        }
-    }
-
-    fun order_is_bid(order_id: u64): bool {
-        return order_id < MIN_ASK_ORDER_ID
-    }
-
-    fun emit_order_canceled<BaseAsset, QuoteAsset>(
-        pool_id: ID,
-        order: &Order
-    ) {
-        event::emit(OrderCanceled<BaseAsset, QuoteAsset> {
-            pool_id,
-            client_order_id: order.client_order_id,
-            order_id: order.order_id,
-            is_bid: order.is_bid,
-            owner: order.owner,
-            original_quantity: order.original_quantity,
-            base_asset_quantity_canceled: order.quantity,
-            price: order.price
-        })
-    }
-
-    fun emit_order_filled<BaseAsset, QuoteAsset>(
-        pool_id: ID,
-        taker_client_id: u64,
-        taker_address: address,
-        order: &Order,
-        base_asset_quantity_filled: u64,
-        taker_commission: u64,
-        maker_rebates: u64
-    ) {
-        event::emit(OrderFilled<BaseAsset, QuoteAsset> {
-            pool_id,
-            order_id: order.order_id,
-            taker_client_order_id: taker_client_id,
-            taker_address,
-            maker_client_order_id: order.client_order_id,
-            is_bid: order.is_bid,
-            maker_address: order.owner,
-            original_quantity: order.original_quantity,
-            base_asset_quantity_filled,
-            // order.quantity = base_asset_quantity_filled + base_asset_quantity_remaining
-            // This guarantees that the subtraction will not underflow
-            base_asset_quantity_remaining: order.quantity - base_asset_quantity_filled,
-            price: order.price,
-            taker_commission,
-            maker_rebates
-        })
-    }
-
-    /// Cancel and opening order.
-    /// Abort if order_id is invalid or if the order is not submitted by the transaction sender.
-    public fun cancel_order<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
-        order_id: u64,
-        account_cap: &AccountCap
-    ) {
-        // First check the highest bit of the order id to see whether it's bid or ask.
-        // Then retrieve the price using the order id.
-        // Using the price to retrieve the corresponding PriceLevel from the bids / asks Critbit Tree.
-        // Retrieve and remove the order from open orders of the PriceLevel.
-        let owner = account_owner(account_cap);
-        assert!(contains(&pool.usr_open_orders, owner), EInvalidUser);
-        let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
-        assert!(linked_table::contains(usr_open_orders, order_id), EInvalidOrderId);
-        let tick_price = *linked_table::borrow(usr_open_orders, order_id);
-        let is_bid = order_is_bid(order_id);
-        let (tick_exists, tick_index) = find_leaf(
-            if (is_bid) { &pool.bids } else { &pool.asks },
-            tick_price);
-        assert!(tick_exists, EInvalidOrderId);
-        let order = remove_order(
-            if (is_bid) { &mut pool.bids } else { &mut pool.asks },
-            usr_open_orders,
-            tick_index,
-            order_id,
-            owner
-        );
-        if (is_bid) {
-            let (_, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
-            custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
-        } else {
-            custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
-        };
-        emit_order_canceled<BaseAsset, QuoteAsset>(*object::uid_as_inner(&pool.id), &order);
     }
 
     fun remove_order(
@@ -2122,39 +1541,20 @@ module deepbook::clob_v2 {
         order
     }
 
-    fun matched_order_metadata<BaseAsset, QuoteAsset>(
-        pool_id: ID,
-        taker_address: address,
-        order: &Order,
-        base_asset_quantity_filled: u64,
-        taker_commission: u64,
-        maker_rebates: u64
-    ): MatchedOrderMetadata<BaseAsset, QuoteAsset>{
-        MatchedOrderMetadata<BaseAsset, QuoteAsset> {
-            pool_id,
-            order_id: order.order_id,
-            is_bid: order.is_bid,
-            taker_address,
-            maker_address: order.owner,
-            base_asset_quantity_filled,
-            price: order.price,
-            taker_commission,
-            maker_rebates
-        }
-    }
+
 
     public fun matched_order_metadata_info<BaseAsset, QuoteAsset>(
         matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
         (
-            matched_order_metadata.pool_id, 
+            matched_order_metadata.pool_id,
             matched_order_metadata.order_id,
-            matched_order_metadata.is_bid, 
+            matched_order_metadata.is_bid,
             matched_order_metadata.taker_address,
-            matched_order_metadata.maker_address, 
+            matched_order_metadata.maker_address,
             matched_order_metadata.base_asset_quantity_filled,
-            matched_order_metadata.price, 
-            matched_order_metadata.taker_commission, 
+            matched_order_metadata.price,
+            matched_order_metadata.taker_commission,
             matched_order_metadata.maker_rebates
         )
     }
@@ -2222,6 +1622,8 @@ module deepbook::clob_v2 {
         balance::value(&pool.quote_asset_trading_fees)
     }
 
+    // === Friend only ===
+
     public(friend) fun clone_order(order: &Order): Order {
         Order {
             order_id: order.order_id,
@@ -2234,6 +1636,617 @@ module deepbook::clob_v2 {
             expire_timestamp: order.expire_timestamp,
             self_matching_prevention: order.self_matching_prevention
         }
+    }
+
+    // === Internal ===
+
+    #[allow(lint(self_transfer, share_owned))]
+    fun create_pool_<BaseAsset, QuoteAsset>(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Balance<SUI>,
+        ctx: &mut TxContext,
+    ) {
+        let (pool, pool_owner_cap) = create_pool_with_return_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            creation_fee,
+            ctx
+        );
+
+        transfer::public_transfer(pool_owner_cap, tx_context::sender(ctx));
+        transfer::share_object(pool);
+    }
+
+    fun match_ask<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        price_limit: u64,
+        current_timestamp: u64,
+        base_balance: Balance<BaseAsset>,
+        compute_metadata: bool,
+    ): (Balance<BaseAsset>, Balance<QuoteAsset>, Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>) {
+        let pool_id = *object::uid_as_inner(&pool.id);
+        let base_balance_left = base_balance;
+        // Base balance received by taker, taking into account of taker commission.
+        let quote_balance_filled = balance::zero<QuoteAsset>();
+        let all_open_orders = &mut pool.bids;
+        let matched_order_metadata = vector::empty<MatchedOrderMetadata<BaseAsset, QuoteAsset>>();
+        if (critbit::is_empty(all_open_orders)) {
+            return (base_balance_left, quote_balance_filled, option::none())
+        };
+        let (tick_price, tick_index) = max_leaf(all_open_orders);
+        let canceled_order_events = vector[];
+        while (!is_empty<TickLevel>(all_open_orders) && tick_price >= price_limit) {
+            let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
+            let order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
+            while (!linked_table::is_empty(&tick_level.open_orders)) {
+                let maker_order = linked_table::borrow(&tick_level.open_orders, order_id);
+                let maker_base_quantity = maker_order.quantity;
+                let skip_order = false;
+
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
+                    skip_order = true;
+                    let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
+                    custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
+                    let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
+                        client_order_id: maker_order.client_order_id,
+                        order_id: maker_order.order_id,
+                        is_bid: maker_order.is_bid,
+                        owner: maker_order.owner,
+                        original_quantity: maker_order.original_quantity,
+                        base_asset_quantity_canceled: maker_order.quantity,
+                        price: maker_order.price
+                    };
+                    vector::push_back(&mut canceled_order_events, canceled_order_event);
+                } else {
+                    let taker_base_quantity_remaining = balance::value(&base_balance_left);
+                    let filled_base_quantity =
+                        if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
+                        else { taker_base_quantity_remaining };
+                    // If a bit is rounded down, the pool will take this as a fee.
+                    let (is_round_down, filled_quote_quantity) = clob_math::unsafe_mul_round(filled_base_quantity, maker_order.price);
+                    if (is_round_down) {
+                        let rounded_down_quantity = custodian::decrease_user_locked_balance<QuoteAsset>(
+                            &mut pool.quote_custodian,
+                            maker_order.owner,
+                            1
+                        );
+                        balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
+                    };
+
+                    // if maker_rebate = 0 due to underflow, maker will not receive a rebate
+                    let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
+                    // if taker_commission = 0 due to underflow, round it up to 1
+                    let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
+                        filled_quote_quantity,
+                        pool.taker_fee_rate
+                    );
+                    if (is_round_down) taker_commission = taker_commission + 1;
+
+                    maker_base_quantity = maker_base_quantity - filled_base_quantity;
+                    // maker in bid side, decrease maker's locked quote asset, increase maker's available base asset
+                    let locked_quote_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
+                        &mut pool.quote_custodian,
+                        maker_order.owner,
+                        filled_quote_quantity
+                    );
+                    let taker_commission_balance = balance::split(
+                        &mut locked_quote_balance,
+                        taker_commission,
+                    );
+                    custodian::increase_user_available_balance<QuoteAsset>(
+                        &mut pool.quote_custodian,
+                        maker_order.owner,
+                        balance::split(
+                            &mut taker_commission_balance,
+                            maker_rebate,
+                        ),
+                    );
+                    balance::join(&mut pool.quote_asset_trading_fees, taker_commission_balance);
+                    balance::join(&mut quote_balance_filled, locked_quote_balance);
+
+                    custodian::increase_user_available_balance<BaseAsset>(
+                        &mut pool.base_custodian,
+                        maker_order.owner,
+                        balance::split(
+                            &mut base_balance_left,
+                            filled_base_quantity,
+                        ),
+                    );
+                    emit_order_filled<BaseAsset, QuoteAsset>(
+                        *object::uid_as_inner(&pool.id),
+                        client_order_id,
+                        account_owner(account_cap),
+                        maker_order,
+                        filled_base_quantity,
+                        taker_commission,
+                        maker_rebate
+                    );
+                    if(compute_metadata) {
+                        vector::push_back(
+                            &mut matched_order_metadata,
+                            matched_order_metadata(
+                                *object::uid_as_inner(&pool.id),
+                                account_owner(account_cap),
+                                maker_order,
+                                filled_base_quantity,
+                                taker_commission,
+                                maker_rebate
+                            )
+                        );
+                    }
+                };
+
+                if (skip_order || maker_base_quantity == 0) {
+                    // Remove the maker order.
+                    let old_order_id = order_id;
+                    let maybe_order_id = linked_table::next(&tick_level.open_orders, order_id);
+                    if (!option::is_none(maybe_order_id)) {
+                        order_id = *option::borrow(maybe_order_id);
+                    };
+                    let usr_open_order_ids = table::borrow_mut(&mut pool.usr_open_orders, maker_order.owner);
+                    linked_table::remove(usr_open_order_ids, old_order_id);
+                    linked_table::remove(&mut tick_level.open_orders, old_order_id);
+                } else {
+                    // Update the maker order.
+                    let maker_order_mut = linked_table::borrow_mut(
+                        &mut tick_level.open_orders,
+                        order_id);
+                    maker_order_mut.quantity = maker_base_quantity;
+                };
+                if (balance::value(&base_balance_left) == 0) {
+                    break
+                };
+            };
+            if (linked_table::is_empty(&tick_level.open_orders)) {
+                (tick_price, _) = previous_leaf(all_open_orders, tick_price);
+                destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
+                (_, tick_index) = find_leaf(all_open_orders, tick_price);
+            };
+            if (balance::value(&base_balance_left) == 0) {
+                break
+            };
+        };
+
+        if (!vector::is_empty(&canceled_order_events)) {
+            event::emit(AllOrdersCanceled<BaseAsset, QuoteAsset> {
+                pool_id,
+                orders_canceled: canceled_order_events,
+            });
+        };
+
+        return (base_balance_left, quote_balance_filled, if(compute_metadata) option::some(matched_order_metadata) else option::none())
+    }
+
+    /// Place a market order to the order book.
+    fun place_market_order_int<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        quantity: u64,
+        is_bid: bool,
+        base_coin: Coin<BaseAsset>,
+        quote_coin: Coin<QuoteAsset>,
+        clock: &Clock,
+        compute_metadata: bool,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>) {
+        // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
+        // Take market bid order for example.
+        // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
+        // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
+        // Open orders that are being filled are removed from the order book.
+        // We stop the iteration untill all quantities are filled.
+        // If the total quantity of open orders at the lowest price level is not large enough to fully fill the market order,
+        // we move on to the next price level by calling next_leaf on the asks Critbit Tree and repeat the same procedure.
+        // Continue iterating over the price levels in ascending order until the market order is completely filled.
+        // If ther market order cannot be completely filled even after consuming all the open ask orders,
+        // the unfilled quantity will be cancelled.
+        // Market ask order follows similar procedure.
+        // The difference is that market ask order is matched against the open bid orders.
+        // We start with the bid PriceLevel with the highest price by calling max_leaf on the bids Critbit Tree.
+        // The inner loop for iterating over the open orders in ascending orders of order id is the same as above.
+        // Then iterate over the price levels in descending order until the market order is completely filled.
+        assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
+        assert!(quantity != 0, EInvalidQuantity);
+        let metadata;
+        if (is_bid) {
+            let (base_balance_filled, quote_balance_left, matched_order_metadata) = match_bid(
+                pool,
+                account_cap,
+                client_order_id,
+                quantity,
+                MAX_PRICE,
+                clock::timestamp_ms(clock),
+                coin::into_balance(quote_coin),
+                compute_metadata
+            );
+            join(
+                &mut base_coin,
+                coin::from_balance(base_balance_filled, ctx),
+            );
+            quote_coin = coin::from_balance(quote_balance_left, ctx);
+            metadata = matched_order_metadata;
+        } else {
+            assert!(quantity <= coin::value(&base_coin), EInsufficientBaseCoin);
+            let base_coin_to_sell = coin::split(&mut base_coin, quantity, ctx);
+            let (base_balance_left, quote_balance_filled, matched_order_metadata) = match_ask(
+                pool,
+                account_cap,
+                client_order_id,
+                MIN_PRICE,
+                clock::timestamp_ms(clock),
+                coin::into_balance(base_coin_to_sell),
+                compute_metadata
+            );
+            join(
+                &mut base_coin,
+                coin::from_balance(base_balance_left, ctx));
+            join(
+                &mut quote_coin,
+                coin::from_balance(quote_balance_filled, ctx),
+            );
+            metadata = matched_order_metadata;
+        };
+        (base_coin, quote_coin, metadata)
+    }
+
+    /// Helper function that all the create pools now call to create pools.
+    fun create_pool_with_return_<BaseAsset, QuoteAsset>(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Balance<SUI>,
+        ctx: &mut TxContext,
+    ): (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
+        assert!(balance::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+
+        let base_type_name = type_name::get<BaseAsset>();
+        let quote_type_name = type_name::get<QuoteAsset>();
+
+        assert!(clob_math::unsafe_mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
+        assert!(base_type_name != quote_type_name, EInvalidPair);
+        assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
+
+        let pool_uid = object::new(ctx);
+        let pool_id = *object::uid_as_inner(&pool_uid);
+
+        // Creates the capability to mark a pool owner.
+        let id = object::new(ctx);
+        let owner = object::uid_to_address(&id);
+        let pool_owner_cap = PoolOwnerCap {
+            id,
+            owner
+        };
+
+        event::emit(PoolCreated {
+            pool_id,
+            base_asset: base_type_name,
+            quote_asset: quote_type_name,
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+        });
+
+        (Pool<BaseAsset, QuoteAsset> {
+            id: pool_uid,
+            bids: critbit::new(ctx),
+            asks: critbit::new(ctx),
+            next_bid_order_id: MIN_BID_ORDER_ID,
+            next_ask_order_id: MIN_ASK_ORDER_ID,
+            usr_open_orders: table::new(ctx),
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            base_custodian: custodian::new<BaseAsset>(ctx),
+            quote_custodian: custodian::new<QuoteAsset>(ctx),
+            creation_fee,
+            base_asset_trading_fees: balance::zero(),
+            quote_asset_trading_fees: balance::zero(),
+        }, pool_owner_cap)
+    }
+
+    fun destroy_empty_level(level: TickLevel) {
+        let TickLevel {
+            price: _,
+            open_orders: orders,
+        } = level;
+
+        linked_table::destroy_empty(orders);
+    }
+
+    fun matched_order_metadata<BaseAsset, QuoteAsset>(
+        pool_id: ID,
+        taker_address: address,
+        order: &Order,
+        base_asset_quantity_filled: u64,
+        taker_commission: u64,
+        maker_rebates: u64
+    ): MatchedOrderMetadata<BaseAsset, QuoteAsset>{
+        MatchedOrderMetadata<BaseAsset, QuoteAsset> {
+            pool_id,
+            order_id: order.order_id,
+            is_bid: order.is_bid,
+            taker_address,
+            maker_address: order.owner,
+            base_asset_quantity_filled,
+            price: order.price,
+            taker_commission,
+            maker_rebates
+        }
+    }
+
+        /// Injects a maker order to the order book.
+    /// Returns the order id.
+    fun inject_limit_order<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        price: u64,
+        original_quantity: u64,
+        quantity: u64,
+        is_bid: bool,
+        self_matching_prevention: u8,
+        expire_timestamp: u64,
+        account_cap: &AccountCap,
+        ctx: &mut TxContext
+    ): u64 {
+        let owner = account_owner(account_cap);
+        let order_id: u64;
+        let open_orders: &mut CritbitTree<TickLevel>;
+        if (is_bid) {
+            let quote_quantity = clob_math::mul(quantity, price);
+            custodian::lock_balance<QuoteAsset>(&mut pool.quote_custodian, account_cap, quote_quantity);
+            order_id = pool.next_bid_order_id;
+            pool.next_bid_order_id = pool.next_bid_order_id + 1;
+            open_orders = &mut pool.bids;
+        } else {
+            custodian::lock_balance<BaseAsset>(&mut pool.base_custodian, account_cap, quantity);
+            order_id = pool.next_ask_order_id;
+            pool.next_ask_order_id = pool.next_ask_order_id + 1;
+            open_orders = &mut pool.asks;
+        };
+        let order = Order {
+            order_id,
+            client_order_id,
+            price,
+            original_quantity,
+            quantity,
+            is_bid,
+            owner,
+            expire_timestamp,
+            self_matching_prevention
+        };
+        let (tick_exists, tick_index) = find_leaf(open_orders, price);
+        if (!tick_exists) {
+            tick_index = insert_leaf(
+                open_orders,
+                price,
+                TickLevel {
+                    price,
+                    open_orders: linked_table::new(ctx),
+                });
+        };
+
+        let tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
+        linked_table::push_back(&mut tick_level.open_orders, order_id, order);
+        event::emit(OrderPlaced<BaseAsset, QuoteAsset> {
+            pool_id: *object::uid_as_inner(&pool.id),
+            order_id,
+            client_order_id,
+            is_bid,
+            owner,
+            original_quantity,
+            base_asset_quantity_placed: quantity,
+            price,
+            expire_timestamp
+        });
+        if (!contains(&pool.usr_open_orders, owner)) {
+            add(&mut pool.usr_open_orders, owner, linked_table::new(ctx));
+        };
+        linked_table::push_back(borrow_mut(&mut pool.usr_open_orders, owner), order_id, price);
+
+        return order_id
+    }
+
+
+    fun place_limit_order_int<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        price: u64,
+        quantity: u64,
+        self_matching_prevention: u8,
+        is_bid: bool,
+        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        restriction: u8,
+        clock: &Clock,
+        account_cap: &AccountCap,
+        compute_metadata: bool,
+        ctx: &mut TxContext
+    ): (u64, u64, bool, u64, Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>) {
+        // If limit bid order, check whether the price is lower than the lowest ask order by checking the min_leaf of asks Critbit Tree.
+        // If so, assign the sequence id of the order to be next_bid_order_id and increment next_bid_order_id by 1.
+        // Inject the new order to the bids Critbit Tree according to the price and order id.
+        // Otherwise, find the price level from the asks Critbit Tree that is no greater than the input price.
+        // Match the bid order against the asks Critbit Tree in the same way as a market order but up until the price level found in the previous step.
+        // If the bid order is not completely filled, inject the remaining quantity to the bids Critbit Tree according to the input price and order id.
+        // If limit ask order, vice versa.
+        assert!(self_matching_prevention == CANCEL_OLDEST, EInvalidSelfMatchingPreventionArg);
+        assert!(quantity > 0, EInvalidQuantity);
+        assert!(price > 0, EInvalidPrice);
+        assert!(price % pool.tick_size == 0, EInvalidPrice);
+        assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
+        assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
+        let owner = account_owner(account_cap);
+        let original_quantity = quantity;
+        let base_quantity_filled;
+        let quote_quantity_filled;
+        let meta_data = if (is_bid) {
+            let quote_quantity_original = custodian::account_available_balance<QuoteAsset>(
+                &pool.quote_custodian,
+                owner
+            );
+            let quote_balance = custodian::decrease_user_available_balance<QuoteAsset>(
+                &mut pool.quote_custodian,
+                account_cap,
+                quote_quantity_original,
+            );
+            let (base_balance_filled, quote_balance_left, matched_order_metadata) = match_bid(
+                pool,
+                account_cap,
+                client_order_id,
+                quantity,
+                price,
+                clock::timestamp_ms(clock),
+                quote_balance,
+                compute_metadata
+            );
+            base_quantity_filled = balance::value(&base_balance_filled);
+            quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
+
+            custodian::increase_user_available_balance<BaseAsset>(
+                &mut pool.base_custodian,
+                owner,
+                base_balance_filled,
+            );
+            custodian::increase_user_available_balance<QuoteAsset>(
+                &mut pool.quote_custodian,
+                owner,
+                quote_balance_left,
+            );
+
+            matched_order_metadata
+        } else {
+            let base_balance = custodian::decrease_user_available_balance<BaseAsset>(
+                &mut pool.base_custodian,
+                account_cap,
+                quantity,
+            );
+            let (base_balance_left, quote_balance_filled, matched_order_metadata) = match_ask(
+                pool,
+                account_cap,
+                client_order_id,
+                price,
+                clock::timestamp_ms(clock),
+                base_balance,
+                compute_metadata
+            );
+
+            base_quantity_filled = quantity - balance::value(&base_balance_left);
+            quote_quantity_filled = balance::value(&quote_balance_filled);
+
+            custodian::increase_user_available_balance<BaseAsset>(
+                &mut pool.base_custodian,
+                owner,
+                base_balance_left,
+            );
+            custodian::increase_user_available_balance<QuoteAsset>(
+                &mut pool.quote_custodian,
+                owner,
+                quote_balance_filled,
+            );
+            matched_order_metadata
+        };
+
+        let order_id;
+        if (restriction == IMMEDIATE_OR_CANCEL) {
+            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
+        };
+        if (restriction == FILL_OR_KILL) {
+            assert!(base_quantity_filled == quantity, EOrderCannotBeFullyFilled);
+            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
+        };
+        if (restriction == POST_OR_ABORT) {
+            assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
+            order_id = inject_limit_order(
+                pool,
+                client_order_id,
+                price,
+                original_quantity,
+                quantity,
+                is_bid,
+                self_matching_prevention,
+                expire_timestamp,
+                account_cap,
+                ctx
+            );
+            return (base_quantity_filled, quote_quantity_filled, true, order_id, meta_data)
+        } else {
+            assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
+            if (quantity > base_quantity_filled) {
+                order_id = inject_limit_order(
+                    pool,
+                    client_order_id,
+                    price,
+                    original_quantity,
+                    quantity - base_quantity_filled,
+                    is_bid,
+                    self_matching_prevention,
+                    expire_timestamp,
+                    account_cap,
+                    ctx
+                );
+                return (base_quantity_filled, quote_quantity_filled, true, order_id, meta_data)
+            };
+            // TODO: is it really false?
+            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
+        }
+    }
+
+    fun order_is_bid(order_id: u64): bool {
+        return order_id < MIN_ASK_ORDER_ID
+    }
+
+    fun emit_order_canceled<BaseAsset, QuoteAsset>(
+        pool_id: ID,
+        order: &Order
+    ) {
+        event::emit(OrderCanceled<BaseAsset, QuoteAsset> {
+            pool_id,
+            client_order_id: order.client_order_id,
+            order_id: order.order_id,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            original_quantity: order.original_quantity,
+            base_asset_quantity_canceled: order.quantity,
+            price: order.price
+        })
+    }
+
+    fun emit_order_filled<BaseAsset, QuoteAsset>(
+        pool_id: ID,
+        taker_client_id: u64,
+        taker_address: address,
+        order: &Order,
+        base_asset_quantity_filled: u64,
+        taker_commission: u64,
+        maker_rebates: u64
+    ) {
+        event::emit(OrderFilled<BaseAsset, QuoteAsset> {
+            pool_id,
+            order_id: order.order_id,
+            taker_client_order_id: taker_client_id,
+            taker_address,
+            maker_client_order_id: order.client_order_id,
+            is_bid: order.is_bid,
+            maker_address: order.owner,
+            original_quantity: order.original_quantity,
+            base_asset_quantity_filled,
+            // order.quantity = base_asset_quantity_filled + base_asset_quantity_remaining
+            // This guarantees that the subtraction will not underflow
+            base_asset_quantity_remaining: order.quantity - base_asset_quantity_filled,
+            price: order.price,
+            taker_commission,
+            maker_rebates
+        })
     }
 
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
