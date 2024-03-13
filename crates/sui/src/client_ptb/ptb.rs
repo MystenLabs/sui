@@ -28,7 +28,7 @@ use sui_types::{
     digests::TransactionDigest,
     gas::GasCostSummary,
     quorum_driver_types::ExecuteTransactionRequestType,
-    transaction::{ProgrammableTransaction, Transaction, TransactionData},
+    transaction::{ProgrammableTransaction, Transaction, TransactionData, TransactionKind},
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
@@ -137,13 +137,19 @@ impl PTB {
             .read_api()
             .get_reference_gas_price()
             .await?;
+
+        let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: ptb.inputs,
+            commands: ptb.commands,
+        });
+
         let gas_budget = if let Some(gas_budget) = program_metadata.gas_budget {
             gas_budget.value
         } else {
-            let tx = TransactionData::new_programmable(
+            let tx = TransactionData::new_with_gas_coins(
+                tx_kind.clone(),
                 sender,
                 vec![],
-                ptb.clone(),
                 max_gas_budget(context).await?,
                 gas_price,
             );
@@ -162,9 +168,7 @@ impl PTB {
         };
 
         // create the transaction data that will be sent to the network
-        let tx_data =
-            TransactionData::new_programmable(sender, vec![coins], ptb, gas_budget, gas_price);
-
+        let tx_data = TransactionData::new(tx_kind, sender, coins, gas_budget, gas_price);
         // sign the tx
         let signature =
             context

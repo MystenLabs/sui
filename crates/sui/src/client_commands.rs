@@ -2708,6 +2708,8 @@ pub(crate) async fn estimate_gas_budget(
     Ok(gas_estimate.try_into()?)
 }
 
+/// Tries to get the maximum gas budget that is set in the protocol, and if not,
+/// it returns the max gas budget defined in a constant in this module {MAX_GAS_BUDGET}.
 pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::Error> {
     let cfg = context
         .get_client()
