@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 37;
+const MAX_PROTOCOL_VERSION: u64 = 38;
 
 // Record history of protocol version allocations here:
 //
@@ -109,7 +109,9 @@ const MAX_PROTOCOL_VERSION: u64 = 37;
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
 // Version 37: Reject entry functions with mutable Random.
-//             Introduce limits for binary tables size.
+// Version 38: Introduce limits for binary tables size.
+//             Remove recursion from loader.
+//             Upgrade deepbook code (framework upgrade)
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -1936,7 +1938,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     }
-
+                }
+                38 => {
                     cfg.binary_module_handles = Some(100);
                     cfg.binary_struct_handles = Some(300);
                     cfg.binary_function_handles = Some(1500);
