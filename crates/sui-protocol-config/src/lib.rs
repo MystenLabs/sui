@@ -393,7 +393,7 @@ struct FeatureFlags {
 
     // Limit PTBs that contain invalid commands after one that uses Random.
     #[serde(skip_serializing_if = "is_false")]
-    enable_randomness_ptb_limits: bool,
+    enable_randomness_ptb_restrictions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1171,8 +1171,8 @@ impl ProtocolConfig {
         self.feature_flags.reject_mutable_random_on_entry_functions
     }
 
-    pub fn enable_randomness_ptb_limits(&self) -> bool {
-        self.feature_flags.enable_randomness_ptb_limits
+    pub fn enable_randomness_ptb_restrictions(&self) -> bool {
+        self.feature_flags.enable_randomness_ptb_restrictions
     }
 }
 
@@ -1923,7 +1923,7 @@ impl ProtocolConfig {
                 }
                 38 => {}
                 39 => {
-                    cfg.feature_flags.enable_randomness_ptb_limits = true;
+                    cfg.feature_flags.enable_randomness_ptb_restrictions = true;
                 }
                 // Use this template when making changes:
                 //

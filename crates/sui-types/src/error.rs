@@ -256,7 +256,7 @@ pub enum UserInputError {
     },
 
     #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
-    PostRandomCommandLimits,
+    PostRandomCommandRestrictions,
 }
 
 #[derive(

@@ -21,6 +21,7 @@ module test::random {
 
     public fun use_clock(_clock: &Clock) {}
     public fun use_random(_random: &Random) {}
+    public fun use_random_twice(_random1: &Random, _random2: &Random) {}
     public fun use_value(_value: u64) {}
 }
 
@@ -51,3 +52,7 @@ module test::random {
 //> test::random::use_clock(Input(1));
 //> test::random::use_random(Input(2));
 //> MergeCoins(Gas, [Result(0)]);
+
+// Good tx - use Random twice in the same call
+//# programmable --sender A --inputs immshared(8)
+//> test::random::use_random_twice(Input(0), Input(0));
