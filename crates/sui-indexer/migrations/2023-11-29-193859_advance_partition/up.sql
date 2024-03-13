@@ -7,3 +7,11 @@ BEGIN
     EXECUTE format('CREATE TABLE IF NOT EXISTS %I_partition_%s PARTITION OF %I FOR VALUES FROM (%L) TO (MAXVALUE)', table_name, new_epoch, table_name, new_epoch_start_cp);
 END;
 $$;
+
+CREATE OR REPLACE PROCEDURE drop_partition(table_name TEXT, epoch BIGINT)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    EXECUTE format('DROP TABLE IF EXISTS %I_partition_%s', table_name, epoch);
+END;
+$$;
