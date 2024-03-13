@@ -108,13 +108,19 @@ SET object_version = EXCLUDED.object_version,
 ";
 
 #[derive(Clone)]
+pub struct PgIndexerStoreConfig {
+    pub parallel_chunk_size: usize,
+    pub parallel_objects_chunk_size: usize,
+    pub epochs_to_keep: Option<u64>,
+}
+
+#[derive(Clone)]
 pub struct PgIndexerStore {
     blocking_cp: PgConnectionPool,
     module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>>,
     metrics: IndexerMetrics,
-    parallel_chunk_size: usize,
-    parallel_objects_chunk_size: usize,
     partition_manager: PgPartitionManager,
+    config: PgIndexerStoreConfig,
 }
 
 impl PgIndexerStore {
@@ -130,16 +136,23 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
+        let epochs_to_keep = std::env::var("EPOCHS_TO_KEEP")
+            .map(|s| s.parse::<u64>().ok())
+            .unwrap_or_else(|_e| None);
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
+        let config = PgIndexerStoreConfig {
+            parallel_chunk_size,
+            parallel_objects_chunk_size,
+            epochs_to_keep,
+        };
 
         Self {
             blocking_cp,
             module_cache,
             metrics,
-            parallel_chunk_size,
-            parallel_objects_chunk_size,
             partition_manager,
+            config,
         }
     }
 
@@ -780,12 +793,14 @@ impl PgIndexerStore {
                 let epoch_partition_data =
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
-                for (table, last_partition) in table_partitions {
+                for (table, (first_partition, last_partition)) in table_partitions {
                     let guard = self.metrics.advance_epoch_latency.start_timer();
-                    self.partition_manager.advance_table_epoch_partition(
+                    self.partition_manager.advance_and_prune_epoch_partition(
                         table.clone(),
+                        first_partition,
                         last_partition,
                         &epoch_partition_data,
+                        self.config.epochs_to_keep,
                     )?;
                     let elapsed = guard.stop_and_record();
                     info!(
@@ -903,7 +918,7 @@ impl IndexerStore for PgIndexerStore {
             .start_timer();
         let objects = make_final_list_of_objects_to_commit(object_changes);
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_chunk(c)))
@@ -946,7 +961,7 @@ impl IndexerStore for PgIndexerStore {
             .start_timer();
 
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_history_chunk(c)))
@@ -1016,7 +1031,7 @@ impl IndexerStore for PgIndexerStore {
             .start_timer();
         let len = transactions.len();
 
-        let chunks = chunk!(transactions, self.parallel_chunk_size);
+        let chunks = chunk!(transactions, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_transactions_chunk(c)))
@@ -1046,7 +1061,7 @@ impl IndexerStore for PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_events
             .start_timer();
-        let chunks = chunk!(events, self.parallel_chunk_size);
+        let chunks = chunk!(events, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_events_chunk(c)))
@@ -1096,7 +1111,7 @@ impl IndexerStore for PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
-        let chunks = chunk!(indices, self.parallel_chunk_size);
+        let chunks = chunk!(indices, self.config.parallel_chunk_size);
 
         let futures = chunks
             .into_iter()
