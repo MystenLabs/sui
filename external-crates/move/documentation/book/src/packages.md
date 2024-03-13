@@ -47,7 +47,6 @@ Optional fields are marked with `*`, `+` denotes one or more elements:
 ```
 [package]
 name = <string>                  # e.g., "MoveStdlib"
-version = "<uint>.<uint>.<uint>" # e.g., "0.1.1"
 license* = <string>              # e.g., "MIT", "GPL", "Apache 2.0"
 authors* = [<string>]            # e.g., ["Joe Smith (joesmith@noemail.com)", "Jane Smith (janesmith@noemail.com)"]
 
@@ -74,7 +73,6 @@ An example of a minimal package manifest with one local dependency and one git d
 ```
 [package]
 name = "AName"
-version = "0.0.0"
 ```
 
 An example of a more standard package manifest that also includes the Move standard library and
@@ -83,7 +81,6 @@ instantiates the named address `Std` from it with the address value `0x1`:
 ```
 [package]
 name = "AName"
-version = "0.0.0"
 license = "Apache 2.0"
 
 [addresses]
