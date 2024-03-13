@@ -165,10 +165,10 @@ the type specified is the type of the coin, not the coin type itself. For exampl
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="deny_list.md#0x2_deny_list_add">add</a>(
     <a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <a href="deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(<a href="bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+    <a href="deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(<a href="bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), `type`, addr)
 }
 </code></pre>
 
@@ -193,13 +193,13 @@ the type specified is the type of the coin, not the coin type itself. For exampl
 
 <pre><code><b>fun</b> <a href="deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(
     list: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <b>if</b> (!<a href="table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, type)) {
-        <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> list.denied_addresses, type, <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
+    <b>if</b> (!<a href="table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, `type`)) {
+        <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> list.denied_addresses, `type`, <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
     };
-    <b>let</b> denied_addresses = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, type);
+    <b>let</b> denied_addresses = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, `type`);
     <b>let</b> already_denied = <a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr);
     <b>if</b> (already_denied) <b>return</b>;
 
@@ -236,10 +236,10 @@ Aborts with <code><a href="deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="deny_list.md#0x2_deny_list_remove">remove</a>(
     <a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <a href="deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(<a href="bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+    <a href="deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(<a href="bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), `type`, addr)
 }
 </code></pre>
 
@@ -264,10 +264,10 @@ Aborts with <code><a href="deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>
 
 <pre><code><b>fun</b> <a href="deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(
     list: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <b>let</b> denied_addresses = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, type);
+    <b>let</b> denied_addresses = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, `type`);
     <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr), <a href="deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>);
     <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(denied_addresses, &addr);
     <b>let</b> denied_count = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_count, addr);
@@ -301,10 +301,10 @@ Returns true iff the given address is denied for the given type.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="deny_list.md#0x2_deny_list_contains">contains</a>(
     <a href="deny_list.md#0x2_deny_list">deny_list</a>: &<a href="deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
     per_type_index: u64,
-    type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ): bool {
-    <a href="deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(<a href="bag.md#0x2_bag_borrow">bag::borrow</a>(&<a href="deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+    <a href="deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(<a href="bag.md#0x2_bag_borrow">bag::borrow</a>(&<a href="deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), `type`, addr)
 }
 </code></pre>
 
@@ -329,7 +329,7 @@ Returns true iff the given address is denied for the given type.
 
 <pre><code><b>fun</b> <a href="deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(
     list: &<a href="deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    `type`: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ): bool {
     <b>if</b> (!<a href="table.md#0x2_table_contains">table::contains</a>(&list.denied_count, addr)) <b>return</b> <b>false</b>;
@@ -337,9 +337,9 @@ Returns true iff the given address is denied for the given type.
     <b>let</b> denied_count = <a href="table.md#0x2_table_borrow">table::borrow</a>(&list.denied_count, addr);
     <b>if</b> (*denied_count == 0) <b>return</b> <b>false</b>;
 
-    <b>if</b> (!<a href="table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, type)) <b>return</b> <b>false</b>;
+    <b>if</b> (!<a href="table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, `type`)) <b>return</b> <b>false</b>;
 
-    <b>let</b> denied_addresses = <a href="table.md#0x2_table_borrow">table::borrow</a>(&list.denied_addresses, type);
+    <b>let</b> denied_addresses = <a href="table.md#0x2_table_borrow">table::borrow</a>(&list.denied_addresses, `type`);
     <a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr)
 }
 </code></pre>
@@ -368,7 +368,7 @@ via a system transaction.
 <pre><code><b>fun</b> <a href="deny_list.md#0x2_deny_list_create">create</a>(ctx: &<b>mut</b> TxContext) {
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="deny_list.md#0x2_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
 
-    <b>let</b> lists = <a href="bag.md#0x2_bag_new">bag::new</a>(ctx);
+    <b>let</b> <b>mut</b> lists = <a href="bag.md#0x2_bag_new">bag::new</a>(ctx);
     <a href="bag.md#0x2_bag_add">bag::add</a>(&<b>mut</b> lists, <a href="deny_list.md#0x2_deny_list_COIN_INDEX">COIN_INDEX</a>, <a href="deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx));
     <b>let</b> deny_list_object = <a href="deny_list.md#0x2_deny_list_DenyList">DenyList</a> {
         id: <a href="object.md#0x2_object_sui_deny_list_object_id">object::sui_deny_list_object_id</a>(),

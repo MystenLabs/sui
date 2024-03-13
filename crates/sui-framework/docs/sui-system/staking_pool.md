@@ -518,7 +518,7 @@ A proportional amount of pool token withdraw is recorded and processed at epoch 
     staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">StakedSui</a>,
     ctx: &TxContext
 ) : Balance&lt;SUI&gt; {
-    <b>let</b> (pool_token_withdraw_amount, principal_withdraw) =
+    <b>let</b> (pool_token_withdraw_amount, <b>mut</b> principal_withdraw) =
         <a href="staking_pool.md#0x3_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, staked_sui);
     <b>let</b> principal_withdraw_amount = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
 
@@ -762,7 +762,7 @@ portion because the principal portion was already taken out of the staker's self
 ) : Balance&lt;SUI&gt; {
     <b>let</b> exchange_rate = <a href="staking_pool.md#0x3_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool, epoch);
     <b>let</b> total_sui_withdraw_amount = <a href="staking_pool.md#0x3_staking_pool_get_sui_amount">get_sui_amount</a>(&exchange_rate, pool_token_withdraw_amount);
-    <b>let</b> reward_withdraw_amount =
+    <b>let</b> <b>mut</b> reward_withdraw_amount =
         <b>if</b> (total_sui_withdraw_amount &gt;= principal_withdraw_amount)
             total_sui_withdraw_amount - principal_withdraw_amount
         <b>else</b> 0;
@@ -1128,7 +1128,7 @@ Returns true if all the staking parameters of the staked sui except the principa
         <b>return</b> <a href="staking_pool.md#0x3_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
     };
     <b>let</b> clamped_epoch = <a href="dependencies/move-stdlib/option.md#0x1_option_get_with_default">option::get_with_default</a>(&pool.deactivation_epoch, epoch);
-    <b>let</b> epoch = <a href="dependencies/sui-framework/math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
+    <b>let</b> <b>mut</b> epoch = <a href="dependencies/sui-framework/math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
     <b>let</b> activation_epoch = *<a href="dependencies/move-stdlib/option.md#0x1_option_borrow">option::borrow</a>(&pool.activation_epoch);
 
     // Find the latest epoch that's earlier than the given epoch <b>with</b> an entry in the <a href="dependencies/sui-framework/table.md#0x2_table">table</a>

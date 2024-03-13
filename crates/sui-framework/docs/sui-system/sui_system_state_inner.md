@@ -2081,10 +2081,10 @@ gas coins.
     self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     new_epoch: u64,
     next_protocol_version: u64,
-    storage_reward: Balance&lt;SUI&gt;,
-    computation_reward: Balance&lt;SUI&gt;,
-    storage_rebate_amount: u64,
-    non_refundable_storage_fee_amount: u64,
+    <b>mut</b> storage_reward: Balance&lt;SUI&gt;,
+    <b>mut</b> computation_reward: Balance&lt;SUI&gt;,
+    <b>mut</b> storage_rebate_amount: u64,
+    <b>mut</b> non_refundable_storage_fee_amount: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x3_validator">validator</a>, in bps.
@@ -2143,7 +2143,7 @@ gas coins.
     <b>let</b> computation_charge_u128 = (computation_charge <b>as</b> u128);
 
     <b>let</b> storage_fund_reward_amount = (storage_fund_balance <b>as</b> u128) * computation_charge_u128 / total_stake_u128;
-    <b>let</b> storage_fund_reward = <a href="dependencies/sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, (storage_fund_reward_amount <b>as</b> u64));
+    <b>let</b> <b>mut</b> storage_fund_reward = <a href="dependencies/sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, (storage_fund_reward_amount <b>as</b> u64));
     <b>let</b> storage_fund_reinvestment_amount =
         storage_fund_reward_amount * (storage_fund_reinvest_rate <b>as</b> u128) / <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
     <b>let</b> storage_fund_reinvestment = <a href="dependencies/sui-framework/balance.md#0x2_balance_split">balance::split</a>(
@@ -2184,7 +2184,7 @@ gas coins.
     // Because of precision issues <b>with</b> integer divisions, we expect that there will be some
     // remaining <a href="dependencies/sui-framework/balance.md#0x2_balance">balance</a> in `storage_fund_reward` and `computation_reward`.
     // All of these go <b>to</b> the storage fund.
-    <b>let</b> leftover_staking_rewards = storage_fund_reward;
+    <b>let</b> <b>mut</b> leftover_staking_rewards = storage_fund_reward;
     <a href="dependencies/sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> leftover_staking_rewards, computation_reward);
     <b>let</b> leftover_storage_fund_inflow = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(&leftover_staking_rewards);
 
@@ -2581,11 +2581,11 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(coins: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;Coin&lt;SUI&gt;&gt;, amount: <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext): Balance&lt;SUI&gt; {
-    <b>let</b> merged_coin = <a href="dependencies/move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
+<pre><code><b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(<b>mut</b> coins: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;Coin&lt;SUI&gt;&gt;, amount: <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext): Balance&lt;SUI&gt; {
+    <b>let</b> <b>mut</b> merged_coin = <a href="dependencies/move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
     <a href="dependencies/sui-framework/pay.md#0x2_pay_join_vec">pay::join_vec</a>(&<b>mut</b> merged_coin, coins);
 
-    <b>let</b> total_balance = <a href="dependencies/sui-framework/coin.md#0x2_coin_into_balance">coin::into_balance</a>(merged_coin);
+    <b>let</b> <b>mut</b> total_balance = <a href="dependencies/sui-framework/coin.md#0x2_coin_into_balance">coin::into_balance</a>(merged_coin);
     // <b>return</b> the full amount <b>if</b> amount is not specified
     <b>if</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&amount)) {
         <b>let</b> amount = <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(amount);
