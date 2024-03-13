@@ -84,7 +84,10 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
-        build_config.config.lint_level.set(LintLevel::None);
+        build_config
+            .config
+            .lint_flag
+            .set(move_compiler::linters::LintLevel::None);
         build_config
     }
 
