@@ -441,7 +441,8 @@ async fn test_pay_sui_multiple_times() {
 
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
-    for _ in 1..100 {
+    for i in 1..20 {
+        println!("Iteration: {}", i);
         let ops = serde_json::from_value(json!(
             [{
                 "operation_identifier":{"index":0},

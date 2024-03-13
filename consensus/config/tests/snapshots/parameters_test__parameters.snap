@@ -5,6 +5,9 @@ expression: parameters
 leader_timeout:
   secs: 0
   nanos: 250000000
+min_round_delay:
+  secs: 0
+  nanos: 50000000
 max_forward_time_drift:
   secs: 0
   nanos: 500000000

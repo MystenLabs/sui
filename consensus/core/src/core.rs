@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
+    time::Duration,
 };
 
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
@@ -221,12 +222,11 @@ impl Core {
         Ok(None)
     }
 
-    // Attempts to create a new block, persist and broadcast it to all peers.
-    fn try_propose(
-        &mut self,
-        ignore_leaders_check: bool,
-    ) -> ConsensusResult<Option<VerifiedBlock>> {
-        if let Some(block) = self.try_new_block(ignore_leaders_check) {
+    // Attempts to create a new block, persist and propose it to all peers.
+    // When force is true, ignore if leader from the last round exists among ancestors and if
+    // the minimum round delay has passed.
+    fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
+        if let Some(block) = self.try_new_block(force) {
             // When there is only one authority in committee, it is unnecessary to broadcast
             // the block which will fail anyway without subscribers to the signal.
             if self.context.committee.size() > 1 {
@@ -241,16 +241,27 @@ impl Core {
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(&mut self, ignore_leaders_check: bool) -> Option<VerifiedBlock> {
+    fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
+
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
             return None;
         }
+
+        let now = timestamp_utc_ms();
+
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
-        // or because we are actually ready to produce the block (leader exists)
-        if !(ignore_leaders_check || self.last_quorum_leaders_exist()) {
-            return None;
+        // or because we are actually ready to produce the block (leader exists and min delay has passed).
+        if !force {
+            if !self.last_quorum_leaders_exist() {
+                return None;
+            }
+            if Duration::from_millis(now.saturating_sub(self.last_proposed_timestamp_ms()))
+                < self.context.parameters.min_round_delay
+            {
+                return None;
+            }
         }
 
         // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
@@ -260,7 +271,6 @@ impl Core {
         // Probably proposing for all the intermediate rounds might not make much sense.
 
         // 1. Consume the ancestors to be included in proposal
-        let now = timestamp_utc_ms();
         let ancestors = self.ancestors_to_propose(clock_round, now);
 
         // 2. Consume the next transactions to be included.
@@ -415,6 +425,10 @@ impl Core {
         self.committer.get_leaders(round)
     }
 
+    fn last_proposed_timestamp_ms(&self) -> BlockTimestampMs {
+        self.last_proposed_block.timestamp_ms()
+    }
+
     fn last_proposed_round(&self) -> Round {
         self.last_proposed_block.round()
     }
@@ -491,9 +505,12 @@ impl CoreSignalsReceivers {
 mod test {
     use std::{collections::BTreeSet, time::Duration};
 
-    use consensus_config::{local_committee_and_keys, Stake};
+    use consensus_config::{local_committee_and_keys, Parameters, Stake};
     use sui_protocol_config::ProtocolConfig;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+    use tokio::{
+        sync::mpsc::{unbounded_channel, UnboundedReceiver},
+        time::sleep,
+    };
 
     use super::*;
     use crate::{
@@ -869,6 +886,9 @@ mod test {
         // Adding one block now will trigger the creation of new block for round 1
         let block_1 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
         expected_ancestors.insert(block_1.reference());
+        // Wait for min round delay to allow blocks to be proposed.
+        sleep(context.parameters.min_round_delay).await;
+        // add blocks to trigger proposal.
         _ = core.add_blocks(vec![block_1]);
 
         assert_eq!(core.last_proposed_round(), 1);
@@ -879,6 +899,9 @@ mod test {
         // Adding another block now forms a quorum for round 1, so block at round 2 will proposed
         let block_3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
         expected_ancestors.insert(block_3.reference());
+        // Wait for min round delay to allow blocks to be proposed.
+        sleep(context.parameters.min_round_delay).await;
+        // add blocks to trigger proposal.
         _ = core.add_blocks(vec![block_3]);
 
         assert_eq!(core.last_proposed_round(), 2);
@@ -900,6 +923,7 @@ mod test {
     #[tokio::test]
     async fn test_core_try_new_block_leader_timeout() {
         telemetry_subscribers::init_for_testing();
+
         // Create the cores for all authorities
         let mut all_cores = create_cores(vec![1, 1, 1, 1]);
 
@@ -917,6 +941,17 @@ mod test {
             for (core, _signal_receivers, _, _) in cores.iter_mut() {
                 core.add_blocks(last_round_blocks.clone()).unwrap();
 
+                // Only when round > 1 and using non-genesis parents.
+                if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
+                    assert_eq!(round - 1, r);
+                    // Ensure no new block is proposed before the min round delay.
+                    assert_eq!(core.last_proposed_round(), r);
+                    // Force propose new block regardless of min round delay.
+                    core.try_propose(true).unwrap().unwrap_or_else(|| {
+                        panic!("Block should have been proposed for round {}", round)
+                    });
+                }
+
                 assert_eq!(core.last_proposed_round(), round);
 
                 this_round_blocks.push(core.last_proposed_block.clone());
@@ -932,7 +967,8 @@ mod test {
             assert!(core.try_propose(false).unwrap().is_none());
         }
 
-        // Now try to create the blocks for round 4 via the leader timeout method which should ignore any leader checks
+        // Now try to create the blocks for round 4 via the leader timeout method which should
+        // ignore any leader checks or min round delay.
         for (core, _, _, _) in cores.iter_mut() {
             assert!(core.force_new_block(4).unwrap().is_some());
             assert_eq!(core.last_proposed_round(), 4);
@@ -954,6 +990,8 @@ mod test {
     #[tokio::test]
     async fn test_core_signals() {
         telemetry_subscribers::init_for_testing();
+        let default_params = Parameters::default();
+
         // create the cores and their signals for all the authorities
         let mut cores = create_cores(vec![1, 1, 1, 1]);
 
@@ -963,6 +1001,8 @@ mod test {
             let mut this_round_blocks = Vec::new();
 
             for (core, signal_receivers, block_receiver, _) in &mut cores {
+                // Wait for min round delay to allow blocks to be proposed.
+                sleep(default_params.min_round_delay).await;
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
                 core.add_blocks(last_round_blocks.clone()).unwrap();
@@ -1025,6 +1065,8 @@ mod test {
     #[tokio::test]
     async fn test_core_compress_proposal_references() {
         telemetry_subscribers::init_for_testing();
+        let default_params = Parameters::default();
+
         // create the cores and their signals for all the authorities
         let mut cores = create_cores(vec![1, 1, 1, 1]);
 
@@ -1061,6 +1103,9 @@ mod test {
         // be applied the we should expect all the previous blocks to be referenced from round 0..=10. However, since compression
         // is applied only the last round's (10) blocks should be referenced + the authority's block of round 0.
         let (core, _, _, _) = &mut cores[excluded_authority];
+        // Wait for min round delay to allow blocks to be proposed.
+        sleep(default_params.min_round_delay).await;
+        // add blocks to trigger proposal.
         core.add_blocks(all_blocks).unwrap();
 
         // Assert that a block has been created for round 11 and it references to blocks of round 10 for the other peers, and
