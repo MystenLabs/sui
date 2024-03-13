@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::VecDeque;
+use std::ops::Range;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Included},
@@ -26,9 +27,9 @@ pub(crate) struct MemStore {
 struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
-    commits: BTreeMap<(Round, CommitIndex, CommitDigest), TrustedCommit>,
-    commit_votes: BTreeSet<(Round, CommitIndex, CommitDigest, BlockRef)>,
-    commit_info: BTreeMap<(Round, CommitIndex, CommitDigest), CommitInfo>,
+    commits: BTreeMap<(CommitIndex, CommitDigest), TrustedCommit>,
+    commit_votes: BTreeSet<(CommitIndex, CommitDigest, BlockRef)>,
+    commit_info: BTreeMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
 impl MemStore {
@@ -64,26 +65,21 @@ impl Store for MemStore {
             for commit in block.commit_votes() {
                 inner
                     .commit_votes
-                    .insert((commit.round, commit.index, commit.digest, block_ref));
+                    .insert((commit.index, commit.digest, block_ref));
             }
         }
         if let Some(last_commit) = write_batch.commits.last().cloned() {
             for commit in write_batch.commits {
                 inner
                     .commits
-                    .insert((commit.round(), commit.index(), commit.digest()), commit);
+                    .insert((commit.index(), commit.digest()), commit);
             }
             let commit_info = CommitInfo {
                 last_committed_rounds: write_batch.last_committed_rounds,
             };
-            inner.commit_info.insert(
-                (
-                    last_commit.round(),
-                    last_commit.index(),
-                    last_commit.digest(),
-                ),
-                commit_info,
-            );
+            inner
+                .commit_info
+                .insert((last_commit.index(), last_commit.digest()), commit_info);
         }
         Ok(())
     }
@@ -168,16 +164,12 @@ impl Store for MemStore {
             .map(|(_, commit)| commit.clone()))
     }
 
-    fn scan_commits(
-        &self,
-        start: (Round, CommitIndex),
-        end: (Round, CommitIndex),
-    ) -> ConsensusResult<Vec<TrustedCommit>> {
+    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>> {
         let inner = self.inner.read();
         let mut commits = vec![];
         for (_, commit) in inner.commits.range((
-            Included((start.0, start.1, CommitDigest::MIN)),
-            Excluded((end.0, end.1, CommitDigest::MIN)),
+            Included((range.start, CommitDigest::MIN)),
+            Excluded((range.end, CommitDigest::MIN)),
         )) {
             commits.push(commit.clone());
         }

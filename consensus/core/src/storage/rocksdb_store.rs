@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::VecDeque;
+use std::ops::Range;
 use std::{
     ops::Bound::{Excluded, Included},
     time::Duration,
@@ -31,12 +32,12 @@ pub(crate) struct RocksDBStore {
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to content.
-    commits: DBMap<(Round, CommitIndex, CommitDigest), Bytes>,
+    commits: DBMap<(CommitIndex, CommitDigest), Bytes>,
     /// Collects votes on commits.
     /// TODO: batch multiple votes into a single row.
-    commit_votes: DBMap<(Round, CommitIndex, CommitDigest, BlockRef), ()>,
+    commit_votes: DBMap<(CommitIndex, CommitDigest, BlockRef), ()>,
     /// Stores the latest values of a few properties.
-    commit_info: DBMap<(Round, CommitIndex, CommitDigest), CommitInfo>,
+    commit_info: DBMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
 impl RocksDBStore {
@@ -80,9 +81,9 @@ impl RocksDBStore {
         let (blocks, digests_by_authorities, commits, commit_votes, commit_info) = reopen!(&rocksdb,
             Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<(Round, CommitIndex, CommitDigest), Bytes>,
-            Self::COMMIT_VOTES_CF;<(Round, CommitIndex, CommitDigest, BlockRef), ()>,
-            Self::COMMIT_INFO_CF;<(Round, CommitIndex, CommitDigest), CommitInfo>
+            Self::COMMITS_CF;<(CommitIndex, CommitDigest), Bytes>,
+            Self::COMMIT_VOTES_CF;<(CommitIndex, CommitDigest, BlockRef), ()>,
+            Self::COMMIT_INFO_CF;<(CommitIndex, CommitDigest), CommitInfo>
         );
 
         Self {
@@ -119,7 +120,7 @@ impl Store for RocksDBStore {
                 batch
                     .insert_batch(
                         &self.commit_votes,
-                        [((commit.round, commit.index, commit.digest, block_ref), ())],
+                        [((commit.index, commit.digest, block_ref), ())],
                     )
                     .map_err(ConsensusError::RocksDBFailure)?;
             }
@@ -129,10 +130,7 @@ impl Store for RocksDBStore {
                 batch
                     .insert_batch(
                         &self.commits,
-                        [(
-                            (commit.round(), commit.index(), commit.digest()),
-                            commit.serialized(),
-                        )],
+                        [((commit.index(), commit.digest()), commit.serialized())],
                     )
                     .map_err(ConsensusError::RocksDBFailure)?;
             }
@@ -142,14 +140,7 @@ impl Store for RocksDBStore {
             batch
                 .insert_batch(
                     &self.commit_info,
-                    [(
-                        (
-                            last_commit.round(),
-                            last_commit.index(),
-                            last_commit.digest(),
-                        ),
-                        commit_info,
-                    )],
+                    [((last_commit.index(), last_commit.digest()), commit_info)],
                 )
                 .map_err(ConsensusError::RocksDBFailure)?;
         }
@@ -246,7 +237,7 @@ impl Store for RocksDBStore {
         let Some(result) = self.commits.safe_iter().skip_to_last().next() else {
             return Ok(None);
         };
-        let ((_round, _index, digest), serialized) = result?;
+        let ((_index, digest), serialized) = result?;
         let commit = TrustedCommit::new_trusted(
             bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedCommit)?,
             serialized,
@@ -255,17 +246,13 @@ impl Store for RocksDBStore {
         Ok(Some(commit))
     }
 
-    fn scan_commits(
-        &self,
-        start: (Round, CommitIndex),
-        end: (Round, CommitIndex),
-    ) -> ConsensusResult<Vec<TrustedCommit>> {
+    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>> {
         let mut commits = vec![];
         for result in self.commits.safe_range_iter((
-            Included((start.0, start.1, CommitDigest::MIN)),
-            Excluded((end.0, end.1, CommitDigest::MIN)),
+            Included((range.start, CommitDigest::MIN)),
+            Excluded((range.end, CommitDigest::MIN)),
         )) {
-            let ((_round, _index, digest), serialized) = result?;
+            let ((_index, digest), serialized) = result?;
             let commit = TrustedCommit::new_trusted(
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedCommit)?,
                 serialized,

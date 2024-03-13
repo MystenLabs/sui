@@ -6,9 +6,9 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::block::Round;
 use crate::commit::CommitAPI;
 use crate::error::{ConsensusError, ConsensusResult};
+use crate::CommitConsumer;
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
     commit::{load_committed_subdag_from_store, CommitIndex, CommittedSubDag},
@@ -42,23 +42,21 @@ pub(crate) struct CommitObserver {
 impl CommitObserver {
     pub(crate) fn new(
         context: Arc<Context>,
-        sender: UnboundedSender<CommittedSubDag>,
-        // Last Round and CommitIndex that has been successfully processed by the output channel.
-        // First commit in the replayed sequence will have index last_processed_commit_index + 1.
-        // Set both to 0 to replay from the start (as normal sequence starts at index = 1).
-        last_processed_commit_round: Round,
-        last_processed_commit_index: CommitIndex,
+        commit_consumer: CommitConsumer,
+        // sender: UnboundedSender<CommittedSubDag>,
+        // last_processed_commit_round: Round,
+        // last_processed_commit_index: CommitIndex,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
         let mut observer = Self {
             context,
             commit_interpreter: Linearizer::new(dag_state.clone()),
-            sender,
+            sender: commit_consumer.sender,
             store,
         };
 
-        observer.recover_and_send_commits(last_processed_commit_round, last_processed_commit_index);
+        observer.recover_and_send_commits(commit_consumer.last_processed_commit_index);
         observer
     }
 
@@ -90,11 +88,7 @@ impl CommitObserver {
         Ok(sent_sub_dags)
     }
 
-    fn recover_and_send_commits(
-        &mut self,
-        last_processed_commit_round: Round,
-        last_processed_commit_index: CommitIndex,
-    ) {
+    fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
         // TODO: remove this check, to allow consensus to regenerate commits?
         let last_commit = self
             .store
@@ -113,10 +107,7 @@ impl CommitObserver {
         // We should not send the last processed commit again, so last_processed_commit_index+1
         let unsent_commits = self
             .store
-            .scan_commits(
-                (last_processed_commit_round, last_processed_commit_index + 1),
-                (Round::MAX, CommitIndex::MAX),
-            )
+            .scan_commits((last_processed_commit_index + 1)..CommitIndex::MAX)
             .expect("Scanning commits should not fail");
 
         // Resend all the committed subdags to the consensus output channel
@@ -180,7 +171,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::BlockRef,
+        block::{BlockRef, Round},
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         dag_state::DagState,
@@ -206,9 +197,11 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            sender,
-            last_processed_commit_round,
-            last_processed_commit_index,
+            CommitConsumer::new(
+                sender,
+                last_processed_commit_round,
+                last_processed_commit_index,
+            ),
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -271,9 +264,7 @@ mod tests {
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(last_commit.index(), commits.last().unwrap().commit_index);
-        let all_stored_commits = mem_store
-            .scan_commits((0, 0), (Round::MAX, CommitIndex::MAX))
-            .unwrap();
+        let all_stored_commits = mem_store.scan_commits(0..CommitIndex::MAX).unwrap();
         assert_eq!(all_stored_commits.len(), leaders.len());
         let blocks_existence = mem_store.contains_blocks(&expected_stored_refs).unwrap();
         assert!(blocks_existence.iter().all(|exists| *exists));
@@ -296,9 +287,11 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            last_processed_commit_round,
-            last_processed_commit_index,
+            CommitConsumer::new(
+                sender.clone(),
+                last_processed_commit_round,
+                last_processed_commit_index,
+            ),
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -389,9 +382,11 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            sender,
-            expected_last_processed_round as Round,
-            expected_last_processed_index as CommitIndex,
+            CommitConsumer::new(
+                sender,
+                expected_last_processed_round as Round,
+                expected_last_processed_index as CommitIndex,
+            ),
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -429,9 +424,11 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            last_processed_commit_round,
-            last_processed_commit_index,
+            CommitConsumer::new(
+                sender.clone(),
+                last_processed_commit_round,
+                last_processed_commit_index,
+            ),
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -480,9 +477,11 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            sender,
-            expected_last_processed_round as Round,
-            expected_last_processed_index as CommitIndex,
+            CommitConsumer::new(
+                sender,
+                expected_last_processed_round as Round,
+                expected_last_processed_index as CommitIndex,
+            ),
             dag_state.clone(),
             mem_store.clone(),
         );

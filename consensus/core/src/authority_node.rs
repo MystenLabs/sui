@@ -142,9 +142,7 @@ where
 
         let commit_observer = CommitObserver::new(
             context.clone(),
-            commit_consumer.sender,
-            commit_consumer.last_processed_commit_round,
-            commit_consumer.last_processed_commit_index,
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
         );

@@ -7,6 +7,8 @@ pub(crate) mod rocksdb_store;
 #[cfg(test)]
 mod store_tests;
 
+use std::ops::Range;
+
 use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
 
@@ -46,11 +48,7 @@ pub(crate) trait Store: Send + Sync {
     fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>>;
 
     /// Reads all commits from start (inclusive) until end (exclusive).
-    fn scan_commits(
-        &self,
-        start: (Round, CommitIndex),
-        end: (Round, CommitIndex),
-    ) -> ConsensusResult<Vec<TrustedCommit>>;
+    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>>;
 
     /// Reads the last commit info, including last committed round per authority.
     fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>>;

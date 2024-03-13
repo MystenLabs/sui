@@ -244,14 +244,14 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits((20, 20), (25, 25))
+            .scan_commits(20..25)
             .expect("Scan commits should not fail");
         assert!(scanned_commits.is_empty(), "{:?}", scanned_commits);
     }
 
     {
         let scanned_commits = store
-            .scan_commits((3, 3), (5, 5))
+            .scan_commits(3..5)
             .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 2, "{:?}", scanned_commits);
         assert_eq!(
@@ -262,7 +262,7 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits((0, 0), (3, 3))
+            .scan_commits(0..3)
             .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 2, "{:?}", scanned_commits);
         assert_eq!(
@@ -273,7 +273,7 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits((0, 0), (5, 5))
+            .scan_commits(0..5)
             .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 4, "{:?}", scanned_commits);
         assert_eq!(scanned_commits, written_commits,);

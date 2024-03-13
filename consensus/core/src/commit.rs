@@ -162,7 +162,6 @@ impl TrustedCommit {
     pub(crate) fn reference(&self) -> CommitRef {
         CommitRef {
             index: self.index(),
-            round: self.leader().round,
             digest: self.digest(),
         }
     }
@@ -235,11 +234,9 @@ impl fmt::Debug for CommitDigest {
     }
 }
 
-/// Uniquely identifies a commit via digest, with its position (round and index).
-/// NOTE: Round is included to help with checking if a Commit is the 1st of its round.
+/// Uniquely identifies a commit with its index and digest.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitRef {
-    pub round: Round,
     pub index: CommitIndex,
     pub digest: CommitDigest,
 }
@@ -348,6 +345,8 @@ pub struct CommitConsumer {
     pub last_processed_commit_round: Round,
     // Index of the last commit that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from the next index.
+    // First commit in the replayed sequence will have index last_processed_commit_index + 1.
+    // Set 0 to replay from the start (as generated commit sequence starts at index = 1).
     pub last_processed_commit_index: CommitIndex,
 }
 
