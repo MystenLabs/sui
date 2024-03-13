@@ -25,7 +25,10 @@ use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
 };
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Context
@@ -50,7 +53,7 @@ struct Context<'env> {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         modules: &UniqueMap<ModuleIdent, H::ModuleDefinition>,
     ) -> Self {
         let all_modules = modules
@@ -136,7 +139,7 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: H::Program,
 ) -> G::Program {
     let H::Program { modules: hmodules } = prog;

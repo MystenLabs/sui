@@ -31,6 +31,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     iter::IntoIterator,
+    sync::Arc,
 };
 
 use self::known_attributes::DiagnosticAttribute;
@@ -234,7 +235,7 @@ impl<'env, 'map> Context<'env, 'map> {
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
 /// the name and its value
 fn compute_address_conflicts(
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &P::Program,
 ) -> BTreeSet<Symbol> {
     let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
@@ -363,10 +364,10 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: P::Program,
 ) -> E::Program {
-    let address_conflicts = compute_address_conflicts(pre_compiled_lib, &prog);
+    let address_conflicts = compute_address_conflicts(pre_compiled_lib.clone(), &prog);
 
     let mut member_computation_context = DefnContext {
         env: compilation_env,
@@ -392,7 +393,7 @@ pub fn program(
             true,
             &prog.lib_definitions,
         );
-        if let Some(pre_compiled) = pre_compiled_lib {
+        if let Some(pre_compiled) = pre_compiled_lib.clone() {
             assert!(pre_compiled.parser.lib_definitions.is_empty());
             all_module_members(
                 &mut member_computation_context,

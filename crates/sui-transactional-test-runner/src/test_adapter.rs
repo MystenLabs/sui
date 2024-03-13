@@ -125,8 +125,8 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
-pub struct SuiTestAdapter<'a> {
-    pub(crate) compiled_state: CompiledState<'a>,
+pub struct SuiTestAdapter {
+    pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
     package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
     accounts: BTreeMap<String, TestAccount>,
@@ -168,14 +168,14 @@ struct TxnSummary {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
+impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
     type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
 
-    fn compiled_state(&mut self) -> &mut CompiledState<'a> {
+    fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
     }
 
@@ -190,7 +190,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     }
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<&'a FullyCompiledProgram>,
+        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -1121,7 +1121,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
-impl<'a> SuiTestAdapter<'a> {
+impl<'a> SuiTestAdapter {
     pub fn is_simulator(&self) -> bool {
         self.is_simulator
     }
@@ -1783,7 +1783,7 @@ impl<'a> SuiTestAdapter<'a> {
     }
 }
 
-impl<'a> GetModule for &'a SuiTestAdapter<'_> {
+impl<'a> GetModule for &'a SuiTestAdapter {
     type Error = anyhow::Error;
 
     type Item = &'a CompiledModule;
@@ -2195,7 +2195,7 @@ async fn update_named_address_mapping(
     }
 }
 
-impl ObjectStore for SuiTestAdapter<'_> {
+impl ObjectStore for SuiTestAdapter {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -2212,7 +2212,7 @@ impl ObjectStore for SuiTestAdapter<'_> {
     }
 }
 
-impl ReadStore for SuiTestAdapter<'_> {
+impl ReadStore for SuiTestAdapter {
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,
