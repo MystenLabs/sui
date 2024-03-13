@@ -1863,8 +1863,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let mut config = PackageConfig::default();
-    config.edition = Edition::E2024_BETA;
+    let config = PackageConfig { edition: Edition::E2024_BETA, ..Default::default() };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
