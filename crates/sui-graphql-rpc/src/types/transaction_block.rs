@@ -200,7 +200,7 @@ impl TransactionBlock {
         };
 
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(*id),
             Some(self.checkpoint_viewed_at),
         )
