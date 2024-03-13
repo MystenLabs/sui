@@ -259,6 +259,7 @@ impl TransactionBuilder {
         call_args: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<TransactionData> {
         let mut builder = ProgrammableTransactionBuilder::new();
         self.single_move_call(
@@ -279,7 +280,11 @@ impl TransactionBuilder {
                 _ => None,
             })
             .collect();
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = if let Some(gas_price) = gas_price {
+            gas_price
+        } else {
+            self.0.get_reference_gas_price().await?
+        };
         let gas = self
             .select_gas(signer, gas, gas_budget, input_objects, gas_price)
             .await?;
