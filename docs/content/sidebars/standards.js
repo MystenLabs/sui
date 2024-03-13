@@ -22,12 +22,18 @@ const standards = [
 	'standards/kiosk',
 	{
 		type: 'category',
-		label: 'NFT Rental Example',
+		label: 'Kiosk Apps',
 		link: {
 			type: 'doc',
 			id: 'standards/kiosk-apps',
 		},
-		items: ['standards/kiosk-apps/nft-rental'],
+		items: [
+			{
+				type: 'doc',
+				label: 'NFT Rental Example',
+				id: 'standards/kiosk-apps/nft-rental',
+			},
+		],
 	},
 	{
 		type: 'category',
