@@ -1,18 +1,24 @@
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:4:17
+  │
+4 │         let s = S { false };
+  │                 ^^^^^^^^^^^ Missing argument for field 'f' in '0x42::M::S'
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:4:21
   │
 4 │         let s = S { false };
-  │                     ^^^^^
-  │                     │
-  │                     Unexpected 'false'
-  │                     Expected an identifier
+  │                     ^ Expected a field expression
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:5:17
+  │
+5 │         let s = S { 0 };
+  │                 ^^^^^^^ Missing argument for field 'f' in '0x42::M::S'
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:4:28
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:5:21
   │
-4 │         let s = S { false };
-  │                            ^
-  │                            │
-  │                            Unexpected ';'
-  │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+5 │         let s = S { 0 };
+  │                     ^ Expected a field expression
 

@@ -1,22 +1,19 @@
-warning[W09003]: unused assignment
-  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:5:13
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:9
   │
-5 │         let x = S { f: X{} };
-  │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+6 │         x.f<u64>;
+  │         ^^^^^^^^ Method syntax is not supported by current edition 'legacy', only '2024.alpha' support this feature
   │
-  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E06001]: unused value without 'drop'
-  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:5:29
+error[E04023]: invalid method call
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:9
   │
-3 │     struct S { f: X<u64> }
-  │            - To satisfy the constraint, the 'drop' ability would need to be added here
-4 │     fun foo() {
-5 │         let x = S { f: X{} };
-  │             -   ------------^ Invalid return
-  │             │   │            
-  │             │   The type '0x42::M::S' does not have the ability 'drop'
-  │             The local variable 'x' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+6 │         x.f<u64>;
+  │         ^^^^^^^^
+  │         │ │
+  │         │ No local 'use fun' alias was found for '0x42::M::S.f', and no function 'f' was found in the defining module '0x42::M'
+  │         Invalid method call. No known method 'f' on type '0x42::M::S'
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:17

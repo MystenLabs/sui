@@ -1,8 +1,33 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/let_binding_missing_paren.move:3:14
+  │
+3 │         let (x1, x2 = (1, 2); // Test a missing right parenthesis
+  │              ^^ Unused local variable 'x1'. Consider removing or prefixing with an underscore: '_x1'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/let_binding_missing_paren.move:3:18
+  │
+3 │         let (x1, x2 = (1, 2); // Test a missing right parenthesis
+  │                  ^^ Unused local variable 'x2'. Consider removing or prefixing with an underscore: '_x2'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/let_binding_missing_paren.move:3:21
   │
 3 │         let (x1, x2 = (1, 2); // Test a missing right parenthesis
-  │             -       ^ Expected ')'
-  │             │        
+  │                     ^
+  │                     │
+  │                     Unexpected '='
+  │                     Expected ','
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/let_binding_missing_paren.move:3:29
+  │
+3 │         let (x1, x2 = (1, 2); // Test a missing right parenthesis
+  │             -               ^ Expected ')'
+  │             │                
   │             To match this '('
 

@@ -4,3 +4,11 @@ error[E01002]: unexpected token
 2 │     struct S<,T> { } // Test a comma before the first type parameter
   │              ^ Expected a type parameter
 
+warning[W09006]: unused struct type parameter
+  ┌─ tests/move_check/parser/struct_type_extra_comma.move:2:15
+  │
+2 │     struct S<,T> { } // Test a comma before the first type parameter
+  │               ^ Unused type parameter 'T'. Consider declaring it as phantom
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

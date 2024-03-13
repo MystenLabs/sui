@@ -1,3 +1,9 @@
+error[E03002]: unbound module
+  ┌─ tests/move_check/parser/use_module_member_invalid_comma.move:4:9
+  │
+4 │     use 0x1::X::{S as XS,,};
+  │         ^^^^^^ Invalid 'use'. Unbound module: '0x1::X'
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/use_module_member_invalid_comma.move:4:26
   │

@@ -46,17 +46,5 @@ error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:9:21
   │
 9 │         let g = G { {} };
-  │                     ^
-  │                     │
-  │                     Unexpected '{'
-  │                     Expected an identifier
-
-error[E01002]: unexpected token
-  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:9:25
-  │
-9 │         let g = G { {} };
-  │                         ^
-  │                         │
-  │                         Unexpected ';'
-  │                         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+  │                     ^ Expected a field expression
 

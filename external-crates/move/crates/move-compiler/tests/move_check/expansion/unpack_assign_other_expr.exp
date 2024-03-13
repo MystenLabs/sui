@@ -65,17 +65,5 @@ error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:12:12
    │
 12 │         G {{}} = G{};
-   │            ^
-   │            │
-   │            Unexpected '{'
-   │            Expected an identifier
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:12:16
-   │
-12 │         G {{}} = G{};
-   │                ^
-   │                │
-   │                Unexpected '='
-   │                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+   │            ^ Expected a field expression
 
