@@ -2,6 +2,7 @@
 version: "3.9"
 services:
   fullnode:
+    # Note: Update the tag to the latest version of mysten/sui-node for mainnet or testnet.
     image: mysten/sui-node:mainnet-v1.19.1
     ports:
     - "8080:8080"
