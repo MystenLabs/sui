@@ -367,6 +367,10 @@ impl Loader<EpochKey> for Db {
                     checkpoint_viewed_at: key.checkpoint_viewed_at,
                 };
 
+                // We filter by checkpoint viewed at in memory because it should be quite rare that
+                // this query actually filters something (only in edge cases), and not trying to
+                // encode it in the SQL query makes the query much simpler and therefore easier for
+                // the DB to plan.
                 let start = epoch.stored.first_checkpoint_id as u64;
                 if matches!(key.checkpoint_viewed_at, Some(cp) if cp < start) {
                     None
