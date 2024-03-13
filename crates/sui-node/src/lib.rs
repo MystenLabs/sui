@@ -1513,6 +1513,7 @@ impl SuiNode {
                 .await;
 
             if stop_condition == StopReason::RunWithRangeCondition {
+                SuiNode::shutdown(&self).await;
                 self.shutdown_channel_tx
                     .send(run_with_range)
                     .expect("RunWithRangeCondition met but failed to send shutdown message");
@@ -1694,6 +1695,12 @@ impl SuiNode {
             }
 
             info!("Reconfiguration finished");
+        }
+    }
+
+    async fn shutdown(&self) {
+        if let Some(validator_components) = &*self.validator_components.lock().await {
+            validator_components.consensus_manager.shutdown().await;
         }
     }
 
