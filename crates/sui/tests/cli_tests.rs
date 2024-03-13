@@ -683,6 +683,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     assert!(resp.is_err());
 
+    // Try a transfer with explicitly set gas price.
+    // It should fail due to that gas price is below RGP.
     let args = vec![
         SuiJsonValue::new(json!(created_obj))?,
         SuiJsonValue::new(json!(address2))?,
