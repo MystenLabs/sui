@@ -7,6 +7,7 @@ mod ingestion_tests {
     use diesel::{QueryDsl, RunQueryDsl};
     use simulacrum::Simulacrum;
     use std::net::SocketAddr;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
     use sui_indexer::db::get_pg_pool_connection;
@@ -19,6 +20,7 @@ mod ingestion_tests {
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::storage::ReadStore;
+    use tempfile::tempdir;
     use tokio::task::JoinHandle;
 
     macro_rules! read_only_blocking {
@@ -38,6 +40,7 @@ mod ingestion_tests {
     /// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
     async fn set_up(
         sim: Arc<Simulacrum>,
+        data_ingestion_path: PathBuf,
     ) -> (
         JoinHandle<()>,
         PgIndexerStore,
@@ -64,6 +67,7 @@ mod ingestion_tests {
             Some(DEFAULT_DB_URL.to_owned()),
             format!("http://{}", server_url),
             ReaderWriterConfig::writer_mode(None),
+            data_ingestion_path,
         )
         .await;
         (server_handle, pg_store, pg_handle)
@@ -93,6 +97,8 @@ mod ingestion_tests {
     #[tokio::test]
     pub async fn test_transaction_table() -> Result<(), IndexerError> {
         let mut sim = Simulacrum::new();
+        let data_ingestion_path = tempdir().unwrap().into_path();
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         // Execute a simple transaction.
         let transfer_recipient = SuiAddress::random_for_testing_only();
@@ -103,7 +109,7 @@ mod ingestion_tests {
         // Create a checkpoint which should include the transaction we executed.
         let checkpoint = sim.create_checkpoint();
 
-        let (_, pg_store, _) = set_up(Arc::new(sim)).await;
+        let (_, pg_store, _) = set_up(Arc::new(sim), data_ingestion_path).await;
 
         // Wait for the indexer to catch up to the checkpoint.
         wait_for_checkpoint(&pg_store, 1).await?;

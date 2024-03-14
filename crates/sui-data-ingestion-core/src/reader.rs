@@ -192,7 +192,7 @@ impl CheckpointReader {
             self.remote_fetcher_receiver = None;
         }
 
-        info!(
+        debug!(
             "Local reader. Current checkpoint number: {}, pruning watermark: {}, unprocessed checkpoints: {:?}",
             self.current_checkpoint_number, self.last_pruned_watermark, checkpoints.len(),
         );

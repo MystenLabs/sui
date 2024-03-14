@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use tokio::sync::watch;
 use tracing::instrument;
@@ -24,6 +24,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
+    mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -38,37 +39,26 @@ pub async fn start_tx_checkpoint_commit_task<S>(
 
     let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(tx_indexing_receiver)
         .ready_chunks(checkpoint_commit_batch_size);
+    let mut unprocessed = HashMap::new();
 
     while let Some(indexed_checkpoint_batch) = stream.next().await {
-        if indexed_checkpoint_batch.is_empty() {
-            continue;
+        for checkpoint in indexed_checkpoint_batch {
+            unprocessed.insert(checkpoint.checkpoint.sequence_number, checkpoint);
         }
-        // split the batch into smaller batches per epoch to handle partitioning
-        let mut indexed_checkpoint_batch_per_epoch = vec![];
-        for indexed_checkpoint in indexed_checkpoint_batch {
-            let epoch = indexed_checkpoint.epoch.clone();
-            indexed_checkpoint_batch_per_epoch.push(indexed_checkpoint);
-            if epoch.is_some() {
-                commit_checkpoints(
-                    &state,
-                    indexed_checkpoint_batch_per_epoch,
-                    epoch,
-                    &metrics,
-                    &commit_notifier,
-                )
-                .await;
-                indexed_checkpoint_batch_per_epoch = vec![];
+        let mut batch = vec![];
+        let mut epoch = None;
+        while let Some(checkpoint) = unprocessed.remove(&next_checkpoint_sequence_number) {
+            epoch = checkpoint.epoch.clone();
+            batch.push(checkpoint);
+            next_checkpoint_sequence_number += 1;
+            if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
+                commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
+                batch = vec![];
+                epoch = None;
             }
         }
-        if !indexed_checkpoint_batch_per_epoch.is_empty() {
-            commit_checkpoints(
-                &state,
-                indexed_checkpoint_batch_per_epoch,
-                None,
-                &metrics,
-                &commit_notifier,
-            )
-            .await;
+        if !batch.is_empty() {
+            commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
         }
     }
 }

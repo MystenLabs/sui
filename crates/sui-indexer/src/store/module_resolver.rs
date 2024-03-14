@@ -22,7 +22,6 @@ use crate::metrics::IndexerMetrics;
 use crate::models::packages::StoredPackage;
 use crate::schema::{objects, packages};
 use crate::store::diesel_macro::read_only_blocking;
-use crate::types::IndexedPackage;
 
 /// A package resolver that reads packages from the database.
 pub struct IndexerStorePackageModuleResolver {
@@ -140,13 +139,8 @@ impl InterimPackageResolver {
     pub fn new(
         package_db_resolver: IndexerStorePackageModuleResolver,
         package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-        new_package_objects: &[(IndexedPackage, Object)],
         metrics: IndexerMetrics,
     ) -> Self {
-        package_buffer
-            .lock()
-            .unwrap()
-            .insert_packages(new_package_objects);
         Self {
             package_db_resolver,
             package_buffer,
