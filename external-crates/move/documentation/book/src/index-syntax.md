@@ -251,10 +251,11 @@ compatibility constraints:
 
 1. They must take the same number of type parameters, those type parameters must have the same
    constraints.
-5. Type parameters must be used the same _by position_, not name.
-2. Their subject types must match exactly except for the mutability.
-3. Their return types must match exactly except for the mutability.
-4. All other parameter types must match exactly.
+1. Type parameters must be used the same _by position_, not name.
+1. Their subject types must match exactly except for the mutability.
+1. Their return types must match exactly except for the mutability.
+1. All other parameter types must match exactly.
+
 These constraints are to ensure that index syntax behaves identically
 regardless of being in a mutable or immutable position.
 
