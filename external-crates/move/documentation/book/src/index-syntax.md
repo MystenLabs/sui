@@ -34,7 +34,7 @@ module matrix {
 }
 ```
 
-Now anyone using this Matrix type has access to index syntax for it:
+Now anyone using this `Matrix` type has access to index syntax for it:
 
 ```
 let v0 = vector<u64>[1, 0, 0];
