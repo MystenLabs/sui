@@ -2011,6 +2011,8 @@ impl AuthorityState {
             execution_result,
             raw_txn_data,
             raw_effects,
+            inner_temp_store.written.clone(),
+            show_raw_txn_data_and_effects,
             layout_resolver.as_mut(),
         )
     }
