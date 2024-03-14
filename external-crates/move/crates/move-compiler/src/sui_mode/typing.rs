@@ -241,6 +241,7 @@ fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Dia
 
 fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
+        compiled_visibility: _,
         visibility,
         signature,
         body,

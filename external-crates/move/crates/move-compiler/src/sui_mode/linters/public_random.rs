@@ -6,6 +6,7 @@
 use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::FunctionName;
+use crate::sui_mode::SUI_ADDR_NAME;
 use crate::typing::visitor::{TypingVisitorConstructor, TypingVisitorContext};
 use crate::{
     diag,
@@ -15,7 +16,6 @@ use crate::{
     shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::ast as T,
 };
-use crate::sui_mode::SUI_ADDR_NAME;
 
 use super::{
     LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
@@ -56,24 +56,19 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_module_custom(
-        &mut self,
-        _ident: ModuleIdent,
-        mdef: &mut T::ModuleDefinition,
-    ) -> bool {
+    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
         // skips if true
-        mdef.attributes.is_test_or_test_only()
+        mdef.attributes.is_test_or_test_only() || ident.value.address.is(SUI_ADDR_NAME)
     }
 
     fn visit_function_custom(
         &mut self,
-        module: ModuleIdent,
+        _module: ModuleIdent,
         fname: FunctionName,
         fdef: &mut T::Function,
     ) -> bool {
         if fdef.attributes.is_test_or_test_only()
             || !matches!(fdef.visibility, Visibility::Public(_))
-            || module.value.address.is(SUI_ADDR_NAME)
         {
             return true;
         }

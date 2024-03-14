@@ -252,7 +252,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     context.current_function = Some(name);
     context.in_macro_function = macro_.is_some();
     process_attributes(context, &attributes);
-    let visibility =
+    let compiled_visibility =
         match public_testing_visibility(context.env, context.current_package, &name, entry) {
             Some(PublicForTesting::Entry(loc)) => Visibility::Public(loc),
             None => visibility,
@@ -272,6 +272,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         warning_filter,
         index,
         attributes,
+        compiled_visibility,
         visibility,
         entry,
         macro_,
