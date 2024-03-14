@@ -6279,7 +6279,8 @@ fn partial_function_test() {
     path.push("tests/partial-function");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();

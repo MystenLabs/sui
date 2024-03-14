@@ -2656,19 +2656,19 @@ fn parse_function_decl(
     context.stop_set.remove(Tok::LParen);
 
     // "(" Comma<Parameter> ")"
-    let parameters = Some(parse_comma_list(
+    let parameters = parse_comma_list(
         context,
         Tok::LParen,
         Tok::RParen,
         &PARAM_START_SET,
         parse_parameter,
         "a function parameter",
-    ));
+    );
 
     let return_type = parse_ret_type(context, name)
-        .or_else(|diag| {
+        .map_err(|diag| {
             context.advance_until_at_stop_set(Some(*diag.clone()));
-            Err(diag)
+            diag
         })
         .ok();
     if let Err(diag) = parse_acquires(context) {
@@ -2679,9 +2679,9 @@ fn parse_function_decl(
     context.stop_set.remove(Tok::LBrace);
 
     let body = parse_body(context, native)
-        .or_else(|diag| {
+        .map_err(|diag| {
             context.advance_until_at_stop_set(Some(*diag.clone()));
-            Err(diag)
+            diag
         })
         .ok();
 
@@ -2699,7 +2699,7 @@ fn parse_function_decl(
         macro_,
         signature: FunctionSignature {
             type_parameters,
-            parameters: parameters.unwrap_or_default(),
+            parameters,
             return_type: return_type.unwrap_or_else(|| sp(name.loc(), Type_::UnresolvedError)),
         },
         name,

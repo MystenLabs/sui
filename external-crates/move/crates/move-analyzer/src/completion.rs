@@ -21,7 +21,10 @@ use move_compiler::{
     shared::Identifier,
 };
 use move_symbol_pool::Symbol;
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::Path,
+};
 use vfs::VfsPath;
 
 /// Constructs an `lsp_types::CompletionItem` with the given `label` and `kind`.
@@ -300,17 +303,24 @@ pub fn on_completion_request(context: &Context, request: &Request, ide_files_roo
         .unwrap();
 
     let items = match SymbolicatorRunner::root_dir(&path) {
-        Some(pkg_path) => match symbols::get_symbols(ide_files_root.clone(), &pkg_path, false) {
-            Ok((Some(symbols), _)) => {
-                completion_items(parameters, &path, &symbols, &ide_files_root)
+        Some(pkg_path) => {
+            match symbols::get_symbols(
+                &mut BTreeMap::new(),
+                ide_files_root.clone(),
+                &pkg_path,
+                false,
+            ) {
+                Ok((Some(symbols), _)) => {
+                    completion_items(parameters, &path, &symbols, &ide_files_root)
+                }
+                _ => completion_items(
+                    parameters,
+                    &path,
+                    &context.symbols.lock().unwrap(),
+                    &ide_files_root,
+                ),
             }
-            _ => completion_items(
-                parameters,
-                &path,
-                &context.symbols.lock().unwrap(),
-                &ide_files_root,
-            ),
-        },
+        }
         None => completion_items(
             parameters,
             &path,
