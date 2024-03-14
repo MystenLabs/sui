@@ -733,7 +733,7 @@ mod tests {
                     .add_message(&mut batch, &epoch_stores[j].name, dkg_message)
                     .unwrap();
             }
-            randomness_managers[i].advance_dkg(&mut batch).unwrap();
+            randomness_managers[i].advance_dkg(&mut batch, 0).unwrap();
             batch.write().unwrap();
         }
 
@@ -757,20 +757,107 @@ mod tests {
                     .add_confirmation(&mut batch, &epoch_stores[j].name, dkg_confirmation)
                     .unwrap();
             }
-            randomness_managers[i].advance_dkg(&mut batch).unwrap();
+            randomness_managers[i].advance_dkg(&mut batch, 0).unwrap();
             batch.write().unwrap();
         }
 
         // Verify DKG completed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager
-                .inner
-                .lock()
+            assert!(randomness_manager.is_dkg_successful());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_expiration() {
+        telemetry_subscribers::init_for_testing();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(4).unwrap())
+                .with_reference_gas_price(500)
+                .build();
+
+        let mut epoch_stores = Vec::new();
+        let mut randomness_managers = Vec::new();
+        let (tx_consensus, mut rx_consensus) = mpsc::channel(100);
+
+        for validator in network_config.validator_configs.iter() {
+            // Send consensus messages to channel.
+            let mut mock_consensus_client = MockSubmitToConsensus::new();
+            let tx_consensus = tx_consensus.clone();
+            mock_consensus_client
+                .expect_submit_to_consensus()
+                .withf(move |transaction: &ConsensusTransaction, _epoch_store| {
+                    tx_consensus.try_send(transaction.clone()).unwrap();
+                    true
+                })
+                .returning(|_, _| Ok(()));
+
+            let state = TestAuthorityBuilder::new()
+                .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
+                .build()
+                .await;
+            let consensus_adapter = Arc::new(ConsensusAdapter::new(
+                Arc::new(mock_consensus_client),
+                state.name,
+                Arc::new(ConnectionMonitorStatusForTests {}),
+                100_000,
+                100_000,
+                None,
+                None,
+                ConsensusAdapterMetrics::new_test(),
+                state.epoch_store_for_testing().protocol_config().clone(),
+            ));
+            let epoch_store = state.epoch_store_for_testing();
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_adapter.clone(),
+                sui_network::randomness::Handle::new_stub(),
+                validator.protocol_key_pair(),
+            )
+            .await
+            .unwrap();
+
+            epoch_stores.push(epoch_store);
+            randomness_managers.push(randomness_manager);
+        }
+
+        // Generate and distribute Messages.
+        let mut dkg_messages = Vec::new();
+        for randomness_manager in &randomness_managers {
+            randomness_manager.start_dkg().unwrap();
+
+            let dkg_message = rx_consensus.recv().await.unwrap();
+            match dkg_message.kind {
+                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
+                    let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
+                        .expect("DKG message deserialization should not fail");
+                    dkg_messages.push(msg);
+                }
+                _ => panic!("wrong type of message sent"),
+            }
+        }
+        for i in 0..randomness_managers.len() {
+            let mut batch = epoch_stores[i]
+                .tables()
                 .unwrap()
-                .dkg_output
-                .get()
-                .flatten()
-                .is_some());
+                .dkg_processed_messages
+                .batch();
+            for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
+                randomness_managers[i]
+                    .add_message(&mut batch, &epoch_stores[j].name, dkg_message)
+                    .unwrap();
+            }
+            randomness_managers[i]
+                .advance_dkg(&mut batch, u64::MAX)
+                .unwrap();
+            batch.write().unwrap();
+        }
+
+        // Verify DKG failed.
+        for randomness_manager in &randomness_managers {
+            assert!(randomness_manager.is_dkg_closed());
+            assert!(!randomness_manager.is_dkg_successful());
         }
     }
 }
