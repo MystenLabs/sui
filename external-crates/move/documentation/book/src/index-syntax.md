@@ -98,11 +98,11 @@ fun borrow_first(input: &Vs): &u64 {
 }
 ```
 
-### Index functions take flexible arguments
+### Index Functions Take Flexible Arguments
 
 Note that, aside from the definition and type limitations described in the rest of this chapter,
-there are no restrictions on the values that may be passed as index parameters, allowing for
-intricate programmatic behavior when using index syntax. For example, a data structure might wish to
+there are no restrictions on the values that can be passed as index parameters, allowing for
+intricate programmatic behavior when using index syntax. For example, a data structure might 
 take a default value if the index is out of bounds:
 
 ```
@@ -141,7 +141,7 @@ adhere to the following rules:
 1. The `#[syntax(index)]` attribute is added to the designated functions defined in the same module
    as the subject type.
 2. The designated functions have `public` visibility.
-3. The functions take a reference type as its "subject" type (its first argument) and returns a
+3. The functions take a reference type as its subject type (its first argument) and returns a
    matching references type (`mut` if the subject was `mut`).
 4. Each type has only a single mutable and single immutable definition.
 5. Immutable and mutable versions have type agreement:
@@ -150,7 +150,7 @@ adhere to the following rules:
     - Type parameters, if present, have identical constraints between both versions.
     - All parameters beyond the subject type are identical.
 
-These are described in greater detail, with additional examples, below.
+The following content and additional examples describe these rules in greater detail.
 
 ### Declaration
 
@@ -160,7 +160,7 @@ compiler that the function is an index accessor for the specified type.
 
 #### Immutable Accessor
 
-The immutable index syntax method is defined for read-only accesses. It takes an immutable reference
+The immutable index syntax method is defined for read-only access. It takes an immutable reference
 of the subject type and returns an immutable reference to the element type. The `borrow` function
 defined in `std::vector` is an example of this:
 
@@ -292,7 +292,7 @@ public fun borrow_mut<T, U>(s: &mut Matrix<U>, i: u64, j: u32):  &mut U { ... }
     // ERROR! `j` is a different type
 ```
 
-Again, the gaol here is to make the usage across the immutable and mutable versions consistent. This
+Again, the goal here is to make the usage across the immutable and mutable versions consistent. This
 allows index syntax methods to work without changing out the behavior or constraints based on
 mutable versus immutable usage, ultimately ensuring a consistent interface to program against.
 
