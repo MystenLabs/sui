@@ -111,7 +111,7 @@ impl NameServiceConfig {
     }
 
     pub fn record_field_id(&self, domain: &Domain) -> ObjectID {
-        let domain_type_tag = Domain::type_(self.package_address.clone());
+        let domain_type_tag = Domain::type_(self.package_address);
         let domain_bytes = bcs::to_bytes(domain).unwrap();
 
         sui_types::dynamic_field::derive_dynamic_field_id(
