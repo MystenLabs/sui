@@ -1,16 +1,18 @@
 # Index Syntax
 
-Syntax attributes establish a way to allow programmers to define operations for syntax-like usage in
-Move. Our first syntax method, `index`, allows programmers to define a group of operations that
-can be used as custom index accessors for their datatypes. These definitions allow programmers to
-use index syntax, such as accessing a matrix element as `m[i,j]`, all based on user definitions.
-These definitions are bespoke per-type and available implicitly for any programmer using the type,
-easing usage across the language.
+Move provides syntax attributes to allow you to define operations that look and feel like native
+move code, lowering these operations into your user-provided definitions.
+
+Our first syntax method, `index`, allows you to define a group of operations that can be used as
+custom index accessors for your datatypes, such as accessing a matrix element as `m[i,j]`, by
+annotating functions that should be used for these index operations. Moreover, these definitions are
+bespoke per-type and available implicitly for any programmer using your type.
 
 ## Overview and Summary
 
-Consider a `Matrix` type that uses a vector of vectors to represent its values. We can write a small
-library using `index` syntax annotations on its `borrow` functions as follows:
+To start, consider a `Matrix` type that uses a vector of vectors to represent its values. You can
+write a small library using `index` syntax annotations on the `borrow` and `borrow_mut` functions as
+follows:
 
 ```
 module matrix {
@@ -61,8 +63,8 @@ while (i < 3) {
 
 ## Usage
 
-As the example indicates, if a datatype defines an index syntax function, it may be used by
-invoking index syntax on a value of that type:
+As the example indicates, if you define a datatype and an asoociated an index syntax method, anyone
+may invoke that method by writin invoking index syntax on a value of that type:
 
 ```move
 let mat = matrix::make_matrix(...);
@@ -85,7 +87,7 @@ let m_0_0 = &mut mat[0, 0];
     // translates to matrix::borrow_mut(&mut mat, 0, 0)
 ``
 
-Index expressions might also be intermixed with field accesses:
+You can also intermix index expressions with field accesses:
 
 ```move
 public struct V { v: vector<u64> }
@@ -101,9 +103,9 @@ fun borrow_first(input: &Vs): &u64 {
 ### Index Functions Take Flexible Arguments
 
 Note that, aside from the definition and type limitations described in the rest of this chapter,
-there are no restrictions on the values that can be passed as index parameters, allowing for
-intricate programmatic behavior when using index syntax. For example, a data structure might 
-take a default value if the index is out of bounds:
+Move places no restrictions on the values your index syntax method takes as parameters. This allows
+you to implement intricate programmatic behavior when defining index syntax, such as a data
+structure that take a default value if the index is out of bounds:
 
 ```
 #[syntax(index)]
@@ -121,7 +123,7 @@ public fun borrow_or_set<Key: copy, Value: drop>(
 }
 ```
 
-Indexing into `MTable` would then require the user provide a default value:
+Now, when you index into `MTable`, you must also provide a default value:
 
 ```
 let string_key: String = ...;
@@ -129,14 +131,14 @@ let mut table: MTable<String, u64> = m_table::make_table();
 let entry: &mut u64 = &mut table[string_key, 0];
 ```
 
-This sort of extensible power allows developers to write precise index interfaces for their types,
+This sort of extensible power allows you to write precise index interfaces for your types,
 concretely enforcing bespoke behavior.
 
 
 ## Defining Index Syntax Functions
 
-This powerful syntax form allows for all user-defined datatypes to behave in this way, assuming they
-adhere to the following rules:
+This powerful syntax form allows all of your user-defined datatypes to behave in this way, assuming
+your definitions adhere to the following rules:
 
 1. The `#[syntax(index)]` attribute is added to the designated functions defined in the same module
    as the subject type.
@@ -206,7 +208,7 @@ public fun borrow_matrix<T>(s: &Matrix<T>, i: u64, j: u64): &T { ... }
     // for its immutable index syntax method
 ```
 
-This ensures that the user can always tell which method is being invoked, without the need to
+This ensures that you can always tell which method is being invoked, without the need to
 inspect type instantiation.
 
 ### Type Constraints
@@ -214,7 +216,7 @@ inspect type instantiation.
 By default, an index syntax method has the following type constraints:
 
 **Its subject type (first argument) must be a reference to a single type defined in the same module
-as the marked function.** This means that we cannot define index syntax methods for tuples,
+as the marked function.** This means that you cannot define index syntax methods for tuples,
 type parameters, or values:
 
 ```move
