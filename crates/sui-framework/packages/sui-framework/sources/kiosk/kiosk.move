@@ -641,15 +641,21 @@ module sui::kiosk {
 
     // === PurchaseCap fields access ===
 
+    public use fun purchase_cap_kiosk as PurchaseCap.kiosk;
+
     /// Get the `kiosk_id` from the `PurchaseCap`.
     public fun purchase_cap_kiosk<T: key + store>(self: &PurchaseCap<T>): ID {
         self.kiosk_id
     }
 
+    public use fun purchase_cap_item as PurchaseCap.item;
+
     /// Get the `Item_id` from the `PurchaseCap`.
     public fun purchase_cap_item<T: key + store>(self: &PurchaseCap<T>): ID {
         self.item_id
     }
+
+    public use fun purchase_cap_min_price as PurchaseCap.min_price;
 
     /// Get the `min_price` from the `PurchaseCap`.
     public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {

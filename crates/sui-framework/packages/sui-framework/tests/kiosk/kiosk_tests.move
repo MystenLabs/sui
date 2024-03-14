@@ -120,9 +120,7 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         kiosk::place(&mut kiosk, &owner_cap, asset);
-        let _cap = kiosk::list_with_purchase_cap<Asset>(
-            &mut kiosk, &owner_cap, item_id, 100, ctx
-        );
+        let _cap = kiosk.list_with_purchase_cap<Asset>(&owner_cap, item_id, 100, ctx);
 
         kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
         abort 1337
@@ -180,10 +178,15 @@ module sui::kiosk_tests {
         let (policy, policy_cap) = test::get_policy(ctx);
 
         kiosk::place(&mut kiosk, &owner_cap, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &owner_cap, item_id, AMT, ctx);
+        let purchase_cap = kiosk.list_with_purchase_cap(&owner_cap, item_id, AMT, ctx);
         let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        assert!(kiosk::is_listed_exclusively(&kiosk, item_id), 0);
-        let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment);
+
+        assert!(purchase_cap.item() == item_id, 0);
+        assert!(purchase_cap.kiosk() == object::id(&kiosk), 0);
+        assert!(purchase_cap.min_price() == AMT, 0);
+        assert!(kiosk.is_listed_exclusively(item_id), 0);
+
+        let (asset, request) = kiosk.purchase_with_cap(purchase_cap, payment);
         assert!(!kiosk::is_listed_exclusively(&kiosk, item_id), 0);
         policy::confirm_request(&policy, request);
 

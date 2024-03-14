@@ -17,13 +17,13 @@ module sui::kiosk_borrow_tests {
         let (item, id) = utils::get_asset(ctx);
         let (mut kiosk, cap) = utils::get_kiosk(ctx);
 
-        kiosk::place(&mut kiosk, &cap, item);
-        let _item_ref = kiosk::borrow<Asset>(&kiosk, &cap, id);
+        kiosk.place(&cap, item);
+        let _item_ref = kiosk.borrow<Asset>(&cap, id);
 
-        kiosk::list<Asset>(&mut kiosk, &cap, id, AMT);
-        let _item_ref = kiosk::borrow<Asset>(&kiosk, &cap, id);
+        kiosk.list<Asset>(&cap, id, AMT);
+        let _item_ref = kiosk.borrow<Asset>(&cap, id);
 
-        let item = kiosk::take<Asset>(&mut kiosk, &cap, id);
+        let item = kiosk.take<Asset>(&cap, id);
         utils::return_assets(vector[ item ]);
         utils::return_kiosk(kiosk, cap, ctx);
     }

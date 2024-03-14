@@ -63,10 +63,14 @@ module sui::object {
 
     // === id ===
 
+    public use fun id_to_bytes as ID.to_bytes;
+
     /// Get the raw bytes of a `ID`
     public fun id_to_bytes(id: &ID): vector<u8> {
         bcs::to_bytes(&id.bytes)
     }
+
+    public use fun id_to_address as ID.to_address;
 
     /// Get the inner bytes of `id` as an address.
     public fun id_to_address(id: &ID): address {
@@ -127,20 +131,28 @@ module sui::object {
         }
     }
 
+    public use fun uid_as_inner as UID.as_inner;
+
     /// Get the inner `ID` of `uid`
     public fun uid_as_inner(uid: &UID): &ID {
         &uid.id
     }
+
+    public use fun uid_to_inner as UID.to_inner;
 
     /// Get the raw bytes of a `uid`'s inner `ID`
     public fun uid_to_inner(uid: &UID): ID {
         uid.id
     }
 
+    public use fun uid_to_bytes as UID.to_bytes;
+
     /// Get the raw bytes of a `UID`
     public fun uid_to_bytes(uid: &UID): vector<u8> {
         bcs::to_bytes(&uid.id.bytes)
     }
+
+    public use fun uid_to_address as UID.to_address;
 
     /// Get the inner bytes of `id` as an address.
     public fun uid_to_address(uid: &UID): address {
