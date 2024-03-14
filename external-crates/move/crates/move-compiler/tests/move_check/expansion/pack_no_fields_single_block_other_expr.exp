@@ -1,3 +1,19 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:5:13
+  │
+5 │         let f = 0;
+  │             ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:6:13
+  │
+6 │         let s = S 0;
+  │             ^ Unused local variable 's'. Consider removing or prefixing with an underscore: '_s'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E03003]: unbound module member
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:6:17
   │
@@ -12,6 +28,14 @@ error[E01002]: unexpected token
   │                   │
   │                   Unexpected '0'
   │                   Expected ';'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:7:13
+  │
+7 │         let s = S f;
+  │             ^ Unused local variable 's'. Consider removing or prefixing with an underscore: '_s'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03003]: unbound module member
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:7:17
@@ -28,11 +52,19 @@ error[E01002]: unexpected token
   │                   Unexpected 'f'
   │                   Expected ';'
 
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:8:13
+  │
+8 │         let g = G ();
+  │             ^ Unused local variable 'g'. Consider removing or prefixing with an underscore: '_g'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:8:17
   │
 8 │         let g = G ();
-  │                 ^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' support this feature
+  │                 ^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
@@ -41,6 +73,14 @@ error[E03013]: positional call mismatch
   │
 8 │         let g = G ();
   │                 ^^^^ Invalid struct instantiation. Named struct declarations require named instantiations.
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:9:13
+  │
+9 │         let g = G { {} };
+  │             ^ Unused local variable 'g'. Consider removing or prefixing with an underscore: '_g'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:9:21
