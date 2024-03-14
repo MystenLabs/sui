@@ -88,7 +88,9 @@ LABEL git-revision=${GIT_REVISION}
 RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 
-COPY --from=install /rootfs /
+RUN mkdir -p /opt/sui/bin
+RUN mkdir -p /usr/local/bin
+COPY --from=build sui/target/release/sui-node /opt/sui/bin/sui-node
 
 RUN ln -s /opt/sui/bin/sui-node /usr/local/bin/sui-node
 
