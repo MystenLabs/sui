@@ -29,15 +29,6 @@ pub async fn start_graphiql_server(
     .await
 }
 
-pub async fn start_graphiql_server_from_cfg_path(
-    server_config_path: &str,
-    version: &Version,
-) -> Result<(), Error> {
-    let (server_builder, config) =
-        ServerBuilder::from_yaml_config(server_config_path, version).await?;
-    start_graphiql_server_impl(server_builder, config.ide.ide_title).await
-}
-
 async fn start_graphiql_server_impl(
     server_builder: ServerBuilder,
     ide_title: String,

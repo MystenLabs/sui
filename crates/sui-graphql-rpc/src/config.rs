@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error as SuiGraphQLError, types::big_int::BigInt};
+use crate::types::big_int::BigInt;
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, path::PathBuf, time::Duration};
+use std::{collections::BTreeSet, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
@@ -43,10 +43,29 @@ pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
 
-/// Configuration on connections for the RPC, passed in as command-line arguments.
+/// The combination of all configurations for the GraphQL service.
+#[derive(Serialize, Clone, Deserialize, Debug, Default)]
+pub struct ServerConfig {
+    #[serde(default)]
+    pub service: ServiceConfig,
+    #[serde(default)]
+    pub connection: ConnectionConfig,
+    #[serde(default)]
+    pub internal_features: InternalFeatureConfig,
+    #[serde(default)]
+    pub tx_exec_full_node: TxExecFullNodeConfig,
+    #[serde(default)]
+    pub ide: Ide,
+}
+
+/// Configuration for connections for the RPC, passed in as command-line arguments. This configures
+/// specific connections between this service and other services, and might differ from instance to
+/// instance of the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
+    /// Port to bind the server to
     pub(crate) port: u16,
+    /// Host to bind the server to
     pub(crate) host: String,
     pub(crate) db_url: String,
     pub(crate) db_pool_size: u32,
@@ -54,7 +73,9 @@ pub struct ConnectionConfig {
     pub(crate) prom_port: u16,
 }
 
-/// Configuration on features supported by the RPC, passed in a TOML-based file.
+/// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
+/// configurations are shared across fleets of the service, i.e. all testnet services will have the
+/// same `ServiceConfig`.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
@@ -66,6 +87,9 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) experiments: Experiments,
+
+    #[serde(default)]
+    pub(crate) name_service: NameServiceConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -376,52 +400,6 @@ impl TxExecFullNodeConfig {
     }
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Default)]
-pub struct ServerConfig {
-    #[serde(default)]
-    pub service: ServiceConfig,
-    #[serde(default)]
-    pub connection: ConnectionConfig,
-    #[serde(default)]
-    pub internal_features: InternalFeatureConfig,
-    #[serde(default)]
-    pub name_service: NameServiceConfig,
-    #[serde(default)]
-    pub tx_exec_full_node: TxExecFullNodeConfig,
-    #[serde(default)]
-    pub ide: Ide,
-}
-
-impl ServerConfig {
-    pub fn from_yaml(path: &str) -> Result<Self, SuiGraphQLError> {
-        let contents = std::fs::read_to_string(path).map_err(|e| {
-            SuiGraphQLError::Internal(format!(
-                "Failed to read service cfg yaml file at {}, err: {}",
-                path, e
-            ))
-        })?;
-        serde_yaml::from_str::<Self>(&contents).map_err(|e| {
-            SuiGraphQLError::Internal(format!(
-                "Failed to deserialize service cfg from yaml: {}",
-                e
-            ))
-        })
-    }
-
-    pub fn to_yaml(&self) -> Result<String, SuiGraphQLError> {
-        serde_yaml::to_string(&self).map_err(|e| {
-            SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
-        })
-    }
-
-    pub fn to_yaml_file(&self, path: PathBuf) -> Result<(), SuiGraphQLError> {
-        let config = self.to_yaml()?;
-        std::fs::write(path, config).map_err(|e| {
-            SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,9 +465,8 @@ mod tests {
 
         use FunctionalGroup as G;
         let expect = ServiceConfig {
-            limits: Limits::default(),
             disabled_features: BTreeSet::from([G::Coins, G::NameService]),
-            experiments: Experiments::default(),
+            ..Default::default()
         };
 
         assert_eq!(actual, expect)
@@ -554,6 +531,7 @@ mod tests {
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },
+            ..Default::default()
         };
 
         assert_eq!(actual, expect);
