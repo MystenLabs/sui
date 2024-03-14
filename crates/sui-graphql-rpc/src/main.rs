@@ -13,7 +13,6 @@ use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::error;
 
 // WARNING!!!
 //
