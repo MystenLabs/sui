@@ -77,13 +77,16 @@ COPY --from=build sui/target/release/sui-node /rootfs/opt/sui/bin/sui-node
 
 RUN --network=none find /rootfs -exec touch -hcd "@0" "{}" +
 
-FROM scratch AS package
+FROM debian:bullseye-slim AS package
 
 ARG PROFILE
 ARG GIT_REVISION
 
 LABEL build-date=${BUILD_DATE}
 LABEL git-revision=${GIT_REVISION}
+
+RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates
+ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 
 COPY --from=install /rootfs /
 
