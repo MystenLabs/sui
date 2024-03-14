@@ -199,13 +199,9 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Epoch::query(
-            ctx.data_unchecked(),
-            Some(*id),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx, Some(*id), Some(self.checkpoint_viewed_at))
+            .await
+            .extend()
     }
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
