@@ -644,9 +644,6 @@ let my_vector: vector<vector<u8>> = {
 
 (The type annotation is not needed in this example and only added for clarity.)
 
-Blocks may also be used for control flow with the `return` keyword, described further in the
-[control flow](./control-flow.md) chapter.
-
 ### Shadowing
 
 If a `let` introduces a local variable with a name already in scope, that previous variable can no
