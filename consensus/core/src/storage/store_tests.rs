@@ -18,18 +18,6 @@ enum TestStore {
 }
 
 impl TestStore {
-    fn new_rocksdb_store() -> Self {
-        let temp_dir = TempDir::new().unwrap();
-        TestStore::RocksDB((
-            RocksDBStore::new(temp_dir.path().to_str().unwrap()),
-            temp_dir,
-        ))
-    }
-
-    fn new_mem_store() -> Self {
-        TestStore::Mem(MemStore::new())
-    }
-
     fn store(&self) -> &dyn Store {
         match self {
             TestStore::RocksDB((store, _)) => store,
@@ -38,10 +26,22 @@ impl TestStore {
     }
 }
 
+fn new_rocksdb_teststore() -> TestStore {
+    let temp_dir = TempDir::new().unwrap();
+    TestStore::RocksDB((
+        RocksDBStore::new(temp_dir.path().to_str().unwrap()),
+        temp_dir,
+    ))
+}
+
+fn new_mem_teststore() -> TestStore {
+    TestStore::Mem(MemStore::new())
+}
+
 #[rstest]
 #[tokio::test]
 async fn read_and_contain_blocks(
-    #[values(TestStore::new_rocksdb_store(), TestStore::new_mem_store())] test_store: TestStore,
+    #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
 ) {
     let store = test_store.store();
 
@@ -106,7 +106,7 @@ async fn read_and_contain_blocks(
 #[rstest]
 #[tokio::test]
 async fn scan_blocks(
-    #[values(TestStore::new_rocksdb_store(), TestStore::new_mem_store())] test_store: TestStore,
+    #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
 ) {
     let store = test_store.store();
 
@@ -189,7 +189,7 @@ async fn scan_blocks(
 #[rstest]
 #[tokio::test]
 async fn read_and_scan_commits(
-    #[values(TestStore::new_rocksdb_store(), TestStore::new_mem_store())] test_store: TestStore,
+    #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
 ) {
     let store = test_store.store();
 
