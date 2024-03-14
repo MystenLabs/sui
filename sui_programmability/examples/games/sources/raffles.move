@@ -11,15 +11,11 @@
 
 module games::raffle_with_tickets {
     use std::option::{Self, Option};
-    use sui::balance;
-    use sui::balance::Balance;
-    use sui::clock;
-    use sui::clock::Clock;
-    use sui::coin;
-    use sui::coin::Coin;
+    use sui::balance::{Self, Balance};
+    use sui::clock::{Self, Clock};
+    use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
-    use sui::random;
-    use sui::random::{Random, new_generator};
+    use sui::random::{Self, Random, new_generator};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::TxContext;

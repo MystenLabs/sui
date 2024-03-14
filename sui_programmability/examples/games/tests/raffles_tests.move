@@ -3,7 +3,6 @@
 
 #[test_only]
 module games::raffles_tests {
-
     use std::option;
     use sui::clock;
     use sui::coin::{Self, Coin};
@@ -38,7 +37,7 @@ module games::raffles_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         // Create the game and get back the output objects.
@@ -81,7 +80,7 @@ module games::raffles_tests {
         test_scenario::next_tx(scenario, user4);
         mint(user4, 10, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        let t4 = raffle_with_tickets::buy_ticket( &mut game, coin, &clock, test_scenario::ctx(scenario));
+        let t4 = raffle_with_tickets::buy_ticket(&mut game, coin, &clock, test_scenario::ctx(scenario));
         assert!(raffle_with_tickets::get_participants(&game) == 4, 1);
         // this is the winner
 
@@ -119,7 +118,7 @@ module games::raffles_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         // Create the game and get back the output objects.
@@ -158,7 +157,7 @@ module games::raffles_tests {
         test_scenario::next_tx(scenario, user4);
         mint(user4, 10, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        small_raffle::play( &mut game, coin, &clock, test_scenario::ctx(scenario));
+        small_raffle::play(&mut game, coin, &clock, test_scenario::ctx(scenario));
         assert!(small_raffle::get_participants(&game) == 4, 1);
 
         // Determine the winner (-> user4)
