@@ -1,17 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::iter;
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+    sync::Arc,
+};
 
 use parking_lot::RwLock;
 use tracing::warn;
 
-use crate::block::{BlockAPI, BlockRef, VerifiedBlock};
-use crate::block_verifier::BlockVerifier;
-use crate::context::Context;
-use crate::dag_state::DagState;
+use crate::{
+    block::{BlockAPI, BlockRef, VerifiedBlock},
+    block_verifier::BlockVerifier,
+    context::Context,
+    dag_state::DagState,
+};
 
 struct SuspendedBlock {
     block: VerifiedBlock,
@@ -305,23 +309,20 @@ impl BlockManager {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
+    use std::{collections::BTreeSet, sync::Arc};
 
     use parking_lot::RwLock;
-    use rand::prelude::StdRng;
-    use rand::seq::SliceRandom;
-    use rand::SeedableRng;
+    use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 
-    use crate::block::{
-        genesis_blocks, BlockAPI, BlockRef, Round, SignedBlock, TestBlock, VerifiedBlock,
+    use crate::{
+        block::{genesis_blocks, BlockAPI, BlockRef, Round, SignedBlock, TestBlock, VerifiedBlock},
+        block_manager::BlockManager,
+        block_verifier::{BlockVerifier, NoopBlockVerifier},
+        context::Context,
+        dag_state::DagState,
+        error::{ConsensusError, ConsensusResult},
+        storage::mem_store::MemStore,
     };
-    use crate::block_manager::BlockManager;
-    use crate::block_verifier::{BlockVerifier, NoopBlockVerifier};
-    use crate::context::Context;
-    use crate::dag_state::DagState;
-    use crate::error::{ConsensusError, ConsensusResult};
-    use crate::storage::mem_store::MemStore;
 
     #[test]
     fn suspend_blocks_with_missing_ancestors() {
