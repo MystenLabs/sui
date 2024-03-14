@@ -5781,6 +5781,16 @@
             "items": {
               "$ref": "#/components/schemas/SuiExecutionResult"
             }
+          },
+          "writtenObjects": {
+            "description": "The objects written in this dev inspected transaction, including both package and other objects.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ObjectData"
+            }
           }
         }
       },
