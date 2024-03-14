@@ -41,6 +41,9 @@
 
 ## Resource `AuthenticatorState`
 
+Singleton shared object which stores the global authenticator state.
+The actual state is stored in a dynamic field of type AuthenticatorStateInner to support
+future versions of the authenticator state.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a> <b>has</b> key
@@ -96,7 +99,7 @@
 <code>active_jwks: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;</code>
 </dt>
 <dd>
-
+ List of currently active JWKs.
 </dd>
 </dl>
 
@@ -107,6 +110,7 @@
 
 ## Struct `JWK`
 
+Must match the JWK struct in fastcrypto-zkp
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_JWK">JWK</a> <b>has</b> <b>copy</b>, drop, store
@@ -152,6 +156,7 @@
 
 ## Struct `JwkId`
 
+Must match the JwkId struct in fastcrypto-zkp
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_JwkId">JwkId</a> <b>has</b> <b>copy</b>, drop, store
@@ -227,6 +232,7 @@
 
 <a name="0x2_authenticator_state_ENotSystemAddress"></a>
 
+Sender is not @0x0 the system address.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
@@ -426,6 +432,9 @@
 
 ## Function `create`
 
+Create and share the AuthenticatorState object. This function is call exactly once, when
+the authenticator state object is first created.
+Can only be called by genesis or change_epoch transactions.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_create">create</a>(ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -563,6 +572,10 @@
 
 ## Function `update_authenticator_state`
 
+Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
+transaction. The new input vector must be sorted and must not contain duplicates.
+If a new JWK is already present, but with a previous epoch, then the epoch is updated to
+indicate that the JWK has been validated in the current epoch and should not be expired.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_update_authenticator_state">update_authenticator_state</a>(self: &<b>mut</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>, new_active_jwks: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;, ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -768,6 +781,8 @@
 
 ## Function `get_active_jwks`
 
+Get the current active_jwks. Called when the node starts up in order to load the current
+JWK state from the chain.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_get_active_jwks">get_active_jwks</a>(self: &<a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">authenticator_state::AuthenticatorState</a>, ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">authenticator_state::ActiveJwk</a>&gt;

@@ -3,6 +3,8 @@
 
 # Module `0x2::sui`
 
+Coin<SUI> is the token used to pay for gas in Sui.
+It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 
 
 -  [Struct `SUI`](#0x2_sui_SUI)
@@ -25,6 +27,7 @@
 
 ## Struct `SUI`
 
+Name of the coin
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/sui.md#0x2_sui_SUI">SUI</a> <b>has</b> drop
@@ -55,6 +58,7 @@
 
 <a name="0x2_sui_ENotSystemAddress"></a>
 
+Sender is not @0x0 the system address.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>: u64 = 1;
@@ -73,6 +77,8 @@
 
 <a name="0x2_sui_MIST_PER_SUI"></a>
 
+The amount of Mist per Sui token based on the the fact that mist is
+10^-9 of a Sui token
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/sui.md#0x2_sui_MIST_PER_SUI">MIST_PER_SUI</a>: u64 = 1000000000;
@@ -82,6 +88,7 @@
 
 <a name="0x2_sui_TOTAL_SUPPLY_MIST"></a>
 
+The total supply of Sui denominated in Mist (10 Billion * 10^9)
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: u64 = 10000000000000000000;
@@ -91,6 +98,7 @@
 
 <a name="0x2_sui_TOTAL_SUPPLY_SUI"></a>
 
+The total supply of Sui denominated in whole Sui tokens (10 Billion)
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/sui.md#0x2_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: u64 = 10000000000;
@@ -102,6 +110,8 @@
 
 ## Function `new`
 
+Register the <code><a href="../../dependencies/sui-framework/sui.md#0x2_sui_SUI">SUI</a></code> Coin to acquire its <code>Supply</code>.
+This should be called only once during genesis creation.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../../dependencies/sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;

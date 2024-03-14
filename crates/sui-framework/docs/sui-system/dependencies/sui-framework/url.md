@@ -3,6 +3,7 @@
 
 # Module `0x2::url`
 
+URL: standard Uniform Resource Locator string
 
 
 -  [Struct `Url`](#0x2_url_Url)
@@ -21,6 +22,7 @@
 
 ## Struct `Url`
 
+Standard Uniform Resource Locator (URL) string.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/url.md#0x2_url_Url">Url</a> <b>has</b> <b>copy</b>, drop, store
@@ -48,6 +50,7 @@
 
 ## Function `new_unsafe`
 
+Create a <code><a href="../../dependencies/sui-framework/url.md#0x2_url_Url">Url</a></code>, with no validation
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/url.md#0x2_url_new_unsafe">new_unsafe</a>(<a href="../../dependencies/sui-framework/url.md#0x2_url">url</a>: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>
@@ -72,6 +75,8 @@
 
 ## Function `new_unsafe_from_bytes`
 
+Create a <code><a href="../../dependencies/sui-framework/url.md#0x2_url_Url">Url</a></code> with no validation from bytes
+Note: this will abort if <code>bytes</code> is not valid ASCII
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/url.md#0x2_url_new_unsafe_from_bytes">new_unsafe_from_bytes</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>
@@ -97,6 +102,7 @@
 
 ## Function `inner_url`
 
+Get inner URL
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>): <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
@@ -121,6 +127,7 @@
 
 ## Function `update`
 
+Update the inner URL
 
 
 <pre><code><b>public</b> <b>fun</b> <b>update</b>(self: &<b>mut</b> <a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>, <a href="../../dependencies/sui-framework/url.md#0x2_url">url</a>: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
