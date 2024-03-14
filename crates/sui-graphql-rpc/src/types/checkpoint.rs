@@ -117,7 +117,7 @@ impl Checkpoint {
     /// The epoch this checkpoint is part of.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.stored.epoch as u64),
             self.checkpoint_viewed_at,
         )
