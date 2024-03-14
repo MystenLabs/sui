@@ -382,7 +382,10 @@ impl DagState {
         }
 
         if slot.round <= self.authority_evict_round(slot.authority) {
-            panic!("Attempted to check for slot {slot} that is <= the last evicted round {} for the authority", self.authority_evict_round(slot.authority));
+            panic!(
+                "Attempted to check for slot {slot} that is <= the last evicted round {}",
+                self.authority_evict_round(slot.authority)
+            );
         }
 
         let mut result = self.recent_refs[slot.authority].range((
@@ -927,13 +930,6 @@ mod test {
         let mut expected = vec![true; (num_rounds * num_authorities) as usize];
         assert_eq!(result, expected);
 
-        // Attempt to check the same via the contains slot method
-        for block_ref in block_refs.clone() {
-            let slot = block_ref.into();
-            let found = dag_state.contains_cached_block_at_slot(slot);
-            assert!(found, "A block should be found at slot {}", slot);
-        }
-
         // Now try to ask also for one block ref that is neither in cache nor in store
         block_refs.insert(
             3,
@@ -944,14 +940,110 @@ mod test {
         // Then all should be found apart from the last one
         expected.insert(3, false);
         assert_eq!(result, expected.clone());
+    }
+
+    #[test]
+    fn test_contains_cached_block_at_slot() {
+        /// Only keep elements up to 2 rounds before the last committed round
+        const CACHED_ROUNDS: Round = 2;
+
+        let num_authorities: u32 = 4;
+        let (mut context, _) = Context::new_for_test(num_authorities as usize);
+        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create test blocks for round 1 ~ 10
+        let num_rounds: u32 = 10;
+        let mut blocks = Vec::new();
+
+        for round in 1..=num_rounds {
+            for author in 0..num_authorities {
+                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
+                blocks.push(block.clone());
+                dag_state.accept_block(block);
+            }
+        }
+
+        // Query for genesis round 0, genesis blocks should be returned
+        for (author, _) in context.committee.authorities() {
+            assert!(
+                dag_state.contains_cached_block_at_slot(Slot::new(GENESIS_ROUND, author)),
+                "Genesis should always be found"
+            );
+        }
+
+        // Now when trying to query whether we have all the blocks, we should successfully retrieve a positive answer
+        // where the blocks of first 4 round should be found in DagState and the rest in store.
+        let mut block_refs = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+
+        for block_ref in block_refs.clone() {
+            let slot = block_ref.into();
+            let found = dag_state.contains_cached_block_at_slot(slot);
+            assert!(found, "A block should be found at slot {}", slot);
+        }
+
+        // Now try to ask also for one block ref that is not in cache
+        // Then all should be found apart from the last one
+        block_refs.insert(
+            3,
+            BlockRef::new(11, AuthorityIndex::new_for_test(3), BlockDigest::default()),
+        );
+        let mut expected = vec![true; (num_rounds * num_authorities) as usize];
+        expected.insert(3, false);
 
         // Attempt to check the same for via the contains slot method
-        for block_ref in block_refs.clone() {
+        for block_ref in block_refs {
             let slot = block_ref.into();
             let found = dag_state.contains_cached_block_at_slot(slot);
 
             assert_eq!(expected.remove(0), found);
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "Attempted to check for slot A8 that is <= the last evicted round 8")]
+    fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
+        /// Only keep elements up to 2 rounds before the last committed round
+        const CACHED_ROUNDS: Round = 2;
+
+        let (mut context, _) = Context::new_for_test(4);
+        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create test blocks for round 1 ~ 10 for authority 0
+        let mut blocks = Vec::new();
+        for round in 1..=10 {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(round, 0).build());
+            blocks.push(block.clone());
+            dag_state.accept_block(block);
+        }
+
+        // Now add a commit to trigger an eviction
+        dag_state.add_commit(TrustedCommit::new_for_test(
+            1 as CommitIndex,
+            CommitDigest::MIN,
+            blocks.last().unwrap().reference(),
+            blocks
+                .into_iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        ));
+
+        dag_state.flush();
+
+        // When trying to request for authority 0 at block slot 8 it should panic, as anything
+        // that is <= commit_round - cached_rounds = 10 - 2 = 8 should be evicted
+        let _ =
+            dag_state.contains_cached_block_at_slot(Slot::new(8, AuthorityIndex::new_for_test(0)));
     }
 
     #[test]
