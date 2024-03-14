@@ -12,6 +12,33 @@ The Plinko game, implemented through smart contracts on the Sui blockchain, inco
 
 The game mechanics involve a player starting a game by specifying the number of balls and staking a certain amount. The backend generates a BLS signature for the game's randomness source, which is verified on-chain to ensure it's untampered. The game uses a Counter NFT for each round to generate a unique VRF input, ensuring each game's randomness is distinct and cannot be predicted or repeated. The number of Plinko balls, chosen by the player, directly influences the game's complexity and potential payout, as each ball's final position is determined by traversing a cryptographic trace path generated from the hashed BLS signature extended to accommodate the total number of balls.
 
+## Sequence diagram
+
+```mermaid
+sequenceDiagram
+    participant Player as Player
+    participant UI as Next.js Application
+    participant API as Backend API
+    participant Blockchain as Sui Blockchain
+
+    Note over Player, Blockchain: Plinko Game Interaction Flow
+
+    Player->>+UI: Places bet, selects number of balls, presses play
+    UI->>Player: Displays game as pending, awaiting outcome
+    UI->>+Blockchain: Sends bet and number of balls
+    UI->>+Blockchain: Calls counter_nft::mint to produce vrf_input, calls plinko::start_game
+    Note over Blockchain: Checks stakes, balances, creates and increments the counter, emits 'NewGame' event
+    Blockchain-->>-UI: Returns gameId, vrfInput
+    UI->>+API: POST /game/plinko/end with { gameId, vrfInput, numberOfBalls }
+    Note over UI: Reads from the 'NewGame' event gameId, vrfInput
+    Note over API: Signs vrfInput with house's private key
+    API->>+Blockchain: Calls plinko::finish_game with signed vrfInput
+    Note over Blockchain: Verifies signature, calculates outcome (payments, balls' trace paths), emits Outcome event
+    Blockchain-->>-API: Returns game outcome event (trace paths, winnings)
+    API-->>-UI: Sends game outcome (trace paths, winnings)
+    UI-->>-Player: Displays game result, balls' descend, and winnings
+```
+
 ## Backend
 
 Follow the comments in each module's code to understand the logic each creates.
