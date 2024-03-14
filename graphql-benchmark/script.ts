@@ -76,11 +76,12 @@ const client = new SuiGraphQLClient<typeof queries>({
 });
 
 async function runBenchmarksSequentially(client: SuiGraphQLClient<typeof queries>) {
+	let limit = 50;
 	console.log('getCoins');
 	await benchmark(client, true, async (client, cursor) => {
 		const response = await client.execute('getCoins', {
 			variables: {
-				first: 100,
+				first: limit,
 				after: cursor,
 			},
 		});
@@ -94,7 +95,7 @@ async function runBenchmarksSequentially(client: SuiGraphQLClient<typeof queries
 	await benchmark(client, true, async (client, cursor) => {
 		const response = await client.execute('getCoins', {
 			variables: {
-				first: 100,
+				first: limit,
 				after: cursor,
 				showContent: true,
 			},
@@ -109,7 +110,7 @@ async function runBenchmarksSequentially(client: SuiGraphQLClient<typeof queries
 	await benchmark(client, true, async (client, cursor) => {
 		const response = await client.execute('getCoins', {
 			variables: {
-				first: 100,
+				first: limit,
 				after: cursor,
 				showPreviousTransaction: true,
 			},
@@ -124,7 +125,7 @@ async function runBenchmarksSequentially(client: SuiGraphQLClient<typeof queries
 	await benchmark(client, true, async (client, cursor) => {
 		const response = await client.execute('getCoins', {
 			variables: {
-				first: 100,
+				first: limit,
 				after: cursor,
 				showContent: true,
 				showPreviousTransaction: true,
@@ -140,6 +141,7 @@ async function runBenchmarksSequentially(client: SuiGraphQLClient<typeof queries
 // runBenchmarksSequentially(client);
 
 async function runEventsBenchmarks(client: SuiGraphQLClient<typeof queries>) {
+	let limit = 50;
 	let senders = new Set<string>();
 	let emittingModules = new Set<string>();
 	// let eventType = '0x3::validator::StakingRequestEvent';
@@ -162,9 +164,10 @@ async function runEventsBenchmarks(client: SuiGraphQLClient<typeof queries>) {
 	// collect senders: each page will yield up to 100 senders
 	console.log('query on eventType=' + eventType + ' and collect senders');
 	await benchmark(client, true, async (client, cursor) => {
+		let limit = 50;
 		const response = await client.execute('queryEvents', {
 			variables: {
-				first: 100,
+				first: limit,
 				after: cursor,
 				filter: {
 					eventType
@@ -190,7 +193,7 @@ async function runEventsBenchmarks(client: SuiGraphQLClient<typeof queries>) {
             await benchmark(client, true, async (client, cursor) => {
                 const response = await client.execute('queryEvents', {
                     variables: {
-                        first: 100,
+                        first: limit,
                         after: cursor,
                         filter: {
                             eventType,
@@ -214,7 +217,7 @@ async function runEventsBenchmarks(client: SuiGraphQLClient<typeof queries>) {
 	await benchmark(client, true, async (client, cursor) => {
 		const response = await client.execute('queryEvents', {
 			variables: {
-				first: 100,
+				first: limit,
 				after: cursor,
 				filter: {
 					eventType,
@@ -246,7 +249,7 @@ async function runEventsBenchmarks(client: SuiGraphQLClient<typeof queries>) {
 			await benchmark(client, true, async (client, cursor) => {
 				const response = await client.execute('queryEvents', {
 					variables: {
-						first: 100,
+						first: limit,
 						after: cursor,
 						filter: {
 							eventType,
