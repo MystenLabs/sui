@@ -12,6 +12,7 @@ use std::ops::Range;
 use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
 
+use crate::block::Slot;
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
     commit::{CommitIndex, TrustedCommit},
@@ -29,6 +30,9 @@ pub(crate) trait Store: Send + Sync {
     /// Checks if blocks exist in the store.
     fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>>;
 
+    /// Checks whether there is any block at the given slot
+    fn contains_block_at_slot(&self, slot: Slot) -> ConsensusResult<bool>;
+
     /// Reads blocks for an authority, from start_round.
     fn scan_blocks_by_author(
         &self,
@@ -36,12 +40,14 @@ pub(crate) trait Store: Send + Sync {
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>>;
 
-    /// Reads an author's blocks from the last produced round up to `num_of_rounds` before (assuming such many rounds exist) in
-    /// round ascending order.
+    // The method returns the last `num_of_rounds` rounds blocks by author in round ascending order.
+    // When a `before_round` is defined then the blocks of round `<=before_round` are returned. If not
+    // then the max value for round will be used as cut off.
     fn scan_last_blocks_by_author(
         &self,
         author: AuthorityIndex,
         num_of_rounds: u64,
+        before_round: Option<Round>,
     ) -> ConsensusResult<Vec<VerifiedBlock>>;
 
     /// Reads the last commit.

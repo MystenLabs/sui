@@ -18,6 +18,7 @@ use typed_store::{
 };
 
 use super::{CommitInfo, Store, WriteBatch};
+use crate::block::Slot;
 use crate::commit::{CommitAPI as _, CommitDigest, TrustedCommit};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
@@ -180,6 +181,18 @@ impl Store for RocksDBStore {
         Ok(exist)
     }
 
+    fn contains_block_at_slot(&self, slot: Slot) -> ConsensusResult<bool> {
+        let found = self
+            .digests_by_authorities
+            .safe_range_iter((
+                Included((slot.authority, slot.round, BlockDigest::MIN)),
+                Included((slot.authority, slot.round, BlockDigest::MAX)),
+            ))
+            .next()
+            .is_some();
+        Ok(found)
+    }
+
     fn scan_blocks_by_author(
         &self,
         author: AuthorityIndex,
@@ -204,17 +217,21 @@ impl Store for RocksDBStore {
     }
 
     // The method returns the last `num_of_rounds` rounds blocks by author in round ascending order.
+    // When a `before_round` is defined then the blocks of round `<=before_round` are returned. If not
+    // then the max value for round will be used as cut off.
     fn scan_last_blocks_by_author(
         &self,
         author: AuthorityIndex,
         num_of_rounds: u64,
+        before_round: Option<Round>,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        let before_round = before_round.unwrap_or(Round::MAX);
         let mut refs = VecDeque::new();
         for kv in self
             .digests_by_authorities
             .safe_range_iter((
                 Included((author, Round::MIN, BlockDigest::MIN)),
-                Included((author, Round::MAX, BlockDigest::MAX)),
+                Included((author, before_round, BlockDigest::MAX)),
             ))
             .skip_to_last()
             .reverse()

@@ -140,12 +140,8 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
-        let commit_observer = CommitObserver::new(
-            context.clone(),
-            commit_consumer,
-            dag_state.clone(),
-            store.clone(),
-        );
+        let commit_observer =
+            CommitObserver::new(context.clone(), commit_consumer, dag_state.clone(), store);
 
         let core = Core::new(
             context.clone(),
@@ -155,7 +151,6 @@ where
             core_signals,
             protocol_keypair,
             dag_state.clone(),
-            store,
         );
 
         let (core_dispatcher, core_thread_handle) =
