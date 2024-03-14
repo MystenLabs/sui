@@ -1256,19 +1256,32 @@ impl SuiClientCommands {
                 let from = context.get_object_owner(&object_id).await?;
                 let to = get_identity_address(Some(to), context)?;
                 let client = context.get_client().await?;
+                let gas_price = client.read_api().get_reference_gas_price().await?;
+                let mut builder = ProgrammableTransactionBuilder::new();
+                
+                builder.transfer_sui(to, amount);
+                let pt = builder.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(pt);
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
                 } else {
-                    let tx = client
-                        .transaction_builder()
-                        .transfer_sui(from, object_id, max_gas_budget(context).await?, to, amount)
-                        .await?;
+                    let tx = TransactionData::new_with_gas_coins(
+                        tx_kind.clone(),
+                        from,
+                        vec![],
+                        max_gas_budget(context).await?,
+                        gas_price,
+                    );
                     estimate_gas_budget(context, tx).await?
                 };
-                let data = client
-                    .transaction_builder()
-                    .transfer_sui(from, object_id, gas_budget, to, amount)
-                    .await?;
+                let data = TransactionData::new_with_gas_coins(
+                    tx_kind,
+                    from,
+                    vec![context.get_object_ref(object_id).await?],
+                    gas_budget,
+                    gas_price,
+                );
+                
                 serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
