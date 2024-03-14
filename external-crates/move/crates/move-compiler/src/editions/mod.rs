@@ -46,6 +46,7 @@ pub enum FeatureGate {
     Move2024Migration,
     SyntaxMethods,
     AutoborrowEq,
+    CleverAssertions,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -125,6 +126,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
     FeatureGate::AutoborrowEq,
+    FeatureGate::CleverAssertions,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
@@ -232,6 +234,7 @@ impl FeatureGate {
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
             FeatureGate::AutoborrowEq => "Automatic borrowing is",
+            FeatureGate::CleverAssertions => "Clever assertions are",
         }
     }
 }

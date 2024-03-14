@@ -7,7 +7,10 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
+    expansion::{
+        ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
+        translate::error_attribute_value,
+    },
     hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
         ast::{BuiltinTypeName_, StructTypeParameter, TParam},
@@ -404,6 +407,10 @@ fn constant(
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
+    let is_error_constant = c
+        .attributes
+        .contains_key_(&known_attributes::ErrorAttribute.into());
+    context.add_constant_definition_attributes(m, n, c.attributes);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, c.signature);
     let value = c.value.unwrap();
@@ -411,6 +418,7 @@ fn constant(
         name,
         signature,
         value,
+        is_error_constant,
     }
 }
 
@@ -789,7 +797,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             code.push(sp(loc, B::WriteRef));
         }
         C::Abort(ecode) => {
-            exp(context, code, ecode);
+            abort_code(context, code, ecode);
             code.push(sp(loc, B::Abort));
         }
         C::Return { exp: e, .. } => {
@@ -1076,4 +1084,31 @@ fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
             O::Range | O::Implies | O::Iff => panic!("specification operator unexpected"),
         },
     ));
+}
+
+fn abort_code(context: &mut Context, code: &mut IR::BytecodeBlock, ecode: H::Exp) {
+    use IR::Bytecode_ as B;
+    match ecode.exp {
+        sp!(cloc, H::UnannotatedExp_::Constant(nm)) => {
+            if let Some(error_code) = context.current_module().and_then(|m| {
+                context
+                    .constant_attributes(m, nm)
+                    .cloned()
+                    .and_then(|attrs| error_attribute_value(context.env, &attrs).map(|(_, v)| v))
+            }) {
+                let (_, (line_no, _), _) = context.env.file_mapping().location(cloc);
+                code.push(sp(
+                    cloc,
+                    B::ErrorConstant {
+                        line_number: line_no as u16,
+                        error_code,
+                        constant: Some(context.constant_name(nm)),
+                    },
+                ))
+            } else {
+                exp(context, code, ecode)
+            }
+        }
+        _ => exp(context, code, ecode),
+    }
 }

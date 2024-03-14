@@ -1,0 +1,46 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/invalid_assertion_const.move:5:9
+  │
+2 │     const X: vector<u8> = b"X";
+  │              ---------- Given: 'vector<u8>'
+  ·
+5 │         abort X;
+  │         ^^^^^^^
+  │         │
+  │         Invalid abort
+  │         Expected: 'u64'
+
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/typing/invalid_assertion_const.move:5:15
+  │
+2 │     const X: vector<u8> = b"X";
+  │           - 'X' defined here with no '#[error]' annotation
+  ·
+5 │         abort X;
+  │               ^ Invalid use of a non-u64 constant 'X' as error code.
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/invalid_assertion_const.move:9:9
+  │
+2 │     const X: vector<u8> = b"X";
+  │              ---------- Given: 'vector<u8>'
+  ·
+9 │         assert!(false, X);
+  │         ^^^^^^^^^^^^^^^^^
+  │         │
+  │         Invalid call of 'assert'. Invalid argument for parameter '1'
+  │         Expected: 'u64'
+
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/typing/invalid_assertion_const.move:9:24
+  │
+2 │     const X: vector<u8> = b"X";
+  │           - 'X' defined here with no '#[error]' annotation
+  ·
+9 │         assert!(false, X);
+  │                        ^ Invalid use of a non-u64 constant 'X' as error code.
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
+

@@ -1641,6 +1641,7 @@ dependencies = [
  "move-core-types",
  "num-bigint",
  "once_cell",
+ "proptest",
  "serde",
  "sha2",
  "vfs",

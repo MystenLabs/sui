@@ -43,6 +43,8 @@ use std::{
     sync::Arc,
 };
 
+use self::program_info::ConstantInfo;
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -1478,8 +1480,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (sp(eloc, Type_::Anything), TE::Return(eret))
         }
         NE::Abort(ncode) => {
-            let ecode = exp(context, ncode);
+            let mut ecode = exp(context, ncode);
             let code_ty = Type_::u64(eloc);
+            annotated_error_const(context, &mut ecode);
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
             (sp(eloc, Type_::Anything), TE::Abort(ecode))
         }
@@ -2937,12 +2940,82 @@ fn module_call_impl(
     (call, return_)
 }
 
+/// If the constant that we are referencing has an `error` attribute, we need to change the type of
+/// the constant to a u64 since this will be compiled into a u64 error code.
+fn annotated_error_const(context: &mut Context, e: &mut T::Exp) {
+    if let sp!(
+        const_loc,
+        T::UnannotatedExp_::Constant(module_ident, constant_name)
+    ) = &mut e.exp
+    {
+        let ConstantInfo {
+            attributes,
+            defined_loc,
+            signature,
+        } = context.constant_info(module_ident, constant_name);
+        let has_error_annotation =
+            attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+        let u64_type = matches!(
+            signature.value.builtin_name(),
+            Some(sp!(_, N::BuiltinTypeName_::U64))
+        );
+        let ty_loc = e.ty.loc;
+        let const_def_loc = *defined_loc;
+
+        if has_error_annotation
+            && context.env.check_feature(
+                context.current_package(),
+                FeatureGate::CleverAssertions,
+                *const_loc,
+            )
+        {
+            e.ty = N::Type_::builtin(ty_loc, sp(ty_loc, N::BuiltinTypeName_::U64), vec![]);
+        }
+
+        // Add help messages
+        if !has_error_annotation
+                && !u64_type
+                // If they're trying to use a non-u64 constant as an error code and in legacy,
+                // nudge them that this is available in Move 2024.
+                && context.env.check_feature(
+                    context.current_package(),
+                    FeatureGate::CleverAssertions,
+                    *const_loc,
+                )
+        {
+            // If in Move 2024, tell them that they probably meant to add an error attribute on
+            // the constant.
+            let msg = format!(
+                "Invalid use of a non-u64 constant '{}' as error code.",
+                constant_name
+            );
+            let msg2 = format!(
+                "'{}' defined here with no '#[{}]' annotation",
+                constant_name,
+                known_attributes::ErrorAttribute
+            );
+            let mut err = diag!(
+                TypeSafety::InvalidCallTarget,
+                (*const_loc, msg),
+                (const_def_loc, msg2)
+            );
+
+            err.add_note(format!(
+                "Non-u64 constants can only be used as error codes if the '#[{}]' \
+                     attribute is added to them.",
+                known_attributes::ErrorAttribute
+            ));
+            context.env.add_diag(err);
+        }
+    }
+}
+
 fn builtin_call(
     context: &mut Context,
     loc: Loc,
     sp!(bloc, nb_): N::BuiltinFunction,
     argloc: Loc,
-    args: Vec<T::Exp>,
+    mut args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
     use N::BuiltinFunction_ as NB;
     use T::BuiltinFunction_ as TB;
@@ -2962,6 +3035,10 @@ fn builtin_call(
             b_ = TB::Assert(is_macro);
             params_ty = vec![Type_::bool(bloc), Type_::u64(bloc)];
             ret_ty = sp(loc, Type_::Unit);
+            match args.get_mut(1) {
+                None => (),
+                Some(exp) => annotated_error_const(context, exp),
+            }
         }
     };
     let (arguments, arg_tys) = call_args(
@@ -2972,6 +3049,7 @@ fn builtin_call(
         argloc,
         args,
     );
+
     assert!(arg_tys.len() == params_ty.len());
     for ((idx, arg_ty), param_ty) in arg_tys.into_iter().enumerate().zip(params_ty) {
         let msg = || {

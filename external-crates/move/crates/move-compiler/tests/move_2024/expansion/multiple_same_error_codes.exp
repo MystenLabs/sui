@@ -1,0 +1,12 @@
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/expansion/multiple_same_error_codes.move:2:20
+  │
+2 │     #[error(code = 0)]
+  │                    ^ Multiple #[error(..)] attributes with same error code '0'. '0' first used here
+  ·
+5 │     #[error(code = 0)]
+  │                    - Duplicate error code '0' defined again here
+  ·
+8 │     #[error(code = 0)]
+  │                    - Duplicate error code '0' defined again here
+

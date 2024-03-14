@@ -24,7 +24,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, u256::U256};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -813,6 +813,7 @@ fn module_(
     let mut functions = UniqueMap::new();
     let mut constants = UniqueMap::new();
     let mut structs = UniqueMap::new();
+    let mut constant_value_errors = BTreeMap::new();
     for member in members {
         match member {
             P::ModuleMember::Use(_) => unreachable!(),
@@ -828,13 +829,16 @@ fn module_(
                     f,
                 )
             }
-            P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
+            P::ModuleMember::Constant(c) => {
+                constant(context, &mut constants, c, &mut constant_value_errors)
+            }
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
             P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc, /* is_error */ false),
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
     check_visibility_modifiers(context, &functions, &friends, package_name);
+    check_error_codes(context, &constant_value_errors);
 
     context.pop_alias_scope(Some(&mut use_funs));
 
@@ -852,6 +856,39 @@ fn module_(
     };
     context.env().pop_warning_filter_scope();
     (current_module, def)
+}
+
+fn check_error_codes(context: &mut Context, constant_value_errors: &BTreeMap<u16, Vec<Loc>>) {
+    // If error code annotations are used check the feature gate.
+    let package_name = context.current_package();
+    if !constant_value_errors.is_empty()
+        && !context.env().check_feature(
+            package_name,
+            FeatureGate::CleverAssertions,
+            constant_value_errors.first_key_value().unwrap().1[0],
+        )
+    {
+        return;
+    }
+    // Don't trigger other errors if clever assertions aren't enabled.
+    for (code, names) in constant_value_errors
+        .iter()
+        .filter(|(_, names)| names.len() > 1)
+    {
+        let mut iter = names.iter();
+        let loc = iter.next().unwrap();
+        let mut diag = diag!(
+            Declarations::DuplicateItem,
+            (*loc, format!("Multiple #[error(..)] attributes with same error code '{code}'. '{code}' first used here"))
+        );
+        diag.add_secondary_labels(iter.map(|loc| {
+            (
+                *loc,
+                format!("Duplicate error code '{code}' defined again here"),
+            )
+        }));
+        context.env().add_diag(diag);
+    }
 }
 
 fn check_visibility_modifiers(
@@ -1097,6 +1134,97 @@ fn attribute(
             }
         },
     ))
+}
+
+pub(crate) fn error_attribute_value(
+    env: &mut CompilationEnv,
+    attributes: &E::Attributes,
+) -> Option<(Loc, u16)> {
+    let sp!(err_loc, err_attribute) = attributes.get_(&known_attributes::ErrorAttribute.into())?;
+    let E::Attribute_::Parameterized(sp!(_, name), inners) = &err_attribute else {
+        let msg = "Invalid #[error(..)] attribute";
+        let mut diag = diag!(Declarations::InvalidAttribute, (*err_loc, msg));
+        diag.add_note("Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]");
+        env.add_diag(diag);
+        return None;
+    };
+
+    assert!(
+        name.as_str() == known_attributes::ErrorAttribute.name(),
+        "ICE error: unexpected attribute name for attribute #[error(..)]"
+    );
+
+    if inners.len() != 1 {
+        let msg = format!(
+            "#[error(..)] expects a single error code, found {}",
+            inners.len()
+        );
+
+        env.add_diag(diag!(Declarations::InvalidAttribute, (*err_loc, msg)));
+        return None;
+    }
+
+    let code_name = E::AttributeName_::Unknown(known_attributes::ErrorAttribute.code().into());
+
+    let mut invalid_attr = |loc| {
+        let msg = "Invalid code assignment used to assign error code in #[error(..)] attribute";
+        let mut diag = diag!(Declarations::InvalidAttribute, (loc, msg));
+        diag.add_note("Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]");
+        env.add_diag(diag);
+    };
+
+    let (name_loc, name, attr) = inners.iter().next().unwrap();
+    let sp!(code_loc, code) = if name == &code_name {
+        attr
+    } else {
+        invalid_attr(name_loc);
+        return None;
+    };
+
+    if let E::Attribute_::Assigned(_, v) = &code {
+        convert_abort_code_to_u15(env, v.as_ref())
+    } else {
+        invalid_attr(*code_loc);
+        None
+    }
+}
+
+fn convert_abort_code_to_u15(
+    env: &mut CompilationEnv,
+    v: &E::AttributeValue,
+) -> Option<(Loc, u16)> {
+    use E::{AttributeValue_ as EAV, Value_ as EV};
+    match v {
+        sp!(vloc, EAV::Value(sp!(_, EV::InferredNum(u))))
+            if *u <= U256::from(known_attributes::ErrorAttribute.error_code_max() as u64) =>
+        {
+            Some((*vloc, u.down_cast_lossy()))
+        }
+        sp!(
+            vloc,
+            EAV::Value(sp!(
+                _,
+                EV::U64(_) | EV::U8(_) | EV::U16(_) | EV::U32(_) | EV::U128(_) | EV::U256(_)
+            ))
+        ) => {
+            env.add_diag(diag!(
+                Attributes::InvalidValue,
+                (
+                    *vloc,
+                    "Annotated integers are not permitted for error codes"
+                ),
+            ));
+            None
+        }
+        sp!(vloc, _) => {
+            let msg = format!(
+                "Expect an integer value between 0 and {} for the #[error(code = ..)] attribute",
+                known_attributes::ErrorAttribute.error_code_max()
+            );
+            env.add_diag(diag!(Declarations::InvalidAttribute, (*vloc, msg)));
+            None
+        }
+    }
 }
 
 /// Like warning_filter, but it will filter _all_ warnings for non-source definitions (or for any
@@ -2627,8 +2755,9 @@ fn constant(
     context: &mut Context,
     constants: &mut UniqueMap<ConstantName, E::Constant>,
     pconstant: P::Constant,
+    constant_error_values: &mut BTreeMap<u16, Vec<Loc>>,
 ) {
-    let (name, constant) = constant_(context, constants.len(), pconstant);
+    let (name, constant) = constant_(context, constants.len(), pconstant, constant_error_values);
     if let Err(_old_loc) = constants.add(name, constant) {
         assert!(context.env().has_errors())
     }
@@ -2638,6 +2767,7 @@ fn constant_(
     context: &mut Context,
     index: usize,
     pconstant: P::Constant,
+    constant_error_values: &mut BTreeMap<u16, Vec<Loc>>,
 ) -> (ConstantName, E::Constant) {
     let P::Constant {
         attributes: pattributes,
@@ -2648,6 +2778,10 @@ fn constant_(
     } = pconstant;
     let attributes = flatten_attributes(context, AttributePosition::Constant, pattributes);
     let warning_filter = warning_filter(context, &attributes);
+    // Check for invalid error attributes on constants
+    if let Some((loc, idx)) = error_attribute_value(context.env(), &attributes) {
+        constant_error_values.entry(idx).or_default().push(loc)
+    };
     context
         .env()
         .add_warning_filter_scope(warning_filter.clone());

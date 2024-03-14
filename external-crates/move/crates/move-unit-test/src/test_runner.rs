@@ -17,6 +17,7 @@ use colored::*;
 
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_bytecode_utils::Modules;
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
     diagnostics::WarningFilters,
     shared::{Flags, NumericalAddress, PackagePaths},
@@ -81,6 +82,12 @@ fn setup_test_storage<'a>(
     }
 
     Ok(storage)
+}
+
+fn convert_clever_move_abort_error(abort_code: u64) -> u64 {
+    ErrorBitset::from_u64(abort_code)
+        .map(|bitset| bitset.error_code() as u64)
+        .unwrap_or(abort_code)
 }
 
 impl TestRunner {
@@ -393,8 +400,9 @@ impl SharedTestingConfig {
 
             match exec_result {
                 Err(err) => {
+                    let sub_status = err.sub_status().map(convert_clever_move_abort_error);
                     let actual_err =
-                        MoveError(err.major_status(), err.sub_status(), err.location().clone());
+                        MoveError(err.major_status(), sub_status, err.location().clone());
                     assert!(err.major_status() != StatusCode::EXECUTED);
                     match test_info.expected_failure.as_ref() {
                         Some(ExpectedFailure::Expected) => {

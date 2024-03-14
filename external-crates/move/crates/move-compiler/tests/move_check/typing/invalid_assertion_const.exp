@@ -1,0 +1,40 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/invalid_assertion_const.move:5:9
+  │
+2 │     const X: vector<u8> = b"X";
+  │              ---------- Given: 'vector<u8>'
+  ·
+5 │         abort X;
+  │         ^^^^^^^
+  │         │
+  │         Invalid abort
+  │         Expected: 'u64'
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/invalid_assertion_const.move:5:15
+  │
+5 │         abort X;
+  │               ^ Clever assertions are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/invalid_assertion_const.move:9:9
+  │
+2 │     const X: vector<u8> = b"X";
+  │              ---------- Given: 'vector<u8>'
+  ·
+9 │         assert!(false, X);
+  │         ^^^^^^^^^^^^^^^^^
+  │         │
+  │         Invalid call of 'assert'. Invalid argument for parameter '1'
+  │         Expected: 'u64'
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/invalid_assertion_const.move:9:24
+  │
+9 │         assert!(false, X);
+  │                        ^ Clever assertions are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+

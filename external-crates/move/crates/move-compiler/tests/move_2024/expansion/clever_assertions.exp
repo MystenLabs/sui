@@ -1,0 +1,123 @@
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/expansion/clever_assertions.move:2:13
+  │
+2 │     #[error(foo)]
+  │             ^^^ Invalid code assignment used to assign error code in #[error(..)] attribute
+  │
+  = Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/expansion/clever_assertions.move:5:13
+  │
+5 │     #[error(0)]
+  │             ^
+  │             │
+  │             Unexpected '0'
+  │             Expected an identifier
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/expansion/clever_assertions.move:8:7
+  │
+8 │     #[error]
+  │       ^^^^^ Invalid #[error(..)] attribute
+  │
+  = Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:11:7
+   │
+11 │     #[error = 10]
+   │       ^^^^^^^^^^ Invalid #[error(..)] attribute
+   │
+   = Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/expansion/clever_assertions.move:14:24
+   │
+14 │     #[error(code = 10, code = 11)]
+   │             ----       ^^^^^^^^^ Duplicate attribute 'code' attached to the same item
+   │             │           
+   │             Attribute previously given here
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:17:7
+   │
+17 │     #[error(code = 10, other = 11)]
+   │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ #[error(..)] expects a single error code, found 2
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:20:13
+   │
+20 │     #[error(other = 11)]
+   │             ^^^^^ Invalid code assignment used to assign error code in #[error(..)] attribute
+   │
+   = Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/expansion/clever_assertions.move:23:20
+   │
+23 │     #[error(code = 0u8)]
+   │                    ^^^ Annotated integers are not permitted for error codes
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/expansion/clever_assertions.move:26:20
+   │
+26 │     #[error(code = 0u16)]
+   │                    ^^^^ Annotated integers are not permitted for error codes
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/expansion/clever_assertions.move:29:20
+   │
+29 │     #[error(code = 0u32)]
+   │                    ^^^^ Annotated integers are not permitted for error codes
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/expansion/clever_assertions.move:32:20
+   │
+32 │     #[error(code = 0u64)]
+   │                    ^^^^ Annotated integers are not permitted for error codes
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/expansion/clever_assertions.move:35:20
+   │
+35 │     #[error(code = 0u128)]
+   │                    ^^^^^ Annotated integers are not permitted for error codes
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/expansion/clever_assertions.move:38:20
+   │
+38 │     #[error(code = 0u256)]
+   │                    ^^^^^ Annotated integers are not permitted for error codes
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:41:20
+   │
+41 │     #[error(code = @0x0)]
+   │                    ^^^^ Expect an integer value between 0 and 32767 for the #[error(code = ..)] attribute
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:44:20
+   │
+44 │     #[error(code = std::vector)]
+   │                    ^^^^^^^^^^^ Expect an integer value between 0 and 32767 for the #[error(code = ..)] attribute
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:47:20
+   │
+47 │     #[error(code = std::vector::foo)]
+   │                    ^^^^^^^^^^^^^^^^ Expect an integer value between 0 and 32767 for the #[error(code = ..)] attribute
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:51:20
+   │
+51 │     #[error(code = 32768)]
+   │                    ^^^^^ Expect an integer value between 0 and 32767 for the #[error(code = ..)] attribute
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/expansion/clever_assertions.move:54:13
+   │
+54 │     #[error(code(code = 32768))]
+   │             ^^^^^^^^^^^^^^^^^^ Invalid code assignment used to assign error code in #[error(..)] attribute
+   │
+   = Error attributes must be of the form #[error(code = <n>)], where 0 <= n <= 32767, e.g. #[error(code = 123)]
+

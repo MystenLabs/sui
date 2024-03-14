@@ -5,8 +5,11 @@
 use crate::{
     cfgir::ast as G,
     diag,
-    expansion::ast::{
-        self as E, Address, Attribute, AttributeValue, ModuleAccess_, ModuleIdent, ModuleIdent_,
+    expansion::{
+        ast::{
+            self as E, Address, Attribute, AttributeValue, ModuleAccess_, ModuleIdent, ModuleIdent_,
+        },
+        translate::error_attribute_value,
     },
     hlir::translate::display_var,
     parser::ast::ConstantName,
@@ -35,7 +38,8 @@ impl<'env> Context<'env> {
             module.constants.ref_map(|_name, constant| {
                 let v_opt = constant.value.as_ref().and_then(|v| match v {
                     MoveValue::U64(u) => Some(*u),
-                    _ => None,
+                    _ => error_attribute_value(compilation_env, &constant.attributes)
+                        .map(|(_, x)| x as u64),
                 });
                 (constant.loc, v_opt)
             })

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    expansion::ast::{Address, ModuleIdent, ModuleIdent_},
+    expansion::ast::{Address, Attributes, ModuleIdent, ModuleIdent_},
     parser::ast::{ConstantName, FunctionName, StructName},
     shared::{CompilationEnv, NumericalAddress},
 };
@@ -24,6 +24,7 @@ pub struct Context<'a> {
     current_module: Option<&'a ModuleIdent>,
     seen_structs: BTreeSet<(ModuleIdent, StructName)>,
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
+    constant_attributes: BTreeMap<(ModuleIdent, ConstantName), Attributes>,
 }
 
 impl<'a> Context<'a> {
@@ -38,6 +39,7 @@ impl<'a> Context<'a> {
             current_module,
             seen_structs: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
+            constant_attributes: BTreeMap::new(),
         }
     }
 
@@ -294,6 +296,19 @@ impl<'a> Context<'a> {
         };
         let n = Self::translate_function_name(f);
         (mname, n)
+    }
+
+    pub fn add_constant_definition_attributes(
+        &mut self,
+        m: &ModuleIdent,
+        c: ConstantName,
+        a: Attributes,
+    ) {
+        self.constant_attributes.insert((*m, c), a);
+    }
+
+    pub fn constant_attributes(&self, m: &ModuleIdent, c: ConstantName) -> Option<&Attributes> {
+        self.constant_attributes.get(&(*m, c))
     }
 
     pub fn constant_definition_name(&self, m: &ModuleIdent, f: ConstantName) -> IR::ConstantName {

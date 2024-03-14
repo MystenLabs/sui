@@ -20,6 +20,7 @@ use crate::{
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -1687,7 +1688,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             use N::BuiltinFunction_ as BF;
             let ty_args = tys_opt.map(|tys| types(context, tys));
-            let nes = call_args(context, rhs);
+            let mut nes = call_args(context, rhs);
             match resolve_function(context, ResolveFunctionCase::Call, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
                     if is_macro.is_none() {
@@ -1706,6 +1707,25 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                             (bloc, dep_msg),
                             (bloc, help_msg),
                         ));
+                    }
+                    // If no abort code is given for the assert, we add in the abort code as the
+                    // bitset-line-number if `CleverAssertions` is set.
+                    if nes.value.len() == 1
+                        && context.env.check_feature(
+                            context.current_package,
+                            FeatureGate::CleverAssertions,
+                            bloc,
+                        )
+                    {
+                        let (_, (line_no, _), _) = context.env.file_mapping().location(bloc);
+                        let bitset = ErrorBitset::new(
+                            line_no as u16,
+                            known_attributes::ErrorAttribute.error_code_max(),
+                            u16::MAX,
+                            u16::MAX,
+                        );
+                        let val = NE::Value(sp(bloc, E::Value_::U64(bitset.bits)));
+                        nes.value.push(sp(bloc, val));
                     }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }

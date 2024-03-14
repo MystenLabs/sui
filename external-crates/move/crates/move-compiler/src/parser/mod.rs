@@ -19,7 +19,10 @@ use anyhow::anyhow;
 use comments::*;
 use move_command_line_common::files::{find_move_filenames_vfs, FileHash};
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 use vfs::VfsPath;
 
 /// Parses program's targets and dependencies, both of which are read from different virtual file
@@ -149,21 +152,20 @@ fn parse_file(
     path.open_file()?.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);
     let fname = Symbol::from(path.as_str());
-    let buffer = match verify_string(file_hash, &source_buffer) {
-        Err(ds) => {
-            compilation_env.add_diags(ds);
-            files.insert(file_hash, (fname, source_buffer));
-            return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
-        }
-        Ok(()) => &source_buffer,
-    };
-    let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer, package) {
+    let source_str = Arc::from(source_buffer);
+    if let Err(ds) = verify_string(file_hash, &source_str) {
+        compilation_env.add_diags(ds);
+        files.insert(file_hash, (fname, source_str));
+        return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
+    }
+    let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
+    {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
             compilation_env.add_diags(ds);
             (vec![], MatchedFileCommentMap::new())
         }
     };
-    files.insert(file_hash, (fname, source_buffer));
+    files.insert(file_hash, (fname, source_str));
     Ok((defs, comments, file_hash))
 }
