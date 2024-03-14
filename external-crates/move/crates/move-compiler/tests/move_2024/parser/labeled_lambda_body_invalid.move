@@ -16,6 +16,6 @@ module a::m {
     }
 
     fun t4() {
-        call!(|x| -> u6 { x } + 1); // parsing error, lambdas cant appear in binop
+        call!(|x| -> u64 { x } + 1); // parsing error, lambdas cant appear in binop
     }
 }
