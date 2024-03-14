@@ -7,6 +7,7 @@ use crate::{
     diagnostics::codes::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
+    linters::{LintLevel, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
     naming::ast as N,
     typing::visitor::TypingVisitor,
 };
@@ -59,9 +60,6 @@ pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
 
 pub const VEC_SET_MOD_NAME: &str = "vec_set";
 pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
-
-pub const ALLOW_ATTR_CATEGORY: &str = "lint";
-pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
 pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
@@ -140,16 +138,21 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
-pub fn linter_visitors() -> Vec<Visitor> {
-    vec![
-        share_owned::ShareOwnedVerifier.visitor(),
-        self_transfer::SelfTransferVerifier.visitor(),
-        custom_state_change::CustomStateChangeVerifier.visitor(),
-        coin_field::CoinFieldVisitor.visitor(),
-        freeze_wrapped::FreezeWrappedVisitor.visitor(),
-        collection_equality::CollectionEqualityVisitor.visitor(),
-        public_random::PublicRandomVisitor.visitor(),
-    ]
+pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
+    match level {
+        LintLevel::None => vec![],
+        LintLevel::Default | LintLevel::All => {
+            vec![
+                share_owned::ShareOwnedVerifier.visitor(),
+                self_transfer::SelfTransferVerifier.visitor(),
+                custom_state_change::CustomStateChangeVerifier.visitor(),
+                coin_field::CoinFieldVisitor.visitor(),
+                freeze_wrapped::FreezeWrappedVisitor.visitor(),
+                collection_equality::CollectionEqualityVisitor.visitor(),
+                public_random::PublicRandomVisitor.visitor(),
+            ]
+        }
+    }
 }
 
 pub fn base_type(t: &N::Type) -> Option<&N::Type> {

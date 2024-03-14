@@ -19,6 +19,7 @@ pub mod expansion;
 pub mod hlir;
 pub mod interface_generator;
 pub mod ir_translation;
+pub mod linters;
 pub mod naming;
 pub mod parser;
 pub mod shared;
