@@ -1,4 +1,3 @@
-
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -34,7 +33,7 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         let gen = new_generator(&random_state, test_scenario::ctx(scenario));
@@ -63,10 +62,10 @@ module sui::random_tests {
             &mut random_state,
             0,
             global_random1,
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
         test_scenario::next_tx(scenario, @0x0);
-        let gen1= new_generator(&random_state, test_scenario::ctx(scenario));
+        let gen1 = new_generator(&random_state, test_scenario::ctx(scenario));
         test_scenario::return_shared(random_state);
         test_scenario::end(scenario_val);
 
@@ -78,10 +77,10 @@ module sui::random_tests {
             &mut random_state,
             1,
             global_random1,
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
         test_scenario::next_tx(scenario, @0x0);
-        let gen2= new_generator(&random_state, test_scenario::ctx(scenario));
+        let gen2 = new_generator(&random_state, test_scenario::ctx(scenario));
         test_scenario::return_shared(random_state);
         test_scenario::end(scenario_val);
 
@@ -93,16 +92,16 @@ module sui::random_tests {
             &mut random_state,
             2,
             global_random2,
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
         test_scenario::next_tx(scenario, @0x0);
-        let gen3= new_generator(&random_state, test_scenario::ctx(scenario));
-        let gen4= new_generator(&random_state, test_scenario::ctx(scenario));
+        let gen3 = new_generator(&random_state, test_scenario::ctx(scenario));
+        let gen4 = new_generator(&random_state, test_scenario::ctx(scenario));
         test_scenario::return_shared(random_state);
         test_scenario::end(scenario_val);
 
         assert!(generator_counter(&gen1) == 0, 0);
-        assert!(*generator_buffer(&gen1) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen1)), 0);
         assert!(generator_seed(&gen1) == generator_seed(&gen2), 0);
         assert!(generator_seed(&gen1) != generator_seed(&gen3), 0);
         assert!(generator_seed(&gen3) != generator_seed(&gen4), 0);
@@ -121,7 +120,7 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         // Regression (not critical for security, but still an indication that something is wrong).
@@ -170,13 +169,13 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         let gen = new_generator(&random_state, test_scenario::ctx(scenario));
 
         // Check the output size & internal generator state
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output = generate_bytes(&mut gen, 1);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 31, 0);
@@ -205,9 +204,9 @@ module sui::random_tests {
         // Sanity check that the output is not all zeros.
         let output = generate_bytes(&mut gen, 10);
         let i = 0;
-        while (true) { // should break before the overflow
-            if (*vector::borrow(&output, i) != 0u8)
-                break;
+        loop {
+            // should break before the overflow
+            if (*vector::borrow(&output, i) != 0u8) break;
             i = i + 1;
         };
 
@@ -215,9 +214,9 @@ module sui::random_tests {
         let output1 = generate_bytes(&mut gen, 10);
         let output2 = generate_bytes(&mut gen, 10);
         i = 0;
-        while (true) { // should break before the overflow
-            if (vector::borrow(&output1, i) != vector::borrow(&output2, i))
-                break;
+        loop {
+            // should break before the overflow
+            if (vector::borrow(&output1, i) != vector::borrow(&output2, i)) break;
             i = i + 1;
         };
 
@@ -238,12 +237,12 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         // u256
         let gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u256(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 0, 0);
@@ -260,13 +259,12 @@ module sui::random_tests {
         while (i < 32) {
             let x = generate_u256(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
-            if (*vector::borrow(&x_bytes, i) != 0u8)
-                i = i + 1;
+            if (*vector::borrow(&x_bytes, i) != 0u8) i = i + 1;
         };
 
         // u128
         gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u128(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 16, 0);
@@ -282,13 +280,12 @@ module sui::random_tests {
         while (i < 16) {
             let x = generate_u128(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
-            if (*vector::borrow(&x_bytes, i) != 0u8)
-                i = i + 1;
+            if (*vector::borrow(&x_bytes, i) != 0u8) i = i + 1;
         };
 
         // u64
         gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u64(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 24, 0);
@@ -304,13 +301,12 @@ module sui::random_tests {
         while (i < 8) {
             let x = generate_u64(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
-            if (*vector::borrow(&x_bytes, i) != 0u8)
-                i = i + 1;
+            if (*vector::borrow(&x_bytes, i) != 0u8) i = i + 1;
         };
 
         // u32
         gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u32(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 28, 0);
@@ -326,13 +322,12 @@ module sui::random_tests {
         while (i < 4) {
             let x = generate_u32(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
-            if (*vector::borrow(&x_bytes, i) != 0u8)
-                i = i + 1;
+            if (*vector::borrow(&x_bytes, i) != 0u8) i = i + 1;
         };
 
         // u16
         gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u16(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 30, 0);
@@ -348,13 +343,12 @@ module sui::random_tests {
         while (i < 2) {
             let x = generate_u16(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
-            if (*vector::borrow(&x_bytes, i) != 0u8)
-                i = i + 1;
+            if (*vector::borrow(&x_bytes, i) != 0u8) i = i + 1;
         };
 
         // u8
         gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u8(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 31, 0);
@@ -366,15 +360,14 @@ module sui::random_tests {
         let _output4 = generate_u8(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 13, 0);
-        while (true) {
+        loop {
             let x = generate_u8(&mut gen);
-            if (x != 0u8)
-                break
+            if (x != 0u8) break
         };
 
         // bool
         gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        assert!(*generator_buffer(&gen) == vector::empty(), 0);
+        assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_bool(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 31, 0);
@@ -387,9 +380,9 @@ module sui::random_tests {
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 13, 0);
         let saw_false = false;
-        while (true) {
+        loop {
             let x = generate_bool(&mut gen);
-            if (!x) saw_false = true;
+            saw_false = saw_false || !x;
             if (x && saw_false) break;
         };
 
@@ -410,11 +403,11 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         let gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        let v: vector<u16> = vector[0, 1, 2, 3, 4,];
+        let v: vector<u16> = vector[0, 1, 2, 3, 4];
         shuffle(&mut gen, &mut v);
         assert!(vector::length(&v) == 5, 0);
         let i: u16 = 0;
@@ -424,15 +417,13 @@ module sui::random_tests {
         };
 
         // check that numbers indeed eventaually move to all positions
-        while (true) {
+        loop {
             shuffle(&mut gen, &mut v);
-            if ((*vector::borrow(&v, 4) == 1u16))
-                break;
+            if ((*vector::borrow(&v, 4) == 1u16)) break;
         };
-        while (true) {
+        loop {
             shuffle(&mut gen, &mut v);
-            if ((*vector::borrow(&v, 0) == 2u16))
-                break;
+            if ((*vector::borrow(&v, 0) == 2u16)) break;
         };
 
         let v: vector<u32> = vector[];
@@ -461,7 +452,7 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         // generate_u128_in_range
@@ -564,8 +555,8 @@ module sui::random_tests {
         let i = 0;
         while (i < 50) {
             let (min, max) = (generate_u8(&mut gen), generate_u8(&mut gen));
-            let (min, max) = if (min < max) { (min, max) } else { (max, min) };
-            let (min, max) = if (min == max) { (min, max + 1) } else { (min, max) };
+            let (min, max) = if (min < max) (min, max) else (max, min);
+            let (min, max) = if (min == max) (min, max + 1) else (min, max);
             let output = generate_u8_in_range(&mut gen, min, max);
             assert!(output >= min, 0);
             assert!(output <= max, 0);
@@ -593,7 +584,7 @@ module sui::random_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         let gen = new_generator(&random_state, test_scenario::ctx(scenario));
@@ -616,13 +607,13 @@ module sui::random_tests {
             &mut random_state,
             0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
         update_randomness_state_for_testing(
             &mut random_state,
             1,
             vector[4, 5, 6, 7],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         test_scenario::next_epoch(scenario, @0x0);
@@ -631,7 +622,7 @@ module sui::random_tests {
             &mut random_state,
             0,
             vector[8, 9, 10, 11],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         test_scenario::return_shared(random_state);
@@ -650,15 +641,15 @@ module sui::random_tests {
         let random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
-            1,
+            0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
         update_randomness_state_for_testing(
             &mut random_state,
-            1,
+            0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         test_scenario::return_shared(random_state);
@@ -677,15 +668,15 @@ module sui::random_tests {
         let random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
-            1,
+            0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
         update_randomness_state_for_testing(
             &mut random_state,
             3,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         test_scenario::return_shared(random_state);

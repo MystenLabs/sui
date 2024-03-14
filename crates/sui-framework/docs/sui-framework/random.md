@@ -199,6 +199,15 @@ Unique randomness generator, derived from the global randomness.
 
 
 
+<a name="0x2_random_EInvalidLength"></a>
+
+
+
+<pre><code><b>const</b> <a href="random.md#0x2_random_EInvalidLength">EInvalidLength</a>: u64 = 4;
+</code></pre>
+
+
+
 <a name="0x2_random_EInvalidRandomnessUpdate"></a>
 
 
@@ -222,6 +231,15 @@ Unique randomness generator, derived from the global randomness.
 
 
 <pre><code><b>const</b> <a href="random.md#0x2_random_RAND_OUTPUT_LEN">RAND_OUTPUT_LEN</a>: u16 = 32;
+</code></pre>
+
+
+
+<a name="0x2_random_U16_MAX"></a>
+
+
+
+<pre><code><b>const</b> <a href="random.md#0x2_random_U16_MAX">U16_MAX</a>: u64 = 65535;
 </code></pre>
 
 
@@ -362,7 +380,7 @@ transaction.
     <b>let</b> epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
     <b>let</b> inner = <a href="random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self);
     <b>if</b> (inner.randomness_round == 0 && inner.epoch == 0 &&
-            <a href="dependencies/move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&inner.random_bytes)) {
+        <a href="dependencies/move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&inner.random_bytes)) {
         // First <b>update</b> should be for round zero.
         <b>assert</b>!(new_round == 0, <a href="random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>);
     } <b>else</b> {
@@ -490,11 +508,12 @@ Generate n random bytes.
         <a href="dependencies/move-stdlib/vector.md#0x1_vector_append">vector::append</a>(&<b>mut</b> result, <a href="random.md#0x2_random_derive_next_block">derive_next_block</a>(g));
         num_of_blocks = num_of_blocks - 1;
     };
-    // Take remaining bytes from the generator's buffer.
+    // Fill the generator's buffer <b>if</b> needed.
     <b>let</b> num_of_bytes = (num_of_bytes <b>as</b> u64);
     <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; (num_of_bytes - <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result))) {
         <a href="random.md#0x2_random_fill_buffer">fill_buffer</a>(g);
     };
+    // Take remaining bytes from the generator's buffer.
     <b>while</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result) &lt; num_of_bytes) {
         <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> result, <a href="dependencies/move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> g.buffer));
     };
@@ -735,9 +754,12 @@ Generate a boolean.
     <b>if</b> (<b>min</b> == max) {
         <b>return</b> <b>min</b>
     };
-    <b>let</b> diff = ((max - <b>min</b>) <b>as</b> u256) + 1;
+    // Pick a <a href="random.md#0x2_random">random</a> number in [0, max - <b>min</b>] by generating a <a href="random.md#0x2_random">random</a> number that is larger than max-<b>min</b>, and taking
+    // the modulo of the <a href="random.md#0x2_random">random</a> number by the range size. Then add the <b>min</b> <b>to</b> the result <b>to</b> get a number in
+    // [<b>min</b>, max].
+    <b>let</b> range_size = ((max - <b>min</b>) <b>as</b> u256) + 1;
     <b>let</b> rand = <a href="random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, num_of_bytes);
-    <b>min</b> + ((rand % diff) <b>as</b> u128)
+    <b>min</b> + ((rand % range_size) <b>as</b> u128)
 }
 </code></pre>
 
@@ -873,7 +895,7 @@ Generate a random u8 in [min, max] (with a bias of 2^{-64}).
 
 ## Function `shuffle`
 
-Shuffle a vector using the random generator.
+Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_shuffle">shuffle</a>&lt;T&gt;(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, v: &<b>mut</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;)
@@ -886,13 +908,16 @@ Shuffle a vector using the random generator.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_shuffle">shuffle</a>&lt;T&gt;(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>, v: &<b>mut</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;) {
-    <b>let</b> n = (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(v) <b>as</b> u32);
+    <b>let</b> n = <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(v);
     <b>if</b> (n == 0) {
         <b>return</b>
     };
-    <b>let</b> i: u32 = 0;
-    <b>while</b> (i &lt; (n - 1)) {
-        <b>let</b> j = <a href="random.md#0x2_random_generate_u32_in_range">generate_u32_in_range</a>(g, i, n-1);
+    <b>assert</b>!(n &lt;= <a href="random.md#0x2_random_U16_MAX">U16_MAX</a>, <a href="random.md#0x2_random_EInvalidLength">EInvalidLength</a>);
+    <b>let</b> n = (n <b>as</b> u16);
+    <b>let</b> i: u16 = 0;
+    <b>let</b> end = n - 1;
+    <b>while</b> (i &lt; end) {
+        <b>let</b> j = <a href="random.md#0x2_random_generate_u16_in_range">generate_u16_in_range</a>(g, i, end);
         <a href="dependencies/move-stdlib/vector.md#0x1_vector_swap">vector::swap</a>(v, (i <b>as</b> u64), (j <b>as</b> u64));
         i = i + 1;
     };

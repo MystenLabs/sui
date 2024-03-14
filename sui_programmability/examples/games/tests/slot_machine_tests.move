@@ -8,7 +8,6 @@ module games::slot_machine_tests {
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};
     use sui::transfer;
-
     use games::slot_machine;
 
     fun mint(addr: address, amount: u64, scenario: &mut Scenario) {
@@ -31,7 +30,7 @@ module games::slot_machine_tests {
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario)
+            test_scenario::ctx(scenario),
         );
 
         // Create the game and get back the output objects.

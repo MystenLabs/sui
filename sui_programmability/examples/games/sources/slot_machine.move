@@ -34,7 +34,7 @@ module games::slot_machine {
     /// Create a new game with a given initial reward for the current epoch.
     public fun create(
         reward: Coin<SUI>,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ) {
         let amount = coin::value(&reward);
         assert!(amount > 0, EInvalidAmount);
@@ -89,5 +89,4 @@ module games::slot_machine {
     public fun get_epoch(game: &Game): u64 {
         game.epoch
     }
-
 }
