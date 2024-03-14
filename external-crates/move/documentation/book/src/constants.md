@@ -2,8 +2,8 @@
 
 Constants are a way of giving a name to shared, static values inside of a `module`.
 
-The constant's value must be known at compilation. The constant's value is stored in the compiled module.
-And each time the constant is used, a new copy of that value is made.
+The constant's value must be known at compilation. The constant's value is stored in the compiled
+module. And each time the constant is used, a new copy of that value is made.
 
 ## Declaration
 
@@ -41,8 +41,8 @@ Even though you can use letters `a` to `z` in a constant. The
 with underscores `_` between each word. For error codes, we use `E` as a prefix and then upper camel
 case (also known as Pascal case) for the rest of the name, as seen in `EMyErrorCode`.
 
-The current naming restriction of starting with `A` to `Z` is in place to give room for future language
-features.
+The current naming restriction of starting with `A` to `Z` is in place to give room for future
+language features.
 
 ## Visibility
 

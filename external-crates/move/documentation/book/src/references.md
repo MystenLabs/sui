@@ -216,10 +216,10 @@ structs.
 
 One could imagine a fancier, more expressive, type system that would allow references to be stored
 in structs. We could allow references inside of structs that do not have the `store`
-[ability](./abilities.md), but the core difficulty is that Move has a fairly complex system
-for tracking static reference safety. This aspect of the type system would also have to be
-extended to support storing references inside of structs. In short, Move's reference safety system
-would have to expand to support stored references, and it is something we are keeping an eye on as
-the language evolves.
+[ability](./abilities.md), but the core difficulty is that Move has a fairly complex system for
+tracking static reference safety. This aspect of the type system would also have to be extended to
+support storing references inside of structs. In short, Move's reference safety system would have to
+expand to support stored references, and it is something we are keeping an eye on as the language
+evolves.
 
 <!-- TODO actually document a sketch of the borrow rules -->

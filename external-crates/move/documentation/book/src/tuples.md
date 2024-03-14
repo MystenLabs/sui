@@ -4,7 +4,8 @@ Move does not fully support tuples as one might expect coming from another langu
 [first-class value](https://en.wikipedia.org/wiki/First-class_citizen). However, in order to support
 multiple return values, Move has tuple-like expressions. These expressions do not result in a
 concrete value at runtime (there are no tuples in the bytecode), and as a result they are very
-limited: 
+limited:
+
 - They can only appear in expressions (usually in the return position for a function).
 - They cannot be bound to local variables.
 - They cannot be bound to local variables.

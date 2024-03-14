@@ -28,8 +28,8 @@ fun this_is_a_test() { ... }
 fun this_is_not_correct(arg: signer) { ... }
 ```
 
-A test can also be annotated as an `#[expected_failure]`. This annotation marks that the test
-is expected to raise an error. You can ensure that a test is aborting with a specific abort code by
+A test can also be annotated as an `#[expected_failure]`. This annotation marks that the test is
+expected to raise an error. You can ensure that a test is aborting with a specific abort code by
 annotating it with `#[expected_failure(abort_code = <code>)]`, if it then fails with a different
 abort code or with a non-abort error the test will fail. Only functions that have the `#[test]`
 annotation can also be annotated as an #`[expected_failure]`.
