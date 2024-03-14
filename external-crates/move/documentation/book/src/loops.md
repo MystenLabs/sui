@@ -148,7 +148,7 @@ fun sum(n: u64): u64 {
 ```
 
 As you might expect, `continue` can also be used inside a `loop`. Here is `sum_intermediate` from
-above rewritten using `loop` instead of `while`
+above rewritten using `loop` instead of `while`.
 
 ```move
 fun sum_intermediate(n: u64): u64 {

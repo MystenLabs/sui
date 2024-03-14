@@ -86,9 +86,9 @@ i == s; // ERROR!
 
 ### Automatic Borrowing
 
-Starting in Move 2024 edition, the `==` and `!=` operators will automatically borrow their operands
-if one of the operands is a reference and the other is not. This means that the following code will
-work without any errors
+Starting in Move 2024 edition, the `==` and `!=` operators automatically borrow their operands
+if one of the operands is a reference and the other is not. This means that the following code
+works without any errors:
 
 ```move
 let r = &0;
@@ -100,7 +100,7 @@ r != 0; // `false`
 0 != r; // `false`
 ```
 
-This automatic borrow is always an immutable borrow
+This automatic borrow is always an immutable borrow.
 
 ## Restrictions
 

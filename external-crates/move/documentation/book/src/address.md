@@ -2,7 +2,7 @@
 
 `address` is a built-in type in Move that is used to represent locations (sometimes called accounts)
 in storage. An `address` value is a 256-bit (32 byte) identifier. Move uses addresses as a way to
-differentiate different packages of [modules](./modules.md), where each package has its own address.
+differentiate packages of [modules](./modules.md), where each package has its own address.
 Specific deployments of Move might also use the `address` value for [storage](./abilities.md#key)
 operations.
 
@@ -25,7 +25,7 @@ value, e.g., `42`, `0xCAFE`, and `10_000` are all valid numerical address litera
 To distinguish when an address is being used in an expression context or not, the syntax when using
 an address differs depending on the context where it's used:
 
-- When an address is used as an expression the address must be prefixed by the `@` character, i.e.,
+- When an address is used as an expression, the address must be prefixed by the `@` character, i.e.,
   [`@<numerical_value>`](./integers.md) or `@<named_address_identifier>`.
 - Outside of expression contexts, the address may be written without the leading `@` character,
   i.e., [`<numerical_value>`](./integers.md) or `<named_address_identifier>`.
@@ -37,7 +37,7 @@ being an expression item.
 
 Named addresses are a feature that allow identifiers to be used in place of numerical values in any
 spot where addresses are used, and not just at the value level. Named addresses are declared and
-bound as top level elements (outside of modules and scripts) in Move Packages, or passed as
+bound as top level elements (outside of modules and scripts) in Move packages, or passed as
 arguments to the Move compiler.
 
 Named addresses only exist at the source language level and will be fully substituted for their

@@ -118,7 +118,7 @@ Bit shifts can abort if the number of bits to shift by is greater than or equal 
 ### Comparisons
 
 Integer types are the _only_ types in Move that can use the comparison operators. Both arguments
-need to be of the same type. If you need to compare integers of different types, you will need to
+need to be of the same type. If you need to compare integers of different types, you must
 [cast](#casting) one of them first.
 
 Comparison operations do not abort.
@@ -151,7 +151,7 @@ For more details see the section on [equality](./equality.md)
 Integer types of one size can be cast to integer types of another size. Integers are the only types
 in Move that support casting.
 
-Casts _do not_ truncate. Casting will abort if the result is too large for the specified type
+Casts _do not_ truncate. Casting aborts if the result is too large for the specified type.
 
 | Syntax     | Operation                                            | Aborts if                              |
 | ---------- | ---------------------------------------------------- | -------------------------------------- |

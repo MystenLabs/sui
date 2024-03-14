@@ -159,7 +159,7 @@ let z = x;
 (y, z)
 ```
 
-Keep in mind, copies of large vectors can be expensive, If this is a concern, annotating the
+Keep in mind, copies of large vectors can be expensive. If this is a concern, annotating the
 `intended` usage can prevent accidental copies. For example,
 
 ```move

@@ -4,7 +4,7 @@ NOTE: this feature has been superceded by [`public(package)`](./functions.md#vis
 
 The `friend` syntax was used to declare modules that are trusted by the current module. A trusted
 module is allowed to call any function defined in the current module that have the `public(friend)`
-visibility. For details on function visibilities, please refer to the _Visibility_ section in
+visibility. For details on function visibilities, refer to the _Visibility_ section in
 [Functions](./functions.md).
 
 ## Friend declaration

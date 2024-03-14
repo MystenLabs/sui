@@ -4,9 +4,10 @@ Move does not fully support tuples as one might expect coming from another langu
 [first-class value](https://en.wikipedia.org/wiki/First-class_citizen). However, in order to support
 multiple return values, Move has tuple-like expressions. These expressions do not result in a
 concrete value at runtime (there are no tuples in the bytecode), and as a result they are very
-limited: they can only appear in expressions (usually in the return position for a function); they
+limited: 
+- They can only appear in expressions (usually in the return position for a function).
+- They cannot be bound to local variables.
 cannot be bound to local variables; they cannot be stored in structs; and tuple types cannot be used
-to instantiate generics.
 
 Similarly, [unit `()`](https://en.wikipedia.org/wiki/Unit_type) is a type created by the Move source
 language in order to be expression based. The unit value `()` does not result in any runtime value.
@@ -106,7 +107,7 @@ For more details, see [Move Variables](./variables.md).
 ## Subtyping
 
 Along with references, tuples are the only types that have
-[subtyping](https://en.wikipedia.org/wiki/Subtyping) in Move. Tuples do have subtyping only in the
+[subtyping](https://en.wikipedia.org/wiki/Subtyping) in Move. Tuples have subtyping only in the
 sense that subtype with references (in a covariant way).
 
 For example:

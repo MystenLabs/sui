@@ -2,7 +2,7 @@
 
 Constants are a way of giving a name to shared, static values inside of a `module`.
 
-The constant's must be known at compilation. The constant's value is stored in the compiled module.
+The constant's value must be known at compilation. The constant's value is stored in the compiled module.
 And each time the constant is used, a new copy of that value is made.
 
 ## Declaration
@@ -41,13 +41,13 @@ Even though you can use letters `a` to `z` in a constant. The
 with underscores `_` between each word. For error codes, we use `E` as a prefix and then upper camel
 case for the rest of the name.
 
-This naming restriction of starting with `A` to `Z` is in place to give room for future language
-features. It may or may not be removed later.
+The current naming restriction of starting with `A` to `Z` is in place to give room for future language
+features.
 
 ## Visibility
 
 `public` or `public(package)` constants are not currently supported. `const` values can be used only
-in the declaring module. However, as a convience, they can be used across modules in
+in the declaring module. However, as a convenience, they can be used across modules in
 [unit tests attributes](./unit-testing.md).
 
 ## Valid Expressions
@@ -102,7 +102,7 @@ const BASE: u8 = 4;
 const SQUARE: u8 = BASE * BASE;
 ```
 
-Note though, that any cycle in the constant definitions will result in an error.
+Note though, that any cycle in the constant definitions results in an error.
 
 ```move
 const A: u16 = B + 1;

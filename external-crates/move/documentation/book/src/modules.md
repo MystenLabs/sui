@@ -73,8 +73,7 @@ fun example() {
 }
 ```
 
-and we compiled it with `my_addr` set to `0xC0FFEE`, then it would be equivalent to the following
-operationally:
+and we compiled it with `my_addr` set to `0xC0FFEE`, then it would be operationally equivalent to the following:
 
 ```move
 fun example() {
@@ -85,7 +84,7 @@ fun example() {
 While at the source level these two different accesses are equivalent, it is a best practice to
 always use the named address and not the numerical value assigned to that address.
 
-Module names can start with letters `a` to `z` or letters `A` to `Z`. After the first character,
+Module names can start with a lowercase letter from `a` to `z` or an uppercase letter from `A` to `Z`. After the first character,
 module names can contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` to
 `9`.
 
@@ -94,17 +93,17 @@ module a::my_module {}
 module a::foo_bar_42 {}
 ```
 
-Typically, module names start with an lowercase letter. A module named `my_module` should be stored
+Typically, module names start with a lowercase letter. A module named `my_module` should be stored
 in a source file named `my_module.move`.
 
 ## Members
 
 All members inside a `module` block can appear in any order. Fundamentally, a module is a collection
-of [`types`](./structs.md) and [`functions`](./functions.md). The [`use`](./uses.md) keyword is used
-to refer to members from other modules. The [`const`](./constants.md) keyword defines constants that
+of [`types`](./structs.md) and [`functions`](./functions.md). The [`use`](./uses.md) keyword
+refers to members from other modules. The [`const`](./constants.md) keyword defines constants that
 can be used in the functions of a module.
 
-[`friend`](./friends.md) are deprecated concept for specifying a list of trusted modules. The
+The [`friend`](./friends.md) syntax is a deprecated concept for specifying a list of trusted modules. The
 concept has been superceded by [`public(package)`](./functions.md#visibility)
 
 <!-- TODO member access rules -->
