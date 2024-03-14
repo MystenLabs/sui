@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, panic, sync::Arc, thread::sleep, time::Duration};
+use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
 use anemo::{types::PeerInfo, PeerId, Response};
 use anemo_tower::auth::{AllowedPeers, RequireAuthorizationLayer};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use bytes::Bytes;
+use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use fastcrypto::traits::KeyPair as _;
 use tokio::sync::broadcast::error::RecvError;
@@ -259,7 +260,16 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     async fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>) {
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
-        let address = authority.address.clone();
+        // Bind to localhost in unit tests since only local networking is needed.
+        // Bind to the unspecified address to allow the actual address to be assigned,
+        // in simtest and production.
+        cfg_if!(
+            if #[cfg(test)] {
+                let address = authority.address.localhost_ip_multi_address();
+            } else {
+                let address = authority.address.zero_ip_multi_address();
+            }
+        );
         let all_peer_ids = self
             .context
             .committee
