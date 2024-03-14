@@ -258,7 +258,7 @@ compatibility constraints:
 These constraints are to ensure that index syntax behaves identically
 regardless of being in a mutable or immutable position.
 
-To illustrate some of these errors, recall the Matrix definition above:
+To illustrate some of these errors, recall the previous `Matrix` definition:
 
 ```move
 #[syntax(index)]
