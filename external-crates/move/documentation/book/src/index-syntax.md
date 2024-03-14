@@ -174,7 +174,7 @@ public fun borrow<Element>(v: &vector<Element>, i: u64): &Element {
 #### Mutable Accessor
 
 The mutable index syntax method is the dual of the immutable one, allowing for both read and write
-operations. It takes a mutable reference of the subject type and returns an mutable reference to
+operations. It takes a mutable reference of the subject type and returns a mutable reference to
 the element type. The `borrow_mut` function defined in `std::vector` is an example of this:
 
 ```move
