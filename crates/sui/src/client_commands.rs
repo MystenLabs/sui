@@ -63,8 +63,10 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::GenericSignature,
     transaction::{
-        SenderSignedData, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+        ProgrammableMoveCall, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+        TransactionKind,
     },
+    SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use json_to_table::json_to_table;
@@ -963,10 +965,9 @@ impl SuiClientCommands {
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
-                let sender = context.try_get_object_owner(&gas).await?;
-                let sender = sender.unwrap_or(context.active_address()?);
-
+                let sender = context.active_address()?;
                 let client = context.get_client().await?;
+                let gas_price = context.get_reference_gas_price().await?;
 
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
@@ -978,39 +979,51 @@ impl SuiClientCommands {
                         skip_dependency_verification,
                     )
                     .await?;
+                let builder = ProgrammableTransactionBuilder::new();
+                let upgrade_cap_arg = builder.pure(upgrade_capability)?;
+                let upgrade_arg = builder.pure(upgrade_policy)?;
+                let digest = builder.pure(package_digest)?;
+                let upgrade_ticket = builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    "package".into(),
+                    "authorize_upgrade".into(),
+                    vec![],
+                    vec![upgrade_cap, upgrade_arg, package_digest],
+                );
+                let upgrade_receipt = builder.upgrade(
+                    package_id,
+                    upgrade_ticket,
+                    dependencies.published.into_values().collect(),
+                    compiled_modules,
+                );
+                let res = builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    "package".into(),
+                    "commit_upgrade".into(),
+                    vec![],
+                    vec![upgrade_cap_arg, upgrade_receipt],
+                );
+                let pt = builder.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(pt);
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
                 } else {
-                    let tx = client
-                        .transaction_builder()
-                        .upgrade(
-                            sender,
-                            package_id,
-                            compiled_modules.clone(),
-                            dependencies.published.clone().into_values().collect(),
-                            upgrade_capability,
-                            upgrade_policy,
-                            package_digest.to_vec(),
-                            gas,
-                            max_gas_budget(context).await?,
-                        )
-                        .await?;
+                    let tx = TransactionData::new_with_gas_coins(
+                        tx_kind.clone(),
+                        sender,
+                        vec![],
+                        max_gas_budget(context).await?,
+                        gas_price,
+                    );
                     estimate_gas_budget(context, tx).await?
                 };
-                let data = client
-                    .transaction_builder()
-                    .upgrade(
-                        sender,
-                        package_id,
-                        compiled_modules,
-                        dependencies.published.into_values().collect(),
-                        upgrade_capability,
-                        upgrade_policy,
-                        package_digest.to_vec(),
-                        gas,
-                        gas_budget,
-                    )
-                    .await?;
+                let data = TransactionData::new_with_gas_coins(
+                    tx_kind.clone(),
+                    sender,
+                    vec![context.select_gas_coins(gas, gas_budget, sender).await?],
+                    gas_budget,
+                    gas_price,
+                );
                 serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
@@ -1258,7 +1271,7 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let gas_price = client.read_api().get_reference_gas_price().await?;
                 let mut builder = ProgrammableTransactionBuilder::new();
-                
+
                 builder.transfer_sui(to, amount);
                 let pt = builder.finish();
                 let tx_kind = TransactionKind::ProgrammableTransaction(pt);
@@ -1281,7 +1294,7 @@ impl SuiClientCommands {
                     gas_budget,
                     gas_price,
                 );
-                
+
                 serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
