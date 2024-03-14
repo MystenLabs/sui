@@ -15,7 +15,7 @@ module t2::o2 {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
@@ -23,7 +23,7 @@ module t2::o2 {
         transfer::public_share_object(coin::zero<SUI>(ctx))
     }
 
-    public fun pop_coin(o2: vector<Coin<SUI>>): Coin<SUI> {
+    public fun pop_coin(mut o2: vector<Coin<SUI>>): Coin<SUI> {
         let o = vector::pop_back(&mut o2);
         vector::destroy_empty(o2);
         o
@@ -34,37 +34,37 @@ module t2::o2 {
         transfer::public_share_object(o)
     }
 
-    public fun delete(o2: vector<Obj2>) {
+    public fun delete(mut o2: vector<Obj2>) {
         let o = vector::pop_back(&mut o2);
         deleter(o);
         vector::destroy_empty(o2);
     }
 
-    public fun freezee(o2: vector<Obj2>) {
+    public fun freezee(mut o2: vector<Obj2>) {
         let o = vector::pop_back(&mut o2);
         freezer(o);
         vector::destroy_empty(o2);
     }
 
-    public fun dof(parent: &mut Obj2, o2: vector<Obj2>) {
+    public fun dof_(parent: &mut Obj2, mut o2: vector<Obj2>) {
         let o = vector::pop_back(&mut o2);
         dofer(parent, o);
         vector::destroy_empty(o2);
     }
 
-    public fun df(parent: &mut Obj2, o2: vector<Obj2>) {
+    public fun df_(parent: &mut Obj2, mut o2: vector<Obj2>) {
         let o = vector::pop_back(&mut o2);
         dfer(parent, o);
         vector::destroy_empty(o2);
     }
 
-    public fun transfer(o2: vector<Obj2>) {
+    public fun transfer_(mut o2: vector<Obj2>) {
         let o = vector::pop_back(&mut o2);
         transferer(o);
         vector::destroy_empty(o2);
     }
 
-    public fun pop_it(o2: vector<Obj2>): Obj2 {
+    public fun pop_it(mut o2: vector<Obj2>): Obj2 {
         let o = vector::pop_back(&mut o2);
         vector::destroy_empty(o2);
         o
@@ -116,17 +116,17 @@ module t2::o2 {
 // Make MoveVec and then try to add as dof
 //# programmable --inputs object(2,0) object(3,0)
 //> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
-//> 1: t2::o2::dof(Input(0), Result(0));
+//> 1: t2::o2::dof_(Input(0), Result(0));
 
 // Make MoveVec and then try to add as df
 //# programmable --inputs object(2,0) object(3,0)
 //> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
-//> 1: t2::o2::df(Input(0), Result(0));
+//> 1: t2::o2::df_(Input(0), Result(0));
 
 // Make MoveVec and then try to transfer it
 //# programmable --inputs object(2,0) object(3,0)
 //> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
-//> 1: t2::o2::transfer(Result(0));
+//> 1: t2::o2::transfer_(Result(0));
 
 // Make MoveVec pop and return it, then try to freeze
 //# programmable --inputs object(2,0) object(3,0)

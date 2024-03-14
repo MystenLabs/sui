@@ -7,7 +7,7 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{Block, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
+    block::{genesis_blocks, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
@@ -32,13 +32,10 @@ pub(crate) fn build_dag(
             );
             start
         }
-        None => {
-            let (_my_genesis_block, genesis) = Block::genesis(context.clone());
-            let references = genesis.iter().map(|x| x.reference()).collect::<Vec<_>>();
-            dag_state.write().accept_blocks(genesis);
-
-            references
-        }
+        None => genesis_blocks(context.clone())
+            .iter()
+            .map(|x| x.reference())
+            .collect::<Vec<_>>(),
     };
 
     let starting_round = ancestors.first().unwrap().round + 1;

@@ -126,7 +126,7 @@ impl ChangeEpochTransaction {
     /// The next (to become) epoch.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.native.epoch),
             Some(self.checkpoint_viewed_at),
         )
@@ -224,7 +224,7 @@ impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
     async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.native.min_epoch),
             Some(self.checkpoint_viewed_at),
         )

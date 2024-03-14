@@ -5,15 +5,13 @@ use crate::consensus::LeaderSchedule;
 use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee};
 use crypto::{RandomnessPartialSignature, RandomnessPrivateKey};
-use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::groups;
-use fastcrypto::serde_helpers::ToFromByteArray;
+use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::tbls::ThresholdBls;
 use fastcrypto_tbls::types::{PublicVssKey, ThresholdBls12381MinSig};
-use fastcrypto_tbls::{dkg, nodes};
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
-use network::anemo_ext::NetworkExt;
+use mysten_network::anemo_ext::NetworkExt;
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -32,10 +30,6 @@ use types::{
 
 type PkG = groups::bls12381::G2Element;
 type EncG = groups::bls12381::G2Element;
-
-#[cfg(test)]
-#[path = "tests/state_handler_tests.rs"]
-pub mod state_handler_tests;
 
 /// Updates Narwhal system state based on certificates received from consensus.
 pub struct StateHandler {
@@ -115,119 +109,22 @@ impl RandomnessState {
     // In this case, narwhal will continue to function normally and simpluy not run
     // the random beacon protocol during the current epoch.
     fn try_new(
-        chain: &ChainIdentifier,
-        protocol_config: &ProtocolConfig,
-        committee: Committee,
-        authority_id: AuthorityIdentifier,
-        private_key: RandomnessPrivateKey,
-        leader_schedule: LeaderSchedule,
-        network: anemo::Network,
+        _chain: &ChainIdentifier,
+        _protocol_config: &ProtocolConfig,
+        _committee: Committee,
+        _authority_id: AuthorityIdentifier,
+        _private_key: RandomnessPrivateKey,
+        _leader_schedule: LeaderSchedule,
+        _network: anemo::Network,
         // Writes the VSS public key to this lock once DKG completes.
-        vss_key_output: Arc<OnceLock<PublicVssKey>>,
-        tx_system_messages: Sender<SystemMessage>,
-        store: RandomnessStore,
-        metrics: Arc<PrimaryMetrics>,
+        _vss_key_output: Arc<OnceLock<PublicVssKey>>,
+        _tx_system_messages: Sender<SystemMessage>,
+        _store: RandomnessStore,
+        _metrics: Arc<PrimaryMetrics>,
     ) -> Option<Self> {
-        if !protocol_config.random_beacon() {
-            info!("random beacon: disabled");
-            return None;
-        }
-
-        let info = committee.randomness_dkg_info();
-        if tracing::enabled!(tracing::Level::DEBUG) {
-            // Log first few entries in DKG info for debugging.
-            for (id, pk, stake) in info.iter().filter(|(id, _, _)| id.0 < 3) {
-                let pk_bytes = pk.as_element().to_byte_array();
-                debug!("random beacon: DKG info: id={id}, stake={stake}, pk={pk_bytes:x?}");
-            }
-        }
-        let nodes = info
-            .iter()
-            .map(|(id, pk, stake)| nodes::Node::<EncG> {
-                id: id.0,
-                pk: pk.clone(),
-                weight: *stake as u16,
-            })
-            .collect();
-        let nodes = match nodes::Nodes::new(nodes) {
-            Ok(nodes) => nodes,
-            Err(err) => {
-                error!("random beacon: error while initializing Nodes: {err:?}");
-                return None;
-            }
-        };
-        let (nodes, t) = nodes.reduce(
-            committee
-                .validity_threshold()
-                .try_into()
-                .expect("validity threshold should fit in u16"),
-            protocol_config.random_beacon_reduction_allowed_delta(),
-        );
-        let total_weight = nodes.total_weight();
-        let num_nodes = nodes.num_nodes();
-        let prefix_str = format!(
-            "dkg {} {}",
-            Hex::encode(chain.as_bytes()),
-            committee.epoch()
-        );
-        let party = match dkg::Party::<PkG, EncG>::new(
-            private_key,
-            nodes,
-            t.into(),
-            fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
-            &mut rand::thread_rng(),
-        ) {
-            Ok(party) => party,
-            Err(err) => {
-                error!("random beacon: error while initializing Party: {err:?}");
-                return None;
-            }
-        };
-        info!(
-            "random beacon: state initialized with authority_id={authority_id}, total_weight={total_weight}, t={t}, num_nodes={num_nodes}, oracle initial_prefix={prefix_str:?}",
-        );
-
-        // Load existing data from store.
-        let dkg_output = store.dkg_output();
-        if let Some(dkg_output) = &dkg_output {
-            info!(
-                "random beacon: loaded existing DKG output for epoch {}",
-                committee.epoch()
-            );
-            metrics
-                .state_handler_random_beacon_dkg_num_shares
-                .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
-            if let Err(e) = vss_key_output.set(dkg_output.vss_pk.clone()) {
-                error!("random beacon: unable to write VSS key to output during startup: {e:?}")
-            }
-        } else {
-            info!(
-                "random beacon: no existing DKG output found for epoch {}",
-                committee.epoch()
-            );
-        }
-        metrics
-            .state_handler_current_randomness_round
-            .set(store.randomness_round().0 as i64);
-
-        Some(Self {
-            store,
-            metrics,
-            tx_system_messages,
-            party,
-            has_sent_confirmation: false,
-            vss_key_output,
-            dkg_output,
-            authority_id,
-            leader_schedule,
-            network,
-            last_randomness_round_sent: None,
-            last_narwhal_round_sent: 0,
-            narhwal_round: 0,
-            cached_sigs: None,
-            partial_sigs: BTreeMap::new(),
-            partial_sig_sender: None,
-        })
+        // TODO: Remove random beacon code entirely from Narwhal.
+        // For now, just disable it regardless of protocol config.
+        None
     }
 
     fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {

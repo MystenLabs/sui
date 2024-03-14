@@ -6,7 +6,7 @@
 //# publish --upgradeable --sender A
 module V0::base_module {
     use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store { 
         id: UID,
         field0: u64,
         field1: u64,
@@ -24,7 +24,7 @@ module V0::friend_module {
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V1::base_module {
     use sui::object::UID;
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -44,7 +44,7 @@ module V2::base_module {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
     use sui::transfer;
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -74,7 +74,7 @@ module V3::base_module {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
     use sui::transfer;
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,

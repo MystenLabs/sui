@@ -163,7 +163,7 @@ mod tests {
         let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);
 
         // send a signal that a new round has been produced.
-        signals.new_round(10).unwrap();
+        signals.new_round(10);
 
         // wait enough until a force_new_block has been received
         sleep(2 * leader_timeout).await;
@@ -206,11 +206,11 @@ mod tests {
 
         // now send some signals with some small delay between them, but not enough so every round
         // manages to timeout and call the force new block method.
-        signals.new_round(13).unwrap();
+        signals.new_round(13);
         sleep(leader_timeout / 2).await;
-        signals.new_round(14).unwrap();
+        signals.new_round(14);
         sleep(leader_timeout / 2).await;
-        signals.new_round(15).unwrap();
+        signals.new_round(15);
         sleep(2 * leader_timeout).await;
 
         // only the last one should be received

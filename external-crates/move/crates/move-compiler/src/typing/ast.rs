@@ -5,11 +5,13 @@
 use crate::{
     debug_display,
     diagnostics::WarningFilters,
-    expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
+    expansion::ast::{
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
+    },
     ice,
     naming::ast::{
-        BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, UseFuns,
-        Var,
+        BlockLabel, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods, Type, TypeName_,
+        Type_, UseFuns, Var,
     },
     parser::ast::{
         BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
@@ -59,6 +61,7 @@ pub struct ModuleDefinition {
     pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
     pub used_addresses: BTreeSet<Address>,
     pub use_funs: UseFuns,
+    pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
@@ -114,6 +117,7 @@ pub struct Constant {
 pub enum LValue_ {
     Ignore,
     Var {
+        mut_: Option<Mutability>,
         var: Var,
         ty: Box<Type>,
         unused_binding: bool,
@@ -323,6 +327,7 @@ impl AstDebug for ModuleDefinition {
             immediate_neighbors,
             used_addresses,
             use_funs,
+            syntax_methods,
             friends,
             structs,
             constants,
@@ -349,6 +354,7 @@ impl AstDebug for ModuleDefinition {
             w.new_line()
         }
         use_funs.ast_debug(w);
+        syntax_methods.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
@@ -765,11 +771,15 @@ impl AstDebug for LValue_ {
         match self {
             L::Ignore => w.write("_"),
             L::Var {
+                mut_,
                 var: v,
                 ty: st,
                 unused_binding,
             } => w.annotate(
                 |w| {
+                    if let Some(mut_) = mut_ {
+                        mut_.ast_debug(w);
+                    }
                     v.ast_debug(w);
                     if *unused_binding {
                         w.write("#unused")

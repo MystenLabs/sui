@@ -43,7 +43,7 @@ module examples::kiosk_name_ext {
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
 
     /// The dynamic field key for the Kiosk Name Extension
-    struct KioskName has store, drop {}
+    struct KioskName has copy, store, drop {}
 
     /// Add a name to the Kiosk (in this implementation can be called only once)
     public fun add(self: &mut Kiosk, cap: &KioskOwnerCap, name: String) {
@@ -53,7 +53,7 @@ module examples::kiosk_name_ext {
 
     /// Try read the name of the Kiosk - if set - return Some(String), if not - None
     public fun name(self: &Kiosk): Option<String> {
-        if (df::exists_(kiosk::uid(self), KioskName {}) {
+        if (df::exists_(kiosk::uid(self), KioskName {})) {
             option::some(*df::borrow(kiosk::uid(self), KioskName {}))
         } else {
             option::none()

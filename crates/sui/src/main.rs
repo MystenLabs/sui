@@ -4,7 +4,6 @@
 use clap::*;
 use colored::Colorize;
 use sui::client_commands::SuiClientCommands::{ProfileTransaction, ReplayTransaction};
-
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
@@ -89,8 +88,6 @@ async fn main() {
             .with_env()
             .init(),
     };
-
     debug!("Sui CLI version: {VERSION}");
-
     exit_main!(args.command.execute().await);
 }

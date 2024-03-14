@@ -116,6 +116,9 @@ impl<A: Clone> QuorumDriver<A> {
                 debug!(?task, "Enqueued task.");
                 self.metrics.current_requests_in_flight.inc();
                 self.metrics.total_enqueued.inc();
+                if task.retry_times == 1 {
+                    self.metrics.current_transactions_in_retry.inc();
+                }
             })
             .map_err(|e| SuiError::QuorumDriverCommunicationError {
                 error: e.to_string(),
@@ -199,6 +202,9 @@ impl<A: Clone> QuorumDriver<A> {
                 Err((*tx_digest, err.clone()))
             }
         };
+        if total_attempts > 1 {
+            self.metrics.current_transactions_in_retry.dec();
+        }
         // On fullnode we expect the send to always succeed because TransactionOrchestrator should be subscribing
         // to this queue all the time. However the if QuorumDriver is used elsewhere log may be noisy.
         if let Err(err) = self.effects_subscribe_sender.send(effects_queue_result) {
@@ -769,6 +775,7 @@ where
                 return;
             }
         };
+        let settlement_finality_latency = timer.elapsed().as_secs_f64();
         quorum_driver
             .metrics
             .settlement_finality_latency
@@ -777,7 +784,14 @@ where
             } else {
                 TX_TYPE_SHARED_OBJ_TX
             }])
-            .observe(timer.elapsed().as_secs_f64());
+            .observe(settlement_finality_latency);
+        if settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1 {
+            debug!(
+                ?tx_digest,
+                "Settlement finality latency is out of expected range: {}",
+                settlement_finality_latency
+            );
+        }
 
         quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
     }

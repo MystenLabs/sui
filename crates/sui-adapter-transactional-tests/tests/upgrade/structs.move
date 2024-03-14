@@ -5,7 +5,7 @@
 
 //# publish --upgradeable --sender A
 module Test_V0::base_module {
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -15,7 +15,7 @@ module Test_V0::base_module {
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base_module {
-    struct Y {
+    public struct Y {
         field0: u64,
         field1: u64,
     }
@@ -30,7 +30,7 @@ module Test_V1::base_module {
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base_module {
-    struct X {
+    public struct X {
         field2: u64,
         field1: u64,
     }
@@ -40,7 +40,7 @@ module Test_V1::base_module {
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base_module {
-    struct X {
+    public struct X {
         field1: u64,
         field0: u64,
     }
@@ -50,7 +50,7 @@ module Test_V1::base_module {
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base_module {
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
         field2: u64,

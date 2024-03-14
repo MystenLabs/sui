@@ -11,11 +11,13 @@ use typed_store::TypedStoreError;
 use crate::block::{BlockRef, BlockTimestampMs, Round};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
-#[allow(unused)]
 #[derive(Clone, Debug, Error)]
 pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(bcs::Error),
+
+    #[error("Error deserializing commit: {0}")]
+    MalformedCommit(bcs::Error),
 
     #[error("Error serializing: {0}")]
     SerializationFailure(bcs::Error),
@@ -56,20 +58,36 @@ pub enum ConsensusError {
     #[error("Synchronizer for fetching blocks directly from {0} is saturated")]
     SynchronizerSaturated(AuthorityIndex),
 
+    #[error("Ancestor is in wrong position: block {block_authority}, ancestor {ancestor_authority}, position {position}")]
+    InvalidAncestorPosition {
+        block_authority: AuthorityIndex,
+        ancestor_authority: AuthorityIndex,
+        position: usize,
+    },
+
     #[error("Ancestor's round ({ancestor}) should be lower than the block's round ({block})")]
     InvalidAncestorRound { ancestor: Round, block: Round },
+
+    #[error("Ancestor {0} not found among genesis blocks!")]
+    InvalidGenesisAncestor(BlockRef),
 
     #[error("Too many ancestors in the block: {0} > {1}")]
     TooManyAncestors(usize, usize),
 
-    #[error("Block is missing ancestor from own authority")]
-    MissingOwnAncestor,
+    #[error("Ancestors from the same authority {0}")]
+    DuplicatedAncestorsAuthority(AuthorityIndex),
 
     #[error("Insufficient stake from parents: {parent_stakes} < {quorum}")]
     InsufficientParentStakes { parent_stakes: Stake, quorum: Stake },
 
     #[error("Invalid transaction: {0}")]
     InvalidTransaction(String),
+
+    #[error("Ancestors max timestamp {max_timestamp_ms} > block timestamp {block_timestamp_ms}")]
+    InvalidBlockTimestamp {
+        max_timestamp_ms: u64,
+        block_timestamp_ms: u64,
+    },
 
     #[error("Block at {block_timestamp}ms is too far in the future: {forward_time_drift:?}")]
     BlockTooFarInFuture {
@@ -93,7 +111,6 @@ pub enum ConsensusError {
     Shutdown,
 }
 
-#[allow(unused)]
 pub type ConsensusResult<T> = Result<T, ConsensusError>;
 
 #[macro_export]

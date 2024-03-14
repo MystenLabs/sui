@@ -24,6 +24,7 @@ use crate::context::Context;
 use crate::core_thread::CoreThreadDispatcher;
 use crate::error::{ConsensusError, ConsensusResult};
 use crate::network::NetworkClient;
+use crate::BlockAPI;
 use consensus_config::AuthorityIndex;
 
 /// The number of concurrent fetch blocks requests per authority
@@ -43,7 +44,6 @@ enum Command {
     },
 }
 
-#[allow(dead_code)]
 pub(crate) struct SynchronizerHandle {
     commands_sender: Sender<Command>,
     tasks: Mutex<JoinSet<()>>,
@@ -75,7 +75,6 @@ impl SynchronizerHandle {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
@@ -271,7 +270,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&peer_index.to_string(), "synchronizer"])
+                    .with_label_values(&[&signed_block.author().to_string(), "synchronizer"])
                     .inc();
                 warn!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
@@ -292,7 +291,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
         // will take care of that.
-        let _ = core_dispatcher
+        let _missing_blocks = core_dispatcher
             .add_blocks(verified_blocks)
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
@@ -687,7 +686,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn synchronizer_periodic_task_fetch_blocks() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);

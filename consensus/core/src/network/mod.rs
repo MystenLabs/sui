@@ -59,7 +59,7 @@ where
     fn client(&self) -> Arc<Self::Client>;
 
     /// Installs network service.
-    fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>);
+    async fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>);
 
     /// Stops the network service.
     async fn stop(&self);

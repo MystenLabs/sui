@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::client_ptb::ptb::PTB;
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
@@ -18,7 +19,6 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 
-use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
@@ -32,24 +32,21 @@ use shared_crypto::intent::Intent;
 use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Coin, DynamicFieldPage, SuiCoinMetadata, SuiData, SuiObjectData, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Coin, DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiRawData,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_replay::ReplayToolCommand;
-use sui_sdk::SuiClient;
 use sui_sdk::{
+    apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
-    SUI_COIN_TYPE,
-};
-use sui_sdk::{
-    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+    wallet_context::WalletContext,
+    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -67,6 +64,7 @@ use sui_types::{
     transaction::{SenderSignedData, Transaction, TransactionData, TransactionDataAPI},
 };
 
+use json_to_table::json_to_table;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{
@@ -435,6 +433,10 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
+
+    /// Run a PTB either from file or from the provided args
+    #[clap(name = "ptb")]
+    PTB(PTB),
 
     /// Publish Move modules
     #[clap(name = "publish")]
@@ -958,56 +960,17 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
 
                 let client = context.get_client().await?;
-                let (dependencies, compiled_modules, compiled_package, package_id) =
-                    compile_package(
-                        &client,
+
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                    upgrade_package(
+                        client.read_api(),
                         build_config,
                         package_path,
+                        upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
                     )
                     .await?;
-
-                let package_id = package_id.map_err(|e| match e {
-                    PublishedAtError::NotPresent => {
-                        anyhow!("No 'published-at' field in manifest for package to be upgraded.")
-                    }
-                    PublishedAtError::Invalid(v) => anyhow!(
-                        "Invalid 'published-at' field in manifest of package to be upgraded. \
-                         Expected an on-chain address, but found: {v:?}"
-                    ),
-                })?;
-
-                let resp = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_object_with_options(
-                        upgrade_capability,
-                        SuiObjectDataOptions::default().with_bcs().with_owner(),
-                    )
-                    .await?;
-
-                let Some(data) = resp.data else {
-                    return Err(anyhow!(
-                        "Could not find upgrade capability at {upgrade_capability}"
-                    ));
-                };
-
-                let upgrade_cap: UpgradeCap = data
-                    .bcs
-                    .ok_or_else(|| {
-                        anyhow!("Fetch upgrade capability object but no data was returned")
-                    })?
-                    .try_as_move()
-                    .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
-                    .deserialize()?;
-                // We keep the existing policy -- no fancy policies or changing the upgrade
-                // policy at the moment. To change the policy you can call a Move function in the
-                // `package` module to change this policy.
-                let upgrade_policy = upgrade_cap.policy;
-                let package_digest =
-                    compiled_package.get_package_digest(with_unpublished_dependencies);
 
                 let data = client
                     .transaction_builder()
@@ -1061,7 +1024,7 @@ impl SuiClientCommands {
 
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
-                    &client,
+                    client.read_api(),
                     build_config,
                     package_path,
                     with_unpublished_dependencies,
@@ -1630,6 +1593,10 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::VerifySource
             }
+            SuiClientCommands::PTB(ptb) => {
+                ptb.execute(context).await?;
+                SuiClientCommandResult::NoOutput
+            }
         });
         ret
     }
@@ -1661,8 +1628,69 @@ fn compile_package_simple(
     )?)
 }
 
-async fn compile_package(
-    client: &SuiClient,
+pub(crate) async fn upgrade_package(
+    read_api: &ReadApi,
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+    upgrade_capability: ObjectID,
+    with_unpublished_dependencies: bool,
+    skip_dependency_verification: bool,
+) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
+    let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
+        read_api,
+        build_config,
+        package_path,
+        with_unpublished_dependencies,
+        skip_dependency_verification,
+    )
+    .await?;
+
+    let package_id = package_id.map_err(|e| match e {
+        PublishedAtError::NotPresent => {
+            anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+        }
+        PublishedAtError::Invalid(v) => anyhow!(
+            "Invalid 'published-at' field in manifest of package to be upgraded. \
+                         Expected an on-chain address, but found: {v:?}"
+        ),
+    })?;
+
+    let resp = read_api
+        .get_object_with_options(
+            upgrade_capability,
+            SuiObjectDataOptions::default().with_bcs().with_owner(),
+        )
+        .await?;
+
+    let Some(data) = resp.data else {
+        return Err(anyhow!(
+            "Could not find upgrade capability at {upgrade_capability}"
+        ));
+    };
+
+    let upgrade_cap: UpgradeCap = data
+        .bcs
+        .ok_or_else(|| anyhow!("Fetch upgrade capability object but no data was returned"))?
+        .try_as_move()
+        .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
+        .deserialize()?;
+    // We keep the existing policy -- no fancy policies or changing the upgrade
+    // policy at the moment. To change the policy you can call a Move function in the
+    // `package` module to change this policy.
+    let upgrade_policy = upgrade_cap.policy;
+    let package_digest = compiled_package.get_package_digest(with_unpublished_dependencies);
+
+    Ok((
+        package_id,
+        compiled_modules,
+        dependencies,
+        package_digest,
+        upgrade_policy,
+    ))
+}
+
+pub(crate) async fn compile_package(
+    read_api: &ReadApi,
     build_config: MoveBuildConfig,
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
@@ -1713,7 +1741,7 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        let verifier = BytecodeSourceVerifier::new(client.read_api());
+        let verifier = BytecodeSourceVerifier::new(read_api);
         if let Err(e) = verifier.verify_package_deps(&compiled_package).await {
             return Err(SuiError::ModulePublishFailure {
                 error: format!(
@@ -2027,6 +2055,7 @@ impl Display for SuiClientCommandResult {
                 writeln!(f, "{}", table)?;
             }
             SuiClientCommandResult::NoOutput => {}
+            SuiClientCommandResult::PTB(_) => {} // this is handled in PTB execute
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -2283,6 +2312,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiTransactionBlockResponse),
     PayAllSui(SuiTransactionBlockResponse),
     PaySui(SuiTransactionBlockResponse),
+    PTB(SuiTransactionBlockResponse),
     Publish(SuiTransactionBlockResponse),
     RawObject(SuiObjectResponse),
     SerializedSignedTransaction(SenderSignedData),

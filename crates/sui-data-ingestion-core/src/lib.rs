@@ -11,7 +11,7 @@ mod worker_pool;
 
 use anyhow::Result;
 use async_trait::async_trait;
-pub use executor::{IndexerExecutor, MAX_CHECKPOINTS_IN_PROGRESS};
+pub use executor::{setup_single_workflow, IndexerExecutor, MAX_CHECKPOINTS_IN_PROGRESS};
 pub use metrics::DataIngestionMetrics;
 pub use progress_store::{FileProgressStore, ProgressStore};
 use sui_types::full_checkpoint_content::CheckpointData;

@@ -9,6 +9,7 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
+use criterion::Criterion;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
@@ -17,6 +18,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
+use move_compiler::editions::Edition;
 use move_compiler::{
     shared::{NumberFormat, NumericalAddress, PackagePaths},
     Flags, FullyCompiledProgram,
@@ -32,7 +34,7 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
-    tasks::{InitCommand, SyntaxChoice, TaskInput},
+    tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
@@ -61,7 +63,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
-use sui_types::crypto::get_authority_key_pair;
+use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages_checkpoint::{
@@ -71,7 +73,6 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
@@ -93,6 +94,7 @@ use sui_types::{
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tempfile::NamedTempFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -111,6 +113,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
@@ -123,8 +126,8 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
-pub struct SuiTestAdapter<'a> {
-    pub(crate) compiled_state: CompiledState<'a>,
+pub struct SuiTestAdapter {
+    pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
     package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
     accounts: BTreeMap<String, TestAccount>,
@@ -166,14 +169,14 @@ struct TxnSummary {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
+impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
-    type Subcommand = SuiSubcommand;
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
+    type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
 
-    fn compiled_state(&mut self) -> &mut CompiledState<'a> {
+    fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
     }
 
@@ -188,7 +191,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     }
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<&'a FullyCompiledProgram>,
+        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -325,7 +328,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
                 )),
-                None,
+                Some(Edition::E2024_ALPHA),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,
@@ -475,33 +478,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
         self.next_task();
-        assert!(signers.is_empty(), "signers are not used");
-        let SuiRunArgs {
-            sender,
-            gas_price,
-            summarize,
-        } = extra;
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let arguments = args
-            .into_iter()
-            .map(|arg| arg.into_argument(&mut builder, self))
-            .collect::<anyhow::Result<_>>()?;
-        let package_id = ObjectID::from(*module_id.address());
-
-        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
-        let gas_price = gas_price.unwrap_or(self.gas_price);
-        let data = |sender, gas| {
-            builder.command(Command::move_call(
-                package_id,
-                module_id.name().to_owned(),
-                function.to_owned(),
-                type_args,
-                arguments,
-            ));
-            let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
-        };
-        let transaction = self.sign_txn(sender, data);
+        let SuiRunArgs { summarize, .. } = extra;
+        let transaction = self.build_function_call_tx(
+            module_id, function, type_args, signers, args, gas_budget, extra,
+        )?;
         let summary = self.execute_txn(transaction).await?;
         let output = self.object_summary_output(&summary, summarize);
         let empty = SerializedReturnValues {
@@ -649,7 +629,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_epoch = self.get_latest_epoch_id()?;
                 let tx = VerifiedTransaction::new_randomness_state_update(
                     latest_epoch,
-                    randomness_round,
+                    RandomnessRound(randomness_round),
                     random_bytes,
                     SequenceNumber::from_u64(randomness_initial_version),
                 );
@@ -1039,6 +1019,72 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
                 Ok(None)
             }
+            SuiSubcommand::Bench(
+                RunCommand {
+                    signers,
+                    args,
+                    type_args,
+                    gas_budget,
+                    syntax,
+                    name,
+                },
+                extra_args,
+            ) => {
+                let (raw_addr, module_name, name) = name.unwrap();
+
+                assert!(
+                    syntax.is_none(),
+                    "syntax flag meaningless with function execution"
+                );
+
+                let addr = self.compiled_state().resolve_address(&raw_addr);
+                let module_id = ModuleId::new(addr, module_name);
+                let type_args = self.compiled_state().resolve_type_args(type_args)?;
+                let args = self.compiled_state().resolve_args(args)?;
+
+                let tx = self
+                    .build_function_call_tx(
+                        &module_id,
+                        name.as_ident_str(),
+                        type_args.clone(),
+                        signers.clone(),
+                        args.clone(),
+                        gas_budget,
+                        extra_args.clone(),
+                    )
+                    .unwrap();
+
+                let objects = self.executor.read_input_objects(tx.clone()).await?;
+
+                // only run benchmarks in release mode
+                if !cfg!(debug_assertions) {
+                    let mut c = Criterion::default();
+
+                    c.bench_function("benchmark_tx", |b| {
+                        let tx = tx.clone();
+                        let objects = objects.clone();
+                        b.iter(|| {
+                            self.executor
+                                .prepare_txn(tx.clone(), objects.clone())
+                                .unwrap();
+                        })
+                    });
+                }
+
+                // Run the tx for real after the benchmark, so that its effects are persisted and
+                // available to subsequent commands
+                self.call_function(
+                    &module_id,
+                    name.as_ident_str(),
+                    type_args,
+                    signers,
+                    args,
+                    gas_budget,
+                    extra_args,
+                )
+                .await?;
+                Ok(merge_output(None, None))
+            }
         }
     }
 
@@ -1076,7 +1122,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
-impl<'a> SuiTestAdapter<'a> {
+impl<'a> SuiTestAdapter {
     pub fn is_simulator(&self) -> bool {
         self.is_simulator
     }
@@ -1303,6 +1349,43 @@ impl<'a> SuiTestAdapter<'a> {
             },
             None => &self.default_account,
         }
+    }
+
+    fn build_function_call_tx(
+        &mut self,
+        module_id: &ModuleId,
+        function: &IdentStr,
+        type_args: Vec<TypeTag>,
+        signers: Vec<ParsedAddress>,
+        args: Vec<SuiValue>,
+        gas_budget: Option<u64>,
+        extra: SuiRunArgs,
+    ) -> anyhow::Result<Transaction> {
+        assert!(signers.is_empty(), "signers are not used");
+        let SuiRunArgs {
+            sender, gas_price, ..
+        } = extra;
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let arguments = args
+            .into_iter()
+            .map(|arg| arg.into_argument(&mut builder, self))
+            .collect::<anyhow::Result<_>>()?;
+        let package_id = ObjectID::from(*module_id.address());
+
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let gas_price = gas_price.unwrap_or(self.gas_price);
+        let data = |sender, gas| {
+            builder.command(Command::move_call(
+                package_id,
+                module_id.name().to_owned(),
+                function.to_owned(),
+                type_args,
+                arguments,
+            ));
+            let pt = builder.finish();
+            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+        };
+        Ok(self.sign_txn(sender, data))
     }
 
     async fn execute_txn(&mut self, transaction: Transaction) -> anyhow::Result<TxnSummary> {
@@ -1701,7 +1784,7 @@ impl<'a> SuiTestAdapter<'a> {
     }
 }
 
-impl<'a> GetModule for &'a SuiTestAdapter<'_> {
+impl<'a> GetModule for &'a SuiTestAdapter {
     type Error = anyhow::Error;
 
     type Item = &'a CompiledModule;
@@ -2113,7 +2196,7 @@ async fn update_named_address_mapping(
     }
 }
 
-impl ObjectStore for SuiTestAdapter<'_> {
+impl ObjectStore for SuiTestAdapter {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -2130,7 +2213,7 @@ impl ObjectStore for SuiTestAdapter<'_> {
     }
 }
 
-impl ReadStore for SuiTestAdapter<'_> {
+impl ReadStore for SuiTestAdapter {
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,
