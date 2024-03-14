@@ -280,12 +280,12 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
          --assign p @{package_id_str}
          --assign s @{shared_id_str}
          # Use the shared object by immutable reference first
-         --move-call "p::test_module::use_immut" s 
+         --move-call "p::test_module::use_immut" s
          # Now use mutably -- we need to update the mutability of the object
          --move-call "p::test_module::use_mut" s
          # Make sure we handle different more complex pure arguments
-         --move-call "p::test_module::use_ascii_string" "'foo bar baz'" 
-         --move-call "p::test_module::use_utf8_string" "'foo †††˚˚¬¬'" 
+         --move-call "p::test_module::use_ascii_string" "'foo bar baz'"
+         --move-call "p::test_module::use_utf8_string" "'foo †††˚˚¬¬'"
          --gas-budget 100000000
         "#
     );
@@ -300,7 +300,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
          --assign p @{package_id_str}
          --assign s @{shared_id_str}
          # Use the shared object by immutable reference first
-         --move-call "p::test_module::use_immut" s 
+         --move-call "p::test_module::use_immut" s
          --move-call "p::test_module::delete_shared_object" s
          --gas-budget 100000000
         "#
@@ -2755,6 +2755,8 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
 #[tokio::test]
 async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
+    const LINTER_MSG: &str =
+        "Total number of linter warnings suppressed: 5 (filtered categories: 3)";
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = vec!["move", "test", "--path", "tests/data/linter"];
     let output = cmd
@@ -2762,9 +2764,15 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .output()
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(
-        out_str.contains("Total number of linter warnings suppressed: 5 (filtered categories: 3)")
-    );
+    assert!(out_str.contains(LINTER_MSG));
+    // test no-lint suppresses
+    let args = vec!["move", "test", "--no-lint", "--path", "tests/data/linter"];
+    let output = cmd
+        .args(&args)
+        .output()
+        .expect("failed to run 'sui move test'");
+    let out_str = str::from_utf8(&output.stderr).unwrap();
+    assert!(!out_str.contains(LINTER_MSG));
     Ok(())
 }
 
