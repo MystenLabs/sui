@@ -292,6 +292,6 @@ public fun borrow_mut<T, U>(s: &mut Matrix<U>, i: u64, j: u32):  &mut U { ... }
 ```
 
 Again, the gaol here is to make the usage across the immutable and mutable versions consistent. This
-allows index syntax methods to work without changing the behavior or constraints out based on
+allows index syntax methods to work without changing out the behavior or constraints based on
 mutable versus immutable usage, ultimately ensuring a consistent interface to program against.
 
