@@ -455,7 +455,10 @@ fn function(
         warning_filter: _warning_filter,
         index: _index,
         attributes,
-        visibility: v,
+        compiled_visibility: v,
+        // original, declared visibility is ignored. This is primarily for marking entry functions
+        // as public in tests
+        visibility: _,
         entry,
         signature,
         body,
