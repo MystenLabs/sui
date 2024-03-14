@@ -3,7 +3,7 @@
 
 use crate::client_ptb::ptb::PTB;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
     str::FromStr,
@@ -51,7 +51,7 @@ use sui_sdk::{
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
-    digests::{ObjectDigest, TransactionDigest},
+    digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
     gas_coin::GasCoin,
@@ -1209,14 +1209,13 @@ impl SuiClientCommands {
                 serialize_signed_transaction,
             } => {
                 let client = context.get_client().await?;
-                let sender = context.get_object_owner(&object_id).await?;
+                let sender = context.active_address()?;
                 let recipient = get_identity_address(Some(to), context)?;
 
-                let mut ptb = ProgrammableTransactionBuilder::new();
-                ptb.transfer_object(recipient, context.get_object_ref(object_id).await?)?;
-                // finish building the transaction block by calling finish on the ptb
-                let builder = ptb.finish();
-                let tx_kind = TransactionKind::ProgrammableTransaction(builder);
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.transfer_object(recipient, context.get_object_ref(object_id).await?)?;
+                let pt = builder.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(pt);
                 let gas_price = client.read_api().get_reference_gas_price().await?;
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
@@ -1233,7 +1232,7 @@ impl SuiClientCommands {
                 let data = TransactionData::new_with_gas_coins(
                     tx_kind,
                     sender,
-                    vec![select_gas_coins(context, gas, gas_budget, sender).await?],
+                    vec![context.select_gas_coins(gas, gas_budget, sender).await?],
                     gas_budget,
                     gas_price,
                 );
@@ -1304,33 +1303,50 @@ impl SuiClientCommands {
                         amounts.len()
                     ),
                 );
+                if let Some(gas) = gas {
+                    if input_coins.contains(&gas) {
+                        return Err(anyhow!("Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"));
+                    }
+                }
                 let recipients = recipients
                     .into_iter()
                     .map(|x| get_identity_address(Some(x), context))
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
-                let from = context.get_object_owner(&input_coins[0]).await?;
+                let from = context.active_address()?;
                 let client = context.get_client().await?;
+                let mut builder = ProgrammableTransactionBuilder::new();
+                let mut coin_refs = vec![];
+                for c in &input_coins {
+                    coin_refs.push(context.get_object_ref(*c).await?)
+                }
+                builder.pay(coin_refs, recipients, amounts)?;
+                let pt = builder.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(pt);
+                let gas_price = client.read_api().get_reference_gas_price().await?;
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
                 } else {
-                    let data = client
-                        .transaction_builder()
-                        .pay(
-                            from,
-                            input_coins.clone(),
-                            recipients.clone(),
-                            amounts.clone(),
-                            gas,
-                            max_gas_budget(context).await?,
-                        )
-                        .await?;
+                    let data = TransactionData::new_with_gas_coins(
+                        tx_kind.clone(),
+                        from,
+                        vec![],
+                        max_gas_budget(context).await?,
+                        gas_price,
+                    );
                     estimate_gas_budget(context, data).await?
                 };
-                let data = client
-                    .transaction_builder()
-                    .pay(from, input_coins, recipients, amounts, gas, gas_budget)
-                    .await?;
+                let mut gas_payment = vec![];
+                for c in &input_coins {
+                    gas_payment.push(context.get_object_ref(*c).await?)
+                }
+                let data = TransactionData::new_with_gas_coins(
+                    tx_kind,
+                    from,
+                    gas_payment,
+                    gas_budget,
+                    gas_price,
+                );
                 serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
@@ -1370,26 +1386,34 @@ impl SuiClientCommands {
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let client = context.get_client().await?;
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.pay_sui(recipients, amounts)?;
+                let pt = builder.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(pt);
+                let gas_price = context.get_reference_gas_price().await?;
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
                 } else {
-                    let data = client
-                        .transaction_builder()
-                        .pay_sui(
-                            signer,
-                            input_coins.clone(),
-                            recipients.clone(),
-                            amounts.clone(),
-                            max_gas_budget(context).await?,
-                        )
-                        .await?;
+                    let data = TransactionData::new_with_gas_coins(
+                        tx_kind.clone(),
+                        signer,
+                        vec![],
+                        max_gas_budget(context).await?,
+                        gas_price,
+                    );
                     estimate_gas_budget(context, data).await?
                 };
-                let data = client
-                    .transaction_builder()
-                    .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
-                    .await?;
+                let mut gas_payment = vec![];
+                for c in input_coins {
+                    gas_payment.push(context.get_object_ref(c).await?)
+                }
+                let data = TransactionData::new_with_gas_coins(
+                    tx_kind,
+                    signer,
+                    gas_payment,
+                    gas_budget,
+                    gas_price,
+                );
                 serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
@@ -1412,25 +1436,34 @@ impl SuiClientCommands {
                 );
                 let recipient = get_identity_address(Some(recipient), context)?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let client = context.get_client().await?;
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.pay_all_sui(recipient);
+                let pt = builder.finish();
+                let tx_kind = TransactionKind::ProgrammableTransaction(pt);
+                let gas_price = context.get_reference_gas_price().await?;
                 let gas_budget = if let Some(gas_budget) = gas_budget {
                     gas_budget
                 } else {
-                    let tx = client
-                        .transaction_builder()
-                        .pay_all_sui(
-                            signer,
-                            input_coins.clone(),
-                            recipient,
-                            max_gas_budget(context).await?,
-                        )
-                        .await?;
+                    let tx = TransactionData::new_with_gas_coins(
+                        tx_kind.clone(),
+                        signer,
+                        vec![],
+                        max_gas_budget(context).await?,
+                        gas_price,
+                    );
                     estimate_gas_budget(context, tx).await?
                 };
-                let data = client
-                    .transaction_builder()
-                    .pay_all_sui(signer, input_coins, recipient, gas_budget)
-                    .await?;
+                let mut gas_payment = vec![];
+                for c in input_coins {
+                    gas_payment.push(context.get_object_ref(c).await?)
+                }
+                let data = TransactionData::new_with_gas_coins(
+                    tx_kind,
+                    signer,
+                    gas_payment,
+                    gas_budget,
+                    gas_price,
+                );
 
                 serialize_or_execute!(
                     data,
@@ -2738,23 +2771,4 @@ pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::
         Some(Some(sui_json_rpc_types::SuiProtocolConfigValue::U64(y))) => *y,
         _ => MAX_GAS_BUDGET,
     })
-}
-
-/// Select the gas coins
-async fn select_gas_coins(
-    context: &mut WalletContext,
-    gas: Option<ObjectID>,
-    gas_budget: u64,
-    sender: SuiAddress,
-) -> Result<(ObjectID, SequenceNumber, ObjectDigest), anyhow::Error> {
-    // find the gas coins if we have no gas coin given
-    if let Some(gas) = gas {
-        Ok(context.get_object_ref(gas).await?)
-    } else {
-        Ok(context
-            .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
-            .await?
-            .1
-            .object_ref())
-    }
 }

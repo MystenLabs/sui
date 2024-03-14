@@ -15,7 +15,8 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -49,6 +50,37 @@ impl WalletContext {
             max_concurrent_requests,
         };
         Ok(context)
+    }
+
+    /// Finds a gas coin with at least the specified gas budget
+    pub async fn select_gas_coins(
+        &self,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+        sender: SuiAddress,
+    ) -> Result<(ObjectID, SequenceNumber, ObjectDigest), anyhow::Error> {
+        if let Some(gas) = gas {
+            let coins = self
+                .gas_objects(sender)
+                .await
+                .map_err(|_| anyhow!("Could not fetch the gas coins for this address {sender}."))?;
+            if coins
+                .iter()
+                .find(|x| x.1.object_id == gas && x.0 >= gas_budget)
+                .is_none()
+            {
+                anyhow::bail!(
+                    "The gas coin does not have enough balance to pay for this transaction."
+                );
+            }
+            Ok(self.get_object_ref(gas).await?)
+        } else {
+            Ok(self
+                .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
+                .await?
+                .1
+                .object_ref())
+        }
     }
 
     pub fn get_addresses(&self) -> Vec<SuiAddress> {
@@ -188,7 +220,7 @@ impl WalletContext {
             }
         }
         Err(anyhow!(
-            "No non-argument gas objects found for this address with value >= budget {budget}. Run sui client gas to check for gas objects."
+            "No gas coins found for this address with a balance >= budget."
         ))
     }
 
