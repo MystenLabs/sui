@@ -59,6 +59,82 @@ while (i < 3) {
 }
 ```
 
+## Usage
+
+As the example indicates, if a datatype defines an index syntax function, it may be used by
+invoking index syntax on a value of that type:
+
+```move
+let mat = matrix::make_matrix(...);
+let m_0_0 = mat[0, 0];
+```
+
+During compilation, the compiler will translate these into the appropriate function invocations
+based on the position and mutable usage of the expression:
+
+```move
+let mut mat = matrix::make_matrix(...);
+
+let m_0_0 = mat[0, 0];
+    // translates to copy matrix::borrow(&mat, 0, 0)
+
+let m_0_0 = &mat[0, 0];
+    // translates to matrix::borrow(&mat, 0, 0)
+
+let m_0_0 = &mut mat[0, 0];
+    // translates to matrix::borrow_mut(&mut mat, 0, 0)
+``
+
+Index expressions may also be intermixed with field accesses:
+
+```move
+public struct V { v: vector<u64> }
+
+public struct Vs { vs: vector<V> }
+
+fun borrow_first(input: &Vs): &u64 {
+    input.vs[0].v[0]
+    // translates to vector::borrow(vector::borrow(input.vs, 0).v, 0)
+}
+```
+
+### Index functions take flexible arguments
+
+Note that, aside from the definition and type limitations described in the rest of this chapter,
+there are no restrictions on the values that may be passed as index parameters, allowing for
+intricate programmatic behavior when using index syntax. For example, a data structure might wish to
+take a default value if the index is out of bounds:
+
+```
+#[syntax(index)]
+public fun borrow_or_set<Key: copy, Value: drop>(
+    input: &mut MTable<Key, Value>,
+    key: &Key,
+    default: Value
+): &mut Value {
+    if (contains(input, *key)) {
+        borrow(input, key)
+    } else {
+        insert(input, *key, default)
+        borrow(input, key)
+    }
+}
+```
+
+Indexing into `MTable` would then require the user provide a default value:
+
+```
+let string_key: String = ...;
+let mut table: MTable<String, u64> = m_table::make_table();
+let entry: &mut u64 = &mut table[string_key, 0];
+```
+
+This sort of extensible power allows developers to write precise index interfaces for their types,
+concretely enforcing bespoke behavior.
+
+
+## Defining Index Syntax Functions
+
 This powerful syntax form allows for all user-defined datatypes to behave in this way, assuming they
 adhere to the following rules:
 
@@ -76,13 +152,13 @@ adhere to the following rules:
 
 These are described in greater detail, with additional examples, below.
 
-## Declaration
+### Declaration
 
 To declare an index syntax method, you add the `#[syntax(index)]` attribute above the relevant
 function definition in the same module as the subject type's definition. This signals to the
 compiler that the function is an index accessor for the specified type.
 
-### Immutable Accessor
+#### Immutable Accessor
 
 The immutable index syntax method is defined for read-only accesses. It takes an immutable reference
 of the subject type and returns an immutable reference to the element type. The `borrow` function
@@ -95,7 +171,7 @@ public fun borrow<Element>(v: &vector<Element>, i: u64): &Element {
 }
 ```
 
-### Mutable Accessor
+#### Mutable Accessor
 
 The mutable index syntax method is the dual of the immutable one, allowing for both read and write
 operations. It takes a mutable reference of the subject type and returns an mutable reference to
@@ -108,13 +184,13 @@ public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element {
 }
 ```
 
-### Visibility
+#### Visibility
 
 To ensure that indexing functions are available anywhere the type is used, all index syntax methods
 must have public visibility. This ensures ergonomic usage of indexing across modules and packages in
 Move.
 
-### No Duplicates
+#### No Duplicates
 
 In addition to the above requirements, we restrict each subject base type to defining a single
 index syntax method for immutable references and a single index syntax method for mutable
@@ -133,7 +209,7 @@ public fun borrow_matrix<T>(s: &Matrix<T>, i: u64, j: u64): &T { ... }
 This ensures that the user can always tell which method is being invoked, without the need to
 inspect type instantiation.
 
-## Type Constraints
+### Type Constraints
 
 By default, an index syntax method has the following type constraints:
 
@@ -168,7 +244,7 @@ public fun borrow_imm(x: &mut Matrix<u64>, ...): &u64 { ... }
 
 ```
 
-## Type Compatibility
+### Type Compatibility
 
 When defining an immutable and mutable index syntax method pair, they are subject to a number of
 compatibility constraints:
