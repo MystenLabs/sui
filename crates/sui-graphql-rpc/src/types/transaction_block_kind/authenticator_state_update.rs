@@ -41,7 +41,7 @@ impl AuthenticatorStateUpdateTransaction {
     /// Epoch of the authenticator state update transaction.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.native.epoch),
             Some(self.checkpoint_viewed_at),
         )
@@ -131,7 +131,7 @@ impl ActiveJwk {
     /// The most recent epoch in which the JWK was validated.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.native.epoch),
             Some(self.checkpoint_viewed_at),
         )

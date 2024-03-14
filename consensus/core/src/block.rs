@@ -23,14 +23,14 @@ use fastcrypto::{
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
-use crate::context::Context;
 use crate::error::ConsensusResult;
+use crate::{commit::CommitRef, context::Context};
 use crate::{ensure, error::ConsensusError};
+
+pub(crate) const GENESIS_ROUND: Round = 0;
 
 /// Round number of a block.
 pub type Round = u32;
-
-pub const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
@@ -81,6 +81,8 @@ pub trait BlockAPI {
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
+    fn commit_votes(&self) -> &[CommitRef];
+    fn slot(&self) -> Slot;
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -92,6 +94,7 @@ pub struct BlockV1 {
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
+    commit_votes: Vec<CommitRef>,
 }
 
 impl BlockV1 {
@@ -102,25 +105,28 @@ impl BlockV1 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
+        commit_votes: Vec<CommitRef>,
     ) -> BlockV1 {
         Self {
+            epoch,
             round,
             author,
             timestamp_ms,
             ancestors,
             transactions,
-            epoch,
+            commit_votes,
         }
     }
 
     fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
         Self {
+            epoch,
             round: GENESIS_ROUND,
             author,
             timestamp_ms: 0,
             ancestors: vec![],
             transactions: vec![],
-            epoch,
+            commit_votes: vec![],
         }
     }
 }
@@ -148,6 +154,14 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn commit_votes(&self) -> &[CommitRef] {
+        &self.commit_votes
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
     }
 }
 
@@ -246,7 +260,7 @@ impl AsRef<[u8]> for BlockDigest {
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
-pub(crate) struct Slot {
+pub struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,
 }
@@ -539,6 +553,11 @@ impl TestBlock {
         }
     }
 
+    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+        self.block.epoch = epoch;
+        self
+    }
+
     pub(crate) fn set_round(mut self, round: Round) -> Self {
         self.block.round = round;
         self
@@ -561,11 +580,6 @@ impl TestBlock {
 
     pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.block.transactions = transactions;
-        self
-    }
-
-    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
-        self.block.epoch = epoch;
         self
     }
 

@@ -38,6 +38,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::iter::once;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -754,6 +755,12 @@ impl ProgrammableMoveCall {
         );
         Ok(())
     }
+
+    fn is_input_arg_used(&self, arg: u16) -> bool {
+        self.arguments
+            .iter()
+            .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
+    }
 }
 
 impl Command {
@@ -861,6 +868,25 @@ impl Command {
         };
         Ok(())
     }
+
+    fn is_input_arg_used(&self, input_arg: u16) -> bool {
+        match self {
+            Command::MoveCall(c) => c.is_input_arg_used(input_arg),
+            Command::TransferObjects(args, arg)
+            | Command::MergeCoins(arg, args)
+            | Command::SplitCoins(arg, args) => args
+                .iter()
+                .chain(once(arg))
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
+            Command::MakeMoveVec(_, args) => args
+                .iter()
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
+            Command::Upgrade(_, _, _, arg) => {
+                matches!(arg, Argument::Input(inp) if *inp == input_arg)
+            }
+            Command::Publish(_, _) => false,
+        }
+    }
 }
 
 pub fn write_sep<T: Display>(
@@ -945,6 +971,30 @@ impl ProgrammableTransaction {
         }
         for command in commands {
             command.validity_check(config)?;
+        }
+
+        // A command that uses Random can only be followed by TransferObjects or MergeCoins.
+        if config.enable_randomness_ptb_restrictions() {
+            // Check if there is a random object in the input objects
+            if let Some(random_index) = inputs.iter().position(|obj| {
+                matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            }) {
+                let mut used_random_object = false;
+                let random_index = random_index.try_into().unwrap();
+                for command in commands {
+                    if !used_random_object {
+                        used_random_object = command.is_input_arg_used(random_index);
+                    } else {
+                        fp_ensure!(
+                            matches!(
+                                command,
+                                Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
+                            ),
+                            UserInputError::PostRandomCommandRestrictions
+                        );
+                    }
+                }
+            }
         }
 
         Ok(())

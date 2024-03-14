@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{error::Elapsed, sleep, sleep_until, timeout, Instant};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::block::{BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
@@ -237,6 +237,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         }
                     }
+                },
+                else => {
+                    info!("Fetching blocks from authority {peer_index} task will now abort.");
+                    break;
                 }
             }
         }

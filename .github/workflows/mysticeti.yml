@@ -1,9 +1,18 @@
 name: Mysticeti
 
 on:
+  # Allow triggering the workflow manually.
   workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: true
+        default: main
+
+  # Triggers the workflow every day at 05:00 UTC.
   schedule:
-    - cron: '0 5 * * *' # everyday 05:00
+    - cron: '0 5 * * *'
 
 env:
   # Enable Mysticeti in tests.
@@ -52,6 +61,8 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref }}
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -121,7 +132,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          scripts/simtest/cargo-simtest simtest
+          scripts/simtest/cargo-simtest simtest --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh

@@ -6,7 +6,7 @@ Please select one of the following editions:
 1) 2024.beta
 2) legacy
 
-Selection (default=1): Recorded edition in 'Move.toml'
+Selection (default=1): 
 
 Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
 Generated changes . . .
@@ -36,6 +36,7 @@ Updating "sources/mut_name.move" . . .
 Changes complete
 Wrote patchfile out to: ./migration.patch
 
+Recorded edition in 'Move.toml'
 External Command `diff -r -s sources migration_sources`:
 Files sources/mut_name.move and migration_sources/mut_name.move are identical
 External Command `diff -s Move.toml Move.toml.expected`:

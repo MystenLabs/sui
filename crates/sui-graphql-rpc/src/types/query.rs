@@ -227,7 +227,7 @@ impl Query {
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), id, None).await.extend()
+        Epoch::query(ctx, id, None).await.extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available

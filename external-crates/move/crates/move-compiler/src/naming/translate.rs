@@ -23,7 +23,10 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Context
@@ -110,7 +113,7 @@ pub(super) struct Context<'env> {
 impl<'env> Context<'env> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
@@ -676,10 +679,10 @@ impl std::fmt::Display for NominalBlockType {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: E::Program,
 ) -> N::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let mut context = Context::new(compilation_env, pre_compiled_lib.clone(), &prog);
     let E::Program { modules: emodules } = prog;
     let modules = modules(&mut context, emodules);
     let mut inner = N::Program_ { modules };

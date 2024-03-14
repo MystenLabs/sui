@@ -96,6 +96,7 @@ enum MigrationChange {
     AddMut,
     AddPublic,
     Backquote(String),
+    AddGlobalQual,
 }
 
 // All of the migration changes
@@ -804,6 +805,7 @@ impl Migration {
         const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
         const NEEDS_BACKTICKS: u8 = codes::Migration::NeedsRestrictedIdentifier as u8;
+        const NEEDS_GLOBAL_QUAL: u8 = codes::Migration::NeedsGlobalQualification as u8;
 
         let (file_id, line, col) = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
@@ -814,6 +816,9 @@ impl Migration {
             (CAT, NEEDS_BACKTICKS) => {
                 let old_name = diag.primary_msg().to_string();
                 line_change_entry.push((col, MigrationChange::Backquote(old_name)))
+            }
+            (CAT, NEEDS_GLOBAL_QUAL) => {
+                line_change_entry.push((col, MigrationChange::AddGlobalQual))
             }
             _ => unreachable!(),
         }
@@ -852,6 +857,10 @@ impl Migration {
                     }
                     MigrationChange::Backquote(old_name) => {
                         output = format!("`{}`{}{}", old_name, &rest[old_name.len()..], output);
+                        line_prefix = &line_prefix[..*col];
+                    }
+                    MigrationChange::AddGlobalQual => {
+                        output = format!("::{}{}", rest, output);
                         line_prefix = &line_prefix[..*col];
                     }
                 }

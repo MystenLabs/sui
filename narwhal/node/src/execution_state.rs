@@ -36,6 +36,10 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
+    fn last_executed_sub_dag_round(&self) -> u64 {
+        0
+    }
+
     fn last_executed_sub_dag_index(&self) -> u64 {
         0
     }

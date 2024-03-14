@@ -2,6 +2,7 @@
 source: consensus/config/tests/parameters_test.rs
 expression: parameters
 ---
+dag_state_cached_rounds: 100
 leader_timeout:
   secs: 0
   nanos: 250000000

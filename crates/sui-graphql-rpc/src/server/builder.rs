@@ -24,6 +24,7 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
+use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
@@ -296,6 +297,7 @@ impl ServerBuilder {
 
         builder = builder
             .context_data(config.service.clone())
+            .context_data(DataLoader::new(db.clone(), tokio::spawn))
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(Resolver::new_with_limits(
