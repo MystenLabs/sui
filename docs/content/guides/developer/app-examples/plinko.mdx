@@ -6,6 +6,14 @@ Plinko is an example implementation of the popular casino game. The Plinko game 
 
 Building an on-chain Plinko game shares a lot of similarities with the [Coin Flip](./coin-flip.mdx) game and [Blackjack](./blackjack.mdx) game. For that reason, this example covers only the smart contracts (Move modules) and frontend logic.
 
+:::info
+
+You can find the source files for this example in the [Plinko repo](https://github.com/MystenLabs/plinko-poc/tree/main) on GitHub.
+
+A version of the game is also deployed at [Mysten Plinko](https://plinko-poc.vercel.app/).
+
+:::
+
 ## Gameplay
 
 The Plinko game, implemented through smart contracts on the Sui blockchain, incorporates cryptographic techniques to ensure fairness and transparency. Utilizing a blend of BLS signatures, hash functions, and verifiable random function (VRF) inputs, the game calculates the trace path for each ball, determining the game's outcome based on the number of Plink balls a player chooses to drop.
@@ -39,7 +47,7 @@ sequenceDiagram
     UI-->>-Player: Displays game result, balls' descend, and winnings
 ```
 
-## Backend
+## Move modules
 
 Follow the comments in each module's code to understand the logic each creates.
 
@@ -777,3 +785,8 @@ The [`PlinkoSettings` component](https://github.com/MystenLabs/plinko-poc/blob/m
 ## User interaction and feedback
 
 Game Initiation: After selecting the desired number of balls and setting the bet size for each, players can initiate a new game by pressing the **Play** button. This action starts the game, with the button becoming disabled during gameplay to prevent new games from being initiated until the current game concludes and the last ball has reached the end. Links are also provided for players to view game details on the Sui explorer for transparency and engagement.
+
+## Related links
+
+- [Plinko repository](https://github.com/MystenLabs/plinko-poc/tree/main): The Plinko GitHub repository contains all the source files for this example.
+- [Mysten Plinko](https://plinko-poc.vercel.app/): A hosted version of the Plinko game.
