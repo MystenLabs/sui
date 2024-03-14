@@ -2,43 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { MultiSigPublicKey } from '../../src/multisig/publickey';
 import { TransactionBlock } from '../../src/transactions';
 import { getZkLoginSignature } from '../../src/zklogin';
 import { toZkLoginPublicIdentifier } from '../../src/zklogin/publickey';
-import { DEFAULT_RECIPIENT, setupWithFundedAddress, TestToolbox } from './utils/setup';
+import { DEFAULT_RECIPIENT, setupWithFundedAddress } from './utils/setup';
 
 describe('MultiSig with zklogin signature', () => {
-	let toolbox: TestToolbox;
-
-	beforeAll(async () => {
-		// Make sure the epoch is at least 1 so the JWK objects can be found when verifying zklogin signature.
-		const startTime = Date.now();
-		const timeout = 20000; // 20 seconds timeout
-		let epochInfo;
-
-		let retires = 50;
-		while (retires !== 0) {
-			epochInfo = await toolbox.client.getCurrentEpoch();
-			if (BigInt(epochInfo.epoch) > 1) {
-				break;
-			}
-
-			if (Date.now() - startTime > timeout) {
-				throw new Error('Timeout waiting for epoch 1');
-			}
-
-			// Wait for a short interval before checking again
-			await new Promise((resolve) => setTimeout(resolve, 200)); // Sleep for 200ms
-			retires -= 1;
-		}
-
-		expect(BigInt(epochInfo!.epoch)).toBeGreaterThan(1);
-	});
-
 	it('Execute tx with multisig with 1 sig and 1 zkLogin sig combined', async () => {
 		// set up default zklogin public identifier consistent with default zklogin proof.
 		let pkZklogin = toZkLoginPublicIdentifier(

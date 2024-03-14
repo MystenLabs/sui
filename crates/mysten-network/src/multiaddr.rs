@@ -4,7 +4,7 @@
 use eyre::{eyre, Result};
 use std::{
     borrow::Cow,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
 pub use ::multiaddr::Error;
@@ -106,9 +106,24 @@ impl Multiaddr {
         let mut new_address = ::multiaddr::Multiaddr::empty();
         for component in &self.0 {
             match component {
-                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
-                    std::net::Ipv4Addr::new(0, 0, 0, 0),
-                )),
+                multiaddr::Protocol::Ip4(_) => {
+                    new_address.push(multiaddr::Protocol::Ip4(Ipv4Addr::UNSPECIFIED))
+                }
+                c => new_address.push(c),
+            }
+        }
+        Self(new_address)
+    }
+
+    /// Set the ip address to `127.0.0.1`. For instance, it converts the following address
+    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/127.0.0.1/tcp/1500/http`.
+    pub fn localhost_ip_multi_address(&self) -> Self {
+        let mut new_address = ::multiaddr::Multiaddr::empty();
+        for component in &self.0 {
+            match component {
+                multiaddr::Protocol::Ip4(_) => {
+                    new_address.push(multiaddr::Protocol::Ip4(Ipv4Addr::LOCALHOST))
+                }
                 c => new_address.push(c),
             }
         }

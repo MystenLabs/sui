@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, panic, sync::Arc, thread::sleep, time::Duration};
+use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
 use anemo::{types::PeerInfo, PeerId, Response};
 use anemo_tower::auth::{AllowedPeers, RequireAuthorizationLayer};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use bytes::Bytes;
+use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use fastcrypto::traits::KeyPair as _;
 use tokio::sync::broadcast::error::RecvError;
@@ -256,10 +257,19 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         self.client.clone()
     }
 
-    fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>) {
+    async fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>) {
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
-        let address = authority.address.clone();
+        // Bind to localhost in unit tests since only local networking is needed.
+        // Bind to the unspecified address to allow the actual address to be assigned,
+        // in simtest and production.
+        cfg_if!(
+            if #[cfg(test)] {
+                let address = authority.address.localhost_ip_multi_address();
+            } else {
+                let address = authority.address.zero_ip_multi_address();
+            }
+        );
         let all_peer_ids = self
             .context
             .committee
@@ -329,10 +339,10 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
                     if retries_left <= 0 {
                         panic!("Failed to initialize AnemoNetwork at {addr}! Last error: {e:#?}");
                     }
-                    error!(
-                        "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
+                    warn!(
+                        "Address {addr} should be available for the Consensus service, retrying in one second: {e:#?}",
                     );
-                    sleep(Duration::from_secs(1));
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
         };
@@ -426,7 +436,9 @@ mod test {
         let manager_0 = AnemoManager::new(context_0.clone());
         let client_0 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
         let service_0 = Arc::new(Mutex::new(TestService::new()));
-        manager_0.install_service(keys[0].0.copy(), service_0.clone());
+        manager_0
+            .install_service(keys[0].0.copy(), service_0.clone())
+            .await;
 
         let context_1 = Arc::new(
             context
@@ -436,7 +448,9 @@ mod test {
         let manager_1 = AnemoManager::new(context_1.clone());
         let client_1 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
         let service_1 = Arc::new(Mutex::new(TestService::new()));
-        manager_1.install_service(keys[1].0.copy(), service_1.clone());
+        manager_1
+            .install_service(keys[1].0.copy(), service_1.clone())
+            .await;
 
         // Test that servers can receive client RPCs.
         client_0
@@ -469,7 +483,9 @@ mod test {
         let manager_4 = AnemoManager::new(context_4.clone());
         let client_4 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_4);
         let service_4 = Arc::new(Mutex::new(TestService::new()));
-        manager_4.install_service(keys_4[4].0.copy(), service_4.clone());
+        manager_4
+            .install_service(keys_4[4].0.copy(), service_4.clone())
+            .await;
 
         // client_4 should not be able to reach service_0 or service_1, because of the
         // AllowedPeers filter.

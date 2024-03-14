@@ -24,6 +24,7 @@ use move_symbol_pool::Symbol;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -150,7 +151,7 @@ impl UseFunsScope {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        _pre_compiled_lib: Option<&FullyCompiledProgram>,
+        _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);

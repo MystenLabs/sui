@@ -9,6 +9,11 @@ use tracing::{debug, info};
 
 #[test]
 fn reload() {
+    if std::env::var("RUST_LOG").is_ok() {
+        println!("RUST_LOG is set, this test may fail to capture logs. Skipping ...");
+        return;
+    }
+
     let log_file_prefix = "out.log";
     let mut config = TelemetryConfig::new();
     config.log_file = Some(log_file_prefix.to_owned());

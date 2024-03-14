@@ -37,7 +37,10 @@ pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput);
 
-    /// Load the last executed sub-dag index from storage
+    /// The last executed sub-dag / commit leader round.
+    fn last_executed_sub_dag_round(&self) -> u64;
+
+    /// The last executed sub-dag / commit index.
     fn last_executed_sub_dag_index(&self) -> u64;
 }
 

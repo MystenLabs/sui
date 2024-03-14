@@ -131,8 +131,25 @@ const guides = [
 					id: 'guides/developer/app-examples',
 				},
 				items: [
-					'guides/developer/app-examples/e2e-counter',
 					'guides/developer/app-examples/auction',
+					'guides/developer/app-examples/blackjack',
+					'guides/developer/app-examples/coin-flip',
+					'guides/developer/app-examples/e2e-counter',
+					{
+						type: 'category',
+						label: 'Oracles',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/app-examples/oracle',
+						},
+						items: [
+							'guides/developer/app-examples/weather-oracle',
+							'guides/developer/app-examples/meta-pricing-oracle',
+						],
+					},
+					'guides/developer/app-examples/plinko',
+					'guides/developer/app-examples/recaptcha',
+					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
 						label: 'Trading',
@@ -147,23 +164,7 @@ const guides = [
 						],
 					},
 					'guides/developer/app-examples/trusted-swap',
-					'guides/developer/app-examples/tic-tac-toe',
-					'guides/developer/app-examples/recaptcha',
 					'guides/developer/app-examples/turnip-town',
-					{
-						type: 'category',
-						label: 'Oracles',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/app-examples/oracle',
-						},
-						items: [
-							'guides/developer/app-examples/weather-oracle',
-							'guides/developer/app-examples/meta-pricing-oracle',
-						],
-					},
-					'guides/developer/app-examples/coin-flip',
-					'guides/developer/app-examples/blackjack',
 				],
 			},
 			'guides/developer/starter-templates',

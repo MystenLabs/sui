@@ -210,6 +210,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandl
             .await;
     }
 
+    fn last_executed_sub_dag_round(&self) -> u64 {
+        self.last_consensus_stats.index.last_committed_round
+    }
+
     fn last_executed_sub_dag_index(&self) -> u64 {
         self.last_consensus_stats.index.sub_dag_index
     }

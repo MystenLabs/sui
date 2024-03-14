@@ -400,6 +400,17 @@ impl Inner {
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
         self.consensus_adapter
             .submit(transaction, None, &epoch_store)?;
+
+        epoch_store
+            .metrics
+            .epoch_random_beacon_dkg_message_time_ms
+            .set(
+                self.dkg_start_time
+                    .get()
+                    .unwrap() // already set above
+                    .elapsed()
+                    .as_millis() as i64,
+            );
         Ok(())
     }
 
@@ -434,6 +445,14 @@ impl Inner {
                     );
                     self.consensus_adapter
                         .submit(transaction, None, &epoch_store)?;
+
+                    let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
+                    if let Some(elapsed) = elapsed {
+                        epoch_store
+                            .metrics
+                            .epoch_random_beacon_dkg_confirmation_time_ms
+                            .set(elapsed as i64);
+                    }
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
