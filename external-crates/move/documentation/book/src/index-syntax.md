@@ -85,7 +85,7 @@ let m_0_0 = &mut mat[0, 0];
     // translates to matrix::borrow_mut(&mut mat, 0, 0)
 ``
 
-Index expressions may also be intermixed with field accesses:
+Index expressions might also be intermixed with field accesses:
 
 ```move
 public struct V { v: vector<u64> }
