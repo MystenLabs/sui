@@ -20,7 +20,10 @@ use fastcrypto::{
 };
 
 use move_core_types::language_storage::TypeTag;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{
+    lock_file::{self, LockFile},
+    BuildConfig as MoveBuildConfig,
+};
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -32,9 +35,10 @@ use shared_crypto::intent::Intent;
 use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Coin, DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiRawData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    get_new_package_obj_from_response, Coin, DynamicFieldPage, SuiCoinMetadata, SuiData,
+    SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
@@ -1025,8 +1029,8 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
-                    build_config,
-                    package_path,
+                    build_config.clone(),
+                    package_path.clone(),
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
@@ -1042,13 +1046,25 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Publish
+                );
+                let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                let install_dir = build_config.install_dir.clone();
+                let lock_file = build_config.lock_file.clone();
+                update_lock_file(
+                    &context,
+                    LockCommand::Publish,
+                    install_dir,
+                    lock_file,
+                    &result,
                 )
+                .await?;
+                result
             }
 
             SuiClientCommands::VerifyBytecodeMeter {
@@ -2431,4 +2447,57 @@ fn pretty_print_balance(
         .build()
         .with(TableStyle::blank())
         .to_string()]);
+}
+
+pub enum LockCommand {
+    Publish,
+    Upgrade,
+}
+
+async fn update_lock_file(
+    context: &WalletContext,
+    command: LockCommand,
+    install_dir: Option<PathBuf>,
+    lock_file: Option<PathBuf>,
+    result: &SuiClientCommandResult,
+) -> Result<(), anyhow::Error> {
+    let chain_identifier = context
+        .get_client()
+        .await?
+        .read_api()
+        .get_chain_identifier()
+        .await?;
+    let response = result.tx_block_response().unwrap();
+    let (original_id, version, _odigest) = get_new_package_obj_from_response(&response).unwrap();
+    info!("chain: {:#?}", chain_identifier);
+    info!("pkg object: {} {}", version, original_id);
+    let (install_dir, lock_file) = match (install_dir, lock_file) {
+        (Some(install_dir), Some(lock_file)) => (install_dir, lock_file),
+        (None, Some(lock_file)) => (PathBuf::from("."), lock_file),
+        (Some(_), None) => bail!("can't progress: no lock"),
+        _ => bail!("can't progress, no anything"),
+    };
+    info!("Writing to lock file at {:#?}", lock_file);
+    let mut lock = LockFile::from(install_dir.clone(), &lock_file)?;
+    match command {
+        LockCommand::Publish => lock_file::schema::update_managed_address(
+            &mut lock,
+            /* environment */ "test".into(),
+            lock_file::schema::ManagedAddressUpdate::Published {
+                chain_id: chain_identifier,
+                original_id: original_id.to_string(),
+            },
+        ),
+        LockCommand::Upgrade => lock_file::schema::update_managed_address(
+            &mut lock,
+            /* environment */ "test".into(),
+            lock_file::schema::ManagedAddressUpdate::Upgraded {
+                latest_id: original_id.to_string(),
+                version: version.into(),
+            },
+        ),
+    }?;
+    // let _mutx = PackageLock::lock(); FIXME: can't access in sui crate
+    lock.commit(lock_file)?;
+    Ok(())
 }
