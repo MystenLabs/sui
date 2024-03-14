@@ -450,9 +450,10 @@ fun set_multiplier_vector(house_data: &mut HouseData, v: vector<u64>) {
     vector::append<u64>(&mut house_data.multiplier, v);
 }
 
-public fun update_multiplier_vector(house_data: &mut HouseData, v: vector<u64>) {
-    house_data.multiplier = vector::empty<u64>();
-    set_multiplier_vector(house_data, v);
+public fun update_multiplier_vector(house_data: &mut HouseData, v: vector<u64>, ctx: &mut TxContext) { 
+   assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse); 
+   house_data.multiplier = vector::empty<u64>(); 
+   set_multiplier_vector(house_data, v); 
 }
 
 /// Function used to top up the house balance. Can be called by anyone.
