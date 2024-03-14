@@ -89,12 +89,12 @@ impl Domain {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub struct NameServiceConfig {
     pub package_address: SuiAddress,
     pub registry_id: ObjectID,
     pub reverse_registry_id: ObjectID,
-    domain_type_tag: TypeTag,
 }
 
 impl NameServiceConfig {
@@ -103,21 +103,20 @@ impl NameServiceConfig {
         registry_id: ObjectID,
         reverse_registry_id: ObjectID,
     ) -> Self {
-        let domain_type_tag = Domain::type_(package_address);
         Self {
             package_address,
             registry_id,
             reverse_registry_id,
-            domain_type_tag: TypeTag::Struct(Box::new(domain_type_tag)),
         }
     }
 
     pub fn record_field_id(&self, domain: &Domain) -> ObjectID {
+        let domain_type_tag = Domain::type_(self.package_address);
         let domain_bytes = bcs::to_bytes(domain).unwrap();
 
         sui_types::dynamic_field::derive_dynamic_field_id(
             self.registry_id,
-            &self.domain_type_tag,
+            &TypeTag::Struct(Box::new(domain_type_tag)),
             &domain_bytes,
         )
         .unwrap()
