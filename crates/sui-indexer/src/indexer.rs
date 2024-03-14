@@ -5,13 +5,16 @@ use std::env;
 
 use anyhow::Result;
 use prometheus::Registry;
+use tokio::sync::oneshot;
 use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
+use sui_data_ingestion_core::{
+    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
+};
 
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
-use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler::new_handlers;
 use crate::handlers::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
 use crate::indexer_reader::IndexerReader;
@@ -20,6 +23,11 @@ use crate::store::IndexerStore;
 use crate::IndexerConfig;
 
 const DOWNLOAD_QUEUE_SIZE: usize = 200;
+const INGESTION_READER_TIMEOUT_SECS: u64 = 20;
+// Limit indexing parallelism on big checkpoints to avoid OOM,
+// by limiting the total size of batch checkpoints to ~20MB.
+// On testnet, most checkpoints are < 200KB, some can go up to 50MB.
+const CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT: usize = 20000000;
 
 pub struct Indexer;
 
@@ -44,33 +52,26 @@ impl Indexer {
             env!("CARGO_PKG_VERSION")
         );
 
-        // None will be returned when checkpoints table is empty.
-        let last_seq_from_db = store
+        let watermark = store
             .get_latest_checkpoint_sequence_number()
             .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB");
+            .expect("Failed to get latest tx checkpoint sequence number from DB")
+            .map(|seq| seq + 1)
+            .unwrap_or_default();
         let download_queue_size = env::var("DOWNLOAD_QUEUE_SIZE")
             .unwrap_or_else(|_| DOWNLOAD_QUEUE_SIZE.to_string())
             .parse::<usize>()
             .expect("Invalid DOWNLOAD_QUEUE_SIZE");
-        let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
-            mysten_metrics::metered_channel::channel(
-                download_queue_size,
-                &mysten_metrics::get_metrics()
-                    .unwrap()
-                    .channels
-                    .with_label_values(&["checkpoint_tx_downloading"]),
-            );
+        let ingestion_reader_timeout_secs = env::var("INGESTION_READER_TIMEOUT_SECS")
+            .unwrap_or_else(|_| INGESTION_READER_TIMEOUT_SECS.to_string())
+            .parse::<u64>()
+            .expect("Invalid INGESTION_READER_TIMEOUT_SECS");
+        let data_limit = std::env::var("CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT")
+            .unwrap_or(CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT.to_string())
+            .parse::<usize>()
+            .unwrap();
 
-        let rest_api_url = format!("{}/rest", config.rpc_client_url);
-        let rest_client = sui_rest_api::Client::new(&rest_api_url);
-        let fetcher = CheckpointFetcher::new(
-            rest_client.clone(),
-            last_seq_from_db,
-            downloaded_checkpoint_data_sender,
-            metrics.clone(),
-        );
-        spawn_monitored_task!(fetcher.run());
+        let rest_client = sui_rest_api::Client::new(format!("{}/rest", config.rpc_client_url));
 
         let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
             rest_client.clone(),
@@ -80,16 +81,34 @@ impl Indexer {
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, rest_client.clone(), metrics.clone()).await?;
-        crate::framework::runner::run(
-            mysten_metrics::metered_channel::ReceiverStream::new(
-                downloaded_checkpoint_data_receiver,
-            ),
-            vec![Box::new(checkpoint_handler)],
-            metrics,
-        )
-        .await;
-
+        #[allow(unused_variables)]
+        let (exit_sender, exit_receiver) = oneshot::channel();
+        let mut executor = IndexerExecutor::new(
+            ShimProgressStore(watermark),
+            1,
+            DataIngestionMetrics::new(&Registry::new()),
+        );
+        let worker = new_handlers(store, rest_client, metrics, watermark).await?;
+        let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
+        let extra_reader_options = ReaderOptions {
+            batch_size: download_queue_size,
+            timeout_secs: ingestion_reader_timeout_secs,
+            data_limit,
+            ..Default::default()
+        };
+        executor.register(worker_pool).await?;
+        executor
+            .run(
+                config
+                    .data_ingestion_path
+                    .clone()
+                    .unwrap_or(tempfile::tempdir().unwrap().into_path()),
+                config.remote_store_url.clone(),
+                vec![],
+                extra_reader_options,
+                exit_receiver,
+            )
+            .await?;
         Ok(())
     }
 
