@@ -7,7 +7,9 @@ concrete value at runtime (there are no tuples in the bytecode), and as a result
 limited: 
 - They can only appear in expressions (usually in the return position for a function).
 - They cannot be bound to local variables.
-cannot be bound to local variables; they cannot be stored in structs; and tuple types cannot be used
+- They cannot be bound to local variables.
+- They cannot be stored in structs.
+- Tuple types cannot be used to instantiate generics.
 
 Similarly, [unit `()`](https://en.wikipedia.org/wiki/Unit_type) is a type created by the Move source
 language in order to be expression based. The unit value `()` does not result in any runtime value.

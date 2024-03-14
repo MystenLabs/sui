@@ -68,8 +68,7 @@ Friend declarations are subject to the following rules:
   //                      ^^^^^^^^^^^^^^^^^ Unbound module '0x42::nonexistent'
   ```
 
-- Friend modules must be within the same account address. (Note: this is not a technical requirement
-  but rather a policy decision which _may_ be relaxed later.)
+- Friend modules must be within the same account address.
 
   ```move=
   module 0x42::m {}
