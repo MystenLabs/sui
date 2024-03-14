@@ -2,7 +2,7 @@
 
 Syntax attributes establish a way to allow programmers to define operations for syntax-like usage in
 Move. Our first syntax method, `index`, allows programmers to define a group of operations that
-may be used as custom index accessors for their datatypes. These definitions allow programmers to
+can be used as custom index accessors for their datatypes. These definitions allow programmers to
 use index syntax, such as accessing a matrix element as `m[i,j]`, all based on user definitions.
 These definitions are bespoke per-type and available implicitly for any programmer using the type,
 easing usage across the language.
