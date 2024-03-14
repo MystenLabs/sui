@@ -67,7 +67,7 @@ adhere to the following rules:
 2. The designated functions have `public` visibility.
 3. The functions take a reference type as its "subject" type (its first argument) and returns a
    matching references type (`mut` if the subject was `mut`).
-4. Each type has only a single mutable and single immuable definition.
+4. Each type has only a single mutable and single immutable definition.
 5. Immutable and mutable versions have type agreement:
     - The subject types match, differing only in mutability.
     - The return types match the mutability of their subject types.
@@ -97,8 +97,8 @@ public fun borrow<Element>(v: &vector<Element>, i: u64): &Element {
 
 ### Mutable Accessor
 
-The mutable index syntax method is the dual of the immuttable one, allowing for both read and write
-opreations. It takes a mutable reference of the subject type and returns an mutable reference to
+The mutable index syntax method is the dual of the immutable one, allowing for both read and write
+operations. It takes a mutable reference of the subject type and returns an mutable reference to
 the element type. The `borrow_mut` function defined in `std::vector` is an example of this:
 
 ```move
