@@ -335,7 +335,7 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
+hyper-rustls = { version = "0.24", features = ["webpki-roots", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
