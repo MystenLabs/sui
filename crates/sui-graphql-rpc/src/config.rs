@@ -124,39 +124,11 @@ pub struct Limits {
 #[derive(Debug)]
 pub struct Version(pub &'static str);
 
-impl Limits {
-    /// Extract limits for the package resolver.
-    pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
-        sui_package_resolver::Limits {
-            max_type_argument_depth: self.max_type_argument_depth as usize,
-            max_type_argument_width: self.max_type_argument_width as usize,
-            max_type_nodes: self.max_type_nodes as usize,
-            max_move_value_depth: self.max_move_value_depth as usize,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Ide {
     #[serde(default)]
     pub(crate) ide_title: String,
-}
-
-impl Default for Ide {
-    fn default() -> Self {
-        Self {
-            ide_title: DEFAULT_IDE_TITLE.to_string(),
-        }
-    }
-}
-
-impl Ide {
-    pub fn new(ide_title: Option<String>) -> Self {
-        Self {
-            ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -168,67 +140,30 @@ pub struct Experiments {
     test_flag: bool,
 }
 
-impl ConnectionConfig {
-    pub fn new(
-        port: Option<u16>,
-        host: Option<String>,
-        db_url: Option<String>,
-        db_pool_size: Option<u32>,
-        prom_url: Option<String>,
-        prom_port: Option<u16>,
-    ) -> Self {
-        let default = Self::default();
-        Self {
-            port: port.unwrap_or(default.port),
-            host: host.unwrap_or(default.host),
-            db_url: db_url.unwrap_or(default.db_url),
-            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
-            prom_url: prom_url.unwrap_or(default.prom_url),
-            prom_port: prom_port.unwrap_or(default.prom_port),
-        }
-    }
-
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: DEFAULT_SERVER_DB_URL.to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn ci_integration_test_cfg_with_db_name(
-        db_name: String,
-        port: u16,
-        prom_port: u16,
-    ) -> Self {
-        Self {
-            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
-            port,
-            prom_port,
-            ..Default::default()
-        }
-    }
-
-    pub fn db_name(&self) -> String {
-        self.db_url.split('/').last().unwrap().to_string()
-    }
-
-    pub fn db_url(&self) -> String {
-        self.db_url.clone()
-    }
-
-    pub fn db_pool_size(&self) -> u32 {
-        self.db_pool_size
-    }
-
-    pub fn server_address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
-    }
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+pub struct InternalFeatureConfig {
+    #[serde(default)]
+    pub(crate) query_limits_checker: bool,
+    #[serde(default)]
+    pub(crate) feature_gate: bool,
+    #[serde(default)]
+    pub(crate) logger: bool,
+    #[serde(default)]
+    pub(crate) query_timeout: bool,
+    #[serde(default)]
+    pub(crate) metrics: bool,
+    #[serde(default)]
+    pub(crate) tracing: bool,
+    #[serde(default)]
+    pub(crate) apollo_tracing: bool,
+    #[serde(default)]
+    pub(crate) open_telemetry: bool,
 }
 
-impl ServiceConfig {
-    pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
-        toml::de::from_str::<Self>(contents)
-    }
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+pub struct TxExecFullNodeConfig {
+    #[serde(default)]
+    pub(crate) node_rpc_url: Option<String>,
 }
 
 /// The enabled features and service limits configured by the server.
@@ -321,6 +256,103 @@ impl ServiceConfig {
     }
 }
 
+impl TxExecFullNodeConfig {
+    pub fn new(node_rpc_url: Option<String>) -> Self {
+        Self { node_rpc_url }
+    }
+}
+
+impl ConnectionConfig {
+    pub fn new(
+        port: Option<u16>,
+        host: Option<String>,
+        db_url: Option<String>,
+        db_pool_size: Option<u32>,
+        prom_url: Option<String>,
+        prom_port: Option<u16>,
+    ) -> Self {
+        let default = Self::default();
+        Self {
+            port: port.unwrap_or(default.port),
+            host: host.unwrap_or(default.host),
+            db_url: db_url.unwrap_or(default.db_url),
+            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
+            prom_url: prom_url.unwrap_or(default.prom_url),
+            prom_port: prom_port.unwrap_or(default.prom_port),
+        }
+    }
+
+    pub fn ci_integration_test_cfg() -> Self {
+        Self {
+            db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn ci_integration_test_cfg_with_db_name(
+        db_name: String,
+        port: u16,
+        prom_port: u16,
+    ) -> Self {
+        Self {
+            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
+            port,
+            prom_port,
+            ..Default::default()
+        }
+    }
+
+    pub fn db_name(&self) -> String {
+        self.db_url.split('/').last().unwrap().to_string()
+    }
+
+    pub fn db_url(&self) -> String {
+        self.db_url.clone()
+    }
+
+    pub fn db_pool_size(&self) -> u32 {
+        self.db_pool_size
+    }
+
+    pub fn server_address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+}
+
+impl ServiceConfig {
+    pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
+        toml::de::from_str::<Self>(contents)
+    }
+}
+
+impl Limits {
+    /// Extract limits for the package resolver.
+    pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
+        sui_package_resolver::Limits {
+            max_type_argument_depth: self.max_type_argument_depth as usize,
+            max_type_argument_width: self.max_type_argument_width as usize,
+            max_type_nodes: self.max_type_nodes as usize,
+            max_move_value_depth: self.max_move_value_depth as usize,
+        }
+    }
+}
+
+impl Ide {
+    pub fn new(ide_title: Option<String>) -> Self {
+        Self {
+            ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
+        }
+    }
+}
+
+impl Default for Ide {
+    fn default() -> Self {
+        Self {
+            ide_title: DEFAULT_IDE_TITLE.to_string(),
+        }
+    }
+}
+
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
@@ -353,26 +385,6 @@ impl Default for Limits {
     }
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
-pub struct InternalFeatureConfig {
-    #[serde(default)]
-    pub(crate) query_limits_checker: bool,
-    #[serde(default)]
-    pub(crate) feature_gate: bool,
-    #[serde(default)]
-    pub(crate) logger: bool,
-    #[serde(default)]
-    pub(crate) query_timeout: bool,
-    #[serde(default)]
-    pub(crate) metrics: bool,
-    #[serde(default)]
-    pub(crate) tracing: bool,
-    #[serde(default)]
-    pub(crate) apollo_tracing: bool,
-    #[serde(default)]
-    pub(crate) open_telemetry: bool,
-}
-
 impl Default for InternalFeatureConfig {
     fn default() -> Self {
         Self {
@@ -385,18 +397,6 @@ impl Default for InternalFeatureConfig {
             apollo_tracing: false,
             open_telemetry: false,
         }
-    }
-}
-
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
-pub struct TxExecFullNodeConfig {
-    #[serde(default)]
-    pub(crate) node_rpc_url: Option<String>,
-}
-
-impl TxExecFullNodeConfig {
-    pub fn new(node_rpc_url: Option<String>) -> Self {
-        Self { node_rpc_url }
     }
 }
 
