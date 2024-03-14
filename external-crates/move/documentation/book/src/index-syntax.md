@@ -9,7 +9,7 @@ easing usage across the language.
 
 ## Overview and Summary
 
-Consider a matrix type that uses a vector of vectors to represent its values. We can write a small
+Consider a `Matrix` type that uses a vector of vectors to represent its values. We can write a small
 library using `index` syntax annotations on its `borrow` functions as follows:
 
 ```
