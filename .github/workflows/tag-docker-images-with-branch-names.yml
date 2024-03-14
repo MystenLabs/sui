@@ -1,0 +1,31 @@
+name: Tag docker images with branch names
+
+on:
+  push:
+    branches:
+      - devnet
+      - testnet
+      - mainnet
+
+  workflow_call:
+    inputs:
+      branch_name:
+        description: 'devnet, testnet or mainnet'
+        type: string
+        required: true   
+
+env:
+  BRANCH_NAME: "${{ github.event.inputs.branch_name || github.ref }}"
+
+jobs:
+  # Tag all sui docker images with devnet, testnet or mainnet tags
+  tag-docker-hub-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: tag-docker-images
+          client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.BRANCH_NAME }}"}'
