@@ -4,14 +4,15 @@ Move offers two constructs for looping: `while` and `loop`.
 
 ## `while` loops
 
-The `while` construct repeats the body (an expression of type unit) until the condition (an expression of type `bool`) evaluates to `false`.
+The `while` construct repeats the body (an expression of type unit) until the condition (an
+expression of type `bool`) evaluates to `false`.
 
-Here is an example of simple `while` loop that computes the sum of the numbers from `1` to `n`:
+Here is an example of simple `while` loop that computes the sum of the numbers from `0` to `n`:
 
 ```move
 fun sum(n: u64): u64 {
-    let sum = 0;
-    let i = 1;
+    let mut sum = 0;
+    let muy i = 1;
     while (i <= n) {
         sum = sum + i;
         i = i + 1
@@ -21,9 +22,9 @@ fun sum(n: u64): u64 {
 }
 ```
 
-Infinite loops are allowed:
+Infinite `while` loops are allowed:
 
-```move=
+```move
 fun foo() {
     while (true) { }
 }
@@ -31,12 +32,13 @@ fun foo() {
 
 ### `break`
 
-The `break` expression can be used to exit a loop before the condition evaluates to `false`. For example, this loop uses `break` to find the smallest factor of `n` that's greater than 1:
+The `break` expression can be used to exit a loop before the condition evaluates to `false`. For
+example, this loop uses `break` to find the smallest factor of `n` that's greater than 1:
 
 ```move
 fun smallest_factor(n: u64): u64 {
     // assuming the input is not 0 or 1
-    let i = 2;
+    let mut i = 2;
     while (i <= n) {
         if (n % i == 0) break;
         i = i + 1
@@ -50,12 +52,13 @@ The `break` expression cannot be used outside of a loop.
 
 ### `continue`
 
-The `continue` expression skips the rest of the loop and continues to the next iteration. This loop uses `continue` to compute the sum of `1, 2, ..., n`, except when the number is divisible by 10:
+The `continue` expression skips the rest of the loop and continues to the next iteration. This loop
+uses `continue` to compute the sum of `1, 2, ..., n`, except when the number is divisible by 10:
 
 ```move
 fun sum_intermediate(n: u64): u64 {
-    let sum = 0;
-    let i = 0;
+    let mut sum = 0;
+    let mut i = 0;
     while (i < n) {
         i = i + 1;
         if (i % 10 == 0) continue;
@@ -70,14 +73,15 @@ The `continue` expression cannot be used outside of a loop.
 
 ### The type of `break` and `continue`
 
-`break` and `continue`, much like `return` and `abort`, can have any type. The following examples illustrate where this flexible typing can be helpful:
+`break` and `continue`, much like `return` and `abort`, can have any type. The following examples
+illustrate where this flexible typing can be helpful:
 
 ```move
 fun pop_smallest_while_not_equal(
     v1: vector<u64>,
     v2: vector<u64>,
 ): vector<u64> {
-    let result = vector::empty();
+    let mut result = vector[];
     while (!vector::is_empty(&v1) && !vector::is_empty(&v2)) {
         let u1 = *vector::borrow(&v1, vector::length(&v1) - 1);
         let u2 = *vector::borrow(&v2, vector::length(&v2) - 1);
@@ -122,7 +126,7 @@ Without a `break`, the loop will continue forever
 
 ```move
 fun foo() {
-    let i = 0;
+    let mut i = 0;
     loop { i = i + 1 }
 }
 ```
@@ -131,8 +135,8 @@ Here is an example that uses `loop` to write the `sum` function:
 
 ```move
 fun sum(n: u64): u64 {
-    let sum = 0;
-    let i = 0;
+    let mut sum = 0;
+    let mut i = 0;
     loop {
         i = i + 1;
         if (i > n) break;
@@ -143,7 +147,8 @@ fun sum(n: u64): u64 {
 }
 ```
 
-As you might expect, `continue` can also be used inside a `loop`. Here is `sum_intermediate` from above rewritten using `loop` instead of `while`
+As you might expect, `continue` can also be used inside a `loop`. Here is `sum_intermediate` from
+above rewritten using `loop` instead of `while`.
 
 ```move
 fun sum_intermediate(n: u64): u64 {
@@ -175,7 +180,8 @@ If a `loop` contains a `break`, the expression has type unit `()`
 let () = loop { if (i < 10) i = i + 1 else break };
 ```
 
-If `loop` does not have a `break`, `loop` can have any type much like `return`, `abort`, `break`, and `continue`.
+If `loop` does not have a `break`, `loop` can have any type much like `return`, `abort`, `break`,
+and `continue`.
 
 ```move
 (loop (): u64);
