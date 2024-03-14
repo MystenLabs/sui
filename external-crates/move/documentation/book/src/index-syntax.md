@@ -69,7 +69,7 @@ let mat = matrix::make_matrix(...);
 let m_0_0 = mat[0, 0];
 ```
 
-During compilation, the compiler will translate these into the appropriate function invocations
+During compilation, the compiler translates these into the appropriate function invocations
 based on the position and mutable usage of the expression:
 
 ```move
