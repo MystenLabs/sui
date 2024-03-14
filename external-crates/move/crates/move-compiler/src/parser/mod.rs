@@ -85,12 +85,14 @@ pub(crate) fn parse_program(
         named_address_map,
     } in deps
     {
-        let (defs, _, _) = parse_file(&path, compilation_env, &mut files, package)?;
+        let (defs, dep_comment_map, fhash) =
+            parse_file(&path, compilation_env, &mut files, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
             def,
         }));
+        source_comments.insert(fhash, dep_comment_map);
     }
 
     let pprog = parser::ast::Program {
