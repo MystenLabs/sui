@@ -28,6 +28,12 @@
 
 ## Resource `Versioned`
 
+A wrapper type that supports versioning of the inner type.
+The inner type is a dynamic field of the Versioned object, and is keyed using version.
+User of this type could load the inner object using corresponding type based on the version.
+You can also upgrade the inner object to a new type version.
+If you want to support lazy upgrade of the inner type, one caveat is that all APIs would have
+to use mutable reference even if it's a read-only API.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> <b>has</b> store, key
@@ -61,6 +67,8 @@
 
 ## Struct `VersionChangeCap`
 
+Represents a hot potato object generated when we take out the dynamic field.
+This is to make sure that we always put a new value back.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a>
@@ -97,6 +105,7 @@
 
 <a name="0x2_versioned_EInvalidUpgrade"></a>
 
+Failed to upgrade the inner object due to invalid capability or new version.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>: u64 = 0;
@@ -108,6 +117,7 @@
 
 ## Function `create`
 
+Create a new Versioned object that contains a initial value of type <code>T</code> with an initial version.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_create">create</a>&lt;T: store&gt;(init_version: u64, init_value: T, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>
@@ -137,6 +147,7 @@
 
 ## Function `version`
 
+Get the current version of the inner type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_version">version</a>(self: &<a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): u64
@@ -161,6 +172,8 @@
 
 ## Function `load_value`
 
+Load the inner value based on the current version. Caller specifies an expected type T.
+If the type mismatch, the load will fail.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_load_value">load_value</a>&lt;T: store&gt;(self: &<a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): &T
@@ -185,6 +198,7 @@
 
 ## Function `load_value_mut`
 
+Similar to load_value, but return a mutable reference.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">load_value_mut</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): &<b>mut</b> T
@@ -209,6 +223,8 @@
 
 ## Function `remove_value_for_upgrade`
 
+Take the inner object out for upgrade. To ensure we always upgrade properly, a capability object is returned
+and must be used when we upgrade.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_remove_value_for_upgrade">remove_value_for_upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): (T, <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_VersionChangeCap">versioned::VersionChangeCap</a>)
@@ -239,6 +255,8 @@
 
 ## Function `upgrade`
 
+Upgrade the inner object with a new version and new value. Must use the capability returned
+by calling remove_value_for_upgrade.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>, new_version: u64, new_value: T, cap: <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_VersionChangeCap">versioned::VersionChangeCap</a>)
@@ -267,6 +285,7 @@
 
 ## Function `destroy`
 
+Destroy this Versioned container, and return the inner object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_destroy">destroy</a>&lt;T: store&gt;(self: <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): T

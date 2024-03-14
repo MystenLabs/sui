@@ -3,6 +3,8 @@
 
 # Module `0x1::ascii`
 
+The <code>ASCII</code> module defines basic string and char newtypes in Move that verify
+that characters are valid ASCII, and that strings consist of only valid ASCII characters.
 
 
 -  [Struct `String`](#0x1_ascii_String)
@@ -31,6 +33,11 @@
 
 ## Struct `String`
 
+The <code><a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">String</a></code> struct holds a vector of bytes that all represent
+valid ASCII characters. Note that these ASCII characters may not all
+be printable. To determine if a <code><a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">String</a></code> contains only "printable"
+characters you should use the <code>all_characters_printable</code> predicate
+defined in this module.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">String</a> <b>has</b> <b>copy</b>, drop, store
@@ -58,6 +65,7 @@
 
 ## Struct `Char`
 
+An ASCII character.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_Char">Char</a> <b>has</b> <b>copy</b>, drop, store
@@ -88,6 +96,7 @@
 
 <a name="0x1_ascii_EINVALID_ASCII_CHARACTER"></a>
 
+An invalid ASCII character was encountered when creating an ASCII string.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>: u64 = 65536;
@@ -99,6 +108,7 @@
 
 ## Function `char`
 
+Convert a <code>byte</code> into a <code><a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_Char">Char</a></code> that is checked to make sure it is valid ASCII.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_char">char</a>(byte: u8): <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_Char">ascii::Char</a>
@@ -124,6 +134,8 @@
 
 ## Function `string`
 
+Convert a vector of bytes <code>bytes</code> into an <code><a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">String</a></code>. Aborts if
+<code>bytes</code> contains non-ASCII characters.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
@@ -153,6 +165,9 @@
 
 ## Function `try_string`
 
+Convert a vector of bytes <code>bytes</code> into an <code><a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">String</a></code>. Returns
+<code>Some(&lt;ascii_string&gt;)</code> if the <code>bytes</code> contains all valid ASCII
+characters. Otherwise returns <code>None</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_try_string">try_string</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>&gt;
@@ -184,6 +199,8 @@
 
 ## Function `all_characters_printable`
 
+Returns <code><b>true</b></code> if all characters in <code><a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a></code> are printable characters
+Returns <code><b>false</b></code> otherwise. Not all <code><a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">String</a></code>s are printable strings.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_all_characters_printable">all_characters_printable</a>(<a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a>: &<a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): bool
@@ -287,6 +304,7 @@
 
 ## Function `as_bytes`
 
+Get the inner bytes of the <code><a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a></code> as a reference
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>(<a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a>: &<a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): &<a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -311,6 +329,7 @@
 
 ## Function `into_bytes`
 
+Unpack the <code><a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a></code> to get its backing bytes
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_into_bytes">into_bytes</a>(<a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a>: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -336,6 +355,7 @@
 
 ## Function `byte`
 
+Unpack the <code>char</code> into its underlying byte.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_byte">byte</a>(char: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_Char">ascii::Char</a>): u8
@@ -361,6 +381,7 @@
 
 ## Function `is_valid_char`
 
+Returns <code><b>true</b></code> if <code>b</code> is a valid ASCII character. Returns <code><b>false</b></code> otherwise.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(b: u8): bool
@@ -385,6 +406,7 @@
 
 ## Function `is_printable_char`
 
+Returns <code><b>true</b></code> if <code>byte</code> is an printable ASCII character. Returns <code><b>false</b></code> otherwise.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte: u8): bool

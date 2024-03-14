@@ -3,6 +3,7 @@
 
 # Module `0x1::string`
 
+The <code><a href="../../dependencies/move-stdlib/string.md#0x1_string">string</a></code> module defines the <code><a href="../../dependencies/move-stdlib/string.md#0x1_string_String">String</a></code> type which represents UTF8 encoded strings.
 
 
 -  [Struct `String`](#0x1_string_String)
@@ -36,6 +37,7 @@
 
 ## Struct `String`
 
+A <code><a href="../../dependencies/move-stdlib/string.md#0x1_string_String">String</a></code> holds a sequence of bytes which is guaranteed to be in utf8 format.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">String</a> <b>has</b> <b>copy</b>, drop, store
@@ -66,6 +68,7 @@
 
 <a name="0x1_string_EINVALID_INDEX"></a>
 
+Index out of range.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_EINVALID_INDEX">EINVALID_INDEX</a>: u64 = 2;
@@ -75,6 +78,7 @@
 
 <a name="0x1_string_EINVALID_UTF8"></a>
 
+An invalid UTF8 encoding.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_EINVALID_UTF8">EINVALID_UTF8</a>: u64 = 1;
@@ -86,6 +90,7 @@
 
 ## Function `utf8`
 
+Creates a new string from a sequence of bytes. Aborts if the bytes do not represent valid utf8.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_utf8">utf8</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
@@ -111,6 +116,7 @@
 
 ## Function `from_ascii`
 
+Convert an ASCII string to a UTF8 string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_from_ascii">from_ascii</a>(s: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
@@ -135,6 +141,8 @@
 
 ## Function `to_ascii`
 
+Convert an UTF8 string to an ASCII string.
+Aborts if <code>s</code> is not valid ASCII
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_to_ascii">to_ascii</a>(s: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>): <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
@@ -160,6 +168,7 @@
 
 ## Function `try_utf8`
 
+Tries to create a new string from a sequence of bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_try_utf8">try_utf8</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>&gt;
@@ -188,6 +197,7 @@
 
 ## Function `bytes`
 
+Returns a reference to the underlying byte vector.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_bytes">bytes</a>(s: &<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>): &<a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -212,6 +222,7 @@
 
 ## Function `is_empty`
 
+Checks whether this string is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_is_empty">is_empty</a>(s: &<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>): bool
@@ -236,6 +247,7 @@
 
 ## Function `length`
 
+Returns the length of this string, in bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_length">length</a>(s: &<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>): u64
@@ -260,6 +272,7 @@
 
 ## Function `append`
 
+Appends a string.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_append">append</a>(s: &<b>mut</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, r: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>)
@@ -284,6 +297,7 @@
 
 ## Function `append_utf8`
 
+Appends bytes which must be in valid utf8 format.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_append_utf8">append_utf8</a>(s: &<b>mut</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;)
@@ -308,6 +322,8 @@
 
 ## Function `insert`
 
+Insert the other string at the byte index in given string. The index must be at a valid utf8 char
+boundary.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_insert">insert</a>(s: &<b>mut</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, at: u64, o: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>)
@@ -339,6 +355,9 @@
 
 ## Function `sub_string`
 
+Returns a sub-string using the given byte indices, where <code>i</code> is the first byte position and <code>j</code> is the start
+of the first byte not included (or the length of the string). The indices must be at valid utf8 char boundaries,
+guaranteeing that the result is valid utf8.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(s: &<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, i: u64, j: u64): <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
@@ -369,6 +388,7 @@
 
 ## Function `index_of`
 
+Computes the index of the first occurrence of a string. Returns <code><a href="../../dependencies/move-stdlib/string.md#0x1_string_length">length</a>(s)</code> if no occurrence found.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/move-stdlib/string.md#0x1_string_index_of">index_of</a>(s: &<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, r: &<a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>): u64
