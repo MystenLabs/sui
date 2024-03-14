@@ -194,7 +194,7 @@ Move.
 
 In addition to the above requirements, we restrict each subject base type to defining a single
 index syntax method for immutable references and a single index syntax method for mutable
-references. For example, you may not define a specialized version for a polymorphic type:
+references. For example, you cannot define a specialized version for a polymorphic type:
 
 ```move
 #[syntax(index)]
