@@ -1,9 +1,32 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:5:13
+  │
+5 │         let f = 0;
+  │             ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:6:9
+  │
+6 │         S { mut f }
+  │         ^^^^^^^^^^^ Missing argument for field 'f' in 'a::m::S'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:6:9
+  │
+4 │     public fun foo() {
+  │                --- Expected: '()'
+5 │         let f = 0;
+6 │         S { mut f }
+  │         ^^^^^^^^^^^
+  │         │
+  │         Invalid return expression
+  │         Given: 'a::m::S'
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:6:13
   │
 6 │         S { mut f }
-  │             ^^^
-  │             │
-  │             Unexpected 'mut'
-  │             Expected an identifier
+  │             ^ Expected a field expression
 

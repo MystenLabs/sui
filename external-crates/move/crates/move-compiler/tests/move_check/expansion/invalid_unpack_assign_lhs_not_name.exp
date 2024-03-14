@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_not_name.move:3:13
+  │
+3 │         let f = 0;
+  │             ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_not_name.move:4:11
   │

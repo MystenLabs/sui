@@ -7,3 +7,15 @@ error[E01002]: unexpected token
   │                         Unexpected 'X2'
   │                         Expected ','
 
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_check/parser/function_acquires_missing_comma.move:6:9
+  │
+6 │         borrow_global_mut<X1>(0x1);
+  │         ^^^^^^^^^^^^^^^^^ Unbound function 'borrow_global_mut' in current scope
+
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_check/parser/function_acquires_missing_comma.move:7:9
+  │
+7 │         borrow_global_mut<X2>(0x1);
+  │         ^^^^^^^^^^^^^^^^^ Unbound function 'borrow_global_mut' in current scope
+

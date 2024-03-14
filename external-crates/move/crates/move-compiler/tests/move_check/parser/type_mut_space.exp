@@ -1,8 +1,23 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/type_mut_space.move:5:20
+  │
+5 │     public fun foo(x: & mut S) {
+  │                    ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03004]: unbound type
+  ┌─ tests/move_check/parser/type_mut_space.move:5:25
+  │
+5 │     public fun foo(x: & mut S) {
+  │                         ^^^ Unbound type 'mut' in current scope
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/type_mut_space.move:5:29
   │
-5 │     public fun foo(x: & mut S): & mut S {
-  │                   -         ^ Expected ')'
-  │                   │          
-  │                   To match this '('
+5 │     public fun foo(x: & mut S) {
+  │                             ^
+  │                             │
+  │                             Unexpected 'S'
+  │                             Expected ','
 
