@@ -79,7 +79,7 @@ describe('Contract links', () => {
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
 				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'http://localhost:3000/api',
+				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
 			});
 
 			const claimableAssets = await claimLink.listClaimableAssets(
@@ -171,7 +171,7 @@ describe('Contract links', () => {
 			const claimLink = await ZkSendLink.fromUrl(url, {
 				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
-				claimApi: 'http://localhost:3000/api',
+				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
 			});
 
 			const claimableAssets = await claimLink.listClaimableAssets(
@@ -217,6 +217,7 @@ describe('Non contract links', () => {
 			const link = new ZkSendLinkBuilder({
 				client,
 				sender: keypair.toSuiAddress(),
+				contract: null,
 			});
 
 			const bears = await createBears(3);

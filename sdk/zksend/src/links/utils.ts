@@ -11,6 +11,7 @@ import type { TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { ZkSendLink } from './claim.js';
+import { MAINNET_CONTRACT_IDS } from './zk-bag.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
 
 const ListCreatedLinksQuery = graphql(`
@@ -64,11 +65,11 @@ export async function listCreatedLinks({
 	address,
 	cursor,
 	network,
-	contract,
+	contract = MAINNET_CONTRACT_IDS,
 	...linkOptions
 }: {
 	address: string;
-	contract: ZkBagContractOptions;
+	contract?: ZkBagContractOptions;
 	cursor?: string;
 	network?: 'mainnet' | 'testnet';
 	// Link options:

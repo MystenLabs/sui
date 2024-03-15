@@ -24,7 +24,7 @@ import {
 import type { ZkSendLinkBuilderOptions } from './builder.js';
 import { ZkSendLinkBuilder } from './builder.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { ZkBag } from './zk-bag.js';
+import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
 	host: 'https://zksend.com',
@@ -44,6 +44,8 @@ export type ZkSendLinkOptions = {
 	host?: string;
 	path?: string;
 	address?: string;
+	isContractLink: boolean;
+	contract?: ZkBagContractOptions | null;
 } & (
 	| {
 			address: string;
@@ -53,17 +55,7 @@ export type ZkSendLinkOptions = {
 			keypair: Keypair;
 			address?: never;
 	  }
-) &
-	(
-		| {
-				isContractLink: true;
-				contract: ZkBagContractOptions;
-		  }
-		| {
-				isContractLink: false;
-				contract?: never;
-		  }
-	);
+);
 
 export class ZkSendLink {
 	#client: SuiClient;
@@ -98,7 +90,7 @@ export class ZkSendLink {
 		claimApi = DEFAULT_ZK_SEND_LINK_OPTIONS.claimApi,
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		keypair,
-		contract,
+		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : null,
 		address,
 		host,
 		path,
@@ -127,20 +119,13 @@ export class ZkSendLink {
 
 	static async fromUrl(
 		url: string,
-		{
-			contract,
-			...options
-		}: Omit<ZkSendLinkOptions, 'keypair' | 'address' | 'isContractLink'> = {},
+		options: Omit<ZkSendLinkOptions, 'keypair' | 'address' | 'isContractLink'> = {},
 	) {
 		const parsed = new URL(url);
 		const isContractLink = parsed.hash.startsWith('#$');
 
 		let link: ZkSendLink;
 		if (isContractLink) {
-			if (!contract) {
-				throw new Error('Contract options are required for contract based links');
-			}
-
 			const keypair = Ed25519Keypair.fromSecretKey(fromB64(parsed.hash.slice(2)));
 			link = new ZkSendLink({
 				...options,
@@ -148,7 +133,6 @@ export class ZkSendLink {
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: true,
-				contract,
 			});
 		} else {
 			const keypair = Ed25519Keypair.fromSecretKey(
@@ -171,9 +155,7 @@ export class ZkSendLink {
 
 	static async fromAddress(
 		address: string,
-		options: Omit<ZkSendLinkOptions, 'keypair' | 'address' | 'isContractLink'> & {
-			contract: ZkBagContractOptions;
-		},
+		options: Omit<ZkSendLinkOptions, 'keypair' | 'address' | 'isContractLink'>,
 	) {
 		const link = new ZkSendLink({
 			...options,
