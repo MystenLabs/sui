@@ -33,6 +33,7 @@ mod checked {
         base_types::*,
         error::ExecutionError,
         error::{ExecutionErrorKind, SuiError},
+        execution_config_utils::to_binary_config,
         metrics::LimitsMetrics,
         storage::ChildObjectResolver,
     };
@@ -71,6 +72,7 @@ mod checked {
                 profiler_config: vm_profiler_config,
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
+                binary_config: to_binary_config(protocol_config),
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

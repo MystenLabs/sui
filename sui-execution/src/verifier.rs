@@ -4,6 +4,7 @@
 use move_binary_format::CompiledModule;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiResult;
+use sui_types::execution_config_utils::to_binary_config;
 
 pub trait Verifier {
     /// Run the bytecode verifier with a meter limit
@@ -22,15 +23,10 @@ pub trait Verifier {
         protocol_config: &ProtocolConfig,
         module_bytes: &[Vec<u8>],
     ) -> SuiResult<()> {
+        let binary_config = to_binary_config(protocol_config);
         let Ok(modules) = module_bytes
             .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(
-                    b,
-                    protocol_config.move_binary_format_version(),
-                    protocol_config.no_extraneous_module_bytes(),
-                )
-            })
+            .map(|b| CompiledModule::deserialize_with_config(b, &binary_config))
             .collect::<Result<Vec<_>, _>>()
         else {
             // Although we failed, we don't care since it wasn't because of a timeout.

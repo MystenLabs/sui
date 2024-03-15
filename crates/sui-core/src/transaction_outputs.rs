@@ -35,9 +35,8 @@ impl TransactionOutputs {
             mutable_inputs,
             written,
             events,
-            max_binary_format_version: _,
             loaded_runtime_objects: _,
-            no_extraneous_module_bytes: _,
+            binary_config: _,
             runtime_packages_loaded_from_db: _,
             lamport_version,
         } = inner_temporary_store;

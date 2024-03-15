@@ -1339,6 +1339,20 @@ export const RPC_METHODS: {
 			scoring_decision_cutoff_value: 'f64',
 			scoring_decision_mad_divisor: 'f64',
 			group_ops_bls12381_msm_max_len: 'u32',
+			binary_module_handles: 'u16',
+			binary_struct_handles: 'u16',
+			binary_function_handles: 'u16',
+			binary_function_instantiations: 'u16',
+			binary_signatures: 'u16',
+			binary_constant_pool: 'u16',
+			binary_identifiers: 'u16',
+			binary_address_identifiers: 'u16',
+			binary_struct_defs: 'u16',
+			binary_struct_def_instantiations: 'u16',
+			binary_function_defs: 'u16',
+			binary_field_handles: 'u16',
+			binary_field_instantiations: 'u16',
+			binary_friend_decls: 'u16',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {

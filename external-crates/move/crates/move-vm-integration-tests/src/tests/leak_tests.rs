@@ -36,7 +36,7 @@ fn leak_with_abort() {
             locals: SignatureIndex(1),
             code: vec![
                 // leak
-                LdU128(0),
+                LdU128(Box::new(0)),
                 StLoc(0),
                 MutBorrowLoc(0),
                 StLoc(1),

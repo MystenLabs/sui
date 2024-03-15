@@ -1421,6 +1421,20 @@
                 "base_tx_cost_per_byte": {
                   "u64": "0"
                 },
+                "binary_address_identifiers": null,
+                "binary_constant_pool": null,
+                "binary_field_handles": null,
+                "binary_field_instantiations": null,
+                "binary_friend_decls": null,
+                "binary_function_defs": null,
+                "binary_function_handles": null,
+                "binary_function_instantiations": null,
+                "binary_identifiers": null,
+                "binary_module_handles": null,
+                "binary_signatures": null,
+                "binary_struct_def_instantiations": null,
+                "binary_struct_defs": null,
+                "binary_struct_handles": null,
                 "bls12381_bls12381_min_pk_verify_cost_base": {
                   "u64": "52"
                 },

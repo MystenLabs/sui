@@ -1098,7 +1098,10 @@ mod checked {
                 }
             }
 
-            Ok(Type::StructInstantiation(idx, loaded_type_params))
+            Ok(Type::StructInstantiation(Box::new((
+                idx,
+                loaded_type_params,
+            ))))
         }
     }
 

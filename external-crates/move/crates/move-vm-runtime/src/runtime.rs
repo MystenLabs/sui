@@ -81,10 +81,7 @@ impl VMRuntime {
             .map(|blob| {
                 CompiledModule::deserialize_with_config(
                     blob,
-                    self.loader.vm_config().max_binary_format_version,
-                    self.loader
-                        .vm_config()
-                        .check_no_extraneous_bytes_during_deserialization,
+                    &self.loader.vm_config().binary_config,
                 )
             })
             .collect::<PartialVMResult<Vec<_>>>()
