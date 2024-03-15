@@ -10,6 +10,23 @@ import { EventsQuery } from './events';
 const queries = {
 	getCoins: CoinsQuery,
 	queryEvents: EventsQuery,
+	objectPreviousTxBlock: graphql(`
+	query objectPreviousTxBlock($first: Int $last: Int $before: String $after: String) {
+		objects(first: $first, last: $last, before: $before, after: $after) {
+		pageInfo {
+		  startCursor
+		  endCursor
+		  hasNextPage
+		  hasPreviousPage
+		}
+		nodes {
+		  previousTransactionBlock {
+			digest
+		  }
+		}
+	  }
+	}
+`)
 };
 
 interface PageInfo {
@@ -71,7 +88,7 @@ async function benchmark(
 }
 
 const client = new SuiGraphQLClient<typeof queries>({
-	url: 'http://127.0.0.1:8000',
+	url: 'http://127.0.0.1:9000',
 	queries,
 });
 
@@ -289,4 +306,26 @@ async function runEventsBenchmarks(client: SuiGraphQLClient<typeof queries>) {
 
 }
 
-runEventsBenchmarks(client);
+// runEventsBenchmarks(client);
+
+
+
+
+async function yeet(client: SuiGraphQLClient<typeof queries>) {
+	let limit = 50;
+	console.log('object previous tx blocks');
+	await benchmark(client, true, async (client, cursor) => {
+		let limit = 50;
+		const response = await client.execute('objectPreviousTxBlock', {
+			variables: {
+				first: limit,
+				after: cursor,
+			},
+		});
+		const data = response.data!;
+		const pageInfo = data.objects.pageInfo;
+		return pageInfo;
+	}, 100).catch(console.error);
+}
+
+yeet(client);
