@@ -12,6 +12,7 @@ accounts:
   - 20000000000000000
 parameters:
   allow_insertion_of_extra_objects: false
+  epoch_duration_ms: 120000
 validator_config_info:
 - commission_rate: 0
   consensus_address: /ip4/127.0.0.1/tcp/8083/http
@@ -41,4 +42,13 @@ validator_config_info:
   narwhal_worker_address: /dns/validator3/udp/8082
   network_address: /dns/validator3/tcp/8080/http
   p2p_address: /dns/validator3/udp/8084
+  stake: 20000000000000000
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator4
+  narwhal_primary_address: /dns/validator4/udp/8081
+  narwhal_worker_address: /dns/validator4/udp/8082
+  network_address: /dns/validator4/tcp/8080/http
+  p2p_address: /dns/validator4/udp/8084
   stake: 20000000000000000
