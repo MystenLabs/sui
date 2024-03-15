@@ -554,6 +554,161 @@ impl ModuleCache {
 // Loader
 //
 
+// Helpers to load/verify modules without recursion
+
+// In order to traverse the transitive dependencies of a module (when verifing the module),
+// we create a stack and iterate over the dependencies to avoid recursion.
+// An entry on the stack is conceptually a pair (module, dependencies) where dependencies
+// is used to visit them and to track when a module is ready for linkage checks
+// Example:
+// A -> B, C
+// B -> F
+// C -> D, E
+// D
+// E
+// F
+// Following are the stack transitions
+// 1.  (A, [B, C]) - top module pushed with deps
+// 2.  (A, [B]), (C, [D, E]) - first dep (C in A) is removed and pushed as an entry
+// 3.  (A, [B]), (C, [D]), (E, []) - first dep (E in C) is removed and pushed as an entry
+// 4.  (A, [B]), (C, [D]) - E is done, no more deps, verify E linkage
+// 5.  (A, [B]), (C, []) (D, []) - second (D in C) dep is removed and pushed as an entry
+// 6.  (A, [B]), (C, []) - D is done, no more deps, verify D linkage
+// 7.  (A, [B]) - C is done, no more deps, verify C linkage
+// 8.  (A, []), (B, [F]) - second dep (B in A) is removed and pushed as an entry
+// 9.  (A, []), (B, []), (F, []) - first dep (F in B) is removed and pushed as an entry
+// 10. (A, []), (B, []) - F is done, no more deps, verify F linkage
+// 11. (A, []) - B is done, no more deps, verify B linkage
+// 12. <empty> - A is done, no more deps, verify A linkage
+// process is over.
+// During the traversal there are few checks performed to verify correctness and
+// track already verified modules so we do not perform the same operation multiple times
+
+// A wrapper around a `CompiledModule` that carries a flag to indicate whether
+// a cycle check was performed already or not.
+// Essentially when we first push the value we need to check for cycles (visited = false)
+// and never again.
+struct ModuleEntry {
+    // module loaded
+    module: Arc<CompiledModule>,
+    // whether a cycle check was already performed
+    checked_for_cycles: bool,
+}
+
+impl ModuleEntry {
+    fn new(module: Arc<CompiledModule>) -> Self {
+        ModuleEntry {
+            module,
+            checked_for_cycles: false,
+        }
+    }
+}
+
+// A `StackEntry` is a pair of a `ModuleEntry` and its dependencies.
+// The `deps` is used as a temp value to make sure all dependencies are traversed.
+// When a module is first pushed onto the stack all deps are retrieved (as `ModuleId`s)
+// and added in `deps`, then one by one they are removed from `deps` and loaded on the stack
+// on their own.
+// When `deps` is empty it means all depndencies have been traversed and `module` can be
+// verified for linkage.
+struct StackEntry {
+    // the module to verify
+    module: ModuleEntry,
+    // list of dependencies for the module
+    deps: Vec<ModuleId>,
+}
+
+// Holds the stack for traversal and other fields to help with the process.
+struct ModuleLoader<'a> {
+    // stack used for traversal to perform DFS
+    stack: Vec<StackEntry>,
+    // keep track of all modules used during traversal to help with the linkage check
+    verified_modules: BTreeMap<ModuleId, Arc<CompiledModule>>,
+    // set of nodes that are being visited (those on the stack) that is used to check for
+    // cycles. The set is passed in and it may contain more elements that those
+    // on the stack.
+    visiting: &'a mut BTreeSet<ModuleId>,
+}
+
+impl<'a> ModuleLoader<'a> {
+    fn new(visiting: &'a mut BTreeSet<ModuleId>) -> Self {
+        ModuleLoader {
+            stack: vec![],
+            verified_modules: BTreeMap::new(),
+            visiting,
+        }
+    }
+
+    // Push an entry on the stack.
+    // `runtime_id` is used to load and verify the given module
+    fn verify_and_push(
+        &mut self,
+        runtime_id: ModuleId,
+        loader: &Loader,
+        data_store: &impl DataStore,
+        allow_loading_failure: bool,
+    ) -> VMResult<(ModuleId, Arc<CompiledModule>)> {
+        let (storage_id, module) =
+            loader.verify_module(&runtime_id, data_store, allow_loading_failure)?;
+        self.stack.push(
+            StackEntry {
+                module: ModuleEntry::new(module.clone()),
+                deps: module.immediate_dependencies(),
+            }
+        );
+        Ok((storage_id, module))
+    }
+
+    // Once all deps of a module are traversed, the module at the top of the stack
+    // can be checked for linkage.
+    // `self.verified_modules` contains all dependencies traversed and so all dependencies
+    // for the entry at the top of the stack when popping
+    fn verify_linkage(&mut self) -> VMResult<()> {
+        match self.stack.last_mut() {
+            None => Ok(()),
+            Some(entry) => {
+                let imm_deps = entry.module.module.immediate_dependencies();
+                let module_deps = imm_deps
+                    .iter()
+                    .map(|module_id| {
+                        self.verified_modules.get(module_id).unwrap().as_ref()
+                    });
+                dependencies::verify_module(
+                    entry.module.module.as_ref(),
+                    module_deps,
+                ).map_err(expect_no_verification_errors)
+            }
+        }
+    }
+
+    // Return the value at the top of the stack, perform a cycle check if not done yet
+    fn top_mut(&mut self) -> VMResult<Option<&mut StackEntry>> {
+        match self.stack.last_mut() {
+            None => Ok(None),
+            Some(entry) => {
+                if !entry.module.checked_for_cycles {
+                    if !self.visiting.insert(entry.module.module.self_id()) {
+                        return Err(PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY)
+                            .finish(Location::Undefined))
+                    }
+                    entry.module.checked_for_cycles = true;
+                }
+                Ok(Some(entry))
+            }
+        }
+    }
+
+    // Remove the entry at the top of the stack, verification was good,
+    // remove from `visiting` and add to `verified_modules`
+    fn pop(&mut self) {
+        if let Some(entry) = self.stack.pop() {
+            let module_id = entry.module.module.self_id();
+            self.visiting.remove(&module_id);
+            self.verified_modules.insert(module_id, entry.module.module.clone());
+        }
+    }
+}
+
 // A Loader is responsible to load modules and holds the cache of all loaded
 // entities. Each cache is protected by a `RwLock`. Operation in the Loader must be thread safe
 // (operating on values on the stack) and when cache needs updating the mutex must be taken.
@@ -661,7 +816,7 @@ impl Loader {
             let module_id = module.self_id();
 
             self.verify_module_for_publication(module, &bundle_verified, data_store)?;
-            bundle_verified.insert(module_id.clone(), module.clone());
+            bundle_verified.insert(module_id, module);
         }
         Ok(())
     }
@@ -677,7 +832,7 @@ impl Loader {
     fn verify_module_for_publication(
         &self,
         module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
+        bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
     ) -> VMResult<()> {
         // Performs all verification steps to load the module without loading it, i.e., the new
@@ -700,7 +855,6 @@ impl Loader {
             data_store,
             &mut visiting,
             /* allow_dependency_loading_failure */ true,
-            /* dependencies_depth */ 0,
         )?;
 
         // make sure there is no cyclic dependency
@@ -710,13 +864,13 @@ impl Loader {
     fn verify_module_cyclic_relations(
         &self,
         module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
+        bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
     ) -> VMResult<()> {
         let module_cache = self.module_cache.read();
         cyclic_dependencies::verify_module(module, |runtime_id| {
             let module = if let Some(bundled) = bundle_verified.get(runtime_id) {
-                Some(bundled)
+                Some(*bundled)
             } else {
                 let storage_id = data_store.relocate(runtime_id)?;
                 module_cache
@@ -844,7 +998,7 @@ impl Loader {
     fn load_module_internal(
         &self,
         runtime_id: &ModuleId,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
+        bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
     ) -> VMResult<(Arc<CompiledModule>, Arc<LoadedModule>)> {
         let link_context = data_store.link_context();
@@ -868,14 +1022,12 @@ impl Loader {
         // otherwise, load the transitive closure of the target module
         let mut visiting = BTreeSet::new();
         let allow_module_loading_failure = true;
-        let dependencies_depth = 0;
         let (storage_id, compiled) = self.verify_module_and_dependencies(
             runtime_id,
             bundle_verified,
             data_store,
             &mut visiting,
             allow_module_loading_failure,
-            dependencies_depth,
         )?;
 
         // verify that the transitive closure does not have cycles
@@ -980,53 +1132,66 @@ impl Loader {
     /// Recursively read the module at ID and its transitive dependencies, verify them individually
     /// and verify that they link together.  Returns the `CompiledModule` for `runtime_id`, written
     /// to the module cache, on success, as well as the `ModuleId` it was read from, in storage.
+    // This is a DFS load of dependencies which also checks for cycles and reports
+    // an error if a cycle is found.
+    // As we load modules and walk up the dependency DAG when a node is popped (traversed)
+    // we make sure that linking is correct as well.
     fn verify_module_and_dependencies(
         &self,
         runtime_id: &ModuleId,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
+        bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
         visiting: &mut BTreeSet<ModuleId>,
         allow_module_loading_failure: bool,
-        dependencies_depth: usize,
     ) -> VMResult<(ModuleId, Arc<CompiledModule>)> {
-        // dependency loading does not permit cycles
-        if !visiting.insert(runtime_id.clone()) {
-            return Err(PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY)
-                .finish(Location::Undefined));
-        }
-
-        // module self-check
+        // make a stack for dependencies traversal (DAG traversal)
+        let mut module_loader = ModuleLoader::new(visiting);
+        // load and verify the module, and push it on the stack for dependencies traversal
         let (storage_id, module) =
-            self.verify_module(runtime_id, data_store, allow_module_loading_failure)?;
-
-        // If this module is already in the "verified dependencies" cache, then no need to check it
-        // again -- it has already been verified against its dependencies in this link context.
-        let cache_key = (data_store.link_context(), runtime_id.clone());
-        if !self
-            .module_cache
-            .read()
-            .verified_dependencies
-            .contains(&cache_key)
-        {
-            // downward exploration of the module's dependency graph. For a module that is loaded from
-            // the data_store, we should never allow its dependencies to fail to load.
-            let allow_dependency_loading_failure = false;
-            self.verify_dependencies(
-                module.as_ref(),
-                bundle_verified,
+            module_loader.verify_and_push(
+                runtime_id.clone(),
+                self,
                 data_store,
-                visiting,
-                allow_dependency_loading_failure,
-                dependencies_depth,
+                allow_module_loading_failure,
             )?;
 
-            self.module_cache
-                .write()
-                .verified_dependencies
-                .insert(cache_key);
+        loop {
+            // get the entry at the top of the stack
+            let entry = module_loader.top_mut()?;
+            if entry.is_none() {
+                // no more entries on the stack, we are done, break out of the loop
+                break;
+            }
+            let entry = entry.unwrap();
+
+            // check against known modules either in the loader `verified_dependencies`
+            // (previously verified module) or in the package being processed (`bundle_verified`)
+            let self_id = entry.module.module.self_id();
+            let cache_key = (data_store.link_context(), self_id.clone());
+            if !bundle_verified.contains_key(&self_id)
+                && !self.module_cache.read().verified_dependencies.contains(&cache_key)
+            {
+                // if there are still dependencies to traverse, we load the next one on the
+                // stack and continue the loop. Otherwise we are done with dependencies
+                // and we verify linking
+                if !entry.deps.is_empty() {
+                    let dep_id = entry.deps.pop().unwrap();
+                    module_loader.verify_and_push(dep_id, self, data_store, false /* allow_loading_failure */)?;
+                    // loop with dep at the top of the stack
+                    continue;
+                }
+                // no more deps, check linkage
+                module_loader.verify_linkage()?;
+                // add to the list of verified modules
+                self.module_cache
+                    .write()
+                    .verified_dependencies
+                    .insert(cache_key);
+            }
+            // finished with top element, pop
+            module_loader.pop();
         }
 
-        visiting.remove(runtime_id);
         Ok((storage_id, module))
     }
 
@@ -1034,21 +1199,11 @@ impl Loader {
     fn verify_dependencies(
         &self,
         module: &CompiledModule,
-        bundle_verified: &BTreeMap<ModuleId, CompiledModule>,
+        bundle_verified: &BTreeMap<ModuleId, &CompiledModule>,
         data_store: &impl DataStore,
         visiting: &mut BTreeSet<ModuleId>,
         allow_dependency_loading_failure: bool,
-        dependencies_depth: usize,
     ) -> VMResult<()> {
-        if let Some(max_dependency_depth) = self.vm_config.verifier.max_dependency_depth {
-            if dependencies_depth > max_dependency_depth {
-                return Err(
-                    PartialVMError::new(StatusCode::MAX_DEPENDENCY_DEPTH_REACHED)
-                        .finish(Location::Undefined),
-                );
-            }
-        }
-
         // all immediate dependencies of the module being verified should be in one of the locations
         // - the verified portion of the bundle (e.g., verified before this module)
         // - the compiled module cache (i.e., module has been self-checked but not link checked)
@@ -1057,7 +1212,7 @@ impl Loader {
         let mut cached_deps = vec![];
         for runtime_dep in module.immediate_dependencies() {
             if let Some(cached) = bundle_verified.get(&runtime_dep) {
-                bundle_deps.push(cached);
+                bundle_deps.push(*cached);
                 continue;
             }
 
@@ -1067,7 +1222,6 @@ impl Loader {
                 data_store,
                 visiting,
                 allow_dependency_loading_failure,
-                dependencies_depth + 1,
             )?;
 
             cached_deps.push(loaded);
