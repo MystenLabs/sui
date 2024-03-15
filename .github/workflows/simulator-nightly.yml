@@ -50,10 +50,11 @@ jobs:
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && rm -rf ~/sui"
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/ && git clone git@github.com:MystenLabs/sui.git"
  
-      # Deleting files in tmpfs that usually fill up pretty quickly after each run
-      - name: Tmpfs clean
+      # Deleting files in tmpfs that usually fill up pretty quickly after each run. Cargo clean to free up space as well.
+      - name: Tmpfs and cargo clean
         run: |  
           tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean"
 
       # Checkout out the latest sui repo
       - name: Checkout sui repo
