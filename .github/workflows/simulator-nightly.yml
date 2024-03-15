@@ -130,7 +130,6 @@ jobs:
       uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        WORKFLOW_CONCLUSION: ${{ env.workflow_conclusion }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
         SLACK_ID: ${{ env.slack_id }}
