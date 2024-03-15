@@ -10,6 +10,7 @@ error[E03006]: unexpected name in this position
 4 │         copy $x;
   │              ^^ Macro parameters are not allowed to appear in paths
   │
+  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
@@ -25,6 +26,7 @@ error[E03006]: unexpected name in this position
 5 │         move $x;
   │              ^^ Macro parameters are not allowed to appear in paths
   │
+  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
