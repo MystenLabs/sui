@@ -275,7 +275,7 @@ pub fn update_managed_address(
         .or_insert_with(|| Item::Table(Table::new()))
         .as_table_mut()
         .ok_or_else(|| anyhow!("Could not find or create 'env' table in Move.lock"))?
-        .entry(&environment)
+        .entry(environment)
         .or_insert_with(|| Item::Table(Table::new()))
         .as_table_mut()
         .ok_or_else(|| anyhow!("Could not find or create {environment} table in Move.lock"))?;
