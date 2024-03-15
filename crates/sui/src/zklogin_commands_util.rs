@@ -97,6 +97,7 @@ pub async fn perform_zk_login_test_tx(
 
     let (sub, aud) = parse_and_validate_jwt(parsed_token)?;
     let address_seed = gen_address_seed(&user_salt, "sub", &sub, &aud)?;
+    println!("Address seed: {:?}", address_seed.to_string());
     let zk_login_inputs = ZkLoginInputs::from_reader(reader, &address_seed)?;
 
     let skp1 = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32])));

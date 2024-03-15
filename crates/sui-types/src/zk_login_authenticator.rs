@@ -94,7 +94,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         // Verify the max epoch in aux inputs is <= the current epoch of authority.
         if epoch > self.get_max_epoch() {
             return Err(SuiError::InvalidSignature {
-                error: format!("ZKLogin expired at epoch {}", self.get_max_epoch()),
+                error: format!("ZKLogin expired at epoch {}, current: {}", self.get_max_epoch(), epoch),
             });
         }
         Ok(())
@@ -158,6 +158,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
         info!("self.max_epoch: {:?}", self.max_epoch);
+        info!("aux_verify_data: {:?}", aux_verify_data);
         verify_zk_login(
             &self.inputs,
             self.max_epoch,

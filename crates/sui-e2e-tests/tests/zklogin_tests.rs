@@ -88,13 +88,13 @@ async fn test_legacy_zklogin_address_accept() {
 async fn zklogin_end_to_end_test() {
     run_zklogin_end_to_end_test(TestClusterBuilder::new().with_default_jwks().build().await).await;
 
-    // wait for current epoch to 4
+    // wait for current epoch to 1
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(1000)
         .build()
         .await;
     test_cluster
-        .wait_for_epoch_with_timeout(Some(4), Duration::from_secs(300))
+        .wait_for_epoch_with_timeout(Some(1), Duration::from_secs(300))
         .await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
@@ -114,7 +114,7 @@ async fn zklogin_end_to_end_test() {
 
     let sig: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        1,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -192,7 +192,7 @@ async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
         // combine ephemeral sig with zklogin inputs.
         let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
             inputs.clone(),
-            10,
+            2,
             eph_sig.clone(),
         ));
         let signed_txn = Transaction::from_generic_sig_data(tx_data.clone(), vec![generic_sig]);
@@ -203,7 +203,7 @@ async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
         // a txn with max_epoch mismatch with proof, fails to execute.
         let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
             inputs.clone(),
-            0,
+            2,
             eph_sig,
         ));
         let signed_txn_expired = Transaction::from_generic_sig_data(tx_data, vec![generic_sig]);

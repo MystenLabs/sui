@@ -223,10 +223,12 @@ pub enum KeyToolCommand {
         network: String,
         #[clap(long, default_value = "true")]
         fixed: bool, // if true, use a fixed kp generated from [0; 32] seed.
-        #[clap(long, default_value = "true")]
+        #[clap(long, default_value = "false")]
         test_multisig: bool, // if true, use a multisig address with zklogin and a traditional kp.
         #[clap(long, default_value = "false")]
         sign_with_sk: bool, // if true, execute tx with the traditional sig (in the multisig), otherwise with the zklogin sig.
+        #[clap(long)]
+        i: u8
     },
 
     /// A workaround to the above command because sometimes token pasting does not work (for Facebook). All the inputs required here are printed from the command above.
@@ -910,12 +912,9 @@ impl KeyToolCommand {
                 fixed,
                 test_multisig,
                 sign_with_sk,
+                i
             } => {
-                let skp = if fixed {
-                    SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])))
-                } else {
-                    SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut rand::thread_rng()))
-                };
+                let skp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([i; 32])));
                 println!("Ephemeral keypair: {:?}", skp.encode());
                 let pk = skp.public();
                 let ephemeral_key_identifier: SuiAddress = (&skp.public()).into();
@@ -935,14 +934,14 @@ impl KeyToolCommand {
                     jwt_random_bytes.to_string()
                 };
                 println!("Jwt randomness: {jwt_randomness}");
-                let url = get_oidc_url(
-                    OIDCProvider::Google,
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com",
-                    "https://sui.io/",
-                    &jwt_randomness,
-                )?;
+                // let url = get_oidc_url(
+                //     OIDCProvider::Google,
+                //     &eph_pk_bytes,
+                //     max_epoch,
+                //     "25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com",
+                //     "https://sui.io/",
+                //     &jwt_randomness,
+                // )?;
                 let url_2 = get_oidc_url(
                     OIDCProvider::Twitch,
                     &eph_pk_bytes,
@@ -951,60 +950,60 @@ impl KeyToolCommand {
                     "https://sui.io/",
                     &jwt_randomness,
                 )?;
-                let url_3 = get_oidc_url(
-                    OIDCProvider::Facebook,
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "233307156352917",
-                    "https://sui.io/",
-                    &jwt_randomness,
-                )?;
-                let url_4 = get_oidc_url(
-                    OIDCProvider::Kakao,
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "aa6bddf393b54d4e0d42ae0014edfd2f",
-                    "https://sui.io/",
-                    &jwt_randomness,
-                )?;
-                let url_5 = get_token_exchange_url(
-                    OIDCProvider::Kakao,
-                    "aa6bddf393b54d4e0d42ae0014edfd2f",
-                    "https://sui.io/",
-                    "$YOUR_AUTH_CODE",
-                    "", // not needed
-                )?;
-                let url_6 = get_oidc_url(
-                    OIDCProvider::Apple,
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "nl.digkas.wallet.client",
-                    "https://sui.io/",
-                    &jwt_randomness,
-                )?;
-                let url_7 = get_oidc_url(
-                    OIDCProvider::Slack,
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "2426087588661.5742457039348",
-                    "https://sui.io/",
-                    &jwt_randomness,
-                )?;
-                let url_8 = get_token_exchange_url(
-                    OIDCProvider::Slack,
-                    "2426087588661.5742457039348",
-                    "https://sui.io/",
-                    "$YOUR_AUTH_CODE",
-                    "39b955a118f2f21110939bf3dff1de90",
-                )?;
-                println!("Visit URL (Google): {url}");
+                // let url_3 = get_oidc_url(
+                //     OIDCProvider::Facebook,
+                //     &eph_pk_bytes,
+                //     max_epoch,
+                //     "233307156352917",
+                //     "https://sui.io/",
+                //     &jwt_randomness,
+                // )?;
+                // let url_4 = get_oidc_url(
+                //     OIDCProvider::Kakao,
+                //     &eph_pk_bytes,
+                //     max_epoch,
+                //     "aa6bddf393b54d4e0d42ae0014edfd2f",
+                //     "https://sui.io/",
+                //     &jwt_randomness,
+                // )?;
+                // let url_5 = get_token_exchange_url(
+                //     OIDCProvider::Kakao,
+                //     "aa6bddf393b54d4e0d42ae0014edfd2f",
+                //     "https://sui.io/",
+                //     "$YOUR_AUTH_CODE",
+                //     "", // not needed
+                // )?;
+                // let url_6 = get_oidc_url(
+                //     OIDCProvider::Apple,
+                //     &eph_pk_bytes,
+                //     max_epoch,
+                //     "nl.digkas.wallet.client",
+                //     "https://sui.io/",
+                //     &jwt_randomness,
+                // )?;
+                // let url_7 = get_oidc_url(
+                //     OIDCProvider::Slack,
+                //     &eph_pk_bytes,
+                //     max_epoch,
+                //     "2426087588661.5742457039348",
+                //     "https://sui.io/",
+                //     &jwt_randomness,
+                // )?;
+                // let url_8 = get_token_exchange_url(
+                //     OIDCProvider::Slack,
+                //     "2426087588661.5742457039348",
+                //     "https://sui.io/",
+                //     "$YOUR_AUTH_CODE",
+                //     "39b955a118f2f21110939bf3dff1de90",
+                // )?;
+                // println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
-                println!("Visit URL (Facebook): {url_3}");
-                println!("Visit URL (Kakao): {url_4}");
-                println!("Token exchange URL (Kakao): {url_5}");
-                println!("Visit URL (Apple): {url_6}");
-                println!("Visit URL (Slack): {url_7}");
-                println!("Token exchange URL (Slack): {url_8}");
+                // println!("Visit URL (Facebook): {url_3}");
+                // println!("Visit URL (Kakao): {url_4}");
+                // println!("Token exchange URL (Kakao): {url_5}");
+                // println!("Visit URL (Apple): {url_6}");
+                // println!("Visit URL (Slack): {url_7}");
+                // println!("Token exchange URL (Slack): {url_8}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 
