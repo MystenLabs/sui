@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 39
+version: 40
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -32,6 +32,7 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
+  random_beacon: true
   enable_effects_v2: true
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
@@ -40,8 +41,11 @@ feature_flags:
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
+  enable_poseidon: true
   enable_coin_deny_list: true
+  enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
+  enable_randomness_ptb_restrictions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -216,6 +220,38 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 52
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
+poseidon_bn254_cost_per_block: 10
+group_ops_bls12381_decode_scalar_cost: 52
+group_ops_bls12381_decode_g1_cost: 52
+group_ops_bls12381_decode_g2_cost: 52
+group_ops_bls12381_decode_gt_cost: 52
+group_ops_bls12381_scalar_add_cost: 52
+group_ops_bls12381_g1_add_cost: 52
+group_ops_bls12381_g2_add_cost: 52
+group_ops_bls12381_gt_add_cost: 52
+group_ops_bls12381_scalar_sub_cost: 52
+group_ops_bls12381_g1_sub_cost: 52
+group_ops_bls12381_g2_sub_cost: 52
+group_ops_bls12381_gt_sub_cost: 52
+group_ops_bls12381_scalar_mul_cost: 52
+group_ops_bls12381_g1_mul_cost: 52
+group_ops_bls12381_g2_mul_cost: 52
+group_ops_bls12381_gt_mul_cost: 52
+group_ops_bls12381_scalar_div_cost: 52
+group_ops_bls12381_g1_div_cost: 52
+group_ops_bls12381_g2_div_cost: 52
+group_ops_bls12381_gt_div_cost: 52
+group_ops_bls12381_g1_hash_to_base_cost: 52
+group_ops_bls12381_g2_hash_to_base_cost: 52
+group_ops_bls12381_g1_hash_to_cost_per_byte: 2
+group_ops_bls12381_g2_hash_to_cost_per_byte: 2
+group_ops_bls12381_g1_msm_base_cost: 52
+group_ops_bls12381_g2_msm_base_cost: 52
+group_ops_bls12381_g1_msm_base_cost_per_input: 52
+group_ops_bls12381_g2_msm_base_cost_per_input: 52
+group_ops_bls12381_msm_max_len: 32
+group_ops_bls12381_pairing_cost: 52
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
@@ -228,6 +264,7 @@ consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
+random_beacon_reduction_lower_bound: 1600
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 

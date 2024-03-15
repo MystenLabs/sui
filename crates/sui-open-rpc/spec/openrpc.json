@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "39",
+              "maxSupportedProtocolVersion": "40",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1795,6 +1795,7 @@
                 "max_num_transferred_move_object_ids_system_tx": {
                   "u64": "32768"
                 },
+                "max_package_dependencies": null,
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
