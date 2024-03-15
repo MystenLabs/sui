@@ -97,6 +97,8 @@ enum MigrationChange {
     AddPublic,
     Backquote(String),
     AddGlobalQual,
+    RemoveFriend(/* start */ usize),
+    MakePubPackage(/* start */ usize),
 }
 
 // All of the migration changes
@@ -806,30 +808,49 @@ impl Migration {
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
         const NEEDS_BACKTICKS: u8 = codes::Migration::NeedsRestrictedIdentifier as u8;
         const NEEDS_GLOBAL_QUAL: u8 = codes::Migration::NeedsGlobalQualification as u8;
+        const REMOVE_FRIEND: u8 = codes::Migration::RemoveFriend as u8;
+        const MAKE_PUB_PACKAGE: u8 = codes::Migration::MakePubPackage as u8;
 
-        let (file_id, line, col) = self.find_file_location(&diag);
+        let (file_id, (start_line, start_col), (end_line, end_col)) =
+            self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
-        let line_change_entry = file_change_entry.entry(line).or_default();
+        let line_change_entry = file_change_entry.entry(start_line).or_default();
         match (diag.info().category(), diag.info().code()) {
-            (CAT, NEEDS_MUT) => line_change_entry.push((col, MigrationChange::AddMut)),
-            (CAT, NEEDS_PUBLIC) => line_change_entry.push((col, MigrationChange::AddPublic)),
+            (CAT, NEEDS_MUT) => line_change_entry.push((start_col, MigrationChange::AddMut)),
+            (CAT, NEEDS_PUBLIC) => line_change_entry.push((start_col, MigrationChange::AddPublic)),
             (CAT, NEEDS_BACKTICKS) => {
                 let old_name = diag.primary_msg().to_string();
-                line_change_entry.push((col, MigrationChange::Backquote(old_name)))
+                line_change_entry.push((start_col, MigrationChange::Backquote(old_name)))
             }
             (CAT, NEEDS_GLOBAL_QUAL) => {
-                line_change_entry.push((col, MigrationChange::AddGlobalQual))
+                line_change_entry.push((start_col, MigrationChange::AddGlobalQual))
+            }
+            (CAT, REMOVE_FRIEND) => {
+                if start_line == end_line {
+                    line_change_entry.push((end_col, MigrationChange::RemoveFriend(start_col)))
+                }
+            }
+            (CAT, MAKE_PUB_PACKAGE) => {
+                if start_line == end_line {
+                    line_change_entry.push((end_col, MigrationChange::MakePubPackage(start_col)))
+                }
             }
             _ => unreachable!(),
         }
     }
 
-    fn find_file_location(&mut self, diag: &Diagnostic) -> (usize, usize, usize) {
+    fn find_file_location(&mut self, diag: &Diagnostic) -> (usize, (usize, usize), (usize, usize)) {
         let (loc, _msg) = &diag.primary_label;
         let start_loc = loc.start() as usize;
+        let end_loc = loc.end() as usize;
         let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        let file_loc = self.files.location(file_id, start_loc).unwrap();
-        (file_id, file_loc.line_number, file_loc.column_number - 1)
+        let star_loc = self.files.location(file_id, start_loc).unwrap();
+        let end_loc = self.files.location(file_id, end_loc).unwrap();
+        (
+            file_id,
+            (star_loc.line_number, star_loc.column_number - 1),
+            (end_loc.line_number, end_loc.column_number - 1),
+        )
     }
 
     fn get_line(&self, file_id: FileId, line_index: usize) -> String {
@@ -862,6 +883,14 @@ impl Migration {
                     MigrationChange::AddGlobalQual => {
                         output = format!("::{}{}", rest, output);
                         line_prefix = &line_prefix[..*col];
+                    }
+                    MigrationChange::RemoveFriend(start) => {
+                        output = format!("/* {} */{}{}", &line_prefix[*start..*col], rest, output);
+                        line_prefix = &line_prefix[..*start];
+                    }
+                    MigrationChange::MakePubPackage(start) => {
+                        output = format!("public(package){}{}", rest, output);
+                        line_prefix = &line_prefix[..*start];
                     }
                 }
             }

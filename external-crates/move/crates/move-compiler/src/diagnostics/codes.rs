@@ -342,6 +342,10 @@ codes!(
             msg: "feature is not supported in specified edition",
             severity: NonblockingError,
         },
+        DeprecatedFeature: {
+            msg: "feature is deprecated in specified edition",
+            severity: NonblockingError,
+        },
     ],
     Migration: [
         NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },

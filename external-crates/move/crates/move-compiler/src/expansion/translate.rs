@@ -872,29 +872,23 @@ fn check_visibility_modifiers(
         );
         for (_, _, friend_decl) in friends {
             let loc = friend_decl.loc;
-            if edition == Edition::E2024_MIGRATION {
-                context
-                    .env()
-                    .add_diag(diag!(Migration::RemoveFriend, (loc, msg)));
+            let diag = if edition == Edition::E2024_MIGRATION {
+                diag!(Migration::RemoveFriend, (loc, msg))
             } else {
-                context
-                    .env()
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (loc, msg)));
+                diag!(Editions::DeprecatedFeature, (loc, msg))
             };
+            context.env().add_diag(diag);
         }
         for (_, _, function) in functions {
             let E::Visibility::Friend(loc) = function.visibility else {
                 continue;
             };
-            if edition == Edition::E2024_MIGRATION {
-                context
-                    .env()
-                    .add_diag(diag!(Migration::MakePubPackage, (loc, msg)));
+            let diag = if edition == Edition::E2024_MIGRATION {
+                diag!(Migration::MakePubPackage, (loc, msg))
             } else {
-                context
-                    .env()
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (loc, msg)));
+                diag!(Editions::DeprecatedFeature, (loc, msg))
             };
+            context.env().add_diag(diag);
         }
     }
 

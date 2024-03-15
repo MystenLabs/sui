@@ -1,4 +1,7 @@
 module a::m {
+
+    friend a::n1;
+
     struct S { f: u64 }
 
     struct LongerName {
@@ -15,4 +18,8 @@ module a::m {
         fin + x
     }
 
+    public(friend) fun t1() {}
+
 }
+
+module a::n {}
