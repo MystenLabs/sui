@@ -72,7 +72,7 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
             //     f2: u64,
             // }
             return [
-                node.child(0).type == 'public' ? 'public ' : '',
+                node.child(0).type === 'public' ? 'public ' : '',
                 'struct ',
                 path.call(print, 'namedChildren', 0),
                 path.call(print, 'namedChildren', 1),
@@ -147,12 +147,12 @@ function breakable_comma_separated_list(path: AstPath,
 
     const items = Symbol('items');
     return [
-        `${start}`,
+        start,
         group([
             indent(softline),
             indent(join([',', line], path.map(print, 'namedChildren'))),
         ], {id: items}),
         ifBreak([',', softline], '', {groupId: items}),
-        `${end}`,
+        end,
     ];
 }
