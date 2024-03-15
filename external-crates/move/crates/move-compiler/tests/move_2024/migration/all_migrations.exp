@@ -2,7 +2,7 @@ error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/all_migrations.move:3:5
   │
 3 │     friend a::n;
-  │     ^^^^^^^^^^^^ 'friend's are deprecated. Use 'public(package)' instead
+  │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
 
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/migration/all_migrations.move:5:5
@@ -57,5 +57,5 @@ error[E13002]: feature is deprecated in specified edition
    ┌─ tests/move_2024/migration/all_migrations.move:21:5
    │
 21 │     public(friend) fun t1() {}
-   │     ^^^^^^^^^^^^^^ 'friend's are deprecated. Use 'public(package)' instead
+   │     ^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
 

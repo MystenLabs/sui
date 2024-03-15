@@ -3,7 +3,7 @@ error[E13002]: feature is deprecated in specified edition
   │  
 3 │ ╭     friend // why
 4 │ │     a::n;
-  │ ╰─────────^ 'friend's are deprecated. Use 'public(package)' instead
+  │ ╰─────────^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
 
 error[E13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/multiline.move:5:5
@@ -11,5 +11,5 @@ error[E13002]: feature is deprecated in specified edition
 5 │ ╭     public( // why folks, why
 6 │ │         friend
 7 │ │     ) fun t() {}
-  │ ╰─────^ 'friend's are deprecated. Use 'public(package)' instead
+  │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'
 

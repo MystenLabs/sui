@@ -866,16 +866,22 @@ fn check_visibility_modifiers(
     let edition = context.env().edition(package_name);
     // mark friend as deprecated
     if pub_package_enabled {
-        let msg = &format!(
-            "'friend's are deprecated. Use '{}' instead",
+        let friend_msg = &format!(
+            "'friend's are deprecated. Remove and replace '{}' with '{}'",
+            E::Visibility::FRIEND,
+            E::Visibility::PACKAGE,
+        );
+        let pub_msg = &format!(
+            "'{}' is deprecated. Replace with '{}'",
+            E::Visibility::FRIEND,
             E::Visibility::PACKAGE
         );
         for (_, _, friend_decl) in friends {
             let loc = friend_decl.loc;
             let diag = if edition == Edition::E2024_MIGRATION {
-                diag!(Migration::RemoveFriend, (loc, msg))
+                diag!(Migration::RemoveFriend, (loc, friend_msg))
             } else {
-                diag!(Editions::DeprecatedFeature, (loc, msg))
+                diag!(Editions::DeprecatedFeature, (loc, friend_msg))
             };
             context.env().add_diag(diag);
         }
@@ -884,9 +890,9 @@ fn check_visibility_modifiers(
                 continue;
             };
             let diag = if edition == Edition::E2024_MIGRATION {
-                diag!(Migration::MakePubPackage, (loc, msg))
+                diag!(Migration::MakePubPackage, (loc, pub_msg))
             } else {
-                diag!(Editions::DeprecatedFeature, (loc, msg))
+                diag!(Editions::DeprecatedFeature, (loc, pub_msg))
             };
             context.env().add_diag(diag);
         }
