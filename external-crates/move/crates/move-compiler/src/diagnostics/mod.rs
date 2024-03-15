@@ -276,7 +276,10 @@ fn render_diagnostic(
 // Migration Diff Reporting
 //**************************************************************************************************
 
-pub fn generate_migration_diff(files: &FilesSourceText, diags: &Diagnostics) -> Option<Migration> {
+pub fn generate_migration_diff(
+    files: &FilesSourceText,
+    diags: &Diagnostics,
+) -> Option<(Migration, /* Migration errors */ Diagnostics)> {
     match diags {
         Diagnostics(Some(inner)) => {
             let migration_diags = inner
@@ -288,8 +291,7 @@ pub fn generate_migration_diff(files: &FilesSourceText, diags: &Diagnostics) -> 
             if migration_diags.is_empty() {
                 return None;
             }
-            let migration = Migration::new(files.clone(), migration_diags);
-            Some(migration)
+            Some(Migration::new(files.clone(), migration_diags))
         }
         _ => None,
     }
@@ -298,7 +300,9 @@ pub fn generate_migration_diff(files: &FilesSourceText, diags: &Diagnostics) -> 
 // Used in test harness for unit testing
 pub fn report_migration_to_buffer(files: &FilesSourceText, diags: Diagnostics) -> Vec<u8> {
     let mut writer = Buffer::no_color();
-    if let Some(mut diff) = generate_migration_diff(files, &diags) {
+    if let Some((mut diff, errors)) = generate_migration_diff(files, &diags) {
+        let rendered_errors = report_diagnostics_to_buffer(files, errors, /* color */ false);
+        let _ = writer.write_all(&rendered_errors);
         let _ = writer.write_all(diff.render_output().as_bytes());
     } else {
         let _ = writer.write_all("No migration report".as_bytes());
@@ -782,7 +786,10 @@ impl UnprefixedWarningFilters {
 }
 
 impl Migration {
-    pub fn new(sources: FilesSourceText, diags: Vec<Diagnostic>) -> Migration {
+    pub fn new(
+        sources: FilesSourceText,
+        diags: Vec<Diagnostic>,
+    ) -> (Migration, /* Migration errors */ Diagnostics) {
         let mut files = SimpleFiles::new();
         let mut file_mapping = HashMap::new();
         for (fhash, (fname, source)) in sources {
@@ -795,14 +802,15 @@ impl Migration {
             changes: BTreeMap::new(),
         };
 
+        let mut migration_errors = Diagnostics::new();
         for diag in diags {
-            mig.add_diagnostic(diag);
+            mig.add_diagnostic(&mut migration_errors, diag);
         }
 
-        mig
+        (mig, migration_errors)
     }
 
-    fn add_diagnostic(&mut self, diag: Diagnostic) {
+    fn add_diagnostic(&mut self, migration_errors: &mut Diagnostics, diag: Diagnostic) {
         const CAT: u8 = Category::Migration as u8;
         const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
@@ -827,12 +835,22 @@ impl Migration {
             }
             (CAT, REMOVE_FRIEND) => {
                 if start_line == end_line {
+                    // we order `end_col` then `start_col` since `render_line` will reverse iterate
                     line_change_entry.push((end_col, MigrationChange::RemoveFriend(start_col)))
+                } else {
+                    let loc = diag.primary_label.0;
+                    let msg = "Unable to migrate. Cannot remove 'friend' that spans multiple lines";
+                    migration_errors.add(diag!(Uncategorized::UnableToMigrate, (loc, msg)))
                 }
             }
             (CAT, MAKE_PUB_PACKAGE) => {
                 if start_line == end_line {
+                    // we order `end_col` then `start_col` since `render_line` will reverse iterate
                     line_change_entry.push((end_col, MigrationChange::MakePubPackage(start_col)))
+                } else {
+                    let loc = diag.primary_label.0;
+                    let msg = "Unable to migrate 'public(friend)' that spans multiple lines";
+                    migration_errors.add(diag!(Uncategorized::UnableToMigrate, (loc, msg)))
                 }
             }
             _ => unreachable!(),

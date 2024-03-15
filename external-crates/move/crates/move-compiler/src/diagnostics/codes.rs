@@ -163,6 +163,7 @@ codes!(
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
         DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
+        UnableToMigrate: { msg: "unable to migrate", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
