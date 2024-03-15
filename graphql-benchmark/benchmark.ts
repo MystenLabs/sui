@@ -102,11 +102,12 @@ export function metrics(durations: number[]): Metrics {
     };
 }
 
-export function report(params: string, metrics: Metrics) {
+export function report(params: string, cursors: string[], metrics: Metrics) {
 	if (metrics.min > 5000) {
 		console.log(`${params} - TIMED OUT`);
 	} else {
 		console.log(params);
+		console.log(cursors.length);
 		console.log(metrics);
 	}
 }
