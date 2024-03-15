@@ -183,8 +183,8 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: u64,
 
-        /// Optional gas price for this call
-        #[clap(long)]
+        /// Optional gas price for this call. Currently use only for testing and not in production enviroments.
+        #[clap(hide = true)]
         gas_price: Option<u64>,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data

@@ -32,7 +32,8 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiObjectResponseQuery, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -735,6 +736,36 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+
+    // Try a call with customized gas price.
+    let args = vec![
+        SuiJsonValue::new(json!("123"))?,
+        SuiJsonValue::new(json!(address1))?,
+    ];
+
+    let result = SuiClientCommands::Call {
+        package,
+        module: "object_basics".to_string(),
+        function: "create".to_string(),
+        type_args: vec![],
+        args,
+        gas: None,
+        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        gas_price: Some(12345),
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::Call(txn_response) = result {
+        assert_eq!(
+            txn_response.transaction.unwrap().data.gas_data().price,
+            12345
+        );
+    } else {
+        panic!("Command failed with unexpected result.")
+    };
 
     Ok(())
 }
