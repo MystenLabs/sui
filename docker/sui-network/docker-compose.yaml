@@ -73,6 +73,30 @@ services:
       options:
         max-file: "10"
         max-size: "1g"
+  validator4:
+    networks:
+      - sui-network
+    image: mysten/sui-node:mainnet-v1.19.1
+    container_name: validator4
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+    volumes:
+      - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - /tmp/sui/db4:/opt/sui/db:rw
+    command:
+      [
+        "/usr/local/bin/sui-node",
+        "--config-path",
+        "/opt/sui/config/validator.yaml",
+      ]
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
   fullnode1:
     networks:
       - sui-network
@@ -84,7 +108,7 @@ services:
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
-      - /tmp/sui/db4:/opt/sui/db:rw
+      - /tmp/sui/db5:/opt/sui/db:rw
     command:
       [
         "/usr/local/bin/sui-node",

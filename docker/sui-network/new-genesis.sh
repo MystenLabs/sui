@@ -1,7 +1,12 @@
 #!/bin/bash
-# assumes sui cli installed (brew install sui)
+# assumes sui cli installed (brew install sui or cargo build --bin sui)
 
-DIR="genesis/files"
+cd genesis
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+
+DIR="files"
 
 if [ -d "$DIR" ]; then
     echo "Directory $DIR exists. Removing..."
@@ -12,5 +17,5 @@ echo "Creating directory $DIR..."
 mkdir "$DIR"
 echo "$DIR directory created."
 
-pip3 install -r genesis/requirements.txt
-genesis/generate.py --genesis-template genesis/compose-validators.yaml --target-directory "$DIR"
+
+./generate.py --genesis-template compose-validators.yaml --target-directory "$DIR"

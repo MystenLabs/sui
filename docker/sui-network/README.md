@@ -10,3 +10,11 @@ Steps for running:
 `./new-genesis.sh`
 (optional) `rm -r /tmp/sui`
 `docker compose up`
+
+
+The version of `sui` which is used to generate the genesis outputs much be on the same protocol version as the fullnode/validators (eg: `mysten/sui-node:mainnet-v1.19.1`)
+Here's an example of how to build a `sui` binary that creates a genesis which is compatible with the release: `v1.19.1`
+```
+git checkout releases/sui-v1.19.0-release
+cargo build --bin sui
+```
