@@ -270,7 +270,7 @@ async function events(client: SuiGraphQLClient<typeof queries>, pagination: Pagi
         return [];
     });
 
-	report(JSON.stringify(initialVariables, null, 2), cursors, metrics(durations));
+	report(initialVariables, cursors, metrics(durations));
 }
 
 function* emitEventTypes() {

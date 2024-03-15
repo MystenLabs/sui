@@ -102,14 +102,26 @@ export function metrics(durations: number[]): Metrics {
     };
 }
 
-export function report(params: string, cursors: string[], metrics: Metrics) {
-	if (metrics.min > 5000) {
-		console.log(`${params} - TIMED OUT`);
-	} else {
-		console.log(params);
-		console.log(cursors.length);
-		console.log(metrics);
-	}
+export function report<T>(params: T, cursors: string[], metrics: Metrics) {
+    let reportObject;
+
+    if (metrics.min > 5000) {
+        reportObject = {
+            status: "TIMED OUT",
+            params,
+            cursors
+        };
+    } else {
+        reportObject = {
+            status: "COMPLETED",
+            params,
+            cursors,
+            metrics
+        };
+    }
+
+    const jsonReport = JSON.stringify(reportObject, null, 2);
+    console.log(jsonReport);
 }
 
 /*
