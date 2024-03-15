@@ -31,6 +31,10 @@
 - [Packages](packages.md)
 - [Unit Tests](unit-testing.md)
 
+## Advanced Concepts
+
+- [Index Syntax Methods](index-syntax.md)
+
 ## Reference
 
 - [Coding Conventions](coding-conventions.md)
