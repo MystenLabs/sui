@@ -219,5 +219,5 @@ and `continue`.
 (loop (): &vector<vector<u8>>);
 ```
 
-If you need even more-precise control flow, such as breaking out of nested loops, the next chaper
+If you need even more-precise control flow, such as breaking out of nested loops, the next chapter
 presents the use of labeled control flow in Move.

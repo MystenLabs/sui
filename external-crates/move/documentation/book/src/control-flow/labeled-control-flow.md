@@ -12,7 +12,7 @@ to sum and some threshold, which behaves as follows:
 - If we would add a number to the current sum that would push us above the threshold, we instead
   return the current sum.
 
-We can write this by iterating over the vector of vecotrs as nested loops and labelling the outer
+We can write this by iterating over the vector of vectors as nested loops and labelling the outer
 one. If any addition in the inner loop would push us over the threshold, we can use `break` with the
 outer label to escape both loops at once:
 
