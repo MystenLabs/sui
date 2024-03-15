@@ -78,7 +78,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tracing::{info, instrument};
 
 use super::ExecutionCacheAPI;
@@ -1059,7 +1059,7 @@ impl ExecutionCacheWrite for WritebackCache {
         &'a self,
         _epoch_store: &AuthorityPerEpochStore,
         _owned_input_objects: &'a [ObjectRef],
-        _tx_digest: TransactionDigest,
+        _tx_digest: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
         todo!()
     }

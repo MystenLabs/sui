@@ -35,7 +35,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapFallible;
 use tracing::instrument;
 use typed_store::Map;
@@ -296,10 +296,10 @@ impl ExecutionCacheWrite for PassthroughCache {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
         self.store
-            .acquire_transaction_locks(epoch_store, owned_input_objects, tx_digest)
+            .acquire_transaction_locks(epoch_store, owned_input_objects, transaction)
             .boxed()
     }
 }

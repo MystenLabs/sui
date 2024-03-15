@@ -28,7 +28,7 @@ use sui_types::storage::{
     ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
@@ -497,7 +497,7 @@ pub trait ExecutionCacheWrite: Send + Sync {
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult>;
 }
 

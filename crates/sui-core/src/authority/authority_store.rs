@@ -40,7 +40,6 @@ use typed_store::{
     TypedStoreError,
 };
 
-use super::authority_per_epoch_store::LockDetailsWrapper;
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
@@ -928,7 +927,7 @@ impl AuthorityStore {
 
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
-        self.delete_locks(&mut write_batch, locks_to_delete)?;
+        self.delete_live_object_markers(&mut write_batch, locks_to_delete)?;
 
         write_batch
             .insert_batch(
@@ -958,10 +957,11 @@ impl AuthorityStore {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> SuiResult {
+        let tx_digest = *transaction.digest();
         if epoch_store.object_lock_split_tables_enabled() {
-            self.acquire_transaction_locks_v2(epoch_store, owned_input_objects, tx_digest)
+            self.acquire_transaction_locks_v2(epoch_store, owned_input_objects, transaction)
                 .await
         } else {
             self.acquire_transaction_locks_v1(epoch_store, owned_input_objects, tx_digest)
@@ -1059,8 +1059,9 @@ impl AuthorityStore {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> SuiResult {
+        let tx_digest = *transaction.digest();
         let epoch = epoch_store.epoch();
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
@@ -1077,9 +1078,7 @@ impl AuthorityStore {
 
         let epoch_tables = epoch_store.tables()?;
 
-        let locks = epoch_tables
-            .owned_object_locked_transactions
-            .multi_get(owned_input_objects)?;
+        let locks = epoch_tables.multi_get_locked_transactions(owned_input_objects)?;
 
         assert_eq!(locks.len(), live_object_markers.len());
 
@@ -1113,10 +1112,11 @@ impl AuthorityStore {
                 );
             }
 
-            let lock = lock.map(|l| l.migrate().into_inner());
-
             if let Some(previous_tx_digest) = &lock {
-                if previous_tx_digest != &tx_digest {
+                if previous_tx_digest == &tx_digest {
+                    // no need to re-write lock
+                    continue;
+                } else {
                     // TODO: add metrics here
                     info!(prev_tx_digest = ?previous_tx_digest,
                           cur_tx_digest = ?tx_digest,
@@ -1128,17 +1128,12 @@ impl AuthorityStore {
                 }
             }
 
-            locks_to_write.push((obj_ref, LockDetailsWrapper::from(tx_digest)));
+            locks_to_write.push((*obj_ref, tx_digest));
         }
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            let mut batch = epoch_tables.owned_object_locked_transactions.batch();
-            batch.insert_batch(
-                &epoch_tables.owned_object_locked_transactions,
-                locks_to_write,
-            )?;
-            batch.write()?;
+            epoch_tables.write_transaction_locks(transaction, locks_to_write)?;
         }
 
         Ok(())
@@ -1177,11 +1172,11 @@ impl AuthorityStore {
         let tables = epoch_store.tables()?;
         let epoch_id = epoch_store.epoch();
 
-        if let Some(lock_info) = tables.owned_object_locked_transactions.get(&obj_ref)? {
+        if let Some(tx_digest) = tables.get_locked_transaction(&obj_ref)? {
             Ok(ObjectLockStatus::LockedToTx {
                 locked_by_tx: LockDetailsDeprecated {
                     epoch: epoch_id,
-                    tx_digest: lock_info.migrate().into_inner(),
+                    tx_digest,
                 },
             })
         } else {
@@ -1335,7 +1330,7 @@ impl AuthorityStore {
     }
 
     /// Removes locks for a given list of ObjectRefs.
-    pub(crate) fn delete_locks(
+    fn delete_live_object_markers(
         &self,
         write_batch: &mut DBBatch,
         objects: &[ObjectRef],

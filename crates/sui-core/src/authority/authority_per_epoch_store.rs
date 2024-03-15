@@ -315,7 +315,7 @@ pub struct AuthorityEpochTables {
 
     /// Map from ObjectRef to transaction locking that object
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
-    pub(crate) owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
+    owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
     /// Signatures over transaction effects that were executed in the current epoch.
     /// Store this to avoid re-signing the same effects twice.
@@ -689,6 +689,45 @@ impl AuthorityEpochTables {
             .unbounded_iter()
             .skip_to(&key)?;
         Ok::<_, SuiError>(iter)
+    }
+
+    pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
+        Ok(self
+            .owned_object_locked_transactions
+            .get(obj_ref)?
+            .map(|l| l.migrate().into_inner()))
+    }
+
+    pub fn multi_get_locked_transactions(
+        &self,
+        owned_input_objects: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        Ok(self
+            .owned_object_locked_transactions
+            .multi_get(owned_input_objects)?
+            .into_iter()
+            .map(|l| l.map(|l| l.migrate().into_inner()))
+            .collect())
+    }
+
+    pub fn write_transaction_locks(
+        &self,
+        transaction: VerifiedSignedTransaction,
+        locks_to_write: impl IntoIterator<Item = (ObjectRef, LockDetails)>,
+    ) -> SuiResult {
+        let mut batch = self.owned_object_locked_transactions.batch();
+        batch.insert_batch(
+            &self.owned_object_locked_transactions,
+            locks_to_write
+                .into_iter()
+                .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+        )?;
+        batch.insert_batch(
+            &self.signed_transactions,
+            std::iter::once((*transaction.digest(), transaction.serializable_ref())),
+        )?;
+        batch.write()?;
+        Ok(())
     }
 }
 
