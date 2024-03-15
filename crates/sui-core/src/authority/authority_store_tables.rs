@@ -54,12 +54,10 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "indirect_move_objects_table_default_config"]
     pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
-    /// This is a map between object references of currently active objects that can be mutated,
-    /// and the transaction that they are lock on for use by this specific authority. Where an object
-    /// lock exists for an object version, but no transaction has been seen using it the lock is set
-    /// to None. The safety of consistent broadcast depend on each honest authority never changing
-    /// the lock once it is set. After a certificate for this object is processed it can be
-    /// forgotten.
+    /// This is a map between object references of currently active objects that can be mutated.
+    ///
+    /// For old epochs, it may also contain the transaction that they are lock on for use by this
+    /// specific validator. The transaction locks themselves are now in AuthorityPerEpochStore.
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     #[rename = "owned_object_transaction_locks"]
     pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
@@ -352,18 +350,6 @@ impl AuthorityPerpetualTables {
             objects.push(key);
         }
         Ok(objects)
-    }
-
-    pub fn has_object_lock(&self, object: &ObjectKey) -> SuiResult<bool> {
-        Ok(self
-            .live_owned_object_markers
-            .safe_iter_with_bounds(
-                Some((object.0, object.1, ObjectDigest::MIN)),
-                Some((object.0, object.1, ObjectDigest::MAX)),
-            )
-            .next()
-            .transpose()?
-            .is_some())
     }
 
     pub fn set_highest_pruned_checkpoint_without_wb(
