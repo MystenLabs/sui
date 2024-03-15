@@ -143,10 +143,10 @@ your definitions adhere to the following rules:
 1. The `#[syntax(index)]` attribute is added to the designated functions defined in the same module
    as the subject type.
 1. The designated functions have `public` visibility.
-3. The functions take a reference type as its subject type (its first argument) and returns a
+1. The functions take a reference type as its subject type (its first argument) and returns a
    matching references type (`mut` if the subject was `mut`).
-4. Each type has only a single mutable and single immutable definition.
-5. Immutable and mutable versions have type agreement:
+1. Each type has only a single mutable and single immutable definition.
+1. Immutable and mutable versions have type agreement:
     - The subject types match, differing only in mutability.
     - The return types match the mutability of their subject types.
     - Type parameters, if present, have identical constraints between both versions.
