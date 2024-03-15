@@ -1,0 +1,2 @@
+migrate
+> diff Move.toml Move.toml.expected
