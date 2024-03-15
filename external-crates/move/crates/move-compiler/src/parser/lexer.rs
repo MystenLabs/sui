@@ -15,7 +15,7 @@ use move_ir_types::location::Loc;
 use std::{collections::BTreeSet, fmt};
 
 // This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
-pub const TOK_COUNT: usize = 75;
+pub const TOK_COUNT: usize = 76;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
