@@ -63,8 +63,8 @@ while (i < 3) {
 
 ## Usage
 
-As the example indicates, if you define a datatype and an asoociated an index syntax method, anyone
-may invoke that method by writin invoking index syntax on a value of that type:
+As the example indicates, if you define a datatype and an associated index syntax method, anyone
+can invoke that method by writing index syntax on a value of that type:
 
 ```move
 let mat = matrix::make_matrix(...);
@@ -105,7 +105,7 @@ fun borrow_first(input: &Vs): &u64 {
 Note that, aside from the definition and type limitations described in the rest of this chapter,
 Move places no restrictions on the values your index syntax method takes as parameters. This allows
 you to implement intricate programmatic behavior when defining index syntax, such as a data
-structure that take a default value if the index is out of bounds:
+structure that takes a default value if the index is out of bounds:
 
 ```
 #[syntax(index)]
@@ -142,7 +142,7 @@ your definitions adhere to the following rules:
 
 1. The `#[syntax(index)]` attribute is added to the designated functions defined in the same module
    as the subject type.
-2. The designated functions have `public` visibility.
+1. The designated functions have `public` visibility.
 3. The functions take a reference type as its subject type (its first argument) and returns a
    matching references type (`mut` if the subject was `mut`).
 4. Each type has only a single mutable and single immutable definition.
@@ -156,7 +156,7 @@ The following content and additional examples describe these rules in greater de
 
 ### Declaration
 
-To declare an index syntax method, you add the `#[syntax(index)]` attribute above the relevant
+To declare an index syntax method, add the `#[syntax(index)]` attribute above the relevant
 function definition in the same module as the subject type's definition. This signals to the
 compiler that the function is an index accessor for the specified type.
 
@@ -233,8 +233,8 @@ public fun borrow_value(x: Matrix<u64>, ...): &u64 { ... }
     // ERROR because x is not a reference
 ```
 
-**The subject type must match mutability with the return type.** This restriction allows users to
-clarify the expected behavior when they borrow an indexed expression as `&vec[i]` versus `&mut
+**The subject type must match mutability with the return type.** This restriction allows you to
+clarify the expected behavior when borrowing an indexed expression as `&vec[i]` versus `&mut
 vec[i]`. The Move compiler uses the mutability marker to determine which borrow form to call to
 produce a reference of the appropriate mutability. As a result, we disallow index syntax methods
 whose subject and return mutability differ:
