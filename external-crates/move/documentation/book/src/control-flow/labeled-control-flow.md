@@ -2,14 +2,14 @@
 
 Move supports labeled control flow, allowing you to define and transfer control to specific labels
 in a function. For example, we can nest two loops and use `break` and `continue` with those labels
-to precisely specify control flow. Any `loop` or `while` form may be prefixed with a `'label:` form
-to allow us to break or continue directly there.
+to precisely specify control flow. You can prefix any `loop` or `while` form with a `'label:` form
+to allow breaking or continuing directly there.
 
 To demonstrate this behavior, consider a function that takes a nested vector of vectors of numbers
-to sum and some threshold, which behaves as follows:
+to sum against some threshold, which behaves as follows:
 
-- If all of the numbers, added together, are under the threshold, return that sum.
-- If we would add a number to the current sum that would push us above the threshold, we instead
+- If the sum of all the numbers are under the threshold, return that sum.
+- If adding a number to the current sum would surpass the threshold,
   return the current sum.
 
 We can write this by iterating over the vector of vectors as nested loops and labelling the outer
@@ -46,7 +46,7 @@ fun sum_until_threshold(input: &vector<vector<u64>>, threshold: u64): u64 {
 }
 ```
 
-These sorts of labels can also be used with a nested loop form, allowing you precise control in
+These sorts of labels can also be used with a nested loop form, providing precise control in
 larger bodies of code. For example, if we were processing a large table where each entry required
 iteration that might see us continuing the inner or outer loop, we could express that code using
 labels:

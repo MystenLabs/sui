@@ -33,10 +33,10 @@ fun foo() {
 }
 ```
 
-### Using `break` Inside Of `while` Loops
+### Using `break` Inside of `while` Loops
 
-In Move, `while` loops can use `break` to exit early: For example, suppose we were looking for the
-position of a value in a vector, and would like to  break if we find it:
+In Move, `while` loops can use `break` to exit early. For example, suppose we were looking for the
+position of a value in a vector, and would like to `break` if we find it:
 
 ```move
 fun find_position(values: &vector<u64>, target_value: u64): Option<u64> {
@@ -66,7 +66,7 @@ and then call `break`, which will cause the program to exit the loop.
 Finally, note that `break` for `while` loops cannot take a value: `while` loops always return the
 unit type `()` and thus `break` does, too.
 
-### Using `continue` Inside Of `while` Loops
+### Using `continue` Inside of `while` Loops
 
 Similar to `break`, Move's `while` loops can invoke `continue` to skip over part of the loop body.
 This allows us to skip part of a computation if a condition is not met, such as in the following
@@ -137,7 +137,7 @@ fun sum(n: u64): u64 {
 }
 ```
 
-### Using `break` With Values In `loop`
+### Using `break` with Values in `loop`
 
 Unlike `while` loops, which always return `()`, a `loop` may return a value using `break`. In doing
 so, the overall `loop` expression evaluates to a value of that type. For example, we can rewrite
@@ -162,10 +162,10 @@ fun find_position(values: &vector<u64>, target_value: u64): Option<u64> {
 This loop will break with an option result, and, as the last expression in the function body, will
 produce that value as the final function result.
 
-### Using `continue` Inside Of `loop` Expressions
+### Using `continue` Inside of `loop` Expressions
 
-As you might expect, `continue` can also be used inside a `loop`. Here is `sum_even` from above
-rewritten using `loop` with `break `and `continue` instead of `while`.
+As you might expect, `continue` can also be used inside a `loop`. Here is the previous `sum_even` function
+rewritten using `loop` with `break `and` continue` instead of `while`.
 
 ```move
 fun sum_even(values: &vector<u64>): u64 {
@@ -184,7 +184,7 @@ fun sum_even(values: &vector<u64>): u64 {
 }
 ```
 
-## The Type Of `while` And `loop`
+## The Type of `while` and `loop`
 
 In Move, loops are typed expressions. A `while` expression always has type `()`.
 

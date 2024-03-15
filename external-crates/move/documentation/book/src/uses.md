@@ -69,7 +69,7 @@ fun new_vec(): vector<std::option::Option<u8>> {
 }
 ```
 
-### Multiple aliases
+### Multiple Aliases
 
 If you want to add aliases for multiple module members at once, you can do so with the following
 syntax
@@ -112,7 +112,7 @@ use std::option::{Self};
 use std::option::{Self as option};
 ```
 
-### Multiple aliases for the same definition
+### Multiple Aliases for the Same Definition
 
 If needed, you can have as many aliases for any item as you like
 
@@ -130,10 +130,10 @@ fun new_vec(): vector<Option<u8>> {
 
 ### Nested imports
 
-You can also import multiple names at once in Move, using nested imports. This will bring all
+In Move, you can also import multiple names with the same `use` declaration. This brings all
 provided names into scope:
 
-```move=
+```move
 use std::{
     vector::{Self as vec, push_back},
     string::{String, Self as str}
@@ -237,7 +237,7 @@ will result in a parsing error
 }
 ```
 This allows you to shorten your import blocks in many situations. Note that these imports, as the
-ones above, are all subject to the naming and uniqueness rules described below.
+previous ones, are all subject to the naming and uniqueness rules described in the following sections.
 
 ## Naming rules
 
