@@ -1,6 +1,6 @@
 module a::m {
 
-    friend a::n1;
+    friend a::n;
 
     struct S { f: u64 }
 
