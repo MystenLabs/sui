@@ -178,7 +178,7 @@ export function RedirectHeader() {
 
 export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	// const enableExplorerRedirect = useFeatureIsOn('explorer-redirect');
-	const enableExplorerRedirect = true
+	const enableExplorerRedirect = true;
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const outageOverride = useFeatureIsOn('network-outage-override');
