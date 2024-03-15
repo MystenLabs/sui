@@ -28,7 +28,7 @@ use sui_types::storage::{
     ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
@@ -246,7 +246,7 @@ pub trait ExecutionCacheRead: Send + Sync {
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
 
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult;
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult;
 
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
     fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
@@ -495,9 +495,9 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// Attempt to acquire object locks for all of the owned input locks.
     fn acquire_transaction_locks<'a>(
         &'a self,
-        epoch_id: EpochId,
+        epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult>;
 }
 

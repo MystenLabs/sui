@@ -1729,6 +1729,7 @@ impl SuiNode {
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             state.get_object_store().as_ref(),
+            None,
         )
         .expect("EpochStartConfiguration construction cannot fail");
 

@@ -48,8 +48,7 @@ use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tracing::{debug, error, info, instrument, trace, warn, Instrument};
+use tracing::{debug, error, info, instrument, warn, Instrument};
 
 use self::authority_store::ExecutionLockWriteGuard;
 use self::authority_store_pruner::AuthorityStorePruningMetrics;
@@ -903,7 +902,8 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.set_transaction_lock(&owned_objects, signed_transaction.clone(), epoch_store)
+        self.execution_cache
+            .acquire_transaction_locks(epoch_store, &owned_objects, signed_transaction.clone())
             .await?;
 
         Ok(signed_transaction)
@@ -3933,47 +3933,6 @@ impl AuthorityState {
         ))
     }
 
-    // Helper function to manage transaction_locks
-
-    /// Set the transaction lock to a specific transaction
-    #[instrument(level = "trace", skip_all)]
-    pub async fn set_transaction_lock(
-        &self,
-        mutable_input_objects: &[ObjectRef],
-        signed_transaction: VerifiedSignedTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        self.lock_and_write_transaction(mutable_input_objects, signed_transaction, epoch_store)
-            .await
-    }
-
-    /// Acquires the transaction lock for a specific transaction, writing the transaction
-    /// to the transaction column family if acquiring the lock succeeds.
-    /// The lock service is used to atomically acquire locks.
-    #[instrument(level = "trace", skip_all)]
-    async fn lock_and_write_transaction(
-        &self,
-        owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let tx_digest = *transaction.digest();
-
-        // Acquire the lock on input objects
-        self.execution_cache
-            .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
-            .await?;
-
-        // Write transactions after because if we write before, there is a chance the lock can fail
-        // and this can cause invalid transactions to be inserted in the table.
-        // It is also safe being non-atomic with above, because if we crash before writing the
-        // transaction, we will just come back, re-acquire the same lock and write the transaction
-        // again.
-        epoch_store.insert_signed_transaction(transaction)?;
-
-        Ok(())
-    }
-
     // Returns coin objects for indexing for fullnode if indexing is enabled.
     #[instrument(level = "trace", skip_all)]
     fn fullnode_only_get_tx_coins_for_indexing(
@@ -4024,7 +3983,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
             .execution_cache
-            .get_lock(*object_ref, epoch_store.epoch())
+            .get_lock(*object_ref, epoch_store)
             .map_err(SuiError::from)?;
         let lock_info = match lock_info {
             ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
@@ -4039,28 +3998,8 @@ impl AuthorityState {
             }
             ObjectLockStatus::LockedToTx { locked_by_tx } => locked_by_tx,
         };
-        // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
-        // However we retry a couple times because the TX is written after the lock is acquired, so it might
-        // just be a race.
-        let tx_digest = &lock_info.tx_digest;
-        let mut retry_strategy = ExponentialBackoff::from_millis(2)
-            .factor(10)
-            .map(jitter)
-            .take(3);
 
-        let mut tx_option = epoch_store.get_signed_transaction(tx_digest)?;
-        while tx_option.is_none() {
-            if let Some(duration) = retry_strategy.next() {
-                // Wait to retry
-                tokio::time::sleep(duration).await;
-                trace!("Retrying getting pending transaction");
-            } else {
-                // No more retries, just quit
-                break;
-            }
-            tx_option = epoch_store.get_signed_transaction(tx_digest)?;
-        }
-        Ok(tx_option)
+        epoch_store.get_signed_transaction(&lock_info.tx_digest)
     }
 
     pub async fn get_objects(&self, objects: &[ObjectID]) -> SuiResult<Vec<Option<Object>>> {
