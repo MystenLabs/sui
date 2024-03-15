@@ -5,8 +5,8 @@ in a function. For example, we can nest two loops and use `break` and `continue`
 to precisely specify control flow. You can prefix any `loop` or `while` form with a `'label:` form
 to allow breaking or continuing directly there.
 
-To demonstrate this behavior, consider a function that takes a nested vector of vectors of numbers
-to sum against some threshold, which behaves as follows:
+To demonstrate this behavior, consider a function that takes nested vectors of numbers (i.e.,
+`vector<vector<u64>>`) to sum against some threshold, which behaves as follows:
 
 - If the sum of all the numbers are under the threshold, return that sum.
 - If adding a number to the current sum would surpass the threshold,
