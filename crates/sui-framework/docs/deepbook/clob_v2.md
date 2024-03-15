@@ -1132,6 +1132,15 @@ do not have this capability:
 
 
 
+<a name="0xdee9_clob_v2_EIncorrectPoolOwner"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EIncorrectPoolOwner">EIncorrectPoolOwner</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="0xdee9_clob_v2_EInvalidFee"></a>
 
 
@@ -1310,7 +1319,7 @@ Accessor functions
 Function to withdraw fees created from a pool
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_fees">withdraw_fees</a>&lt;BaseAsset, QuoteAsset&gt;(_pool_owner_cap: &<a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">clob_v2::PoolOwnerCap</a>, pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_fees">withdraw_fees</a>&lt;BaseAsset, QuoteAsset&gt;(pool_owner_cap: &<a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">clob_v2::PoolOwnerCap</a>, pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;QuoteAsset&gt;
 </code></pre>
 
 
@@ -1320,10 +1329,11 @@ Function to withdraw fees created from a pool
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_withdraw_fees">withdraw_fees</a>&lt;BaseAsset, QuoteAsset&gt;(
-    _pool_owner_cap: &<a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">PoolOwnerCap</a>,
+    pool_owner_cap: &<a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">PoolOwnerCap</a>,
     pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;QuoteAsset&gt; {
+    <b>assert</b>!(pool_owner_cap.owner == <a href="dependencies/sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&pool.id), <a href="clob_v2.md#0xdee9_clob_v2_EIncorrectPoolOwner">EIncorrectPoolOwner</a>);
     <b>let</b> quantity = <a href="clob_v2.md#0xdee9_clob_v2_quote_asset_trading_fees_value">quote_asset_trading_fees_value</a>(pool);
     <b>let</b> to_withdraw = <a href="dependencies/sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> pool.quote_asset_trading_fees, quantity);
     <a href="dependencies/sui-framework/coin.md#0x2_coin_from_balance">coin::from_balance</a>(to_withdraw, ctx)
@@ -1569,11 +1579,8 @@ Helper function that all the create pools now call to create pools.
 
     // Creates the capability <b>to</b> mark a pool owner.
     <b>let</b> id = <a href="dependencies/sui-framework/object.md#0x2_object_new">object::new</a>(ctx);
-    <b>let</b> owner = <a href="dependencies/sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&id);
-    <b>let</b> pool_owner_cap = <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">PoolOwnerCap</a> {
-        id,
-        owner
-    };
+    <b>let</b> owner = <a href="dependencies/sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&pool_uid);
+    <b>let</b> pool_owner_cap = <a href="clob_v2.md#0xdee9_clob_v2_PoolOwnerCap">PoolOwnerCap</a> { id, owner };
 
     <a href="dependencies/sui-framework/event.md#0x2_event_emit">event::emit</a>(<a href="clob_v2.md#0xdee9_clob_v2_PoolCreated">PoolCreated</a> {
         pool_id,
