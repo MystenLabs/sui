@@ -482,6 +482,9 @@ pub struct ProtocolConfig {
     /// Maximum number of modules in a Publish transaction.
     max_modules_in_publish: Option<u32>,
 
+    /// Maximum number of transitive dependencies in a package when publishing.
+    max_package_dependencies: Option<u32>,
+
     /// Maximum number of arguments in a move call or a ProgrammableTransaction's
     /// TransferObjects command.
     max_arguments: Option<u32>,
@@ -1296,6 +1299,7 @@ impl ProtocolConfig {
             max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
             max_gas_payment_objects: Some(256),
             max_modules_in_publish: Some(128),
+            max_package_dependencies: None,
             max_arguments: Some(512),
             max_type_arguments: Some(16),
             max_type_argument_depth: Some(16),
@@ -1955,6 +1959,11 @@ impl ProtocolConfig {
                     cfg.binary_field_handles = Some(500);
                     cfg.binary_field_instantiations = Some(250);
                     cfg.binary_friend_decls = Some(100);
+                    // reduce dependencies maximum
+                    cfg.max_package_dependencies = Some(32);
+                    cfg.max_modules_in_publish = Some(64);
+                    // bump execution version
+                    cfg.execution_version = Some(3);
                 }
                 39 => {}
                 40 => {

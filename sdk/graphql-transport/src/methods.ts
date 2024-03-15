@@ -1353,6 +1353,7 @@ export const RPC_METHODS: {
 			binary_field_handles: 'u16',
 			binary_field_instantiations: 'u16',
 			binary_friend_decls: 'u16',
+			max_package_dependencies: 'u32',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
