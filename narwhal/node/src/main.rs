@@ -11,8 +11,8 @@ mod benchmark_client;
 use benchmark_client::{parse_url, url_to_multiaddr, Client, OperatingMode};
 use clap::{Parser, Subcommand};
 use config::{
-    ChainIdentifier, Committee, CommitteeBuilder, Epoch, Export, Import, Parameters,
-    PrometheusMetricsParameters, WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
+    Committee, CommitteeBuilder, Epoch, Export, Import, Parameters, PrometheusMetricsParameters,
+    WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
 };
 use crypto::{KeyPair, NetworkKeyPair};
 use eyre::{Context, Result};
@@ -572,7 +572,6 @@ async fn run(
                     primary_keypair,
                     primary_network_keypair,
                     committee,
-                    ChainIdentifier::unknown(),
                     ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache,
                     client.clone(),
@@ -621,7 +620,6 @@ async fn run(
                     primary_keypair.copy(),
                     primary_network_keypair,
                     committee.clone(),
-                    ChainIdentifier::unknown(),
                     ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache.clone(),
                     client.clone(),

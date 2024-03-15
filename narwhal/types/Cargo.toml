@@ -31,7 +31,6 @@ tracing.workspace = true
 anyhow.workspace = true
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
-fastcrypto-tbls.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 anemo.workspace = true
 sui-protocol-config.workspace = true
