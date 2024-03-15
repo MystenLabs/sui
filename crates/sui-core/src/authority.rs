@@ -307,6 +307,12 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     10., 20., 30., 60., 90.,
 ];
 
+// Buckets for low latency samples. Starts from 10us.
+const LOW_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.00001, 0.00002, 0.00005, 0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1,
+    0.2, 0.5, 1., 2., 5., 10., 20., 50., 100.,
+];
+
 const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
     10.0, 50.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 2000.0,
     3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0, 50000.0, 100000.0, 1000000.0,
@@ -424,7 +430,7 @@ impl AuthorityMetrics {
             execution_load_input_objects_latency: register_histogram_with_registry!(
                 "authority_state_execution_load_input_objects_latency",
                 "Latency of loading input objects for execution",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                LOW_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
