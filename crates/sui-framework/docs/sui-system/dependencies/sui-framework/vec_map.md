@@ -38,6 +38,12 @@
 
 ## Struct `VecMap`
 
+A map data structure backed by a vector. The map is guaranteed not to contain duplicate keys, but entries
+are *not* sorted by key--entries are included in insertion order.
+All operations are O(N) in the size of the map--the intention of this data structure is only to provide
+the convenience of programming against a map API.
+Large maps should use handwritten parent/child relationships instead.
+Maps that need sorted iteration rather than insertion order iteration should also be handwritten.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
@@ -65,6 +71,7 @@
 
 ## Struct `Entry`
 
+An entry in the map
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_Entry">Entry</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
@@ -101,6 +108,7 @@
 
 <a name="0x2_vec_map_EKeyAlreadyExists"></a>
 
+This key already exists in the map
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EKeyAlreadyExists">EKeyAlreadyExists</a>: u64 = 0;
@@ -110,6 +118,7 @@
 
 <a name="0x2_vec_map_EKeyDoesNotExist"></a>
 
+This key does not exist in the map
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
@@ -119,6 +128,7 @@
 
 <a name="0x2_vec_map_EIndexOutOfBounds"></a>
 
+Trying to access an element of the map at an invalid index
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
@@ -128,6 +138,7 @@
 
 <a name="0x2_vec_map_EMapEmpty"></a>
 
+Trying to pop from a map that is empty
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>: u64 = 4;
@@ -137,6 +148,7 @@
 
 <a name="0x2_vec_map_EMapNotEmpty"></a>
 
+Trying to destroy a map that is not empty
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EMapNotEmpty">EMapNotEmpty</a>: u64 = 2;
@@ -148,6 +160,7 @@
 
 ## Function `empty`
 
+Create an empty <code><a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">empty</a>&lt;K: <b>copy</b>, V&gt;(): <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;
@@ -172,6 +185,8 @@
 
 ## Function `insert`
 
+Insert the entry <code>key</code> |-> <code>value</code> into <code>self</code>.
+Aborts if <code>key</code> is already bound in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">insert</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: K, value: V)
@@ -197,6 +212,7 @@
 
 ## Function `remove`
 
+Remove the entry <code>key</code> |-> <code>value</code> from self. Aborts if <code>key</code> is not bound in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_remove">remove</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): (K, V)
@@ -223,6 +239,7 @@
 
 ## Function `pop`
 
+Pop the most recently inserted entry from the map. Aborts if the map is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_pop">pop</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): (K, V)
@@ -249,6 +266,8 @@
 
 ## Function `get_mut`
 
+Get a mutable reference to the value bound to <code>key</code> in <code>self</code>.
+Aborts if <code>key</code> is not bound in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">get_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): &<b>mut</b> V
@@ -275,6 +294,8 @@
 
 ## Function `get`
 
+Get a reference to the value bound to <code>key</code> in <code>self</code>.
+Aborts if <code>key</code> is not bound in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_get">get</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): &V
@@ -301,6 +322,9 @@
 
 ## Function `try_get`
 
+Safely try borrow a value bound to <code>key</code> in <code>self</code>.
+Return Some(V) if the value exists, None otherwise.
+Only works for a "copyable" value as references cannot be stored in <code><a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_try_get">try_get</a>&lt;K: <b>copy</b>, V: <b>copy</b>&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;V&gt;
@@ -329,6 +353,7 @@
 
 ## Function `contains`
 
+Return true if <code>self</code> contains an entry for <code>key</code>, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">contains</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): bool
@@ -353,6 +378,7 @@
 
 ## Function `size`
 
+Return the number of entries in <code>self</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_size">size</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): u64
@@ -377,6 +403,7 @@
 
 ## Function `is_empty`
 
+Return true if <code>self</code> has 0 elements, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_is_empty">is_empty</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): bool
@@ -401,6 +428,7 @@
 
 ## Function `destroy_empty`
 
+Destroy an empty map. Aborts if <code>self</code> is not empty
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_destroy_empty">destroy_empty</a>&lt;K: <b>copy</b>, V&gt;(self: <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;)
@@ -427,6 +455,8 @@
 
 ## Function `into_keys_values`
 
+Unpack <code>self</code> into vectors of its keys and values.
+The output keys and values are stored in insertion order, *not* sorted by key.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_into_keys_values">into_keys_values</a>&lt;K: <b>copy</b>, V&gt;(self: <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): (<a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;, <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;V&gt;)
@@ -465,6 +495,8 @@
 
 ## Function `keys`
 
+Returns a list of keys in the map.
+Do not assume any particular ordering.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_keys">keys</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
@@ -497,6 +529,8 @@
 
 ## Function `get_idx_opt`
 
+Find the index of <code>key</code> in <code>self</code>. Return <code>None</code> if <code>key</code> is not in <code>self</code>.
+Note that map entries are stored in insertion order, *not* sorted by key.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
@@ -529,6 +563,8 @@
 
 ## Function `get_idx`
 
+Find the index of <code>key</code> in <code>self</code>. Aborts if <code>key</code> is not in <code>self</code>.
+Note that map entries are stored in insertion order, *not* sorted by key.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_get_idx">get_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): u64
@@ -555,6 +591,9 @@
 
 ## Function `get_entry_by_idx`
 
+Return a reference to the <code>idx</code>th entry of <code>self</code>. This gives direct access into the backing array of the map--use with caution.
+Note that map entries are stored in insertion order, *not* sorted by key.
+Aborts if <code>idx</code> is greater than or equal to <code><a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self)</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">get_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &V)
@@ -581,6 +620,9 @@
 
 ## Function `get_entry_by_idx_mut`
 
+Return a mutable reference to the <code>idx</code>th entry of <code>self</code>. This gives direct access into the backing array of the map--use with caution.
+Note that map entries are stored in insertion order, *not* sorted by key.
+Aborts if <code>idx</code> is greater than or equal to <code><a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self)</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">get_entry_by_idx_mut</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (&K, &<b>mut</b> V)
@@ -607,6 +649,8 @@
 
 ## Function `remove_entry_by_idx`
 
+Remove the entry at index <code>idx</code> from self.
+Aborts if <code>idx</code> is greater than or equal to <code><a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_size">size</a>(self)</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_remove_entry_by_idx">remove_entry_by_idx</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, idx: u64): (K, V)

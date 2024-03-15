@@ -33,6 +33,7 @@
 
 <a name="0x2_address_EAddressParseError"></a>
 
+Error from <code>from_bytes</code> when it is supplied too many or too few bytes.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
@@ -42,6 +43,7 @@
 
 <a name="0x2_address_LENGTH"></a>
 
+The length of an address, in bytes
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_LENGTH">LENGTH</a>: u64 = 32;
@@ -62,6 +64,8 @@
 
 ## Function `to_u256`
 
+Convert <code>a</code> into a u256 by interpreting <code>a</code> as the bytes of a big-endian integer
+(e.g., <code><a href="../../dependencies/sui-framework/address.md#0x2_address_to_u256">to_u256</a>(0x1) == 1</code>)
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_to_u256">to_u256</a>(a: <b>address</b>): u256
@@ -84,6 +88,8 @@
 
 ## Function `from_u256`
 
+Convert <code>n</code> into an address by encoding it as a big-endian integer (e.g., <code><a href="../../dependencies/sui-framework/address.md#0x2_address_from_u256">from_u256</a>(1) = @0x1</code>)
+Aborts if <code>n</code> > <code>MAX_ADDRESS</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_from_u256">from_u256</a>(n: u256): <b>address</b>
@@ -106,6 +112,8 @@
 
 ## Function `from_bytes`
 
+Convert <code>bytes</code> into an address.
+Aborts with <code><a href="../../dependencies/sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>bytes</code> is not 32
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_from_bytes">from_bytes</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <b>address</b>
@@ -128,6 +136,7 @@
 
 ## Function `to_bytes`
 
+Convert <code>a</code> into BCS-encoded bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_to_bytes">to_bytes</a>(a: <b>address</b>): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -152,6 +161,7 @@
 
 ## Function `to_ascii_string`
 
+Convert <code>a</code> to a hex-encoded ASCII string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a: <b>address</b>): <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
@@ -176,6 +186,7 @@
 
 ## Function `to_string`
 
+Convert <code>a</code> to a hex-encoded ASCII string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_to_string">to_string</a>(a: <b>address</b>): <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
@@ -200,6 +211,12 @@
 
 ## Function `from_ascii_bytes`
 
+Converts an ASCII string to an address, taking the numerical value for each character. The
+string must be Base16 encoded, and thus exactly 64 characters long.
+For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
+will be converted to the address @0xDEADB33F.
+Aborts with <code><a href="../../dependencies/sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>s</code> is not 64,
+or if an invalid character is encountered.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &<a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <b>address</b>
@@ -260,6 +277,7 @@
 
 ## Function `length`
 
+Length of a Sui address in bytes
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_length">length</a>(): u64
@@ -284,6 +302,7 @@
 
 ## Function `max`
 
+Largest possible address
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/address.md#0x2_address_max">max</a>(): u256

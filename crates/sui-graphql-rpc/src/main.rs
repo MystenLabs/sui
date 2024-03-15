@@ -10,10 +10,7 @@ use sui_graphql_rpc::config::{
     ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
 };
 use sui_graphql_rpc::server::builder::export_schema;
-use sui_graphql_rpc::server::graphiql_server::{
-    start_graphiql_server, start_graphiql_server_from_cfg_path,
-};
-use tracing::error;
+use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 
 // WARNING!!!
 //
@@ -41,19 +38,6 @@ static VERSION: Version = Version(const_str::concat!(
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
-        Command::GenerateConfig { path } => {
-            let cfg = ServerConfig::default();
-            if let Some(file) = path {
-                println!("Write config to file: {:?}", file);
-                cfg.to_yaml_file(file)
-                    .expect("Failed writing config to file");
-            } else {
-                println!(
-                    "{}",
-                    &cfg.to_yaml().expect("Failed serializing config to yaml")
-                );
-            }
-        }
         Command::GenerateDocsExamples => {
             let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             // we are looking to put examples content in
@@ -114,16 +98,6 @@ async fn main() {
 
             start_graphiql_server(&server_config, &VERSION)
                 .await
-                .unwrap();
-        }
-        Command::FromConfig { path } => {
-            println!("Starting server...");
-            start_graphiql_server_from_cfg_path(path.to_str().unwrap(), &VERSION)
-                .await
-                .map_err(|x| {
-                    error!("Error: {:?}", x);
-                    x
-                })
                 .unwrap();
         }
     }

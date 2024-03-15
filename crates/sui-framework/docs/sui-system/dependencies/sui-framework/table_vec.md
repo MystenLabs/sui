@@ -3,6 +3,7 @@
 
 # Module `0x2::table_vec`
 
+A basic scalable vector library implemented using <code>Table</code>.
 
 
 -  [Struct `TableVec`](#0x2_table_vec_TableVec)
@@ -47,7 +48,7 @@
 <code>contents: <a href="../../dependencies/sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;u64, Element&gt;</code>
 </dt>
 <dd>
-
+ The contents of the table vector.
 </dd>
 </dl>
 
@@ -81,6 +82,7 @@
 
 ## Function `empty`
 
+Create an empty TableVec.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_empty">empty</a>&lt;Element: store&gt;(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;
@@ -107,6 +109,7 @@
 
 ## Function `singleton`
 
+Return a TableVec of size one containing element <code>e</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_singleton">singleton</a>&lt;Element: store&gt;(e: Element, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;
@@ -133,6 +136,7 @@
 
 ## Function `length`
 
+Return the length of the TableVec.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_length">length</a>&lt;Element: store&gt;(t: &<a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;): u64
@@ -157,6 +161,7 @@
 
 ## Function `is_empty`
 
+Return if the TableVec is empty or not.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_is_empty">is_empty</a>&lt;Element: store&gt;(t: &<a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;): bool
@@ -181,6 +186,8 @@
 
 ## Function `borrow`
 
+Acquire an immutable reference to the <code>i</code>th element of the TableVec <code>t</code>.
+Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): &Element
@@ -206,6 +213,7 @@
 
 ## Function `push_back`
 
+Add element <code>e</code> to the end of the TableVec <code>t</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_push_back">push_back</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, e: Element)
@@ -231,6 +239,8 @@
 
 ## Function `borrow_mut`
 
+Return a mutable reference to the <code>i</code>th element in the TableVec <code>t</code>.
+Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): &<b>mut</b> Element
@@ -256,6 +266,8 @@
 
 ## Function `pop_back`
 
+Pop an element from the end of TableVec <code>t</code>.
+Aborts if <code>t</code> is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_pop_back">pop_back</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;): Element
@@ -282,6 +294,8 @@
 
 ## Function `destroy_empty`
 
+Destroy the TableVec <code>t</code>.
+Aborts if <code>t</code> is not empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_destroy_empty">destroy_empty</a>&lt;Element: store&gt;(t: <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;)
@@ -308,6 +322,8 @@
 
 ## Function `drop`
 
+Drop a possibly non-empty TableVec <code>t</code>.
+Usable only if the value type <code>Element</code> has the <code>drop</code> ability
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_drop">drop</a>&lt;Element: drop, store&gt;(t: <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;)
@@ -333,6 +349,8 @@
 
 ## Function `swap`
 
+Swaps the elements at the <code>i</code>th and <code>j</code>th indices in the TableVec <code>t</code>.
+Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64, j: u64)
@@ -363,6 +381,9 @@
 
 ## Function `swap_remove`
 
+Swap the <code>i</code>th element of the TableVec <code>t</code> with the last element and then pop the TableVec.
+This is O(1), but does not preserve ordering of elements in the TableVec.
+Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_swap_remove">swap_remove</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../../dependencies/sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): Element

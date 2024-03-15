@@ -35,7 +35,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapFallible;
 use tracing::instrument;
 use typed_store::Map;
@@ -174,12 +174,12 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.find_object_lt_or_eq_version(object_id, version)
     }
 
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
-        self.store.get_lock(obj_ref, epoch_id)
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
+        self.store.get_lock(obj_ref, epoch_store)
     }
 
     fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
-        self.store.get_latest_lock_for_object_id(object_id)
+        self.store.get_latest_live_version_for_object_id(object_id)
     }
 
     fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
@@ -294,12 +294,12 @@ impl ExecutionCacheWrite for PassthroughCache {
 
     fn acquire_transaction_locks<'a>(
         &'a self,
-        epoch_id: EpochId,
+        epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
         self.store
-            .acquire_transaction_locks(epoch_id, owned_input_objects, tx_digest)
+            .acquire_transaction_locks(epoch_store, owned_input_objects, transaction)
             .boxed()
     }
 }

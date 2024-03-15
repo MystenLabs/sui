@@ -3,6 +3,7 @@
 
 # Module `0x2::object`
 
+Sui object identifiers
 
 
 -  [Struct `ID`](#0x2_object_ID)
@@ -44,6 +45,12 @@
 
 ## Struct `ID`
 
+An object ID. This is used to reference Sui Objects.
+This is *not* guaranteed to be globally unique--anyone can create an <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> from a <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> or
+from an object, and ID's can be freely copied and dropped.
+Here, the values are not globally unique because there can be multiple values of type <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code>
+with the same underlying bytes. For example, <code><a href="../../dependencies/sui-framework/object.md#0x2_object_id">object::id</a>(&obj)</code> can be called as many times
+as you want for a given <code>obj</code>, and each <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> value will be identical.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a> <b>has</b> <b>copy</b>, drop, store
@@ -71,6 +78,12 @@
 
 ## Struct `UID`
 
+Globally unique IDs that define an object's ID in storage. Any Sui Object, that is a struct
+with the <code>key</code> ability, must have <code>id: <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> as its first field.
+These are globally unique in the sense that no two values of type <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> are ever equal, in
+other words for any two values <code>id1: <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> and <code>id2: <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code>, <code>id1</code> != <code>id2</code>.
+This is a privileged type that can only be derived from a <code>TxContext</code>.
+<code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> doesn't have the <code>drop</code> ability, so deleting a <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> requires a call to <code>delete</code>.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a> <b>has</b> store
@@ -101,6 +114,7 @@
 
 <a name="0x2_object_ENotSystemAddress"></a>
 
+Sender is not @0x0 the system address.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
@@ -110,6 +124,7 @@
 
 <a name="0x2_object_SUI_AUTHENTICATOR_STATE_ID"></a>
 
+The hardcoded ID for the singleton AuthenticatorState Object.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_SUI_AUTHENTICATOR_STATE_ID">SUI_AUTHENTICATOR_STATE_ID</a>: <b>address</b> = 7;
@@ -119,6 +134,7 @@
 
 <a name="0x2_object_SUI_CLOCK_OBJECT_ID"></a>
 
+The hardcoded ID for the singleton Clock Object.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_SUI_CLOCK_OBJECT_ID">SUI_CLOCK_OBJECT_ID</a>: <b>address</b> = 6;
@@ -128,6 +144,7 @@
 
 <a name="0x2_object_SUI_DENY_LIST_OBJECT_ID"></a>
 
+The hardcoded ID for the singleton DenyList.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a>: <b>address</b> = 403;
@@ -137,6 +154,7 @@
 
 <a name="0x2_object_SUI_RANDOM_ID"></a>
 
+The hardcoded ID for the singleton Random Object.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_SUI_RANDOM_ID">SUI_RANDOM_ID</a>: <b>address</b> = 8;
@@ -146,6 +164,7 @@
 
 <a name="0x2_object_SUI_SYSTEM_STATE_OBJECT_ID"></a>
 
+The hardcoded ID for the singleton Sui System State Object.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_SUI_SYSTEM_STATE_OBJECT_ID">SUI_SYSTEM_STATE_OBJECT_ID</a>: <b>address</b> = 5;
@@ -157,6 +176,7 @@
 
 ## Function `id_to_bytes`
 
+Get the raw bytes of a <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id_to_bytes">id_to_bytes</a>(id: &<a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -181,6 +201,7 @@
 
 ## Function `id_to_address`
 
+Get the inner bytes of <code>id</code> as an address.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id_to_address">id_to_address</a>(id: &<a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>): <b>address</b>
@@ -205,6 +226,7 @@
 
 ## Function `id_from_bytes`
 
+Make an <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> from raw bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>
@@ -229,6 +251,7 @@
 
 ## Function `id_from_address`
 
+Make an <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> from an address.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id_from_address">id_from_address</a>(bytes: <b>address</b>): <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>
@@ -253,6 +276,8 @@
 
 ## Function `sui_system_state`
 
+Create the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>SuiSystemState</code> object.
+This should only be called once from <code><a href="../../sui_system.md#0x3_sui_system">sui_system</a></code>.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -280,6 +305,8 @@
 
 ## Function `clock`
 
+Create the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>Clock</code> object.
+This should only be called once from <code><a href="../../dependencies/sui-framework/clock.md#0x2_clock">clock</a></code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/clock.md#0x2_clock">clock</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -306,6 +333,8 @@
 
 ## Function `authenticator_state`
 
+Create the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>AuthenticatorState</code> object.
+This should only be called once from <code><a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state">authenticator_state</a></code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state">authenticator_state</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -332,6 +361,8 @@
 
 ## Function `randomness_state`
 
+Create the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>Random</code> object.
+This should only be called once from <code><a href="../../dependencies/sui-framework/random.md#0x2_random">random</a></code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_randomness_state">randomness_state</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -358,6 +389,8 @@
 
 ## Function `sui_deny_list_object_id`
 
+Create the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>DenyList</code> object.
+This should only be called once from <code><a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a></code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -384,6 +417,7 @@
 
 ## Function `uid_as_inner`
 
+Get the inner <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> of <code>uid</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_uid_as_inner">uid_as_inner</a>(uid: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>): &<a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>
@@ -408,6 +442,7 @@
 
 ## Function `uid_to_inner`
 
+Get the raw bytes of a <code>uid</code>'s inner <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_uid_to_inner">uid_to_inner</a>(uid: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>): <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>
@@ -432,6 +467,7 @@
 
 ## Function `uid_to_bytes`
 
+Get the raw bytes of a <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_uid_to_bytes">uid_to_bytes</a>(uid: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -456,6 +492,7 @@
 
 ## Function `uid_to_address`
 
+Get the inner bytes of <code>id</code> as an address.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_uid_to_address">uid_to_address</a>(uid: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>): <b>address</b>
@@ -480,6 +517,8 @@
 
 ## Function `new`
 
+Create a new object. Returns the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> that must be stored in a Sui object.
+This is the only way to create <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code>s.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_new">new</a>(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -506,6 +545,7 @@
 
 ## Function `delete`
 
+Delete the object and it's <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code>. This is the only way to eliminate a <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_delete">delete</a>(id: <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>)
@@ -531,6 +571,7 @@
 
 ## Function `id`
 
+Get the underlying <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> of <code>obj</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id">id</a>&lt;T: key&gt;(obj: &T): <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>
@@ -555,6 +596,7 @@
 
 ## Function `borrow_id`
 
+Borrow the underlying <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> of <code>obj</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_borrow_id">borrow_id</a>&lt;T: key&gt;(obj: &T): &<a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>
@@ -579,6 +621,7 @@
 
 ## Function `id_bytes`
 
+Get the raw bytes for the underlying <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> of <code>obj</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id_bytes">id_bytes</a>&lt;T: key&gt;(obj: &T): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -603,6 +646,7 @@
 
 ## Function `id_address`
 
+Get the inner bytes for the underlying <code><a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a></code> of <code>obj</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_id_address">id_address</a>&lt;T: key&gt;(obj: &T): <b>address</b>
@@ -627,6 +671,11 @@
 
 ## Function `borrow_uid`
 
+Get the <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for <code>obj</code>.
+Safe because Sui has an extra bytecode verifier pass that forces every struct with
+the <code>key</code> ability to have a distinguished <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> field.
+Cannot be made public as the access to <code><a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a></code> for a given object must be privileged, and
+restrictable in the object's module.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_borrow_uid">borrow_uid</a>&lt;T: key&gt;(obj: &T): &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
@@ -649,6 +698,7 @@
 
 ## Function `new_uid_from_hash`
 
+Generate a new UID specifically used for creating a UID from a hash
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>

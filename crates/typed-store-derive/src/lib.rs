@@ -379,7 +379,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             pub fn build(&self) -> typed_store::rocks::DBMapTableConfigMap {
                 typed_store::rocks::DBMapTableConfigMap::new([
                     #(
-                        (stringify!(#cf_names).to_owned(), self.#field_names.clone()),
+                        (stringify!(#field_names).to_owned(), self.#field_names.clone()),
                     )*
                 ].into_iter().collect())
             }
@@ -564,10 +564,20 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 }
             }
 
+            fn cf_name_to_table_name(cf_name: &str) -> eyre::Result<&'static str> {
+                Ok(match cf_name {
+                    #(
+                        stringify!(#cf_names) => stringify!(#field_names),
+                    )*
+                    _ => eyre::bail!("No such cf name: {}", cf_name),
+                })
+            }
+
             /// Dump all key-value pairs in the page at the given table name
             /// Tables must be opened in read only mode using `open_tables_read_only`
-            pub fn dump(&self, table_name: &str, page_size: u16,
-                page_number: usize) -> eyre::Result<std::collections::BTreeMap<String, String>> {
+            pub fn dump(&self, cf_name: &str, page_size: u16, page_number: usize) -> eyre::Result<std::collections::BTreeMap<String, String>> {
+                let table_name = Self::cf_name_to_table_name(cf_name)?;
+
                 Ok(match table_name {
                     #(
                         stringify!(#field_names) => {
