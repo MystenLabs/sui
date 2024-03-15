@@ -261,7 +261,7 @@ pub enum ManagedAddressUpdate {
 /// Saves published or upgraded package addresses in the lock file.
 pub fn update_managed_address(
     file: &mut LockFile,
-    environment: String,
+    environment: &str,
     managed_address_update: ManagedAddressUpdate,
 ) -> Result<()> {
     use toml_edit::{value, Document, Item, Table};
@@ -286,7 +286,7 @@ pub fn update_managed_address(
             chain_id,
         } => {
             env_table[CHAIN_ID_KEY] = value(chain_id);
-            env_table[ORIGINAL_PUBLISHED_ID_KEY] = value(original_id.to_string());
+            env_table[ORIGINAL_PUBLISHED_ID_KEY] = value(&original_id);
             env_table[LATEST_PUBLISHED_ID_KEY] = value(original_id);
             env_table[PUBLISHED_VERSION_KEY] = value("1");
         }
