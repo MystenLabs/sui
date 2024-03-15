@@ -112,7 +112,6 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
                 node.namedChildren.length > 1 ? ': ' : '' ,
                 join(' + ', abilities),
             ];
-
         case 'datatype_fields':
             return path.call(print, 'firstNamedChild');
         case 'named_fields':
