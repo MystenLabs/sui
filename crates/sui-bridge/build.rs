@@ -16,20 +16,33 @@ fn main() -> Result<(), ExitStatus> {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false);
-    eprintln!("Forge installed!");
+    if forge_installed {
+        eprintln!("Forge is installed");
+    }
     if !forge_installed {
         eprintln!("Installing forge");
-        let output = Command::new("curl")
-            .arg("-L")
-            .arg("https://foundry.paradigm.xyz")
+        let install_cmd = "curl -L https://foundry.paradigm.xyz | bash";
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(install_cmd)
             .output()
-            .expect("Failed to download Forge");
+            .expect("Failed to install Forge");
 
         if !output.status.success() {
-            eprintln!("Error downloading Forge: {:?}", output);
+            eprintln!("Error installing forge: {:?}", output);
+            exit(1);
+        }
+
+        let output = Command::new("foundryup")
+            .output()
+            .expect("Failed to install Forge");
+
+        if !output.status.success() {
+            eprintln!("Error running foundryup: {:?}", output);
             exit(1);
         }
     }
+    eprintln!("Forge installed!");
 
     // check if dependencies are installed
     if is_directory_empty(bridge_lib_path) {
