@@ -1,4 +1,4 @@
-# Conditionals
+# Conditional `if` Expressions
 
 An `if` expression specifies that some code should only be evaluated if a certain condition is true.
 For example:
@@ -46,7 +46,8 @@ if (condition) true_branch // implied default: else ()
 if (condition) true_branch else ()
 ```
 
-Commonly, [`if` expressions](./conditionals.md) are used in conjunction with expression blocks.
+Commonly, `if` expressions are used in conjunction with [expression
+blocks](../variables.md#expression-blocks).
 
 ```move
 let maximum = if (x > y) x else y;
