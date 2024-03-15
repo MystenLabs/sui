@@ -36,13 +36,18 @@ pub struct Committee {
 }
 
 impl Committee {
-    pub fn new(epoch: Epoch, authorities: Vec<Authority>) -> Self {
+    pub fn new(epoch: Epoch, mut authorities: Vec<Authority>) -> Self {
         assert!(!authorities.is_empty(), "Committee cannot be empty!");
         assert!(
             authorities.len() < u32::MAX as usize,
             "Too many authorities ({})!",
             authorities.len()
         );
+
+        // sort the authorities by their protocol (public) key in ascending order - critical to be
+        // aligned with the SUI committee.
+        authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
+
         let total_stake = authorities.iter().map(|a| a.stake).sum();
         assert_ne!(total_stake, 0, "Total stake cannot be zero!");
         let quorum_threshold = 2 * total_stake / 3 + 1;
