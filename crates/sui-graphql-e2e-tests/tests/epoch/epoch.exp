@@ -15,7 +15,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4 'run'. lines 16-18:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [78, 58, 44, 251, 207, 98, 72, 238, 33, 68, 113, 221, 92, 15, 125, 108, 253, 195, 217, 214, 236, 87, 167, 54, 157, 252, 96, 32, 50, 112, 243, 94, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [138, 42, 97, 253, 61, 22, 31, 106, 213, 157, 60, 241, 33, 156, 159, 193, 184, 127, 83, 194, 143, 198, 11, 54, 121, 139, 166, 151, 113, 26, 5, 97, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(4,0)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(3,0)
@@ -52,7 +52,7 @@ Response: {
           ]
         },
         "validatorCandidatesSize": 0,
-        "inactivePoolsId": "0xc76fdf887aefbd77746d364e773b23cb2f53024f8554b1d03a4b6c3d77b92505"
+        "inactivePoolsId": "0x8713eb91a5cf17ed1c0d8e008aa785666469e7ab693ef8761efa1ee3ebbe3ab9"
       },
       "totalGasFees": "1000000",
       "totalStakeRewards": "1000000",
@@ -67,13 +67,13 @@ Response: {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
             },
-            "digest": "DaoyaehwCEqNa5bCCT4Ns9kXTv6zsnBLDFGL3ueb7mNL"
+            "digest": "74v5nnByFFTd2kePFY4X2skrHsRojfdnb96562Yr3hWM"
           },
           {
             "kind": {
               "__typename": "EndOfEpochTransaction"
             },
-            "digest": "EZc1ezTVB9ydCDbocchM2UZhv9uist1EEJb8VV9aVtZq"
+            "digest": "5NBZfJP5y3yrNaBesbtkatNSHoYCghaK6uCNP1uf8c2w"
           }
         ]
       }
