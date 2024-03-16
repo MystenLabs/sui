@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_package::BuildConfig as MoveBuildConfig;
 use move_cli::base::migrate;
+use move_package::BuildConfig as MoveBuildConfig;
 use std::path::PathBuf;
 
 #[derive(Parser)]
