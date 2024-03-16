@@ -1982,6 +1982,7 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             T::Multiple(v) => v.iter().for_each(|t| self.type_symbols(t)),
             T::Unit => (),
+            T::UnresolvedError => (),
         }
     }
 
