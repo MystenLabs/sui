@@ -33,12 +33,14 @@ SIMTEST_LOGS_DIR=~/simtest_logs
 LOG_DIR="${SIMTEST_LOGS_DIR}/${DATE}"
 LOG_FILE="$LOG_DIR/log"
 
+# By default run 30 iterations for each test. But allow overrides.
+${MSIM_TEST_NUM:=30}
+
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and
 # don't need to be done inside of the for loop below.
 # TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
 MSIM_TEST_SEED="$SEED" \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-MSIM_TEST_NUM=30 \
 scripts/simtest/cargo-simtest simtest \
   --color always \
   --test-threads "$NUM_CPUS" \
