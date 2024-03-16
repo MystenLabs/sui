@@ -47,8 +47,7 @@ max_size_written_objects_system_tx: 50000000
 max_serialized_tx_effects_size_bytes: 524288
 max_serialized_tx_effects_size_bytes_system_tx: 8388608
 max_gas_payment_objects: 256
-max_modules_in_publish: 64
-max_package_dependencies: 32
+max_modules_in_publish: 128
 max_arguments: 512
 max_type_arguments: 16
 max_type_argument_depth: 16
@@ -207,7 +206,7 @@ check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
-execution_version: 3
+execution_version: 2
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
