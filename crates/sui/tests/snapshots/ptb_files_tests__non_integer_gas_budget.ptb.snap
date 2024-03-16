@@ -10,11 +10,3 @@ expression: "results.join(\"\\n\")"
    ·                ╰── Expected a u64 value
    ╰────
 
-  × Error when processing PTB
-   ╭────
- 1 │ --gas-budget @0x1 
-   ·                  ▲
-   ·                  ╰── Gas budget not set.
-   ╰────
-  help: Use --gas-budget <u64> to set a gas budget
-

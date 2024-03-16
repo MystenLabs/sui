@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    client_commands::{estimate_gas_budget, max_gas_budget},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
@@ -27,7 +28,7 @@ use sui_types::{
     digests::TransactionDigest,
     gas::GasCostSummary,
     quorum_driver_types::ExecuteTransactionRequestType,
-    transaction::{ProgrammableTransaction, Transaction, TransactionData},
+    transaction::{ProgrammableTransaction, Transaction, TransactionData, TransactionKind},
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
@@ -98,9 +99,7 @@ impl PTB {
             );
             return Ok(());
         }
-
         let client = context.get_client().await?;
-
         let (res, warnings) = Self::build_ptb(program, context, client).await;
 
         // Render warnings
@@ -131,17 +130,6 @@ impl PTB {
             anyhow::bail!("No active address, cannot execute PTB");
         };
 
-        // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = program_metadata.gas_object_id {
-            context.get_object_ref(gas.value).await?
-        } else {
-            context
-                .gas_for_owner_budget(sender, program_metadata.gas_budget.value, BTreeSet::new())
-                .await?
-                .1
-                .object_ref()
-        };
-
         // get the gas price
         let gas_price = context
             .get_client()
@@ -149,14 +137,38 @@ impl PTB {
             .read_api()
             .get_reference_gas_price()
             .await?;
+
+        let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: ptb.inputs,
+            commands: ptb.commands,
+        });
+
+        let gas_budget = if let Some(gas_budget) = program_metadata.gas_budget {
+            gas_budget.value
+        } else {
+            let tx = TransactionData::new_with_gas_coins(
+                tx_kind.clone(),
+                sender,
+                vec![],
+                max_gas_budget(context).await?,
+                gas_price,
+            );
+            estimate_gas_budget(context, tx).await?
+        };
+
+        // find the gas coins if we have no gas coin given
+        let coins = if let Some(gas) = program_metadata.gas_object_id {
+            context.get_object_ref(gas.value).await?
+        } else {
+            context
+                .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
+                .await?
+                .1
+                .object_ref()
+        };
+
         // create the transaction data that will be sent to the network
-        let tx_data = TransactionData::new_programmable(
-            sender,
-            vec![coins],
-            ptb,
-            program_metadata.gas_budget.value,
-            gas_price,
-        );
+        let tx_data = TransactionData::new(tx_kind, sender, coins, gas_budget, gas_price);
         // sign the tx
         let signature =
             context

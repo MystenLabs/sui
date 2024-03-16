@@ -31,12 +31,3 @@ expression: "results.join(\"\\n\")"
    ╰────
   help: Expected an argument here
 
-  × Error when processing PTB
-   ╭─[3:22]
- 2 │ --split-coins gas [0] 5
- 3 │ --split-coins [1] gas 
-   ·                      ▲
-   ·                      ╰── Gas budget not set.
-   ╰────
-  help: Use --gas-budget <u64> to set a gas budget
-

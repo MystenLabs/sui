@@ -1111,7 +1111,7 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: None,
-            gas_budget: 50000000,
+            gas_budget: Some(50000000),
             gas: None,
             count: Some(10),
             serialize_unsigned_transaction: false,
@@ -1239,7 +1239,7 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: None,
-            gas_budget: 50000000,
+            gas_budget: Some(50000000),
             gas: None,
             count: Some(10),
             serialize_unsigned_transaction: false,
@@ -1398,7 +1398,7 @@ mod tests {
         let res = SuiClientCommands::PayAllSui {
             input_coins: vec![*bad_gas.id()],
             recipient: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
-            gas_budget: 2_000_000,
+            gas_budget: Some(2_000_000),
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
         }
@@ -1521,7 +1521,7 @@ mod tests {
         let res = SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![tiny_value]),
-            gas_budget: 50000000,
+            gas_budget: Some(50000000),
             gas: None,
             count: None,
             serialize_unsigned_transaction: false,
@@ -1606,7 +1606,7 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![reasonable_value]),
-            gas_budget: 50000000,
+            gas_budget: Some(50000000),
             gas: None,
             count: None,
             serialize_unsigned_transaction: false,
@@ -1622,7 +1622,7 @@ mod tests {
             SuiClientCommands::TransferSui {
                 to: KeyIdentity::Address(destination_address),
                 sui_coin_object_id: *gas.id(),
-                gas_budget: 50000000,
+                gas_budget: Some(50000000),
                 amount: None,
                 serialize_unsigned_transaction: false,
                 serialize_signed_transaction: false,
@@ -1679,7 +1679,7 @@ mod tests {
         let _res = SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![tiny_value]),
-            gas_budget: 50000000,
+            gas_budget: Some(50000000),
             gas: None,
             count: None,
             serialize_unsigned_transaction: false,
@@ -1695,7 +1695,7 @@ mod tests {
             SuiClientCommands::TransferSui {
                 to: KeyIdentity::Address(destination_address),
                 sui_coin_object_id: *gas.id(),
-                gas_budget: 50000000,
+                gas_budget: Some(50000000),
                 amount: None,
                 serialize_unsigned_transaction: false,
                 serialize_signed_transaction: false,
@@ -1813,7 +1813,7 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: None,
-            gas_budget: 50000000,
+            gas_budget: Some(50000000),
             gas: None,
             count: Some(10),
             serialize_unsigned_transaction: false,

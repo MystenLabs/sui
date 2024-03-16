@@ -585,8 +585,10 @@ async fn do_test_full_node_sync_flood() {
                         count: None,
                         coin_id: object_to_split.0,
                         gas: Some(gas_object_id),
-                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
-                            * context.get_reference_gas_price().await.unwrap(),
+                        gas_budget: Some(
+                            TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                                * context.get_reference_gas_price().await.unwrap(),
+                        ),
                         serialize_unsigned_transaction: false,
                         serialize_signed_transaction: false,
                     }

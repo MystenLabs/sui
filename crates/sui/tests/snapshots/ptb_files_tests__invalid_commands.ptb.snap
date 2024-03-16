@@ -61,12 +61,3 @@ expression: "results.join(\"\\n\")"
    ╰────
   help: Did you mean '--transfer-objects'?
 
-  × Error when processing PTB
-   ╭─[6:18]
- 5 │ --move-vec
- 6 │ --transfer-object 
-   ·                  ▲
-   ·                  ╰── Gas budget not set.
-   ╰────
-  help: Use --gas-budget <u64> to set a gas budget
-
