@@ -67,4 +67,15 @@ mod compatibility_tests {
                 "The current framework differs the latest bytecode snapshot. Did you forget to upgrade protocol version?"
             );
     }
+
+    #[test]
+    fn check_no_dirty_manifest_commit() {
+        let snapshots = load_bytecode_snapshot_manifest();
+        for snapshot in snapshots.values() {
+            assert!(
+                !snapshot.git_revision().contains("dirty"),
+                "If you are trying to regenerate the bytecode snapshot after cherry-picking, please do so in a standalone PR after the cherry-pick is merged on the release branch.",
+            );
+        }
+    }
 }
