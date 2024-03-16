@@ -21,7 +21,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 
 task 4 'view-object'. lines 34-34:
 Owner: Account Address ( validator_0 )
 Version: 1
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 30000000000000000u64}}
+Contents: sui_system::validator_cap::UnverifiedValidatorOperationCap {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, authorizer_validator_address: validator_0}
 
 task 5 'view-object'. lines 36-36:
 Owner: Account Address ( A )
@@ -44,7 +44,7 @@ task 9 'advance-epoch'. lines 44-44:
 Epoch advanced: 5
 
 task 10 'view-checkpoint'. lines 46-46:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: AniVJHs297J9iJZDe3yBt4mqNfMA3v6nj38JasBDPtic,
+CheckpointSummary { epoch: 5, seq: 10, content_digest: C61cKCJWb9sw7ntgsD6WSAXioh4ogmbNMty8v4oxsjhB,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 11 'run-graphql'. lines 48-53:
@@ -116,8 +116,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x8b1f480a76190d0222c4e2c8c5e4f55058a82d6fa5ff3661e0a299b9ba6320c0",
-              "digest": "AavRG5UW1mn7DicJxcXnE2taoWGWuZs7jp1oL16aEL59",
+              "address": "0x127ebc904fc866d4677fca7f7b428bff5b88527c305434c882e712945bbeb630",
+              "digest": "Cmx2Tcf2RoMqnxriyZFSccHtHk7jA4HVKRKykrNMtKpW",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -142,8 +142,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x8b1f480a76190d0222c4e2c8c5e4f55058a82d6fa5ff3661e0a299b9ba6320c0",
-              "digest": "AavRG5UW1mn7DicJxcXnE2taoWGWuZs7jp1oL16aEL59",
+              "address": "0x127ebc904fc866d4677fca7f7b428bff5b88527c305434c882e712945bbeb630",
+              "digest": "Cmx2Tcf2RoMqnxriyZFSccHtHk7jA4HVKRKykrNMtKpW",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -157,8 +157,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x2aa4063ca7b1d33279085e8c72d703b5ed2dbf7aa54190e251fbe407ac800cdb",
-              "digest": "6yoYL8RMHBww4HesVmXb4kth7ZCWubhzEZJoMud2vUFW",
+              "address": "0x00ca13a0bf70f8768696ebd40a05bafb132e05f020f4186a17ba90e6737abaca",
+              "digest": "9R3vvuwUS4Zk1joFrUCAg6azt9kfBGVJgpH5MoEVfu8y",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -166,8 +166,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0x359a02240ea120006e49dfebcab20bc73486210e6cbf04d9b4e19f0d840c5112",
-              "digest": "856XHHwtVw6Gzqno9ZDWM2FatquccP4s5KNi8Prxthr3",
+              "address": "0x76fb11d049dd7b1328f2cfb196f1cb18d444d20c9c5ca59c832e5a15ac80594c",
+              "digest": "uaafRXthffyBnsd17L6D8wWQtaYrsbyJ9U4fRsu4tJW",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -176,7 +176,7 @@ Response: {
           {
             "node": {
               "address": "0xa75755ab1ad9cc5a1f9e0745d770d7eeb724d30fca9a96d4dc881e2e57aa8c66",
-              "digest": "32MKoUFFXbFZ69ZQeQRibpp6BKdBK2ZuM7aMtfsSup2s",
+              "digest": "AycePHSxuYVtwTaK9xG38Bjb7T1237mEC4U1WUDy1WFW",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -184,8 +184,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xb094dba9fac18584380c8d35082caa700a2d39eb160f8cef2615020f7f80da07",
-              "digest": "FUSnmmi1usMfcSafJL6eGT2esZcK6vXpVhPwf4K6cdCb",
+              "address": "0xaf12bf78851720ffb7583032490b150ab1c37e430628d91d7e84dbdbc93c17e3",
+              "digest": "7vsLSSY4ZntwJSkTfB54MGDxbw8RGQtUQjtNX64PDeo1",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -193,8 +193,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xb508bf6039f4f81dfa88e0e2f073da3b673bbbec59169d7438aaed2d2fc9fb7a",
-              "digest": "XQArwaEgKhWim2UyLmyoFYJ82L1hZyu2B5zxFaNrxKE",
+              "address": "0xc68bdb786bf1563aaf02ca2ed63d7f7d83c71ff277dde05fbdd962030c6e180f",
+              "digest": "CvbTB1bRP3ngTtwkE2YSfFaSNWkpUV5YgE3ikqwaiMJa",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -202,8 +202,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xc7734b2572fde0ffe9748ee5e82681a7e4d72766906be3866df932b35b4f94c8",
-              "digest": "CQCUVoQ28rWQB6LqpzZEt9t4QYgzTWMgMPafMQyhE5jQ",
+              "address": "0xe03a1feb19afc2c173044f6d778432c74c567604e0dcc759ae06680453f460d4",
+              "digest": "FbF9oAL5jJTFkxUkPSEPyUDDbWEhuFzzem353cRGgCG3",
               "owner": {
                 "__typename": "AddressOwner"
               }

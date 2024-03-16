@@ -14,8 +14,8 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use miette::Severity;
 use move_binary_format::{
-    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
-    file_format_common::VERSION_MAX,
+    access::ModuleAccess, binary_config::BinaryConfig, binary_views::BinaryIndexedView,
+    file_format::SignatureToken,
 };
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
@@ -502,7 +502,7 @@ impl<'a> PTBBuilder<'a> {
         package_name_loc: Span,
     ) -> PTBResult<Vec<Tx::Argument>> {
         let module = package
-            .deserialize_module(module_name, VERSION_MAX, true)
+            .deserialize_module(module_name, &BinaryConfig::standard())
             .map_err(|e| {
                 let help_message = if package.serialized_module_map().is_empty() {
                     Some("No modules found in this package".to_string())

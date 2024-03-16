@@ -2,12 +2,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{check_bounds::BoundsChecker, errors::*, file_format::*, file_format_common::*};
+use crate::{
+    binary_config::{BinaryConfig, TableConfig},
+    check_bounds::BoundsChecker,
+    errors::*,
+    file_format::*,
+    file_format_common::*,
+};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,
     vm_status::StatusCode,
 };
-use std::{collections::HashSet, convert::TryInto, io::Read};
+use std::{collections::HashSet, convert::TryInto, io::{Cursor, Read}};
 
 impl CompiledScript {
     /// Deserializes a &[u8] slice into a `CompiledScript` instance.
@@ -37,8 +43,7 @@ impl CompiledModule {
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
         Self::deserialize_with_config(
             binary,
-            VERSION_MAX,
-            /* check_no_extraneous_bytes */ false,
+            &BinaryConfig::with_extraneous_bytes_check(false),
         )
     }
 
@@ -47,14 +52,9 @@ impl CompiledModule {
     /// - Can specify if the deserializer should error on trailing bytes
     pub fn deserialize_with_config(
         binary: &[u8],
-        max_binary_format_version: u32,
-        check_no_extraneous_bytes: bool,
+        binary_config: &BinaryConfig,
     ) -> BinaryLoaderResult<Self> {
-        let module = deserialize_compiled_module(
-            binary,
-            max_binary_format_version,
-            check_no_extraneous_bytes,
-        )?;
+        let module = deserialize_compiled_module(binary, binary_config)?;
         BoundsChecker::verify_module(&module)?;
         Ok(module)
     }
@@ -62,7 +62,7 @@ impl CompiledModule {
     // exposed as a public function to enable testing the deserializer
     #[doc(hidden)]
     pub fn deserialize_no_check_bounds(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        deserialize_compiled_module(binary, VERSION_MAX, false)
+        deserialize_compiled_module(binary, &BinaryConfig::with_extraneous_bytes_check(false))
     }
 }
 
@@ -314,22 +314,14 @@ fn deserialize_compiled_script(
     binary: &[u8],
     max_binary_format_version: u32,
 ) -> BinaryLoaderResult<CompiledScript> {
-    let binary_len = binary.len();
-    let mut cursor = VersionedCursor::new(binary, max_binary_format_version, false)?;
-    let table_count = load_table_count(&mut cursor)?;
-    let mut tables: Vec<Table> = Vec::new();
-    read_tables(&mut cursor, table_count, &mut tables)?;
-    let content_len = check_tables(&mut tables, binary_len)?;
-
-    let mut table_contents_buffer = Vec::new();
-    let table_contents = read_table_contents(
-        &mut cursor,
-        &mut table_contents_buffer,
-        content_len as usize,
-    )?;
-
+    // TODO: this function is unused and it's ok to call `new_legacy` until
+    //       we finalize the script removal
+    let binary_config = &BinaryConfig::legacy(max_binary_format_version, false);
+    let versioned_binary = VersionedBinary::initialize(binary, binary_config, false)?;
+    let mut cursor = versioned_binary.new_cursor(0, binary.len() - versioned_binary.data_offset());
+    let version = versioned_binary.version();
     let mut script = CompiledScript {
-        version: cursor.version(),
+        version,
         type_parameters: load_ability_sets(
             &mut cursor,
             AbilitySetPosition::FunctionTypeParameters,
@@ -339,42 +331,29 @@ fn deserialize_compiled_script(
         ..Default::default()
     };
 
-    build_compiled_script(&mut script, &table_contents, &tables)?;
+    build_compiled_script(&mut script, &versioned_binary, &versioned_binary.tables)?;
     Ok(script)
 }
 
 /// Module internal function that manages deserialization of modules.
 fn deserialize_compiled_module(
     binary: &[u8],
-    max_binary_format_version: u32,
-    check_no_extraneous_bytes: bool,
+    binary_config: &BinaryConfig,
 ) -> BinaryLoaderResult<CompiledModule> {
-    let binary_len = binary.len();
-    let mut cursor =
-        VersionedCursor::new(binary, max_binary_format_version, check_no_extraneous_bytes)?;
-    let table_count = load_table_count(&mut cursor)?;
-    let mut tables: Vec<Table> = Vec::new();
-    read_tables(&mut cursor, table_count, &mut tables)?;
-    let content_len = check_tables(&mut tables, binary_len)?;
-
-    let mut table_contents_buffer = Vec::new();
-    let table_contents = read_table_contents(
-        &mut cursor,
-        &mut table_contents_buffer,
-        content_len as usize,
-    )?;
-
+    let versioned_binary = VersionedBinary::initialize(binary, binary_config, true)?;
+    let version = versioned_binary.version();
+    let self_module_handle_idx = versioned_binary.module_idx();
     let mut module = CompiledModule {
-        version: cursor.version(),
-        self_module_handle_idx: load_module_handle_index(&mut cursor)?,
+        version,
+        self_module_handle_idx,
         ..Default::default()
     };
 
-    build_compiled_module(&mut module, &table_contents, &tables)?;
+    build_compiled_module(&mut module, &versioned_binary, &versioned_binary.tables)?;
 
-    let end_pos = cursor.position();
-    let had_remaining_bytes = end_pos < (binary.len() as u64);
-    if check_no_extraneous_bytes && had_remaining_bytes {
+    let end_pos = versioned_binary.binary_end_offset();
+    let had_remaining_bytes = end_pos < binary.len();
+    if binary_config.check_no_extraneous_bytes && had_remaining_bytes {
         return Err(PartialVMError::new(StatusCode::TRAILING_BYTES));
     }
     Ok(module)
@@ -407,16 +386,6 @@ fn read_table(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Table> {
     let table_offset = load_table_offset(cursor)?;
     let count = load_table_size(cursor)?;
     Ok(Table::new(TableType::from_u8(kind)?, table_offset, count))
-}
-
-fn read_table_contents<'a>(
-    cursor: &mut VersionedCursor,
-    buffer: &'a mut Vec<u8>,
-    n: usize,
-) -> BinaryLoaderResult<VersionedBinary<'a>> {
-    cursor
-        .read_new_binary(buffer, n)
-        .map_err(|e| e.with_message("Error reading table contents".to_string()))
 }
 
 /// Verify correctness of tables.
@@ -569,25 +538,70 @@ fn build_common_tables(
     tables: &[Table],
     common: &mut impl CommonTables,
 ) -> BinaryLoaderResult<()> {
+    let TableConfig {
+        // common tables
+        module_handles: module_handles_max,
+        struct_handles: struct_handles_max,
+        function_handles: function_handles_max,
+        function_instantiations: function_instantiations_max,
+        signatures: signatures_max,
+        constant_pool: constant_pool_max,
+        identifiers: identifiers_max,
+        address_identifiers: address_identifiers_max,
+        // module tables
+        struct_defs: _,
+        struct_def_instantiations: _,
+        function_defs: _,
+        field_handles: _,
+        field_instantiations: _,
+        friend_decls: _,
+    } = &binary.binary_config.table_config;
     for table in tables {
+        // minimize code that checks limits with a local macro that knows the context (`table: &Table`)
+        macro_rules! check_table_size {
+            ($vec:expr, $max:expr) => {
+                if $vec.len() > $max as usize {
+                    return Err(PartialVMError::new(StatusCode::MALFORMED)
+                        .with_message(format!(
+                            "Exceeded size ({} > {})  in {:?}",
+                            $vec.len(),
+                            $max,
+                            table.kind,
+                    )));
+                }
+            }
+        }
+
         match table.kind {
             TableType::MODULE_HANDLES => {
-                load_module_handles(binary, table, common.get_module_handles())?;
+                let module_handles = common.get_module_handles();
+                load_module_handles(binary, table, module_handles)?;
+                check_table_size!(module_handles, *module_handles_max);
             }
             TableType::STRUCT_HANDLES => {
-                load_struct_handles(binary, table, common.get_struct_handles())?;
+                let struct_handles = common.get_struct_handles();
+                load_struct_handles(binary, table, struct_handles)?;
+                check_table_size!(struct_handles, *struct_handles_max);
             }
             TableType::FUNCTION_HANDLES => {
-                load_function_handles(binary, table, common.get_function_handles())?;
+                let function_handles = common.get_function_handles();
+                load_function_handles(binary, table, function_handles)?;
+                check_table_size!(function_handles, *function_handles_max);
             }
             TableType::FUNCTION_INST => {
-                load_function_instantiations(binary, table, common.get_function_instantiations())?;
+                let function_instantiations = common.get_function_instantiations();
+                load_function_instantiations(binary, table, function_instantiations)?;
+                check_table_size!(function_instantiations, *function_instantiations_max);
             }
             TableType::SIGNATURES => {
-                load_signatures(binary, table, common.get_signatures())?;
+                let signatures = common.get_signatures();
+                load_signatures(binary, table, signatures)?;
+                check_table_size!(signatures, *signatures_max);
             }
             TableType::CONSTANT_POOL => {
-                load_constant_pool(binary, table, common.get_constant_pool())?;
+                let constant_pool = common.get_constant_pool();
+                load_constant_pool(binary, table, constant_pool)?;
+                check_table_size!(constant_pool, *constant_pool_max);
             }
             TableType::METADATA => {
                 if binary.check_no_extraneous_bytes() || binary.version() < VERSION_5 {
@@ -599,18 +613,23 @@ fn build_common_tables(
                     );
                 }
                 load_metadata(binary, table, common.get_metadata())?;
+                // we do not read metadata, nothing to check
             }
             TableType::IDENTIFIERS => {
-                load_identifiers(binary, table, common.get_identifiers())?;
+                let identifiers = common.get_identifiers();
+                load_identifiers(binary, table, identifiers)?;
+                check_table_size!(identifiers, *identifiers_max);
             }
             TableType::ADDRESS_IDENTIFIERS => {
-                load_address_identifiers(binary, table, common.get_address_identifiers())?;
+                let address_identifiers = common.get_address_identifiers();
+                load_address_identifiers(binary, table, address_identifiers)?;
+                check_table_size!(address_identifiers, *address_identifiers_max);
             }
             TableType::FUNCTION_DEFS
             | TableType::STRUCT_DEFS
             | TableType::STRUCT_DEF_INST
             | TableType::FIELD_HANDLE
-            | TableType::FIELD_INST => continue,
+            | TableType::FIELD_INST => (),
             TableType::FRIEND_DECLS => {
                 // friend declarations do not exist before VERSION_2
                 if binary.version() < VERSION_2 {
@@ -618,7 +637,6 @@ fn build_common_tables(
                         "Friend declarations not applicable in bytecode version 1".to_string(),
                     ));
                 }
-                continue;
             }
         }
     }
@@ -631,25 +649,67 @@ fn build_module_tables(
     tables: &[Table],
     module: &mut CompiledModule,
 ) -> BinaryLoaderResult<()> {
+    let TableConfig {
+        // common tables
+        module_handles: _,
+        struct_handles: _,
+        function_handles: _,
+        function_instantiations: _,
+        signatures: _,
+        constant_pool: _,
+        identifiers: _,
+        address_identifiers: _,
+        // module tables
+        struct_defs: struct_defs_max,
+        struct_def_instantiations: struct_def_instantiations_max,
+        function_defs: function_defs_max,
+        field_handles: field_handles_max,
+        field_instantiations: field_instantiations_max,
+        friend_decls:  friend_decls_max,
+    } = &binary.binary_config.table_config;
     for table in tables {
+        // minimize code that checks limits bu a local macro that know the context
+        macro_rules! check_table_size {
+            ($vec:expr, $max:expr) => {
+                if $vec.len() > $max as usize {
+                    return Err(PartialVMError::new(StatusCode::MALFORMED)
+                        .with_message(format!(
+                            "Exceeded size ({} > {})  in {:?}",
+                            $vec.len(),
+                            $max,
+                            table.kind,
+                    )));
+                }
+            }
+        }
+
         match table.kind {
             TableType::STRUCT_DEFS => {
                 load_struct_defs(binary, table, &mut module.struct_defs)?;
+                check_table_size!(&module.struct_defs, *struct_defs_max);
             }
             TableType::STRUCT_DEF_INST => {
                 load_struct_instantiations(binary, table, &mut module.struct_def_instantiations)?;
+                check_table_size!(
+                    &module.struct_def_instantiations,
+                    *struct_def_instantiations_max
+                );
             }
             TableType::FUNCTION_DEFS => {
                 load_function_defs(binary, table, &mut module.function_defs)?;
+                check_table_size!(&module.function_defs, *function_defs_max);
             }
             TableType::FIELD_HANDLE => {
                 load_field_handles(binary, table, &mut module.field_handles)?;
+                check_table_size!(&module.field_handles, *field_handles_max);
             }
             TableType::FIELD_INST => {
                 load_field_instantiations(binary, table, &mut module.field_instantiations)?;
+                check_table_size!(&module.field_instantiations, *field_instantiations_max);
             }
             TableType::FRIEND_DECLS => {
                 load_module_handles(binary, table, &mut module.friend_decls)?;
+                check_table_size!(&module.friend_decls, *friend_decls_max);
             }
             TableType::MODULE_HANDLES
             | TableType::STRUCT_HANDLES
@@ -659,9 +719,7 @@ fn build_module_tables(
             | TableType::ADDRESS_IDENTIFIERS
             | TableType::CONSTANT_POOL
             | TableType::METADATA
-            | TableType::SIGNATURES => {
-                continue;
-            }
+            | TableType::SIGNATURES => (),
         }
     }
     Ok(())
@@ -1009,7 +1067,7 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 } => {
                     ty_args.push(tok);
                     if ty_args.len() >= arity {
-                        T::Saturated(SignatureToken::StructInstantiation(sh_idx, ty_args))
+                        T::Saturated(SignatureToken::StructInstantiation(Box::new((sh_idx, ty_args))))
                     } else {
                         T::StructInst {
                             sh_idx,
@@ -1504,7 +1562,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             }
             Opcodes::LD_U128 => {
                 let value = read_u128_internal(cursor)?;
-                Bytecode::LdU128(value)
+                Bytecode::LdU128(Box::new(value))
             }
             Opcodes::CAST_U8 => Bytecode::CastU8,
             Opcodes::CAST_U64 => Bytecode::CastU64,
@@ -1577,7 +1635,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             }
             Opcodes::LD_U256 => {
                 let value = read_u256_internal(cursor)?;
-                Bytecode::LdU256(value)
+                Bytecode::LdU256(Box::new(value))
             }
             Opcodes::CAST_U16 => Bytecode::CastU16,
             Opcodes::CAST_U32 => Bytecode::CastU32,
@@ -1795,5 +1853,168 @@ impl Opcodes {
             0x4D => Ok(Opcodes::CAST_U256),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE)),
         }
+    }
+}
+
+//
+// Cursor API
+//
+
+#[derive(Debug)]
+struct VersionedBinary<'a, 'b> {
+    binary_config: &'b BinaryConfig,
+    binary: &'a [u8],
+    version: u32,
+    tables: Vec<Table>,
+    module_idx: ModuleHandleIndex,
+    // index after the binary header (including table info)
+    data_offset: usize,
+    binary_end_offset: usize,
+}
+
+#[derive(Debug)]
+struct VersionedCursor<'a> {
+    version: u32,
+    cursor: Cursor<&'a [u8]>,
+}
+
+impl<'a, 'b> VersionedBinary<'a, 'b> {
+    fn initialize(
+        binary: &'a [u8],
+        binary_config: &'b BinaryConfig,
+        load_module_idx: bool,
+    ) -> BinaryLoaderResult<Self> {
+        let binary_len = binary.len();
+        let mut cursor = Cursor::<&'a [u8]>::new(binary);
+        // check magic
+        let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
+        if let Ok(count) = cursor.read(&mut magic) {
+            if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC
+            {
+                return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
+            }
+        } else {
+            return Err(PartialVMError::new(StatusCode::MALFORMED)
+                .with_message("Bad binary header".to_string()));
+        }
+        // load binary version
+        let version = match read_u32(&mut cursor) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(PartialVMError::new(StatusCode::MALFORMED)
+                    .with_message("Bad binary header".to_string()));
+            }
+        };
+        if version == 0 || version > u32::min(binary_config.max_binary_format_version, VERSION_MAX) {
+            return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
+        }
+
+        let mut versioned_cursor = VersionedCursor {
+            version,
+            cursor,
+        };
+        // load table info
+        let table_count = load_table_count(&mut versioned_cursor)?;
+        let mut tables: Vec<Table> = Vec::new();
+        read_tables(&mut versioned_cursor, table_count, &mut tables)?;
+        let table_size = check_tables(&mut tables, binary_len)?;
+        if table_size as u64 + versioned_cursor.position() > binary_len as u64 {
+            return Err(PartialVMError::new(StatusCode::MALFORMED).with_message("Table size too big".to_string()))
+        }
+
+        // save "start offset" for table content (data)
+        let data_offset = versioned_cursor.position() as usize;
+
+        // load module idx (self id) - at the end of the binary. Why?
+        let module_idx = if load_module_idx {
+            versioned_cursor.set_position((data_offset + table_size as usize) as u64);
+            load_module_handle_index(&mut versioned_cursor)?
+        } else {
+            ModuleHandleIndex(0)
+        };
+        // end of binary
+        let binary_end_offset = versioned_cursor.position() as usize;
+        Ok(Self {
+                binary_config,
+                binary,
+                version,
+                tables,
+                module_idx,
+                data_offset,
+                binary_end_offset,
+            },
+        )
+    }
+
+    fn version(&self) -> u32 {
+        self.version
+    }
+
+    fn module_idx(&self) -> ModuleHandleIndex {
+        self.module_idx
+    }
+
+    fn data_offset(&self) -> usize {
+        self.data_offset
+    }
+
+    fn binary_end_offset(&self) -> usize {
+        self.binary_end_offset
+    }
+
+    fn new_cursor(&self, start: usize, end: usize) -> VersionedCursor<'a> {
+        VersionedCursor {
+            cursor: Cursor::new(&self.binary[start + self.data_offset..end + self.data_offset]),
+            version: self.version(),
+        }
+    }
+
+    fn slice(&self, start: usize, end: usize) -> &'a [u8] {
+        &self.binary[start + self.data_offset..end + self.data_offset]
+    }
+
+    fn check_no_extraneous_bytes(&self) -> bool {
+        self.binary_config.check_no_extraneous_bytes
+    }
+}
+
+impl<'a> VersionedCursor<'a> {
+    fn version(&self) -> u32 {
+        self.version
+    }
+
+    fn position(&self) -> u64 {
+        self.cursor.position()
+    }
+
+    fn read_u8(&mut self) -> anyhow::Result<u8> {
+        read_u8(&mut self.cursor)
+    }
+
+    fn set_position(&mut self, pos: u64) {
+        self.cursor.set_position(pos);
+    }
+
+    #[allow(dead_code)]
+    fn read_u32(&mut self) -> anyhow::Result<u32> {
+        read_u32(&mut self.cursor)
+    }
+
+    fn read_uleb128_as_u64(&mut self) -> anyhow::Result<u64> {
+        read_uleb128_as_u64(&mut self.cursor)
+    }
+
+    #[cfg(test)]
+    fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
+        Self {
+            version,
+            cursor,
+        }
+    }
+}
+
+impl<'a> Read for VersionedCursor<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.cursor.read(buf)
     }
 }

@@ -74,7 +74,8 @@ impl StDefnMaterializeState {
                 let sh = &self.struct_handles[idx.0 as usize];
                 sh.abilities
             }
-            StructInstantiation(idx, type_args) => {
+            StructInstantiation(struct_inst) => {
+                let (idx, type_args) = &**struct_inst;
                 let sh = &self.struct_handles[idx.0 as usize];
 
                 // Gather the abilities of the type actuals.

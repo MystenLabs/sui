@@ -854,7 +854,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules, _) | Command::Upgrade(modules, _, _, _) => {
+            Command::Publish(modules, deps) | Command::Upgrade(modules, deps, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -864,6 +864,16 @@ impl Command {
                         value: config.max_modules_in_publish().to_string()
                     }
                 );
+                if let Some(max_package_dependencies) = config.max_package_dependencies_as_option()
+                {
+                    fp_ensure!(
+                        deps.len() < max_package_dependencies as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum package dependencies".to_string(),
+                            value: max_package_dependencies.to_string()
+                        }
+                    );
+                };
             }
         };
         Ok(())

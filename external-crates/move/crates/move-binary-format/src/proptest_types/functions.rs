@@ -817,9 +817,12 @@ impl BytecodeGen {
             U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Struct(_)
             | TypeParameter(_) => true,
             Vector(element_token) => BytecodeGen::check_signature_token(element_token),
-            StructInstantiation(_, type_arguments) => type_arguments
-                .iter()
-                .all(BytecodeGen::check_signature_token),
+            StructInstantiation(struct_inst) => {
+                let (_, type_arguments) = &**struct_inst;
+                type_arguments
+                    .iter()
+                    .all(BytecodeGen::check_signature_token)
+            },
             Reference(_) | MutableReference(_) => false,
         }
     }
@@ -837,10 +840,10 @@ impl BytecodeGen {
         9 => Self::just_bytecode_strategy(),
         1 => any::<u64>().prop_map(Bytecode::LdU64),
         1 => any::<u8>().prop_map(Bytecode::LdU8),
-        1 => any::<u128>().prop_map(Bytecode::LdU128),
+        1 => any::<Box<u128>>().prop_map(Bytecode::LdU128),
         1 => any::<u16>().prop_map(Bytecode::LdU16),
         1 => any::<u32>().prop_map(Bytecode::LdU32),
-        1 => any::<U256>().prop_map(Bytecode::LdU256),
+        1 => any::<Box<U256>>().prop_map(Bytecode::LdU256),
         ]
     }
 

@@ -207,6 +207,7 @@ use simulator::*;
 pub use simulator::set_jwk_injector;
 use sui_core::consensus_handler::ConsensusHandlerInitializer;
 use sui_core::mysticeti_adapter::LazyMysticetiClient;
+use sui_types::execution_config_utils::to_binary_config;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -1492,8 +1493,7 @@ impl SuiNode {
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
                 let config = cur_epoch_store.protocol_config();
-                let max_binary_format_version = config.move_binary_format_version();
-                let no_extraneous_module_bytes = config.no_extraneous_module_bytes();
+                let binary_config = to_binary_config(config);
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,
@@ -1501,10 +1501,7 @@ impl SuiNode {
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
                         self.state
-                            .get_available_system_packages(
-                                max_binary_format_version,
-                                no_extraneous_module_bytes,
-                            )
+                            .get_available_system_packages(&binary_config)
                             .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
