@@ -101,6 +101,42 @@ impl<V> CachedVersionMap<V> {
     }
 }
 
+// an iterator adapter that asserts that the wrapped iterator yields elements in order
+pub(super) struct AssertOrdered<I: Iterator> {
+    iter: I,
+    last: Option<I::Item>,
+}
+
+impl<I: Iterator> AssertOrdered<I> {
+    fn new(iter: I) -> Self {
+        Self { iter, last: None }
+    }
+}
+
+impl<I: IntoIterator> From<I> for AssertOrdered<I::IntoIter> {
+    fn from(iter: I) -> Self {
+        Self::new(iter.into_iter())
+    }
+}
+
+impl<I: Iterator> Iterator for AssertOrdered<I>
+where
+    I::Item: Ord + Copy,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.iter.next();
+        if let Some(next) = next {
+            if let Some(last) = &self.last {
+                assert!(*last < next, "iterator must yield elements in order");
+            }
+            self.last = Some(next);
+        }
+        next
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,5 +280,19 @@ mod tests {
     fn get_last_on_empty_map() {
         let map: CachedVersionMap<&str> = CachedVersionMap::default();
         assert!(map.get_highest().is_none());
+    }
+
+    #[test]
+    fn test_assert_order() {
+        let iter = AssertOrdered::from(1..=10);
+        let result: Vec<_> = iter.collect();
+        assert_eq!(result, (1..=10).collect::<Vec<_>>());
+    }
+
+    #[test]
+    #[should_panic(expected = "iterator must yield elements in order")]
+    fn test_assert_order_panics() {
+        let iter = AssertOrdered::from(vec![1, 3, 2]);
+        let _ = iter.collect::<Vec<_>>();
     }
 }

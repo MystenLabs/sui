@@ -36,7 +36,7 @@ use sui_types::{
 };
 use tracing::instrument;
 
-pub(crate) mod cached_version_map;
+pub(crate) mod cache_types;
 pub mod passthrough_cache;
 pub mod writeback_cache;
 
