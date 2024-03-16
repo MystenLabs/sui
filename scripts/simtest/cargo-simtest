@@ -87,7 +87,7 @@ if ! cargo nextest --help > /dev/null 2>&1; then
   exit 1
 fi
 
-CARGO_COMMAND=(nextest run --cargo-profile simulator --workspace --exclude sui-bridge)
+CARGO_COMMAND=(nextest run --cargo-profile simulator)
 if [ "$1" = "build" ]; then
   shift
   CARGO_COMMAND=(build --profile simulator)
