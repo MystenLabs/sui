@@ -798,7 +798,7 @@ On modifications that are made to the template package this process needs to be 
 
 :::
 
-Before proceeding to how to make these edits, it's important to understand how the library exposes the template module bytecode. The process is currently manual. This requires that you build and retrieve the compiled bytecode. To do this, navigate inside the the template folder and run the following command:
+Before proceeding to how to make these edits, it's important to understand how the library exposes the template module bytecode. The process is currently manual. This requires that you build and retrieve the compiled bytecode. To do this, navigate inside the template folder and run the following command:
 
 ```bash
 xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1 
