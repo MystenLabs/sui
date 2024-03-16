@@ -15,7 +15,11 @@ export type Effects = {
 	modifiedAtVersions: ModifiedAtVersion[];
 	sharedObjects: Reference[];
 	transactionDigest: string;
-	mutated: Mutated[];
+	mutated: EffectsObject[];
+	created: EffectsObject[];
+	deleted: Reference[];
+	wrapped: EffectsObject[];
+	unwrapped: EffectsObject[];
 	gasObject: GasObject;
 	dependencies: string[];
 };
@@ -47,12 +51,12 @@ export type ModifiedAtVersion = {
 	sequenceNumber: string;
 };
 
-export type Mutated = {
-	owner: MutatedOwner;
+export type EffectsObject = {
+	owner: EffectsOwner;
 	reference: Reference;
 };
 
-export type MutatedOwner = {
+export type EffectsOwner = {
 	ObjectOwner?: string;
 	Shared?: Shared;
 	AddressOwner?: string;

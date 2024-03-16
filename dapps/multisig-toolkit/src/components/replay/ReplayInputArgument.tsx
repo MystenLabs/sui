@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PreviewCard } from '../preview-effects/PreviewCard';
-import { ReplayInput } from './replay-types';
+import { EffectsObject, Reference, ReplayInput} from './replay-types';
 import { ReplayLink } from './ReplayLink';
 
 const formatObject = (input: ReplayInput) => {
@@ -43,6 +43,30 @@ export function ReplayInputArgument({ input }: { input: ReplayInput }) {
 						))}
 					</>
 				)}
+			</PreviewCard.Body>
+		</PreviewCard.Root>
+	);
+}
+
+export function EffectsItem({ input }: { input: EffectsObject }) {
+	return (
+		<PreviewCard.Root>
+			<PreviewCard.Body>
+				{<ReplayLink id={input.reference.objectId} text={input.reference.objectId} />}
+				{'ObjectOwner' in input.owner && <p>Object Owner: {input.owner.ObjectOwner}</p>}
+				{'AddressOwner' in input.owner && <p>Address Owner: {input.owner.AddressOwner}</p>}
+				{'Shared' in input.owner && <p>Shared Object</p>}
+			</PreviewCard.Body>
+		</PreviewCard.Root>
+	);
+}
+
+export function DeletedItem({ input }: { input: Reference }) {
+	return (
+		<PreviewCard.Root>
+			<PreviewCard.Body>
+				{<ReplayLink id={input.objectId} text={input.objectId} />}
+				<div>version: {<span>{JSON.stringify(input.version)}</span>}</div>
 			</PreviewCard.Body>
 		</PreviewCard.Root>
 	);

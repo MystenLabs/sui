@@ -57,7 +57,7 @@ export function Replay() {
 		{
 			name: 'effects',
 			title: 'Effects',
-			component: () => data && <ReplayEffects mutated={data.effects.mutated} />,
+			component: () => data && <ReplayEffects effects={data.effects} />,
 		},
 		{
 			name: 'transactions',
