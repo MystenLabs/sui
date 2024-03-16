@@ -409,11 +409,8 @@ impl Primary {
 
         // Add my workers
         for worker in worker_cache.our_workers(authority.protocol_key()).unwrap() {
-            let Some((peer_id, address)) =
-                Self::add_peer_in_network(&network, worker.name, &worker.worker_address)
-            else {
-                continue;
-            };
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "our_worker".to_string());
             info!(
                 "Adding our worker with peer id {} and address {}",
@@ -423,11 +420,8 @@ impl Primary {
 
         // Add others workers
         for (_, worker) in worker_cache.others_workers(authority.protocol_key()) {
-            let Some((peer_id, address)) =
-                Self::add_peer_in_network(&network, worker.name, &worker.worker_address)
-            else {
-                continue;
-            };
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "other_worker".to_string());
             info!(
                 "Adding others worker with peer id {} and address {}",
@@ -442,11 +436,7 @@ impl Primary {
             .map(|(_, address, network_key)| (network_key, address));
 
         for (public_key, address) in primaries {
-            let Some((peer_id, address)) =
-                Self::add_peer_in_network(&network, public_key, &address)
-            else {
-                continue;
-            };
+            let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
             peer_types.insert(peer_id, "other_primary".to_string());
             info!(
                 "Adding others primaries with peer id {} and address {}",
@@ -571,15 +561,9 @@ impl Primary {
         network: &Network,
         peer_name: NetworkPublicKey,
         address: &Multiaddr,
-    ) -> Option<(PeerId, Address)> {
+    ) -> (PeerId, Address) {
         let peer_id = PeerId(peer_name.0.to_bytes());
-        let address = match address.to_anemo_address() {
-            Ok(addr) => addr,
-            Err(e) => {
-                error!("Failed to convert {:?} to anemo address: {:?}", address, e);
-                return None;
-            }
-        };
+        let address = address.to_anemo_address().unwrap();
         let peer_info = PeerInfo {
             peer_id,
             affinity: anemo::types::PeerAffinity::High,
@@ -587,7 +571,7 @@ impl Primary {
         };
         network.known_peers().insert(peer_info);
 
-        Some((peer_id, address))
+        (peer_id, address)
     }
 }
 
