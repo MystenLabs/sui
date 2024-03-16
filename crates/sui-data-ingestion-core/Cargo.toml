@@ -23,9 +23,9 @@ tracing.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true
-workspace-hack.workspace = true
+tempfile.workspace = true
+tap.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
-tempfile.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }

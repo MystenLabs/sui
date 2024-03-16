@@ -166,6 +166,13 @@ impl TestCluster {
             .collect()
     }
 
+    pub fn all_validator_handles(&self) -> Vec<SuiNodeHandle> {
+        self.swarm
+            .validator_nodes()
+            .map(|n| n.get_node_handle().unwrap())
+            .collect()
+    }
+
     pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
         self.swarm.active_validators().map(|v| v.name()).collect()
     }
@@ -267,9 +274,11 @@ impl TestCluster {
             .fullnode_handle
             .sui_node
             .with(|node| node.subscribe_to_epoch_change());
-        timeout(timeout_dur, async move {
+        let mut state = Option::None;
+        timeout(timeout_dur, async {
             while let Ok(system_state) = epoch_rx.recv().await {
                 info!("received epoch {}", system_state.epoch());
+                state = Some(system_state.clone());
                 match target_epoch {
                     Some(target_epoch) if system_state.epoch() >= target_epoch => {
                         return system_state;
@@ -284,6 +293,9 @@ impl TestCluster {
         })
         .await
         .unwrap_or_else(|_| {
+            if let Some(state) = state {
+                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
+            }
             panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
         })
     }
@@ -630,6 +642,31 @@ impl TestCluster {
         ))
     }
 
+    /// This call sends some funds from the seeded address to the funding
+    /// address for the given amount and returns the gas object ref. This
+    /// is useful to construct transactions from the funding address.
+    pub async fn fund_address_and_return_gas(
+        &self,
+        rgp: u64,
+        amount: Option<u64>,
+        funding_address: SuiAddress,
+    ) -> ObjectRef {
+        let context = &self.wallet;
+        let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
+        let tx = context.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(amount, funding_address)
+                .build(),
+        );
+        context.execute_transaction_must_succeed(tx).await;
+
+        context
+            .get_one_gas_object_owned_by_address(funding_address)
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
     #[cfg(msim)]
     pub fn set_safe_mode_expected(&self, value: bool) {
         for n in self.all_node_handles() {
@@ -955,7 +992,7 @@ impl TestClusterBuilder {
             .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
+        let wallet = WalletContext::new(&wallet_conf, None, None).unwrap();
 
         TestCluster {
             swarm,

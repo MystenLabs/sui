@@ -5,9 +5,9 @@ title: Migrating to GraphQL
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide compares JSON-RPC queries to their equivalent GraphQL counterpart. While it is possible to systematically rewrite JSON-RPC queries (for example, `sui_getTotalTransactionBlocks`) to their GraphQL counterparts using this guide, it is recommended that you revisit your application's query patterns to take full advantage of the flexibility that GraphQL offers in serving queries that touch multiple potentially nested endpoints (for example transactions, balances, coins), and use the following examples to get a flavor of how the two APIs express similar concepts.
+{@include: ../../../snippets/migrate-to-graphql.mdx}
 
-For a comprehensive list of all available GraphQL APIs, consult the [reference](../../../references/sui-graphql).
+For a comprehensive list of all available GraphQL features, consult the [reference](../../../references/sui-graphql).
 
 ### Example 1: Get total transaction blocks
 
@@ -143,3 +143,9 @@ The cursor is now passed in the `after` (or `before`) fields on the connection, 
 
 </TabItem>
 </Tabs>
+
+## Related links
+  
+- [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
+- [GraphQL quick-start](../getting-started/graphql-rpc.mdx): Querying Sui RPC with GraphQL gets you started using GraphQL to query the Sui RPC for on-chain data.
+- [GraphQL concepts](../../../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.

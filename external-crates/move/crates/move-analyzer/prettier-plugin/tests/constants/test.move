@@ -1,4 +1,4 @@
-module test::constatnts {
+module test::constants {
     const              C:
             u64 =
   42;

@@ -25,5 +25,4 @@ sui-sdk.workspace = true
 move-binary-format.workspace = true
 sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
-workspace-hack.workspace = true
 

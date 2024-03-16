@@ -3,6 +3,10 @@
 
 # Module `0x2::dynamic_object_field`
 
+Similar to <code>sui::dynamic_field</code>, this module allows for the access of dynamic fields. But
+unlike, <code>sui::dynamic_field</code> the values bound to these dynamic fields _must_ be objects
+themselves. This allows for the objects to still exist within in storage, which may be important
+for external tools. The difference is otherwise not observable from within Move.
 
 
 -  [Struct `Wrapper`](#0x2_dynamic_object_field_Wrapper)
@@ -53,6 +57,8 @@
 
 ## Function `add`
 
+Adds a dynamic object field to the object <code><a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID</code> at field specified by <code>name: Name</code>.
+Aborts with <code>EFieldAlreadyExists</code> if the object already has that field with that name.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_add">add</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name, value: Value)
@@ -86,6 +92,10 @@
 
 ## Function `borrow`
 
+Immutably borrows the <code><a href="../../dependencies/sui-framework/object.md#0x2_object">object</a></code>s dynamic object field with the name specified by <code>name: Name</code>.
+Aborts with <code>EFieldDoesNotExist</code> if the object does not have a field with that name.
+Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value object does not have the
+specified type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_borrow">borrow</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): &Value
@@ -115,6 +125,10 @@
 
 ## Function `borrow_mut`
 
+Mutably borrows the <code><a href="../../dependencies/sui-framework/object.md#0x2_object">object</a></code>s dynamic object field with the name specified by <code>name: Name</code>.
+Aborts with <code>EFieldDoesNotExist</code> if the object does not have a field with that name.
+Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value object does not have the
+specified type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): &<b>mut</b> Value
@@ -144,6 +158,11 @@
 
 ## Function `remove`
 
+Removes the <code><a href="../../dependencies/sui-framework/object.md#0x2_object">object</a></code>s dynamic object field with the name specified by <code>name: Name</code> and returns
+the bound object.
+Aborts with <code>EFieldDoesNotExist</code> if the object does not have a field with that name.
+Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value object does not have the
+specified type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_remove">remove</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): Value
@@ -175,6 +194,8 @@
 
 ## Function `exists_`
 
+Returns true if and only if the <code><a href="../../dependencies/sui-framework/object.md#0x2_object">object</a></code> has a dynamic object field with the name specified by
+<code>name: Name</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): bool
@@ -203,6 +224,8 @@
 
 ## Function `exists_with_type`
 
+Returns true if and only if the <code><a href="../../dependencies/sui-framework/object.md#0x2_object">object</a></code> has a dynamic field with the name specified by
+<code>name: Name</code> with an assigned value of type <code>Value</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): bool
@@ -233,6 +256,8 @@
 
 ## Function `id`
 
+Returns the ID of the object associated with the dynamic object field
+Returns none otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_id">id</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../../dependencies/sui-framework/object.md#0x2_object">object</a>: &<a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a>&gt;

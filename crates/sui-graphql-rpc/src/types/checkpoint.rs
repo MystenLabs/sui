@@ -23,7 +23,7 @@ use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
-    models_v2::checkpoints::StoredCheckpoint,
+    models::checkpoints::StoredCheckpoint,
     schema::{checkpoints, objects_snapshot},
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -117,7 +117,7 @@ impl Checkpoint {
     /// The epoch this checkpoint is part of.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.stored.epoch as u64),
             self.checkpoint_viewed_at,
         )

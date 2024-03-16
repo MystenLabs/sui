@@ -3,6 +3,9 @@
 
 # Module `0x2::deny_list`
 
+Defines the <code><a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a></code> type. The <code><a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a></code> shared object is used to restrict access to
+instances of certain core types from being used as inputs by specified addresses in the deny
+list.
 
 
 -  [Resource `DenyList`](#0x2_deny_list_DenyList)
@@ -32,6 +35,7 @@
 
 ## Resource `DenyList`
 
+A shared object that stores the addresses that are blocked for a given core type.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a> <b>has</b> key
@@ -54,7 +58,7 @@
 <code>lists: <a href="../../dependencies/sui-framework/bag.md#0x2_bag_Bag">bag::Bag</a></code>
 </dt>
 <dd>
-
+ The individual deny lists.
 </dd>
 </dl>
 
@@ -65,6 +69,7 @@
 
 ## Resource `PerTypeList`
 
+Stores the addresses that are denied for a given core type.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> <b>has</b> store, key
@@ -87,13 +92,16 @@
 <code>denied_count: <a href="../../dependencies/sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, u64&gt;</code>
 </dt>
 <dd>
-
+ Number of object types that have been banned for a given address.
+ Used to quickly skip checks for most addresses.
 </dd>
 <dt>
 <code>denied_addresses: <a href="../../dependencies/sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;</code>
 </dt>
 <dd>
-
+ Set of addresses that are banned for a given type.
+ For example with <code>sui::coin::Coin</code>: If addresses A and B are banned from using
+ "0...0123::my_coin::MY_COIN", this will be "0...0123::my_coin::MY_COIN" -> {A, B}.
 </dd>
 </dl>
 
@@ -107,6 +115,7 @@
 
 <a name="0x2_deny_list_ENotSystemAddress"></a>
 
+Trying to create a deny list object when not called by the system address.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
@@ -116,6 +125,7 @@
 
 <a name="0x2_deny_list_COIN_INDEX"></a>
 
+The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_COIN_INDEX">COIN_INDEX</a>: u64 = 0;
@@ -125,6 +135,7 @@
 
 <a name="0x2_deny_list_ENotDenied"></a>
 
+The specified address to be removed is not already in the deny list.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>: u64 = 1;
@@ -136,6 +147,10 @@
 
 ## Function `add`
 
+Adds the given address to the deny list of the specified type, preventing it
+from interacting with instances of that type as an input to a transaction. For coins,
+the type specified is the type of the coin, not the coin type itself. For example,
+"00...0123::my_coin::MY_COIN" would be the type, not "00...02::coin::Coin".
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_add">add</a>(<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>)
@@ -205,6 +220,8 @@
 
 ## Function `remove`
 
+Removes a previously denied address from the list.
+Aborts with <code><a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a></code> if the address is not on the list.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_remove">remove</a>(<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>)
@@ -269,6 +286,7 @@
 
 ## Function `contains`
 
+Returns true iff the given address is denied for the given type.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_contains">contains</a>(<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>): bool
@@ -334,6 +352,8 @@
 
 ## Function `create`
 
+Creation of the deny list object is restricted to the system address
+via a system transaction.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_create">create</a>(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)

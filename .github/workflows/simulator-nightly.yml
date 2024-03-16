@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Install Teleport
-        uses: teleport-actions/setup@8d23169da0f80ce14d25ed791272faa1c07f4f1e # pin@v1
+        uses: teleport-actions/setup@176c25dfcd19cd31a252f275d579822b243e7b9c # pin@v1.0.6
         with:
           version: 11.3.1
       - name: Authorize against Teleport
@@ -77,10 +77,10 @@ jobs:
     if: failure()
 
     steps:
-    - uses: technote-space/workflow-conclusion-action@v3
+    - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
     - name: Checkout sui repo main branch
-      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
     
     - name: Get sui commit
       env:
@@ -96,15 +96,26 @@ jobs:
         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
 
-    - name: Get current sui-core oncall
-      id: pagerduty
-      uses: mxie/pagerduty-oncall-action@main 
-      with:
-        token: ${{ secrets.PAGERDUTY_ACCESS_KEY }}
-        schedule-id: PGCQ3YS # sui-core
+    - name: Get current oncall
+      run: |
+        export current_oncall=$(curl -s --request GET \
+          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          --header 'Accept: application/json' \
+          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+          --header 'Content-Type: application/json' \
+          | jq '.oncalls[].user.summary' | tr -d '"')
+        echo "current_oncall=$(echo ${current_oncall})" >> $GITHUB_ENV
+
+        export oncall_name=$(curl -s --request GET \
+          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          --header 'Accept: application/json' \
+          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+          --header 'Content-Type: application/json' \
+          | jq '.oncalls[].escalation_policy.summary' | tr -d '"')
+        echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -112,7 +123,7 @@ jobs:
 
     - name: Get slack id for the oncall
       run: |
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ steps.pagerduty.outputs.person }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV        
 
     - name: Post to slack
@@ -121,6 +132,8 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
+        SLACK_ID: ${{ env.slack_id }}
+        ONCALL_NAME: ${{ env.oncall_name }}
       with:
         channel-id: 'simtest-nightly'
         payload: |
@@ -151,7 +164,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<@${{ env.slack_id }}> (current sui-core oncall), please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
+                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
                 }
               }
             ]

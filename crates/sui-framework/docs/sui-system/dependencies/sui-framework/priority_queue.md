@@ -3,6 +3,7 @@
 
 # Module `0x2::priority_queue`
 
+Priority queue implemented using a max heap.
 
 
 -  [Struct `PriorityQueue`](#0x2_priority_queue_PriorityQueue)
@@ -27,6 +28,11 @@
 
 ## Struct `PriorityQueue`
 
+Struct representing a priority queue. The <code>entries</code> vector represents a max
+heap structure, where entries[0] is the root, entries[1] and entries[2] are the
+left child and right child of the root, etc. More generally, the children of
+entries[i] are at at i * 2 + 1 and i * 2 + 2. The max heap should have the invariant
+that the parent node's priority is always higher than its child nodes' priorities.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T: drop&gt; <b>has</b> drop, store
@@ -90,6 +96,7 @@
 
 <a name="0x2_priority_queue_EPopFromEmptyHeap"></a>
 
+For when heap is empty and there's no data to pop.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_EPopFromEmptyHeap">EPopFromEmptyHeap</a>: u64 = 0;
@@ -101,6 +108,7 @@
 
 ## Function `new`
 
+Create a new priority queue from the input entry vectors.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_new">new</a>&lt;T: drop&gt;(entries: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_Entry">priority_queue::Entry</a>&lt;T&gt;&gt;): <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">priority_queue::PriorityQueue</a>&lt;T&gt;
@@ -132,6 +140,7 @@
 
 ## Function `pop_max`
 
+Pop the entry with the highest priority value.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_pop_max">pop_max</a>&lt;T: drop&gt;(pq: &<b>mut</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">priority_queue::PriorityQueue</a>&lt;T&gt;): (u64, T)
@@ -163,6 +172,7 @@
 
 ## Function `insert`
 
+Insert a new entry into the queue.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_insert">insert</a>&lt;T: drop&gt;(pq: &<b>mut</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_PriorityQueue">priority_queue::PriorityQueue</a>&lt;T&gt;, priority: u64, value: T)
@@ -281,6 +291,11 @@
 
 ## Function `max_heapify_recursive`
 
+Max heapify the subtree whose root is at index <code>i</code>. That means after this function
+finishes, the subtree should have the property that the parent node has higher priority
+than both child nodes.
+This function assumes that all the other nodes in the subtree (nodes other than the root)
+do satisfy the max heap property.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_max_heapify_recursive">max_heapify_recursive</a>&lt;T: drop&gt;(v: &<b>mut</b> <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/priority_queue.md#0x2_priority_queue_Entry">priority_queue::Entry</a>&lt;T&gt;&gt;, len: u64, i: u64)

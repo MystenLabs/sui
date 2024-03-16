@@ -36,7 +36,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: bmwill/rust-cache@v1
 
       - name: Install cargo-llvm-cov
@@ -57,7 +57,7 @@ jobs:
         run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
       - name: Upload report to Codecov for nextest
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
         with:
           files: lcov.info
 
@@ -67,7 +67,7 @@ jobs:
           ./scripts/simtest/codecov.sh
 
       - name: Upload report to Codecov for simtest
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
         with:
           files: lcov-simtest.info
 
@@ -78,10 +78,10 @@ jobs:
     if: always() # always notify
 
     steps:
-    - uses: technote-space/workflow-conclusion-action@v3
+    - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
     - name: Checkout sui repo main branch
-      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v3.0.3
     
     - name: Get sui commit
       env:
@@ -107,15 +107,26 @@ jobs:
         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
 
-    - name: Get current sui-core oncall
-      id: pagerduty
-      uses: mxie/pagerduty-oncall-action@main 
-      with:
-        token: ${{ secrets.PAGERDUTY_ACCESS_KEY }}
-        schedule-id: PGCQ3YS # sui-core
+    - name: Get current oncall
+      run: |
+        export current_oncall=$(curl -s --request GET \
+          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          --header 'Accept: application/json' \
+          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+          --header 'Content-Type: application/json' \
+          | jq '.oncalls[].user.summary' | tr -d '"')
+        echo "current_oncall=$(echo ${current_oncall})" >> $GITHUB_ENV
+
+        export oncall_name=$(curl -s --request GET \
+          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          --header 'Accept: application/json' \
+          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+          --header 'Content-Type: application/json' \
+          | jq '.oncalls[].escalation_policy.summary' | tr -d '"')
+        echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV                  
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -123,7 +134,7 @@ jobs:
 
     - name: Get slack id for the oncall
       run: |
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ steps.pagerduty.outputs.person }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
 
     - name: Post to slack
@@ -134,6 +145,8 @@ jobs:
         SUI_BRANCH_NAME: ${{ env.sui_branch_name }}
         SUI_BRANCH_NAME_URL: ${{ env.sui_branch_name_url }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
+        SLACK_ID: ${{ env.slack_id }}
+        ONCALL_NAME: ${{ env.oncall_name }}
       with:
         channel-id: 'code-coverage'
         payload: |
@@ -164,7 +177,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<@${{ env.slack_id }}> (current sui-core oncall), please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
+                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
                 }
               }
             ]

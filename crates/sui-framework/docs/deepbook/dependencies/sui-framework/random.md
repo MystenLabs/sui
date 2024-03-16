@@ -27,6 +27,8 @@
 
 ## Resource `Random`
 
+Singleton shared object which stores the global randomness state.
+The actual state is stored in a versioned inner field.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/random.md#0x2_random_Random">Random</a> <b>has</b> key
@@ -146,6 +148,9 @@
 
 ## Function `create`
 
+Create and share the Random object. This function is called exactly once, when
+the Random object is first created.
+Can only be called by genesis or change_epoch transactions.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/random.md#0x2_random_create">create</a>(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -249,6 +254,8 @@
 
 ## Function `update_randomness_state`
 
+Record new randomness. Called when executing the RandomnessStateUpdate system
+transaction.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/random.md#0x2_random_update_randomness_state">update_randomness_state</a>(self: &<b>mut</b> <a href="../../dependencies/sui-framework/random.md#0x2_random_Random">random::Random</a>, new_round: u64, new_bytes: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -277,9 +284,11 @@
         // First <b>update</b> should be for round zero.
         <b>assert</b>!(new_round == 0, <a href="../../dependencies/sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>);
     } <b>else</b> {
-        // Subsequent updates should increment either epoch or randomness_round.
+        // Subsequent updates should either increase epoch or increment randomness_round.
+        // Note that epoch may increase by more than 1 <b>if</b> an epoch is completed without
+        // randomness ever being generated in that epoch.
         <b>assert</b>!(
-            (epoch == inner.epoch + 1 && new_round == 0) ||
+            (epoch &gt; inner.epoch && new_round == 0) ||
                 (new_round == inner.randomness_round + 1),
             <a href="../../dependencies/sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>
         );

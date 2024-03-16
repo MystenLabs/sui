@@ -254,6 +254,9 @@ pub enum UserInputError {
         address: SuiAddress,
         coin_type: String,
     },
+
+    #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
+    PostRandomCommandRestrictions,
 }
 
 #[derive(
@@ -537,10 +540,6 @@ pub enum SuiError {
     HandleConsensusTransactionFailure(String),
 
     // Cryptography errors.
-    #[error("Signature seed invalid length, input byte size was: {0}")]
-    SignatureSeedInvalidLength(usize),
-    #[error("HKDF error: {0}")]
-    HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
     #[error("Key Conversion Error: {0}")]
@@ -613,8 +612,8 @@ pub enum SuiError {
     #[error("Storage error: {0}")]
     Storage(String),
 
-    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_sec}.")]
-    ValidatorOverloadedRetryAfter { retry_after_sec: u64 },
+    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
+    ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
 }
 
 #[repr(u64)]
@@ -703,17 +702,6 @@ impl From<&str> for SuiError {
         }
     }
 }
-
-// impl From<FastCryptoError> for SuiError {
-//     fn from(kind: FastCryptoError) -> Self {
-//         match kind {
-//             FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
-//                 error: "Invalid signature".to_string(),
-//             },
-//             _ => SuiError::Unknown("Unknown cryptography error".to_string()),
-//         }
-//     }
-// }
 
 impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;
@@ -814,6 +802,10 @@ impl SuiError {
                 | SuiError::TooOldTransactionPendingOnObject { .. }
                 | SuiError::TooManyTransactionsPendingConsensus
         )
+    }
+
+    pub fn is_retryable_overload(&self) -> bool {
+        matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
     }
 }
 

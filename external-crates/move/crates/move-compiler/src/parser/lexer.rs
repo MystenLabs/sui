@@ -91,6 +91,7 @@ pub enum Tok {
     Match,
     BlockLabel,
     MinusGreater,
+    For,
 }
 
 impl fmt::Display for Tok {
@@ -172,6 +173,7 @@ impl fmt::Display for Tok {
             Match => "match",
             BlockLabel => "'[Identifier]",
             MinusGreater => "->",
+            For => "for",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -883,6 +885,7 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
             "enum" => Tok::Enum,
             "type" => Tok::Type,
             "match" => Tok::Match,
+            "for" => Tok::For,
             _ => Tok::Identifier,
         },
         _ => Tok::Identifier,

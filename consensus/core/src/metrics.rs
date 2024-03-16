@@ -48,13 +48,16 @@ pub(crate) struct NodeMetrics {
     pub invalid_blocks: IntCounterVec,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
-
-    // Commit Metrics
-    #[allow(unused)]
-    pub committed_leaders_total: IntCounterVec,
+    pub dag_state_store_read_count: IntCounterVec,
+    pub dag_state_store_write_count: IntCounter,
+    pub last_decided_leader_round: IntGauge,
+    pub last_committed_leader_round: IntGauge,
+    pub decided_leaders_total: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub sub_dags_per_commit_count: Histogram,
     pub block_commit_latency: Histogram,
+    pub fetched_blocks: IntCounterVec,
+    pub fetch_blocks_scheduler_inflight: IntGauge,
 }
 
 impl NodeMetrics {
@@ -112,7 +115,7 @@ impl NodeMetrics {
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
-                &["authority"],
+                &["authority", "source"],
                 registry,
             )
             .unwrap(),
@@ -130,9 +133,30 @@ impl NodeMetrics {
                 registry,
             )
             .unwrap(),
-
-            // Commit Metrics
-            committed_leaders_total: register_int_counter_vec_with_registry!(
+            dag_state_store_read_count: register_int_counter_vec_with_registry!(
+                "dag_state_store_read_count",
+                "Number of times DagState needs to read from store per operation type",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            dag_state_store_write_count: register_int_counter_with_registry!(
+                "dag_state_store_write_count",
+                "Number of times DagState needs to write to store",
+                registry,
+            )
+            .unwrap(),
+            last_decided_leader_round: register_int_gauge_with_registry!(
+                "last_decided_leader_round",
+                "The last round where a commit decision was made.",
+                registry,
+            ).unwrap(),
+            last_committed_leader_round: register_int_gauge_with_registry!(
+                "last_committed_leader_round",
+                "The last round where a leader was committed to store and sent to commit consumer.",
+                registry,
+            ).unwrap(),
+            decided_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
                 "Total number of (direct or indirect) committed leaders per authority",
                 &["authority", "commit_type"],
@@ -157,6 +181,17 @@ impl NodeMetrics {
                 registry,
             )
             .unwrap(),
+            fetched_blocks: register_int_counter_vec_with_registry!(
+                "fetched_blocks",
+                "Number of fetched blocks per peer authority via the synchronizer.",
+                &["authority", "type"],
+                registry,
+            ).unwrap(),
+            fetch_blocks_scheduler_inflight: register_int_gauge_with_registry!(
+                "fetch_blocks_scheduler_inflight",
+                "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
+                registry,
+            ).unwrap()
         }
     }
 }

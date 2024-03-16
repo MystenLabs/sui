@@ -1,0 +1,33 @@
+{
+	"name": "escrow-api-demo",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Demo package for escrow",
+	"main": "server.ts",
+	"scripts": {
+		"dev": "concurrently \"pnpm api:dev\" \"pnpm indexer\"",
+		"db:setup:dev": "npx prisma migrate dev --name init",
+		"db:reset:dev": "npx prisma db push --force-reset",
+		"db:studio": "npx prisma studio",
+		"api:dev": "npx ts-node server.ts",
+		"indexer": "npx ts-node indexer.ts"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "Apache-2.0",
+	"devDependencies": {
+		"@types/cors": "^2.8.17",
+		"@types/express": "^4.17.21",
+		"@types/node": "^20.4.2",
+		"concurrently": "^8.2.0",
+		"prisma": "^5.8.1",
+		"ts-node": "^10.9.1",
+		"typescript": "^5.3.3"
+	},
+	"dependencies": {
+		"@mysten/sui.js": "^0.50.1",
+		"@prisma/client": "^5.8.1",
+		"cors": "^2.8.5",
+		"express": "^4.18.2"
+	}
+}

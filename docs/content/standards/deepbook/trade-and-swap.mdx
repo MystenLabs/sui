@@ -109,7 +109,19 @@ There are four types of restrictions that you could put on limit orders.
 
 #### Custodian account {#custodian-account}
 
-Before placing a limit order, traders need to host a custodian account with asset deposited. Traders could generate a custodian account by invoking create_account and will get an AccountCap object authorizing them to access their custodian accounts. Note that the AccountCap object will be the key to the custodian account, and if you transfer this object to others, the new owner will have access to all the funds and orders in the custodian account.
+Before placing a limit order, traders need to host a custodian account with asset deposited. Traders could generate a custodian account by invoking `create_account` to get an `AccountCap` object authorizing them to access their custodian accounts. The `AccountCap` object is the key to the custodian account, and if you transfer this object to others, the new owner has access to all the funds and orders in the custodian account.
+
+```mermaid
+flowchart LR
+ A((user_address\n0x1234\ncustodian_cap_address\n0xABCD))
+ subgraph Sui_blockchain
+    direction TB
+    B["account_balances: Table&lt;address, Account&lt;T>>"]
+    C("<table><tbody><tr><td>0xABCD</td><td>5 SUI</td></tr><tr><td>0xBCDE</td><td>12 SUI</td></tr><tr><td>...</td><td>...</td></tr></tbody></table>")
+ end
+
+ A ----> Sui_blockchain
+```
 
 **Function signature for `create_account` in Move contract**
 

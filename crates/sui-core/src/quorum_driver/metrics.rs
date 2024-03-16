@@ -33,6 +33,9 @@ pub struct QuorumDriverMetrics {
     pub(crate) total_attempts_retrying_conflicting_transaction: IntCounter,
     pub(crate) total_successful_attempts_retrying_conflicting_transaction: IntCounter,
     pub(crate) total_times_conflicting_transaction_already_finalized_when_retrying: IntCounter,
+    pub(crate) total_retryable_overload_errors: IntCounter,
+    pub(crate) transaction_retry_count: Histogram,
+    pub(crate) current_transactions_in_retry: IntGauge,
 
     pub(crate) settlement_finality_latency: HistogramVec,
 }
@@ -97,6 +100,23 @@ impl QuorumDriverMetrics {
             total_times_conflicting_transaction_already_finalized_when_retrying: register_int_counter_with_registry!(
                 "quorum_driver_total_times_conflicting_transaction_already_finalized_when_retrying",
                 "Total number of times the conflicting transaction is already finalized when retrying",
+                registry,
+            )
+            .unwrap(),
+            total_retryable_overload_errors: register_int_counter_with_registry!(
+                "quorum_driver_total_retryable_overload_errors",
+                "Total number of transactions experiencing retryable overload error",
+                registry,
+            )
+            .unwrap(),
+            transaction_retry_count: Histogram::new_in_registry(
+                "quorum_driver_transaction_retry_count",
+                "Histogram of transaction retry count",
+                registry,
+            ),
+            current_transactions_in_retry: register_int_gauge_with_registry!(
+                "current_transactions_in_retry",
+                "Current number of transactions in retry loop in QuorumDriver",
                 registry,
             )
             .unwrap(),

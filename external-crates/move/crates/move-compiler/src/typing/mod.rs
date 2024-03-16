@@ -9,5 +9,6 @@ mod expand;
 mod infinite_instantiations;
 mod macro_expand;
 mod recursive_structs;
+mod syntax_methods;
 pub(crate) mod translate;
 pub mod visitor;

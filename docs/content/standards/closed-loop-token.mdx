@@ -6,16 +6,49 @@ Using the Closed-Loop Token standard, you can limit the applications that can us
 
 ## Background and use cases
 
-The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system - coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped), [freely transferable](/concepts/dynamic-fields/transfers/custom-rules#the-store-ability-and-transfer-rules) and you can store them in any application. The best real world analogy would be cash - hardly regulated and can be freely used and passed.
+The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system - coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped.mdx), [freely transferable](/concepts/transfers/custom-rules.mdx#the-store-ability-and-transfer-rules) and you can store them in any application. The best real world analogy would be cash - hardly regulated and can be freely used and passed.
 
 Some applications, however, require constraining the scope of the token to a specific purpose. For example, some applications might need a token that you can only use for a specific service, or that an authorized account can only use, or a token that you can block certain accounts from using. A real-world analogy would be a bank account - regulated, bank-controlled, and compliant with certain rules and policies.
 
+## Difference with Coin
 
-## Difference with coins
+```mermaid
+flowchart RL
+    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
+        A["Balance&lt;T>
+        Supply&lt;T>"];
+    end
+    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
+        B["Coin&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
+        C["Token&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+    B-- to_balance -->A;
+    C-- to_coin -->B;
+```
+```mermaid
+flowchart LR
+    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
+        A["Balance&lt;T>
+        Supply&lt;T>"];
+    end
+    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
+        B["Coin&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
+        C["Token&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+    A-- from_balance -->B;
+    B-- from_coin -->C;
+```
 
-![Coin/token differences](./images/balance-token-coin.png)
 
-Unlike coins, which have `key + store` abilities and thus support wrapping and public transfers, tokens have only the `key` ability and you cannot wrap them, store them as a dynamic field, or freely transfer them (unless you include a custom policy for that). Consequently, only accounts can own tokens. You can't store them in an application (however, you can spend them, as detailed in the [Spending section](./closed-loop-token/spending.mdx)).
+Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
 
 ```move
 // defined in `sui::coin`

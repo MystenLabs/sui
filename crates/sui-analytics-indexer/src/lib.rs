@@ -37,11 +37,12 @@ use crate::handlers::object_handler::ObjectHandler;
 use crate::handlers::package_handler::PackageHandler;
 use crate::handlers::transaction_handler::TransactionHandler;
 use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
+use crate::handlers::wrapped_object_handler::WrappedObjectHandler;
 use crate::handlers::AnalyticsHandler;
 use crate::tables::{
     CheckpointEntry, DynamicFieldEntry, EventEntry, InputObjectKind, MoveCallEntry,
     MovePackageEntry, ObjectEntry, ObjectStatus, OwnerType, TransactionEntry,
-    TransactionObjectEntry,
+    TransactionObjectEntry, WrappedObjectEntry,
 };
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
@@ -64,6 +65,8 @@ const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
 const MOVE_CALL_PREFIX: &str = "move_call";
 const MOVE_PACKAGE_PREFIX: &str = "move_package";
 const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
+
+const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -317,6 +320,7 @@ pub enum FileType {
     MoveCall,
     MovePackage,
     DynamicField,
+    WrappedObject,
 }
 
 impl FileType {
@@ -330,6 +334,7 @@ impl FileType {
             FileType::MoveCall => Path::from(MOVE_CALL_PREFIX),
             FileType::MovePackage => Path::from(MOVE_PACKAGE_PREFIX),
             FileType::DynamicField => Path::from(DYNAMIC_FIELD_PREFIX),
+            FileType::WrappedObject => Path::from(WRAPPED_OBJECT_PREFIX),
         }
     }
 
@@ -398,6 +403,12 @@ impl From<bool> for ParquetValue {
 impl From<OwnerType> for ParquetValue {
     fn from(value: OwnerType) -> Self {
         Self::Str(value.to_string())
+    }
+}
+
+impl From<Option<OwnerType>> for ParquetValue {
+    fn from(value: Option<OwnerType>) -> Self {
+        value.map(|v| v.to_string()).into()
     }
 }
 
@@ -522,6 +533,7 @@ impl Processor {
 pub async fn read_store_for_checkpoint(
     remote_store_config: ObjectStoreConfig,
     file_type: FileType,
+    dir_prefix: Option<Path>,
 ) -> Result<CheckpointSequenceNumber> {
     let remote_object_store = remote_store_config.make()?;
     let remote_store_is_empty = remote_object_store
@@ -531,7 +543,8 @@ pub async fn read_store_for_checkpoint(
         .common_prefixes
         .is_empty();
     info!("Remote store is empty: {remote_store_is_empty}");
-    let prefix = file_type.dir_prefix();
+    let file_type_prefix = file_type.dir_prefix();
+    let prefix = join_paths(dir_prefix, &file_type_prefix);
     let epoch_dirs = find_all_dirs_with_epoch_prefix(&remote_object_store, Some(&prefix)).await?;
     let epoch = epoch_dirs.last_key_value().map(|(k, _v)| *k).unwrap_or(0);
     let epoch_prefix = prefix.child(format!("epoch_{}", epoch));
@@ -817,6 +830,32 @@ pub async fn make_dynamic_field_processor(
     .await
 }
 
+pub async fn make_wrapped_object_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::WrappedObject).await?;
+    let handler: Box<dyn AnalyticsHandler<WrappedObjectEntry>> = Box::new(
+        WrappedObjectHandler::new(&config.package_cache_path, &config.rest_url),
+    );
+    let writer = make_writer::<WrappedObjectEntry>(
+        config.clone(),
+        FileType::WrappedObject,
+        starting_checkpoint_seq_num,
+    )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
+    Processor::new::<WrappedObjectEntry>(
+        handler,
+        writer,
+        max_checkpoint_reader,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
+    )
+    .await
+}
+
 pub fn make_writer<S: Serialize + ParquetSchema>(
     config: AnalyticsIndexerConfig,
     file_type: FileType,
@@ -843,7 +882,12 @@ pub async fn get_starting_checkpoint_seq_num(
     let checkpoint = if let Some(starting_checkpoint_seq_num) = config.starting_checkpoint_seq_num {
         starting_checkpoint_seq_num
     } else {
-        read_store_for_checkpoint(config.remote_store_config.clone(), file_type).await?
+        read_store_for_checkpoint(
+            config.remote_store_config.clone(),
+            file_type,
+            config.remote_store_path_prefix,
+        )
+        .await?
     };
     Ok(checkpoint)
 }
@@ -861,5 +905,17 @@ pub async fn make_analytics_processor(
         FileType::MoveCall => make_move_call_processor(config, metrics).await,
         FileType::MovePackage => make_move_package_processor(config, metrics).await,
         FileType::DynamicField => make_dynamic_field_processor(config, metrics).await,
+        FileType::WrappedObject => make_wrapped_object_processor(config, metrics).await,
     }
+}
+
+pub fn join_paths(base: Option<Path>, child: &Path) -> Path {
+    base.map(|p| {
+        let mut out_path = p.clone();
+        for part in child.parts() {
+            out_path = out_path.child(part)
+        }
+        out_path
+    })
+    .unwrap_or(child.clone())
 }

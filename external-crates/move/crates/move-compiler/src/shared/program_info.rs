@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -9,7 +9,8 @@ use move_symbol_pool::Symbol;
 use crate::{
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
-        self as N, FunctionSignature, ResolvedUseFuns, StructDefinition, StructTypeParameter, Type,
+        self as N, FunctionSignature, ResolvedUseFuns, StructDefinition, StructTypeParameter,
+        SyntaxMethods, Type,
     },
     parser::ast::{ConstantName, FunctionName, StructName},
     shared::unique_map::UniqueMap,
@@ -40,6 +41,7 @@ pub struct ModuleInfo {
     pub attributes: Attributes,
     pub package: Option<Symbol>,
     pub use_funs: ResolvedUseFuns,
+    pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Loc>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
@@ -79,6 +81,7 @@ macro_rules! program_info {
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
                 use_funs,
+                syntax_methods: mdef.syntax_methods.clone(),
                 friends: mdef.friends.ref_map(|_, friend| friend.loc),
                 structs,
                 functions,
@@ -100,7 +103,7 @@ macro_rules! program_info {
 
 impl TypingProgramInfo {
     pub fn new(
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         prog: &T::Program_,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
@@ -110,7 +113,7 @@ impl TypingProgramInfo {
 }
 
 impl NamingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &N::Program_) -> Self {
+    pub fn new(pre_compiled_lib: Option<Arc<FullyCompiledProgram>>, prog: &N::Program_) -> Self {
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
         program_info!(pre_compiled_lib, prog, naming, module_use_funs)
@@ -183,5 +186,14 @@ impl NamingProgramInfo {
             .into_iter()
             .map(|(mident, minfo)| (mident, minfo.use_funs))
             .collect()
+    }
+
+    pub fn set_module_syntax_methods(
+        &mut self,
+        mident: ModuleIdent,
+        syntax_methods: SyntaxMethods,
+    ) {
+        let syntax_methods_ref = &mut self.modules.get_mut(&mident).unwrap().syntax_methods;
+        *syntax_methods_ref = syntax_methods;
     }
 }

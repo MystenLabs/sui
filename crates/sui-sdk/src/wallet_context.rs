@@ -29,7 +29,7 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub async fn new(
+    pub fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
@@ -188,7 +188,7 @@ impl WalletContext {
             }
         }
         Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {budget}"
+            "No non-argument gas objects found for this address with value >= budget {budget}. Run sui client gas to check for gas objects."
         ))
     }
 

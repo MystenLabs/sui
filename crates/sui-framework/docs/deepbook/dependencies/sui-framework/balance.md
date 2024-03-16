@@ -3,6 +3,9 @@
 
 # Module `0x2::balance`
 
+A storable handler for Balances in general. Is used in the <code>Coin</code>
+module to allow balance operations and can be used to implement
+custom coins with <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">Supply</a></code> and <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code>s.
 
 
 -  [Struct `Supply`](#0x2_balance_Supply)
@@ -32,6 +35,8 @@
 
 ## Struct `Supply`
 
+A Supply of T. Used for minting and burning.
+Wrapped into a <code>TreasuryCap</code> in the <code>Coin</code> module.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt; <b>has</b> store
@@ -59,6 +64,8 @@
 
 ## Struct `Balance`
 
+Storable balance - an inner struct of a Coin type.
+Can be used to store coins which don't need the key ability.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; <b>has</b> store
@@ -89,6 +96,7 @@
 
 <a name="0x2_balance_ENotSystemAddress"></a>
 
+Sender is not @0x0 the system address.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>: u64 = 3;
@@ -98,6 +106,7 @@
 
 <a name="0x2_balance_ENonZero"></a>
 
+For when trying to destroy a non-zero balance.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_ENonZero">ENonZero</a>: u64 = 0;
@@ -107,6 +116,7 @@
 
 <a name="0x2_balance_ENotEnough"></a>
 
+For when trying to withdraw more than there is.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_ENotEnough">ENotEnough</a>: u64 = 2;
@@ -116,6 +126,7 @@
 
 <a name="0x2_balance_EOverflow"></a>
 
+For when an overflow is happening on Supply operations.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_EOverflow">EOverflow</a>: u64 = 1;
@@ -127,6 +138,7 @@
 
 ## Function `value`
 
+Get the amount stored in a <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_value">value</a>&lt;T&gt;(self: &<a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): u64
@@ -151,6 +163,7 @@
 
 ## Function `supply_value`
 
+Get the <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">Supply</a></code> value.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_supply_value">supply_value</a>&lt;T&gt;(supply: &<a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): u64
@@ -175,6 +188,7 @@
 
 ## Function `create_supply`
 
+Create a new supply for type T.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_create_supply">create_supply</a>&lt;T: drop&gt;(_: T): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
@@ -199,6 +213,7 @@
 
 ## Function `increase_supply`
 
+Increase supply by <code>value</code> and create a new <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;</code> with this value.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, value: u64): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -225,6 +240,7 @@
 
 ## Function `decrease_supply`
 
+Burn a Balance<T> and decrease Supply<T>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>: <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): u64
@@ -252,6 +268,7 @@
 
 ## Function `zero`
 
+Create a zero <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code> for type <code>T</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_zero">zero</a>&lt;T&gt;(): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -276,6 +293,7 @@
 
 ## Function `join`
 
+Join two balances together.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>: <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): u64
@@ -302,6 +320,7 @@
 
 ## Function `split`
 
+Split a <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code> and take a sub balance from it.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, value: u64): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -328,6 +347,7 @@
 
 ## Function `withdraw_all`
 
+Withdraw all balance. After this the remaining balance must be 0.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_withdraw_all">withdraw_all</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -353,6 +373,7 @@
 
 ## Function `destroy_zero`
 
+Destroy a zero <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>: <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
@@ -378,6 +399,9 @@
 
 ## Function `create_staking_rewards`
 
+CAUTION: this function creates a <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code> without increasing the supply.
+It should only be called by the epoch change system txn to create staking rewards,
+and nowhere else.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64, ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -403,6 +427,9 @@
 
 ## Function `destroy_storage_rebates`
 
+CAUTION: this function destroys a <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">Balance</a></code> without decreasing the supply.
+It should only be called by the epoch change system txn to destroy storage rebates,
+and nowhere else.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -428,6 +455,7 @@
 
 ## Function `destroy_supply`
 
+Destroy a <code><a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">Supply</a></code> preventing any further minting and burning.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): u64

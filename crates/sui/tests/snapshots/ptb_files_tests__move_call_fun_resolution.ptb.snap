@@ -1,0 +1,92 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────╮
+│ PTB Preview                                         │
+├────────────┬────────────────────────────────────────┤
+│ command    │ values                                 │
+├────────────┼────────────────────────────────────────┤
+│ move-call  │ zero_x_zero::option::is_none<u64> none │
+│ assign     │ a none                                 │
+│ assign     │ zero_x_zero @0x0                       │
+│ move-call  │ zero_x_zero::option::is_none<u64> a    │
+│ move-call  │ std::Option::is_none<u64> a            │
+│ move-call  │ std::option::isnone<u64> a             │
+│ move-call  │ std::option::is_none<u64>              │
+│ move-call  │ std::option::is_none<u64> a b          │
+│ move-call  │ sui::coin::destroy_zero @0x1           │
+│ move-call  │ std::option::is_none<u64, bool> a      │
+├────────────┼────────────────────────────────────────┤
+│ gas-budget │ 1000                                   │
+╰────────────┴────────────────────────────────────────╯
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+   ╭─[2:13]
+ 1 │ --gas-budget 1000
+ 2 │ --move-call zero_x_zero::option::is_none<u64> none
+   ·             ─────┬─────
+   ·                  ╰── Unbound named address: 'zero_x_zero'
+ 3 │ --assign a none
+   ╰────
+  help: This is most likely because the named address 'zero_x_zero' is not
+        in scope. You can either bind a variable to the address that you
+        want to use or use the address in the command.
+
+  × Error when processing PTB
+   ╭─[5:13]
+ 4 │ --assign zero_x_zero @0x0
+ 5 │ --move-call zero_x_zero::option::is_none<u64> a
+   ·             ─────┬─────
+   ·                  ╰── Object 0x0000000000000000000000000000000000000000000000000000000000000000 does not exist.
+ 6 │ --move-call std::Option::is_none<u64> a
+   ╰────
+
+  × Error when processing PTB
+   ╭─[6:18]
+ 5 │ --move-call zero_x_zero::option::is_none<u64> a
+ 6 │ --move-call std::Option::is_none<u64> a
+   ·                  ───┬──
+   ·                     ╰── Module not found in package: "Option".
+ 7 │ --move-call std::option::isnone<u64> a
+   ╰────
+  help: Did you mean 'option'?
+
+  × Error when processing PTB
+   ╭─[7:26]
+ 6 │ --move-call std::Option::is_none<u64> a
+ 7 │ --move-call std::option::isnone<u64> a
+   ·                          ───┬──
+   ·                             ╰── Could not resolve function 'isnone' in module 'option'
+ 8 │ --move-call std::option::is_none<u64>
+   ╰────
+  help: Did you mean 'is_none'?
+
+  × Error when processing PTB
+   ╭─[8:13]
+ 7 │ --move-call std::option::isnone<u64> a
+ 8 │ --move-call std::option::is_none<u64>
+   ·             ──────────┬─────────
+   ·                       ╰── Expected 1 argument, but got 0
+ 9 │ --move-call std::option::is_none<u64> a b
+   ╰────
+
+  × Error when processing PTB
+    ╭─[9:39]
+  8 │ --move-call std::option::is_none<u64>
+  9 │ --move-call std::option::is_none<u64> a b
+    ·                                       ─┬─
+    ·                                        ╰── Expected 1 argument, but got 2
+ 10 │ --move-call sui::coin::destroy_zero @0x1
+    ╰────
+
+  × Error when processing PTB
+    ╭─[10:37]
+  9 │ --move-call std::option::is_none<u64> a b
+ 10 │ --move-call sui::coin::destroy_zero @0x1
+    ·                                     ──┬─
+    ·                                       ╰── Not enough type parameters supplied for Move call
+ 11 │ --move-call std::option::is_none<u64, bool> a 
+    ╰────
+

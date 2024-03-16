@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.19.0"
+    "version": "1.21.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "36",
+              "maxSupportedProtocolVersion": "39",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1377,6 +1377,7 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
+                "enable_randomness_ptb_restrictions": false,
                 "end_of_epoch_transaction_supported": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
@@ -1385,7 +1386,6 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "narwhal_certificate_v2": false,
-                "narwhal_header_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
@@ -1394,6 +1394,7 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "reject_mutable_random_on_entry_functions": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
@@ -1880,6 +1881,7 @@
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
                 "random_beacon_reduction_allowed_delta": null,
+                "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },

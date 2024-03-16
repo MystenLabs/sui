@@ -230,6 +230,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
                 system_state,
                 Default::default(),
                 authority_state.get_object_store(),
+                None,
             )
             .unwrap(),
             &executor,

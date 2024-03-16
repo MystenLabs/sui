@@ -127,7 +127,7 @@ impl HttpKVStore {
     pub fn new(base_url: &str) -> SuiResult<Self> {
         info!("creating HttpKVStore with base_url: {}", base_url);
         let http = HttpsConnectorBuilder::new()
-            .with_native_roots()
+            .with_webpki_roots()
             .https_or_http()
             .enable_http2()
             .build();

@@ -4,7 +4,7 @@
 use crate::{
     db::{PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection},
     errors::IndexerError,
-    models_v2::{
+    models::{
         address_metrics::StoredAddressMetrics,
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
@@ -1334,7 +1334,7 @@ impl IndexerReader {
         Ok(objects)
     }
 
-    pub fn bcs_name_from_dynamic_field_name(
+    fn bcs_name_from_dynamic_field_name(
         &self,
         name: &DynamicFieldName,
     ) -> Result<Vec<u8>, IndexerError> {
@@ -1343,6 +1343,15 @@ impl IndexerReader {
         let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
         let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
         Ok(name_bcs_value)
+    }
+
+    pub async fn bcs_name_from_dynamic_field_name_in_blocking_task(
+        &self,
+        name: &DynamicFieldName,
+    ) -> Result<Vec<u8>, IndexerError> {
+        let name = name.clone();
+        self.spawn_blocking(move |this| this.bcs_name_from_dynamic_field_name(&name))
+            .await
     }
 
     fn get_object_refs(

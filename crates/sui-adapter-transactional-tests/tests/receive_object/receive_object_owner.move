@@ -12,13 +12,13 @@ module tto::M1 {
 
     const KEY: u64 = 0;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
         value: u64,
     }
 
     public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx), value: 0 };
+        let mut a = A { id: object::new(ctx), value: 0 };
         dof::add(&mut a.id, KEY, A { id: object::new(ctx), value: 0 });
         transfer::public_transfer(a, tx_context::sender(ctx));
     }

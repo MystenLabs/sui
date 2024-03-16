@@ -33,7 +33,6 @@ sui-storage.workspace = true
 sui-data-ingestion-core.workspace = true
 sui-types.workspace = true
 url.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

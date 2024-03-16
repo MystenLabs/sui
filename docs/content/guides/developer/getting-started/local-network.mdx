@@ -137,7 +137,7 @@ The response resembles the following, but with different IDs:
 ╰────────────────────────────────────────────────────────────────────┴────────────╯
 ```
 
-## Install Sui Wallet and Sui Explorer locally
+## Install Sui Wallet locally
 
 To install and use the apps locally, you must first install [pnpm](https://pnpm.io/installation). Use the instructions appropriate for your operating system.
 
@@ -147,7 +147,7 @@ After you install `pnpm`, use the following command to install the required depe
 pnpm install
 ```
 
-After the installation completes, run the following command to install Sui Wallet and Sui Explorer:
+After the installation completes, run the following command to install Sui Wallet:
 
 ```shell
 pnpm turbo build
@@ -155,27 +155,11 @@ pnpm turbo build
 
 If you encounter an error from turbo build, confirm that there is no `package-lock.json`. If the file exists, remove it and then run the command again.
 
-### Set up Sui Explorer on your local network
-
-To connect the live Sui Explorer to your local network, open the URL:[https://suiexplorer.com/?network=local](https://suiexplorer.com/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
-
-Run the following command from the `sui` root folder:
-
-**Note:** To run the command you have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
-
-```bash
-pnpm explorer dev
-```
-
-After the command completes, open your local Sui Explorer at the following URL: [http://localhost:3000/](http://localhost:3000/).
-
-For more details about Sui Explorer, see the [Explorer README](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md#set-up).
-
 ## Set up a local Sui Wallet
 
-You can also use a local Sui Wallet to test with your local network. You can then see transactions executed from your local Sui Wallet on your local Sui Explorer.
+You can also use a local Sui Wallet to test with your local network.
 
-**Note:** To run the command you must have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
+**Note:** To run the command you must have `pnpm` installed. See [Install Sui Wallet locally](#install-sui-wallet-locally) for details.
 
 Before you start the Sui Wallet app, update its default environment to point to your local network. To do so, first make a copy of `sui/apps/wallet/configs/environment/.env.defaults` and rename it to `.env` in the same directory. In your `.env` file, edit the first line to read `API_ENV=local` and then save the file.
 

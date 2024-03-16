@@ -1,7 +1,3 @@
-//**************************************************************************************************
-// Entry
-//**************************************************************************************************
-
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
@@ -9,9 +5,11 @@
 use crate::{
     debug_display, debug_display_verbose, diag,
     editions::{FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent},
-    hlir::ast::{self as H, Block, BlockLabel, MoveOpAnnotation},
-    hlir::detect_dead_code::program as detect_dead_code_analysis,
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
+    hlir::{
+        ast::{self as H, Block, BlockLabel, MoveOpAnnotation},
+        detect_dead_code::program as detect_dead_code_analysis,
+    },
     ice,
     naming::ast as N,
     parser::ast::{Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName},
@@ -22,11 +20,13 @@ use crate::{
 };
 
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     convert::TryInto,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -109,7 +109,7 @@ struct Context<'env> {
     env: &'env mut CompilationEnv,
     current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
-    function_locals: UniqueMap<H::Var, H::SingleType>,
+    function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
     named_block_binders: UniqueMap<H::BlockLabel, Vec<H::LValue>>,
@@ -121,7 +121,7 @@ struct Context<'env> {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
+        pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
         prog: &T::Program_,
     ) -> Self {
         fn add_struct_fields(
@@ -171,21 +171,23 @@ impl<'env> Context<'env> {
         self.function_locals.is_empty()
     }
 
-    pub fn extract_function_locals(&mut self) -> UniqueMap<H::Var, H::SingleType> {
+    pub fn extract_function_locals(&mut self) -> UniqueMap<H::Var, (Mutability, H::SingleType)> {
         self.tmp_counter = 0;
         std::mem::replace(&mut self.function_locals, UniqueMap::new())
     }
 
     pub fn new_temp(&mut self, loc: Loc, t: H::SingleType) -> H::Var {
         let new_var = H::Var(sp(loc, new_temp_name(self)));
-        self.function_locals.add(new_var, t).unwrap();
+        self.function_locals
+            .add(new_var, (Mutability::Either, t))
+            .unwrap();
 
         new_var
     }
 
-    pub fn bind_local(&mut self, v: N::Var, t: H::SingleType) {
+    pub fn bind_local(&mut self, mut_: Mutability, v: N::Var, t: H::SingleType) {
         let symbol = translate_var(v);
-        self.function_locals.add(symbol, t).unwrap();
+        self.function_locals.add(symbol, (mut_, t)).unwrap();
     }
 
     pub fn record_named_block_binders(
@@ -248,7 +250,7 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: T::Program,
 ) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
@@ -285,6 +287,7 @@ fn module(
         immediate_neighbors: _,
         used_addresses: _,
         use_funs: _,
+        syntax_methods: _,
         friends,
         structs: tstructs,
         functions: tfunctions,
@@ -334,7 +337,8 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility: evisibility,
+        compiled_visibility: tcompiled_visibility,
+        visibility: tvisibility,
         entry,
         macro_,
         signature,
@@ -349,7 +353,8 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility: visibility(evisibility),
+        compiled_visibility: visibility(tcompiled_visibility),
+        visibility: visibility(tvisibility),
         entry,
         signature,
         body,
@@ -361,10 +366,10 @@ fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::Fu
     let parameters = sig
         .parameters
         .into_iter()
-        .map(|(_, v, tty)| {
+        .map(|(mut_, v, tty)| {
             let ty = single_type(context, tty);
-            context.bind_local(v, ty.clone());
-            (translate_var(v), ty)
+            context.bind_local(mut_, v, ty.clone());
+            (mut_, translate_var(v), ty)
         })
         .collect();
     let return_type = type_(context, sig.return_type);
@@ -401,7 +406,7 @@ fn function_body_defined(
     signature: &H::FunctionSignature,
     loc: Loc,
     seq: VecDeque<T::SequenceItem>,
-) -> (UniqueMap<H::Var, H::SingleType>, Block) {
+) -> (UniqueMap<H::Var, (Mutability, H::SingleType)>, Block) {
     context.signature = Some(signature.clone());
     let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
     if let Some(ret_exp) = final_value {
@@ -657,6 +662,7 @@ fn body(
     }
 }
 
+#[growing_stack]
 fn tail(
     context: &mut Context,
     block: &mut Block,
@@ -846,6 +852,7 @@ fn tail_block(
 // Value Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn value(
     context: &mut Context,
     block: &mut Block,
@@ -1480,6 +1487,7 @@ fn error_exp(loc: Loc) -> H::Exp {
 // Statement Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
     use H::{Command_ as C, Statement_ as S};
     use T::UnannotatedExp_ as E;
@@ -1587,7 +1595,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         E::Assign(assigns, lvalue_ty, rhs) => {
             let expected_type = expected_types(context, eloc, lvalue_ty);
             let exp = value(context, block, Some(&expected_type), *rhs);
-            make_assignments(context, block, eloc, assigns, exp);
+            make_assignments(context, block, eloc, H::AssignCase::Update, assigns, exp);
         }
 
         E::Mutate(lhs_in, rhs_in) => {
@@ -1653,7 +1661,7 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
                 let expected_tys = expected_types(context, sloc, ty);
                 let rhs_exp = value(context, block, Some(&expected_tys), *expr);
                 declare_bind_list(context, &bindings);
-                make_assignments(context, block, sloc, bindings, rhs_exp);
+                make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
             }
         }
     }
@@ -1811,9 +1819,11 @@ fn declare_bind(context: &mut Context, sp!(_, bind_): &T::LValue) {
     use T::LValue_ as L;
     match bind_ {
         L::Ignore => (),
-        L::Var { var: v, ty, .. } => {
+        L::Var {
+            var: v, ty, mut_, ..
+        } => {
             let st = single_type(context, *ty.clone());
-            context.bind_local(*v, st)
+            context.bind_local(mut_.unwrap(), *v, st)
         }
         L::Unpack(_, _, _, fields) | L::BorrowUnpack(_, _, _, _, fields) => fields
             .iter()
@@ -1825,6 +1835,7 @@ fn make_assignments(
     context: &mut Context,
     result: &mut Block,
     loc: Loc,
+    case: H::AssignCase,
     sp!(_, assigns): T::LValueList,
     rvalue: H::Exp,
 ) {
@@ -1833,17 +1844,21 @@ fn make_assignments(
     let mut after = Block::new();
     for (idx, a) in assigns.into_iter().enumerate() {
         let a_ty = rvalue.ty.value.type_at_index(idx);
-        let (ls, mut af) = assign(context, a, a_ty);
+        let (ls, mut af) = assign(context, case, a, a_ty);
 
         lvalues.push(ls);
         after.append(&mut af);
     }
-    result.push_back(sp(loc, S::Command(sp(loc, C::Assign(lvalues, rvalue)))));
+    result.push_back(sp(
+        loc,
+        S::Command(sp(loc, C::Assign(case, lvalues, rvalue))),
+    ));
     result.append(&mut after);
 }
 
 fn assign(
     context: &mut Context,
+    case: H::AssignCase,
     sp!(loc, ta_): T::LValue,
     rvalue_ty: &H::SingleType,
 ) -> (H::LValue, Block) {
@@ -1852,9 +1867,16 @@ fn assign(
     let mut after = Block::new();
     let l_ = match ta_ {
         A::Ignore => L::Ignore,
-        A::Var { var: v, ty: st, .. } => {
-            L::Var(translate_var(v), Box::new(single_type(context, *st)))
-        }
+        A::Var {
+            var: v,
+            ty: st,
+            unused_binding,
+            ..
+        } => L::Var {
+            var: translate_var(v),
+            ty: Box::new(single_type(context, *st)),
+            unused_assignment: unused_binding,
+        },
         A::Unpack(m, s, tbs, tfields) => {
             // all fields of an unpacked struct type are used
             context
@@ -1869,7 +1891,7 @@ fn assign(
             for (decl_idx, f, bt, tfa) in assign_fields(context, &m, &s, tfields) {
                 assert!(fields.len() == decl_idx);
                 let st = &H::SingleType_::base(bt);
-                let (fa, mut fafter) = assign(context, tfa, st);
+                let (fa, mut fafter) = assign(context, case, tfa, st);
                 after.append(&mut fafter);
                 fields.push((f, fa))
             }
@@ -1901,9 +1923,13 @@ fn assign(
                 let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
                 let borrow = H::exp(borrow_ty, sp(floc, borrow_));
-                make_assignments(context, &mut after, floc, sp(floc, vec![tfa]), borrow);
+                make_assignments(context, &mut after, floc, case, sp(floc, vec![tfa]), borrow);
             }
-            L::Var(tmp, Box::new(rvalue_ty.clone()))
+            L::Var {
+                var: tmp,
+                ty: Box::new(rvalue_ty.clone()),
+                unused_assignment: false,
+            }
         }
     };
     (sp(loc, l_), after)
@@ -2044,7 +2070,7 @@ fn bind_value_in_block(
     let mut binders_valid = true;
     for sp!(loc, lvalue) in &binders {
         match lvalue {
-            H::LValue_::Var(_, _) => (),
+            H::LValue_::Var { .. } => (),
             lv => {
                 context.env.add_diag(ice!((
                     *loc,
@@ -2062,7 +2088,10 @@ fn bind_value_in_block(
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
     let loc = rhs_exp.exp.loc;
-    stmts.push_back(sp(loc, S::Command(sp(loc, C::Assign(binders, rhs_exp)))));
+    stmts.push_back(sp(
+        loc,
+        S::Command(sp(loc, C::Assign(H::AssignCase::Let, binders, rhs_exp))),
+    ));
 }
 
 fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>, H::Exp) {
@@ -2103,7 +2132,12 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
 
 fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::LValue, H::Exp) {
     let binder = context.new_temp(loc, sp(loc, ty.clone()));
-    let lvalue = sp(loc, H::LValue_::Var(binder, Box::new(sp(loc, ty.clone()))));
+    let lvalue_ = H::LValue_::Var {
+        var: binder,
+        ty: Box::new(sp(loc, ty.clone())),
+        unused_assignment: false,
+    };
+    let lvalue = sp(loc, lvalue_);
     let uexp = sp(
         loc,
         H::UnannotatedExp_::Move {

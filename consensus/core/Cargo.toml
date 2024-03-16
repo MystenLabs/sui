@@ -35,8 +35,6 @@ tower.workspace = true
 tracing.workspace = true
 typed-store.workspace = true
 
-workspace-hack.workspace = true
-
 [dev-dependencies]
 rstest.workspace = true
 tempfile.workspace = true

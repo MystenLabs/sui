@@ -21,6 +21,11 @@ sui-types.workspace = true
 sui-config.workspace = true
 sui-swarm-config.workspace = true
 
+arc-swap.workspace = true
+bcs.workspace = true
+bytes.workspace = true
+fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 mysten-network.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
@@ -30,7 +35,6 @@ rand.workspace = true
 anyhow.workspace = true
 prometheus.workspace = true
 mysten-metrics.workspace = true
-workspace-hack.workspace = true
 
 [build-dependencies]
 anemo-build.workspace = true
@@ -40,5 +44,4 @@ tonic-build.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 ed25519-consensus.workspace = true
-fastcrypto = { workspace = true }
 tempfile = "3.3.0"

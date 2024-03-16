@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::committee::CommitteeTrait;
+use crate::zk_login_authenticator::AddressSeed;
 use anyhow::{anyhow, Error};
 use derive_more::{AsMut, AsRef, From};
 use eyre::eyre;
@@ -25,7 +26,6 @@ pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
-use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
@@ -36,7 +36,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
@@ -266,13 +266,10 @@ impl ZkLoginPublicIdentifier {
         bytes.extend([iss_bytes.len() as u8]);
         bytes.extend(iss_bytes);
 
-        // pad 0 to make it 32 bytes.
-        let address_seed_bytes =
-            big_int_str_to_bytes(address_seed).map_err(|_| SuiError::InvalidAddress)?;
-        let mut padded = Vec::new();
-        padded.extend(vec![0; 32 - address_seed_bytes.len()]);
-        padded.extend(address_seed_bytes);
-        bytes.extend(padded.clone());
+        let address_seed =
+            AddressSeed::from_str(address_seed).map_err(|_| SuiError::InvalidAddress)?;
+
+        bytes.extend(address_seed.padded());
 
         Ok(Self(bytes))
     }
@@ -1704,5 +1701,56 @@ impl FromStr for GenericSignature {
     type Err = eyre::Report;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::decode_base64(s).map_err(|e| eyre!("Fail to decode base64 {}", e.to_string()))
+    }
+}
+
+//
+// Types for randomness generation
+//
+pub type RandomnessSignature = fastcrypto_tbls::types::Signature;
+pub type RandomnessPartialSignature = fastcrypto_tbls::tbls::PartialSignature<RandomnessSignature>;
+pub type RandomnessPrivateKey =
+    fastcrypto_tbls::ecies::PrivateKey<fastcrypto::groups::bls12381::G2Element>;
+
+/// Round number of generated randomness.
+#[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RandomnessRound(pub u64);
+
+impl Display for RandomnessRound {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::ops::Add for RandomnessRound {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+}
+
+impl std::ops::Add<u64> for RandomnessRound {
+    type Output = Self;
+    fn add(self, other: u64) -> Self {
+        Self(self.0 + other)
+    }
+}
+
+impl RandomnessRound {
+    pub fn new(round: u64) -> Self {
+        Self(round)
+    }
+
+    pub fn checked_add(self, rhs: u64) -> Option<Self> {
+        self.0.checked_add(rhs).map(Self)
+    }
+
+    pub fn signature_message(&self) -> Vec<u8> {
+        "random_beacon round "
+            .as_bytes()
+            .iter()
+            .cloned()
+            .chain(bcs::to_bytes(&self.0).expect("serialization should not fail"))
+            .collect()
     }
 }

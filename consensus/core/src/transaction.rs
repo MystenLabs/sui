@@ -77,7 +77,6 @@ impl TransactionConsumer {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct TransactionClient {
     sender: metered_channel::Sender<Transaction>,
     max_transaction_size: u64,
@@ -92,7 +91,6 @@ pub enum ClientError {
     OversizedTransaction(u64, u64),
 }
 
-#[allow(dead_code)]
 impl TransactionClient {
     pub(crate) fn new(context: Arc<Context>) -> (Self, metered_channel::Receiver<Transaction>) {
         let (sender, receiver) = channel_with_total(
@@ -140,7 +138,6 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     ) -> Result<(), ValidationError>;
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum ValidationError {
     #[error("Invalid transaction: {0}")]

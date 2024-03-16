@@ -7,13 +7,10 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-diesel = { version = "2.1.4", features = ["postgres", "r2d2"] }
+diesel = { version = "2.1.4", features = ["postgres", "r2d2", "serde_json"] }
 sui-data-ingestion-core.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
-aws-config.workspace = true
-aws-sdk-dynamodb.workspace = true
-aws-sdk-s3.workspace = true
 backoff.workspace = true
 base64-url.workspace = true
 bcs.workspace = true
@@ -32,7 +29,6 @@ tracing.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true
-workspace-hack.workspace = true
 sui-json-rpc.workspace = true
 dotenvy = "0.15"
 move-core-types.workspace = true
@@ -41,4 +37,3 @@ move-core-types.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
-

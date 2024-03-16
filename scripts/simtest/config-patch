@@ -19,18 +19,10 @@ diff --git a/Cargo.toml b/Cargo.toml
 index 3b1ca4591c..e4ff4d61d2 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -672,10 +672,14 @@ semver = "1.0.16"
+@@ -668,2 +668,6 @@ semver = "1.0.16"
  spinners = "4.1.0"
  include_dir = "0.7.3"
- 
- 
- # Using the workspace-hack via this patch directive means that it only applies
- # while building within this workspace. If another workspace imports a crate
- # from here via a git dependency, it will not have the workspace-hack applied
- # to it.
- [patch.crates-io.workspace-hack]
- path = "crates/workspace-hack"
 +
 +[patch.crates-io]
-+tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77" }
-+futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77" }
++tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8" }
++futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8" }

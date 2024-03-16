@@ -12,6 +12,7 @@ use tracing::{debug, error, info, warn};
 
 pub enum ProjectType {
     App,
+    Service,
     Basic,
     CronJob,
 }
@@ -19,15 +20,22 @@ pub enum ProjectType {
 const KEYRING: &str = "pulumi-kms-automation-f22939d";
 
 impl ProjectType {
-    pub fn create_project(&self, use_kms: &bool) -> Result<()> {
+    pub fn create_project(&self, use_kms: &bool, project_name: Option<String>) -> Result<()> {
         // make sure we're in suiops
         ensure_in_suiops_repo()?;
         // inquire params from user
-        let project_name = Text::new("project name:").prompt()?;
+        let project_name = project_name.unwrap_or_else(|| {
+            Text::new("project name:")
+                .prompt()
+                .expect("couldn't get project name")
+        });
         // create dir
         let project_subdir = match self {
-            Self::App | Self::CronJob => "apps",
-            Self::Basic => "services",
+            Self::App | Self::CronJob => "apps".to_owned(),
+            Self::Service => "services".to_owned(),
+            Self::Basic => Text::new("project subdir (under sui-operations/pulumi/):")
+                .prompt()
+                .expect("couldn't get subdir"),
         };
         let project_dir = get_pulumi_dir()?.join(project_subdir).join(&project_name);
         let mut project_opts = vec![];
@@ -45,8 +53,8 @@ impl ProjectType {
             ))
         } else {
             match self {
-                Self::App => {
-                    info!("creating k8s containerized application");
+                Self::App | Self::Service => {
+                    info!("creating k8s containerized application/service");
                     create_mysten_k8s_project(
                         &project_name,
                         &project_dir,
@@ -140,7 +148,7 @@ fn run_pulumi_new_from_template(
         project_dir_str.bright_purple()
     );
     let template_dir = match project_type {
-        ProjectType::App => "app-go",
+        ProjectType::App | ProjectType::Service => "app-go",
         ProjectType::CronJob => "cronjob-go",
         _ => "app-go",
     };

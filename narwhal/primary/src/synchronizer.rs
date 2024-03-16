@@ -11,11 +11,8 @@ use itertools::Itertools;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::metered_channel::{channel_with_total, Sender};
 use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
-use network::{
-    anemo_ext::{NetworkExt, WaitingPeer},
-    client::NetworkClient,
-    PrimaryToWorkerClient, RetryConfig,
-};
+use mysten_network::anemo_ext::{NetworkExt, WaitingPeer};
+use network::{client::NetworkClient, PrimaryToWorkerClient, RetryConfig};
 use parking_lot::Mutex;
 use std::{
     cmp::min,

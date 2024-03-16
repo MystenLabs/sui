@@ -18,7 +18,7 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
@@ -264,7 +264,7 @@ module Test::M1 {
 }
 
 //# run-graphql
-# No longer accessible, as there are more recent versions owned by address B.
+# Historical lookups will still return results at version.
 {
   objects_at_version: address(address: "@{A}") {
     objects(

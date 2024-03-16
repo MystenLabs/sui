@@ -85,18 +85,6 @@ impl<W: Worker + 'static> WorkerPool<W> {
         // main worker pool loop
         loop {
             tokio::select! {
-                Some(checkpoint) = checkpoint_receiver.recv() => {
-                    let sequence_number = checkpoint.checkpoint_summary.sequence_number;
-                    if sequence_number < current_checkpoint_number {
-                        continue;
-                    }
-                    if idle.is_empty() {
-                        checkpoints.push_back(checkpoint);
-                    } else {
-                        let worker_id = idle.pop_first().unwrap();
-                        workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
-                    }
-                }
                 Some((worker_id, status_update, progress_watermark)) = progress_receiver.recv() => {
                     idle.insert(worker_id);
                     updates.insert(status_update, progress_watermark);
@@ -117,6 +105,18 @@ impl<W: Worker + 'static> WorkerPool<W> {
                     }
                     while !checkpoints.is_empty() && !idle.is_empty() {
                         let checkpoint = checkpoints.pop_front().unwrap();
+                        let worker_id = idle.pop_first().unwrap();
+                        workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
+                    }
+                }
+                Some(checkpoint) = checkpoint_receiver.recv() => {
+                    let sequence_number = checkpoint.checkpoint_summary.sequence_number;
+                    if sequence_number < current_checkpoint_number {
+                        continue;
+                    }
+                    if idle.is_empty() {
+                        checkpoints.push_back(checkpoint);
+                    } else {
                         let worker_id = idle.pop_first().unwrap();
                         workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                     }

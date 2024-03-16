@@ -46,6 +46,8 @@ move-ir-types.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 move-vm-profiler.workspace = true
+num-traits = "0.2.18"
+num-bigint = { version = "0.4", default-features = false, features = ["rand"] }
 
 narwhal-config.workspace = true
 narwhal-crypto.workspace = true
@@ -64,7 +66,6 @@ typed-store-error.workspace = true
 derive_more.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true

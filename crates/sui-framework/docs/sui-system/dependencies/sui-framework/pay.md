@@ -3,6 +3,7 @@
 
 # Module `0x2::pay`
 
+This module provides handy functionality for wallets and <code>sui::Coin</code> management.
 
 
 -  [Constants](#@Constants_0)
@@ -30,6 +31,7 @@
 
 <a name="0x2_pay_ENoCoins"></a>
 
+For when empty vector is supplied into join function.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_ENoCoins">ENoCoins</a>: u64 = 0;
@@ -41,6 +43,7 @@
 
 ## Function `keep`
 
+Transfer <code>c</code> to the sender of the current transaction
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_keep">keep</a>&lt;T&gt;(c: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, ctx: &<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -65,6 +68,8 @@
 
 ## Function `split`
 
+Split coin <code>self</code> to two coins, one with balance <code>split_amount</code>,
+and the remaining balance is left is <code>self</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -91,6 +96,8 @@
 
 ## Function `split_vec`
 
+Split coin <code>self</code> into multiple coins, each with balance specified
+in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amounts: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -121,6 +128,8 @@
 
 ## Function `split_and_transfer`
 
+Send <code>amount</code> units of <code>c</code> to <code>recipient</code>
+Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal to <code>amount</code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -147,6 +156,8 @@
 
 ## Function `divide_and_keep`
 
+Divide coin <code>self</code> into <code>n - 1</code> coins with equal balances. If the balance is
+not evenly divisible by <code>n</code>, the remainder is left in <code>self</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_divide_and_keep">divide_and_keep</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -179,6 +190,7 @@
 
 ## Function `join`
 
+Join <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin">coin</a></code> into <code>self</code>. Re-exports <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_join">coin::join</a></code> function.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/coin.md#0x2_coin">coin</a>: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
@@ -203,6 +215,7 @@
 
 ## Function `join_vec`
 
+Join everything in <code>coins</code> with <code>self</code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, coins: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;)
@@ -234,6 +247,7 @@
 
 ## Function `join_vec_and_transfer`
 
+Join a vector of <code>Coin</code> into a single object and transfer it to <code>receiver</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/pay.md#0x2_pay_join_vec_and_transfer">join_vec_and_transfer</a>&lt;T&gt;(coins: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, receiver: <b>address</b>)

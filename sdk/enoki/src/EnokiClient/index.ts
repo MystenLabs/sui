@@ -27,6 +27,28 @@ export interface EnokiClientConfig {
 	apiUrl?: string;
 }
 
+export class EnokiClientError extends Error {
+	errors: { code: string; message: string; data: unknown }[] = [];
+
+	constructor(status: number, response: string) {
+		let errors;
+		try {
+			const parsedResponse = JSON.parse(response) as {
+				errors: { code: string; message: string; data: unknown }[];
+			};
+			errors = parsedResponse.errors;
+		} catch (e) {
+			// Ignore
+		}
+		const cause = errors?.[0] ? new Error(errors[0].message) : undefined;
+		super(`Request to Enoki API failed (status: ${status})`, {
+			cause,
+		});
+		this.errors = errors ?? [];
+		this.name = 'EnokiClientError';
+	}
+}
+
 /**
  * A low-level client for interacting with the Enoki API.
  */
@@ -85,12 +107,17 @@ export class EnokiClient {
 	createSponsoredTransactionBlock(input: CreateSponsoredTransactionBlockApiInput) {
 		return this.#fetch<CreateSponsoredTransactionBlockApiResponse>('transaction-blocks/sponsor', {
 			method: 'POST',
-			headers: {
-				[ZKLOGIN_HEADER]: input.jwt,
-			},
+			headers: input.jwt
+				? {
+						[ZKLOGIN_HEADER]: input.jwt,
+				  }
+				: {},
 			body: JSON.stringify({
+				sender: input.sender,
 				network: input.network,
 				transactionBlockKindBytes: input.transactionBlockKindBytes,
+				allowedAddresses: input.allowedAddresses,
+				allowedMoveCallTargets: input.allowedMoveCallTargets,
 			}),
 		});
 	}
@@ -119,7 +146,7 @@ export class EnokiClient {
 		});
 
 		if (!res.ok) {
-			throw new Error('Failed to fetch');
+			throw new EnokiClientError(res.status, await res.text());
 		}
 
 		const { data } = await res.json();

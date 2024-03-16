@@ -13,6 +13,7 @@ pub(crate) mod code {
     pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
     pub const UNKNOWN: &str = "UNKNOWN";
 }
 
@@ -60,7 +61,7 @@ pub(crate) fn graphql_error_at_pos(
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),

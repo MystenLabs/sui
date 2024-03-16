@@ -31,7 +31,7 @@ use tracing::{debug, error, info};
 use url::Url;
 
 use move_core_types::account_address::AccountAddress;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
@@ -158,7 +158,7 @@ pub async fn verify_package(
         MoveBuildConfig::default(),
         Some(package_path.as_ref().to_path_buf()),
     )?;
-    config.no_lint = true;
+    config.lint_flag = LintFlag::LEVEL_NONE;
     config.silence_warnings = true;
     let build_config = BuildConfig {
         config,

@@ -24,5 +24,4 @@ move-vm-runtime = { path = "../../../external-crates/move/move-execution/v0/move
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true
 tracing.workspace = true

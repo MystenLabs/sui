@@ -13,7 +13,7 @@ jobs:
       isGraphQlTransport: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/graphql-transport')) }}
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Detect Changes (turbo)
         uses: './.github/actions/turbo-diffs'
         id: turbo
@@ -43,15 +43,15 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       # Disabled for now as it makes test runs take longer
       # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      - uses: pnpm/action-setup@v2.4.0
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
         with:
           version: 8
       - run: cargo build --bin sui-test-validator --bin sui --profile dev
       - name: Install Nodejs
-        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
           node-version: '18'
           cache: 'pnpm'
@@ -77,10 +77,6 @@ jobs:
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm turbo --filter=sui-explorer build
 
-      - name: Run Explorer e2e tests
-        # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
-        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm --filter sui-explorer playwright test
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -129,7 +125,7 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Run E2E Test Runner with devnet branch
         uses: './.github/actions/ts-e2e'
         with:
@@ -158,7 +154,7 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Run E2E Test Runner with testnet branch
         uses: './.github/actions/ts-e2e'
         with:

@@ -8,8 +8,8 @@ module V0::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct String has copy, drop, store { bytes: vector<u8>, }
-   struct Char has copy, drop, store { byte: u8, }
+   public struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
     public fun char(byte: u8): Char {
         assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
@@ -24,7 +24,7 @@ module V0::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -34,7 +34,7 @@ module V0::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -61,8 +61,8 @@ module V1::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct String has copy, drop, store { bytes: vector<u8>, }
-   struct Char has copy, drop, store { byte: u8, }
+   public struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
     public fun char(byte: u8): Char {
         assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
@@ -77,7 +77,7 @@ module V1::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -87,7 +87,7 @@ module V1::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -115,8 +115,8 @@ module V1::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct String has copy, drop, store { bytes: vector<u8>, }
-   struct Char has copy, drop, store { byte: u8, }
+   public struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
     public fun char(byte: u8): Char {
         assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
@@ -131,7 +131,7 @@ module V1::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        // CHANGED: Swapped the order of these two let declarations.
-       let i = 0;
+       let mut i = 0;
        let len = vector::length(&bytes);
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
@@ -142,7 +142,7 @@ module V1::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -169,8 +169,8 @@ module V1::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct Char has copy, drop, store { byte: u8, }
-   struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
+   public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -185,7 +185,7 @@ module V1::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -195,7 +195,7 @@ module V1::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -222,9 +222,9 @@ module V2::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct Char has copy, drop, store { byte: u8, }
-   struct NewStruct { }
-   struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
+   public struct NewStruct { }
+   public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -239,7 +239,7 @@ module V2::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -249,7 +249,7 @@ module V2::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -277,9 +277,9 @@ module V2::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct Char has copy, drop, store { byte: u8, }
-   struct NewStruct { } // <<<<<<<<< NEW STRUCT
-   struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
+   public struct NewStruct { } // <<<<<<<<< NEW STRUCT
+   public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -294,7 +294,7 @@ module V2::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -304,7 +304,7 @@ module V2::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -332,9 +332,9 @@ module V3::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct Char has copy, drop, store { byte: u8, }
-   struct NewStruct { } // <<<<<<<<< NEW STRUCT
-   struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
+   public struct NewStruct { } // <<<<<<<<< NEW STRUCT
+   public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -349,7 +349,7 @@ module V3::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -359,7 +359,7 @@ module V3::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;
@@ -387,9 +387,9 @@ module V4::ascii {
     use std::vector;
     use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   struct Char has copy, drop, store { byte: u8, }
-   struct NewStruct { } // <<<<<<<<< NEW STRUCT
-   struct String has copy, drop, store { bytes: vector<u8>, }
+   public struct Char has copy, drop, store { byte: u8, }
+   public struct NewStruct { } // <<<<<<<<< NEW STRUCT
+   public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -404,7 +404,7 @@ module V4::ascii {
     }
     public fun try_string(bytes: vector<u8>): Option<String> {
        let len = vector::length(&bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
@@ -414,7 +414,7 @@ module V4::ascii {
     }
     public fun all_characters_printable(string: &String): bool {
        let len = vector::length(&string.bytes);
-       let i = 0;
+       let mut i = 0;
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
            if (!is_printable_char(byte)) return false;

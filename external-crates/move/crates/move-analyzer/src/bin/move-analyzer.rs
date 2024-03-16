@@ -11,6 +11,7 @@ use lsp_types::{
     HoverProviderCapability, OneOf, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgressOptions,
 };
+use move_compiler::linters::LintLevel;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -18,12 +19,11 @@ use std::{
 };
 
 use move_analyzer::{
-    completion::on_completion_request,
-    context::Context,
-    symbols,
-    vfs::{on_text_document_sync_notification, VirtualFileSystem},
+    completion::on_completion_request, context::Context, symbols,
+    vfs::on_text_document_sync_notification,
 };
 use url::Url;
+use vfs::{impls::memory::MemoryFS, VfsPath};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -48,9 +48,9 @@ fn main() {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
-    let mut context = Context {
+    let ide_files_root: VfsPath = MemoryFS::new().into();
+    let context = Context {
         connection,
-        files: VirtualFileSystem::default(),
         symbols: symbols.clone(),
     };
 
@@ -117,15 +117,26 @@ fn main() {
                 .expect("could not deserialize client capabilities");
 
         // determine if linting is on or off based on what the editor requested
-        let mut lint = false;
-        if let Some(init_options) = initialize_params.initialization_options {
-            lint = init_options
-                .get("lintOpt")
+        let lint = {
+            let lint_all = initialize_params
+                .initialization_options
+                .as_ref()
+                .and_then(|init_options| init_options.get("lintOpt"))
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
-        }
+            if lint_all {
+                LintLevel::All
+            } else {
+                LintLevel::None
+            }
+        };
 
-        symbolicator_runner = symbols::SymbolicatorRunner::new(symbols.clone(), diag_sender, lint);
+        symbolicator_runner = symbols::SymbolicatorRunner::new(
+            ide_files_root.clone(),
+            symbols.clone(),
+            diag_sender,
+            lint,
+        );
 
         // If initialization information from the client contains a path to the directory being
         // opened, try to initialize symbols before sending response to the client. Do not bother
@@ -134,7 +145,12 @@ fn main() {
         // to be available right after the client is initialized.
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
-                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint) {
+                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+                    &mut BTreeMap::new(),
+                    ide_files_root.clone(),
+                    p.as_path(),
+                    lint,
+                ) {
                     let mut old_symbols = symbols.lock().unwrap();
                     (*old_symbols).merge(new_symbols);
                 }
@@ -189,7 +205,8 @@ fn main() {
                             },
                         }
                     },
-                    Err(error) => eprintln!("symbolicator message error: {:?}", error),
+                    Err(error) =>
+                        eprintln!("symbolicator message error: {:?}", error),
                 }
             },
             recv(context.connection.receiver) -> message => {
@@ -199,7 +216,7 @@ fn main() {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, shutdown_req_received);
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), shutdown_req_received);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -210,7 +227,7 @@ fn main() {
                                 // It ought to, especially once it begins processing requests that may
                                 // take a long time to respond to.
                             }
-                            _ => on_notification(&mut context, &symbolicator_runner, &notification),
+                            _ => on_notification(ide_files_root.clone(), &symbolicator_runner, &notification),
                         }
                     }
                     Err(error) => eprintln!("IDE message error: {:?}", error),
@@ -228,7 +245,12 @@ fn main() {
 /// The reason why this information is also passed as an argument is that according to the LSP
 /// spec, if any additional requests are received after shutdownd then the LSP implementation
 /// should respond with a particular type of error.
-fn on_request(context: &Context, request: &Request, shutdown_request_received: bool) -> bool {
+fn on_request(
+    context: &Context,
+    request: &Request,
+    ide_files_root: VfsPath,
+    shutdown_request_received: bool,
+) -> bool {
     if shutdown_request_received {
         let response = lsp_server::Response::new_err(
             request.id.clone(),
@@ -245,9 +267,12 @@ fn on_request(context: &Context, request: &Request, shutdown_request_received: b
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => {
-            on_completion_request(context, request, &context.symbols.lock().unwrap())
-        }
+        lsp_types::request::Completion::METHOD => on_completion_request(
+            context,
+            request,
+            ide_files_root.clone(),
+            &context.symbols.lock().unwrap(),
+        ),
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request, &context.symbols.lock().unwrap());
         }
@@ -286,7 +311,7 @@ fn on_response(_context: &Context, _response: &Response) {
 }
 
 fn on_notification(
-    context: &mut Context,
+    ide_files_root: VfsPath,
     symbolicator_runner: &symbols::SymbolicatorRunner,
     notification: &Notification,
 ) {
@@ -295,11 +320,7 @@ fn on_notification(
         | lsp_types::notification::DidChangeTextDocument::METHOD
         | lsp_types::notification::DidSaveTextDocument::METHOD
         | lsp_types::notification::DidCloseTextDocument::METHOD => {
-            on_text_document_sync_notification(
-                &mut context.files,
-                symbolicator_runner,
-                notification,
-            )
+            on_text_document_sync_notification(ide_files_root, symbolicator_runner, notification)
         }
         _ => eprintln!("handle notification '{}' from client", notification.method),
     }
