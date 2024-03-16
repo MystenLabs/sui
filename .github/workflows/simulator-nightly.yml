@@ -8,14 +8,14 @@ on:
     - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
     inputs:
-      sui_commit:
-        description: "commit to test"
+      sui_ref:
+        description: "Branch / commit to test"
         type: string
         required: true
-        default: origin/main
+        default: main
 
 env:
-  SUI_COMMIT: "${{ github.event.inputs.sui_commit || 'origin/main' }}"
+  SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
 
 jobs:
   simtest:
@@ -59,7 +59,7 @@ jobs:
       # Checkout out the latest sui repo
       - name: Checkout sui repo
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git rebase ${{ env.SUI_COMMIT  }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout ${{ env.SUI_REF }}"
 
       # Setting up cargo and simtest
       - name: Install simtest
