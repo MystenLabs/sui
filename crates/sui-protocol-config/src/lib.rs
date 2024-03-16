@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 40;
+const MAX_PROTOCOL_VERSION: u64 = 39;
 
 // Record history of protocol version allocations here:
 //
@@ -111,7 +111,7 @@ const MAX_PROTOCOL_VERSION: u64 = 40;
 // Version 37: Reject entry functions with mutable Random.
 // Version 38: Introduce limits for binary tables size.
 // Version 39: Allow skipped epochs for randomness updates.
-// Version 40: Extra version to fix `test_upgrade_compatibility` simtest.
+//             Extra version to fix `test_upgrade_compatibility` simtest.
 //             Reject PTBs that contain invalid commands after one that uses Random.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1965,8 +1965,7 @@ impl ProtocolConfig {
                     // bump execution version
                     cfg.execution_version = Some(3);
                 }
-                39 => {}
-                40 => {
+                39 => {
                     cfg.feature_flags.enable_randomness_ptb_restrictions = true;
                 }
                 // Use this template when making changes:
