@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 39;
+const MAX_PROTOCOL_VERSION: u64 = 40;
 
 // Record history of protocol version allocations here:
 //
@@ -112,7 +112,7 @@ const MAX_PROTOCOL_VERSION: u64 = 39;
 // Version 38: Introduce limits for binary tables size.
 // Version 39: Allow skipped epochs for randomness updates.
 //             Extra version to fix `test_upgrade_compatibility` simtest.
-//             Reject PTBs that contain invalid commands after one that uses Random.
+// Version 40: Reject PTBs that contain invalid commands after one that uses Random.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -950,7 +950,7 @@ pub struct ProtocolConfig {
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
 
-    /// Minimum number of shares below wich voting weights will not be reduced for the
+    /// Minimum number of shares below which voting weights will not be reduced for the
     /// random beacon protocol.
     random_beacon_reduction_lower_bound: Option<u32>,
 
@@ -1966,6 +1966,10 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(3);
                 }
                 39 => {
+                    // It is important that we keep this protocol version brank due to an issue with random.move.
+                }
+                40 => {
+                    // TODO: We don't actually need this.
                     cfg.feature_flags.enable_randomness_ptb_restrictions = true;
                 }
                 // Use this template when making changes:
