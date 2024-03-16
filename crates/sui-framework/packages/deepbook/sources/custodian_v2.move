@@ -9,6 +9,7 @@ module deepbook::custodian_v2 {
     use sui::tx_context::TxContext;
 
     friend deepbook::clob_v2;
+    friend deepbook::clob_v3;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     #[test_only]
