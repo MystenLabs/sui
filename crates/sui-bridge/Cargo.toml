@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-ethers = "2.0.13"
+ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 sui-common.workspace = true
@@ -56,10 +56,6 @@ sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
-
-
-[build-dependencies]
-forge = { git = "https://github.com/foundry-rs/foundry.git", rev = "3dfa43bf1fa030a6c76c36a12feb4f2fe623b89b", package = "forge"}
 
 [[bin]]
 name = "sui-bridge-cli"
