@@ -84,12 +84,15 @@ const client = new SuiGraphQLClient({
 });
 
 
-let packages = ['0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1', '0x2', '0x3'];
-let modules = ['coin_flip', 'display', 'validator'];
-let types = ['Outcome', 'DisplayCreated', 'StakingRequestEvent'];
+let eventPackages = ['0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1', '0x2', '0x3'];
+let eventModules = ['coin_flip', 'display', 'validator'];
+let eventTypes = ['Outcome', 'DisplayCreated', 'StakingRequestEvent'];
 let senders = ['0x18889a72b0cd8072196ee4cf269a16d8e559c69088f7488ecb76de002f088010', // from last 0x2
 '0x8eab656650ded2b5e1a2577ad102202595a361b375ba953769c192f30d59fc4c'
 ];
+let emittingPackages = ['0x7f6ce7ade63857c4fd16ef7783fed2dfc4d7fb7e40615abdb653030b76aef0c6', '0x549e8b69270defbfafd4f94e17ec44cdbdd99820b33bda2278dea3b9a32d3f55'];
+let emittingModules = ['staked_sui_vault', 'native_pool'];
+
 
 type Variables = VariablesOf<typeof queries['queryEvents']>;
 
@@ -118,40 +121,116 @@ async function eventsHelper(client: SuiGraphQLClient<typeof queries>, variables:
 	};
 }
 
-function* emitEventTypes() {
+function* emitTypes(packages: string[], modules: string[], types: string[]) {
+    for (let [i, package_] of packages.entries()) {
+        yield* emitModulesHelper(package_, modules[i]);
+        yield* emitTypesHelper(package_, modules[i], types[i]);
+    }
+}
+
+function* emitModules(packages: string[], modules: string[]) {
 	for (let [i, package_] of packages.entries()) {
-		yield* emitEventTypesHelper(package_, modules[i], types[i]);
+		yield* emitModulesHelper(package_, modules[i]);
 	}
 }
 
-function* emitEventTypesHelper(package_: string, module: string, type: string) {
-	yield package_;
-	yield package_ + '::' + module;
-	yield package_ + '::' + module + '::' + type;
+function* emitModulesHelper(eventPackage: string, module: string) {
+    yield eventPackage;
+    yield eventPackage + '::' + module;
 }
 
+function* emitTypesHelper(eventPackage: string, module: string, type: string) {
+	yield* emitModulesHelper(eventPackage, module);
+    yield eventPackage + '::' + module + '::' + type;
+}
+
+type Filter = { eventType?: string, sender?: string, emittingModule?: string };
+
+function* generateFilters(eventPackages: string[], eventModules: string[], eventTypes: string[], senders: string[], emittingPackages: string[], emittingModules: string[]): Generator<Filter> {
+	// generate filters with one field
+  	for (let eventType of emitTypes(eventPackages, eventModules, eventTypes)) {
+    	yield { eventType };
+  	}
+  	for (let sender of senders) {
+		yield { sender };
+  	}
+  	for (let emittingModule of emitModules(emittingPackages, emittingModules)) {
+		yield { emittingModule };
+  	}
+
+  	// generate filters with two fields
+	for (let eventType of emitTypes(eventPackages, eventModules, eventTypes)) {
+		for (let sender of senders) {
+			yield { eventType, sender };
+		}
+		for (let emittingModule of emitModules(emittingPackages, emittingModules)) {
+			yield { eventType, emittingModule };
+		}
+	}
+	for (let sender of senders) {
+		for (let emittingModule of emitModules(emittingPackages, emittingModules)) {
+			yield { sender, emittingModule };
+		}
+	}
+
+	// generate filters with three fields
+	for (let eventType of emitTypes(eventPackages, eventModules, eventTypes)) {
+		for (let sender of senders) {
+			for (let emittingModule of emitModules(emittingPackages, emittingModules)) {
+				yield { eventType, sender, emittingModule };
+			}
+		}
+	}
+}
+
+
 async function eventsSuite(client: SuiGraphQLClient<typeof queries>) {
+  let limit = 50;
+  let numPages = 10;
+
+  for (let filter of generateFilters(eventPackages, eventModules, eventTypes, senders, emittingPackages, emittingModules)) {
+    await events(client, { paginateForwards: true, limit, numPages }, { filter });
+    await events(client, { paginateForwards: false, limit, numPages }, { filter });
+  }
+}
+
+async function eventsSuiteOld(client: SuiGraphQLClient<typeof queries>) {
 	let limit = 50;
 	let numPages = 10;
 	let paginateForwards = true;
 
 	// eventType
-	for (let eventType of emitEventTypes()) {
-		await events(client, { paginateForwards, limit, numPages }, {
-			filter: { eventType }});
-		await events(client, { paginateForwards: false, limit, numPages }, { filter: { eventType } });
-	}
+	// for (let eventType of emitTypes(eventPackages, eventModules, eventTypes)) {
+		// await events(client, { paginateForwards, limit, numPages }, {
+			// filter: { eventType }});
+		// await events(client, { paginateForwards: false, limit, numPages }, { filter: { eventType } });
+	// }
 
 	// eventType, sender
-	for (let eventType of emitEventTypesHelper(packages[2], modules[2], types[2])) {
-		for (let sender of senders) {
-			await events(client, { paginateForwards, limit, numPages }, {filter: { eventType, sender }});
-			await events(client, { paginateForwards: false, limit, numPages }, {filter: { eventType, sender }});
-		}
-	}
+	// for (let eventType of emitTypesHelper(eventPackages[2], eventModules[2], eventTypes[2])) {
+		// for (let sender of senders) {
+			// await events(client, { paginateForwards, limit, numPages }, { filter: { eventType, sender }});
+			// await events(client, { paginateForwards: false, limit, numPages }, { filter: { eventType, sender }});
+		// }
+	// }
 
 	// eventType, emittingModule
+	// for (let eventType of emitTypesHelper(eventPackages[1], eventModules[1], eventTypes[1])) {
+		// for (let emittingModule of emitModules(emittingPackages, emittingModules)) {
+			// await events(client, { paginateForwards, limit, numPages }, { filter: { eventType, emittingModule }});
+			// await events(client, { paginateForwards: false, limit, numPages }, { filter: { eventType, emittingModule }});
+		// }
+	// }
 
+	// eventType, sender, emittingModule
+	for (let eventType of emitTypesHelper(eventPackages[2], eventModules[2], eventTypes[2])) {
+		for (let sender of senders) {
+			for (let emittingModule of emitModules(emittingPackages, emittingModules)) {
+				await events(client, { paginateForwards, limit, numPages }, { filter: { eventType, sender, emittingModule }});
+				await events(client, { paginateForwards: false, limit, numPages }, { filter: { eventType, sender, emittingModule }});
+			}
+		}
+	}
 }
 
 eventsSuite(client);
