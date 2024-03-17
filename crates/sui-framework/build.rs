@@ -5,6 +5,7 @@ use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -161,29 +162,77 @@ fn build_packages_with_move_config(
     serialize_modules_to_file(deepbook, &out_dir.join(deepbook_dir)).unwrap();
     serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
     // write out generated docs
-    // TODO: remove docs of deleted files
     if write_docs {
-        for (fname, doc) in deepbook_pkg.package.compiled_docs.unwrap() {
+        // Remove the old docs directory -- in case there was a module that was deleted (could
+        // happen during development).
+        if Path::new(DOCS_DIR).exists() {
+            std::fs::remove_dir_all(DOCS_DIR).unwrap();
+        }
+        let mut files_to_write = BTreeMap::new();
+        relocate_docs(
+            deepbook_dir,
+            &deepbook_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        relocate_docs(
+            system_dir,
+            &system_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        relocate_docs(
+            framework_dir,
+            &framework_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        for (fname, doc) in files_to_write {
             let mut dst_path = PathBuf::from(DOCS_DIR);
-            dst_path.push(deepbook_dir);
             dst_path.push(fname);
             fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
             fs::write(dst_path, doc).unwrap();
         }
-        for (fname, doc) in system_pkg.package.compiled_docs.unwrap() {
-            let mut dst_path = PathBuf::from(DOCS_DIR);
-            dst_path.push(system_dir);
-            dst_path.push(fname);
-            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
-            fs::write(dst_path, doc).unwrap();
-        }
-        for (fname, doc) in framework_pkg.package.compiled_docs.unwrap() {
-            let mut dst_path = PathBuf::from(DOCS_DIR);
-            dst_path.push(framework_dir);
-            dst_path.push(fname);
-            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
-            fs::write(dst_path, doc).unwrap();
-        }
+    }
+}
+
+/// Post process the generated docs so that they are in a format that can be consumed by
+/// docusaurus.
+/// * Flatten out the tree-like structure of the docs directory that we generate for a package into
+///   a flat list of packages;
+/// * Deduplicate packages (since multiple packages could share dependencies); and
+/// * Write out the package docs in a flat directory structure.
+fn relocate_docs(prefix: &str, files: &[(String, String)], output: &mut BTreeMap<String, String>) {
+    // Turn on multi-line mode so that `.` matches newlines, consume from the start of the file to
+    // beginning of the heading, then capture the heading and replace with the yaml tag for docusaurus. E.g.,
+    // ```
+    // -<a name="0x2_display"></a>
+    // -
+    // -# Module `0x2::display`
+    // -
+    // +---
+    // +title: Module `0x2::display`
+    // +---
+    //```
+    let re = regex::Regex::new(r"(?s).*\n#\s+(.*?)\n").unwrap();
+    for (file_name, file_content) in files {
+        let path = PathBuf::from(file_name);
+        let top_level = path.components().count() == 1;
+        let file_name = if top_level {
+            let mut new_path = PathBuf::from(prefix);
+            new_path.push(file_name);
+            new_path.to_string_lossy().to_string()
+        } else {
+            let mut new_path = PathBuf::new();
+            new_path.push(path.components().skip(1).collect::<PathBuf>());
+            new_path.to_string_lossy().to_string()
+        };
+        output.entry(file_name).or_insert_with(|| {
+            re.replace_all(
+                &file_content
+                    .replace("../../dependencies/", "../")
+                    .replace("dependencies/", "../"),
+                "\n---\ntitle: $1\n---\n",
+            )
+            .to_string()
+        });
     }
 }
 
