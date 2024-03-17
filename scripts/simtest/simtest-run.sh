@@ -36,6 +36,12 @@ LOG_FILE="$LOG_DIR/log"
 # By default run 1 iteration for each test, if not specified.
 : ${TEST_NUM:=1}
 
+echo ""
+echo "================================================"
+echo "Running e2e simtests with $TEST_NUM iterations"
+echo "================================================"
+date
+
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and
 # don't need to be done inside of the for loop below.
 # TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
@@ -50,6 +56,12 @@ scripts/simtest/cargo-simtest simtest \
   --package sui-e2e-tests \
   --profile simtestnightly \
   -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+
+echo ""
+echo "============================================="
+echo "Running $NUM_CPUS stress simtests in parallel"
+echo "============================================="
+date
 
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
@@ -73,8 +85,15 @@ done
 # wait for all the jobs to end
 wait
 
+echo ""
+echo "==========================="
+echo "Running determinism simtest"
+echo "==========================="
+date
+
 # Check for determinism in stress simtests
 LOG_FILE="$LOG_DIR/determinism-log"
+echo "Using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 
 MSIM_TEST_SEED="$SEED" \
 MSIM_TEST_NUM=1 \
@@ -87,7 +106,12 @@ scripts/simtest/cargo-simtest simtest \
   --profile simtestnightly \
   -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
 
+echo ""
+echo "============================================="
 echo "All tests completed, checking for failures..."
+echo "============================================="
+date
+
 grep -qHn FAIL "$LOG_DIR"/*
 
 # if grep found no failures exit now
