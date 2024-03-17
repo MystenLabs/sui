@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
-import { BenchmarkParams, benchmark_connection_query, metrics, v2 } from './benchmark';
+import { BenchmarkParams, benchmark_connection_query, metrics } from './benchmark';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
 
 
@@ -61,15 +61,19 @@ const client = new SuiGraphQLClient({
 });
 
 async function checkpoints(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams) {
-    let durations = await v2(client, benchmarkParams, async (client, paginationParams) => {
+    let durations = await benchmark_connection_query(client, benchmarkParams, async (client, paginationParams) => {
+      let variables = {
+        ...paginationParams
+      };
         const response = await client.execute('Checkpoints', {
-            variables: {
-              ...paginationParams,
-            }
+            variables
         });
         const data = response.data;
         const pageInfo = data?.checkpoints.pageInfo;
-        return pageInfo;
+        return {
+          pageInfo,
+          variables
+        };
     }).catch ((error) => {
         console.error(error);
         return [];
@@ -79,16 +83,20 @@ async function checkpoints(client: SuiGraphQLClient<typeof queries>, benchmarkPa
 }
 
 async function epochCheckpoints(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams, epochId: number | null) {
-    let durations = await v2(client, benchmarkParams, async (client, paginationParams) => {
+    let durations = await benchmark_connection_query(client, benchmarkParams, async (client, paginationParams) => {
+      let variables = {
+        ...paginationParams,
+        epochId
+      };
         const response = await client.execute('EpochCheckpoints', {
-            variables: {
-                ...paginationParams,
-                epochId
-            }
+          variables,
         });
         const data = response.data;
         const pageInfo = data?.epoch!.checkpoints.pageInfo;
-        return pageInfo;
+        return {
+          pageInfo,
+          variables
+        };
     }).catch ((error) => {
         console.error(error);
         return [];

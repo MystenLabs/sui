@@ -55,8 +55,17 @@ export class PaginationV2 {
 		return this.cursor;
 	}
 
-	setCursor(cursor: string) {
-		this.cursor = cursor;
+	setCursor(pageInfo: PageInfo) {
+		if (this.paginateForwards) {
+			if (pageInfo.hasNextPage) {
+				this.cursor = pageInfo.endCursor!;
+			}
+		} else {
+			if (pageInfo.hasPreviousPage) {
+				this.cursor = pageInfo.startCursor!;
+			}
+		}
+
 	}
 }
 
@@ -64,105 +73,48 @@ export class PaginationV2 {
 // TODO doc comments once stabilized
 /// Caller is responsible for providing a `testFn` that returns the `PageInfo` for the benchmark to
 /// paginate through.
-export async function benchmark_connection_query<T extends Record<string, GraphQLDocument>>(
-	client: SuiGraphQLClient<T>,
-	paginateForwards: boolean,
-	testFn: (client: SuiGraphQLClient<T>, cursor: string | null) => Promise<PageInfo | undefined>,
-	pages: number = 10,
-	runParallel: boolean = false
-): Promise<number[]> {
-	let cursors: Array<string> = [];
-	let hasNextPage = true;
-	let cursor: string | null = null;
-    let durations: number[] = [];
-
-	for (let i = 0; i < pages && hasNextPage; i++) {
-		const start = performance.now();
-		const result = await testFn(client, cursor);
-		const duration = performance.now() - start;
-        durations.push(duration);
-
-		// TODO: this is a bit awkward because we can't tell if we timed out ...
-		// Simple way is just to consider all that exceed the timeout as a timeout
-		if (result == undefined) {
-			return durations;
-		}
-
-		if (paginateForwards) {
-			hasNextPage = result.hasNextPage;
-			cursor = result.endCursor;
-			if (result.endCursor) {
-				cursors.push(result.endCursor);
-			}
-		} else {
-			hasNextPage = result.hasPreviousPage;
-			cursor = result.startCursor;
-			if (result.startCursor) {
-				cursors.push(result.startCursor);
-			}
-		}
-	}
-
-	// Artificial delay to simulate processing
-	await new Promise((resolve) => setTimeout(resolve, 1000));
-
-	// Run tests in parallel
-	if (runParallel) {
-		const fetchFutures = cursors.map(async (cursor) => {
-			const start = performance.now();
-			const result = await testFn(client, cursor);
-			const duration = performance.now() - start;
-
-			return result;
-		});
-
-		await Promise.all(fetchFutures);
-	}
-
-    return durations;
-}
-
-
-export async function v2<Q extends Record<string, GraphQLDocument>>(
+export async function benchmark_connection_query<Q extends Record<string, GraphQLDocument>>(
 	client: SuiGraphQLClient<Q>,
 	benchmarkParams: BenchmarkParams,
-	testFn: (client: SuiGraphQLClient<Q>, cursor: PaginationParams) => Promise<PageInfo | undefined>,
+	testFn: (client: SuiGraphQLClient<Q>, cursor: PaginationParams) => Promise<{ pageInfo: PageInfo | undefined, variables: any }>,
 ): Promise<number[]> {
 	let { paginateForwards, limit, numPages } = benchmarkParams;
 
 	let cursors: Array<string> = [];
 	let hasNextPage = true;
-	let cursor: string | null = null;
     let durations: number[] = [];
 
 	let pagination = new PaginationV2(paginateForwards, limit);
+	let initialVariables;
 
 	for (let i = 0; i < numPages && hasNextPage; i++) {
-		const start = performance.now();
-		const result = await testFn(client, pagination.getParams());
-		const duration = performance.now() - start;
+		let start = performance.now();
+		let { pageInfo: result, variables } = await testFn(client, pagination.getParams());
+		let duration = performance.now() - start;
         durations.push(duration);
 
 		// TODO: this is a bit awkward because we can't tell if we timed out ...
 		// Simple way is just to consider all that exceed the timeout as a timeout
 		if (result == undefined) {
-			return durations;
+			break;
 		}
 
-		if (paginateForwards) {
-			hasNextPage = result.hasNextPage;
-			cursor = result.endCursor;
-			if (result.endCursor) {
-				cursors.push(result.endCursor);
-			}
-		} else {
-			hasNextPage = result.hasPreviousPage;
-			cursor = result.startCursor;
-			if (result.startCursor) {
-				cursors.push(result.startCursor);
-			}
+		if (i == 0) {
+			initialVariables = variables;
 		}
+
+		let cursor = pagination.getCursor();
+		if (cursor) {
+			cursors.push(cursor);
+		}
+
+		// Defer to pagination to update cursor
+		pagination.setCursor(result);
 	}
+
+	report(initialVariables, cursors, metrics(durations));
+
+
 
 	// we should report the cursors here, not in the calls
 	return durations;
