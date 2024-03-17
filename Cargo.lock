@@ -12363,6 +12363,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "once_cell",
+ "regex",
  "serde",
  "sui-move-build",
  "sui-types",
