@@ -984,25 +984,22 @@ impl ProgrammableTransaction {
         }
 
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
-        if config.enable_randomness_ptb_restrictions() {
-            // Check if there is a random object in the input objects
-            if let Some(random_index) = inputs.iter().position(|obj| {
-                matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
-            }) {
-                let mut used_random_object = false;
-                let random_index = random_index.try_into().unwrap();
-                for command in commands {
-                    if !used_random_object {
-                        used_random_object = command.is_input_arg_used(random_index);
-                    } else {
-                        fp_ensure!(
-                            matches!(
-                                command,
-                                Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
-                            ),
-                            UserInputError::PostRandomCommandRestrictions
-                        );
-                    }
+        if let Some(random_index) = inputs.iter().position(|obj| {
+            matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+        }) {
+            let mut used_random_object = false;
+            let random_index = random_index.try_into().unwrap();
+            for command in commands {
+                if !used_random_object {
+                    used_random_object = command.is_input_arg_used(random_index);
+                } else {
+                    fp_ensure!(
+                        matches!(
+                            command,
+                            Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
+                        ),
+                        UserInputError::PostRandomCommandRestrictions
+                    );
                 }
             }
         }
