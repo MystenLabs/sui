@@ -3,12 +3,15 @@ version: "3"
 services:
   validator1:
     networks:
-      - sui-network
+      sui-network:
+        ipv4_address: 10.0.0.11
     image: mysten/sui-node:mainnet-v1.19.1
     container_name: validator1
+    hostname: validator1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -27,12 +30,15 @@ services:
         max-size: "1g"
   validator2:
     networks:
-      - sui-network
+      sui-network:
+        ipv4_address: 10.0.0.12
     image: mysten/sui-node:mainnet-v1.19.1
     container_name: validator2
+    hostname: validator2
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -51,12 +57,15 @@ services:
         max-size: "1g"
   validator3:
     networks:
-      - sui-network
+      sui-network:
+        ipv4_address: 10.0.0.13
     image: mysten/sui-node:mainnet-v1.19.1
     container_name: validator3
+    hostname: validator3
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -75,12 +84,15 @@ services:
         max-size: "1g"
   validator4:
     networks:
-      - sui-network
+      sui-network:
+        ipv4_address: 10.0.0.14
     image: mysten/sui-node:mainnet-v1.19.1
     container_name: validator4
+    hostname: validator4
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -99,12 +111,15 @@ services:
         max-size: "1g"
   fullnode1:
     networks:
-      - sui-network
+      sui-network:
+        ipv4_address: 10.0.0.15
     image: mysten/sui-node:mainnet-v1.19.1
+    hostname: fullnode1
     container_name: fullnode1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
@@ -124,14 +139,15 @@ services:
 
   stress:
     networks:
-      - sui-network
+      sui-network:
+        ipv4_address: 10.0.0.16
     image: stress:testing
     container_name: stress
     environment:
       - RUST_LOG=info
       - STARTUP_DELAY_SECONDS=5
       - STRESS_STAGGERED_START_MAX_MULTIPLIER=0
-      - FULLNODE_RPC_ADDRESS=fullnode1:9000
+      - FULLNODE_RPC_ADDRESS=10.0.0.15:9000
       - USE_FULLNODE_FOR_RECONFIG=false
       - PRIMARY_GAS_OWNER=0xd59d79516a4ed5b6825e80826c075a12bdd2759aaeb901df2f427f5f880c8f60
       - GENESIS_BLOB_PATH=/opt/sui/config/genesis.blob
@@ -155,3 +171,6 @@ services:
 networks:
   sui-network:
     driver: bridge
+    ipam:
+      config:
+      - subnet: 10.0.0.0/24
