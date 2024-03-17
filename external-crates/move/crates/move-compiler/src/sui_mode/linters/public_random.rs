@@ -83,7 +83,6 @@ impl TypingVisitorContext for Context<'_> {
                 d.add_note(note);
                 d.add_note("Non-public functions are preferred");
                 self.env.add_diag(d);
-                return true;
             }
         }
         true
