@@ -92,15 +92,14 @@ export async function benchmark_connection_query<Q extends Record<string, GraphQ
 		let { pageInfo: result, variables } = await testFn(client, pagination.getParams());
 		let duration = performance.now() - start;
         durations.push(duration);
+		if (i == 0) {
+			initialVariables = variables;
+		}
 
 		// TODO: this is a bit awkward because we can't tell if we timed out ...
 		// Simple way is just to consider all that exceed the timeout as a timeout
 		if (result == undefined) {
 			break;
-		}
-
-		if (i == 0) {
-			initialVariables = variables;
 		}
 
 		let cursor = pagination.getCursor();
@@ -112,11 +111,10 @@ export async function benchmark_connection_query<Q extends Record<string, GraphQ
 		pagination.setCursor(result);
 	}
 
+	// sleep for 1 second
+	await new Promise(r => setTimeout(r, 1000));
+
 	report(initialVariables, cursors, metrics(durations));
-
-
-
-	// we should report the cursors here, not in the calls
 	return durations;
 };
 

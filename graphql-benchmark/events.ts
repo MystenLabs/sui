@@ -91,23 +91,20 @@ let senders = ['0x18889a72b0cd8072196ee4cf269a16d8e559c69088f7488ecb76de002f0880
 '0x8eab656650ded2b5e1a2577ad102202595a361b375ba953769c192f30d59fc4c'
 ];
 
-type EventFilter = VariablesOf<typeof queries['queryEvents']>['filter'];
 type Variables = VariablesOf<typeof queries['queryEvents']>;
 
-async function events(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams, filter: EventFilter) {
-    let durations = await benchmark_connection_query(client, benchmarkParams, async (client, paginationParams) => {
+async function events(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams, variables: Variables) {
+    await benchmark_connection_query(client, benchmarkParams, async (client, paginationParams) => {
         return await eventsHelper(client,
             {
 				...paginationParams,
-				filter,
+				...variables,
 			}
         );
     }).catch ((error) => {
         console.error(error);
         return [];
     });
-
-	report(filter, [], metrics(durations));
 }
 
 // TODO: ideally benchmark can execute, and just rely on the helper to extract pageInfo
@@ -138,17 +135,22 @@ async function eventsSuite(client: SuiGraphQLClient<typeof queries>) {
 	let numPages = 10;
 	let paginateForwards = true;
 
-	// for (let eventType of emitEventTypes()) {
-		// await events(client, { paginateForwards, limit, numPages }, { eventType });
-		// await events(client, { paginateForwards: false, limit, numPages }, { eventType });
-	// }
+	// eventType
+	for (let eventType of emitEventTypes()) {
+		await events(client, { paginateForwards, limit, numPages }, {
+			filter: { eventType }});
+		await events(client, { paginateForwards: false, limit, numPages }, { filter: { eventType } });
+	}
 
+	// eventType, sender
 	for (let eventType of emitEventTypesHelper(packages[2], modules[2], types[2])) {
 		for (let sender of senders) {
-			await events(client, { paginateForwards, limit, numPages }, { eventType, sender });
-			await events(client, { paginateForwards: false, limit, numPages }, { eventType, sender });
+			await events(client, { paginateForwards, limit, numPages }, {filter: { eventType, sender }});
+			await events(client, { paginateForwards: false, limit, numPages }, {filter: { eventType, sender }});
 		}
 	}
+
+	// eventType, emittingModule
 
 }
 
