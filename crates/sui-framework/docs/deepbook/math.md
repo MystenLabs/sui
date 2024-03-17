@@ -1,7 +1,7 @@
 
-<a name="0xdee9_math"></a>
-
-# Module `0xdee9::math`
+---
+title: Module `0xdee9::math`
+---
 
 
 
