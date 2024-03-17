@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { graphql, ResultOf, VariablesOf } from '@mysten/sui.js/graphql/schemas/2024-01';
-import { Pagination, benchmark_connection_query, metrics, report } from './benchmark';
+import { PageInfo, BenchmarkParams, benchmark_connection_query, metrics, report, v2 } from './benchmark';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
 
 // with cursor
@@ -241,36 +241,29 @@ let senders = ['0x18889a72b0cd8072196ee4cf269a16d8e559c69088f7488ecb76de002f0880
 ];
 
 type EventFilter = VariablesOf<typeof queries['queryEvents']>['filter'];
-type Result = ResultOf<typeof queries['queryEvents']>;
+type Variables = VariablesOf<typeof queries['queryEvents']>;
 
-
-async function events(client: SuiGraphQLClient<typeof queries>, pagination: Pagination, filter: EventFilter) {
-	let { paginateForwards, limit, numPages } = pagination;
-	let initialVariables = {
-		...(paginateForwards ? { first: limit } : { last: limit })
-		, filter
-	};
-	let cursors: string[] = [];
-
-    let durations = await benchmark_connection_query(client, paginateForwards, async (client, cursor) => {
-		// todo this is kind of awkward - overlapping ownership
-		if (cursor)
-		cursors.push(cursor);
-        const response = await client.execute('queryEvents', {
-            variables: {
-				...initialVariables,
-				...(paginateForwards ? { after: cursor } : { before: cursor }),
+async function events(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams, filter: EventFilter) {
+    let durations = await v2(client, benchmarkParams, async (client, paginationParams) => {
+        return await eventsHelper(client,
+            {
+				...paginationParams,
+				filter,
 			}
-        });
-        const data = response.data;
-        const pageInfo = data?.events.pageInfo;
-        return pageInfo;
-    }, numPages).catch ((error) => {
+        );
+    }).catch ((error) => {
         console.error(error);
         return [];
     });
 
-	report(initialVariables, cursors, metrics(durations));
+	report(filter, [], metrics(durations));
+}
+
+
+async function eventsHelper(client: SuiGraphQLClient<typeof queries>, variables: Variables): Promise<PageInfo | undefined >{
+	let response = await client.execute('queryEvents', { variables });
+	let data = response.data;
+	return data?.events.pageInfo;
 }
 
 function* emitEventTypes() {
@@ -290,17 +283,17 @@ async function eventsSuite(client: SuiGraphQLClient<typeof queries>) {
 	let numPages = 10;
 	let paginateForwards = true;
 
-	for (let eventType of emitEventTypes()) {
-		await events(client, { paginateForwards, limit, numPages }, { eventType });
-		await events(client, { paginateForwards: false, limit, numPages }, { eventType });
-	}
-
-	// for (let eventType of emitEventTypesHelper(packages[2], modules[2], types[2])) {
-		// for (let sender of senders) {
-			// await events(client, { paginateForwards, limit, numPages }, { eventType, sender });
-			// await events(client, { paginateForwards: false, limit, numPages }, { eventType, sender });
-		// }
+	// for (let eventType of emitEventTypes()) {
+		// await events(client, { paginateForwards, limit, numPages }, { eventType });
+		// await events(client, { paginateForwards: false, limit, numPages }, { eventType });
 	// }
+
+	for (let eventType of emitEventTypesHelper(packages[2], modules[2], types[2])) {
+		for (let sender of senders) {
+			await events(client, { paginateForwards, limit, numPages }, { eventType, sender });
+			await events(client, { paginateForwards: false, limit, numPages }, { eventType, sender });
+		}
+	}
 
 }
 

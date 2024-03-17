@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
-import { Pagination, benchmark_connection_query, metrics } from './benchmark';
+import { BenchmarkParams, benchmark_connection_query, metrics, v2 } from './benchmark';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
 
 
@@ -60,20 +60,17 @@ const client = new SuiGraphQLClient({
 	queries
 });
 
-async function checkpoints(client: SuiGraphQLClient<typeof queries>, pagination: Pagination) {
-  let { paginateForwards, limit, numPages } = pagination;
-  console.log('Checkpoints, paginateForwards: ' + paginateForwards + ', limit: ' + limit + ', numPages: ' + numPages);
-
-    let durations = await benchmark_connection_query(client, paginateForwards, async (client, cursor) => {
-        let variables = paginateForwards ? { first: limit, after: cursor } : { last: limit, before: cursor };
-
+async function checkpoints(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams) {
+    let durations = await v2(client, benchmarkParams, async (client, paginationParams) => {
         const response = await client.execute('Checkpoints', {
-            variables
+            variables: {
+              ...paginationParams,
+            }
         });
         const data = response.data;
         const pageInfo = data?.checkpoints.pageInfo;
         return pageInfo;
-    }, numPages).catch ((error) => {
+    }).catch ((error) => {
         console.error(error);
         return [];
     });
@@ -81,22 +78,18 @@ async function checkpoints(client: SuiGraphQLClient<typeof queries>, pagination:
     console.log(metrics(durations));
 }
 
-async function epochCheckpoints(client: SuiGraphQLClient<typeof queries>, pagination: Pagination, epochId: number | null) {
-  let { paginateForwards, limit, numPages } = pagination;
-  console.log('EpochCheckpoints, paginateForwards: ' + paginateForwards + ', limit: ' + limit + ', numPages: ' + numPages + ', epochId: ' + epochId);
-
-    let durations = await benchmark_connection_query(client, paginateForwards, async (client, cursor) => {
-        let variables = paginateForwards ? { first: limit, after: cursor } : { last: limit, before: cursor };
+async function epochCheckpoints(client: SuiGraphQLClient<typeof queries>, benchmarkParams: BenchmarkParams, epochId: number | null) {
+    let durations = await v2(client, benchmarkParams, async (client, paginationParams) => {
         const response = await client.execute('EpochCheckpoints', {
             variables: {
-                ...variables,
+                ...paginationParams,
                 epochId
             }
         });
         const data = response.data;
         const pageInfo = data?.epoch!.checkpoints.pageInfo;
         return pageInfo;
-    }, numPages).catch ((error) => {
+    }).catch ((error) => {
         console.error(error);
         return [];
     });
@@ -107,18 +100,18 @@ async function epochCheckpoints(client: SuiGraphQLClient<typeof queries>, pagina
 async function checkpointSuite(client: SuiGraphQLClient<typeof queries>) {
   let paginateForwards = true;
 
-  let pagination = {
+  let benchmarkParams = {
       paginateForwards,
       limit: 50,
       numPages: 10
   };
 
-    await checkpoints(client, pagination);
-    await checkpoints(client, { ...pagination, paginateForwards: false });
+    await checkpoints(client, benchmarkParams);
+    await checkpoints(client, { ...benchmarkParams, paginateForwards: false });
 
     let epochId = 320;
-    await epochCheckpoints(client, pagination, epochId);
-    await epochCheckpoints(client, { ...pagination, paginateForwards: false }, epochId);
+    await epochCheckpoints(client, benchmarkParams, epochId);
+    await epochCheckpoints(client, { ...benchmarkParams, paginateForwards: false }, epochId);
 };
 
 checkpointSuite(client);

@@ -1,20 +1,65 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { GraphQLQueryOptions } from '@mysten/graphql-transport';
+import { ResultOf, VariablesOf, graphql } from '@mysten/sui.js/dist/cjs/graphql/schemas/2024-01';
 import { SuiGraphQLClient, GraphQLDocument } from '@mysten/sui.js/graphql';
 
-interface PageInfo {
+export interface PageInfo {
 	hasNextPage: boolean;
 	hasPreviousPage: boolean;
 	endCursor: string | null;
 	startCursor: string | null;
 }
 
-export type Pagination = {
+export type BenchmarkParams = {
 	paginateForwards: boolean,
 	limit: number,
 	numPages: number
 }
+
+export type PaginationParams = {
+	first?: number,
+	after?: string,
+	last?: number,
+	before?: string
+}
+
+export class PaginationV2 {
+	paginateForwards: boolean;
+	limit: number;
+	cursor?: string;
+
+	constructor(
+	  paginateForwards: boolean,
+	  limit: number,
+	) {
+	  this.paginateForwards = paginateForwards;
+	  this.limit = limit;
+	}
+
+	getParams(): PaginationParams {
+		if (this.paginateForwards) {
+			return {
+				first: this.limit,
+				after: this.cursor
+			}
+		}
+		return {
+			last: this.limit,
+			before: this.cursor
+		}
+	}
+
+	getCursor(): string | undefined {
+		return this.cursor;
+	}
+
+	setCursor(cursor: string) {
+		this.cursor = cursor;
+	}
+}
+
 
 // TODO doc comments once stabilized
 /// Caller is responsible for providing a `testFn` that returns the `PageInfo` for the benchmark to
@@ -76,6 +121,60 @@ export async function benchmark_connection_query<T extends Record<string, GraphQ
 
     return durations;
 }
+
+
+export async function v2<Q extends Record<string, GraphQLDocument>>(
+	client: SuiGraphQLClient<Q>,
+	benchmarkParams: BenchmarkParams,
+	testFn: (client: SuiGraphQLClient<Q>, cursor: PaginationParams) => Promise<PageInfo | undefined>,
+): Promise<number[]> {
+	let { paginateForwards, limit, numPages } = benchmarkParams;
+
+	let cursors: Array<string> = [];
+	let hasNextPage = true;
+	let cursor: string | null = null;
+    let durations: number[] = [];
+
+	let pagination = new PaginationV2(paginateForwards, limit);
+
+	for (let i = 0; i < numPages && hasNextPage; i++) {
+		const start = performance.now();
+		const result = await testFn(client, pagination.getParams());
+		const duration = performance.now() - start;
+        durations.push(duration);
+
+		// TODO: this is a bit awkward because we can't tell if we timed out ...
+		// Simple way is just to consider all that exceed the timeout as a timeout
+		if (result == undefined) {
+			return durations;
+		}
+
+		if (paginateForwards) {
+			hasNextPage = result.hasNextPage;
+			cursor = result.endCursor;
+			if (result.endCursor) {
+				cursors.push(result.endCursor);
+			}
+		} else {
+			hasNextPage = result.hasPreviousPage;
+			cursor = result.startCursor;
+			if (result.startCursor) {
+				cursors.push(result.startCursor);
+			}
+		}
+	}
+
+	// we should report the cursors here, not in the calls
+	return durations;
+};
+
+
+interface PaginationVariables {
+	before?: string;
+	after?: string;
+	first?: number;
+	last?: number;
+  }
 
 type Metrics = {
 	min: number,
