@@ -183,6 +183,10 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: u64,
 
+        /// Optional gas price for this call. Currently use only for testing and not in production enviroments.
+        #[clap(hide = true)]
+        gas_price: Option<u64>,
+
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
         /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
         /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
@@ -1128,12 +1132,14 @@ impl SuiClientCommands {
                 type_args,
                 gas,
                 gas_budget,
+                gas_price,
                 args,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
                 let tx_data = construct_move_call_transaction(
-                    package, &module, &function, type_args, gas, gas_budget, args, context,
+                    package, &module, &function, type_args, gas, gas_budget, gas_price, args,
+                    context,
                 )
                 .await?;
                 serialize_or_execute!(
@@ -2070,6 +2076,7 @@ async fn construct_move_call_transaction(
     type_args: Vec<TypeTag>,
     gas: Option<ObjectID>,
     gas_budget: u64,
+    gas_price: Option<u64>,
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
 ) -> Result<TransactionData, anyhow::Error> {
@@ -2090,7 +2097,7 @@ async fn construct_move_call_transaction(
     client
         .transaction_builder()
         .move_call(
-            sender, package, module, function, type_args, args, gas, gas_budget,
+            sender, package, module, function, type_args, args, gas, gas_budget, gas_price,
         )
         .await
 }
