@@ -1,7 +1,7 @@
 
-<a name="0x2_package"></a>
-
-# Module `0x2::package`
+---
+title: Module `0x2::package`
+---
 
 Functions for operating on Move packages from within Move:
 - Creating proof-of-publish objects from one-time witnesses
@@ -39,8 +39,8 @@ Functions for operating on Move packages from within Move:
 -  [Function `restrict`](#0x2_package_restrict)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
-<b>use</b> <a href="dependencies/move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -76,13 +76,13 @@ a type originated from.
 
 </dd>
 <dt>
-<code><a href="package.md#0x2_package">package</a>: <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
+<code><a href="package.md#0x2_package">package</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>module_name: <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
+<code>module_name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
 
@@ -183,7 +183,7 @@ progress.
  permits.
 </dd>
 <dt>
-<code>digest: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+<code>digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
 </dt>
 <dd>
  (Immutable) SHA256 digest of the bytecode and transitive
@@ -341,12 +341,12 @@ but multiple per package (!).
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="package.md#0x2_package_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="types.md#0x2_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="package.md#0x2_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
-    <b>let</b> type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
+    <b>let</b> type = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
 
     <a href="package.md#0x2_package_Publisher">Publisher</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="package.md#0x2_package">package</a>: <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&type),
-        module_name: <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_module">type_name::get_module</a>(&type),
+        <a href="package.md#0x2_package">package</a>: <a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&type),
+        module_name: <a href="../move-stdlib/type_name.md#0x1_type_name_get_module">type_name::get_module</a>(&type),
     }
 }
 </code></pre>
@@ -426,9 +426,9 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+    <b>let</b> type = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
 
-    (<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&type) == self.<a href="package.md#0x2_package">package</a>)
+    (<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&type) == self.<a href="package.md#0x2_package">package</a>)
 }
 </code></pre>
 
@@ -453,10 +453,10 @@ Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+    <b>let</b> type = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
 
-    (<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&type) == self.<a href="package.md#0x2_package">package</a>)
-        && (<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_module">type_name::get_module</a>(&type) == self.module_name)
+    (<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&type) == self.<a href="package.md#0x2_package">package</a>)
+        && (<a href="../move-stdlib/type_name.md#0x1_type_name_get_module">type_name::get_module</a>(&type) == self.module_name)
 }
 </code></pre>
 
@@ -471,7 +471,7 @@ Check whether a type belongs to the same module as the publisher object.
 Read the name of the module.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_module">published_module</a>(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): &<a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_module">published_module</a>(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -496,7 +496,7 @@ Read the name of the module.
 Read the package address string.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_package">published_package</a>(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): &<a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_published_package">published_package</a>(self: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -715,7 +715,7 @@ A package's digest is calculated as:
 sha3_256(sort(modules ++ deps))
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -724,7 +724,7 @@ sha3_256(sort(modules ++ deps))
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     &ticket.digest
 }
 </code></pre>
@@ -894,7 +894,7 @@ the parent package must be compatible with the policy in the ticket
 for the upgrade to succeed.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, digest: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
 </code></pre>
 
 
@@ -906,7 +906,7 @@ for the upgrade to succeed.
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(
     cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>,
     policy: u8,
-    digest: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+    digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 ): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = <a href="object.md#0x2_object_id_from_address">object::id_from_address</a>(@0x0);
     <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a> != id_zero, <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
