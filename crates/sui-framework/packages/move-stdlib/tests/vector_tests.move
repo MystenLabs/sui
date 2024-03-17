@@ -571,4 +571,13 @@ module std::vector_tests {
             i = i + 1;
         };
     }
+
+    #[test]
+    fun test_string_aliases() {
+        assert!(b"hello_world".to_string().length() == 11, 0);
+        assert!(b"hello_world".try_to_string().is_some(), 1);
+
+        assert!(b"hello_world".to_ascii_string().length() == 11, 2);
+        assert!(b"hello_world".try_to_ascii_string().is_some(), 3);
+    }
 }
