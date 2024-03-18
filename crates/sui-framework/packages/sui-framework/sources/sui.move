@@ -60,7 +60,7 @@ module sui::sui {
     /// It allows the `sui::coin::CoinMetadata` to be accessible in test modules. 
     /// The Sui Coin decimals is often needed in DeFi to perform fixed-point math operations.  
     /// The functions `sui::coin::mint_for_testing` and `sui::balance::create_for_testing` allow 
-    /// the user to mint Sui but does not share its metadata.
+    /// the user to mint Sui but do not share its metadata.
     public fun new_for_testing(ctx: &mut TxContext): Balance<SUI> {
         new(ctx)
     }
