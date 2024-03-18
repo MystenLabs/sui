@@ -7,9 +7,6 @@ module std::ascii {
     use std::vector;
     use std::option::{Self, Option};
 
-    use fun is_valid_char as u8.is_valid_char;
-    use fun try_string as vector.try_string;
-
     /// An invalid ASCII character was encountered when creating an ASCII string.
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
 
@@ -29,14 +26,14 @@ module std::ascii {
 
     /// Convert a `byte` into a `Char` that is checked to make sure it is valid ASCII.
     public fun char(byte: u8): Char {
-        assert!(byte.is_valid_char(), EINVALID_ASCII_CHARACTER);
+        assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
     }
 
     /// Convert a vector of bytes `bytes` into an `String`. Aborts if
     /// `bytes` contains non-ASCII characters.
     public fun string(bytes: vector<u8>): String {
-       let x = bytes.try_string();
+       let x = try_string(bytes);
        assert!(x.is_some(), EINVALID_ASCII_CHARACTER);
        x.destroy_some()
     }
@@ -49,7 +46,7 @@ module std::ascii {
         let mut i = 0;
         while (i < len) {
             let possible_byte = bytes[i];
-            if (!possible_byte.is_valid_char()) return option::none();
+            if (!is_valid_char(possible_byte)) return option::none();
             i = i + 1;
         };
         option::some(String { bytes })
