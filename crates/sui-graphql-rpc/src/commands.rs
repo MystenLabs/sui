@@ -13,11 +13,6 @@ use std::path::PathBuf;
     version
 )]
 pub enum Command {
-    GenerateConfig {
-        /// Path to output the YAML config, otherwise stdout.
-        #[clap(short, long)]
-        path: Option<PathBuf>,
-    },
     GenerateDocsExamples,
     GenerateSchema {
         /// Path to output GraphQL schema to, in SDL format.
@@ -28,11 +23,6 @@ pub enum Command {
         /// Path to output examples docs.
         #[clap(short, long)]
         file: Option<PathBuf>,
-    },
-    FromConfig {
-        /// Path to TOML file containing configuration for server.
-        #[clap(short, long)]
-        path: PathBuf,
     },
     StartServer {
         /// The title to display at the top of the page

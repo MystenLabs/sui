@@ -225,16 +225,6 @@ impl ServerBuilder {
         })
     }
 
-    pub async fn from_yaml_config(
-        path: &str,
-        version: &Version,
-    ) -> Result<(Self, ServerConfig), Error> {
-        let config = ServerConfig::from_yaml(path)?;
-        Self::from_config(&config, version)
-            .await
-            .map(|builder| (builder, config))
-    }
-
     pub async fn from_config(config: &ServerConfig, version: &Version) -> Result<Self, Error> {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
@@ -262,7 +252,7 @@ impl ServerBuilder {
         let state = AppState::new(config.connection.clone(), metrics.clone());
         let mut builder = ServerBuilder::new(state);
 
-        let name_service_config = config.name_service.clone();
+        let name_service_config = config.service.name_service.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
