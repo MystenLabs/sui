@@ -14,6 +14,7 @@ use tokio::sync::{broadcast, watch};
 use tracing::warn;
 
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
+use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
@@ -289,6 +290,11 @@ impl Core {
 
         // Update internal state.
         self.last_proposed_block = verified_block.clone();
+
+        // Now acknowledge the transactions for their inclusion to block
+        transaction_guards
+            .into_iter()
+            .for_each(TransactionGuard::acknowledge);
 
         tracing::info!("Created block {}", verified_block);
 

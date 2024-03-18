@@ -20,11 +20,18 @@ const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
 
 /// The guard acts as an acknowledgment mechanism for the inclusion of the transaction to a block.
-/// When the guard is dropped then the transaction has been acknowledged.
+/// When the transaction is included to a block then the inclusion should be explicitly acknowledged
+/// by calling the `acknowledge` method. If the guard is dropped without getting acknowledged then
+/// that means the transaction has not been included to a block and the consensus is shutting down.
 pub(crate) struct TransactionGuard {
     pub transaction: Transaction,
-    // implicitly dropping the sender acknowledges the transaction
-    _included_in_block_ack: oneshot::Sender<()>,
+    included_in_block_ack: oneshot::Sender<()>,
+}
+
+impl TransactionGuard {
+    pub fn acknowledge(self) {
+        self.included_in_block_ack.send(()).ok();
+    }
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
@@ -93,8 +100,8 @@ pub struct TransactionClient {
 
 #[derive(Debug, Error)]
 pub enum ClientError {
-    #[error("Failed to submit transaction to consensus: {0}")]
-    SubmitError(String),
+    #[error("Failed to submit transaction, consensus is shutting down: {0}")]
+    ConsensusShuttingDown(String),
 
     #[error("Transaction size ({0}B) is over limit ({1}B)")]
     OversizedTransaction(u64, u64),
@@ -125,14 +132,17 @@ impl TransactionClient {
     /// included to the next proposed block.
     pub async fn submit(&self, transaction: Vec<u8>) -> Result<(), ClientError> {
         let included_in_block = self.submit_no_wait(transaction).await?;
-        included_in_block.await.ok();
-        Ok(())
+        included_in_block
+            .await
+            .tap_err(|e| error!("Transaction acknowledge failed with {:?}", e))
+            .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))
     }
 
     /// Submits a transaction to be sequenced. The transaction length gets evaluated and rejected from consensus if too big.
     /// That shouldn't be the common case as sizes should be aligned between consensus and client. The method returns
     /// a receiver to wait on until the transactions has been included in the next block to get proposed. The consumer should
-    /// not care about the receiver result and just wait on it to consider as inclusion acknowledgement.
+    /// wait on it to consider as inclusion acknowledgement. If the receiver errors then consensus is shutting down and transaction
+    /// has not been included to any block.
     pub(crate) async fn submit_no_wait(
         &self,
         transaction: Vec<u8>,
@@ -147,13 +157,13 @@ impl TransactionClient {
 
         let t = TransactionGuard {
             transaction: Transaction::new(transaction),
-            _included_in_block_ack: included_in_block_ack_send,
+            included_in_block_ack: included_in_block_ack_send,
         };
         self.sender
             .send(t)
             .await
             .tap_err(|e| error!("Submit transaction failed with {:?}", e))
-            .map_err(|e| ClientError::SubmitError(e.to_string()))?;
+            .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))?;
         Ok(included_in_block_ack_receive)
     }
 }
@@ -191,7 +201,7 @@ impl TransactionVerifier for NoopTransactionVerifier {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::transaction::{TransactionClient, TransactionConsumer};
+    use crate::transaction::{TransactionClient, TransactionConsumer, TransactionGuard};
     use futures::stream::FuturesUnordered;
     use futures::StreamExt;
     use std::sync::Arc;
@@ -239,12 +249,14 @@ mod tests {
             "We should expect to timeout as none of the transactions have been acknowledged yet"
         );
 
-        // Now acknowledge the inclusion of transactions by just dropping the guards
-        drop(transactions);
+        // Now acknowledge the inclusion of transactions
+        transactions
+            .into_iter()
+            .for_each(TransactionGuard::acknowledge);
 
         // Now make sure that all the waiters have returned
         while let Some(result) = included_in_block_waiters.next().await {
-            assert!(result.is_err());
+            assert!(result.is_ok());
         }
 
         // try to pull again transactions, result should be empty
