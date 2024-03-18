@@ -23,8 +23,6 @@ import { decodeStr, encodeStr, splitGenericParameters } from './utils.js';
 import type { BcsWriterOptions } from './writer.js';
 import { BcsWriter } from './writer.js';
 
-export * from './legacy-registry.js';
-
 // Re-export all encoding dependencies.
 export {
 	bcs,

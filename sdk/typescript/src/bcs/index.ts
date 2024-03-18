@@ -2,21 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
-import {
-	bcs,
-	BCS as BcsRegistry,
-	fromB58,
-	fromB64,
-	fromHEX,
-	getSuiMoveConfig,
-	toB58,
-	toB64,
-	toHEX,
-} from '@mysten/bcs';
+import { bcs, fromB58, fromB64, fromHEX, toB58, toB64, toHEX } from '@mysten/bcs';
 
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 
 export { TypeTagSerializer } from './type-tag-serializer.js';
+export { BcsType, type BcsTypeOptions } from '@mysten/bcs';
 
 /**
  * A reference to a shared object.
@@ -132,18 +123,6 @@ export type GasData = {
  */
 export type TransactionExpiration = { None: null } | { Epoch: number };
 
-const bcsRegistry = new BcsRegistry({
-	...getSuiMoveConfig(),
-	types: {
-		enums: {
-			'Option<T>': {
-				None: null,
-				Some: 'T',
-			},
-		},
-	},
-});
-
 function unsafe_u64(options?: BcsTypeOptions<number>) {
 	return bcs
 		.u64({
@@ -160,34 +139,6 @@ function optionEnum<T extends BcsType<any, any>>(type: T) {
 	return bcs.enum('Option', {
 		None: null,
 		Some: type,
-	});
-}
-
-/**
- * Wrapper around Enum, which transforms any `T` into an object with `kind` property:
- * @example
- * ```
- * let bcsEnum = { TransferObjects: { objects: [], address: ... } }
- * // becomes
- * let translatedEnum = { kind: 'TransferObjects', objects: [], address: ... };
- * ```
- */
-function enumKind<T extends object, Input extends object>(type: BcsType<T, Input>) {
-	type Merge<T> = T extends infer U ? { [K in keyof U]: U[K] } : never;
-	type EnumKindTransform<T> = T extends infer U
-		? Merge<(U[keyof U] extends null | boolean ? object : U[keyof U]) & { kind: keyof U }>
-		: never;
-
-	return type.transform({
-		input: (val: EnumKindTransform<Input>) =>
-			({
-				[val.kind]: val,
-			}) as Input,
-		output: (val) => {
-			const key = Object.keys(val)[0] as keyof T;
-
-			return { kind: key, ...val[key] } as EnumKindTransform<T>;
-		},
 	});
 }
 
@@ -438,52 +389,6 @@ const suiBcs = {
 	TransactionExpiration,
 	TransactionKind,
 	TypeTag,
-
-	// preserve backwards compatibility with old bcs export
-	ser: bcsRegistry.ser.bind(bcsRegistry),
-	de: bcsRegistry.de.bind(bcsRegistry),
-	getTypeInterface: bcsRegistry.getTypeInterface.bind(bcsRegistry),
-	hasType: bcsRegistry.hasType.bind(bcsRegistry),
-	parseTypeName: bcsRegistry.parseTypeName.bind(bcsRegistry),
-	registerAddressType: bcsRegistry.registerAddressType.bind(bcsRegistry),
-	registerAlias: bcsRegistry.registerAlias.bind(bcsRegistry),
-	registerBcsType: bcsRegistry.registerBcsType.bind(bcsRegistry),
-	registerEnumType: bcsRegistry.registerEnumType.bind(bcsRegistry),
-	registerStructType: bcsRegistry.registerStructType.bind(bcsRegistry),
-	registerType: bcsRegistry.registerType.bind(bcsRegistry),
-	types: bcsRegistry.types,
 };
 
-bcsRegistry.registerBcsType('utf8string', () => bcs.string({ name: 'utf8string' }));
-bcsRegistry.registerBcsType('unsafe_u64', () => unsafe_u64());
-bcsRegistry.registerBcsType('enumKind', (T) => enumKind(T));
-
-[
-	Address,
-	Argument,
-	CallArg,
-	CompressedSignature,
-	GasData,
-	MultiSig,
-	MultiSigPkMap,
-	MultiSigPublicKey,
-	ObjectArg,
-	ObjectDigest,
-	ProgrammableMoveCall,
-	ProgrammableTransaction,
-	PublicKey,
-	SenderSignedData,
-	SharedObjectRef,
-	StructTag,
-	SuiObjectRef,
-	Transaction,
-	TransactionData,
-	TransactionDataV1,
-	TransactionExpiration,
-	TransactionKind,
-	TypeTag,
-].forEach((type) => {
-	bcsRegistry.registerBcsType(type.name, () => type);
-});
-
-export { suiBcs as bcs, bcsRegistry };
+export { suiBcs as bcs };
