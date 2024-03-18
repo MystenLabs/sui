@@ -52,7 +52,8 @@ module sui::deny_list {
         `type`: vector<u8>,
         addr: address,
     ) {
-        &mut deny_list.lists[per_type_index].per_type_list_add(`type`, addr)
+        let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
+        bag_entry.per_type_list_add(`type`, addr)
     }
 
     fun per_type_list_add(
