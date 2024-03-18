@@ -20,7 +20,7 @@ pub type SequenceNumber = u64;
 
 #[derive(Clone, Debug)]
 /// The output of Consensus, which includes all the batches for each certificate in the sub dag
-/// It is sent to the the ExecutionState handle_consensus_transactions
+/// It is sent to the ExecutionState handle_consensus_transactions
 pub struct ConsensusOutput {
     pub sub_dag: Arc<CommittedSubDag>,
     /// Matches certificates in the `sub_dag` one-to-one.

@@ -95,7 +95,7 @@ pub(crate) struct CommitV1 {
     /// Digest of the previous commit.
     /// Set to CommitDigest::MIN for the first commit after genesis.
     previous_digest: CommitDigest,
-    /// A reference to the the commit leader.
+    /// A reference to the commit leader.
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
     blocks: Vec<BlockRef>,

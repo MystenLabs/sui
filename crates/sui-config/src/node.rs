@@ -706,7 +706,7 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_max_load_shedding_percentage")]
     pub max_load_shedding_percentage: u32,
 
-    // When in aggressive load shedding mode, the the minimum percentage of
+    // When in aggressive load shedding mode, the minimum percentage of
     // transactions to shed.
     #[serde(default = "default_min_load_shedding_percentage_above_hard_limit")]
     pub min_load_shedding_percentage_above_hard_limit: u32,
