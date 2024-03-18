@@ -275,15 +275,15 @@ impl Core {
         // Unnecessary to verify own blocks.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
 
-        // Add to the threshold clock and pending ancestors
-        self.threshold_clock.add_block(verified_block.reference());
-
         // Accept the block into BlockManager and DagState.
         let (accepted_blocks, missing) = self
             .block_manager
             .try_accept_blocks(vec![verified_block.clone()]);
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
+
+        // Internally accept the block to move the threshold clock etc
+        self.add_accepted_blocks(vec![verified_block.clone()]);
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
