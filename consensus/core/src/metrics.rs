@@ -19,10 +19,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 const SIZE_BUCKETS: &[f64] = &[
-    10.,
-    50.,
     100.,
-    200.,
     400.,
     800.,
     1_000.,
