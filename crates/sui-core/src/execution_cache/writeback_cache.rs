@@ -78,7 +78,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tracing::{info, instrument};
 
 use super::ExecutionCacheAPI;
@@ -147,7 +147,7 @@ struct UncommittedData {
     /// This table may contain both live and dead objects, since we flush both live and dead
     /// objects to the db in order to support past object queries on fullnodes.
     ///
-    /// Further, we only remove objects in FIFO order, which ensures that the the cached
+    /// Further, we only remove objects in FIFO order, which ensures that the cached
     /// sequence of objects has no gaps. In other words, if we have versions 4, 8, 13 of
     /// an object, we can deduce that version 9 does not exist. This also makes child object
     /// reads efficient. `object_cache` cannot contain a more recent version of an object than
@@ -1036,7 +1036,11 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    fn get_lock(&self, _obj_ref: ObjectRef, _epoch_id: EpochId) -> SuiLockResult {
+    fn get_lock(
+        &self,
+        _obj_ref: ObjectRef,
+        _epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiLockResult {
         todo!()
     }
 
@@ -1053,9 +1057,9 @@ impl ExecutionCacheWrite for WritebackCache {
     #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
-        _epoch_id: EpochId,
+        _epoch_store: &AuthorityPerEpochStore,
         _owned_input_objects: &'a [ObjectRef],
-        _tx_digest: TransactionDigest,
+        _tx_digest: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
         todo!()
     }

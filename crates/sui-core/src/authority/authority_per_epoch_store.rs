@@ -24,8 +24,8 @@ use std::sync::Arc;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
-use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
 use sui_types::committee::CommitteeTrait;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound};
@@ -41,12 +41,14 @@ use sui_types::transaction::{
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use tokio::sync::OnceCell;
 use tracing::{debug, error, info, instrument, trace, warn};
+use typed_store::rocks::{read_size_from_env, ReadWriteOptions};
 use typed_store::{
     rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
     traits::{TableSummary, TypedStoreDebug},
     TypedStoreError,
 };
 
+use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::ResolverWrapper;
@@ -310,6 +312,10 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "signed_transactions_table_default_config"]
     signed_transactions:
         DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
+
+    /// Map from ObjectRef to transaction locking that object
+    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
+    owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
     /// Signatures over transaction effects that were executed in the current epoch.
     /// Store this to avoid re-signing the same effects twice.
@@ -582,6 +588,16 @@ fn signed_transactions_table_default_config() -> DBOptions {
         .optimize_for_large_values_no_scan(1 << 10)
 }
 
+fn owned_object_transaction_locks_table_default_config() -> DBOptions {
+    DBOptions {
+        options: default_db_options()
+            .optimize_for_write_throughput()
+            .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
+            .options,
+        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(false),
+    }
+}
+
 fn pending_execution_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
@@ -673,6 +689,45 @@ impl AuthorityEpochTables {
             .unbounded_iter()
             .skip_to(&key)?;
         Ok::<_, SuiError>(iter)
+    }
+
+    pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
+        Ok(self
+            .owned_object_locked_transactions
+            .get(obj_ref)?
+            .map(|l| l.migrate().into_inner()))
+    }
+
+    pub fn multi_get_locked_transactions(
+        &self,
+        owned_input_objects: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        Ok(self
+            .owned_object_locked_transactions
+            .multi_get(owned_input_objects)?
+            .into_iter()
+            .map(|l| l.map(|l| l.migrate().into_inner()))
+            .collect())
+    }
+
+    pub fn write_transaction_locks(
+        &self,
+        transaction: VerifiedSignedTransaction,
+        locks_to_write: impl IntoIterator<Item = (ObjectRef, LockDetails)>,
+    ) -> SuiResult {
+        let mut batch = self.owned_object_locked_transactions.batch();
+        batch.insert_batch(
+            &self.owned_object_locked_transactions,
+            locks_to_write
+                .into_iter()
+                .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+        )?;
+        batch.insert_batch(
+            &self.signed_transactions,
+            std::iter::once((*transaction.digest(), transaction.serializable_ref())),
+        )?;
+        batch.write()?;
+        Ok(())
     }
 }
 
@@ -1029,6 +1084,17 @@ impl AuthorityPerEpochStore {
             .unwrap();
     }
 
+    #[cfg(test)]
+    pub fn delete_object_locks_for_test(&self, objects: &[ObjectRef]) {
+        for object in objects {
+            self.tables()
+                .expect("test should not cross epoch boundary")
+                .owned_object_locked_transactions
+                .remove(object)
+                .unwrap();
+        }
+    }
+
     pub fn get_signed_transaction(
         &self,
         tx_digest: &TransactionDigest,
@@ -1323,6 +1389,12 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration
             .flags()
             .contains(&EpochFlag::PerEpochFinalizedTransactions)
+    }
+
+    pub fn object_lock_split_tables_enabled(&self) -> bool {
+        self.epoch_start_configuration
+            .flags()
+            .contains(&EpochFlag::ObjectLockSplitTables)
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the
@@ -3491,5 +3563,48 @@ impl ExecutionComponents {
 
     pub(crate) fn metrics(&self) -> Arc<ResolverMetrics> {
         self.metrics.clone()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LockDetailsWrapper {
+    V1(TransactionDigest),
+}
+
+impl LockDetailsWrapper {
+    pub fn migrate(self) -> Self {
+        // TODO: when there are multiple versions, we must iteratively migrate from version N to
+        // N+1 until we arrive at the latest version
+        self
+    }
+
+    // Always returns the most recent version. Older versions are migrated to the latest version at
+    // read time, so there is never a need to access older versions.
+    pub fn inner(&self) -> &LockDetails {
+        match self {
+            Self::V1(v1) => v1,
+
+            // can remove #[allow] when there are multiple versions
+            #[allow(unreachable_patterns)]
+            _ => panic!("lock details should have been migrated to latest version at read time"),
+        }
+    }
+    pub fn into_inner(self) -> LockDetails {
+        match self {
+            Self::V1(v1) => v1,
+
+            // can remove #[allow] when there are multiple versions
+            #[allow(unreachable_patterns)]
+            _ => panic!("lock details should have been migrated to latest version at read time"),
+        }
+    }
+}
+
+pub type LockDetails = TransactionDigest;
+
+impl From<LockDetails> for LockDetailsWrapper {
+    fn from(details: LockDetails) -> Self {
+        // always use latest version.
+        LockDetailsWrapper::V1(details)
     }
 }

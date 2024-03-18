@@ -148,10 +148,10 @@ let v2: vector<u64> = vector[]; // no error
 
 In a rarer case, the type system might not be able to infer a type for divergent code (where all the
 following code is unreachable). Both [`return`](./functions.md#return-expression) and
-[`abort`](./abort-and-assert.md) are expressions and can have any type. A [`loop`](./loops.md) has
-type `()` if it has a `break` (or `T` if has a `break e` where `e: T`), but if there is no break out
-of the `loop`, it could have any type. If these types cannot be inferred, a type annotation is
-required. For example, this code:
+[`abort`](./abort-and-assert.md) are expressions and can have any type. A
+[`loop`](./control-flow/loops.md) has type `()` if it has a `break` (or `T` if has a `break e` where
+`e: T`), but if there is no break out of the `loop`, it could have any type. If these types cannot
+be inferred, a type annotation is required. For example, this code:
 
 ```move
 let a: u8 = return ();

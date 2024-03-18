@@ -488,7 +488,8 @@ impl<'a> Disassembler<'a> {
                         .name,
                 )
                 .to_string(),
-            SignatureToken::StructInstantiation(struct_handle_idx, instantiation) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (struct_handle_idx, instantiation) = *struct_inst;
                 let instantiation = instantiation
                     .into_iter()
                     .map(|tok| self.disassemble_sig_tok(tok, type_param_context))

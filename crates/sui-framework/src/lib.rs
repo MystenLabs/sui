@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::file_format::{Ability, AbilitySet};
 use move_binary_format::CompiledModule;
@@ -166,8 +167,7 @@ pub async fn compare_system_package<S: ObjectStore>(
     id: &ObjectID,
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
-    max_binary_format_version: u32,
-    no_extraneous_module_bytes: bool,
+    binary_config: &BinaryConfig,
 ) -> Option<ObjectRef> {
     let cur_object = match object_store.get_object(id) {
         Ok(Some(cur_object)) => cur_object,
@@ -236,17 +236,14 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let cur_normalized =
-        match cur_pkg.normalize(max_binary_format_version, no_extraneous_module_bytes) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Could not normalize existing package: {e:?}");
-                return None;
-            }
-        };
-    let mut new_normalized = new_pkg
-        .normalize(max_binary_format_version, no_extraneous_module_bytes)
-        .ok()?;
+    let cur_normalized = match cur_pkg.normalize(binary_config) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Could not normalize existing package: {e:?}");
+            return None;
+        }
+    };
+    let mut new_normalized = new_pkg.normalize(binary_config).ok()?;
 
     for (name, cur_module) in cur_normalized {
         let Some(new_module) = new_normalized.remove(&name) else {

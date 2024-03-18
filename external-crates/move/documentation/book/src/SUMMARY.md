@@ -20,8 +20,10 @@
 - [Local Variables and Scopes](variables.md)
 - [Equality](equality.md)
 - [Abort and Assert](abort-and-assert.md)
-- [Conditionals](conditionals.md)
-- [While and Loop](loops.md)
+- [Control Flow](control-flow/intro.md)
+  - [Conditional Expressions](control-flow/conditionals.md)
+  - [Loops](control-flow/loops.md)
+  - [Labeled Control FLow](control-flow/labeled-control-flow.md)
 - [Functions](functions.md)
 - [Structs](structs.md)
 - [Constants](constants.md)
@@ -30,6 +32,10 @@
 - [Uses and Aliases](uses.md)
 - [Packages](packages.md)
 - [Unit Tests](unit-testing.md)
+
+## Advanced Concepts
+
+- [Index Syntax Methods](index-syntax.md)
 
 ## Reference
 

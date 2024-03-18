@@ -140,7 +140,7 @@ fn invalid_struct_with_actuals_in_field() {
     match &mut m.struct_defs[0].field_information {
         StructFieldInformation::Declared(ref mut fields) => {
             fields[0].signature.0 =
-                StructInstantiation(StructHandleIndex::new(0), vec![TypeParameter(0)]);
+                StructInstantiation(Box::new((StructHandleIndex::new(0), vec![TypeParameter(0)])));
             assert_eq!(
                 BoundsChecker::verify_module(&m).unwrap_err().major_status(),
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH

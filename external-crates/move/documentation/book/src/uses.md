@@ -69,6 +69,8 @@ fun new_vec(): vector<std::option::Option<u8>> {
 }
 ```
 
+### Multiple Aliases
+
 If you want to add aliases for multiple module members at once, you can do so with the following
 syntax
 
@@ -90,6 +92,8 @@ fun new_vec(): vector<std::option::Option<u8>> {
 }
 ```
 
+### Self aliases
+
 If you need to add an alias to the Module itself in addition to module members, you can do that in a
 single `use` using `Self`. `Self` is a member of sorts that refers to the module.
 
@@ -108,6 +112,8 @@ use std::option::{Self};
 use std::option::{Self as option};
 ```
 
+### Multiple Aliases for the Same Definition
+
 If needed, you can have as many aliases for any item as you like
 
 ```move
@@ -122,6 +128,25 @@ fun new_vec(): vector<Option<u8>> {
 }
 ```
 
+### Nested imports
+
+In Move, you can also import multiple names with the same `use` declaration. This brings all
+provided names into scope:
+
+```move
+use std::{
+    vector::{Self as vec, push_back},
+    string::{String, Self as str}
+};
+
+fun example(s: &mut String) {
+    let mut v = vec::empty();
+    push_back(&mut v, 0);
+    push_back(&mut v, 10);
+    str::append_utf8(s, v);
+}
+```
+
 ## Inside a `module`
 
 Inside of a `module` all `use` declarations are usable regardless of the order of declaration.
@@ -132,8 +157,8 @@ module a::example {
 
     fun new_vec(): vector<Option<u8>> {
         let mut v = vector[];
-        push_back(&mut v, some(0));
-        push_back(&mut v, none());
+        vector::push_back(&mut v, 0);
+        vector::push_back(&mut v, 10);
         v
     }
 
@@ -211,6 +236,8 @@ will result in a parsing error
     use std::vector; // ERROR!
 }
 ```
+This allows you to shorten your import blocks in many situations. Note that these imports, as the
+previous ones, are all subject to the naming and uniqueness rules described in the following sections.
 
 ## Naming rules
 

@@ -265,9 +265,9 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         // in simtest and production.
         cfg_if!(
             if #[cfg(test)] {
-                let address = authority.address.localhost_ip_multi_address();
+                let own_address = authority.address.with_localhost_ip();
             } else {
-                let address = authority.address.zero_ip_multi_address();
+                let own_address = authority.address.with_zero_ip();
             }
         );
         let all_peer_ids = self
@@ -319,9 +319,9 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         };
 
         let mut retries_left = 90;
-        let addr = address
+        let addr = own_address
             .to_anemo_address()
-            .unwrap_or_else(|op| panic!("{op}: {address}"));
+            .unwrap_or_else(|op| panic!("{op}: {own_address}"));
         let network = loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("consensus")
@@ -349,11 +349,23 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
 
         for (_i, authority) in self.context.committee.authorities() {
             let peer_id = PeerId(authority.network_key.0.to_bytes());
-            let address = authority.address.to_anemo_address().unwrap();
+            let peer_address = match authority.address.to_anemo_address() {
+                Ok(addr) => addr,
+                // Validations are performed on addresses so this failure should not happen.
+                // But it is possible if supported anemo address formats are updated without a
+                // feature flag.
+                Err(e) => {
+                    error!(
+                        "Failed to convert {:?} to anemo address: {:?}",
+                        authority.address, e
+                    );
+                    continue;
+                }
+            };
             let peer_info = PeerInfo {
                 peer_id,
                 affinity: anemo::types::PeerAffinity::High,
-                address: vec![address.clone()],
+                address: vec![peer_address.clone()],
             };
             network.known_peers().insert(peer_info);
         }
