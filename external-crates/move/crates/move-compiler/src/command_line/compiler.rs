@@ -372,8 +372,15 @@ impl Compiler {
                 });
                 return Ok((files, Err(diags)));
             }
-            let migration = generate_migration_diff(&files, &diags);
-            Ok((files, Ok(migration)))
+            let res = match generate_migration_diff(&files, &diags) {
+                Some((_, migration_errors)) if !migration_errors.is_empty() => {
+                    diags.extend(migration_errors);
+                    Err(diags)
+                }
+                Some((migration, _)) => Ok(Some(migration)),
+                None => Ok(None),
+            };
+            Ok((files, res))
         } else {
             Ok((files, Ok(None)))
         }

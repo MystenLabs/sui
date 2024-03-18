@@ -860,6 +860,45 @@ fn check_visibility_modifiers(
     friends: &UniqueMap<ModuleIdent, E::Friend>,
     package_name: Option<Symbol>,
 ) {
+    let pub_package_enabled = context
+        .env()
+        .supports_feature(package_name, FeatureGate::PublicPackage);
+    let edition = context.env().edition(package_name);
+    // mark friend as deprecated
+    if pub_package_enabled {
+        let friend_msg = &format!(
+            "'friend's are deprecated. Remove and replace '{}' with '{}'",
+            E::Visibility::FRIEND,
+            E::Visibility::PACKAGE,
+        );
+        let pub_msg = &format!(
+            "'{}' is deprecated. Replace with '{}'",
+            E::Visibility::FRIEND,
+            E::Visibility::PACKAGE
+        );
+        for (_, _, friend_decl) in friends {
+            let loc = friend_decl.loc;
+            let diag = if edition == Edition::E2024_MIGRATION {
+                diag!(Migration::RemoveFriend, (loc, friend_msg))
+            } else {
+                diag!(Editions::DeprecatedFeature, (loc, friend_msg))
+            };
+            context.env().add_diag(diag);
+        }
+        for (_, _, function) in functions {
+            let E::Visibility::Friend(loc) = function.visibility else {
+                continue;
+            };
+            let diag = if edition == Edition::E2024_MIGRATION {
+                diag!(Migration::MakePubPackage, (loc, pub_msg))
+            } else {
+                diag!(Editions::DeprecatedFeature, (loc, pub_msg))
+            };
+            context.env().add_diag(diag);
+        }
+    }
+
+    // mark conflicting friend usage
     let mut friend_usage = friends.iter().next().map(|(_, _, friend)| friend.loc);
     let mut public_package_usage = None;
     for (_, _, function) in functions {
