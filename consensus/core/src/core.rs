@@ -14,6 +14,7 @@ use tokio::sync::{broadcast, watch};
 use tracing::warn;
 
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
+use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
@@ -242,8 +243,13 @@ impl Core {
         // Consume the ancestors to be included in proposal
         let ancestors = self.ancestors_to_propose(clock_round, now);
 
-        // Consume the next transactions to be included.
-        let transactions = self.transaction_consumer.next();
+        // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
+        // the inclusion of transactions. Just let this be done in the end of the method.
+        let transaction_guards = self.transaction_consumer.next();
+        let transactions = transaction_guards
+            .iter()
+            .map(|t| t.transaction.clone())
+            .collect::<Vec<_>>();
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -284,6 +290,11 @@ impl Core {
 
         // Update internal state.
         self.last_proposed_block = verified_block.clone();
+
+        // Now acknowledge the transactions for their inclusion to block
+        transaction_guards
+            .into_iter()
+            .for_each(TransactionGuard::acknowledge);
 
         tracing::info!("Created block {}", verified_block);
 
@@ -788,7 +799,10 @@ mod test {
                 bcs::to_bytes(&format!("Transaction {index}")).expect("Shouldn't fail");
             total += transaction.len();
             index += 1;
-            transaction_client.submit(transaction).await.unwrap();
+            let _w = transaction_client
+                .submit_no_wait(transaction)
+                .await
+                .unwrap();
 
             // Create total size of transactions up to 1KB
             if total >= 1_000 {
