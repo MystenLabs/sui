@@ -271,7 +271,8 @@ impl<'a> BinaryIndexedView<'a> {
                 let sh = self.struct_handle_at(*idx);
                 Ok(sh.abilities)
             }
-            StructInstantiation(idx, type_args) => {
+            StructInstantiation(struct_inst) => {
+                let (idx, type_args) = &**struct_inst;
                 let sh = self.struct_handle_at(*idx);
                 let declared_abilities = sh.abilities;
                 let type_arguments = type_args

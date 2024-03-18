@@ -77,7 +77,7 @@ Sender is not @0x0 the system address.
 
 <a name="0x2_sui_MIST_PER_SUI"></a>
 
-The amount of Mist per Sui token based on the the fact that mist is
+The amount of Mist per Sui token based on the fact that mist is
 10^-9 of a Sui token
 
 

@@ -283,7 +283,8 @@ impl Type {
                     type_arguments: Vec::new(),
                 }
             }
-            StructInstantiation(shi, type_actuals) => {
+            StructInstantiation(struct_inst) => {
+                let (shi, type_actuals) = &**struct_inst;
                 let s_handle = m.struct_handle_at(*shi);
                 let m_handle = m.module_handle_at(s_handle.module);
                 Type::Struct {
@@ -591,13 +592,13 @@ impl Bytecode {
             FB::Branch(x) => B::Branch(*x),
             FB::LdU8(x) => B::LdU8(*x),
             FB::LdU64(x) => B::LdU64(*x),
-            FB::LdU128(x) => B::LdU128(*x),
+            FB::LdU128(x) => B::LdU128(**x),
             FB::CopyLoc(x) => B::CopyLoc(*x),
             FB::MoveLoc(x) => B::MoveLoc(*x),
             FB::StLoc(x) => B::StLoc(*x),
             FB::LdU16(x) => B::LdU16(*x),
             FB::LdU32(x) => B::LdU32(*x),
-            FB::LdU256(x) => B::LdU256(*x),
+            FB::LdU256(x) => B::LdU256(**x),
             FB::LdConst(const_idx) => B::LdConst(Constant::new(m, m.constant_at(*const_idx))),
             FB::Call(fh_idx) => B::Call(FunctionRef::from_idx(m, fh_idx)),
             FB::CallGeneric(fhi_idx) => {

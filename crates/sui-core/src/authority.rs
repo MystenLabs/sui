@@ -13,6 +13,7 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::MultisetHash;
 use itertools::Itertools;
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
@@ -156,6 +157,7 @@ use crate::transaction_manager::TransactionManager;
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
+use sui_types::execution_config_utils::to_binary_config;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -4059,8 +4061,7 @@ impl AuthorityState {
     /// compatible with the current versions of those packages on-chain.
     pub async fn get_available_system_packages(
         &self,
-        max_binary_format_version: u32,
-        no_extraneous_module_bytes: bool,
+        binary_config: &BinaryConfig,
     ) -> Vec<ObjectRef> {
         let mut results = vec![];
 
@@ -4084,8 +4085,7 @@ impl AuthorityState {
                 system_package.id(),
                 &modules,
                 system_package.dependencies().to_vec(),
-                max_binary_format_version,
-                no_extraneous_module_bytes,
+                binary_config,
             )
             .await
             else {
@@ -4113,8 +4113,7 @@ impl AuthorityState {
     async fn get_system_package_bytes(
         &self,
         system_packages: Vec<ObjectRef>,
-        move_binary_format_version: u32,
-        no_extraneous_module_bytes: bool,
+        binary_config: &BinaryConfig,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await.expect("read cannot fail");
@@ -4151,14 +4150,7 @@ impl AuthorityState {
 
             let modules: Vec<_> = bytes
                 .iter()
-                .map(|m| {
-                    CompiledModule::deserialize_with_config(
-                        m,
-                        move_binary_format_version,
-                        no_extraneous_module_bytes,
-                    )
-                    .unwrap()
-                })
+                .map(|m| CompiledModule::deserialize_with_config(m, binary_config).unwrap())
                 .collect();
 
             let new_object = Object::new_system_package(
@@ -4415,12 +4407,9 @@ impl AuthorityState {
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
         let config = epoch_store.protocol_config();
+        let binary_config = to_binary_config(config);
         let Some(next_epoch_system_package_bytes) = self
-            .get_system_package_bytes(
-                next_epoch_system_packages.clone(),
-                config.move_binary_format_version(),
-                config.no_extraneous_module_bytes(),
-            )
+            .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
             .await
         else {
             error!(

@@ -110,10 +110,10 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let name: AuthorityName = self.keypair.public().into();
 
+        let sui_committee = system_state.get_sui_committee();
         let authority_index: AuthorityIndex = committee
             .to_authority_index(
-                epoch_store
-                    .committee()
+                sui_committee
                     .authority_index(&name)
                     .expect("Should have valid index for own authority") as usize,
             )

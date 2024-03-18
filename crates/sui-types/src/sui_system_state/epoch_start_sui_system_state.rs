@@ -198,6 +198,10 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             });
         }
 
+        // Sort the authorities by their protocol (public) key in ascending order. That's the sorting
+        // SUI committee follows and we
+        authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
+
         ConsensusCommittee::new(self.epoch as consensus_config::Epoch, authorities)
     }
 
@@ -296,5 +300,89 @@ pub struct EpochStartValidatorInfoV1 {
 impl EpochStartValidatorInfoV1 {
     pub fn authority_name(&self) -> AuthorityName {
         (&self.protocol_pubkey).into()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::base_types::SuiAddress;
+    use crate::committee::CommitteeTrait;
+    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use crate::sui_system_state::epoch_start_sui_system_state::{
+        EpochStartSystemStateTrait, EpochStartSystemStateV1, EpochStartValidatorInfoV1,
+    };
+    use fastcrypto::traits::KeyPair;
+    use mysten_network::Multiaddr;
+    use narwhal_crypto::NetworkKeyPair;
+    use rand::thread_rng;
+    use sui_protocol_config::ProtocolVersion;
+
+    #[test]
+    fn test_sui_and_mysticeti_committee_are_same() {
+        // GIVEN
+        let mut active_validators = vec![];
+
+        for i in 0..10 {
+            let (sui_address, protocol_key): (SuiAddress, AuthorityKeyPair) = get_key_pair();
+            let narwhal_network_key = NetworkKeyPair::generate(&mut thread_rng());
+
+            active_validators.push(EpochStartValidatorInfoV1 {
+                sui_address,
+                protocol_pubkey: protocol_key.public().clone(),
+                narwhal_network_pubkey: narwhal_network_key.public().clone(),
+                narwhal_worker_pubkey: narwhal_network_key.public().clone(),
+                sui_net_address: Multiaddr::empty(),
+                p2p_address: Multiaddr::empty(),
+                narwhal_primary_address: Multiaddr::empty(),
+                narwhal_worker_address: Multiaddr::empty(),
+                voting_power: 1_000,
+                hostname: format!("host-{i}").to_string(),
+            })
+        }
+
+        let state = EpochStartSystemStateV1 {
+            epoch: 10,
+            protocol_version: ProtocolVersion::MAX.as_u64(),
+            reference_gas_price: 0,
+            safe_mode: false,
+            epoch_start_timestamp_ms: 0,
+            epoch_duration_ms: 0,
+            active_validators,
+        };
+
+        // WHEN
+        let sui_committee = state.get_sui_committee();
+        let mysticeti_committee = state.get_mysticeti_committee();
+
+        // THEN
+        // assert the validators details
+        assert_eq!(sui_committee.num_members(), 10);
+        assert_eq!(sui_committee.num_members(), mysticeti_committee.size());
+        assert_eq!(
+            sui_committee.validity_threshold(),
+            mysticeti_committee.validity_threshold()
+        );
+        assert_eq!(
+            sui_committee.quorum_threshold(),
+            mysticeti_committee.quorum_threshold()
+        );
+        assert_eq!(state.epoch, mysticeti_committee.epoch());
+
+        for (authority_index, mysticeti_authority) in mysticeti_committee.authorities() {
+            let sui_authority_name = sui_committee
+                .authority_by_index(authority_index.value() as u32)
+                .unwrap();
+
+            assert_eq!(
+                mysticeti_authority.protocol_key.pubkey.to_bytes(),
+                sui_authority_name.0,
+                "Mysten & SUI committee member of same index correspond to different public key"
+            );
+            assert_eq!(
+                mysticeti_authority.stake,
+                sui_committee.weight(sui_authority_name),
+                "Mysten & SUI committee member stake differs"
+            );
+        }
     }
 }

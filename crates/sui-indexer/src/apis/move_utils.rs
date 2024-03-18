@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use move_binary_format::binary_config::BinaryConfig;
 
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_json_rpc::SuiRpcModule;
@@ -48,13 +49,13 @@ impl MoveUtilsServer for MoveUtilsApi {
                     "Package object does not exist with ID {package_id}",
                 ))
             })?;
+        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
         let modules =
                 // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                 // binary format
                 normalize_modules(
                     package.serialized_module_map().values(),
-                    /* max_binary_format_version */ move_binary_format::file_format_common::VERSION_MAX,
-                    /* no_extraneous_module_bytes */ false,
+                    &binary_config,
                 )
                 .map_err(|e| SuiRpcInputError::GenericInvalid(e.to_string()))?;
         Ok(modules

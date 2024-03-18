@@ -11,6 +11,7 @@ use crate::{
     base_types::ObjectID,
     object::{Object, Owner},
 };
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
@@ -30,8 +31,7 @@ pub struct InnerTemporaryStore {
     pub written: WrittenObjects,
     pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     pub events: TransactionEvents,
-    pub max_binary_format_version: u32,
-    pub no_extraneous_module_bytes: bool,
+    pub binary_config: BinaryConfig,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, PackageObject>,
     pub lamport_version: SequenceNumber,
 }
@@ -116,8 +116,7 @@ where
             if let Some(p) = o.data.try_as_package() {
                 return Ok(Some(Arc::new(p.deserialize_module(
                     &id.name().into(),
-                    self.temp_store.max_binary_format_version,
-                    self.temp_store.no_extraneous_module_bytes,
+                    &self.temp_store.binary_config,
                 )?)));
             }
         }

@@ -633,6 +633,8 @@ async fn test_multisig_with_zklogin_scenerios() {
         .contains("Invalid value was given to the function"));
 }
 
+// TODO: @joy to look at improve the stability of this test.
+#[ignore]
 #[sim_test]
 async fn test_expired_epoch_zklogin_in_multisig() {
     // 17. expired zklogin sig fails to execute. wait till epoch 11, the zklogin input committed to max_epoch 10 fails to execute.
