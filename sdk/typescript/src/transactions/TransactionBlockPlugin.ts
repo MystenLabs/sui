@@ -6,21 +6,17 @@ import { parse } from 'valibot';
 
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
-import type { SuiMoveNormalizedType } from '../client/index.js';
 import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
-import type {
-	Argument,
-	CallArg,
-	OpenMoveTypeSignature,
-	OpenMoveTypeSignatureBody,
-	Transaction,
-} from './blockData/v2.js';
+import type { Argument, CallArg, OpenMoveTypeSignature, Transaction } from './blockData/v2.js';
 import { ObjectRef } from './blockData/v2.js';
 import { Inputs, isMutableSharedObjectInput } from './Inputs.js';
-import { getPureSerializationType, isTxContext } from './serializer.js';
+import {
+	isTxContext,
+	normalizedTypeToMoveTypeSignature,
+	pureBcsSchemaFromOpenMoveTypeSignatureBody,
+} from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-import { extractStructTag } from './utils.js';
 
 export type MaybePromise<T> = T | Promise<T>;
 export interface TransactionBlockPlugin {
@@ -276,7 +272,9 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 					}
 					return null;
 				});
-				const needsResolution = inputs.some((input) => input && input.RawValue);
+				const needsResolution = inputs.some(
+					(input) => input && (input.RawValue || input.UnresolvedObject),
+				);
 
 				if (needsResolution) {
 					moveModulesToResolve.push(transaction.MoveCall);
@@ -329,63 +327,39 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 						const inputValue = input.RawValue?.value ?? input.UnresolvedObject?.value!;
 
-						const serType = getPureSerializationType(param, inputValue);
+						const typeSignature = normalizedTypeToMoveTypeSignature(param);
 
-						if (serType) {
-							inputs[inputs.indexOf(input)] = Inputs.Pure(bcs.ser(serType, inputValue).toBytes());
+						if (typeof typeSignature.body !== 'object' || 'vector' in typeSignature.body) {
+							const schema = pureBcsSchemaFromOpenMoveTypeSignatureBody(typeSignature.body);
+							inputs[inputs.indexOf(input)] = Inputs.Pure(schema.serialize(inputValue));
 							return;
 						}
 
-						const structVal = extractStructTag(param);
-						if (structVal != null || (typeof param === 'object' && 'TypeParameter' in param)) {
-							if (typeof inputValue !== 'string') {
-								throw new Error(
-									`Expect the argument to be an object id string, got ${JSON.stringify(
-										inputValue,
-										null,
-										2,
-									)}`,
-								);
-							}
-
-							if (input.$kind === 'RawValue') {
-								inputs[inputs.indexOf(input)] = {
-									$kind: 'UnresolvedObject',
-									UnresolvedObject: {
-										value: inputValue,
-										typeSignatures: [normalizedTypeToSignature(param)],
-									},
-								};
-							} else {
-								input.UnresolvedObject.typeSignatures.push(normalizedTypeToSignature(param));
-							}
-
-							return;
+						if (typeof inputValue !== 'string') {
+							throw new Error(
+								`Expect the argument to be an object id string, got ${JSON.stringify(
+									inputValue,
+									null,
+									2,
+								)}`,
+							);
 						}
 
-						throw new Error(
-							`Unknown call arg type ${JSON.stringify(param, null, 2)} for value ${JSON.stringify(
-								inputValue,
-								null,
-								2,
-							)}`,
-						);
+						if (input.$kind === 'RawValue') {
+							inputs[inputs.indexOf(input)] = {
+								$kind: 'UnresolvedObject',
+								UnresolvedObject: {
+									value: inputValue,
+									typeSignatures: [typeSignature],
+								},
+							};
+						} else {
+							input.UnresolvedObject.typeSignatures.push(typeSignature);
+						}
 					});
 				}),
 			);
 		}
-
-		blockData.inputs.forEach((input, index) => {
-			if (input.RawValue?.type === 'Object') {
-				inputs[index] = {
-					$kind: 'UnresolvedObject',
-					UnresolvedObject: {
-						value: input.RawValue.value as string,
-						typeSignatures: [],
-					},
-				};
-			}
-		});
 	};
 
 	validate: NonNullable<TransactionBlockPlugin['validate']> = async (blockData, options) => {
@@ -430,74 +404,4 @@ function isReceivingType(type: OpenMoveTypeSignature): boolean {
 		type.body.datatype.module === 'transfer' &&
 		type.body.datatype.type === 'Receiving'
 	);
-}
-
-function normalizedTypeToSignature(type: SuiMoveNormalizedType): OpenMoveTypeSignature {
-	if (typeof type === 'object' && 'Reference' in type) {
-		return {
-			ref: '&',
-			body: normalizedTypeToSignatureBody(type.Reference),
-		};
-	}
-
-	if (typeof type === 'object' && 'MutableReference' in type) {
-		return {
-			ref: '&mut',
-			body: normalizedTypeToSignatureBody(type.MutableReference),
-		};
-	}
-
-	return {
-		ref: null,
-		body: normalizedTypeToSignatureBody(type),
-	};
-}
-
-function normalizedTypeToSignatureBody(type: SuiMoveNormalizedType): OpenMoveTypeSignatureBody {
-	switch (type) {
-		case 'Address':
-			return 'address';
-		case 'Bool':
-			return 'bool';
-		case 'Signer':
-			throw new Error('Signer type is not expected');
-		case 'U8':
-			return 'u8';
-		case 'U16':
-			return 'u16';
-		case 'U32':
-			return 'u32';
-		case 'U64':
-			return 'u64';
-		case 'U128':
-			return 'u128';
-		case 'U256':
-			return 'u256';
-	}
-
-	if ('Struct' in type) {
-		return {
-			datatype: {
-				package: type.Struct.address,
-				module: type.Struct.module,
-				type: type.Struct.name,
-				typeParameters: type.Struct.typeArguments.map((param) =>
-					normalizedTypeToSignatureBody(param),
-				),
-			},
-		};
-	}
-	if ('Vector' in type) {
-		return {
-			vector: normalizedTypeToSignatureBody(type.Vector),
-		};
-	}
-
-	if ('TypeParameter' in type) {
-		return {
-			typeParameter: type.TypeParameter,
-		};
-	}
-
-	throw new Error(`Unknown type ${JSON.stringify(type, null, 2)}`);
 }

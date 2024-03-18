@@ -45,7 +45,7 @@ describe('Keypair', () => {
 
 	it('`signWithIntent()` should return the correct signature', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
-		const bytes = bcs.ser(['vector', 'u8'], data).toBytes();
+		const bytes = bcs.vector(bcs.U8).serialize(data).toBytes();
 
 		const sig1 = await k1.signWithIntent(bytes, IntentScope.PersonalMessage);
 		const sig2 = await k2.signWithIntent(data, IntentScope.TransactionData);
@@ -103,7 +103,7 @@ describe('Keypair', () => {
 		const sig2 = await k2.signPersonalMessage(data);
 		const sig3 = await k3.signPersonalMessage(data);
 
-		const bytes = bcs.ser(['vector', 'u8'], data).toBytes();
+		const bytes = bcs.vector(bcs.U8).serialize(data).toBytes();
 
 		expect(sig1.bytes).toEqual(toB64(bytes));
 		expect(sig1.bytes).toEqual('CQAAAAVIZWxsbw==');

@@ -82,10 +82,6 @@ export function getIdFromCallArg(arg: string | CallArg) {
 		return normalizeSuiAddress(arg.UnresolvedObject.value);
 	}
 
-	if (arg.RawValue && arg.RawValue.type === 'Object') {
-		return normalizeSuiAddress(arg.RawValue.value as string);
-	}
-
 	return undefined;
 }
 
