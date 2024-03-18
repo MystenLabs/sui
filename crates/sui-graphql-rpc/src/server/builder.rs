@@ -309,7 +309,7 @@ impl ServerBuilder {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout::default());
+            builder = builder.extension(Timeout);
         }
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
@@ -546,7 +546,7 @@ pub mod tests {
                 .context_data(cfg)
                 .context_data(query_id())
                 .context_data(ip_address())
-                .extension(Timeout::default())
+                .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
