@@ -12,7 +12,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::dynamic_field::Field;
 use sui_types::id::{ID, UID};
-use sui_types::object::Object;
+use sui_types::object::{MoveObject, Object};
 use sui_types::TypeTag;
 
 const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
@@ -319,6 +319,17 @@ impl TryFrom<Object> for NameRecord {
     type Error = NameServiceError;
 
     fn try_from(object: Object) -> Result<Self, NameServiceError> {
+        object
+            .to_rust::<Field<Domain, Self>>()
+            .map(|record| record.value)
+            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
+    }
+}
+
+impl TryFrom<MoveObject> for NameRecord {
+    type Error = NameServiceError;
+
+    fn try_from(object: MoveObject) -> Result<Self, NameServiceError> {
         object
             .to_rust::<Field<Domain, Self>>()
             .map(|record| record.value)
