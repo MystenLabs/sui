@@ -20,19 +20,19 @@ module sui::pay {
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public entry fun split<T>(
-        self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext
+        coin: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext
     ) {
-        keep(coin::split(self, split_amount, ctx), ctx)
+        keep(coin.split(split_amount, ctx), ctx)
     }
 
     /// Split coin `self` into multiple coins, each with balance specified
     /// in `split_amounts`. Remaining balance is left in `self`.
     public entry fun split_vec<T>(
-        self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext
+        coin: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext
     ) {
         let (mut i, len) = (0, vector::length(&split_amounts));
         while (i < len) {
-            split(self, *vector::borrow(&split_amounts, i), ctx);
+            split(coin, split_amounts[i], ctx);
             i = i + 1;
         };
     }
@@ -52,37 +52,37 @@ module sui::pay {
     public entry fun divide_and_keep<T>(
         self: &mut Coin<T>, n: u64, ctx: &mut TxContext
     ) {
-        let mut vec: vector<Coin<T>> = coin::divide_into_n(self, n, ctx);
-        let (mut i, len) = (0, vector::length(&vec));
+        let mut vec: vector<Coin<T>> = self.divide_into_n(n, ctx);
+        let (mut i, len) = (0, vec.length());
         while (i < len) {
-            transfer::public_transfer(vector::pop_back(&mut vec), tx_context::sender(ctx));
+            transfer::public_transfer(vec.pop_back(), ctx.sender());
             i = i + 1;
         };
-        vector::destroy_empty(vec);
+        vec.destroy_empty();
     }
 
     /// Join `coin` into `self`. Re-exports `coin::join` function.
     public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
-        coin::join(self, coin)
+        self.join(coin)
     }
 
     /// Join everything in `coins` with `self`
     public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
-        let (mut i, len) = (0, vector::length(&coins));
+        let (mut i, len) = (0, coins.length());
         while (i < len) {
-            let coin = vector::pop_back(&mut coins);
-            coin::join(self, coin);
+            let coin = coins.pop_back();
+            self.join(coin);
             i = i + 1
         };
         // safe because we've drained the vector
-        vector::destroy_empty(coins)
+        coins.destroy_empty()
     }
 
     /// Join a vector of `Coin` into a single object and transfer it to `receiver`.
     public entry fun join_vec_and_transfer<T>(mut coins: vector<Coin<T>>, receiver: address) {
-        assert!(vector::length(&coins) > 0, ENoCoins);
+        assert!(coins.length() > 0, ENoCoins);
 
-        let mut self = vector::pop_back(&mut coins);
+        let mut self = coins.pop_back();
         join_vec(&mut self, coins);
         transfer::public_transfer(self, receiver)
     }
