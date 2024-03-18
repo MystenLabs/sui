@@ -19,7 +19,7 @@ module std::string {
 
     /// Creates a new string from a sequence of bytes. Aborts if the bytes do not represent valid utf8.
     public fun utf8(bytes: vector<u8>): String {
-        assert!(internal_check_utf8(bytes), EINVALID_UTF8);
+        assert!(internal_check_utf8(&bytes), EINVALID_UTF8);
         String { bytes }
     }
 
@@ -37,7 +37,7 @@ module std::string {
 
     /// Tries to create a new string from a sequence of bytes.
     public fun try_utf8(bytes: vector<u8>): Option<String> {
-        if (internal_check_utf8(bytes)) {
+        if (internal_check_utf8(&bytes)) {
             option::some(String { bytes })
         } else {
             option::none()
@@ -66,7 +66,7 @@ module std::string {
 
     /// Appends bytes which must be in valid utf8 format.
     public fun append_utf8(s: &mut String, bytes: vector<u8>) {
-        s.append(bytes.utf8())
+        s.append(utf8(bytes))
     }
 
     /// Insert the other string at the byte index in given string. The index must be at a valid utf8 char
@@ -97,7 +97,7 @@ module std::string {
 
     /// Computes the index of the first occurrence of a string. Returns `length(s)` if no occurrence found.
     public fun index_of(s: &String, r: &String): u64 {
-        internal_index_of(s.bytes, &r.bytes)
+        internal_index_of(&s.bytes, &r.bytes)
     }
 
     // Native API
