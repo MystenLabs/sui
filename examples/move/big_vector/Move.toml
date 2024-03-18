@@ -1,0 +1,10 @@
+[package]
+name = "BigVector"
+edition = "2024.alpha"
+version = "0.0.0"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+big_vector = "0x0"
