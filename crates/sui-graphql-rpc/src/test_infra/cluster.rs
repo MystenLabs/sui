@@ -240,11 +240,6 @@ async fn wait_for_graphql_checkpoint_catchup(
 
     let timeout = base_timeout.mul_f64(checkpoint.max(1) as f64);
 
-    println!(
-        "Waiting for graphql to catchup to checkpoint: {}",
-        checkpoint
-    );
-
     tokio::time::timeout(timeout, async {
         loop {
             let resp = client
