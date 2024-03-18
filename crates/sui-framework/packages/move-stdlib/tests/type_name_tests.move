@@ -77,9 +77,9 @@ module 0xA::type_name_tests {
 
     #[test]
     fun test_get_module() {
-        assert!(get_address(&get<std::ascii::String>()) == string(b"ascii"), 0);
-        assert!(get_address(&get<TestStruct>()) ==  string(b"type_name_tests"), 0);
-        assert!(get_address(&get<TestGenerics<std::string::String>>()) ==  string(b"type_name_tests"), 0);
+        assert!(get_module(&get<std::ascii::String>()) == string(b"ascii"), 0);
+        assert!(get_module(&get<TestStruct>()) ==  string(b"type_name_tests"), 0);
+        assert!(get_module(&get<TestGenerics<std::string::String>>()) ==  string(b"type_name_tests"), 0);
     }
 
     #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
