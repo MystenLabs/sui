@@ -634,6 +634,8 @@ module sui::kiosk {
 
     // === KioskOwnerCap fields access ===
 
+    public use fun kiosk_owner_cap_for as KioskOwnerCap.`for`;
+
     /// Get the `for` field of the `KioskOwnerCap`.
     public fun kiosk_owner_cap_for(cap: &KioskOwnerCap): ID {
         cap.`for`

@@ -3,6 +3,9 @@
 
 module sui::tx_context {
 
+    /// Allows calling `ctx.fresh_uid()` to generate a new `UID`.
+    public use fun sui::object::new as TxContext.fresh_uid;
+
     #[test_only]
     use std::vector;
 
