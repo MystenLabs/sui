@@ -155,7 +155,13 @@ impl BlockManager {
             .missing_blocks
             .difference(&missing_blocks_before)
             .cloned()
-            .collect();
+            .collect::<BTreeSet<_>>();
+
+        self.context
+            .metrics
+            .node_metrics
+            .missing_blocks_total
+            .set(missing_blocks_after.len() as i64);
 
         // Figure out the new missing blocks
         (accepted_blocks, missing_blocks_after)
