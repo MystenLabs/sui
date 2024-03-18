@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
 # assumes sui cli installed (brew install sui or cargo build --bin sui)
 
 cd genesis
