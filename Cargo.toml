@@ -499,7 +499,7 @@ tower-http = { version = "0.3.4", features = [
 # tower-http = { version="0.4", features = ["trace"] }
 tower-layer = "0.3.2"
 twox-hash = "1.6.3"
-tracing = "0.1.40"
+tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.15", default-features = false, features = [
   "std",
@@ -677,10 +677,3 @@ field_names = "0.2.0"
 semver = "1.0.16"
 spinners = "4.1.0"
 include_dir = "0.7.3"
-
-# Patches for revm, needed by native bridge
-[patch.crates-io]
-revm = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
-revm-primitives = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
-revm-interpreter = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
-revm-precompile = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
