@@ -230,6 +230,23 @@ impl Checkpoint {
         }))
     }
 
+    /// Look up a `Checkpoint` in the database and retrieve its `timestamp_ms` field. This method
+    /// takes a connection, so that it can be used within a transaction.
+    pub(crate) fn query_timestamp(
+        conn: &mut Conn,
+        seq_num: u64,
+    ) -> Result<u64, diesel::result::Error> {
+        use checkpoints::dsl;
+
+        let stored: i64 = conn.first(move || {
+            dsl::checkpoints
+                .select(dsl::timestamp_ms)
+                .filter(dsl::sequence_number.eq(seq_num as i64))
+        })?;
+
+        Ok(stored as u64)
+    }
+
     pub(crate) async fn query_latest_checkpoint_sequence_number(db: &Db) -> Result<u64, Error> {
         db.execute(move |conn| Checkpoint::latest_checkpoint_sequence_number(conn))
             .await
