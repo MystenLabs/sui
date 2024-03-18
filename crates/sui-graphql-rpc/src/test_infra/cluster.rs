@@ -222,35 +222,6 @@ async fn wait_for_graphql_server(client: &SimpleClient) {
     .expect("Timeout waiting for graphql server to start");
 }
 
-async fn wait_for_indexer_checkpoint_catchup(
-    indexer_store: &PgIndexerStore,
-    checkpoint: u64,
-    base_timeout: Duration,
-) {
-    let current_checkpoint = indexer_store
-        .get_latest_tx_checkpoint_sequence_number()
-        .await
-        .unwrap();
-
-    let diff = checkpoint
-        .saturating_sub(current_checkpoint.unwrap_or(0))
-        .max(1);
-    let timeout = base_timeout.mul_f64(diff as f64);
-
-    tokio::time::timeout(timeout, async {
-        while indexer_store
-            .get_latest_tx_checkpoint_sequence_number()
-            .await
-            .unwrap()
-            < Some(checkpoint)
-        {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-    })
-    .await
-    .expect("Timeout waiting for indexer to catchup to checkpoint");
-}
-
 /// Ping the GraphQL server until its background task has updated the checkpoint watermark to the
 /// desired checkpoint.
 async fn wait_for_graphql_checkpoint_catchup(
@@ -266,46 +237,44 @@ async fn wait_for_graphql_checkpoint_catchup(
             }
         }
     }"#;
-    let resp = client
-        .execute_to_graphql(query.to_string(), false, vec![], vec![])
-        .await
-        .unwrap();
 
-    let current_checkpoint = resp
-        .response_body_json()
-        .get("data")
-        .unwrap()
-        .get("availableRange")
-        .unwrap()
-        .get("last")
-        .unwrap()
-        .get("sequenceNumber")
-        .unwrap()
-        .as_u64();
+    let timeout = base_timeout.mul_f64(checkpoint.max(1) as f64);
 
-    let diff = checkpoint
-        .saturating_sub(current_checkpoint.unwrap_or(0))
-        .max(1);
-    let timeout = base_timeout.mul_f64(diff as f64);
+    println!(
+        "Waiting for graphql to catchup to checkpoint: {}",
+        checkpoint
+    );
 
     tokio::time::timeout(timeout, async {
-        while client
-            .execute_to_graphql(query.to_string(), false, vec![], vec![])
-            .await
-            .unwrap()
-            .response_body_json()
-            .get("data")
-            .unwrap()
-            .get("availableRange")
-            .unwrap()
-            .get("last")
-            .unwrap()
-            .get("sequenceNumber")
-            .unwrap()
-            .as_u64()
-            < Some(checkpoint)
-        {
-            tokio::time::sleep(Duration::from_secs(1)).await;
+        loop {
+            let resp = client
+                .execute_to_graphql(query.to_string(), false, vec![], vec![])
+                .await
+                .unwrap()
+                .response_body_json();
+
+            let current_checkpoint = resp
+                .get("data")
+                .unwrap()
+                .get("availableRange")
+                .unwrap()
+                .get("last")
+                .unwrap()
+                .get("sequenceNumber");
+
+            // Indexer has not picked up any checkpoints yet
+            let Some(current_checkpoint) = current_checkpoint else {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            };
+
+            // Indexer has picked up a checkpoint, but it's not the one we're waiting for
+            let current_checkpoint = current_checkpoint.as_u64().unwrap();
+            if current_checkpoint < checkpoint {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            } else {
+                break;
+            }
         }
     })
     .await
@@ -316,7 +285,6 @@ impl Cluster {
     /// Waits for the indexer to index up to the given checkpoint, then waits for the graphql
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
-        wait_for_indexer_checkpoint_catchup(&self.indexer_store, checkpoint, base_timeout).await;
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
     }
 }
@@ -325,7 +293,6 @@ impl ExecutorCluster {
     /// Waits for the indexer to index up to the given checkpoint, then waits for the graphql
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
-        wait_for_indexer_checkpoint_catchup(&self.indexer_store, checkpoint, base_timeout).await;
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
     }
 
