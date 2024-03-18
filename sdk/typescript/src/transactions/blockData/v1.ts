@@ -236,7 +236,7 @@ export function v1BlockDataFromTransactionBlockState(
 		if (input.RawValue) {
 			return {
 				kind: 'Input',
-				type: input.RawValue.type === 'Object' ? 'object' : 'pure',
+				type: 'pure',
 				index,
 				value: input.RawValue.value,
 			};

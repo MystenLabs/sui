@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import type { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import type {
@@ -17,6 +18,7 @@ import {
 	SUI_CLOCK_OBJECT_ID,
 } from '@mysten/sui.js/utils';
 
+import { BcsOrder } from './types/bcs.js';
 import type {
 	Level2BookStatusPoint,
 	MarketPrice,
@@ -25,7 +27,7 @@ import type {
 	PoolSummary,
 	UserPosition,
 } from './types/index.js';
-import { bcs, LimitOrderType, SelfMatchingPreventionStyle } from './types/index.js';
+import { LimitOrderType, SelfMatchingPreventionStyle } from './types/index.js';
 import {
 	CREATION_FEE,
 	MODULE_CLOB,
@@ -570,7 +572,7 @@ export class DeepBookClient {
 			return undefined;
 		}
 
-		return bcs.de('Order', Uint8Array.from(results![0].returnValues![0][0]));
+		return BcsOrder.parse(Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**
@@ -595,7 +597,7 @@ export class DeepBookClient {
 				transactionBlock: txb,
 				sender: this.currentAddress,
 			})
-		).results![0].returnValues!.map(([bytes, _]) => BigInt(bcs.de('u64', Uint8Array.from(bytes))));
+		).results![0].returnValues!.map(([bytes, _]) => BigInt(bcs.U64.parse(Uint8Array.from(bytes))));
 		return {
 			availableBaseAmount,
 			lockedBaseAmount,
@@ -633,7 +635,7 @@ export class DeepBookClient {
 			return [];
 		}
 
-		return bcs.de('vector<Order>', Uint8Array.from(results![0].returnValues![0][0]));
+		return bcs.vector(BcsOrder).parse(Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**
@@ -653,8 +655,8 @@ export class DeepBookClient {
 				sender: this.currentAddress,
 			})
 		).results![0].returnValues!.map(([bytes, _]) => {
-			const opt = bcs.de('Option<u64>', Uint8Array.from(bytes));
-			return 'Some' in opt ? BigInt(opt.Some) : undefined;
+			const opt = bcs.option(bcs.U64).parse(Uint8Array.from(bytes));
+			return opt == null ? undefined : BigInt(opt);
 		});
 
 		return { bestBidPrice: resp[0], bestAskPrice: resp[1] };
@@ -715,10 +717,16 @@ export class DeepBookClient {
 
 		if (side === 'both') {
 			const bidSide = results.results![0].returnValues!.map(([bytes, _]) =>
-				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+				bcs
+					.vector(bcs.U64)
+					.parse(Uint8Array.from(bytes))
+					.map((s: string) => BigInt(s)),
 			);
 			const askSide = results.results![1].returnValues!.map(([bytes, _]) =>
-				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+				bcs
+					.vector(bcs.U64)
+					.parse(Uint8Array.from(bytes))
+					.map((s: string) => BigInt(s)),
 			);
 			return [
 				bidSide[0].map((price: bigint, i: number) => ({ price, depth: bidSide[1][i] })),
@@ -726,7 +734,10 @@ export class DeepBookClient {
 			];
 		} else {
 			const result = results.results![0].returnValues!.map(([bytes, _]) =>
-				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+				bcs
+					.vector(bcs.U64)
+					.parse(Uint8Array.from(bytes))
+					.map((s) => BigInt(s)),
 			);
 			return result[0].map((price: bigint, i: number) => ({ price, depth: result[1][i] }));
 		}
