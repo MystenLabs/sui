@@ -269,6 +269,10 @@ impl CheckpointSummary {
             })
             .ok();
     }
+
+    pub fn is_last_checkpoint_of_epoch(&self) -> bool {
+        self.end_of_epoch_data.is_some()
+    }
 }
 
 impl Display for CheckpointSummary {

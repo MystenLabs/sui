@@ -279,27 +279,9 @@ impl CheckpointExecutor {
             .set(is_inconsistent_state as i64);
     }
 
-    /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
-    /// to be called in the order of checkpoint sequence number.
-    #[instrument(level = "debug", skip_all)]
-    async fn process_executed_checkpoint(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        checkpoint: &VerifiedCheckpoint,
-        all_tx_digests: &[TransactionDigest],
-    ) {
+    fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
-
-        // Commit all transaction effects to disk
-        let cache_commit = self.state.get_cache_commit();
-        for digest in all_tx_digests {
-            cache_commit
-                .commit_transaction_outputs(epoch_store.epoch(), digest)
-                .await
-                .expect("commit_transaction_outputs cannot fail");
-        }
-
         debug!("Bumping highest_executed_checkpoint watermark to {seq:?}");
         if let Some(prev_highest) = self
             .checkpoint_store
@@ -343,6 +325,30 @@ impl CheckpointExecutor {
             .last_executed_checkpoint_timestamp_ms
             .set(checkpoint.timestamp_ms as i64);
         checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
+    }
+
+    /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
+    /// to be called in the order of checkpoint sequence number.
+    #[instrument(level = "debug", skip_all)]
+    async fn process_executed_checkpoint(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint: &VerifiedCheckpoint,
+        all_tx_digests: &[TransactionDigest],
+    ) {
+        // Commit all transaction effects to disk
+        let cache_commit = self.state.get_cache_commit();
+        debug!(seq = ?checkpoint.sequence_number, "committing checkpoint transactions to disk");
+        for digest in all_tx_digests {
+            cache_commit
+                .commit_transaction_outputs(epoch_store.epoch(), digest)
+                .await
+                .expect("commit_transaction_outputs cannot fail");
+        }
+
+        if !checkpoint.is_last_checkpoint_of_epoch() {
+            self.bump_highest_executed_checkpoint(checkpoint);
+        }
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -455,6 +461,7 @@ impl CheckpointExecutor {
         }));
     }
 
+    #[instrument(level = "info", skip_all)]
     async fn execute_change_epoch_tx(
         &self,
         execution_digests: ExecutionDigests,
@@ -537,6 +544,12 @@ impl CheckpointExecutor {
                     )
                     .await;
 
+                    let cache_commit = self.state.get_cache_commit();
+                    cache_commit
+                        .commit_transaction_outputs(cur_epoch, &change_epoch_tx_digest)
+                        .await
+                        .expect("commit_transaction_outputs cannot fail");
+
                     fail_point_async!("prune-and-compact");
 
                     // For finalizing the checkpoint, we need to pass in all checkpoint
@@ -582,6 +595,8 @@ impl CheckpointExecutor {
                         .in_monitored_scope("CheckpointExecutor::accumulate_epoch")
                         .await
                         .expect("Accumulating epoch cannot fail");
+
+                    self.bump_highest_executed_checkpoint(checkpoint);
 
                     return true;
                 }
