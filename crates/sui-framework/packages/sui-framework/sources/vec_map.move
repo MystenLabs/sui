@@ -153,7 +153,7 @@ module sui::vec_map {
         let mut i = 0;
         let n = size(self);
         while (i < n) {
-            if (&contents[i].key == key) {
+            if (&self.contents[i].key == key) {
                 return option::some(i)
             };
             i = i + 1;
