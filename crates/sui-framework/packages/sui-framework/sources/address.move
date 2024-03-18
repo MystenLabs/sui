@@ -2,11 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::address {
-    use sui::hex;
     use std::ascii;
     use std::bcs;
     use std::string;
-    use std::vector;
+
+    use fun to_ascii_string as address.to_ascii_string;
+    use fun to_bytes as address.to_bytes;
+
+    use fun hex_char_value as u8.hex_char_value;
+
+    use fun sui::hex::encode as vector.hex_encode;
+    use fun ascii::string as vector.to_string;
+    use fun string::from_ascii as ascii::String.from_ascii;
 
     /// The length of an address, in bytes
     const LENGTH: u64 = 32;
@@ -37,12 +44,12 @@ module sui::address {
 
     /// Convert `a` to a hex-encoded ASCII string
     public fun to_ascii_string(a: address): ascii::String {
-        ascii::string(hex::encode(to_bytes(a)))
+        a.to_bytes().hex_encode().to_string()
     }
 
     /// Convert `a` to a hex-encoded ASCII string
     public fun to_string(a: address): string::String {
-        string::from_ascii(to_ascii_string(a))
+        a.to_ascii_string().from_ascii()
     }
 
     /// Converts an ASCII string to an address, taking the numerical value for each character. The
@@ -52,13 +59,13 @@ module sui::address {
     /// Aborts with `EAddressParseError` if the length of `s` is not 64,
     /// or if an invalid character is encountered.
     public fun from_ascii_bytes(bytes: &vector<u8>): address {
-        assert!(vector::length(bytes) == 64, EAddressParseError);
+        assert!(bytes.length() == 64, EAddressParseError);
         let mut hex_bytes = vector[];
         let mut i = 0;
         while (i < 64) {
-            let hi = hex_char_value(*vector::borrow(bytes, i));
-            let lo = hex_char_value(*vector::borrow(bytes, i + 1));
-            vector::push_back(&mut hex_bytes, (hi << 4) | lo);
+            let hi = bytes[i].hex_char_value();
+            let lo = bytes[i+1].hex_char_value();
+            hex_bytes.push_back((hi << 4) | lo);
             i = i + 2;
         };
         from_bytes(hex_bytes)
