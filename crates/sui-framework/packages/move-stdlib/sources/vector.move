@@ -6,6 +6,20 @@
 /// vectors are growable. This module has many native functions.
 module std::vector {
 
+    /// Allows calling `.to_string()` on a vector of `u8` to get a utf8 `String`.
+    public use fun std::string::utf8 as vector.to_string;
+
+    /// Allows calling `.try_to_string()` on a vector of `u8` to get a utf8 `String`.
+    /// This will return `None` if the vector is not valid utf8.
+    public use fun std::string::try_utf8 as vector.try_to_string;
+
+    /// Allows calling `.to_ascii_string()` on a vector of `u8` to get an `ascii::String`.
+    public use fun std::ascii::string as vector.to_ascii_string;
+
+    /// Allows calling `.try_to_ascii_string()` on a vector of `u8` to get an
+    /// `ascii::String`. This will return `None` if the vector is not valid ascii.
+    public use fun std::ascii::try_string as vector.try_to_ascii_string;
+
     /// The index into the vector is out of bounds
     const EINDEX_OUT_OF_BOUNDS: u64 = 0x20000;
 
