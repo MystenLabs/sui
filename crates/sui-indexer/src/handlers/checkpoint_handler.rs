@@ -309,12 +309,15 @@ where
 
         // Index epoch
         let epoch = Self::index_epoch(state, &data).await?;
+        info!(checkpoint_seq, "Indexed checkpoint epoch");
 
         // Index Objects
         let object_changes: TransactionObjectChangesToCommit =
             Self::index_objects(data.clone(), &metrics, package_resolver.clone()).await?;
+        info!(checkpoint_seq, "Indexed checkpoint objects");
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
+        info!(checkpoint_seq, "Indexed checkpoint object history");
 
         let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
@@ -345,6 +348,7 @@ where
             )
         };
 
+        info!(checkpoint_seq, "Indexed the whole checkpoint");
         Ok(CheckpointDataToCommit {
             checkpoint,
             transactions: db_transactions,

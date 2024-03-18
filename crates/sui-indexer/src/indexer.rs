@@ -73,12 +73,21 @@ impl Indexer {
         );
         spawn_monitored_task!(fetcher.run());
 
-        let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
-            store.clone(),
-            metrics.clone(),
-            snapshot_config,
-        );
-        spawn_monitored_task!(objects_snapshot_processor.start());
+        let skip_object_processor = std::env::var("SKIP_OBJECT_PROCESSOR")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .expect("Invalid SKIP_OBJECT_PROCESSOR");
+        if !skip_object_processor {
+            let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
+                store.clone(),
+                metrics.clone(),
+                snapshot_config,
+            );
+            spawn_monitored_task!(objects_snapshot_processor.start());
+            info!("Object snapshot processor started...");
+        } else {
+            info!("Object snapshot processor is skipped...");
+        }
 
         let checkpoint_handler = new_handlers(store, metrics).await?;
         crate::framework::runner::run(
