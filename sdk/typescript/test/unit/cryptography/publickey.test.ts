@@ -81,7 +81,7 @@ describe('Publickey', () => {
 
 		expect(
 			await pk1.verifyWithIntent(
-				bcs.ser(['vector', 'u8'], data).toBytes(),
+				bcs.vector(bcs.U8).serialize(data).toBytes(),
 				sig1.signature,
 				IntentScope.PersonalMessage,
 			),

@@ -47,7 +47,7 @@ describe('Test dev inspect', () => {
 		const obj = tx.moveCall({
 			target: `${packageId}::serializer_tests::return_struct`,
 			typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-			arguments: [tx.pure.address(coin_0.coinObjectId)],
+			arguments: [tx.object(coin_0.coinObjectId)],
 		});
 
 		// TODO: Ideally dev inspect transactions wouldn't need this, but they do for now

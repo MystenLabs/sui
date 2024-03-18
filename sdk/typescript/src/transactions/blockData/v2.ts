@@ -246,7 +246,6 @@ const CallArg = safeEnum({
 	// added for sui:rawValues
 	RawValue: object({
 		value: unknown(),
-		type: nullish(union([literal('Pure'), literal('Object')])),
 	}),
 });
 export type CallArg = Output<typeof CallArg>;

@@ -101,7 +101,7 @@ describe('offline build', () => {
 
 	it('supports pre-serialized inputs as Uint8Array', async () => {
 		const tx = setup();
-		const inputBytes = bcs.ser('u64', 100n).toBytes();
+		const inputBytes = bcs.U64.serialize(100n).toBytes();
 		// Use bytes directly in pure value:
 		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
 		await tx.build();
