@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, Command, ExitStatus};
 
 fn main() -> Result<(), ExitStatus> {
+    #[cfg(windows)]
+    {
+        eprintln!("bridge tests are not supported on Windows.");
+        return Ok(());
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
     let base = env!("CARGO_MANIFEST_DIR");
     let bridge_path = format!("{base}/../../bridge/evm");
