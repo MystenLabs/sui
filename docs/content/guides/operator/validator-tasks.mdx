@@ -260,7 +260,7 @@ sui client call --package 0x3 --module sui_system --function rotate_operation_ca
 
 By default the new `Cap` object is transferred to the validator address, which then could be transferred to the new delegatee address. At this point, the old `Cap` becomes invalidated and no longer represents eligibility.
 
-To get the current valid `Cap` object's ID of a validator, use the Sui Client CLI `sui client objects` command after setting the holder as the active address. Or go to the [explorer](https://explorer.sui.io/object/0x0000000000000000000000000000000000000005) and look for `operation_cap_id` of that validator in the `validators` module.
+To get the current valid `Cap` object's ID of a validator, use the Sui Client CLI `sui client objects` command after setting the holder as the active address.
 
 ### Updating the gas price survey quote
 

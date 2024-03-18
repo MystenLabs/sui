@@ -55,7 +55,7 @@ impl AbstractValue {
         assert!(
             match token {
                 SignatureToken::Struct(_)
-                | SignatureToken::StructInstantiation(_, _)
+                | SignatureToken::StructInstantiation(_)
                 | SignatureToken::Reference(_)
                 | SignatureToken::MutableReference(_)
                 | SignatureToken::Signer
@@ -112,7 +112,7 @@ impl AbstractValue {
     fn is_generic_token(token: &SignatureToken) -> bool {
         match token {
             SignatureToken::TypeParameter(_) => true,
-            SignatureToken::StructInstantiation(_, _) => true,
+            SignatureToken::StructInstantiation(_) => true,
             SignatureToken::Reference(tok) | SignatureToken::MutableReference(tok) => {
                 Self::is_generic_token(tok)
             }

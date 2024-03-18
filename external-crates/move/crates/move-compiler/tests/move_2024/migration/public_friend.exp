@@ -1,0 +1,18 @@
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/public_friend.move:3:5
+  │
+3 │     public( friend ) fun t0() {}
+  │     ^^^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/public_friend.move:4:5
+  │
+4 │     public(friend) fun t1() {}
+  │     ^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/public_friend.move:5:14
+  │
+5 │     /*stays*/public(/*deleted*/friend/*deleted*/)/*stays*/fun t2() {}
+  │              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
+

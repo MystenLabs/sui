@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{ChainIdentifier, Parameters};
+use config::Parameters;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_node::execution_state::SimpleExecutionState;
@@ -48,7 +48,6 @@ async fn simple_primary_worker_node_start_stop() {
             key_pair.copy(),
             network_key_pair.copy(),
             committee.clone(),
-            ChainIdentifier::unknown(),
             latest_protocol_version(),
             worker_cache.clone(),
             client.clone(),
@@ -133,7 +132,6 @@ async fn primary_node_restart() {
             key_pair.copy(),
             network_key_pair.copy(),
             committee.clone(),
-            ChainIdentifier::unknown(),
             latest_protocol_version(),
             worker_cache.clone(),
             client.clone(),
@@ -157,7 +155,6 @@ async fn primary_node_restart() {
             key_pair.copy(),
             network_key_pair.copy(),
             committee.clone(),
-            ChainIdentifier::unknown(),
             latest_protocol_version(),
             worker_cache.clone(),
             client.clone(),

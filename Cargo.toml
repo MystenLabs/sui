@@ -61,6 +61,9 @@ exclude = [
   "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
   "external-crates/move/move-execution/v1/crates/move-stdlib",
   "external-crates/move/move-execution/v1/crates/move-vm-runtime",
+  "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
+  "external-crates/move/move-execution/v2/crates/move-stdlib",
+  "external-crates/move/move-execution/v2/crates/move-vm-runtime",
   "sdk/move-bytecode-template",
 ]
 
@@ -183,11 +186,14 @@ members = [
   "sui-execution/v1/sui-adapter",
   "sui-execution/v1/sui-move-natives",
   "sui-execution/v1/sui-verifier",
+  "sui-execution/v2/sui-adapter",
+  "sui-execution/v2/sui-move-natives",
+  "sui-execution/v2/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.21.0"
+version = "1.22.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -335,7 +341,7 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
+hyper-rustls = { version = "0.24", features = ["webpki-roots", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.1.0", features = ["serde"] }

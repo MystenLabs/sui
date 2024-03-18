@@ -655,7 +655,8 @@ fn serialize_signature_token_single_node_impl(
             binary.push(SerializedType::STRUCT as u8)?;
             serialize_struct_handle_index(binary, idx)?;
         }
-        SignatureToken::StructInstantiation(idx, type_params) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, type_params) = &**struct_inst;
             binary.push(SerializedType::STRUCT_INST as u8)?;
             serialize_struct_handle_index(binary, idx)?;
             serialize_signature_size(binary, type_params.len())?;
@@ -777,7 +778,7 @@ fn serialize_instruction_inner(
         }
         Bytecode::LdU128(value) => {
             binary.push(Opcodes::LD_U128 as u8)?;
-            write_u128(binary, *value)
+            write_u128(binary, **value)
         }
         Bytecode::CastU8 => binary.push(Opcodes::CAST_U8 as u8),
         Bytecode::CastU64 => binary.push(Opcodes::CAST_U64 as u8),
@@ -955,7 +956,7 @@ fn serialize_instruction_inner(
         }
         Bytecode::LdU256(value) => {
             binary.push(Opcodes::LD_U256 as u8)?;
-            write_u256(binary, *value)
+            write_u256(binary, **value)
         }
         Bytecode::CastU16 => binary.push(Opcodes::CAST_U16 as u8),
         Bytecode::CastU32 => binary.push(Opcodes::CAST_U32 as u8),

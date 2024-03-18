@@ -98,7 +98,6 @@ impl ConsensusManagerTrait for NarwhalManager {
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
     ) {
-        let chain = epoch_store.get_chain_identifier();
         let system_state = epoch_store.epoch_start_state();
         let epoch = epoch_store.epoch();
         let committee = system_state.get_narwhal_committee();
@@ -141,7 +140,6 @@ impl ConsensusManagerTrait for NarwhalManager {
                     self.primary_keypair.copy(),
                     self.network_keypair.copy(),
                     committee.clone(),
-                    narwhal_config::ChainIdentifier::new(*chain.as_bytes()),
                     protocol_config.clone(),
                     worker_cache.clone(),
                     network_client.clone(),

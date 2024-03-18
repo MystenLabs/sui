@@ -20,7 +20,7 @@ use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
-    sui_mode::linters::LINT_WARNING_PREFIX,
+    linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -84,7 +84,10 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
-        build_config.config.no_lint = true;
+        build_config
+            .config
+            .lint_flag
+            .set(move_compiler::linters::LintLevel::None);
         build_config
     }
 

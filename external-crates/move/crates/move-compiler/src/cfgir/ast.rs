@@ -84,7 +84,11 @@ pub struct Function {
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
+    /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
+    /// test_mode. This is the visibility we will actually emit in the compiled module
+    pub compiled_visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
@@ -288,6 +292,7 @@ impl AstDebug for (FunctionName, &Function) {
                 index,
                 attributes,
                 visibility,
+                compiled_visibility,
                 entry,
                 signature,
                 body,
@@ -295,7 +300,11 @@ impl AstDebug for (FunctionName, &Function) {
         ) = self;
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
+        w.write("(");
         visibility.ast_debug(w);
+        w.write(" as ");
+        compiled_visibility.ast_debug(w);
+        w.write(") ");
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }

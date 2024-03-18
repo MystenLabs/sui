@@ -7,7 +7,7 @@
 
 use std::io::{Read, Seek, Write};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
@@ -23,6 +23,15 @@ use super::LockFile;
 ///
 /// TODO(amnn): Set to version 1 when stabilised.
 pub const VERSION: u64 = 0;
+
+/// Table for storing package info under an environment.
+const ENV_TABLE_NAME: &str = "env";
+
+/// Table keys in environment for managing published packages.
+const ORIGINAL_PUBLISHED_ID_KEY: &str = "original-published-id";
+const LATEST_PUBLISHED_ID_KEY: &str = "latest-published-id";
+const PUBLISHED_VERSION_KEY: &str = "published-version";
+const CHAIN_ID_KEY: &str = "chain-id";
 
 #[derive(Deserialize)]
 pub struct Packages {
@@ -236,4 +245,67 @@ fn to_toml_edit_value(value: &toml::Value) -> toml_edit::Item {
             toml_edit::Item::Table(toml_edit_table)
         }
     }
+}
+
+pub enum ManagedAddressUpdate {
+    Published {
+        original_id: String,
+        chain_id: String,
+    },
+    Upgraded {
+        latest_id: String,
+        version: u64,
+    },
+}
+
+/// Saves published or upgraded package addresses in the lock file.
+pub fn update_managed_address(
+    file: &mut LockFile,
+    environment: &str,
+    managed_address_update: ManagedAddressUpdate,
+) -> Result<()> {
+    use toml_edit::{value, Document, Item, Table};
+
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<Document>()?;
+
+    let env_table = toml
+        .entry(ENV_TABLE_NAME)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create 'env' table in Move.lock"))?
+        .entry(environment)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create {environment} table in Move.lock"))?;
+
+    match managed_address_update {
+        ManagedAddressUpdate::Published {
+            original_id,
+            chain_id,
+        } => {
+            env_table[CHAIN_ID_KEY] = value(chain_id);
+            env_table[ORIGINAL_PUBLISHED_ID_KEY] = value(&original_id);
+            env_table[LATEST_PUBLISHED_ID_KEY] = value(original_id);
+            env_table[PUBLISHED_VERSION_KEY] = value("1");
+        }
+        ManagedAddressUpdate::Upgraded { latest_id, version } => {
+            if !env_table.contains_key(CHAIN_ID_KEY) {
+                bail!("Move.lock violation: attempted address update for package upgrade when no {CHAIN_ID_KEY} exists")
+            }
+            if !env_table.contains_key(ORIGINAL_PUBLISHED_ID_KEY) {
+                bail!("Move.lock violation: attempted address update for package upgrade when no {ORIGINAL_PUBLISHED_ID_KEY} exists")
+            }
+            env_table[LATEST_PUBLISHED_ID_KEY] = value(latest_id);
+            env_table[PUBLISHED_VERSION_KEY] = value(version.to_string());
+        }
+    }
+
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
+    file.rewind()?;
+    Ok(())
 }

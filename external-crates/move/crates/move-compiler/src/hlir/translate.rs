@@ -1,7 +1,3 @@
-//**************************************************************************************************
-// Entry
-//**************************************************************************************************
-
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
@@ -341,7 +337,8 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility: evisibility,
+        compiled_visibility: tcompiled_visibility,
+        visibility: tvisibility,
         entry,
         macro_,
         signature,
@@ -356,7 +353,8 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility: visibility(evisibility),
+        compiled_visibility: visibility(tcompiled_visibility),
+        visibility: visibility(tvisibility),
         entry,
         signature,
         body,

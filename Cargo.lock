@@ -179,7 +179,7 @@ dependencies = [
  "rcgen",
  "ring 0.16.20",
  "rustls 0.21.6",
- "rustls-webpki",
+ "rustls-webpki 0.101.4",
  "serde",
  "serde_json",
  "socket2 0.5.6",
@@ -5420,6 +5420,7 @@ dependencies = [
  "rustls-native-certs",
  "tokio",
  "tokio-rustls 0.24.0",
+ "webpki-roots 0.23.1",
 ]
 
 [[package]]
@@ -6636,6 +6637,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-v2"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
@@ -7073,6 +7086,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-v2"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-v2",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -7204,6 +7238,25 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier-v1",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v2"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -7490,7 +7543,6 @@ name = "narwhal-config"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
- "fastcrypto-tbls",
  "insta",
  "match_opt",
  "mysten-network",
@@ -7513,7 +7565,6 @@ dependencies = [
  "bincode",
  "criterion",
  "fastcrypto",
- "fastcrypto-tbls",
  "hex-literal 0.3.4",
  "proptest",
  "proptest-derive",
@@ -7646,7 +7697,6 @@ dependencies = [
  "criterion",
  "dashmap",
  "fastcrypto",
- "fastcrypto-tbls",
  "futures",
  "governor",
  "indexmap 2.1.0",
@@ -7751,7 +7801,6 @@ dependencies = [
  "derive_builder",
  "enum_dispatch",
  "fastcrypto",
- "fastcrypto-tbls",
  "futures",
  "indexmap 2.1.0",
  "mockall",
@@ -8126,9 +8175,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.16"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f30b0abd723be7e2ffca1272140fac1a2f084c77ec3e123c192b66af1ee9e6c2"
+checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
 dependencies = [
  "autocfg",
  "libm",
@@ -10403,7 +10452,7 @@ checksum = "1d1feddffcfcc0b33f5c6ce9a29e341e4cd59c3f78e7ee45f4a40c038b1d6cbb"
 dependencies = [
  "log",
  "ring 0.16.20",
- "rustls-webpki",
+ "rustls-webpki 0.101.4",
  "sct",
 ]
 
@@ -10426,6 +10475,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
  "base64 0.21.2",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.100.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f6a5fc258f1c1276dfe3016516945546e2d5383911efc0fc4f1cdc5df3a4ae3"
+dependencies = [
+ "ring 0.16.20",
+ "untrusted 0.7.1",
 ]
 
 [[package]]
@@ -11463,7 +11522,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11629,8 +11688,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-v2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-v2",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-v2",
+ "move-vm-types",
+ "parking_lot 0.12.1",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-v2",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-v2",
+ "tracing",
+]
+
+[[package]]
 name = "sui-analytics-indexer"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11683,7 +11768,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -11989,6 +12074,7 @@ dependencies = [
  "narwhal-test-utils",
  "narwhal-types",
  "narwhal-worker",
+ "num-bigint 0.4.4",
  "num_cpus",
  "object_store 0.7.0",
  "once_cell",
@@ -12191,22 +12277,27 @@ dependencies = [
  "move-bytecode-verifier",
  "move-bytecode-verifier-v0",
  "move-bytecode-verifier-v1",
+ "move-bytecode-verifier-v2",
  "move-vm-config",
  "move-vm-runtime",
  "move-vm-runtime-v0",
  "move-vm-runtime-v1",
+ "move-vm-runtime-v2",
  "petgraph 0.5.1",
  "sui-adapter-latest",
  "sui-adapter-v0",
  "sui-adapter-v1",
+ "sui-adapter-v2",
  "sui-move-natives-latest",
  "sui-move-natives-v0",
  "sui-move-natives-v1",
+ "sui-move-natives-v2",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
  "sui-verifier-v0",
  "sui-verifier-v1",
+ "sui-verifier-v2",
 ]
 
 [[package]]
@@ -12224,7 +12315,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12272,6 +12363,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "once_cell",
+ "regex",
  "serde",
  "sui-move-build",
  "sui-types",
@@ -12442,7 +12534,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12723,7 +12815,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12765,7 +12857,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12847,6 +12939,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-move-natives-v2"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "indexmap 2.1.0",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-v2",
+ "move-vm-runtime-v2",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "tracing",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -12885,7 +12997,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -12935,7 +13047,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12971,7 +13083,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13207,7 +13319,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13236,7 +13348,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13356,7 +13468,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13482,7 +13594,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13614,7 +13726,7 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rustls 0.21.6",
- "rustls-webpki",
+ "rustls-webpki 0.101.4",
  "tokio",
  "tokio-rustls 0.24.0",
  "tower-layer",
@@ -13623,7 +13735,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -13786,6 +13898,8 @@ dependencies = [
  "narwhal-config",
  "narwhal-crypto",
  "nonempty",
+ "num-bigint 0.4.4",
+ "num-traits",
  "once_cell",
  "prometheus",
  "proptest",
@@ -13873,6 +13987,20 @@ dependencies = [
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
+ "sui-types",
+]
+
+[[package]]
+name = "sui-verifier-v2"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-v2",
+ "move-core-types",
+ "move-vm-config",
+ "sui-protocol-config",
  "sui-types",
 ]
 
@@ -15255,7 +15383,7 @@ dependencies = [
  "log",
  "once_cell",
  "rustls 0.21.6",
- "rustls-webpki",
+ "rustls-webpki 0.101.4",
  "url",
  "webpki-roots 0.25.2",
 ]
@@ -15556,6 +15684,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c71e40d7d2c34a5106301fb632274ca37242cd0c9d3e64dbece371a40a2d87"
 dependencies = [
  "webpki",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b03058f88386e5ff5310d9111d53f48b17d732b401aeb83a8d5190f2ac459338"
+dependencies = [
+ "rustls-webpki 0.100.3",
 ]
 
 [[package]]

@@ -10,10 +10,7 @@ module P0::m1 { public fun f(): u64 { P0::n::f() } }
 module P0::m2 { public fun f(): u64 { P0::n::f() } }
 
 module P0::n {
-    friend P0::m0;
-    friend P0::m1;
-    friend P0::m2;
-    public fun f(): u64 { 42 }
+    public(package) fun f(): u64 { 42 }
 }
 
 //# create-checkpoint
@@ -182,12 +179,7 @@ module P0::m2 { public fun f(): u64 { P0::n::f() } }
 module P0::m3 { public fun f(): u64 { P0::n::f() } }
 
 module P0::n {
-    friend P0::m0;
-    friend P0::m1;
-    friend P0::m2;
-    friend P0::m3;
-
-    public fun f(): u64 { 42 }
+    public(package) fun f(): u64 { 42 }
 }
 
 //# create-checkpoint

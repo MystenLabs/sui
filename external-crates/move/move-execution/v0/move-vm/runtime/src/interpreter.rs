@@ -205,7 +205,7 @@ impl Interpreter {
                     gas_meter
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
-                        profile_close_frame!(gas_meter, current_frame.function.pretty_string());
+                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
 
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
@@ -899,11 +899,11 @@ impl Frame {
             }
             Bytecode::LdU128(int_const) => {
                 gas_meter.charge_simple_instr(S::LdU128)?;
-                interpreter.operand_stack.push(Value::u128(*int_const))?;
+                interpreter.operand_stack.push(Value::u128(**int_const))?;
             }
             Bytecode::LdU256(int_const) => {
                 gas_meter.charge_simple_instr(S::LdU256)?;
-                interpreter.operand_stack.push(Value::u256(*int_const))?;
+                interpreter.operand_stack.push(Value::u256(**int_const))?;
             }
             Bytecode::LdConst(idx) => {
                 let constant = resolver.constant_at(*idx);
@@ -1437,7 +1437,8 @@ impl Frame {
                     .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
                     .solve(&[])?)
             }
-            Type::StructInstantiation(si, ty_args) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (si, ty_args) = &**struct_inst;
                 // Calculate depth of all type arguments, and make sure they themselves are not too deep.
                 let ty_arg_depths = ty_args
                     .iter()

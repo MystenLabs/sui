@@ -207,6 +207,7 @@ use simulator::*;
 pub use simulator::set_jwk_injector;
 use sui_core::consensus_handler::ConsensusHandlerInitializer;
 use sui_core::mysticeti_adapter::LazyMysticetiClient;
+use sui_types::execution_config_utils::to_binary_config;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -1238,6 +1239,20 @@ impl SuiNode {
 
         consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
+        if epoch_store.randomness_state_enabled() {
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_adapter.clone(),
+                randomness_handle,
+                config.protocol_key_pair(),
+            )
+            .await
+            .map(Arc::new);
+            if let Some(randomness_manager) = &randomness_manager {
+                epoch_store.set_randomness_manager(randomness_manager.clone())?;
+            }
+        }
+
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
             state.metrics.clone(),
@@ -1283,20 +1298,6 @@ impl SuiNode {
                 epoch_store.clone(),
                 consensus_adapter.clone(),
             );
-        }
-
-        if epoch_store.randomness_state_enabled() {
-            let randomness_manager = RandomnessManager::try_new(
-                Arc::downgrade(&epoch_store),
-                consensus_adapter.clone(),
-                randomness_handle,
-                config.protocol_key_pair(),
-            )
-            .await
-            .map(Arc::new);
-            if let Some(randomness_manager) = &randomness_manager {
-                epoch_store.set_randomness_manager(randomness_manager.clone())?;
-            }
         }
 
         Ok(ValidatorComponents {
@@ -1492,8 +1493,7 @@ impl SuiNode {
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
                 let config = cur_epoch_store.protocol_config();
-                let max_binary_format_version = config.move_binary_format_version();
-                let no_extraneous_module_bytes = config.no_extraneous_module_bytes();
+                let binary_config = to_binary_config(config);
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,
@@ -1501,10 +1501,7 @@ impl SuiNode {
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
                         self.state
-                            .get_available_system_packages(
-                                max_binary_format_version,
-                                no_extraneous_module_bytes,
-                            )
+                            .get_available_system_packages(&binary_config)
                             .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
@@ -1729,6 +1726,7 @@ impl SuiNode {
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             state.get_object_store().as_ref(),
+            None,
         )
         .expect("EpochStartConfiguration construction cannot fail");
 

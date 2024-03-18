@@ -8,3 +8,4 @@ mod control_flow_graph_tests;
 mod deserializer_tests;
 mod number_tests;
 mod signature_token_tests;
+mod binary_limits_tests;
