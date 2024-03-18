@@ -6,7 +6,7 @@
 module sui::clock {
     use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
@@ -38,7 +38,7 @@ module sui::clock {
     /// Create and share the singleton Clock -- this function is
     /// called exactly once, during genesis.
     fun create(ctx: &TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         transfer::share_object(Clock {
             id: object::clock(),
@@ -56,7 +56,7 @@ module sui::clock {
         ctx: &TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         clock.timestamp_ms = timestamp_ms
     }
