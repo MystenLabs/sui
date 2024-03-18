@@ -47,6 +47,7 @@ module sui::table {
         table.size = table.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutable borrows the value associated with the key in the table `table: &Table<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -54,6 +55,7 @@ module sui::table {
         field::borrow(&table.id, k)
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the table `table: &mut Table<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
