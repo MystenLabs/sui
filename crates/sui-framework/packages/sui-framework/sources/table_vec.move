@@ -23,7 +23,7 @@ module sui::table_vec {
 
     /// Return a TableVec of size one containing element `e`.
     public fun singleton<Element: store>(e: Element, ctx: &mut TxContext): TableVec<Element> {
-        let mut t = ctx.empty();
+        let mut t = empty(ctx);
         t.push_back(e);
         t
     }
@@ -91,7 +91,7 @@ module sui::table_vec {
         if (i == j) { return };
         let element_i = t.contents.remove(i);
         let element_j = t.contents.remove(j);
-        t.contents.add(j) element_i);
+        t.contents.add(j, element_i);
         t.contents.add(i, element_j);
     }
 
@@ -107,7 +107,8 @@ module sui::table_vec {
 
     #[test]
     fun test_swap() {
-        let mut tv = singleton(0);
+        let ctx = &mut sui::tx_context::dummy();
+        let mut tv = singleton(0, ctx);
         tv.push_back(1);
         tv.push_back(2);
         tv.push_back(3);
@@ -118,6 +119,7 @@ module sui::table_vec {
         tv.check_pop(4);
         tv.check_pop(1);
         tv.check_pop(0);
+        tv.drop()
     }
 
     #[test_only]
