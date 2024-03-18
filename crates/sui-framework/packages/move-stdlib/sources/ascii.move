@@ -48,7 +48,7 @@ module std::ascii {
         let len = bytes.length();
         let mut i = 0;
         while (i < len) {
-            let possible_byte = *bytes.borrow(i);
+            let possible_byte = bytes[i];
             if (!possible_byte.is_valid_char()) return option::none();
             i = i + 1;
         };
@@ -61,7 +61,7 @@ module std::ascii {
         let len = string.bytes.length();
         let mut i = 0;
         while (i < len) {
-            let byte = *vector::borrow(&string.bytes, i);
+            let byte = string.bytes[i];
             if (!is_printable_char(byte)) return false;
             i = i + 1;
         };
