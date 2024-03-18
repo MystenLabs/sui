@@ -35,10 +35,10 @@ impl BenchmarkContext {
         checkpoint_size: usize,
         print_sample_tx: bool,
     ) -> Self {
-        // Increase by 2 so that we could generate one extra sample transaction before benchmarking.
-        // as well as reserve 1 account for package publishing.
+        // Reserve 1 account for package publishing.
         let mut num_accounts = workload.num_accounts() + 1;
         if print_sample_tx {
+            // Reserver another one to generate a sample transaction.
             num_accounts += 1;
         }
         let gas_object_num_per_account = workload.gas_object_num_per_account();
