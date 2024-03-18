@@ -37,6 +37,7 @@ module sui::object_bag {
         bag.size = bag.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutably borrows the value associated with the key in the bag `bag: &ObjectBag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.
@@ -46,6 +47,7 @@ module sui::object_bag {
         ofield::borrow(&bag.id, k)
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the bag `bag: &mut ObjectBag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.

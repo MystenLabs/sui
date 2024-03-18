@@ -5,7 +5,7 @@
 module sui::object {
     use std::bcs;
     use sui::address;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     /* friend sui::clock; */
     /* friend sui::coin; */
@@ -89,7 +89,7 @@ module sui::object {
     /// Create the `UID` for the singleton `SuiSystemState` object.
     /// This should only be called once from `sui_system`.
     fun sui_system_state(ctx: &TxContext): UID {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         UID {
             id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
         }
@@ -153,7 +153,7 @@ module sui::object {
     /// This is the only way to create `UID`s.
     public fun new(ctx: &mut TxContext): UID {
         UID {
-            id: ID { bytes: tx_context::fresh_object_address(ctx) },
+            id: ID { bytes: ctx.fresh_object_address() },
         }
     }
 
@@ -211,7 +211,7 @@ module sui::object {
     #[test_only]
     /// Return the most recent created object ID.
     public fun last_created(ctx: &TxContext): ID {
-        ID { bytes: tx_context::last_created_object_id(ctx) }
+        ID { bytes: ctx.last_created_object_id() }
     }
 
 }

@@ -37,6 +37,7 @@ module sui::object_table {
         table.size = table.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutable borrows the value associated with the key in the table `table: &ObjectTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -44,6 +45,7 @@ module sui::object_table {
         ofield::borrow(&table.id, k)
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the table `table: &mut ObjectTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.

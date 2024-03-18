@@ -17,7 +17,6 @@ module sui::display {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::event;
-    use std::vector;
     use std::string::String;
 
     /// For when T does not belong to the package `Publisher`.
