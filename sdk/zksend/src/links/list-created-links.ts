@@ -142,7 +142,7 @@ export async function listCreatedLinks({
 					...linkOptions,
 				});
 
-				await link.loadOwnedData();
+				await link.loadAssets();
 
 				return {
 					link,

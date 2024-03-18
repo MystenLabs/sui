@@ -143,7 +143,7 @@ export class ZkSendLink {
 			});
 		}
 
-		await link.loadOwnedData();
+		await link.loadAssets();
 
 		return link;
 	}
@@ -158,12 +158,12 @@ export class ZkSendLink {
 			isContractLink: true,
 		});
 
-		await link.loadOwnedData();
+		await link.loadAssets();
 
 		return link;
 	}
 
-	async loadOwnedData() {
+	async loadAssets() {
 		if (this.#contract) {
 			await this.#loadBag();
 		} else {

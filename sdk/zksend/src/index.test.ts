@@ -6,10 +6,10 @@ import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
 // import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { toB64 } from '@mysten/sui.js/utils';
 import { describe } from 'node:test';
 import { expect, test } from 'vitest';
 
-import { toB64 } from '../../bcs/src/b64.js';
 import { ZkSendLink, ZkSendLinkBuilder } from './index.js';
 import { listCreatedLinks } from './links/list-created-links.js';
 
@@ -396,7 +396,7 @@ describe('Non contract links', () => {
 				isContractLink: false,
 			});
 
-			await claimLink.loadOwnedData();
+			await claimLink.loadAssets();
 
 			expect(claimLink.assets?.nfts.length).toEqual(0);
 			expect(claimLink.assets?.balances.length).toEqual(1);
