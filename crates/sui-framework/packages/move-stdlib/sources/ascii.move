@@ -37,10 +37,7 @@ module std::ascii {
     /// `bytes` contains non-ASCII characters.
     public fun string(bytes: vector<u8>): String {
        let x = bytes.try_string();
-       assert!(
-            option::is_some(&x),
-            EINVALID_ASCII_CHARACTER
-       );
+       assert!(x.is_some(), EINVALID_ASCII_CHARACTER);
        x.destroy_some()
     }
 
@@ -61,7 +58,7 @@ module std::ascii {
     /// Returns `true` if all characters in `string` are printable characters
     /// Returns `false` otherwise. Not all `String`s are printable strings.
     public fun all_characters_printable(string: &String): bool {
-        let len = vector::length(&string.bytes);
+        let len = string.bytes.length();
         let mut i = 0;
         while (i < len) {
             let byte = *vector::borrow(&string.bytes, i);
