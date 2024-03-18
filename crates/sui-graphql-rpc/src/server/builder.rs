@@ -54,6 +54,7 @@ use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
+use tokio::join;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
@@ -111,8 +112,7 @@ impl Server {
 
         // Wait for both tasks to complete. This ensures that the service doesn't fully shut down
         // until both the background task and the server have completed their shutdown processes.
-        let _ = watermark_task.await;
-        let _ = server_task.await;
+        let _ = join!(watermark_task, server_task);
 
         Ok(())
     }
@@ -680,7 +680,7 @@ pub mod tests {
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
             let schema = prep_schema(None, Some(cfg))
-                .extension(Timeout::default())
+                .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })

@@ -422,9 +422,10 @@ impl Query {
     ) -> Result<Option<Address>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = ctx.data()?;
         Ok(
-            NameService::resolve_to_record(ctx, &domain, checkpoint_viewed_at)
+            NameService::resolve_to_record(ctx, &domain, Some(*checkpoint_viewed_at))
                 .await
                 .extend()?
+                .and_then(|r| r.target_address)
                 .map(|a| Address {
                     address: a.into(),
                     checkpoint_viewed_at: Some(*checkpoint_viewed_at),

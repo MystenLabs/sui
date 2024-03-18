@@ -101,7 +101,7 @@ async fn main() {
             };
 
             let cancellation_token_clone = cancellation_token.clone();
-            tracker.spawn(async move {
+            let graphql_service_handle = tracker.spawn(async move {
                 start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
                     .await
                     .unwrap();
@@ -109,7 +109,14 @@ async fn main() {
 
             // Wait for shutdown signal
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {},
+                result = graphql_service_handle => {
+                    if let Err(e) = result {
+                        println!("GraphQL service crashed or exited with error: {:?}", e);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    println!("Ctrl+C signal received.");
+                },
             }
 
             println!("Shutting down...");
