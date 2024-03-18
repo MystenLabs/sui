@@ -224,7 +224,7 @@ export class TransactionBlock {
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
 						? Inputs.Pure(value)
-						: { $kind: 'RawValue', RawValue: { type: 'Pure', value } },
+						: { $kind: 'RawValue', RawValue: { value } },
 				);
 			}),
 		});
@@ -281,7 +281,10 @@ export class TransactionBlock {
 			: this.#input(
 					'object',
 					typeof value === 'string'
-						? { $kind: 'RawValue', RawValue: { type: 'Object', value: normalizeSuiAddress(value) } }
+						? {
+								$kind: 'UnresolvedObject',
+								UnresolvedObject: { value: normalizeSuiAddress(value), typeSignatures: [] },
+						  }
 						: value,
 			  );
 	}
