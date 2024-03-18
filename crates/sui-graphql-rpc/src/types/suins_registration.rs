@@ -23,7 +23,7 @@ use super::{
     type_filter::ExactTypeFilter,
 };
 use crate::{
-    consistency::{build_objects_query, consistent_range},
+    consistency::{build_objects_query, consistent_range, View},
     data::{Db, DbConnection, QueryExecutor},
     error::Error,
 };
@@ -69,8 +69,12 @@ pub(crate) struct SuinsRegistration {
 /// `expiration_timestamp_ms` on the name records are compared to the checkpoint's timestamp to
 /// check that the domain is not expired.
 pub(crate) struct DomainExpiration {
-    pub parent_name_record: Option<NameRecord>,
+    /// The domain's `NameRecord`.
     pub name_record: Option<NameRecord>,
+    /// The parent's `NameRecord`, populated only if the domain is a subdomain.
+    pub parent_name_record: Option<NameRecord>,
+    /// The timestamp of the checkpoint at which the query was made. This is used to check if the
+    /// `expiration_timestamp_ms` on the name records are expired.
     pub checkpoint_timestamp_ms: u64,
 }
 
@@ -340,44 +344,24 @@ impl NameService {
         domain: &Domain,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<NameRecord>, Error> {
-        let config = ctx.data_unchecked::<NameServiceConfig>();
-        // Create a page with a bound of 2 to fetch the domain's NameRecord and potentially its parent's
-        let page: Page<object::Cursor> =
-            Page::from_params(ctx.data_unchecked(), Some(2), None, None, None).map_err(|_| {
-                Error::Internal("Page size of 2 is incompatible with configured limits".to_string())
-            })?;
-
-        let record_id: SuiAddress = config.record_field_id(&domain.0).into();
-        let parent_record_id: SuiAddress = config.record_field_id(&domain.0.parent()).into();
-
         // Query for the domain's NameRecord and parent NameRecord if applicable. The checkpoint's
         // timestamp is also fetched. These values are used to determine if the domain is expired.
-        let Some(query) = Self::query_domain_expiration(
-            ctx.data_unchecked(),
-            page,
-            record_id,
-            if domain.0.is_subdomain() {
-                Some(parent_record_id)
-            } else {
-                None
-            },
-            checkpoint_viewed_at,
-        )
-        .await?
+        let Some(domain_expiration) =
+            Self::query_domain_expiration(ctx, domain, checkpoint_viewed_at).await?
         else {
             return Ok(None);
         };
 
         // Get the name_record from the query. If we didn't find it, we return as it means that the
         // requested name is not registered.
-        let Some(name_record) = query.name_record else {
+        let Some(name_record) = domain_expiration.name_record else {
             return Ok(None);
         };
 
         // If name record is SLD, or Node subdomain, we can check the expiration and return the
         // record if not expired.
         if !name_record.is_leaf_record() {
-            return if !name_record.is_node_expired(query.checkpoint_timestamp_ms) {
+            return if !name_record.is_node_expired(domain_expiration.checkpoint_timestamp_ms) {
                 Ok(Some(name_record))
             } else {
                 Err(Error::NameService(NameServiceError::NameExpired))
@@ -385,14 +369,14 @@ impl NameService {
         }
 
         // If we cannot find the parent, then the name is expired.
-        let Some(parent_name_record) = query.parent_name_record else {
+        let Some(parent_name_record) = domain_expiration.parent_name_record else {
             return Err(Error::NameService(NameServiceError::NameExpired));
         };
 
         // If the parent is valid for this leaf, and not expired, then we can return the name
         // record. Otherwise, the name is expired.
         if parent_name_record.is_valid_leaf_parent(&name_record)
-            && !parent_name_record.is_node_expired(query.checkpoint_timestamp_ms)
+            && !parent_name_record.is_node_expired(domain_expiration.checkpoint_timestamp_ms)
         {
             Ok(Some(name_record))
         } else {
@@ -417,7 +401,10 @@ impl NameService {
         let Some(object) = MoveObject::query(
             ctx.data_unchecked(),
             reverse_record_id.into(),
-            ObjectLookupKey::Latest,
+            match checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
+            },
         )
         .await?
         else {
@@ -443,23 +430,35 @@ impl NameService {
     /// Query for a domain's NameRecord, its parent's NameRecord if supplied, and the timestamp of
     /// the checkpoint bound.
     async fn query_domain_expiration(
-        db: &Db,
-        page: Page<object::Cursor>,
-        record_id: SuiAddress,
-        parent_record_id: Option<SuiAddress>,
+        ctx: &Context<'_>,
+        domain: &Domain,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<DomainExpiration>, Error> {
-        let mut object_ids = vec![record_id];
-        let mut name_record = None;
-        let mut parent_name_record = None;
-
-        if let Some(id) = parent_record_id {
-            object_ids.push(id);
+        let config = ctx.data_unchecked::<NameServiceConfig>();
+        let db: &crate::data::pg::PgExecutor = ctx.data_unchecked::<Db>();
+        // Construct the list of `object_id`s to look up. The first element is the domain's
+        // `NameRecord`. If the domain is a subdomain, there will be a second element for the
+        // parent's `NameRecord`.
+        let mut object_ids = vec![SuiAddress::from(config.record_field_id(&domain.0))];
+        if domain.0.is_subdomain() {
+            object_ids.push(SuiAddress::from(config.record_field_id(&domain.0.parent())));
         }
+
+        // Create a page with a bound of `object_ids` length to fetch the relevant `NameRecord`s.
+        let page: Page<object::Cursor> = Page::from_params(
+            ctx.data_unchecked(),
+            Some(object_ids.len() as u64),
+            None,
+            None,
+            None,
+        )
+        .map_err(|_| {
+            Error::Internal("Page size of 2 is incompatible with configured limits".to_string())
+        })?;
 
         // prepare the filter for the query.
         let filter = ObjectFilter {
-            object_ids: Some(object_ids),
+            object_ids: Some(object_ids.clone()),
             ..Default::default()
         };
 
@@ -469,10 +468,10 @@ impl NameService {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                let timestamp_ms = Checkpoint::query_timestamp(conn, rhs as i64)?;
+                let timestamp_ms = Checkpoint::query_timestamp(conn, rhs)?;
 
                 let sql = build_objects_query(
-                    crate::consistency::View::Consistent,
+                    View::Consistent,
                     lhs as i64,
                     rhs as i64,
                     &page,
@@ -487,14 +486,21 @@ impl NameService {
             })
             .await?;
 
-        let Some((timestamp_ms, results)) = response else {
+        let Some((checkpoint_timestamp_ms, results)) = response else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));
         };
 
+        let mut domain_expiration = DomainExpiration {
+            parent_name_record: None,
+            name_record: None,
+            checkpoint_timestamp_ms,
+        };
+
         // Max size of results is 2. We loop through them, convert to objects, and then parse
-        // name_record. We then assign it to the variable based on the address.
+        // name_record. We then assign it to the correct field on `domain_expiration` based on the
+        // address.
         for result in results {
             let object = Object::try_from_stored_history_object(result, None)?;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
@@ -506,18 +512,14 @@ impl NameService {
 
             let record = NameRecord::try_from(move_object.native)?;
 
-            if object.address == record_id {
-                name_record = Some(record);
-            } else if Some(object.address) == parent_record_id {
-                parent_name_record = Some(record);
+            if object.address == object_ids[0] {
+                domain_expiration.name_record = Some(record);
+            } else if Some(&object.address) == object_ids.get(1) {
+                domain_expiration.parent_name_record = Some(record);
             }
         }
 
-        Ok(Some(DomainExpiration {
-            parent_name_record,
-            name_record,
-            checkpoint_timestamp_ms: timestamp_ms as u64,
-        }))
+        Ok(Some(domain_expiration))
     }
 }
 

@@ -234,17 +234,17 @@ impl Checkpoint {
     /// takes a connection, so that it can be used within a transaction.
     pub(crate) fn query_timestamp(
         conn: &mut Conn,
-        seq_num: i64,
-    ) -> Result<i64, diesel::result::Error> {
+        seq_num: u64,
+    ) -> Result<u64, diesel::result::Error> {
         use checkpoints::dsl;
 
-        let stored = conn.first(move || {
+        let stored: i64 = conn.first(move || {
             dsl::checkpoints
                 .select(dsl::timestamp_ms)
-                .filter(dsl::sequence_number.eq(seq_num))
+                .filter(dsl::sequence_number.eq(seq_num as i64))
         })?;
 
-        Ok(stored)
+        Ok(stored as u64)
     }
 
     pub(crate) async fn query_latest_checkpoint_sequence_number(db: &Db) -> Result<u64, Error> {
