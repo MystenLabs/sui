@@ -36,17 +36,13 @@ pub struct Committee {
 }
 
 impl Committee {
-    pub fn new(epoch: Epoch, mut authorities: Vec<Authority>) -> Self {
+    pub fn new(epoch: Epoch, authorities: Vec<Authority>) -> Self {
         assert!(!authorities.is_empty(), "Committee cannot be empty!");
         assert!(
             authorities.len() < u32::MAX as usize,
             "Too many authorities ({})!",
             authorities.len()
         );
-
-        // sort the authorities by their protocol (public) key in ascending order - critical to be
-        // aligned with the SUI committee.
-        authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
 
         let total_stake = authorities.iter().map(|a| a.stake).sum();
         assert_ne!(total_stake, 0, "Total stake cannot be zero!");
@@ -216,30 +212,20 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
 #[cfg(test)]
 mod tests {
     use crate::{local_committee_and_keys, Stake};
-    use std::collections::BTreeMap;
 
     #[test]
     fn committee_basic() {
         // GIVEN
         let epoch = 100;
         let num_of_authorities = 9;
-        let authority_stakes = (1..=9).map(|s| s as Stake).collect::<Vec<_>>();
-        let (committee, _) = local_committee_and_keys(epoch, authority_stakes.clone());
+        let authority_stakes = (1..=9).map(|s| s as Stake).collect();
+        let (committee, _) = local_committee_and_keys(epoch, authority_stakes);
 
         // THEN make sure the output Committee fields are populated correctly.
-        // the committee authorities are ordered by their public key, so stakes will not be in same order.
         assert_eq!(committee.size(), num_of_authorities);
-
-        let mut authorities_by_stake = BTreeMap::new();
         for (i, authority) in committee.authorities() {
-            authorities_by_stake.insert(authority.stake, i);
+            assert_eq!((i.value() + 1) as Stake, authority.stake);
         }
-
-        assert_eq!(authorities_by_stake.len(), committee.size());
-        assert_eq!(
-            authorities_by_stake.keys().cloned().collect::<Vec<_>>(),
-            authority_stakes
-        );
 
         // AND ensure thresholds are calculated correctly.
         assert_eq!(committee.total_stake(), 45);

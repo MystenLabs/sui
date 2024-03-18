@@ -198,6 +198,10 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             });
         }
 
+        // Sort the authorities by their protocol (public) key in ascending order. That's the sorting
+        // SUI committee follows and we
+        authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
+
         ConsensusCommittee::new(self.epoch as consensus_config::Epoch, authorities)
     }
 
@@ -352,7 +356,7 @@ mod test {
 
         // THEN
         // assert the validators details
-        assert_eq!(sui_committee.num_members(), 4);
+        assert_eq!(sui_committee.num_members(), 10);
         assert_eq!(sui_committee.num_members(), mysticeti_committee.size());
         assert_eq!(
             sui_committee.validity_threshold(),
