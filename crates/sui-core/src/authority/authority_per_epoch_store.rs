@@ -1165,13 +1165,6 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
-    pub fn multi_get_next_shared_object_versions<'a>(
-        &self,
-        ids: impl Iterator<Item = &'a ObjectID>,
-    ) -> SuiResult<Vec<Option<SequenceNumber>>> {
-        Ok(self.tables()?.next_shared_object_versions.multi_get(ids)?)
-    }
-
     /// Resolves InputObjectKinds into InputKeys, by consulting the shared object version
     /// assignment table.
     pub(crate) fn get_input_object_keys(
