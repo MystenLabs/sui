@@ -21,14 +21,17 @@ use crate::{
 /// Commit one leader.
 #[test]
 fn direct_commit() {
-    let (mut dag_builder, committer) = basic_dag_builder_test_setup();
+    let (mut dag_builder, dag_state, committer) = basic_dag_builder_test_setup();
 
     // Build fully connected dag with empty blocks adding up to voting round of
     // wave 2 to the dag so that we have 2 completed waves and one incomplete wave.
     // note: waves & rounds are zero-indexed.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let voting_round_wave_2 = committer.committers[0].leader_round(2) + 1;
-    dag_builder.layers(1..voting_round_wave_2).build();
+    dag_builder
+        .layers(1..voting_round_wave_2)
+        .build()
+        .persist_layers(dag_state);
 
     dag_builder.print();
 
@@ -221,12 +224,15 @@ fn no_genesis_commit() {
 /// We directly skip the leader if there are enough non-votes (blames).
 #[test]
 fn direct_skip_no_leader_votes() {
-    let (mut dag_builder, committer) = basic_dag_builder_test_setup();
+    let (mut dag_builder, dag_state, committer) = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the leader round of wave 1.
     // note: waves & rounds are zero-indexed.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
-    dag_builder.layers(1..leader_round_wave_1).build();
+    dag_builder
+        .layers(1..leader_round_wave_1)
+        .build()
+        .persist_layers(dag_state.clone());
 
     // Add enough blocks to reach the decision round of the first leader but without
     // votes for the leader of wave 1.
@@ -234,10 +240,14 @@ fn direct_skip_no_leader_votes() {
     let voting_round_wave_1 = leader_round_wave_1 + 1;
     dag_builder
         .layer(voting_round_wave_1)
-        .no_leader_link(leader_round_wave_1, vec![]);
+        .no_leader_link(leader_round_wave_1, vec![])
+        .persist_layers(dag_state.clone());
 
     let decision_round_wave_1 = committer.committers[0].decision_round(1);
-    dag_builder.layer(decision_round_wave_1).build();
+    dag_builder
+        .layer(decision_round_wave_1)
+        .build()
+        .persist_layers(dag_state);
 
     dag_builder.print();
 
@@ -259,7 +269,7 @@ fn direct_skip_no_leader_votes() {
 /// We directly skip the leader if it is missing.
 #[test]
 fn direct_skip_missing_leader_block() {
-    let (mut dag_builder, committer) = basic_dag_builder_test_setup();
+    let (mut dag_builder, dag_state, committer) = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the decision round of wave 0
     // note: waves & rounds are zero-indexed.
@@ -281,6 +291,7 @@ fn direct_skip_missing_leader_block() {
         .build();
 
     dag_builder.print();
+    dag_builder.persist_all_blocks(dag_state.clone());
 
     // Ensure the leader is skipped because the leader is missing.
     let last_committed = Slot::new_for_test(0, 0);
@@ -333,12 +344,17 @@ fn indirect_commit() {
      }";
 
     let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        dag_builder.context.clone(),
+        Arc::new(MemStore::new()),
+    )));
+
     dag_builder.print();
+    dag_builder.persist_all_blocks(dag_state.clone());
 
     // Create committer without pipelining and only 1 leader per leader round
     let committer =
-        UniversalCommitterBuilder::new(dag_builder.context.clone(), dag_builder.dag_state.clone())
-            .build();
+        UniversalCommitterBuilder::new(dag_builder.context.clone(), dag_state.clone()).build();
     // note: without pipelining or multi-leader enabled there should only be one committer.
     assert!(committer.committers.len() == 1);
 
@@ -695,16 +711,22 @@ fn basic_test_setup() -> (
 }
 
 // TODO: Make this the basic_test_setup()
-fn basic_dag_builder_test_setup() -> (DagBuilder, super::UniversalCommitter) {
+fn basic_dag_builder_test_setup() -> (DagBuilder, Arc<RwLock<DagState>>, super::UniversalCommitter)
+{
     telemetry_subscribers::init_for_testing();
-    let dag_builder = DagBuilder::new(Context::new_for_test(4).0);
+    let context = Arc::new(Context::new_for_test(4).0);
+    let dag_builder = DagBuilder::new(context);
+
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        dag_builder.context.clone(),
+        Arc::new(MemStore::new()),
+    )));
 
     // Create committer without pipelining and only 1 leader per leader round
     let committer =
-        UniversalCommitterBuilder::new(dag_builder.context.clone(), dag_builder.dag_state.clone())
-            .build();
+        UniversalCommitterBuilder::new(dag_builder.context.clone(), dag_state.clone()).build();
     // note: without pipelining or multi-leader enabled there should only be one committer.
     assert!(committer.committers.len() == 1);
 
-    (dag_builder, committer)
+    (dag_builder, dag_state, committer)
 }

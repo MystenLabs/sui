@@ -2,19 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::ops::Range;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, ops::Bound::Included, sync::Arc};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
+    block::{
+        genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
+        VerifiedBlock,
+    },
     commit::DEFAULT_WAVE_LENGTH,
     context::Context,
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
-    storage::mem_store::MemStore,
 };
 
 /// DagBuilder
@@ -23,37 +25,40 @@ use crate::{
 #[allow(unused)]
 pub(crate) struct DagBuilder {
     pub context: Arc<Context>,
-    pub dag_state: Arc<RwLock<DagState>>,
     pub leader_schedule: LeaderSchedule,
     wave_length: Round,
     number_of_leaders: u32,
     pipeline: bool,
 
+    // The genesis blocks
+    pub genesis: BTreeMap<BlockRef, VerifiedBlock>,
+
     // The current set of ancestors that any new layer will attempt to connect to.
     pub last_ancestors: Vec<BlockRef>,
 
-    // All blocks written to dag state to pretty print or to be retrieved for testing.
+    // All blocks created by dag builder. Will be used to pretty print or to be
+    // retrieved for testing/persiting to dag state.
     pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
 }
 
 #[allow(unused)]
 impl DagBuilder {
-    pub(crate) fn new(context: Context) -> Self {
-        let context = Arc::new(context);
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         let leader_schedule = LeaderSchedule::new(context.clone());
-        let dag_state = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let genesis_references = dag_state.read().genesis_block_refs();
+        let genesis_blocks = genesis_blocks(context.clone());
+        let genesis: BTreeMap<BlockRef, VerifiedBlock> = genesis_blocks
+            .into_iter()
+            .map(|block| (block.reference(), block))
+            .collect();
+        let last_ancestors = genesis.keys().cloned().collect();
         Self {
             context,
             leader_schedule,
-            dag_state,
             wave_length: DEFAULT_WAVE_LENGTH,
             number_of_leaders: 1,
             pipeline: false,
-            last_ancestors: genesis_references,
+            genesis,
+            last_ancestors,
             blocks: BTreeMap::new(),
         }
     }
@@ -83,6 +88,12 @@ impl DagBuilder {
         builder
     }
 
+    pub(crate) fn persist_all_blocks(&self, dag_state: Arc<RwLock<DagState>>) {
+        dag_state
+            .write()
+            .accept_blocks(self.blocks.values().cloned().collect());
+    }
+
     pub(crate) fn print(&self) {
         let mut dag_str = "DAG {\n".to_string();
 
@@ -97,27 +108,6 @@ impl DagBuilder {
         dag_str.push_str("}\n");
 
         tracing::info!("{dag_str}");
-    }
-
-    // TODO: confirm pipelined & multi-leader cases work properly
-    // Leader blocks start from round 1 as we do not consider any blocks from genesis
-    // roudn as a leader block.
-    pub(crate) fn get_all_leader_blocks(&mut self, end_round: u32) -> Vec<VerifiedBlock> {
-        let mut blocks = Vec::new();
-        for round in 1..=end_round {
-            for leader_offset in 0..self.number_of_leaders {
-                if self.pipeline || round % self.wave_length == 0 {
-                    let slot = Slot::new(
-                        round,
-                        self.leader_schedule.elect_leader(round, leader_offset),
-                    );
-                    let uncommitted_blocks =
-                        self.dag_state.read().get_uncommitted_blocks_at_slot(slot);
-                    blocks.extend(uncommitted_blocks);
-                }
-            }
-        }
-        blocks
     }
 
     // TODO: merge into layer builder?
@@ -141,9 +131,24 @@ impl DagBuilder {
             );
             references.push(block.reference());
             self.blocks.insert(block.reference(), block.clone());
-            self.dag_state.write().accept_block(block);
         }
         self.last_ancestors = references;
+    }
+
+    /// Gets all uncommitted blocks in a slot.
+    pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![];
+        for (block_ref, block) in self.blocks.range((
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+        )) {
+            blocks.push(block.clone())
+        }
+        blocks
+    }
+
+    pub(crate) fn genesis_block_refs(&self) -> Vec<BlockRef> {
+        self.genesis.keys().cloned().collect()
     }
 }
 
@@ -223,7 +228,7 @@ impl<'a> LayerBuilder<'a> {
     // Only link 2f+1 random ancestors to the current layer round using a seed,
     // if provided
     // note: configuration is terminal and layer will be built after this call.
-    pub fn min_ancestor_links(mut self, seed: Option<u64>) {
+    pub fn min_ancestor_links(mut self, seed: Option<u64>) -> Self {
         self.min_ancestor_links = true;
         self.min_ancestor_links_random_seed = seed;
         self.fully_linked_ancestors = false;
@@ -233,7 +238,7 @@ impl<'a> LayerBuilder<'a> {
     // No links will be created between the specified ancestors and the specified
     // authorities at the layer round.
     // note: configuration is terminal and layer will be built after this call.
-    pub fn skip_ancestor_links(mut self, ancestors_to_skip: Vec<AuthorityIndex>) {
+    pub fn skip_ancestor_links(mut self, ancestors_to_skip: Vec<AuthorityIndex>) -> Self {
         // authorities must be specified for this to apply
         assert!(self.specified_authorities.is_some());
         self.skip_ancestor_links = Some(ancestors_to_skip);
@@ -261,7 +266,11 @@ impl<'a> LayerBuilder<'a> {
     // A list of specified leader offsets can be provided to skip those leader links.
     // If none are provided all potential leaders for the round will be skipped.
     // note: configuration is terminal and layer will be built after this call.
-    pub fn no_leader_link(mut self, leader_round: Round, specified_leader_offsets: Vec<u32>) {
+    pub fn no_leader_link(
+        mut self,
+        leader_round: Round,
+        specified_leader_offsets: Vec<u32>,
+    ) -> Self {
         self.no_leader_link = true;
         self.specified_leader_link_offsets = Some(specified_leader_offsets);
         self.leader_round = Some(leader_round);
@@ -295,8 +304,7 @@ impl<'a> LayerBuilder<'a> {
     }
 
     // Apply the configurations & build the dag layer(s).
-    // todo: add an option to control wether to write to dag state.
-    pub fn build(mut self) {
+    pub fn build(mut self) -> Self {
         for round in self.start_round..=self.end_round.unwrap_or(self.start_round) {
             tracing::info!("BUILDING LAYER ROUND {round}...");
 
@@ -335,11 +343,12 @@ impl<'a> LayerBuilder<'a> {
             self.create_blocks(round, connections);
         }
 
-        self.dag_builder
-            .dag_state
-            .write()
-            .accept_blocks(self.blocks);
-        self.dag_builder.last_ancestors = self.ancestors;
+        self.dag_builder.last_ancestors = self.ancestors.clone();
+        self
+    }
+
+    pub fn persist_layers(&self, dag_state: Arc<RwLock<DagState>>) {
+        dag_state.write().accept_blocks(self.blocks.clone());
     }
 
     // Layer round is minimally and randomly connected with ancestors.

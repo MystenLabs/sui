@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use consensus_config::AuthorityIndex;
 use nom::{
@@ -28,7 +28,8 @@ pub(crate) fn parse_dag(dag_string: &str) -> IResult<&str, DagBuilder> {
 
     let (mut input, num_authors) = parse_genesis(input)?;
 
-    let mut dag_builder = DagBuilder::new(Context::new_for_test(num_authors as usize).0);
+    let context = Arc::new(Context::new_for_test(num_authors as usize).0);
+    let mut dag_builder = DagBuilder::new(context);
 
     // Parse subsequent rounds
     loop {
@@ -111,14 +112,14 @@ fn parse_specified_connections<'a>(
             } else if connection.starts_with('-') {
                 let (input, _) = char('-')(connection)?;
                 let (_, slot) = parse_slot(input)?;
-                let stored_block_refs = get_blocks_from_store(slot, dag_builder);
+                let stored_block_refs = get_blocks(slot, dag_builder);
                 block_refs.extend(dag_builder.last_ancestors.clone());
 
                 block_refs.retain(|ancestor| !stored_block_refs.contains(ancestor));
             } else {
                 let input = connection;
                 let (_, slot) = parse_slot(input)?;
-                let stored_block_refs = get_blocks_from_store(slot, dag_builder);
+                let stored_block_refs = get_blocks(slot, dag_builder);
 
                 block_refs.extend(stored_block_refs);
             }
@@ -131,27 +132,22 @@ fn parse_specified_connections<'a>(
     Ok((input, output))
 }
 
-fn get_blocks_from_store(slot: Slot, dag_builder: &DagBuilder) -> Vec<BlockRef> {
-    // note: special case for genesis blocks as they are not stored in
-    // dag_state.recent_blocks
-    let stored_block_refs = if slot.round == 0 {
+fn get_blocks(slot: Slot, dag_builder: &DagBuilder) -> Vec<BlockRef> {
+    // note: special case for genesis blocks as they are cached separately
+    let block_refs = if slot.round == 0 {
         dag_builder
-            .dag_state
-            .read()
             .genesis_block_refs()
             .into_iter()
             .filter(|block| Slot::from(*block) == slot)
             .collect::<Vec<_>>()
     } else {
         dag_builder
-            .dag_state
-            .read()
             .get_uncommitted_blocks_at_slot(slot)
             .iter()
             .map(|block| block.reference())
             .collect::<Vec<_>>()
     };
-    stored_block_refs
+    block_refs
 }
 
 fn parse_author_and_connections(input: &str) -> IResult<&str, (AuthorityIndex, Vec<&str>)> {
@@ -252,6 +248,8 @@ fn str_to_authority_index(input: &str) -> Option<AuthorityIndex> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     #[test]
@@ -289,7 +287,8 @@ mod tests {
         assert!(result.is_ok());
 
         let (_, dag_builder) = result.unwrap();
-        assert_eq!(dag_builder.dag_state.read().genesis_block_refs().len(), 4);
+        assert_eq!(dag_builder.genesis.len(), 4);
+        assert_eq!(dag_builder.blocks.len(), 23);
     }
 
     #[test]
@@ -316,7 +315,8 @@ mod tests {
     #[test]
     fn test_all_round_parsing() {
         let dag_str = "Round 1 : { * }";
-        let dag_builder = DagBuilder::new(Context::new_for_test(4).0);
+        let context = Arc::new(Context::new_for_test(4).0);
+        let dag_builder = DagBuilder::new(context);
         let result = parse_round(dag_str, &dag_builder);
         assert!(result.is_ok());
         let (_, (round, connections)) = result.unwrap();
@@ -335,7 +335,8 @@ mod tests {
             B -> [*, A0],
             C -> [-A0],
         }";
-        let dag_builder = DagBuilder::new(Context::new_for_test(4).0);
+        let context = Arc::new(Context::new_for_test(4).0);
+        let dag_builder = DagBuilder::new(context);
         let result = parse_round(dag_str, &dag_builder);
         assert!(result.is_ok());
         let (_, (round, connections)) = result.unwrap();
