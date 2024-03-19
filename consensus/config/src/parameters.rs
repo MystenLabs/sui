@@ -92,15 +92,16 @@ pub struct AnemoParameters {
     /// large messages will still be handled, but logged and reported in metrics for debugging.
     ///
     /// If unspecified, this will default to 8 MiB.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub excessive_message_size: Option<usize>,
+    #[serde(default = "AnemoParameters::default_excessive_message_size")]
+    excessive_message_size: usize,
 }
 
 impl AnemoParameters {
-    pub fn excessive_message_size(&self) -> usize {
-        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
+    pub fn default_excessive_message_size() -> usize {
+        8 << 20
+    }
 
+    pub fn excessive_message_size(&self) -> usize {
         self.excessive_message_size
-            .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
     }
 }

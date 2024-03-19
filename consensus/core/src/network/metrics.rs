@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::sync::Arc;
 
-use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramTimer,
-    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
-use tracing::warn;
 
 #[derive(Clone)]
-pub struct QuinnConnectionMetrics {
+pub(crate) struct QuinnConnectionMetrics {
     /// The connection status of known peers. 0 if not connected, 1 if connected.
     pub network_peer_connected: IntGaugeVec,
     /// The number of connected peers
@@ -60,7 +57,7 @@ impl QuinnConnectionMetrics {
             network_peer_connected: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_connected"),
                 "The connection status of a peer. 0 if not connected, 1 if connected",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
@@ -73,7 +70,7 @@ impl QuinnConnectionMetrics {
             network_peer_disconnects: register_int_counter_vec_with_registry!(
                 format!("quinn_network_peer_disconnects"),
                 "Number of disconnect events per peer.",
-                &["peer_id", "reason"],
+                &["peer_id", "hostname", "reason"],
                 registry
             )
             .unwrap(),
@@ -94,42 +91,42 @@ impl QuinnConnectionMetrics {
             network_peer_rtt: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_rtt"),
                 "The rtt for a peer connection in ms.",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_lost_packets: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_lost_packets"),
                 "The total number of lost packets for a peer connection.",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_lost_bytes: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_lost_bytes"),
                 "The total number of lost bytes for a peer connection.",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_sent_packets: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_sent_packets"),
                 "The total number of sent packets for a peer connection.",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_congestion_events: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_congestion_events"),
                 "The total number of congestion events for a peer connection.",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_congestion_window: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_congestion_window"),
                 "The congestion window for a peer connection.",
-                &["peer_id"],
+                &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
@@ -138,21 +135,21 @@ impl QuinnConnectionMetrics {
             network_peer_closed_connections: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_closed_connections"),
                 "The number of closed connections for a peer connection.",
-                &["peer_id", "direction"],
+                &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_max_data: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_max_data"),
                 "The number of max data frames for a peer connection.",
-                &["peer_id", "direction"],
+                &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_data_blocked: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_data_blocked"),
                 "The number of data blocked frames for a peer connection.",
-                &["peer_id", "direction"],
+                &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
@@ -161,21 +158,21 @@ impl QuinnConnectionMetrics {
             network_peer_udp_datagrams: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_udp_datagrams"),
                 "The total number datagrams observed by the UDP peer connection.",
-                &["peer_id", "direction"],
+                &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_udp_bytes: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_udp_bytes"),
                 "The total number bytes observed by the UDP peer connection.",
-                &["peer_id", "direction"],
+                &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_udp_transmits: register_int_gauge_vec_with_registry!(
                 format!("quinn_network_peer_udp_transmits"),
                 "The total number transmits observed by the UDP peer connection.",
-                &["peer_id", "direction"],
+                &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
@@ -184,23 +181,23 @@ impl QuinnConnectionMetrics {
 }
 
 #[derive(Clone)]
-pub struct NetworkMetrics {
+pub(crate) struct NetworkRouteMetrics {
     /// Counter of requests by route
-    requests: IntCounterVec,
+    pub requests: IntCounterVec,
     /// Request latency by route
-    request_latency: HistogramVec,
+    pub request_latency: HistogramVec,
     /// Request size by route
-    request_size: HistogramVec,
+    pub request_size: HistogramVec,
     /// Response size by route
-    response_size: HistogramVec,
+    pub response_size: HistogramVec,
     /// Counter of requests exceeding the "excessive" size limit
-    excessive_size_requests: IntCounterVec,
+    pub excessive_size_requests: IntCounterVec,
     /// Counter of responses exceeding the "excessive" size limit
-    excessive_size_responses: IntCounterVec,
+    pub excessive_size_responses: IntCounterVec,
     /// Gauge of the number of inflight requests at any given time by route
-    inflight_requests: IntGaugeVec,
+    pub inflight_requests: IntGaugeVec,
     /// Failed requests by route
-    errors: IntCounterVec,
+    pub errors: IntCounterVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -217,7 +214,7 @@ const SIZE_BYTE_BUCKETS: &[f64] = &[
     48787348., 63423553., // *1.3
 ];
 
-impl NetworkMetrics {
+impl NetworkRouteMetrics {
     pub fn new(direction: &'static str, registry: &Registry) -> Self {
         let requests = register_int_counter_vec_with_registry!(
             format!("{direction}_requests"),
@@ -296,117 +293,5 @@ impl NetworkMetrics {
             inflight_requests,
             errors,
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct MetricsMakeCallbackHandler {
-    metrics: Arc<NetworkMetrics>,
-    /// Size in bytes above which a request or response message is considered excessively large
-    excessive_message_size: usize,
-}
-
-impl MetricsMakeCallbackHandler {
-    pub fn new(metrics: Arc<NetworkMetrics>, excessive_message_size: usize) -> Self {
-        Self {
-            metrics,
-            excessive_message_size,
-        }
-    }
-}
-
-impl MakeCallbackHandler for MetricsMakeCallbackHandler {
-    type Handler = MetricsResponseHandler;
-
-    fn make_handler(&self, request: &anemo::Request<bytes::Bytes>) -> Self::Handler {
-        let route = request.route().to_owned();
-
-        self.metrics.requests.with_label_values(&[&route]).inc();
-        self.metrics
-            .inflight_requests
-            .with_label_values(&[&route])
-            .inc();
-        let body_len = request.body().len();
-        self.metrics
-            .request_size
-            .with_label_values(&[&route])
-            .observe(body_len as f64);
-        if body_len > self.excessive_message_size {
-            warn!(
-                "Saw excessively large request with size {body_len} for {route} with peer {:?}",
-                request.peer_id()
-            );
-            self.metrics
-                .excessive_size_requests
-                .with_label_values(&[&route])
-                .inc();
-        }
-
-        let timer = self
-            .metrics
-            .request_latency
-            .with_label_values(&[&route])
-            .start_timer();
-
-        MetricsResponseHandler {
-            metrics: self.metrics.clone(),
-            timer,
-            route,
-            excessive_message_size: self.excessive_message_size,
-        }
-    }
-}
-
-pub struct MetricsResponseHandler {
-    metrics: Arc<NetworkMetrics>,
-    // The timer is held on to and "observed" once dropped
-    #[allow(unused)]
-    timer: HistogramTimer,
-    route: String,
-    excessive_message_size: usize,
-}
-
-impl ResponseHandler for MetricsResponseHandler {
-    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
-        let body_len = response.body().len();
-        self.metrics
-            .response_size
-            .with_label_values(&[&self.route])
-            .observe(body_len as f64);
-        if body_len > self.excessive_message_size {
-            warn!(
-                "Saw excessively large response with size {body_len} for {} with peer {:?}",
-                self.route,
-                response.peer_id()
-            );
-            self.metrics
-                .excessive_size_responses
-                .with_label_values(&[&self.route])
-                .inc();
-        }
-
-        if !response.status().is_success() {
-            let status = response.status().to_u16().to_string();
-            self.metrics
-                .errors
-                .with_label_values(&[&self.route, &status])
-                .inc();
-        }
-    }
-
-    fn on_error<E>(self, _error: &E) {
-        self.metrics
-            .errors
-            .with_label_values(&[&self.route, "unknown"])
-            .inc();
-    }
-}
-
-impl Drop for MetricsResponseHandler {
-    fn drop(&mut self) {
-        self.metrics
-            .inflight_requests
-            .with_label_values(&[&self.route])
-            .dec();
     }
 }
