@@ -168,7 +168,8 @@ the type specified is the type of the coin, not the coin type itself. For exampl
     `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(<a href="../sui-framework/bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), `type`, addr)
+    <b>let</b> bag_entry: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index];
+    bag_entry.<a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(`type`, addr)
 }
 </code></pre>
 

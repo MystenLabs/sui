@@ -102,7 +102,7 @@ module sui::random {
         // Randomness should only be incremented.
         let epoch = ctx.epoch();
         let inner = self.load_inner_mut();
-        if (inner.randomness_round == 0 && inner.epoch == 0 && inner.random_bytes.is_empty(&)) {
+        if (inner.randomness_round == 0 && inner.epoch == 0 && inner.random_bytes.is_empty()) {
             // First update should be for round zero.
             assert!(new_round == 0, EInvalidRandomnessUpdate);
         } else {

@@ -341,12 +341,12 @@ but multiple per package (!).
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="package.md#0x2_package_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="types.md#0x2_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="package.md#0x2_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
-    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
+    <b>let</b> tyname = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;OTW&gt;();
 
     <a href="package.md#0x2_package_Publisher">Publisher</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="package.md#0x2_package">package</a>: <a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&`type`),
-        module_name: <a href="../move-stdlib/type_name.md#0x1_type_name_get_module">type_name::get_module</a>(&`type`),
+        <a href="package.md#0x2_package">package</a>: tyname.get_address(),
+        module_name: tyname.get_module(),
     }
 }
 </code></pre>
@@ -426,9 +426,7 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
-
-    (<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&`type`) == self.<a href="package.md#0x2_package">package</a>)
+    <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().get_address() == self.<a href="package.md#0x2_package">package</a>
 }
 </code></pre>
 
@@ -453,10 +451,9 @@ Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="package.md#0x2_package_Publisher">Publisher</a>): bool {
-    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+    <b>let</b> tyname = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
 
-    (<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&`type`) == self.<a href="package.md#0x2_package">package</a>)
-        && (<a href="../move-stdlib/type_name.md#0x1_type_name_get_module">type_name::get_module</a>(&`type`) == self.module_name)
+    (tyname.get_address() == self.<a href="package.md#0x2_package">package</a>) && (tyname.get_module() == self.module_name)
 }
 </code></pre>
 
@@ -818,7 +815,7 @@ change dependencies.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
-    <a href="package.md#0x2_package_restrict">restrict</a>(cap, <a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>)
+    cap.<a href="package.md#0x2_package_restrict">restrict</a>(<a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>)
 }
 </code></pre>
 
@@ -844,7 +841,7 @@ dependencies.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
-    <a href="package.md#0x2_package_restrict">restrict</a>(cap, <a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>)
+    cap.<a href="package.md#0x2_package_restrict">restrict</a>(<a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>)
 }
 </code></pre>
 
