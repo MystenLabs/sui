@@ -2581,6 +2581,7 @@ impl AuthorityPerEpochStore {
 
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
             checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
+            std::thread::sleep(std::time::Duration::from_millis(300));
 
             // Generate pending checkpoint for user tx with randomness.
             if let Some(randomness_round) = randomness_round {
