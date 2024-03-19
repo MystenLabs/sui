@@ -188,6 +188,9 @@ pub enum ExecutionFailureStatus {
 
     #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
     InputObjectDeleted,
+
+    #[error("Certificate is cancelled due to congestion on object {object}")]
+    ExecutionCancelledDueToCongestionOnObject { object: ObjectID },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

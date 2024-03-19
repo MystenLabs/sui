@@ -2749,6 +2749,7 @@ pub enum ObjectReadResultKind {
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
+    CongestedSharedObject(),
 }
 
 impl From<Object> for ObjectReadResultKind {
@@ -2767,6 +2768,14 @@ impl ObjectReadResult {
             panic!("only shared objects can be DeletedSharedObject");
         }
 
+        if let (
+            InputObjectKind::ImmOrOwnedMoveObject(_),
+            ObjectReadResultKind::CongestedSharedObject(),
+        ) = (&input_object_kind, &object)
+        {
+            panic!("only shared objects can be CongestedSharedObject");
+        }
+
         Self {
             input_object_kind,
             object,
@@ -2781,6 +2790,7 @@ impl ObjectReadResult {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
             ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+            ObjectReadResultKind::CongestedSharedObject() => None,
         }
     }
 
@@ -2802,6 +2812,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
             ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CongestedSharedObject(),
+            ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
         }
     }
@@ -2818,6 +2832,14 @@ impl ObjectReadResult {
         match &self.object {
             ObjectReadResultKind::DeletedSharedObject(v, tx) => Some((*v, *tx)),
             _ => None,
+        }
+    }
+
+    pub fn is_congested_shared_object(&self) -> bool {
+        if let ObjectReadResultKind::CongestedSharedObject() = &self.object {
+            true
+        } else {
+            false
         }
     }
 
@@ -2839,6 +2861,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
             ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CongestedSharedObject(),
+            ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { .. }, _) => None,
         }
     }
@@ -2858,6 +2884,7 @@ impl ObjectReadResult {
                 ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
                     SharedInput::Deleted((id, *seq, mutable, *digest))
                 }
+                ObjectReadResultKind::CongestedSharedObject() => SharedInput::Congested(id),
             }),
         }
     }
@@ -2866,6 +2893,7 @@ impl ObjectReadResult {
         match &self.object {
             ObjectReadResultKind::Object(obj) => obj.previous_transaction,
             ObjectReadResultKind::DeletedSharedObject(_, digest) => *digest,
+            ObjectReadResultKind::CongestedSharedObject() => unreachable!(),
         }
     }
 }
@@ -2932,6 +2960,15 @@ impl InputObjects {
         self.objects
             .iter()
             .any(|obj| obj.is_deleted_shared_object())
+    }
+
+    pub fn get_congested_object(&self) -> Option<ObjectID> {
+        for obj in &self.objects {
+            if let ObjectReadResultKind::CongestedSharedObject() = obj.object {
+                return Some(obj.id());
+            }
+        }
+        None
     }
 
     pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
@@ -3007,6 +3044,16 @@ impl InputObjects {
                             None
                         }
                     }
+                    (
+                        InputObjectKind::ImmOrOwnedMoveObject(_),
+                        ObjectReadResultKind::CongestedSharedObject(),
+                    ) => {
+                        unreachable!()
+                    }
+                    (
+                        InputObjectKind::SharedMoveObject { .. },
+                        ObjectReadResultKind::CongestedSharedObject(),
+                    ) => None,
                 },
             )
             .collect()
@@ -3024,6 +3071,7 @@ impl InputObjects {
                     object.data.try_as_move().map(MoveObject::version)
                 }
                 ObjectReadResultKind::DeletedSharedObject(v, _) => Some(*v),
+                ObjectReadResultKind::CongestedSharedObject() => Some(SequenceNumber::MIN),
             })
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 

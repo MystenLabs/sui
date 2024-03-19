@@ -388,6 +388,9 @@ struct FeatureFlags {
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
+
+    #[serde(skip_serializing_if = "PerObjectCongestionControlMode::is_none")]
+    per_object_congestion_control_mode: PerObjectCongestionControlMode,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -411,6 +414,20 @@ pub enum ConsensusTransactionOrdering {
 impl ConsensusTransactionOrdering {
     pub fn is_none(&self) -> bool {
         matches!(self, ConsensusTransactionOrdering::None)
+    }
+}
+
+/// Ordering mechanism for transactions in one Narwhal consensus output.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+pub enum PerObjectCongestionControlMode {
+    #[default]
+    None,
+    TotalGasBudget,
+}
+
+impl PerObjectCongestionControlMode {
+    pub fn is_none(&self) -> bool {
+        matches!(self, PerObjectCongestionControlMode::None)
     }
 }
 
@@ -960,6 +977,10 @@ pub struct ProtocolConfig {
     consensus_max_transaction_size_bytes: Option<u64>,
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
+
+    max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+
+    max_deferral_rounds_for_congestion_control: Option<u64>,
 }
 
 // feature flags
@@ -1176,6 +1197,10 @@ impl ProtocolConfig {
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
+    }
+
+    pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
+        self.feature_flags.per_object_congestion_control_mode
     }
 }
 
@@ -1610,6 +1635,10 @@ impl ProtocolConfig {
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
+
+            max_accumulated_txn_cost_per_object_in_checkpoint: None,
+
+            max_deferral_rounds_for_congestion_control: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1970,6 +1999,14 @@ impl ProtocolConfig {
                 }
                 40 => {}
                 41 => {}
+                42 => {
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::TotalGasBudget;
+                        cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(150_000_000);
+                        cfg.max_deferral_rounds_for_congestion_control = Some(20);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
