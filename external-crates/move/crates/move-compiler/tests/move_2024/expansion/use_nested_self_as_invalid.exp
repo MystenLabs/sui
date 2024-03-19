@@ -1,0 +1,36 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:3:5
+  │
+3 │     struct S {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:8:26
+  │
+8 │     use 0x2::X::{Self as B, foo, S};
+  │                          ^ Unused 'use' of alias 'B'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01003]: invalid modifier
+   ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:10:5
+   │
+10 │     struct X { f: X::S, f2: S }
+   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+   │
+   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:10:19
+   │
+10 │     struct X { f: X::S, f2: S }
+   │                   ^ Expected a module or address in this position, not a module member
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:12:9
+   │
+12 │         X::foo();
+   │         ^ Expected a module or address in this position, not a module member
+

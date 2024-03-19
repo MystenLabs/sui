@@ -1,0 +1,22 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:4:5
+  │
+4 │     struct Foo has copy {} has;
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:4:28
+  │
+4 │     struct Foo has copy {} has;
+  │                ---         ^^^ Duplicate ability declaration. Abilities can be declared before or after the field declarations, but not both.
+  │                │            
+  │                Ability declaration previously given here
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:4:31
+  │
+4 │     struct Foo has copy {} has;
+  │                               ^ Unexpected ';'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
+

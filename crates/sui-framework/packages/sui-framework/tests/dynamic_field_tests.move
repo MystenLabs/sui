@@ -72,7 +72,7 @@ module sui::dynamic_field_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
-        borrow<u64, u64>(&mut id, 0);
+        borrow<u64, u64>(&id, 0);
         abort 42
     }
 
@@ -83,7 +83,7 @@ module sui::dynamic_field_tests {
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         add(&mut id, 0, 0);
-        borrow<u64, u8>(&mut id, 0);
+        borrow<u64, u8>(&id, 0);
         abort 42
     }
 
@@ -134,10 +134,10 @@ module sui::dynamic_field_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
-        assert!(!exists_with_type<u64, u64>(&mut id, 0), 0);
+        assert!(!exists_with_type<u64, u64>(&id, 0), 0);
         add(&mut id, 0, 0);
-        assert!(exists_with_type<u64, u64>(&mut id, 0), 0);
-        assert!(!exists_with_type<u64, u8>(&mut id, 0), 0);
+        assert!(exists_with_type<u64, u64>(&id, 0), 0);
+        assert!(!exists_with_type<u64, u8>(&id, 0), 0);
         ts::end(scenario);
         object::delete(id);
     }
@@ -149,7 +149,7 @@ module sui::dynamic_field_tests {
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         add(&mut id, 0, 0);
-        assert!(exists_with_type<u64, u64>(&mut id, 0), 0);
+        assert!(exists_with_type<u64, u64>(&id, 0), 0);
         ts::end(scenario);
         object::delete(id);
     }

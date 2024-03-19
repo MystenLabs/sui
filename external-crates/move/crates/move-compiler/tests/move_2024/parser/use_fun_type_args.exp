@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/use_fun_type_args.move:3:21
+  │
+3 │     use fun foo as X<u64>.foo;
+  │                     ^
+  │                     │
+  │                     Unexpected '<'
+  │                     Expected '.'
+

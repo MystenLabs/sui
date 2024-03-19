@@ -2,6 +2,8 @@
 
 [move]
 version = 0
+manifest_digest = "67260FCD7E87294C58A3477C87DFEB182EC8E91FF1AEF97234D0FBF5C43BB7DC"
+deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 
 dependencies = [
   { name = "MoveStdlib" },
@@ -19,3 +21,8 @@ source = { local = "../sui-framework" }
 dependencies = [
   { name = "MoveStdlib" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.16.0"
+edition = "legacy"
+flavor = "sui"

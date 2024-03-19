@@ -1,0 +1,9 @@
+### Validator staking pool requirements 
+
+There are minimum staking requirements a validator must satisfy to become active and to stay in the active validator set.
+
+More precisely:
+
+- A validator candidate must accrue at least 30M SUI of stake before they can request to join the validator set.
+- If an active validator’s stake falls below 20M SUI, they have seven epochs of grace period to gain back the stake before being removed from the validator set.
+- If an active validator’s stake falls below 15M SUI, they are removed from the validator set at the end of the current epoch boundary. Sui uses 24-hour epochs.

@@ -1,0 +1,12 @@
+# Latest epoch, since epoch omitted
+{
+  epoch {
+    protocolConfigs {
+      protocolVersion
+    }
+    epochId
+    referenceGasPrice
+    startTimestamp
+    endTimestamp
+  }
+}

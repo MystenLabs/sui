@@ -107,10 +107,10 @@ module sui::object_table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = object_table::new(ts::ctx(&mut scenario));
-        assert!(!contains(&mut table, 0), 0);
+        assert!(!contains(&table, 0), 0);
         add(&mut table, 0, new(&mut scenario));
-        assert!(contains(&mut table, 0), 0);
-        assert!(!contains(&mut table, 1), 0);
+        assert!(contains(&table, 0), 0);
+        assert!(!contains(&table, 1), 0);
         ts::end(scenario);
         destroy(remove(&mut table, 0));
         object_table::destroy_empty(table)

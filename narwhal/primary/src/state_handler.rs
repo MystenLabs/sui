@@ -9,10 +9,10 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use types::{Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, Round};
 
-/// Receives the highest round reached by consensus and update it for all tasks.
+/// Updates Narwhal system state based on certificates received from consensus.
 pub struct StateHandler {
-    /// The id of this authority.
     authority_id: AuthorityIdentifier,
+
     /// Receives the ordered certificates from consensus.
     rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
     /// Channel to signal committee changes.
@@ -32,23 +32,27 @@ impl StateHandler {
         tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
+        let state_handler = Self {
+            authority_id,
+            rx_committed_certificates,
+            rx_shutdown,
+            tx_committed_own_headers,
+            network,
+        };
         spawn_logged_monitored_task!(
             async move {
-                Self {
-                    authority_id,
-                    rx_committed_certificates,
-                    rx_shutdown,
-                    tx_committed_own_headers,
-                    network,
-                }
-                .run()
-                .await;
+                state_handler.run().await;
             },
             "StateHandlerTask"
         )
     }
 
     async fn handle_sequenced(&mut self, commit_round: Round, certificates: Vec<Certificate>) {
+        debug!(
+            "state handler: received {:?} sequenced certificates at round {commit_round}",
+            certificates.len()
+        );
+
         // Now we are going to signal which of our own batches have been committed.
         let own_rounds_committed: Vec<_> = certificates
             .iter()
@@ -77,11 +81,10 @@ impl StateHandler {
             "StateHandler on node {} has started successfully.",
             self.authority_id
         );
+
         loop {
             tokio::select! {
-                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(commit_round, certificates).await;
-                },
+                biased;
 
                 _ = self.rx_shutdown.receiver.recv() => {
                     // shutdown network
@@ -93,6 +96,10 @@ impl StateHandler {
 
                     return;
                 }
+
+                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(commit_round, certificates).await;
+                },
             }
         }
     }

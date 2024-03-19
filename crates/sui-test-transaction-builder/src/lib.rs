@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
-use sui_move_build::BuildConfig;
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_sdk::rpc_types::{
     get_new_package_obj_from_response, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
@@ -13,15 +13,15 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
 use sui_types::digests::TransactionDigest;
-use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-    TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
 
@@ -42,6 +42,15 @@ impl TestTransactionBuilder {
         }
     }
 
+    pub fn sender(&self) -> SuiAddress {
+        self.sender
+    }
+
+    pub fn gas_object(&self) -> ObjectRef {
+        self.gas_object
+    }
+
+    // Use `with_type_args` below to provide type args if any
     pub fn move_call(
         mut self,
         package_id: ObjectID,
@@ -60,6 +69,16 @@ impl TestTransactionBuilder {
         self
     }
 
+    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
+        if let TestTransactionData::Move(data) = &mut self.test_data {
+            assert!(data.type_args.is_empty());
+            data.type_args = type_args;
+        } else {
+            panic!("Cannot set type args for non-move call");
+        }
+        self
+    }
+
     pub fn call_counter_create(self, package_id: ObjectID) -> Self {
         self.move_call(package_id, "counter", "create", vec![])
     }
@@ -74,6 +93,42 @@ impl TestTransactionBuilder {
             package_id,
             "counter",
             "increment",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: true,
+            })],
+        )
+    }
+
+    pub fn call_counter_read(
+        self,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        counter_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "counter",
+            "value",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: false,
+            })],
+        )
+    }
+
+    pub fn call_counter_delete(
+        self,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        counter_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "counter",
+            "delete",
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
@@ -165,16 +220,6 @@ impl TestTransactionBuilder {
         )
     }
 
-    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
-        if let TestTransactionData::Move(data) = &mut self.test_data {
-            assert!(data.type_args.is_empty());
-            data.type_args = type_args;
-        } else {
-            panic!("Cannot set type args for non-move call");
-        }
-        self
-    }
-
     pub fn transfer(mut self, object: ObjectRef, recipient: SuiAddress) -> Self {
         self.test_data = TestTransactionData::Transfer(TransferData { object, recipient });
         self
@@ -187,19 +232,19 @@ impl TestTransactionBuilder {
 
     pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
-            with_unpublished_deps: false,
-        });
+        self.test_data = TestTransactionData::Publish(PublishData::Source(path, false));
         self
     }
 
     pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
-            with_unpublished_deps: true,
-        });
+        self.test_data = TestTransactionData::Publish(PublishData::Source(path, true));
+        self
+    }
+
+    pub fn publish_with_data(mut self, data: PublishData) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(data);
         self
     }
 
@@ -252,10 +297,21 @@ impl TestTransactionBuilder {
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
-                let compiled_package = BuildConfig::new_for_testing().build(data.path).unwrap();
-                let all_module_bytes =
-                    compiled_package.get_package_bytes(data.with_unpublished_deps);
-                let dependencies = compiled_package.get_dependency_original_package_ids();
+                let (all_module_bytes, dependencies) = match data {
+                    PublishData::Source(path, with_unpublished_deps) => {
+                        let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+                        let all_module_bytes =
+                            compiled_package.get_package_bytes(with_unpublished_deps);
+                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                    PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
+                    PublishData::CompiledPackage(compiled_package) => {
+                        let all_module_bytes = compiled_package.get_package_bytes(false);
+                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                };
 
                 TransactionData::new_module(
                     self.sender,
@@ -270,7 +326,7 @@ impl TestTransactionBuilder {
                 self.sender,
                 vec![self.gas_object],
                 pt,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
                 self.gas_price,
             ),
             TestTransactionData::Empty => {
@@ -280,27 +336,31 @@ impl TestTransactionBuilder {
     }
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
-        Transaction::from_data_and_signer(self.build(), Intent::sui_transaction(), vec![signer])
+        Transaction::from_data_and_signer(self.build(), vec![signer])
     }
 
     pub fn build_and_sign_multisig(
         self,
         multisig_pk: MultiSigPublicKey,
         signers: &[&dyn Signer<Signature>],
+        bitmap: BitmapUnit,
     ) -> Transaction {
         let data = self.build();
-        let intent = Intent::sui_transaction();
-        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+        let intent_msg = IntentMessage::new(Intent::sui_transaction(), data.clone());
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer));
+            signatures.push(
+                GenericSignature::from(Signature::new_secure(&intent_msg, *signer))
+                    .to_compressed()
+                    .unwrap(),
+            );
         }
 
         let multisig =
-            GenericSignature::MultiSig(MultiSig::combine(signatures, multisig_pk).unwrap());
+            GenericSignature::MultiSig(MultiSig::insecure_new(signatures, bitmap, multisig_pk));
 
-        Transaction::from_generic_sig_data(data, intent, vec![multisig])
+        Transaction::from_generic_sig_data(data, vec![multisig])
     }
 
     pub fn build_and_sign_multisig_legacy(
@@ -314,14 +374,14 @@ impl TestTransactionBuilder {
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer));
+            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
         }
 
         let multisig = GenericSignature::MultiSigLegacy(
             MultiSigLegacy::combine(signatures, multisig_pk).unwrap(),
         );
 
-        Transaction::from_generic_sig_data(data, intent, vec![multisig])
+        Transaction::from_generic_sig_data(data, vec![multisig])
     }
 }
 
@@ -342,10 +402,12 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
-struct PublishData {
-    path: PathBuf,
-    /// Whether to publish unpublished dependencies in the same transaction or not.
-    with_unpublished_deps: bool,
+pub enum PublishData {
+    /// Path to source code directory and with_unpublished_deps.
+    /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.
+    Source(PathBuf, bool),
+    ModuleBytes(Vec<Vec<u8>>),
+    CompiledPackage(CompiledPackage),
 }
 
 struct TransferData {

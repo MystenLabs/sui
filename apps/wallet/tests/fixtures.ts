@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { test as base, chromium, type BrowserContext } from '@playwright/test';
 import path from 'path';
+import { test as base, chromium, type BrowserContext } from '@playwright/test';
 
 const EXTENSION_PATH = path.join(__dirname, '../dist');
 const LAUNCH_ARGS = [

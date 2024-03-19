@@ -8,13 +8,4 @@
 module std::bcs {
     /// Return the binary representation of `v` in BCS (Binary Canonical Serialization) format
     native public fun to_bytes<MoveValue>(v: &MoveValue): vector<u8>;
-
-    // ==============================
-    // Module Specification
-    spec module {} // switch to module documentation context
-
-    spec module {
-        /// Native function which is defined in the prover's prelude.
-        native fun serialize<MoveValue>(v: &MoveValue): vector<u8>;
-    }
 }

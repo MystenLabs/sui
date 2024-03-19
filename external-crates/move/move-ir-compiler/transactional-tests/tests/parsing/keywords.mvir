@@ -1,6 +1,0 @@
-//# print-bytecode
-// `label` is a keyword so it cannot be used as a parameter name.
-main(label: address) {
-label b0:
-    return;
-}

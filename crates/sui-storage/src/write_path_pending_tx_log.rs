@@ -32,7 +32,7 @@ impl WritePathPendingTransactionLog {
     pub fn new(path: PathBuf) -> Self {
         let pending_transactions = WritePathPendingTransactionTable::open_tables_transactional(
             path,
-            MetricConf::default(),
+            MetricConf::new("pending_tx_log"),
             None,
             None,
         );

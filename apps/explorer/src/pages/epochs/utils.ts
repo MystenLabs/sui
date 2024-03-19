@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTimeAgo } from '@mysten/core';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 
 export function useEpochProgress(suffix: string = 'left') {
-	const { data } = useLatestSuiSystemState();
+	const { data } = useSuiClientQuery('getLatestSuiSystemState');
 	const start = data?.epochStartTimestampMs ? Number(data.epochStartTimestampMs) : undefined;
 	const duration = data?.epochDurationMs ? Number(data.epochDurationMs) : undefined;
 	const end = start !== undefined && duration !== undefined ? start + duration : undefined;

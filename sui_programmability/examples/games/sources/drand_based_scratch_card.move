@@ -39,7 +39,6 @@ module games::drand_based_scratch_card {
     const EInvalidDeposit: u64 = 0;
     const EInvalidEpoch: u64 = 1;
     const EInvalidTicket: u64 = 2;
-    const EInvalidRandomness: u64 = 3;
     const EInvalidReward: u64 = 4;
     const ETooSoonToRedeem: u64 = 5;
     const EInvalidGame: u64 = 6;
@@ -123,11 +122,10 @@ module games::drand_based_scratch_card {
         ticket: Ticket,
         game: &Game,
         drand_sig: vector<u8>,
-        drand_prev_sig: vector<u8>,
         ctx: &mut TxContext
     ) {
         assert!(ticket.game_id == object::id(game), EInvalidTicket);
-        drand_lib::verify_drand_signature(drand_sig, drand_prev_sig, end_of_game_round(game.base_drand_round));
+        drand_lib::verify_drand_signature(drand_sig, end_of_game_round(game.base_drand_round));
         // The randomness for the current ticket is derived by HMAC(drand randomness, ticket id).
         // A solution like checking if (drand randomness % reward_factor) == (ticket id % reward_factor) is not secure
         // as the adversary can control the values of ticket id. (For this particular game this attack is not
@@ -187,6 +185,6 @@ module games::drand_based_scratch_card {
         // at least 24 hours from now. Since the creator does not know as well if its game is created in the beginning
         // or the end of the epoch, we define the end of the game to be 24h + 24h from when it started, +1h to be on
         // the safe side since epoch duration is not deterministic.
-        round + 2 * 60 * (24 + 25)
+        round + 20 * 60 * (24 + 25)
     }
 }

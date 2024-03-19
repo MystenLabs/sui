@@ -75,7 +75,7 @@ module sui::bag_tests {
         let scenario = ts::begin(sender);
         let bag = bag::new(ts::ctx(&mut scenario));
         add(&mut bag, 0, 0);
-        borrow<u64, u8>(&mut bag, 0);
+        borrow<u64, u8>(&bag, 0);
         abort 42
     }
 
@@ -137,10 +137,10 @@ module sui::bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = bag::new(ts::ctx(&mut scenario));
-        assert!(!contains_with_type<u64, u64>(&mut bag, 0), 0);
+        assert!(!contains_with_type<u64, u64>(&bag, 0), 0);
         add(&mut bag, 0, 0);
-        assert!(contains_with_type<u64, u64>(&mut bag, 0), 0);
-        assert!(!contains_with_type<u64, u64>(&mut bag, 1), 0);
+        assert!(contains_with_type<u64, u64>(&bag, 0), 0);
+        assert!(!contains_with_type<u64, u64>(&bag, 1), 0);
         ts::end(scenario);
         bag::remove<u64, u64>(&mut bag, 0);
         bag::destroy_empty(bag);

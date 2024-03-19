@@ -1,0 +1,6 @@
+[package]
+name = "Root-rename"
+
+[dependencies]
+A-rename = { local = "./deps_only/A-rename", addr_subst = { "AA" = "0x1" } }
+B-rename = { local = "./deps_only/B-rename", addr_subst = { "BA" = "0x1" } }

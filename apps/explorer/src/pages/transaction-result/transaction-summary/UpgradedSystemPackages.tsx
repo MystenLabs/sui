@@ -4,7 +4,8 @@
 import { Text } from '@mysten/ui';
 
 import { ObjectLink } from '~/ui/InternalLink';
-import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
+import { CollapsibleCard } from '~/ui/collapsible/CollapsibleCard';
+import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
 import type { OwnedObjectRef } from '@mysten/sui.js/client';
 
@@ -12,8 +13,8 @@ export function UpgradedSystemPackages({ data }: { data: OwnedObjectRef[] }) {
 	if (!data?.length) return null;
 
 	return (
-		<TransactionBlockCard title="Changes" size="sm" shadow>
-			<TransactionBlockCardSection
+		<CollapsibleCard title="Changes" size="sm" shadow>
+			<CollapsibleSection
 				title={
 					<Text variant="body/semibold" color="success-dark">
 						Updated
@@ -38,7 +39,7 @@ export function UpgradedSystemPackages({ data }: { data: OwnedObjectRef[] }) {
 						);
 					})}
 				</div>
-			</TransactionBlockCardSection>
-		</TransactionBlockCard>
+			</CollapsibleSection>
+		</CollapsibleCard>
 	);
 }

@@ -1,0 +1,43 @@
+[package]
+name = "move-vm-integration-tests"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move VM Integration Tests"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow.workspace = true
+fail = { workspace = true, features = ["failpoints"] }
+tempfile.workspace = true
+memory-stats = "1.0.0"
+
+move-core-types.workspace = true
+move-binary-format.workspace = true
+move-bytecode-verifier.workspace = true
+move-compiler.workspace = true
+move-vm-config.workspace = true
+move-vm-runtime.workspace = true
+move-vm-profiler.workspace = true
+move-vm-types.workspace = true
+move-vm-test-utils.workspace = true
+move-stdlib.workspace = true
+
+[features]
+default = []
+gas-profiler = [
+    "move-vm-config/gas-profiler",
+    "move-vm-runtime/gas-profiler",
+    "move-vm-profiler/gas-profiler",
+    "move-vm-types/gas-profiler",
+    "move-vm-test-utils/gas-profiler",
+]
+
+[[bin]]
+name = "instantiation"
+path = "src/tests/instantiation_tests.rs"

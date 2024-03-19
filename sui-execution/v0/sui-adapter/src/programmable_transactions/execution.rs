@@ -34,6 +34,8 @@ mod checked {
     use serde::{de::DeserializeSeed, Deserialize};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -50,7 +52,6 @@ mod checked {
             normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
             UpgradeReceipt, UpgradeTicket,
         },
-        storage::get_packages,
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         Identifier, SUI_FRAMEWORK_ADDRESS,
     };
@@ -93,7 +94,7 @@ mod checked {
                 // We still need to record the loaded child objects for replay
                 let loaded_child_objects = object_runtime.loaded_child_objects();
                 drop(context);
-                state_view.save_loaded_child_objects(loaded_child_objects);
+                state_view.save_loaded_runtime_objects(loaded_child_objects);
                 return Err(err.with_command_index(idx));
             };
         }
@@ -106,7 +107,7 @@ mod checked {
         // apply changes
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
-        state_view.save_loaded_child_objects(loaded_child_objects);
+        state_view.save_loaded_runtime_objects(loaded_child_objects);
         state_view.record_execution_results(finished?);
         Ok(mode_results)
     }
@@ -121,10 +122,10 @@ mod checked {
         let results = match command {
             Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
                 let Some(tag) = tag_opt else {
-                invariant_violation!(
-                    "input checker ensures if args are empty, there is a type specified"
-                );
-            };
+                    invariant_violation!(
+                        "input checker ensures if args are empty, there is a type specified"
+                    );
+                };
                 let elem_ty = context
                     .load_type(&tag)
                     .map_err(|e| context.convert_vm_error(e))?;
@@ -203,13 +204,13 @@ mod checked {
             Command::SplitCoins(coin_arg, amount_args) => {
                 let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
                 let ObjectContents::Coin(coin) = &mut obj.contents else {
-                let e = ExecutionErrorKind::command_argument_error(
-                    CommandArgumentError::TypeMismatch,
-                    0,
-                );
-                let msg = "Expected a coin but got an non coin object".to_owned();
-                return Err(ExecutionError::new_with_source(e, msg));
-            };
+                    let e = ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        0,
+                    );
+                    let msg = "Expected a coin but got an non coin object".to_owned();
+                    return Err(ExecutionError::new_with_source(e, msg));
+                };
                 let split_coins = amount_args
                     .into_iter()
                     .map(|amount_arg| {
@@ -230,13 +231,13 @@ mod checked {
             Command::MergeCoins(target_arg, coin_args) => {
                 let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
                 let ObjectContents::Coin(target_coin) = &mut target.contents else {
-                let e = ExecutionErrorKind::command_argument_error(
-                    CommandArgumentError::TypeMismatch,
-                    0,
-                );
-                let msg = "Expected a coin but got an non coin object".to_owned();
-                return Err(ExecutionError::new_with_source(e, msg));
-            };
+                    let e = ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        0,
+                    );
+                    let msg = "Expected a coin but got an non coin object".to_owned();
+                    return Err(ExecutionError::new_with_source(e, msg));
+                };
                 let coins: Vec<ObjectValue> = coin_args
                     .into_iter()
                     .enumerate()
@@ -252,11 +253,11 @@ mod checked {
                         return Err(ExecutionError::new_with_source(e, msg));
                     }
                     let ObjectContents::Coin(Coin { id, balance }) = coin.contents else {
-                    invariant_violation!(
-                        "Target coin was a coin, and we already checked for the same type. \
+                        invariant_violation!(
+                            "Target coin was a coin, and we already checked for the same type. \
                         This should be a coin"
-                    );
-                };
+                        );
+                    };
                     context.delete_id(*id.object_id())?;
                     target_coin.add(balance)?;
                 }
@@ -483,11 +484,12 @@ mod checked {
         // affects the order in which error cases are checked.
         let package_obj = if context.protocol_config.package_upgrades_supported() {
             let dependencies = fetch_packages(context, &dep_ids)?;
-            let package_obj = context.new_package(&modules, &dependencies)?;
+            let package_obj =
+                context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
             let Some(package) = package_obj.data.try_as_package() else {
-            invariant_violation!("Newly created package object is not a package");
-        };
+                invariant_violation!("Newly created package object is not a package");
+            };
 
             context.set_linkage(package)?;
             let res = publish_and_verify_modules(context, runtime_id, &modules)
@@ -501,7 +503,8 @@ mod checked {
             // required to maintain backwards compatibility.
             publish_and_verify_modules(context, runtime_id, &modules)?;
             let dependencies = fetch_packages(context, &dep_ids)?;
-            let package = context.new_package(&modules, &dependencies)?;
+            let package =
+                context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
             init_modules::<Mode>(context, argument_updates, &modules)?;
             package
         };
@@ -597,19 +600,23 @@ mod checked {
         let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
         let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
-        let runtime_id = current_package.original_package_id();
+        let runtime_id = current_package.move_package().original_package_id();
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         let storage_id = context.tx_context.fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
-        let package_obj =
-            context.upgrade_package(storage_id, &current_package, &modules, &dependencies)?;
+        let package_obj = context.upgrade_package(
+            storage_id,
+            current_package.move_package(),
+            &modules,
+            dependencies.iter().map(|p| p.move_package()),
+        )?;
 
         let Some(package) = package_obj.data.try_as_package() else {
-        invariant_violation!("Newly created package object is not a package");
-    };
+            invariant_violation!("Newly created package object is not a package");
+        };
 
         // Populate loader with all previous types.
         if !context
@@ -627,12 +634,12 @@ mod checked {
                 }
 
                 let Ok(module) = Identifier::new(module_name.as_str()) else {
-                continue;
-            };
+                    continue;
+                };
 
                 let Ok(name) = Identifier::new(struct_name.as_str()) else {
-                continue;
-            };
+                    continue;
+                };
 
                 let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
                     address: (*origin).into(),
@@ -648,7 +655,12 @@ mod checked {
         context.reset_linkage();
         res?;
 
-        check_compatibility(context, &current_package, &modules, upgrade_ticket.policy)?;
+        check_compatibility(
+            context,
+            current_package.move_package(),
+            &modules,
+            upgrade_ticket.policy,
+        )?;
 
         context.write_package(package_obj)?;
         Ok(vec![Value::Raw(
@@ -669,32 +681,28 @@ mod checked {
     ) -> Result<(), ExecutionError> {
         // Make sure this is a known upgrade policy.
         let Ok(policy) = UpgradePolicy::try_from(policy) else {
-        return Err(ExecutionError::from_kind(
-            ExecutionErrorKind::PackageUpgradeError {
-                upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy },
-            },
-        ));
-    };
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::PackageUpgradeError {
+                    upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy },
+                },
+            ));
+        };
 
-        let Ok(current_normalized) = existing_package
-        .normalize(
-            context.protocol_config.move_binary_format_version(),
-            context.protocol_config.no_extraneous_module_bytes(),
-        )
-    else {
-        invariant_violation!("Tried to normalize modules in existing package but failed")
-    };
+        let binary_config = to_binary_config(context.protocol_config);
+        let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
+            invariant_violation!("Tried to normalize modules in existing package but failed")
+        };
 
         let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
         for (name, cur_module) in current_normalized {
             let Some(new_module) = new_normalized.remove(&name) else {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::PackageUpgradeError {
-                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
-                },
-                format!("Existing module {name} not found in next version of package"),
-            ));
-        };
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::PackageUpgradeError {
+                        upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+                    },
+                    format!("Existing module {name} not found in next version of package"),
+                ));
+            };
 
             check_module_compatibility(&policy, context.protocol_config, &cur_module, &new_module)?;
         }
@@ -745,7 +753,7 @@ mod checked {
     fn fetch_package(
         context: &ExecutionContext<'_, '_, '_>,
         package_id: &ObjectID,
-    ) -> Result<MovePackage, ExecutionError> {
+    ) -> Result<PackageObject, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
@@ -762,9 +770,9 @@ mod checked {
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
         context: &'ctx ExecutionContext<'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-    ) -> Result<Vec<MovePackage>, ExecutionError> {
+    ) -> Result<Vec<PackageObject>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-        match get_packages(&context.state_view, package_ids) {
+        match get_package_objects(&context.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 e,
@@ -826,8 +834,8 @@ mod checked {
         // objects).
         if tx_context_kind == TxContextKind::Mutable {
             let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
-            invariant_violation!("Missing TxContext in reference outputs");
-        };
+                invariant_violation!("Missing TxContext in reference outputs");
+            };
             let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
                 ExecutionError::invariant_violation(format!(
                     "Unable to deserialize TxContext bytes. {e}"
@@ -843,15 +851,12 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         module_bytes: &[Vec<u8>],
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
+        let binary_config = to_binary_config(context.protocol_config);
         let modules = module_bytes
             .iter()
             .map(|b| {
-                CompiledModule::deserialize_with_config(
-                    b,
-                    context.protocol_config.move_binary_format_version(),
-                    context.protocol_config.no_extraneous_module_bytes(),
-                )
-                .map_err(|e| e.finish(Location::Undefined))
+                CompiledModule::deserialize_with_config(b, &binary_config)
+                    .map_err(|e| e.finish(Location::Undefined))
             })
             .collect::<VMResult<Vec<CompiledModule>>>()
             .map_err(|e| context.convert_vm_error(e))?;
@@ -1001,17 +1006,22 @@ mod checked {
             .vm
             .load_module(module_id, context.session.get_resolver())
             .map_err(|e| context.convert_vm_error(e))?;
-        let Some((index, fdef)) = module.function_defs.iter().enumerate().find(|(_index, fdef)| {
-        module.identifier_at(module.function_handle_at(fdef.function).name) == function
-    }) else {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::FunctionNotFound,
-            format!(
-                "Could not resolve function '{}' in module {}",
-                function, &module_id,
-            ),
-        ));
-    };
+        let Some((index, fdef)) = module
+            .function_defs
+            .iter()
+            .enumerate()
+            .find(|(_index, fdef)| {
+                module.identifier_at(module.function_handle_at(fdef.function).name) == function
+            })
+        else {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::FunctionNotFound,
+                format!(
+                    "Could not resolve function '{}' in module {}",
+                    function, &module_id,
+                ),
+            ));
+        };
 
         // entry on init is now banned, so ban invoking it
         if !from_init && function == INIT_FN_NAME && context.protocol_config.ban_entry_init() {
@@ -1138,21 +1148,21 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
+                    Type::Struct(_) | Type::StructInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .session
                             .get_type_tag(return_type)
                             .map_err(|e| context.convert_vm_error(e))?;
                         let TypeTag::Struct(struct_tag) = type_tag else {
-                        invariant_violation!("Struct type make a non struct type tag")
-                    };
+                            invariant_violation!("Struct type make a non struct type tag")
+                        };
                         ValueKind::Object {
                             type_: MoveObjectType::from(*struct_tag),
                             has_public_transfer: abilities.has_store(),
                         }
                     }
                     Type::Struct(_)
-                    | Type::StructInstantiation(_, _)
+                    | Type::StructInstantiation(_)
                     | Type::Bool
                     | Type::U8
                     | Type::U64
@@ -1274,8 +1284,8 @@ mod checked {
                             .get_type_tag(type_)
                             .map_err(|e| context.convert_vm_error(e))?;
                         let TypeTag::Struct(struct_tag) = type_tag else {
-                        invariant_violation!("Struct type make a non struct type tag")
-                    };
+                            invariant_violation!("Struct type make a non struct type tag")
+                        };
                         let type_ = (*struct_tag).into();
                         ValueKind::Object {
                             type_,
@@ -1334,19 +1344,19 @@ mod checked {
             // and might need to run validation in addition to the BCS layout
             Value::Raw(RawValueType::Any, bytes) => {
                 let Some(layout) = primitive_serialization_layout(context, param_ty)? else {
-                let msg = format!(
-                    "Non-primitive argument at index {}. If it is an object, it must be \
+                    let msg = format!(
+                        "Non-primitive argument at index {}. If it is an object, it must be \
                     populated by an object",
-                    idx,
-                );
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::command_argument_error(
-                        CommandArgumentError::InvalidUsageOfPureArg,
-                        idx as u16,
-                    ),
-                    msg,
-                ));
-            };
+                        idx,
+                    );
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::command_argument_error(
+                            CommandArgumentError::InvalidUsageOfPureArg,
+                            idx as u16,
+                        ),
+                        msg,
+                    ));
+                };
                 bcs_argument_validate(bytes, idx as u16, layout)?;
                 return Ok(());
             }
@@ -1358,6 +1368,9 @@ mod checked {
                 ty
             }
             Value::Object(obj) => &obj.type_,
+            Value::Receiving(_, _, _) => {
+                unreachable!("Receiving value should never occur in v0 execution")
+            }
         };
         if ty != param_ty {
             Err(command_argument_error(
@@ -1391,10 +1404,12 @@ mod checked {
             Type::Reference(inner) => (false, inner),
             _ => return Ok(TxContextKind::None),
         };
-        let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
+        let Type::Struct(idx) = &**inner else {
+            return Ok(TxContextKind::None);
+        };
         let Some(s) = context.session.get_struct_type(*idx) else {
-        invariant_violation!("Loaded struct not found")
-    };
+            invariant_violation!("Loaded struct not found")
+        };
         let (module_addr, module_name, struct_name) = get_struct_ident(&s);
         let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
             && module_name == TX_CONTEXT_MODULE_NAME
@@ -1433,10 +1448,11 @@ mod checked {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::StructInstantiation(idx, targs) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (idx, targs) = &**struct_inst;
                 let Some(s) = context.session.get_struct_type(*idx) else {
-                invariant_violation!("Loaded struct not found")
-            };
+                    invariant_violation!("Loaded struct not found")
+                };
                 let resolved_struct = get_struct_ident(&s);
                 // is option of a string
                 if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
@@ -1448,8 +1464,8 @@ mod checked {
             }
             Type::Struct(idx) => {
                 let Some(s) = context.session.get_struct_type(*idx) else {
-                invariant_violation!("Loaded struct not found")
-            };
+                    invariant_violation!("Loaded struct not found")
+                };
                 let resolved_struct = get_struct_ident(&s);
                 if resolved_struct == RESOLVED_SUI_ID {
                     Some(PrimitiveArgumentLayout::Address)

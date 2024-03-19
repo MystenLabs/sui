@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo } from 'react';
-
 import type { SuiParsedData } from '@mysten/sui.js/client';
+import { useMemo } from 'react';
 
 export const parseIpfsUrl = (ipfsUrl: string) =>
 	ipfsUrl.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');

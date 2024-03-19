@@ -3,10 +3,9 @@
 
 use std::{
     collections::hash_map::RandomState,
-    hash::{self, BuildHasher, Hash},
+    hash::{BuildHasher, Hash},
 };
 
-use hash::Hasher;
 use lru::LruCache;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -50,9 +49,7 @@ where
     S: BuildHasher,
 {
     fn shard_id(&self, key: &K) -> usize {
-        let mut hasher = self.hasher.build_hasher();
-        key.hash(&mut hasher);
-        let h = hasher.finish() as usize;
+        let h = self.hasher.hash_one(key) as usize;
         h % self.shards.len()
     }
 
@@ -125,14 +122,14 @@ where
     pub async fn get_with(&self, key: K, init: impl Future<Output = V>) -> V {
         let shard = self.read_shard(&key).await;
         let value = shard.peek(&key);
-        if value.is_some() {
-            return value.unwrap().clone();
+        if let Some(value) = value {
+            return value.clone();
         }
         drop(shard);
         let mut shard = self.write_shard(&key).await;
         let value = shard.get(&key);
-        if value.is_some() {
-            return value.unwrap().clone();
+        if let Some(value) = value {
+            return value.clone();
         }
         let value = init.await;
         let cloned_value = value.clone();

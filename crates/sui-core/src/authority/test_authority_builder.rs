@@ -8,6 +8,7 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::execution_cache::ExecutionCache;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -17,7 +18,7 @@ use std::sync::Arc;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
-use sui_config::node::StateDebugDumpConfig;
+use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
@@ -25,18 +26,18 @@ use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
+use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::digests::ChainIdentifier;
-use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
 use tempfile::tempdir;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
@@ -48,6 +49,11 @@ pub struct TestAuthorityBuilder<'a> {
     genesis: Option<&'a Genesis>,
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
+    disable_indexer: bool,
+    accounts: Vec<AccountConfig>,
+    /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
+    insert_genesis_checkpoint: bool,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -119,26 +125,41 @@ impl<'a> TestAuthorityBuilder<'a> {
         )
     }
 
+    pub fn disable_indexer(mut self) -> Self {
+        self.disable_indexer = true;
+        self
+    }
+
+    pub fn insert_genesis_checkpoint(mut self) -> Self {
+        self.insert_genesis_checkpoint = true;
+        self
+    }
+
     pub fn with_expensive_safety_checks(mut self, config: ExpensiveSafetyCheckConfig) -> Self {
         assert!(self.expensive_safety_checks.replace(config).is_none());
         self
     }
 
-    pub async fn side_load_objects(
-        authority_state: Arc<AuthorityState>,
-        objects: &'a [Object],
-    ) -> SuiResult {
-        authority_state
-            .database
-            .insert_raw_object_unchecked_for_testing(objects)
-            .await
+    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.accounts = accounts;
+        self
+    }
+
+    pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
+        assert!(self.authority_overload_config.replace(config).is_none());
+        self
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
-        let local_network_config =
+        let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500))
-                .build();
+                .with_accounts(self.accounts)
+                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500));
+        if let Some(protocol_config) = &self.protocol_config {
+            local_network_config_builder =
+                local_network_config_builder.with_protocol_version(protocol_config.version);
+        }
+        let local_network_config = local_network_config_builder.build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee().unwrap();
         let path = self.store_base_path.unwrap_or_else(|| {
@@ -174,18 +195,32 @@ impl<'a> TestAuthorityBuilder<'a> {
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
-        let _guard = self
-            .protocol_config
-            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
+        // Force disable random beacon for tests using this builder, because it doesn't set up the
+        // RandomnessManager.
+        let _guard = if let Some(mut config) = self.protocol_config {
+            config.set_random_beacon_for_testing(false);
+            ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone())
+        } else {
+            ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+                config.set_random_beacon_for_testing(false);
+                config
+            })
+        };
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
-            genesis.authenticator_state_obj_initial_shared_version(),
-        );
+            &genesis.objects(),
+            None,
+        )
+        .unwrap();
         let expensive_safety_checks = match self.expensive_safety_checks {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
+        let cache = Arc::new(ExecutionCache::new_for_tests(
+            authority_store.clone(),
+            &registry,
+        ));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -193,7 +228,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             EpochMetrics::new(&registry),
             epoch_start_configuration,
-            authority_store.clone(),
+            cache.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
@@ -206,26 +241,47 @@ impl<'a> TestAuthorityBuilder<'a> {
         ));
 
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(
-            path.join("indexes"),
-            &registry,
-            epoch_store
-                .protocol_config()
-                .max_move_identifier_len_as_option(),
-        )));
+        if self.insert_genesis_checkpoint {
+            checkpoint_store.insert_genesis_checkpoint(
+                genesis.checkpoint(),
+                genesis.checkpoint_contents().clone(),
+                &epoch_store,
+            );
+        }
+        let index_store = if self.disable_indexer {
+            None
+        } else {
+            Some(Arc::new(IndexStore::new(
+                path.join("indexes"),
+                &registry,
+                epoch_store
+                    .protocol_config()
+                    .max_move_identifier_len_as_option(),
+            )))
+        };
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
+        let authority_overload_config = self.authority_overload_config.unwrap_or_default();
+        let mut pruning_config = AuthorityStorePruningConfig::default();
+        if !epoch_store
+            .protocol_config()
+            .simplified_unwrap_then_delete()
+        {
+            // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
+            pruning_config.set_killswitch_tombstone_pruning(true);
+        }
         let state = AuthorityState::new(
             name,
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             authority_store,
+            cache,
             epoch_store,
             committee_store,
             index_store,
             checkpoint_store,
             &registry,
-            AuthorityStorePruningConfig::default(),
+            pruning_config,
             genesis.objects(),
             &DBCheckpointConfig::default(),
             ExpensiveSafetyCheckConfig::new_enable_all(),
@@ -235,6 +291,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             StateDebugDumpConfig {
                 dump_file_directory: Some(tempdir().unwrap().into_path()),
             },
+            authority_overload_config,
             ArchiveReaderBalancer::default(),
         )
         .await;
@@ -255,10 +312,14 @@ impl<'a> TestAuthorityBuilder<'a> {
             .await
             .unwrap();
 
+        // We want to insert these objects directly instead of relying on genesis because
+        // genesis process would set the previous transaction field for these objects, which would
+        // change their object digest. This makes it difficult to write tests that want to use
+        // these objects directly.
+        // TODO: we should probably have a better way to do this.
         if let Some(starting_objects) = self.starting_objects {
             state
-                .database
-                .insert_raw_object_unchecked_for_testing(starting_objects)
+                .insert_objects_unsafe_for_testing_only(starting_objects)
                 .await
                 .unwrap();
         };

@@ -1,0 +1,36 @@
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:8:13
+  │
+8 │         let Foo(_) = x;
+  │             ^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:8:13
+  │
+8 │         let Foo(_) = x;
+  │             ^^^^^^ Missing binding for field 'field' in '0x42::M::Foo'
+
+error[E03010]: unbound field
+  ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:8:13
+  │
+8 │         let Foo(_) = x;
+  │             ^^^^^^ Unbound field '0' in '0x42::M::Foo'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:15:9
+   │
+15 │         Foo(_) = x;
+   │         ^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:15:9
+   │
+15 │         Foo(_) = x;
+   │         ^^^^^^ Missing assignment for field 'field' in '0x42::M::Foo'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:15:9
+   │
+15 │         Foo(_) = x;
+   │         ^^^^^^ Unbound field '0' in '0x42::M::Foo'
+

@@ -8,6 +8,16 @@ module.exports = {
 	tabWidth: 2,
 	trailingComma: 'all',
 	useTabs: true,
+	plugins: ['@ianvs/prettier-plugin-sort-imports'],
+	importOrder: [
+		'<BUILT_IN_MODULES>',
+		'<THIRD_PARTY_MODULES>',
+		'',
+		'^@/(.*)$',
+		'^~/(.*)$',
+		'',
+		'^[.]',
+	],
 	overrides: [
 		{
 			files: 'apps/explorer/**/*',
@@ -18,6 +28,12 @@ module.exports = {
 		},
 		{
 			files: 'sdk/**/*',
+			options: {
+				proseWrap: 'always',
+			},
+		},
+		{
+			files: 'external-crates/move/documentation/book/**/*',
 			options: {
 				proseWrap: 'always',
 			},

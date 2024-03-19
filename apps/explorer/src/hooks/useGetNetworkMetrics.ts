@@ -9,7 +9,7 @@ export function useGetNetworkMetrics() {
 	return useQuery({
 		queryKey: ['home', 'metrics'],
 		queryFn: () => client.getNetworkMetrics(),
-		cacheTime: 24 * 60 * 60 * 1000,
+		gcTime: 24 * 60 * 60 * 1000,
 		staleTime: Infinity,
 		retry: 5,
 	});

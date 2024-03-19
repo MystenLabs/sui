@@ -19,11 +19,10 @@ rand.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
 sui-config.workspace = true
-sui-types.workspace = true
+sui-types = { workspace = true, features = ["test-utils"]}
 sui-storage.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 tokio = { workspace = true, features = ["full"] }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tempfile.workspace = true

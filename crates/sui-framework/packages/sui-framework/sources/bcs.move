@@ -9,7 +9,7 @@
 /// - address - sequence of X bytes
 /// - bool - byte with 0 or 1
 /// - u8 - a single u8 byte
-/// - u64 / u128 - LE bytes
+/// - u64 / u128 / u256 - LE bytes
 /// - vector - ULEB128 length + LEN elements
 /// - option - first byte bool: None (0) or Some (1), then value
 ///
@@ -40,10 +40,8 @@ module sui::bcs {
 
     /// For when bytes length is less than required for deserialization.
     const EOutOfRange: u64 = 0;
-
     /// For when the boolean value different than `0` or `1`.
     const ENotBool: u64 = 1;
-
     /// For when ULEB byte is out of range (or not found).
     const ELenOutOfRange: u64 = 2;
 
@@ -126,6 +124,20 @@ module sui::bcs {
         while (i < 128) {
             let byte = (v::pop_back(&mut bcs.bytes) as u128);
             value = value + (byte << i);
+            i = i + 8;
+        };
+
+        value
+    }
+
+    /// Read `u256` value from bcs-serialized bytes.
+    public fun peel_u256(bcs: &mut BCS): u256 {
+        assert!(v::length(&bcs.bytes) >= 32, EOutOfRange);
+
+        let (value, i) = (0u256, 0u16);
+        while (i < 256) {
+            let byte = (v::pop_back(&mut bcs.bytes) as u256);
+            value = value + (byte << (i as u8));
             i = i + 8;
         };
 
@@ -260,9 +272,6 @@ module sui::bcs {
             option::none()
         }
     }
-
-    // TODO: re-enable once bit-wise operators in peel_vec_length are supported in the prover
-    spec module { pragma verify = false; }
 
     // === Tests ===
 

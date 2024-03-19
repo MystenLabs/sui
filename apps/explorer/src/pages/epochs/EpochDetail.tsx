@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -40,8 +40,8 @@ function SuiStats({
 export default function EpochDetail() {
 	const { id } = useParams();
 	const enhancedRpc = useEnhancedRpcClient();
-	const { data: systemState } = useLatestSuiSystemState();
-	const { data, isLoading, isError } = useQuery({
+	const { data: systemState } = useSuiClientQuery('getLatestSuiSystemState');
+	const { data, isPending, isError } = useQuery({
 		queryKey: ['epoch', id],
 		queryFn: async () =>
 			enhancedRpc.getEpochs({
@@ -69,7 +69,7 @@ export default function EpochDetail() {
 		);
 	}, [epochData]);
 
-	if (isLoading) return <PageLayout content={<LoadingIndicator />} />;
+	if (isPending) return <PageLayout content={<LoadingIndicator />} />;
 
 	if (isError || !epochData)
 		return (

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppSelector } from '_hooks';
+import { setAttributes } from '_src/shared/experimentation/features';
 import { useGrowthBook } from '@growthbook/growthbook-react';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import * as Sentry from '@sentry/browser';
@@ -8,8 +10,6 @@ import { useEffect } from 'react';
 import Browser from 'webextension-polyfill';
 
 import { getUrlWithDeviceId } from '../analytics/amplitude';
-import { useAppSelector } from '_hooks';
-import { setAttributes } from '_src/shared/experimentation/features';
 
 export const MAIN_UI_URL = Browser.runtime.getURL('ui.html');
 

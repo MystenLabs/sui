@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{
 #[path = "tests/metered_channel_tests.rs"]
 mod metered_channel_tests;
 
-/// An [`mpsc::Sender`](tokio::sync::mpsc::Sender) with an [`IntGauge`]
+/// An [`mpsc::Sender`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
 pub struct Sender<T> {
@@ -34,7 +34,43 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-/// An [`mpsc::Receiver`](tokio::sync::mpsc::Receiver) with an [`IntGauge`]
+impl<T> Sender<T> {
+    pub fn downgrade(&self) -> WeakSender<T> {
+        let sender = self.inner.downgrade();
+        WeakSender {
+            inner: sender,
+            gauge: self.gauge.clone(),
+        }
+    }
+}
+
+/// An [`mpsc::WeakSender`] with an [`IntGauge`]
+/// counting the number of currently queued items.
+#[derive(Debug)]
+pub struct WeakSender<T> {
+    inner: mpsc::WeakSender<T>,
+    gauge: IntGauge,
+}
+
+impl<T> Clone for WeakSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            gauge: self.gauge.clone(),
+        }
+    }
+}
+
+impl<T> WeakSender<T> {
+    pub fn upgrade(&self) -> Option<Sender<T>> {
+        self.inner.upgrade().map(|s| Sender {
+            inner: s,
+            gauge: self.gauge.clone(),
+        })
+    }
+}
+
+/// An [`mpsc::Receiver`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
 pub struct Receiver<T> {
@@ -72,7 +108,15 @@ impl<T> Receiver<T> {
         })
     }
 
-    // TODO: facade [`blocking_recv`](tokio::mpsc::Receiver::blocking_recv) under the tokio feature flag "sync"
+    pub fn blocking_recv(&mut self) -> Option<T> {
+        self.inner.blocking_recv().map(|val| {
+            self.gauge.dec();
+            if let Some(total_gauge) = &self.total {
+                total_gauge.inc();
+            }
+            val
+        })
+    }
 
     /// Closes the receiving half of a channel without dropping it.
     pub fn close(&mut self) {

@@ -1,0 +1,35 @@
+# Get the checkpoint at sequence 9769 and show
+# its transactions
+{
+  checkpoint(id: { sequenceNumber: 9769 }) {
+    digest
+    sequenceNumber
+    timestamp
+    validatorSignatures
+    previousCheckpointDigest
+    networkTotalTransactions
+    rollingGasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+    epoch {
+      epochId
+      liveObjectSetDigest
+    }
+    transactionBlocks {
+      edges {
+        node {
+          digest
+          sender {
+            address
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+    }
+  }
+}

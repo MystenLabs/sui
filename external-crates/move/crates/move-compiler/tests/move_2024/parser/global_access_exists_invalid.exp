@@ -1,0 +1,23 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/parser/global_access_exists_invalid.move:2:5
+  │
+2 │     struct R {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_2024/parser/global_access_exists_invalid.move:9:9
+  │
+9 │     fun freeze(): u64 { 0 }
+  │         ^^^^^^ Invalid function name 'freeze'. 'freeze' is restricted and cannot be used to name a function
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:13:26
+   │
+13 │         let _ : bool = ::exists<Self::R>(0x0);
+   │                          ^^^^^^ Expected '::' after the address in this module access chain
+   │
+   = Access chains that start with '::' must be one of the following forms: 
+       '::<address>::<module>', '::<address>::<module>::<member>'
+

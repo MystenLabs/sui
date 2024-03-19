@@ -1,6 +1,0 @@
-error[E01001]: invalid character
-  ┌─ tests/move_check/parser/invalid_character_comment.move:3:44
-  │
-3 │ // Non-ASCII characters in comments (e.g., ф) are also not allowed.
-  │                                            ^ Invalid character 'ф' found when reading file. Only ASCII printable characters, tabs (\t), lf (\n) and crlf (\r\n) are permitted.
-

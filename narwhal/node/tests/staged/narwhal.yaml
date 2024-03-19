@@ -1,4 +1,21 @@
 ---
+Authority:
+  STRUCT:
+    - protocol_key:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
+    - protocol_key_bytes:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
+    - stake: U64
+    - primary_address: STR
+    - network_key:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
+    - hostname: STR
 AuthorityIdentifier:
   NEWTYPESTRUCT: U16
 Batch:
@@ -32,26 +49,35 @@ BatchV2:
         TYPENAME: VersionedMetadata
 Certificate:
   ENUM:
-    0:
-      V1:
+    1:
+      V2:
         NEWTYPE:
-          TYPENAME: CertificateV1
+          TYPENAME: CertificateV2
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-CertificateV1:
+CertificateV2:
   STRUCT:
     - header:
         TYPENAME: Header
-    - aggregated_signature:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
+    - signature_verification_state:
+        TYPENAME: SignatureVerificationState
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
+Committee:
+  STRUCT:
+    - authorities:
+        MAP:
+          KEY:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 96
+          VALUE:
+            TYPENAME: Authority
+    - epoch: U64
 Header:
   ENUM:
     0:
@@ -88,6 +114,14 @@ MetadataV1:
     - created_at: U64
     - received_at:
         OPTION: U64
+SignatureVerificationState:
+  ENUM:
+    0:
+      Unsigned:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 48
 VersionedMetadata:
   ENUM:
     0:

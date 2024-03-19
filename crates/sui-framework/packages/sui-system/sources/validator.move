@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(unused_const)]
 module sui_system::validator {
     use std::ascii;
     use std::vector;
@@ -356,7 +357,7 @@ module sui_system::validator {
     public(friend) fun request_withdraw_stake(
         self: &mut Validator,
         staked_sui: StakedSui,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) : Balance<SUI> {
         let principal_amount = staking_pool::staked_sui_amount(&staked_sui);
         let stake_activation_epoch = staking_pool::stake_activation_epoch(&staked_sui);
@@ -426,7 +427,7 @@ module sui_system::validator {
     }
 
     /// Process pending stakes and withdraws, called at the end of the epoch.
-    public(friend) fun process_pending_stakes_and_withdraws(self: &mut Validator, ctx: &mut TxContext) {
+    public(friend) fun process_pending_stakes_and_withdraws(self: &mut Validator, ctx: &TxContext) {
         staking_pool::process_pending_stakes_and_withdraws(&mut self.staking_pool, ctx);
         assert!(stake_amount(self) == self.next_epoch_stake, EInvalidStakeAmount);
     }
@@ -535,15 +536,7 @@ module sui_system::validator {
     // TODO: this and `delegate_amount` and `total_stake` all seem to return the same value?
     // two of the functions can probably be removed.
     public fun total_stake_amount(self: &Validator): u64 {
-        spec {
-            // TODO: this should be provable rather than assumed
-            assume self.staking_pool.sui_balance <= MAX_U64;
-        };
         staking_pool::sui_balance(&self.staking_pool)
-    }
-
-    spec total_stake_amount {
-        aborts_if false;
     }
 
     public fun stake_amount(self: &Validator): u64 {
@@ -870,13 +863,6 @@ module sui_system::validator {
     }
 
     public native fun validate_metadata_bcs(metadata: vector<u8>);
-
-    spec validate_metadata_bcs {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-     }
 
     public(friend) fun get_staking_pool_ref(self: &Validator) : &StakingPool {
         &self.staking_pool

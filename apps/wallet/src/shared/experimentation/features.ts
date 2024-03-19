@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { API_ENV } from '_src/shared/api-env';
 import { GrowthBook } from '@growthbook/growthbook';
 import Browser from 'webextension-polyfill';
-
-import { API_ENV } from '_src/shared/api-env';
 
 export const growthbook = new GrowthBook({
 	// If you want to develop locally, you can set the API host to this:
@@ -27,6 +26,9 @@ export enum FEATURES {
 	WALLET_QREDO = 'wallet-qredo',
 	WALLET_APPS_BANNER_CONFIG = 'wallet-apps-banner-config',
 	WALLET_INTERSTITIAL_CONFIG = 'wallet-interstitial-config',
+	WALLET_DEFI = 'wallet-defi',
+	WALLET_FEE_ADDRESS = 'wallet-fee-address',
+	DEEP_BOOK_CONFIGS = 'deep-book-configs',
 }
 
 export function setAttributes(network?: { apiEnv: API_ENV; customRPC?: string | null }) {

@@ -15,15 +15,14 @@ function FooterIcon({ children }: { children: ReactNode }) {
 }
 
 export const footerLinks = [
-	{ title: 'FAQ', href: 'https://docs.mystenlabs.com/explorer/faq' },
-	{ title: 'Blog', href: 'https://medium.com/mysten-labs' },
+	{ title: 'Blog', href: 'https://mystenlabs.com/blog' },
 	{
 		title: 'Whitepaper',
 		href: 'https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf',
 	},
 	{
 		title: 'Docs',
-		href: 'https://docs.mystenlabs.com/explorer',
+		href: 'https://docs.mystenlabs.com',
 	},
 	{
 		title: 'GitHub',
@@ -62,10 +61,10 @@ export const socialLinks = [
 export const legalLinks = [
 	{
 		title: 'Terms & Conditions',
-		href: 'https://mystenlabs.com/legal?content=terms',
+		href: 'https://mystenlabs.com/legal#termsofservice',
 	},
 	{
 		title: 'Privacy Policy',
-		href: 'https://mystenlabs.com/legal?content=privacy',
+		href: 'https://mystenlabs.com/legal#privacypolicy',
 	},
 ];

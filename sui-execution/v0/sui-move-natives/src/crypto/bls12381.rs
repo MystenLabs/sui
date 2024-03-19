@@ -80,9 +80,10 @@ pub fn bls12381_min_sig_verify(
     let cost = context.gas_used();
 
     let Ok(signature) =
-         <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref)  else {
-            return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
-        };
+        <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref)
+    else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
+    };
 
     let public_key =
         match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {

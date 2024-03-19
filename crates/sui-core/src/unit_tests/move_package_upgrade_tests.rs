@@ -10,7 +10,7 @@ use sui_types::{
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::{BackingPackageStore, ObjectStore},
+    storage::ObjectStore,
     transaction::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -18,6 +18,7 @@ use sui_types::{
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, UserInputError};
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
 };
@@ -34,6 +35,7 @@ use crate::authority::{
     move_integration_tests::build_and_publish_test_package_with_upgrade_cap, AuthorityState,
 };
 
+#[macro_export]
 macro_rules! move_call {
     {$builder:expr, ($addr:expr)::$module_name:ident::$func:ident($($args:expr),* $(,)?)} => {
         $builder.programmable_move_call(
@@ -115,10 +117,6 @@ struct UpgradeStateRunner {
 impl UpgradeStateRunner {
     pub async fn new(base_package_name: &str) -> Self {
         telemetry_subscribers::init_for_testing();
-        let _dont_remove = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_package_upgrades_for_testing(true);
-            config
-        });
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -267,17 +265,13 @@ async fn test_upgrade_package_happy_path() {
 
     let package = runner
         .authority_state
-        .database
-        .get_package(&runner.package.0)
+        .get_cache_reader()
+        .get_package_object(&runner.package.0)
         .unwrap()
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let normalized_modules = package
-        .normalize(
-            config.move_binary_format_version(),
-            config.no_extraneous_module_bytes(),
-        )
-        .unwrap();
+    let binary_config = to_binary_config(&config);
+    let normalized_modules = package.move_package().normalize(&binary_config).unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .functions
@@ -354,7 +348,7 @@ async fn test_upgrade_introduces_type_then_uses_it() {
 
     let b = runner
         .authority_state
-        .database
+        .get_object_store()
         .get_object_by_key(&created.0, created.1)
         .unwrap()
         .unwrap();
@@ -421,7 +415,7 @@ async fn test_upgrade_package_incorrect_digest() {
 async fn test_upgrade_package_compatibility_too_permissive() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             let cap = builder
@@ -840,13 +834,14 @@ async fn test_publish_override_happy_path() {
 
     let package = runner
         .authority_state
-        .database
-        .get_package(&new_package.0)
+        .get_cache_reader()
+        .get_package_object(&new_package.0)
         .unwrap()
         .unwrap();
 
     // Make sure the linkage table points to the correct versions!
     let dep_ids_in_linkage_table: BTreeSet<_> = package
+        .move_package()
         .linkage_table()
         .values()
         .map(|up| up.upgraded_id)
@@ -892,13 +887,14 @@ async fn test_publish_transitive_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .database
-        .get_package(&root_package.0)
+        .get_cache_reader()
+        .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
 
     // Make sure the linkage table points to the correct versions!
     let dep_ids_in_linkage_table: BTreeSet<_> = root_move_package
+        .move_package()
         .linkage_table()
         .values()
         .map(|up| up.upgraded_id)
@@ -982,13 +978,14 @@ async fn test_publish_transitive_override_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .database
-        .get_package(&root_package.0)
+        .get_cache_reader()
+        .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
 
     // Make sure the linkage table points to the correct versions!
     let dep_ids_in_linkage_table: BTreeSet<_> = root_move_package
+        .move_package()
         .linkage_table()
         .values()
         .map(|up| up.upgraded_id)

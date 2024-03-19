@@ -6,24 +6,21 @@ import { Text } from '@mysten/ui';
 
 import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
-import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
+import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
 const REGEX_NUMBER = /^\d+$/;
-const DEFAULT_ITEMS_TO_SHOW = 10;
 
 interface InputsCardProps {
 	inputs: SuiCallArg[];
 }
 
 export function InputsCard({ inputs }: InputsCardProps) {
-	const defaultOpen = inputs.length < DEFAULT_ITEMS_TO_SHOW;
-
 	if (!inputs?.length) {
 		return null;
 	}
 
 	const expandableItems = inputs.map((input, index) => (
-		<TransactionBlockCardSection key={index} title={`Input ${index}`} defaultOpen={defaultOpen}>
+		<CollapsibleSection key={index} title={`Input ${index}`} defaultOpen>
 			<div data-testid="inputs-card-content" className="flex flex-col gap-2">
 				{Object.entries(input).map(([key, value]) => {
 					let renderValue;
@@ -62,7 +59,7 @@ export function InputsCard({ inputs }: InputsCardProps) {
 					);
 				})}
 			</div>
-		</TransactionBlockCardSection>
+		</CollapsibleSection>
 	));
 
 	return (
@@ -71,8 +68,6 @@ export function InputsCard({ inputs }: InputsCardProps) {
 			items={expandableItems}
 			itemsLabel={inputs.length > 1 ? 'Inputs' : 'Input'}
 			count={inputs.length}
-			defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-			noExpandableList={defaultOpen}
 		/>
 	);
 }

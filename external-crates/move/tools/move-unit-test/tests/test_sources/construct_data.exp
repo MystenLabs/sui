@@ -1,8 +1,0 @@
-Running Move unit tests
-[ PASS    ] 0x1::M::make_sure_not_other_number
-[ PASS    ] 0x1::M::make_sure_number_matches
-0x1::M::make_sure_not_other_number
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::make_sure_number_matches
-Output: Ok(ChangeSet { accounts: {} })
-Test result: OK. Total tests: 2; passed: 2; failed: 0

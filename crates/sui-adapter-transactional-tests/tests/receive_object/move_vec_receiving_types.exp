@@ -1,0 +1,60 @@
+processed 14 tasks
+
+task 1 'publish'. lines 6-66:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10579200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 68-68:
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 70-70:
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 4 'view-object'. lines 72-72:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+
+task 5 'view-object'. lines 74-74:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
+
+task 6 'view-object'. lines 76-76:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::C {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}}
+
+task 7 'view-object'. lines 78-80:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::C {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,4)}}}
+
+task 8 'programmable'. lines 81-84:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 9 'programmable'. lines 85-89:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 10 'programmable'. lines 90-95:
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+
+task 11 'programmable'. lines 96-100:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(1) } }
+
+task 12 'programmable'. lines 101-103:
+Error: Transaction Effects Status: Invalid command argument at 4. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 4, kind: TypeMismatch }, source: None, command: Some(1) } }
+
+task 13 'programmable'. lines 105-108:
+Error: Transaction Effects Status: Invalid command argument at 4. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 4, kind: TypeMismatch }, source: None, command: Some(2) } }

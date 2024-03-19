@@ -3,6 +3,7 @@
 
 use axum::{
     error_handling::HandleErrorLayer,
+    extract::Path,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -63,11 +64,11 @@ async fn main() -> Result<(), anyhow::Error> {
         ..
     } = config;
 
-    let context = create_wallet_context(wallet_client_timeout_secs).await?;
+    let context = create_wallet_context(wallet_client_timeout_secs)?;
 
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();
     info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
-    let registry_service = sui_node::metrics::start_prometheus_server(prom_binding);
+    let registry_service = mysten_metrics::start_prometheus_server(prom_binding);
     let prometheus_registry = registry_service.default_registry();
     let app_state = Arc::new(AppState {
         faucet: SimpleFaucet::new(
@@ -91,7 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .route("/", get(health))
         .route("/gas", post(request_gas))
         .route("/v1/gas", post(batch_request_gas))
-        .route("/v1/status", get(request_status))
+        .route("/v1/status/:task_id", get(request_status))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
@@ -145,7 +146,7 @@ async fn batch_request_gas(
             Json(BatchFaucetResponse::from(FaucetError::Internal(
                 "Input Error.".to_string(),
             ))),
-        )
+        );
     };
 
     if state.config.batch_enabled {
@@ -210,36 +211,26 @@ async fn batch_request_gas(
 /// handler for batch_get_status requests
 async fn request_status(
     Extension(state): Extension<Arc<AppState>>,
-    Json(payload): Json<FaucetRequest>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match payload {
-        FaucetRequest::GetBatchSendStatusRequest(requests) => {
-            match Uuid::parse_str(&requests.task_id) {
-                Ok(task_id) => {
-                    let result = state.faucet.get_batch_send_status(task_id).await;
-                    match result {
-                        Ok(v) => (
-                            StatusCode::CREATED,
-                            Json(BatchStatusFaucetResponse::from(v)),
-                        ),
-                        Err(v) => (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(BatchStatusFaucetResponse::from(v)),
-                        ),
-                    }
-                }
-                Err(e) => (
+    match Uuid::parse_str(&id) {
+        Ok(task_id) => {
+            let result = state.faucet.get_batch_send_status(task_id).await;
+            match result {
+                Ok(v) => (
+                    StatusCode::CREATED,
+                    Json(BatchStatusFaucetResponse::from(v)),
+                ),
+                Err(v) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
-                        e.to_string(),
-                    ))),
+                    Json(BatchStatusFaucetResponse::from(v)),
                 ),
             }
         }
-        _ => (
-            StatusCode::BAD_REQUEST,
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
             Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
-                "Input Error.".to_string(),
+                e.to_string(),
             ))),
         ),
     }
@@ -294,7 +285,7 @@ async fn request_gas(
     }
 }
 
-async fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyhow::Error> {
+fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     WalletContext::new(
@@ -302,7 +293,6 @@ async fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyho
         Some(Duration::from_secs(timeout_secs)),
         Some(1000),
     )
-    .await
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {

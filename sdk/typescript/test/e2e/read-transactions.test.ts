@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
 import { SuiTransactionBlockResponse } from '../../src/client';
-import { TransactionBlock } from '../../src/builder';
+import { TransactionBlock } from '../../src/transactions';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {
@@ -114,16 +115,20 @@ describe('Transaction Reading API', () => {
 			showObjectChanges: true,
 			showBalanceChanges: true,
 		};
-		const resp = await toolbox.client.queryTransactionBlocks({
+		const {
+			// comparing checkpoint causes a race condition resulting in flaky tests
+			// timestamp is only available after indexing, causing flaky tests
+			data: [{ checkpoint: _, timestampMs: __, ...response1 }],
+		} = await toolbox.client.queryTransactionBlocks({
 			options,
 			limit: 1,
 		});
-		const digest = resp.data[0].digest;
-		const response2 = await toolbox.client.getTransactionBlock({
-			digest,
+
+		const { checkpoint, timestampMs, ...response2 } = await toolbox.client.getTransactionBlock({
+			digest: response1.digest,
 			options,
 		});
-		expect(resp.data[0]).toEqual(response2);
+		expect(response1).toEqual(response2);
 	});
 
 	it('Get Transactions', async () => {

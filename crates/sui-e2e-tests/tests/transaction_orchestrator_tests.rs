@@ -61,7 +61,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     // Wait for data sync to catch up
     handle
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();

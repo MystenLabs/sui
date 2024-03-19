@@ -1,34 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
-import { Plus12 } from '@mysten/icons';
-import { useMemo } from 'react';
-
-import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { getAllStakeSui } from '../getAllStakeSui';
-import { StakeAmount } from '../home/StakeAmount';
-import { type DelegationObjectWithValidator, StakeCard } from '../home/StakedCard';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
+import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Button } from '_app/shared/ButtonUI';
-import BottomMenuLayout, { Menu, Content } from '_app/shared/bottom-menu-layout';
 import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { ampli } from '_src/shared/analytics/ampli';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_src/shared/constants';
+import { useGetDelegatedStake } from '@mysten/core';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
+import { Plus12 } from '@mysten/icons';
 import type { StakeObject } from '@mysten/sui.js/client';
+import { useMemo } from 'react';
+
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { getAllStakeSui } from '../getAllStakeSui';
+import { StakeAmount } from '../home/StakeAmount';
+import { StakeCard, type DelegationObjectWithValidator } from '../home/StakedCard';
 
 export function ValidatorsCard() {
 	const accountAddress = useActiveAddress();
 	const {
 		data: delegatedStake,
-		isLoading,
+		isPending,
 		isError,
 		error,
-	} = useGetDelegatedStake(accountAddress || '');
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	});
 
-	const { data: system } = useLatestSuiSystemState();
+	const { data: system } = useSuiClientQuery('getLatestSuiSystemState');
 	const activeValidators = system?.activeValidators;
 
 	// Total active stake for all Staked validators
@@ -74,7 +82,7 @@ export function ValidatorsCard() {
 
 	const numberOfValidators = delegatedStake?.length || 0;
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

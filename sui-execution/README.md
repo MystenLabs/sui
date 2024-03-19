@@ -18,7 +18,7 @@ The specific versions of crates in the execution layer are found in:
 
 - `./sui-execution`, (latest version and cuts/copies of sui-specific
   crates).
-- `./external-crates/move-execution` (cuts/copies of move-specific
+- `./external-crates/move/move-execution` (cuts/copies of move-specific
   crates).
 - `./external-crates/move` (the latest versions of move-specific
   crates).
@@ -85,7 +85,7 @@ on creating such a cut.
 Versioned snapshots, such as `v0`, found at:
 
 - `./sui-execution/v0`
-- `./external-crates/move-execution/v0`
+- `./external-crates/move/move-execution/v0`
 
 preserve the existing behaviour of execution.  These should generally
 not be modified, because doing so risks changing the effects produced

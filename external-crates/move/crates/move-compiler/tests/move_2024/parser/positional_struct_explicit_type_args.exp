@@ -1,0 +1,38 @@
+error[E03003]: unbound module member
+   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:17
+   │
+17 │         let _ = Foo <u64>(0);
+   │                 ^^^ Invalid module access. Unbound constant 'Foo' in module '0x42::M'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:17
+   │
+17 │         let _ = Foo <u64>(0);
+   │                 ^^^^^^^^
+   │                 │
+   │                 Invalid argument to '>'
+   │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:22
+   │
+17 │         let _ = Foo <u64>(0);
+   │                      ^^^ Unbound variable 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:25
+   │
+17 │         let _ = Foo <u64>(0);
+   │                 --------^--- Found: integer. It is not compatible with the other type.
+   │                 │       │ 
+   │                 │       Incompatible arguments to '>'
+   │                 Found: 'bool'. It is not compatible with the other type.
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:26
+   │
+17 │         let _ = Foo <u64>(0);
+   │                 -------- ^^^ Invalid argument to '>'
+   │                 │         
+   │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+

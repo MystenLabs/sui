@@ -19,10 +19,10 @@ export default function CoinsPanel({ coinType, id }: CoinsPanelProps) {
 	const containerRef = useRef(null);
 	const coinsSectionRef = useRef(null);
 	const { isIntersecting } = useOnScreen(containerRef);
-	const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useGetCoins(coinType, id);
+	const { data, isPending, isFetching, fetchNextPage, hasNextPage } = useGetCoins(coinType, id);
 	const [_, containerWidth] = useElementDimensions(coinsSectionRef);
 
-	const isSpinnerVisible = hasNextPage || isLoading || isFetching;
+	const isSpinnerVisible = hasNextPage || isPending || isFetching;
 
 	useEffect(() => {
 		if (isIntersecting && hasNextPage && !isFetching) {

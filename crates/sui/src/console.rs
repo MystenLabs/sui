@@ -131,7 +131,7 @@ async fn handle_command(
                 let addresses = addresses
                     .addresses
                     .iter()
-                    .map(|addr| format!("{addr}"))
+                    .map(|addr| format!("{}", addr.1))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::flag("--address"), addresses.clone());
                 cache.insert(CacheKey::flag("--to"), addresses);

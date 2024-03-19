@@ -44,7 +44,7 @@ module sui::test_random {
         if (remainder > 0) {
             let (i, digest) = (0, next_digest(random));
             while (i < remainder) {
-                vector::push_back(&mut output, *vector::borrow(&mut digest, i));
+                vector::push_back(&mut output, *vector::borrow(&digest, i));
                 i = i + 1;
             };
         };

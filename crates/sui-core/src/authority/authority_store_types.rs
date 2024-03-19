@@ -10,7 +10,7 @@ use sui_types::coin::Coin;
 use sui_types::crypto::{default_hash, Signable};
 use sui_types::error::SuiError;
 use sui_types::move_package::MovePackage;
-use sui_types::object::{Data, MoveObject, Object, Owner};
+use sui_types::object::{Data, MoveObject, Object, ObjectInner, Owner};
 use sui_types::storage::ObjectKey;
 
 pub type ObjectContentDigest = ObjectDigest;
@@ -196,6 +196,8 @@ pub struct StoreObjectPair(pub StoreObjectWrapper, pub Option<StoreMoveObjectWra
 pub fn get_store_object_pair(object: Object, indirect_objects_threshold: usize) -> StoreObjectPair {
     let mut indirect_object = None;
 
+    let object = object.into_inner();
+
     let data = match object.data {
         Data::Package(package) => StoreData::Package(package),
         Data::Move(move_obj) => {
@@ -266,16 +268,17 @@ pub(crate) fn try_construct_object(
             )?)
         },
         _ => {
-            return Err(SuiError::StorageCorruptedFieldError(
-                "inconsistent object representation".to_string(),
+            return Err(SuiError::Storage(
+                "corrupted field: inconsistent object representation".to_string(),
             ))
         }
     };
 
-    Ok(Object {
+    Ok(ObjectInner {
         data,
         owner: store_object.owner,
         previous_transaction: store_object.previous_transaction,
         storage_rebate: store_object.storage_rebate,
-    })
+    }
+    .into())
 }

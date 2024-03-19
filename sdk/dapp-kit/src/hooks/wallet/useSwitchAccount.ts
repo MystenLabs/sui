@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WalletAccount } from '@mysten/wallet-standard';
-import type { UseMutationOptions } from '@tanstack/react-query';
+import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
+
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletAccountNotFoundError, WalletNotConnectedError } from '../../errors/walletErrors.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
@@ -15,13 +16,10 @@ type SwitchAccountArgs = {
 
 type SwitchAccountResult = void;
 
+type UseSwitchAccountError = WalletNotConnectedError | WalletAccountNotFoundError | Error;
+
 type UseSwitchAccountMutationOptions = Omit<
-	UseMutationOptions<
-		SwitchAccountResult,
-		WalletNotConnectedError | WalletAccountNotFoundError | Error,
-		SwitchAccountArgs,
-		unknown
-	>,
+	UseMutationOptions<SwitchAccountResult, UseSwitchAccountError, SwitchAccountArgs, unknown>,
 	'mutationFn'
 >;
 
@@ -31,8 +29,12 @@ type UseSwitchAccountMutationOptions = Omit<
 export function useSwitchAccount({
 	mutationKey,
 	...mutationOptions
-}: UseSwitchAccountMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+}: UseSwitchAccountMutationOptions = {}): UseMutationResult<
+	SwitchAccountResult,
+	UseSwitchAccountError,
+	SwitchAccountArgs
+> {
+	const { currentWallet } = useCurrentWallet();
 	const setAccountSwitched = useWalletStore((state) => state.setAccountSwitched);
 
 	return useMutation({

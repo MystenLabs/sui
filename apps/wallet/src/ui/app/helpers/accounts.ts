@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import { isZkLoginAccountSerializedUI } from '_src/background/accounts/zklogin/ZkLoginAccount';
 
 function getKey(account: SerializedUIAccount): string {
 	if (isMnemonicSerializedUiAccount(account)) return account.sourceID;
-	if (isZkAccountSerializedUI(account)) return account.provider;
+	if (isZkLoginAccountSerializedUI(account)) return account.provider;
 	return account.type;
 }
 
 export const defaultSortOrder: AccountType[] = [
-	'zk',
+	'zkLogin',
 	'mnemonic-derived',
 	'imported',
 	'ledger',
@@ -19,12 +19,12 @@ export const defaultSortOrder: AccountType[] = [
 ];
 
 export function getAccountBackgroundByType(account: SerializedUIAccount) {
-	if (!isZkAccountSerializedUI(account)) return 'bg-gradients-graph-cards';
+	if (!isZkLoginAccountSerializedUI(account)) return 'bg-gradients-graph-cards';
 	switch (account.provider) {
 		case 'google':
 			return 'bg-google bg-no-repeat bg-cover';
 		case 'twitch':
-			return 'bg-twitch bg-no-repeat bg-cover';
+			return 'bg-twitch-image bg-no-repeat bg-cover';
 		default:
 			return `bg-gradients-graph-cards`;
 	}

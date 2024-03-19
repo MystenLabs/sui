@@ -64,7 +64,7 @@ module sui::clock {
     #[test_only]
     /// Expose the functionality of `create()` (usually only done during
     /// genesis) for tests that want to create a Clock.
-    public fun create_for_testing(ctx: &mut sui::tx_context::TxContext): Clock {
+    public fun create_for_testing(ctx: &mut TxContext): Clock {
         Clock {
             id: object::new(ctx),
             timestamp_ms: 0,

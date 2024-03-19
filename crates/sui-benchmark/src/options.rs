@@ -6,6 +6,7 @@ use clap::*;
 use strum_macros::EnumString;
 
 use crate::drivers::Interval;
+use std::str::FromStr;
 
 #[derive(Parser)]
 #[clap(name = "Stress Testing Framework")]
@@ -124,25 +125,59 @@ pub enum RunSpec {
     // and make progress in parallel. But this too
     // will likely change in future to support
     // more representative workloads.
+    //
+    // The Bench command allow us to define multiple benchmark groups in order to simulate different
+    // traffic characteristics across the whole benchmark duration. For that reason all arguments are
+    // expressed as vectors. Each benchmark group runs for the specified duration - as defined on the
+    // duration field - and for each group the parameters of the same vector position are considered.
+    // For example, for benchmark group 0, the vector arguments on position 0 refer to the properties
+    // of that benchmark group. The benchmark groups will run in a rotation fashion, unless the duration
+    // of the last group is set as "unbounded" which will run of the rest of the whole benchmark.
+    //
+    // Example: for Bench argument:
+    //
+    // Bench {
+    //      num_of_benchmarks: 2,
+    //      shared_counter: vec![100, 200],
+    //      transfer_object: vec![50, 50],
+    //      target_qps: vec![1000, 2000]
+    //      ...
+    //      duration: vec!["10s", "30s"]
+    // }
+    //
+    // It will run 2 "benchmarks" in a cycle . First the benchmark with parameters {shared_counter: 100, transfer_object: 50, target_qps: 1000, duration: "10s"...}
+    // will run for 10 seconds. Once finished, then a second benchmark will run immediately with parameters {shared_counter: 200, transfer_object: 50, target_qps: 2000, duration: "30s"...}
+    // for 30 seconds. Once finished, then again the fist benchmark will run. That will happen perpetually unless a `run_duration` is defined.
+    // If the second benchmark group had as duration "unbounded" then this benchmark would run forever and no cycling would occur.
+    // It has to be noted that all those benchmark groups are running under the same benchmark. The benchmark groups are essentially a way
+    // for someone to define for example different traffic loads to simulate things like peaks, lows etc.
     Bench {
         // ----- workloads ----
+        // the number of benchmarks that we are willing to run. For example, if `num_of_benchmark_groups = 2`,
+        // then we expect all the arguments under this subcommand to contain two values on their vectors - one for each
+        // benchmark set. If an argument doesn't contain the right number of values then it will panic.
+        #[clap(long, default_value = "1")]
+        num_of_benchmark_groups: u32,
         // relative weight of shared counter
         // transaction in the benchmark workload
-        #[clap(long, default_value = "0")]
-        shared_counter: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        shared_counter: Vec<u32>,
         // relative weight of transfer object
         // transactions in the benchmark workload
-        #[clap(long, default_value = "1")]
-        transfer_object: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
+        transfer_object: Vec<u32>,
         // relative weight of delegation transactions in the benchmark workload
-        #[clap(long, default_value = "0")]
-        delegation: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        delegation: Vec<u32>,
         // relative weight of batch payment transactions in the benchmark workload
-        #[clap(long, default_value = "0")]
-        batch_payment: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        batch_payment: Vec<u32>,
         // relative weight of adversarial transactions in the benchmark workload
-        #[clap(long, default_value = "0")]
-        adversarial: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        adversarial: Vec<u32>,
+        // relative weight of adversarial transactions in the benchmark workload
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        shared_deletion: Vec<u32>,
 
         // --- workload-specific options --- (TODO: use subcommands or similar)
         // 100 for max hotness i.e all requests target
@@ -151,31 +186,41 @@ pub enum RunSpec {
         // counter. The way total number of counters to
         // create is computed roughly as:
         // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
-        #[clap(long, default_value = "50")]
-        shared_counter_hotness_factor: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [50])]
+        shared_counter_hotness_factor: Vec<u32>,
+        // The number of shared counters this stress client will create and use.
+        // This parameter takes precedence over `shared_counter_hotness_factor`, meaning that when this
+        // parameter is specified, `shared_counter_hotness_factor` is ignored when deciding the number of shared
+        // counters to create.
+        #[clap(long, num_args(1..), value_delimiter = ',')]
+        num_shared_counters: Option<Vec<u64>>,
         // Maximum gas price increment over the RGP for shared counter transactions.
         // The actual increment for each transaction is chosen at random a value between 0 and this value.
-        #[clap(long, default_value = "0")]
-        shared_counter_max_tip: u64,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        shared_counter_max_tip: Vec<u64>,
         // batch size use for batch payment workload
-        #[clap(long, default_value = "15")]
-        batch_payment_size: u32,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [15])]
+        batch_payment_size: Vec<u32>,
         // type and load % of adversarial transactions in the benchmark workload.
         // Format is "{adversarial_type}-{load_factor}".
         // `load_factor` is a number between 0.0 and 1.0 which dictates how much load per tx
         // Default is (0-0.5) implying random load at 50% load. See `AdversarialPayloadType` enum for `adversarial_type`
-        #[clap(long, default_value = "0-1.0")]
-        adversarial_cfg: String,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = ["0-1.0".to_string()])]
+        adversarial_cfg: Vec<String>,
 
         // --- generic options ---
         // Target qps
-        #[clap(long, default_value = "1000", global = true)]
-        target_qps: u64,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1000])]
+        target_qps: Vec<u64>,
         // Number of workers
-        #[clap(long, default_value = "12", global = true)]
-        num_workers: u64,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [12])]
+        num_workers: Vec<u64>,
         // Max in-flight ratio
-        #[clap(long, default_value = "5", global = true)]
-        in_flight_ratio: u64,
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
+        in_flight_ratio: Vec<u64>,
+
+        // Setting the duration of each benchmark. Benchmarks will run in sequence.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [Interval::from_str("unbounded").unwrap()])]
+        duration: Vec<Interval>,
     },
 }

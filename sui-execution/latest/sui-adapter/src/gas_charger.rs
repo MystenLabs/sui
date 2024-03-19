@@ -11,7 +11,9 @@ pub mod checked {
     use crate::temporary_store::TemporaryStore;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
-    use sui_types::gas_model::gas_predicates::dont_charge_budget_on_storage_oog;
+    use sui_types::gas_model::gas_predicates::{
+        charge_upgrades, dont_charge_budget_on_storage_oog,
+    };
     use sui_types::{
         base_types::{ObjectID, ObjectRef},
         digests::TransactionDigest,
@@ -19,7 +21,6 @@ pub mod checked {
         gas_model::tables::GasStatus,
         is_system_package,
         object::Data,
-        storage::{DeleteKindWithOldVersion, WriteKind},
     };
     use tracing::trace;
 
@@ -36,7 +37,7 @@ pub mod checked {
         tx_digest: TransactionDigest,
         gas_model_version: u64,
         gas_coins: Vec<ObjectRef>,
-        // this is the the first gas coin in `gas_coins` and the one that all others will
+        // this is the first gas coin in `gas_coins` and the one that all others will
         // be smashed into. It can be None for system transactions when `gas_coins` is empty.
         smashed_gas_coin: Option<ObjectID>,
         gas_status: SuiGasStatus,
@@ -107,6 +108,10 @@ pub mod checked {
             self.gas_status.move_gas_status_mut()
         }
 
+        pub fn into_gas_status(self) -> SuiGasStatus {
+            self.gas_status
+        }
+
         pub fn summary(&self) -> GasCostSummary {
             self.gas_status.summary()
         }
@@ -131,6 +136,7 @@ pub mod checked {
             if gas_coin_count == 1 {
                 return;
             }
+
             // sum the value of all gas coins
             let new_balance = self
                 .gas_coins
@@ -138,10 +144,10 @@ pub mod checked {
                 .map(|obj_ref| {
                     let obj = temporary_store.objects().get(&obj_ref.0).unwrap();
                     let Data::Move(move_obj) = &obj.data else {
-                    return Err(ExecutionError::invariant_violation(
-                        "Provided non-gas coin object as input for gas!"
-                    ));
-                };
+                        return Err(ExecutionError::invariant_violation(
+                            "Provided non-gas coin object as input for gas!",
+                        ));
+                    };
                     if !move_obj.type_().is_gas_coin() {
                         return Err(ExecutionError::invariant_violation(
                             "Provided non-gas coin object as input for gas!",
@@ -172,9 +178,9 @@ pub mod checked {
                 })
                 .clone();
             // delete all gas objects except the primary_gas_object
-            for (id, version, _digest) in &self.gas_coins[1..] {
+            for (id, _version, _digest) in &self.gas_coins[1..] {
                 debug_assert_ne!(*id, primary_gas_object.id());
-                temporary_store.delete_object(id, DeleteKindWithOldVersion::Normal(*version));
+                temporary_store.delete_input_object(id);
             }
             primary_gas_object
                 .data
@@ -187,16 +193,21 @@ pub mod checked {
                     )
                 })
                 .set_coin_value_unsafe(new_balance);
-            temporary_store.write_object(primary_gas_object, WriteKind::Mutate);
+            temporary_store.mutate_input_object(primary_gas_object);
         }
 
         //
         // Gas charging operations
         //
 
-        pub fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64 {
+        pub fn track_storage_mutation(
+            &mut self,
+            object_id: ObjectID,
+            new_size: usize,
+            storage_rebate: u64,
+        ) -> u64 {
             self.gas_status
-                .track_storage_mutation(new_size, storage_rebate)
+                .track_storage_mutation(object_id, new_size, storage_rebate)
         }
 
         pub fn reset_storage_cost_and_rebate(&mut self) {
@@ -205,6 +216,14 @@ pub mod checked {
 
         pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
             self.gas_status.charge_publish_package(size)
+        }
+
+        pub fn charge_upgrade_package(&mut self, size: usize) -> Result<(), ExecutionError> {
+            if charge_upgrades(self.gas_model_version) {
+                self.gas_status.charge_publish_package(size)
+            } else {
+                Ok(())
+            }
         }
 
         pub fn charge_input_objects(
@@ -271,6 +290,11 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
+            if self.smashed_gas_coin.is_some() {
+                #[skip_checked_arithmetic]
+                trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
+            }
+
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules
             if let Some(gas_object_id) = self.smashed_gas_coin {
@@ -288,7 +312,7 @@ pub mod checked {
                 #[skip_checked_arithmetic]
                 trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
-                temporary_store.write_object(gas_object, WriteKind::Mutate);
+                temporary_store.mutate_input_object(gas_object);
                 cost_summary
             } else {
                 GasCostSummary::default()

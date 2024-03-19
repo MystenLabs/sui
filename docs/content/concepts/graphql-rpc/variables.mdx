@@ -1,0 +1,46 @@
+---
+title: Variables
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Variables offer a way to introduce dynamic inputs to a re-usable/static query. A variable is declared in the parameters to a `query` or `mutation`, using the `$` symbol and its type (in this example `Int`) which must be a `scalar`, `enum`, or `input` type. In the query body, it is referred to by its name (again prefixed with the `$` symbol).
+
+If a variable is declared but not used in the query or not defined (supplied a value), the query will fail to execute.
+
+To learn more, read the GraphQL documentation on [Variables](https://graphql.org/learn/queries/#variables).
+
+In the following example, the ID of the epoch being queried is supplied by a variable.
+
+```graphql
+query ($epochID: Int) {
+  epoch(id: $epochID) {
+    referenceGasPrice
+  }
+}
+```
+
+**Variables**:
+```json
+{
+   "epochID": 100
+}
+```
+
+## In the IDE
+
+When using the online IDE, variables are supplied as a JSON object to the query in the "Variables" pane at the bottom of the main editing window. If a variable is supplied but not declared, a warning will be issued.
+
+## In Requests
+
+When making a request to the GraphQL service (for example, using `curl`), the query and variables are passed as two fields of a single JSON object:
+
+```bash
+ curl -X POST https://sui-testnet.mystenlabs.com/graphql \
+    --header 'Content-Type: application/json' \
+    --data '{
+     "query": "query ($epochID: Int) { epoch(id: $epochID) { referenceGasPrice } }",
+     "variables": { "epochID": 100 }
+   }'
+```

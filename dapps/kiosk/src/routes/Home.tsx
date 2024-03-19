@@ -1,28 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWalletKit } from '@mysten/wallet-kit';
-import { KioskData } from '../components/Kiosk/KioskData';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+
 import { Loading } from '../components/Base/Loading';
-import { useOwnedKiosk } from '../hooks/kiosk';
 import { WalletNotConnected } from '../components/Base/WalletNotConnected';
 import { KioskCreation } from '../components/Kiosk/KioskCreation';
+import { KioskData } from '../components/Kiosk/KioskData';
 import { KioskSelector } from '../components/Kiosk/KioskSelector';
+import { useOwnedKiosk } from '../hooks/kiosk';
 import { useKioskSelector } from '../hooks/useKioskSelector';
 
 function Home() {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	const {
 		data: ownedKiosk,
-		isLoading,
+		isPending,
 		refetch: refetchOwnedKiosk,
 	} = useOwnedKiosk(currentAccount?.address);
 
 	const { selected, setSelected, showKioskSelector } = useKioskSelector(currentAccount?.address);
 
 	// Return loading state.
-	if (isLoading) return <Loading />;
+	if (isPending) return <Loading />;
 
 	// Return wallet not connected state.
 	if (!currentAccount?.address) return <WalletNotConnected />;

@@ -1,0 +1,18 @@
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:29:14
+   │
+29 │     #[syntax(for)]
+   │              ^^^ 'for' syntax attributes are not currently supported
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:34:14
+   │
+34 │     #[syntax(assign)]
+   │              ^^^^^^ 'assign' syntax attributes are not currently supported
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:39:14
+   │
+39 │     #[syntax(nonsense)]
+   │              ^^^^^^^^ Invalid syntax method identifier 'nonsense'
+

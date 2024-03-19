@@ -1,0 +1,5 @@
+[package]
+name = "use_named_address"
+
+[addresses]
+A = "0x42"

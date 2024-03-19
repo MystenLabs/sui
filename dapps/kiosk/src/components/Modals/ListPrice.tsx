@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
-import { ModalBase } from './Base';
-import { OwnedObjectType } from '../Inventory/OwnedObjects';
-import { DisplayObjectThumbnail } from '../DisplayObjectThumbnail';
-import { Button } from '../Base/Button';
 import { MIST_PER_SUI } from '@mysten/sui.js/utils';
+import { useState } from 'react';
+
 import { usePlaceAndListMutation } from '../../mutations/kiosk';
+import { Button } from '../Base/Button';
+import { DisplayObjectThumbnail } from '../DisplayObjectThumbnail';
+import { OwnedObjectType } from '../Inventory/OwnedObjects';
+import { ModalBase } from './Base';
 
 export interface ListPriceProps {
 	item: OwnedObjectType;
@@ -43,7 +44,7 @@ export function ListPrice({ item, onSuccess, closeModal, listAndPlace, kioskId }
 
 				<div className="mt-6">
 					<Button
-						loading={placeAndListToKioskMutation.isLoading}
+						loading={placeAndListToKioskMutation.isPending}
 						className="ease-in-out duration-300 rounded py-2 px-4 bg-primary text-white hover:opacity-70 w-full"
 						onClick={() =>
 							placeAndListToKioskMutation.mutate({

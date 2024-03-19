@@ -3,8 +3,8 @@
 import {
 	DryRunTransactionBlockResponse,
 	GasCostSummary,
-	SuiTransactionBlockResponse,
 	SuiGasData,
+	SuiTransactionBlockResponse,
 	TransactionEffects,
 } from '@mysten/sui.js/client';
 

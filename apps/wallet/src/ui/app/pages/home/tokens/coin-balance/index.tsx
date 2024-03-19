@@ -1,33 +1,46 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useFormatCoin, useSuiCoinData } from '@mysten/core';
-import { SUI_DECIMALS } from '@mysten/sui.js/utils';
-import BigNumber from 'bignumber.js';
-import { useMemo } from 'react';
+import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
+import { useAppSelector } from '_hooks';
+import { API_ENV } from '_shared/api-env';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
+import { useBalanceInUSD, useFormatCoin } from '@mysten/core';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { useMemo } from 'react';
 
 export type CoinProps = {
 	type: string;
 	amount: bigint;
 };
 
-export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
-	const [formatted, symbol] = useFormatCoin(walletBalance, type);
-	const { data } = useSuiCoinData();
-	const { currentPrice } = data || {};
+function WalletBalanceUsd({ amount: walletBalance }: { amount: bigint }) {
+	const isDefiWalletEnabled = useIsWalletDefiEnabled();
+	const formattedWalletBalance = useBalanceInUSD(SUI_TYPE_ARG, walletBalance);
 
 	const walletBalanceInUsd = useMemo(() => {
-		if (!currentPrice) return null;
-		const suiPriceInUsd = new BigNumber(currentPrice);
-		const walletBalanceInSui = new BigNumber(walletBalance.toString()).shiftedBy(-1 * SUI_DECIMALS);
-		const value = walletBalanceInSui.multipliedBy(suiPriceInUsd).toNumber();
+		if (!formattedWalletBalance) return null;
 
-		return `~${value.toLocaleString('en', {
+		return `~${formattedWalletBalance.toLocaleString('en', {
 			style: 'currency',
 			currency: 'USD',
 		})} USD`;
-	}, [currentPrice, walletBalance]);
+	}, [formattedWalletBalance]);
+
+	if (!walletBalanceInUsd) {
+		return null;
+	}
+
+	return (
+		<Text variant="caption" weight="medium" color={isDefiWalletEnabled ? 'hero-darkest' : 'steel'}>
+			{walletBalanceInUsd}
+		</Text>
+	);
+}
+
+export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
+	const { apiEnv } = useAppSelector((state) => state.app);
+	const [formatted, symbol] = useFormatCoin(walletBalance, type);
 
 	return (
 		<div className="flex flex-col gap-1 items-center justify-center">
@@ -40,13 +53,7 @@ export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
 					{symbol}
 				</Heading>
 			</div>
-			<div>
-				{walletBalanceInUsd ? (
-					<Text variant="caption" weight="medium" color="steel">
-						{walletBalanceInUsd}
-					</Text>
-				) : null}
-			</div>
+			<div>{apiEnv === API_ENV.mainnet ? <WalletBalanceUsd amount={walletBalance} /> : null}</div>
 		</div>
 	);
 }

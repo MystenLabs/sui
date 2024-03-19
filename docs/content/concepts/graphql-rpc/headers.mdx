@@ -1,0 +1,52 @@
+---
+title: Headers
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+The service accepts the following optional headers:
+
+- `x-sui-rpc-version` to specify which RPC version to use (note that currently only one version is supported),
+- `x-sui-rpc-show-usage` will return the response with extra query complexity information.
+
+By default, each request will return the service's version in the response header: `x-sui-rpc-version`.
+
+```bash
+curl -i -X POST https://sui-mainnet.mystenlabs.com/graphql \
+     --header 'x-sui-rpc-show-usage: true'                 \
+     --header 'Content-Type: application/json'             \
+     --data '{
+          "query": "query { epoch { referenceGasPrice } }"
+     }'
+```
+
+The response for the request above will look similarly to the following:
+
+```bash
+HTTP/2 200
+content-type: application/json
+content-length: 159
+x-sui-rpc-version: 2024.1.0
+date: Tue, 30 Jan 2024 23:50:43 GMT
+via: 1.1 google
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+
+{
+  "data": {
+    "epoch": {
+      "referenceGasPrice": "1000"
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 2,
+      "outputNodes": 2,
+      "depth": 2,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 37
+    }
+  }
+}
+```

@@ -1,0 +1,5 @@
+When resolving dependencies for package Root, conflicting dependencies found:
+At A -> C
+	D = { local = "deps_only/D" }
+At B -> C
+	no dependencies

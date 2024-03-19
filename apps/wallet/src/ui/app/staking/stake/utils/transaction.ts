@@ -6,7 +6,7 @@ import { SUI_SYSTEM_STATE_OBJECT_ID } from '@mysten/sui.js/utils';
 
 export function createStakeTransaction(amount: bigint, validator: string) {
 	const tx = new TransactionBlock();
-	const stakeCoin = tx.splitCoins(tx.gas, [tx.pure(amount)]);
+	const stakeCoin = tx.splitCoins(tx.gas, [amount]);
 	tx.moveCall({
 		target: '0x3::sui_system::request_add_stake',
 		arguments: [
@@ -16,7 +16,7 @@ export function createStakeTransaction(amount: bigint, validator: string) {
 				mutable: true,
 			}),
 			stakeCoin,
-			tx.pure(validator, 'address'),
+			tx.pure.address(validator),
 		],
 	});
 	return tx;

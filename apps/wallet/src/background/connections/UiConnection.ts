@@ -1,55 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
-
-import Browser from 'webextension-polyfill';
-import { Connection } from './Connection';
-import NetworkEnv from '../NetworkEnv';
+import { createMessage } from '_messages';
+import type { Message } from '_messages';
+import type { PortChannelName } from '_messaging/PortChannelName';
+import { isBasePayload, type ErrorPayload } from '_payloads';
+import type { LoadedFeaturesPayload } from '_payloads/feature-gating';
+import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
+import { isGetPermissionRequests, isPermissionResponse } from '_payloads/permissions';
+import type { Permission, PermissionRequests } from '_payloads/permissions';
+import { isDisconnectApp } from '_payloads/permissions/DisconnectApp';
+import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
+import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
+import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
+import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
+import Permissions from '_src/background/Permissions';
+import Tabs from '_src/background/Tabs';
+import Transactions from '_src/background/Transactions';
+import { growthbook } from '_src/shared/experimentation/features';
 import {
-	getAllSerializedUIAccountSources,
+	isMethodPayload,
+	type MethodPayload,
+	type UIAccessibleEntityType,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
+import {
+	isQredoConnectPayload,
+	type QredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
+import { toEntropy } from '_src/shared/utils/bip39';
+import Dexie from 'dexie';
+import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
+import Browser from 'webextension-polyfill';
+import type { Runtime } from 'webextension-polyfill';
+
+import {
 	accountSourcesHandleUIMessage,
+	getAccountSourceByID,
+	getAllSerializedUIAccountSources,
 } from '../account-sources';
+import { accountSourcesEvents } from '../account-sources/events';
+import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { accountsHandleUIMessage, getAllSerializedUIAccounts } from '../accounts';
+import { type AccountType } from '../accounts/Account';
+import { accountsEvents } from '../accounts/events';
 import { getAutoLockMinutes, notifyUserActive, setAutoLockMinutes } from '../auto-lock-accounts';
-import { getDB, settingsKeys } from '../db';
+import { backupDB, getDB, settingsKeys } from '../db';
+import { clearStatus, doMigration, getStatus } from '../legacy-accounts/storage-migration';
+import NetworkEnv from '../NetworkEnv';
 import {
 	acceptQredoConnection,
 	getUIQredoInfo,
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
-import { clearStatus, doMigration, getStatus } from '../storage-migration';
-import { createMessage } from '_messages';
-import { type ErrorPayload, isBasePayload } from '_payloads';
-import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
-import { isGetPermissionRequests, isPermissionResponse } from '_payloads/permissions';
-import { isDisconnectApp } from '_payloads/permissions/DisconnectApp';
-import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
-import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import Permissions from '_src/background/Permissions';
-import Tabs from '_src/background/Tabs';
-import Transactions from '_src/background/Transactions';
-import Keyring from '_src/background/keyring';
-import { growthbook } from '_src/shared/experimentation/features';
-import {
-	type MethodPayload,
-	isMethodPayload,
-	type UIAccessibleEntityType,
-} from '_src/shared/messaging/messages/payloads/MethodPayload';
-import {
-	type QredoConnectPayload,
-	isQredoConnectPayload,
-} from '_src/shared/messaging/messages/payloads/QredoConnect';
-
-import type { Message } from '_messages';
-import type { PortChannelName } from '_messaging/PortChannelName';
-import type { LoadedFeaturesPayload } from '_payloads/feature-gating';
-import type { Permission, PermissionRequests } from '_payloads/permissions';
-import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
-import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
-import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
-import type { Runtime } from 'webextension-polyfill';
+import { Connection } from './Connection';
 
 export class UiConnection extends Connection {
 	public static readonly CHANNEL: PortChannelName = 'sui_ui<->background';
@@ -107,8 +112,6 @@ export class UiConnection extends Connection {
 			} else if (isDisconnectApp(payload)) {
 				await Permissions.delete(payload.origin, payload.specificAccounts);
 				this.send(createMessage({ type: 'done' }, id));
-			} else if (isBasePayload(payload) && payload.type === 'keyring') {
-				await Keyring.handleUiMessage(msg, this);
 			} else if (isBasePayload(payload) && payload.type === 'get-features') {
 				await growthbook.loadFeatures();
 				this.send(
@@ -243,6 +246,48 @@ export class UiConnection extends Connection {
 				await notifyUserActive();
 				await this.send(createMessage({ type: 'done' }, msg.id));
 				return true;
+			} else if (isMethodPayload(payload, 'resetPassword')) {
+				const { password, recoveryData } = payload.args;
+				if (!recoveryData.length) {
+					throw new Error('Missing recovery data');
+				}
+				for (const { accountSourceID, entropy } of recoveryData) {
+					const accountSource = await getAccountSourceByID(accountSourceID);
+					if (!accountSource) {
+						throw new Error('Account source not found');
+					}
+					if (!(accountSource instanceof MnemonicAccountSource)) {
+						throw new Error('Invalid account source type');
+					}
+					await accountSource.verifyRecoveryData(entropy);
+				}
+				const db = await getDB();
+				const zkLoginType: AccountType = 'zkLogin';
+				const accountSourceIDs = recoveryData.map(({ accountSourceID }) => accountSourceID);
+				await db.transaction('rw', db.accountSources, db.accounts, async () => {
+					await db.accountSources.where('id').noneOf(accountSourceIDs).delete();
+					await db.accounts
+						.where('type')
+						.notEqual(zkLoginType)
+						.filter(
+							(anAccount) =>
+								!('sourceID' in anAccount) ||
+								typeof anAccount.sourceID !== 'string' ||
+								!accountSourceIDs.includes(anAccount.sourceID),
+						)
+						.delete();
+					for (const { accountSourceID, entropy } of recoveryData) {
+						await db.accountSources.update(accountSourceID, {
+							encryptedData: await Dexie.waitFor(
+								MnemonicAccountSource.createEncryptedData(toEntropy(entropy), password),
+							),
+						});
+					}
+				});
+				await backupDB();
+				accountSourcesEvents.emit('accountSourcesChanged');
+				accountsEvents.emit('accountsChanged');
+				await this.send(createMessage({ type: 'done' }, msg.id));
 			} else {
 				throw new Error(
 					`Unhandled message ${msg.id}. (${JSON.stringify(

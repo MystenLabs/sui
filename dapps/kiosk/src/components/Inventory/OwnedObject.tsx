@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { OwnedObjectType } from './OwnedObjects';
-import { DisplayObject } from '../DisplayObject';
-import { Button } from '../Base/Button';
 import { KioskFnType } from '../../hooks/kiosk';
 import { usePlaceMutation } from '../../mutations/kiosk';
+import { Button } from '../Base/Button';
+import { DisplayObject } from '../DisplayObject';
+import { OwnedObjectType } from './OwnedObjects';
 
 export function OwnedObject({
 	object,
@@ -27,7 +27,7 @@ export function OwnedObject({
 			<>
 				<Button
 					className="bg-gray-200 hover:bg-primary hover:text-white"
-					loading={placeToKioskMutation.isLoading}
+					loading={placeToKioskMutation.isPending}
 					onClick={() => placeToKioskMutation.mutate({ item: object, kioskId })}
 				>
 					Place in kiosk

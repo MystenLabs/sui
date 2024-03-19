@@ -8,18 +8,14 @@ module deepbook::critbit {
 
     friend deepbook::clob;
     friend deepbook::clob_v2;
-    friend deepbook::order_query;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    const ENotImplemented: u64 = 1;
     const EExceedCapacity: u64 = 2;
     const ETreeNotEmpty: u64 = 3;
     const EKeyAlreadyExist: u64 = 4;
     const ELeafNotExist: u64 = 5;
-    const EAssertFalse: u64 = 6;
     const EIndexOutOfRange: u64 = 7;
     const ENullParent: u64 = 8;
-    const ENullChild: u64 = 9;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
 
@@ -77,7 +73,7 @@ module deepbook::critbit {
 
     // Return (key, index) the leaf with minimum value.
     // A market buy order will start consuming liquidty from the min leaf.
-    public(friend) fun min_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
+    public fun min_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
         assert!(!is_empty(tree), ELeafNotExist);
         let min_leaf = table::borrow(&tree.leaves, tree.min_leaf);
         return (min_leaf.key, tree.min_leaf)
@@ -85,7 +81,7 @@ module deepbook::critbit {
 
     // Return (key, index) the leaf with maximum value.
     // A market sell order will start consuming liquidity from the max leaf.
-    public(friend) fun max_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
+    public fun max_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
         assert!(!is_empty(tree), ELeafNotExist);
         let max_leaf = table::borrow(&tree.leaves, tree.max_leaf);
         return (max_leaf.key, tree.max_leaf)
@@ -114,7 +110,7 @@ module deepbook::critbit {
     // Return the next leaf (key, index) of the input leaf.
     // Market buy orders consume liquidities by iterating through the leaves in ascending order starting from the min leaf of the asks Critbit Tree.
     // This function provides the iterator for this procedure.
-    public(friend) fun next_leaf<V: store>(tree: &CritbitTree<V>, key: u64): (u64, u64) {
+    public fun next_leaf<V: store>(tree: &CritbitTree<V>, key: u64): (u64, u64) {
         let (_, index) = find_leaf(tree, key);
         assert!(index != PARTITION_INDEX, ELeafNotExist);
         let ptr = MAX_U64 - index;
@@ -232,7 +228,7 @@ module deepbook::critbit {
 
     // Find the leaf from the tree.
     // Returns true and the index of the leaf if exists.
-    public(friend) fun find_leaf<V: store>(tree: & CritbitTree<V>, key: u64): (bool, u64) {
+    public fun find_leaf<V: store>(tree: & CritbitTree<V>, key: u64): (bool, u64) {
         if (is_empty(tree)) {
             return (false, PARTITION_INDEX)
         };
@@ -311,12 +307,12 @@ module deepbook::critbit {
         &mut entry.value
     }
 
-    public(friend) fun borrow_leaf_by_index<V: store>(tree: & CritbitTree<V>, index: u64): &V {
+    public fun borrow_leaf_by_index<V: store>(tree: & CritbitTree<V>, index: u64): &V {
         let entry = table::borrow(&tree.leaves, index);
         &entry.value
     }
 
-    public(friend) fun borrow_leaf_by_key<V: store>(tree: & CritbitTree<V>, key: u64): &V {
+    public fun borrow_leaf_by_key<V: store>(tree: & CritbitTree<V>, key: u64): &V {
         let (is_exist, index) = find_leaf(tree, key);
         assert!(is_exist, ELeafNotExist);
         borrow_leaf_by_index(tree, index)

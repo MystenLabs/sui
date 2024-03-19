@@ -1,0 +1,109 @@
+processed 24 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 13-65:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9264400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 67-67:
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 69-69:
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'run'. lines 71-71:
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'view-object'. lines 73-73:
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 6 'view-object'. lines 75-75:
+Owner: Shared
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 7 'view-object'. lines 77-79:
+Owner: Shared
+Version: 5
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}}
+
+task 8 'programmable'. lines 80-84:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 9 'programmable'. lines 85-89:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 10 'programmable'. lines 90-94:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 11 'programmable'. lines 95-99:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 12 'programmable'. lines 100-104:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 13 'run'. lines 106-106:
+created: object(13,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14 'run'. lines 108-108:
+created: object(14,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15 'run'. lines 110-110:
+created: object(15,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'view-object'. lines 112-112:
+Owner: Shared
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(13,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 17 'view-object'. lines 114-114:
+Owner: Shared
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(14,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 18 'view-object'. lines 116-118:
+Owner: Shared
+Version: 8
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}}
+
+task 19 'programmable'. lines 119-123:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 20 'programmable'. lines 124-128:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 21 'programmable'. lines 129-133:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 22 'programmable'. lines 134-138:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 23 'programmable'. lines 139-141:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None

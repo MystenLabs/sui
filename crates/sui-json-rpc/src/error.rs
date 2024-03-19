@@ -8,15 +8,14 @@ use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::{CallError, INTERNAL_ERROR_CODE};
 use jsonrpsee::types::ErrorObject;
 use std::collections::BTreeMap;
+use sui_json_rpc_api::{TRANSACTION_EXECUTION_CLIENT_ERROR_CODE, TRANSIENT_ERROR_CODE};
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
 use crate::authority_state::StateReadError;
-
-pub const TRANSIENT_ERROR_CODE: i32 = -32050;
-pub const TRANSACTION_EXECUTION_CLIENT_ERROR_CODE: i32 = -32002;
+use crate::name_service::NameServiceError;
 
 pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
@@ -63,6 +62,12 @@ pub enum Error {
     // TODO(wlmyng): convert StateReadError::Internal message to generic internal error message.
     #[error(transparent)]
     StateReadError(#[from] StateReadError),
+
+    #[error("Unsupported Feature: {0}")]
+    UnsupportedFeature(String),
+
+    #[error("transparent")]
+    NameServiceError(#[from] NameServiceError),
 }
 
 impl From<SuiError> for Error {
@@ -70,20 +75,37 @@ impl From<SuiError> for Error {
         match e {
             SuiError::UserInputError { error } => Self::UserInputError(error),
             SuiError::SuiObjectResponseError { error } => Self::SuiObjectResponseError(error),
+            SuiError::UnsupportedFeatureError { error } => Self::UnsupportedFeature(error),
+            SuiError::IndexStoreNotAvailable => Self::UnsupportedFeature(
+                "Required indexes are not available on this node".to_string(),
+            ),
             other => Self::SuiError(other),
         }
     }
 }
 
 impl From<Error> for RpcError {
+    /// `InvalidParams`/`INVALID_PARAMS_CODE` for client errors.
     fn from(e: Error) -> RpcError {
         match e {
             Error::UserInputError(_) => RpcError::Call(CallError::InvalidParams(e.into())),
+            Error::UnsupportedFeature(_) => RpcError::Call(CallError::InvalidParams(e.into())),
             Error::SuiObjectResponseError(err) => match err {
                 SuiObjectResponseError::NotExists { .. }
                 | SuiObjectResponseError::DynamicFieldNotFound { .. }
                 | SuiObjectResponseError::Deleted { .. }
                 | SuiObjectResponseError::DisplayError { .. } => {
+                    RpcError::Call(CallError::InvalidParams(err.into()))
+                }
+                _ => RpcError::Call(CallError::Failed(err.into())),
+            },
+            Error::NameServiceError(err) => match err {
+                NameServiceError::ExceedsMaxLength { .. }
+                | NameServiceError::InvalidHyphens { .. }
+                | NameServiceError::InvalidLength { .. }
+                | NameServiceError::InvalidUnderscore { .. }
+                | NameServiceError::LabelsEmpty { .. }
+                | NameServiceError::InvalidSeparator { .. } => {
                     RpcError::Call(CallError::InvalidParams(err.into()))
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
@@ -220,7 +242,8 @@ impl From<Error> for RpcError {
                         );
                         RpcError::Call(CallError::Custom(error_object))
                     }
-                    QuorumDriverError::SystemOverload { .. } => {
+                    QuorumDriverError::SystemOverload { .. }
+                    | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         let error_object =
                             ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>);
                         RpcError::Call(CallError::Custom(error_object))

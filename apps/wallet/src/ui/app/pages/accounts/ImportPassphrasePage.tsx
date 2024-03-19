@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
+import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 import { useNavigate } from 'react-router-dom';
 
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ImportRecoveryPhraseForm } from '../../components/accounts/ImportRecoveryPhraseForm';
 import { Heading } from '../../shared/heading';
-import { Text } from '_app/shared/text';
-import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export function ImportPassphrasePage() {
 	const navigate = useNavigate();

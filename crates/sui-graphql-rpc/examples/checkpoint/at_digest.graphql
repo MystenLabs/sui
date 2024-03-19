@@ -1,0 +1,22 @@
+# Get the checkpoint's information at a particular digest
+{
+  checkpoint(id: { digest: "GaDeWEfbSQCQ8FBQHUHVdm4KjrnbgMqEZPuhStoq5njU" }) {
+    digest
+    sequenceNumber
+    validatorSignatures
+    previousCheckpointDigest
+    networkTotalTransactions
+    rollingGasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+    epoch {
+      epochId
+      referenceGasPrice
+      startTimestamp
+      endTimestamp
+    }
+  }
+}

@@ -1,0 +1,151 @@
+---
+title: Migrating to GraphQL
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+{@include: ../../../snippets/migrate-to-graphql.mdx}
+
+For a comprehensive list of all available GraphQL features, consult the [reference](../../../references/sui-graphql).
+
+### Example 1: Get total transaction blocks
+
+The goal is to get the total number of transaction blocks in the network.
+
+<Tabs groupId="migrating-json-rpc">
+
+<TabItem value="json-rpc1" label="JSON-RPC">
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTotalTransactionBlocks",
+  "params": []
+}
+```
+
+</TabItem>
+<TabItem value="graphql1" label="GraphQL">
+
+```graphql
+query {
+  checkpoint {
+    networkTotalTransactions
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Example 2: Get a specific transaction block
+The goal is to get the transaction block by its digest.
+
+<Tabs groupId="migrating-json-rpc">
+
+<TabItem value="json-rpc2" label="JSON-RPC">
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF",
+    {
+      "showInput": true,
+      "showRawInput": false,
+      "showEffects": true,
+      "showEvents": true,
+      "showObjectChanges": false,
+      "showBalanceChanges": false
+    }
+  ]
+}
+```
+
+</TabItem>
+<TabItem value="graphql2" label="GraphQL">
+
+```graphql
+query {
+  transactionBlock(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+      }
+    }
+  }
+}
+```
+</TabItem>
+</Tabs>
+
+### Example 3: Get coin objects owned by an address
+
+The goal is to return all `Coin<0x2::sui::SUI>` objects an address owns.
+
+<Tabs groupId="migrating-json-rpc">
+
+<TabItem value="json-rpc3" label="JSON-RPC">
+
+```json
+query {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "suix_getCoins",
+  "params": [
+    "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9", //owner
+    "0x2::sui::SUI",                                                      //coin type
+    "0xe5c651321915b06c81838c2e370109b554a448a78d3a56220f798398dde66eab", //cursor
+    3 //limit
+  ]
+}
+```
+
+</TabItem>
+<TabItem value="graphql3" label="GraphQL">
+
+```graphql
+query {
+  address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
+    coins(
+      first: 3,
+      after: "IAB3ha2PEA4ESRF4UErsJufJEwYpmSbCq7UNpxIHnLhG",
+      type: "0x2::sui::SUI"
+    ) {
+      nodes {
+        address
+      }
+    }
+  }
+}
+```
+
+:::info
+The cursor is now passed in the `after` (or `before`) fields on the connection, and the limit in the `first` or `last` fields.
+:::
+
+</TabItem>
+</Tabs>
+
+## Related links
+  
+- [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
+- [GraphQL quick-start](../getting-started/graphql-rpc.mdx): Querying Sui RPC with GraphQL gets you started using GraphQL to query the Sui RPC for on-chain data.
+- [GraphQL concepts](../../../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.

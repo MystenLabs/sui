@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{env, fmt};
 
-use crate::sui_serde::Readable;
+use crate::{error::SuiError, sui_serde::Readable};
 use fastcrypto::encoding::{Base58, Encoding};
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 use sui_protocol_config::Chain;
+use tracing::info;
 
 /// A representation of a 32 byte digest
 #[serde_as]
@@ -84,6 +85,20 @@ impl From<[u8; 32]> for Digest {
     }
 }
 
+impl TryFrom<Vec<u8>> for Digest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        let bytes: [u8; 32] =
+            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiError::InvalidDigestLength {
+                expected: 32,
+                actual: bytes.len(),
+            })?;
+
+        Ok(Self::from(bytes))
+    }
+}
+
 impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO avoid the allocation
@@ -127,23 +142,64 @@ impl fmt::UpperHex for Digest {
 
 /// Representation of a network's identifier by the genesis checkpoint's digest
 #[derive(
-    Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
 )]
 pub struct ChainIdentifier(CheckpointDigest);
 
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
+/// For testing purposes or bootstrapping regenesis chaing configuration, you can set
+/// this environment variable to force protocol config to use a specific Chain.
+const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE";
+
+static SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: Lazy<Option<Chain>> = Lazy::new(|| {
+    if let Ok(s) = env::var(SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME) {
+        info!("SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {:?}", s);
+        match s.as_str() {
+            "mainnet" => Some(Chain::Mainnet),
+            "testnet" => Some(Chain::Testnet),
+            "" => None,
+            _ => panic!("unrecognized SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {s:?}"),
+        }
+    } else {
+        None
+    }
+});
+
 impl ChainIdentifier {
     pub fn chain(&self) -> Chain {
         let mainnet_id = get_mainnet_chain_identifier();
         let testnet_id = get_testnet_chain_identifier();
 
-        match self {
+        let chain = match self {
             id if *id == mainnet_id => Chain::Mainnet,
             id if *id == testnet_id => Chain::Testnet,
             _ => Chain::Unknown,
+        };
+        if let Some(override_chain) = *SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE {
+            if chain != Chain::Unknown {
+                panic!("not allowed to override real chain {chain:?}");
+            }
+            return override_chain;
         }
+
+        chain
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.inner()
     }
 }
 
@@ -246,6 +302,14 @@ impl From<CheckpointDigest> for [u8; 32] {
 impl From<[u8; 32]> for CheckpointDigest {
     fn from(digest: [u8; 32]) -> Self {
         Self::new(digest)
+    }
+}
+
+impl TryFrom<Vec<u8>> for CheckpointDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(CheckpointDigest)
     }
 }
 
@@ -433,8 +497,10 @@ impl TransactionDigest {
 
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
+    /// Note that this is not the same as the digest of the genesis transaction,
+    /// which cannot be known ahead of time.
     // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
-    pub const fn genesis() -> Self {
+    pub const fn genesis_marker() -> Self {
         Self::ZERO
     }
 
@@ -671,6 +737,60 @@ impl std::str::FromStr for TransactionEventsDigest {
     }
 }
 
+#[serde_as]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct EffectsAuxDataDigest(Digest);
+
+impl EffectsAuxDataDigest {
+    pub const ZERO: Self = Self(Digest::ZERO);
+
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+
+    pub fn random() -> Self {
+        Self(Digest::random())
+    }
+
+    pub fn next_lexicographical(&self) -> Option<Self> {
+        self.0.next_lexicographical().map(Self)
+    }
+
+    pub fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+}
+
+impl fmt::Debug for EffectsAuxDataDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("EffectsAuxDataDigest")
+            .field(&self.0)
+            .finish()
+    }
+}
+
+impl AsRef<[u8]> for EffectsAuxDataDigest {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<[u8; 32]> for EffectsAuxDataDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        self.0.as_ref()
+    }
+}
+
+impl std::str::FromStr for EffectsAuxDataDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(Self::new(result))
+    }
+}
+
 // Each object has a unique digest
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(Digest);
@@ -792,5 +912,70 @@ impl std::str::FromStr for ObjectDigest {
         let mut result = [0; 32];
         result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
         Ok(ObjectDigest::new(result))
+    }
+}
+
+/// A digest of a ZkLoginInputs, which commits to the signatures as well as the tx.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ZKLoginInputsDigest(Digest);
+
+impl ZKLoginInputsDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct ConsensusCommitDigest(Digest);
+
+impl ConsensusCommitDigest {
+    pub const ZERO: Self = Self(Digest::ZERO);
+
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+
+    pub const fn inner(&self) -> &[u8; 32] {
+        self.0.inner()
+    }
+
+    pub const fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+
+    pub fn random() -> Self {
+        Self(Digest::random())
+    }
+}
+
+impl Default for ConsensusCommitDigest {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl From<ConsensusCommitDigest> for [u8; 32] {
+    fn from(digest: ConsensusCommitDigest) -> Self {
+        digest.into_inner()
+    }
+}
+
+impl From<[u8; 32]> for ConsensusCommitDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self::new(digest)
+    }
+}
+
+impl fmt::Display for ConsensusCommitDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for ConsensusCommitDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ConsensusCommitDigest")
+            .field(&self.0)
+            .finish()
     }
 }

@@ -8,7 +8,7 @@ module V0::base_module {
 
     const A: u64 = 0;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -20,7 +20,7 @@ module V1::base_module {
 
     const A: u64 = 1;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -32,7 +32,7 @@ module V2::base_module {
 
     const Y: u64 = 1;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -46,7 +46,7 @@ module V3::base_module {
 
     const Y: u64 = 0;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -58,7 +58,7 @@ module V3::base_module {
 
     const Y: u64 = 0;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -75,7 +75,7 @@ module V3::base_module {
     const Z: u64 = 0;
     const A: u64 = 42;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -92,7 +92,7 @@ module V4::base_module {
     const T: u64 = 2;
     const A: u64 = 42;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -107,7 +107,7 @@ module V5::base_module {
     const Y: u64 = 1;
     const T: u64 = 2;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }
@@ -123,7 +123,7 @@ module V6::base_module {
     const T: u64 = 2;
     const Y: u64 = 1;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }

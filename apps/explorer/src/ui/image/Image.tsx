@@ -17,6 +17,7 @@ const imageStyles = cva(null, {
 			full: 'rounded-full',
 			'2xl': 'rounded-2xl',
 			lg: 'rounded-lg',
+			xl: 'rounded-xl',
 			md: 'rounded-md',
 			sm: 'rounded-sm',
 			none: 'rounded-none',
@@ -33,6 +34,9 @@ const imageStyles = cva(null, {
 			md: 'h-24 w-24',
 			lg: 'h-32 w-32',
 			full: 'h-full w-full',
+		},
+		aspect: {
+			square: 'aspect-square',
 		},
 	},
 	defaultVariants: {
@@ -63,6 +67,7 @@ function BaseImage({
 	visibility,
 	onClick,
 	fadeIn,
+	aspect,
 	...imgProps
 }: ImageProps & { status: string }) {
 	const [scope, animate] = useAnimate();
@@ -85,7 +90,7 @@ function BaseImage({
 		<div
 			ref={scope}
 			className={cx(
-				imageStyles({ size, rounded }),
+				imageStyles({ size, rounded, aspect }),
 				'relative flex items-center justify-center bg-gray-40 text-gray-65',
 				animateFadeIn && 'opacity-0',
 			)}

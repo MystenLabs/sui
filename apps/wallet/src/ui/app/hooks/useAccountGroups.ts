@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMemo } from 'react';
-import { useAccounts } from './useAccounts';
+
 import { defaultSortOrder, groupByType } from '../helpers/accounts';
+import { useAccounts } from './useAccounts';
 
 export function useAccountGroups() {
 	const { data: accounts } = useAccounts();

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isBasePayload } from '_payloads';
-
-import type { GrowthBook } from '@growthbook/growthbook';
 import type { BasePayload, Payload } from '_payloads';
+import type { GrowthBook } from '@growthbook/growthbook';
 
 export type LoadedFeatures = Parameters<GrowthBook['setFeatures']>['0'];
 export type LoadedAttributes = Parameters<GrowthBook['setAttributes']>['0'];

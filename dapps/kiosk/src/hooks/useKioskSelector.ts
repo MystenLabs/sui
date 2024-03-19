@@ -3,6 +3,7 @@
 
 import { KioskOwnerCap } from '@mysten/kiosk';
 import { useEffect, useState } from 'react';
+
 import { useOwnedKiosk } from './kiosk';
 
 export function useKioskSelector(address: string | undefined) {
@@ -10,7 +11,7 @@ export function useKioskSelector(address: string | undefined) {
 
 	// tries to find an owned kiosk for the supplied id.
 	// will fail if it's a direct kioskId and pass it down directly.
-	const { data: ownedKiosk, isLoading } = useOwnedKiosk(address);
+	const { data: ownedKiosk, isPending } = useOwnedKiosk(address);
 
 	// show kiosk selector in the following conditions:
 	// 1. It's an address lookup.
@@ -23,9 +24,9 @@ export function useKioskSelector(address: string | undefined) {
 		if (!ownedKiosk?.caps.find((x) => x.objectId === selected?.objectId))
 			setSelected(ownedKiosk?.caps[0]);
 
-		if (isLoading || selected) return;
+		if (isPending || selected) return;
 		setSelected(ownedKiosk?.caps[0]);
-	}, [isLoading, selected, ownedKiosk?.caps, setSelected]);
+	}, [isPending, selected, ownedKiosk?.caps, setSelected]);
 
 	return {
 		selected,

@@ -1,0 +1,5 @@
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A" }

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount, formatDate } from '@mysten/core';
-import { useSuiClient, useTotalTransactionBlocks } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Heading, Text, LoadingIndicator } from '@mysten/ui';
-import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 
@@ -40,39 +39,38 @@ function TooltipContent({
 }
 
 function useEpochTransactions() {
-	const client = useSuiClient();
-	return useQuery({
-		queryKey: ['get', 'last', '30', 'epoch', 'transactions'],
-		queryFn: async () =>
-			[
-				...(
-					await client.getEpochs({
-						descendingOrder: true,
-						limit: 31,
-					})
-				).data,
-			]
-				.reverse()
-				.slice(0, -1),
-		select: (data) =>
-			data.map(({ epoch, epochTotalTransactions, epochStartTimestamp }) => ({
-				epoch: Number(epoch),
-				epochTotalTransactions: Number(epochTotalTransactions),
-				epochStartTimestamp: Number(epochStartTimestamp),
-			})),
-	});
+	return useSuiClientQuery(
+		'getEpochMetrics',
+		{
+			descendingOrder: true,
+			limit: 31,
+		},
+		{
+			select: (data) =>
+				data.data
+					.map(({ epoch, epochTotalTransactions, epochStartTimestamp }) => ({
+						epoch: Number(epoch),
+						epochTotalTransactions: Number(epochTotalTransactions),
+						epochStartTimestamp: Number(epochStartTimestamp),
+					}))
+					.reverse()
+					.slice(0, -1),
+		},
+	);
 }
 
 export function TransactionsCardGraph() {
-	const { data: totalTransactions } = useTotalTransactionBlocks(
+	const { data: totalTransactions } = useSuiClientQuery(
+		'getTotalTransactionBlocks',
 		{},
 		{
-			cacheTime: 24 * 60 * 60 * 1000,
+			gcTime: 24 * 60 * 60 * 1000,
 			staleTime: Infinity,
 			retry: 5,
 		},
 	);
-	const { data: epochMetrics, isLoading } = useEpochTransactions();
+	const { data: epochMetrics, isPending } = useEpochTransactions();
+
 	const lastEpochTotalTransactions =
 		epochMetrics?.[epochMetrics.length - 1]?.epochTotalTransactions;
 
@@ -103,7 +101,7 @@ export function TransactionsCardGraph() {
 						!epochMetrics?.length && 'bg-gray-40',
 					)}
 				>
-					{isLoading ? (
+					{isPending ? (
 						<div className="flex flex-col items-center gap-1">
 							<LoadingIndicator />
 							<Text color="steel" variant="body/medium">

@@ -1,0 +1,5 @@
+[package]
+name = "Dep"
+
+[addresses]
+a = "0x41"

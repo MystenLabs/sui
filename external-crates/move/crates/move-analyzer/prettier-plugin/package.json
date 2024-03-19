@@ -1,0 +1,26 @@
+{
+  "name": "prettier-plugin-move",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "keywords": [
+    "prettier",
+    "move",
+    "plugin"
+  ],
+  "main": "./out/index.js",
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -p . -w",
+    "test": "npm run compile && mocha --config ./.mocharc.yaml"
+  },
+  "dependencies": {
+    "prettier": "^3.1.1",
+    "web-tree-sitter": "0.20.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.10.6",
+    "line-diff": "^2.1.1",
+    "mocha": "10.2.0",
+    "typescript": "5.3.3"
+  }
+}

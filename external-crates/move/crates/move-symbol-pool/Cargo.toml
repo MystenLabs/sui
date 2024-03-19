@@ -1,0 +1,21 @@
+[package]
+name = "move-symbol-pool"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "A static, global string table for Move tools"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+once_cell.workspace = true
+serde.workspace = true
+phf.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[features]
+default = []

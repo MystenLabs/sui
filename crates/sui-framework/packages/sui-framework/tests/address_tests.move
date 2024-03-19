@@ -109,4 +109,34 @@ module sui::address_tests {
         assert!(address::to_string(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe) == string::utf8(b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"), 0);
         assert!(address::to_string(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) == string::utf8(b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 0);
     }
+
+    #[test]
+    fun from_ascii_string_ok() {
+        assert!(address::from_ascii_bytes(&b"0000000000000000000000000000000000000000000000000000000000000000") == @0x0, 0);
+        assert!(address::from_ascii_bytes(&b"0000000000000000000000000000000000000000000000000000000000000001") == @0x1, 0);
+        assert!(address::from_ascii_bytes(&b"0000000000000000000000000000000000000000000000000000000000000010") == @0x10, 0);
+        assert!(address::from_ascii_bytes(&b"00000000000000000000000000000000000000000000000000000000000000ff") == @0xff, 0);
+        assert!(address::from_ascii_bytes(&b"0000000000000000000000000000000000000000000000000000000000000101") == @0x101, 0);
+        assert!(address::from_ascii_bytes(&b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe") == @0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe, 0);
+        assert!(address::from_ascii_bytes(&b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") == @0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, 0);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::address::EAddressParseError)]
+    fun from_ascii_string_too_short() {
+        address::from_ascii_bytes(&b"0");
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::address::EAddressParseError)]
+    fun from_ascii_string_too_long() {
+        address::from_ascii_bytes(&b"00000000000000000000000000000000000000000000000000000000000000001");
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::address::EAddressParseError)]
+    fun from_ascii_string_non_hex_character() {
+        address::from_ascii_bytes(&b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffg");
+    }
+
 }

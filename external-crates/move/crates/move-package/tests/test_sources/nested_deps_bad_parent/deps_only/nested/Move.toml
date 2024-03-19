@@ -1,0 +1,5 @@
+[package]
+name = "Nested"
+
+[dependencies]
+More = { local = "../../../../../../../../../out_of_repo" }

@@ -1,0 +1,6 @@
+[package]
+name = "B"
+
+[dependencies]
+C = { local = "../C" }
+D = { local = "../D-v3", override = true }

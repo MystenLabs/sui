@@ -1,21 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { SuiClient } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
 	StandardEventsFeature,
 	StandardEventsOnMethod,
 	SuiFeatures,
+	SuiSignAndExecuteTransactionBlockMethod,
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockMethod,
-	SuiSignAndExecuteTransactionBlockMethod,
 	Wallet,
 } from '@mysten/wallet-standard';
-import { getWallets, SUI_CHAINS, ReadonlyWalletAccount } from '@mysten/wallet-standard';
+import { getWallets, ReadonlyWalletAccount, SUI_CHAINS } from '@mysten/wallet-standard';
 import { useEffect } from 'react';
+
 import { useSuiClient } from '../useSuiClient.js';
 
 const WALLET_NAME = 'Unsafe Burner Wallet';

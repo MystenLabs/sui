@@ -1,0 +1,46 @@
+[package]
+name = "move-package"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Package and build system for Move code"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+toml.workspace = true
+toml_edit.workspace = true
+serde.workspace = true
+petgraph.workspace = true
+anyhow.workspace = true
+walkdir.workspace = true
+clap.workspace = true
+colored.workspace = true
+serde_yaml.workspace = true
+tempfile.workspace = true
+sha2.workspace = true
+regex.workspace = true
+treeline.workspace = true
+once_cell.workspace = true
+named-lock.workspace = true
+itertools.workspace = true
+
+move-binary-format.workspace = true
+move-compiler.workspace = true
+move-bytecode-source-map.workspace = true
+move-docgen.workspace = true
+move-core-types.workspace = true
+move-symbol-pool.workspace = true
+move-command-line-common.workspace = true
+move-model.workspace = true
+move-bytecode-utils.workspace = true
+
+whoami.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+expect-test = "1.4.0"
+
+[[test]]
+name = "test_runner"
+harness = false

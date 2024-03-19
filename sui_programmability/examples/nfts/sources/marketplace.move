@@ -76,7 +76,7 @@ module nfts::marketplace {
     public fun delist<T: key + store, COIN>(
         marketplace: &mut Marketplace<COIN>,
         item_id: ID,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ): T {
         let Listing {
             id,
@@ -95,7 +95,7 @@ module nfts::marketplace {
     public entry fun delist_and_take<T: key + store, COIN>(
         marketplace: &mut Marketplace<COIN>,
         item_id: ID,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         let item = delist<T, COIN>(marketplace, item_id, ctx);
         transfer::public_transfer(item, tx_context::sender(ctx));
@@ -138,7 +138,7 @@ module nfts::marketplace {
         marketplace: &mut Marketplace<COIN>,
         item_id: ID,
         paid: Coin<COIN>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         transfer::public_transfer(
             buy<T, COIN>(marketplace, item_id, paid),
@@ -149,7 +149,7 @@ module nfts::marketplace {
     /// Take profits from selling items on the `Marketplace`.
     public fun take_profits<COIN>(
         marketplace: &mut Marketplace<COIN>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ): Coin<COIN> {
         ofield::remove<address, Coin<COIN>>(&mut marketplace.id, tx_context::sender(ctx))
     }
@@ -157,7 +157,7 @@ module nfts::marketplace {
     /// Call [`take_profits`] and transfer Coin to the sender.
     public entry fun take_profits_and_keep<COIN>(
         marketplace: &mut Marketplace<COIN>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         transfer::public_transfer(
             take_profits(marketplace, ctx),

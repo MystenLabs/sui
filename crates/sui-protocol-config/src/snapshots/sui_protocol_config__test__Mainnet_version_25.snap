@@ -19,12 +19,18 @@ feature_flags:
   disallow_change_struct_type_params_on_upgrade: true
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
+  zklogin_auth: true
   consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
   narwhal_new_leader_election_schedule: true
+  zklogin_supported_providers:
+    - Facebook
+    - Google
+    - Twitch
   loaded_child_object_format: true
+  enable_jwk_consensus_updates: true
   end_of_epoch_transaction_supported: true
   simple_conservation_checks: true
   loaded_child_object_format_type: true
@@ -193,4 +199,6 @@ scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
 execution_version: 1
 consensus_bad_nodes_stake_threshold: 20
+max_jwk_votes_per_validator_per_epoch: 240
+max_age_of_jwk_in_epochs: 1
 

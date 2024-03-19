@@ -1,0 +1,16 @@
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/copy_move_path.move:12:9
+   │
+12 │         copy x.y.z;
+   │         ^^^^ Move 2024 paths are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/copy_move_path.move:13:9
+   │
+13 │         move x.y.z;
+   │         ^^^^ Move 2024 paths are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+

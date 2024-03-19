@@ -1,17 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Button } from './ui/button';
-import { useState } from 'react';
-import { useWalletKit, ConnectModal } from '@mysten/wallet-kit';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import {
+	ConnectModal,
+	useAccounts,
+	useCurrentAccount,
+	useDisconnectWallet,
+	useSwitchAccount,
+} from '@mysten/dapp-kit';
 import { formatAddress } from '@mysten/sui.js/utils';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { useState } from 'react';
+
 import { cn } from '@/lib/utils';
 
+import { Button } from './ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+
 function ConnectedButton() {
-	const { accounts, currentAccount, selectAccount, disconnect } = useWalletKit();
+	const accounts = useAccounts();
+	const currentAccount = useCurrentAccount();
+	const { mutateAsync: switchAccount } = useSwitchAccount();
+	const { mutateAsync: disconnect } = useDisconnectWallet();
 	const [open, setOpen] = useState(false);
 
 	return (
@@ -38,7 +49,7 @@ function ConnectedButton() {
 								value={account.address}
 								className="cursor-pointer"
 								onSelect={() => {
-									selectAccount(account);
+									switchAccount({ account });
 									setOpen(false);
 								}}
 							>
@@ -69,7 +80,7 @@ function ConnectedButton() {
 
 export function ConnectWallet() {
 	const [connectModalOpen, setConnectModalOpen] = useState(false);
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	return (
 		<>
@@ -79,7 +90,11 @@ export function ConnectWallet() {
 				<Button onClick={() => setConnectModalOpen(true)}>Connect Wallet</Button>
 			)}
 
-			<ConnectModal open={connectModalOpen} onClose={() => setConnectModalOpen(false)} />
+			<ConnectModal
+				trigger={<></>}
+				open={connectModalOpen}
+				onOpenChange={(open) => setConnectModalOpen(open)}
+			/>
 		</>
 	);
 }

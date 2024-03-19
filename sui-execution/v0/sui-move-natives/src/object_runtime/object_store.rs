@@ -3,7 +3,9 @@
 
 use crate::object_runtime::LocalProtocolConfig;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{effects::Op, value::MoveTypeLayout, vm_status::StatusCode};
+use move_core_types::{
+    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
+};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
@@ -172,8 +174,8 @@ impl<'a> Inner<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_ty_layout: &MoveTypeLayout,
-        child_ty_fully_annotated_layout: &MoveTypeLayout,
+        child_ty_layout: &R::MoveTypeLayout,
+        child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, GlobalValue)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
@@ -289,8 +291,8 @@ impl<'a> ObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut ChildObject>> {
         let store_entries_count = self.store.len() as u64;

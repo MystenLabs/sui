@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { UseMutationOptions } from '@tanstack/react-query';
-import { useMutation } from '@tanstack/react-query';
 import type {
 	StandardConnectInput,
 	StandardConnectOutput,
 	WalletAccount,
 	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
-import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
+import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { useWalletStore } from './useWalletStore.js';
-import { useCurrentWallet } from './useCurrentWallet.js';
 
 type ConnectWalletArgs = {
 	/** The wallet to connect to. */
@@ -35,26 +34,34 @@ type UseConnectWalletMutationOptions = Omit<
 export function useConnectWallet({
 	mutationKey,
 	...mutationOptions
-}: UseConnectWalletMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+}: UseConnectWalletMutationOptions = {}): UseMutationResult<
+	ConnectWalletResult,
+	Error,
+	ConnectWalletArgs,
+	unknown
+> {
 	const setWalletConnected = useWalletStore((state) => state.setWalletConnected);
+	const setConnectionStatus = useWalletStore((state) => state.setConnectionStatus);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
-		mutationFn: async ({ wallet, accountAddress, ...standardConnectInput }) => {
-			if (currentWallet) {
-				throw new WalletAlreadyConnectedError(
-					currentWallet.name === wallet.name
-						? `The user is already connected to wallet ${wallet.name}.`
-						: "You must disconnect the wallet you're currently connected to before connecting to a new wallet.",
+		mutationFn: async ({ wallet, accountAddress, ...connectArgs }) => {
+			try {
+				setConnectionStatus('connecting');
+
+				const connectResult = await wallet.features['standard:connect'].connect(connectArgs);
+				const connectedSuiAccounts = connectResult.accounts.filter((account) =>
+					account.chains.some((chain) => chain.split(':')[0] === 'sui'),
 				);
+				const selectedAccount = getSelectedAccount(connectedSuiAccounts, accountAddress);
+
+				setWalletConnected(wallet, connectedSuiAccounts, selectedAccount);
+
+				return { accounts: connectedSuiAccounts };
+			} catch (error) {
+				setConnectionStatus('disconnected');
+				throw error;
 			}
-
-			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
-			const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
-
-			setWalletConnected(wallet, selectedAccount);
-			return connectResult;
 		},
 		...mutationOptions,
 	});

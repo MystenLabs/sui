@@ -11,12 +11,12 @@ import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 export function CompletedTransactions() {
 	const activeAddress = useActiveAddress();
-	const { data: txns, isLoading, error } = useQueryTransactionsByAddress(activeAddress);
+	const { data: txns, isPending, error } = useQueryTransactionsByAddress(activeAddress);
 	if (error) {
 		return <Alert>{(error as Error)?.message}</Alert>;
 	}
 	return (
-		<Loading loading={isLoading}>
+		<Loading loading={isPending}>
 			{txns?.length && activeAddress ? (
 				txns.map((txn) => (
 					<ErrorBoundary key={txn.digest}>

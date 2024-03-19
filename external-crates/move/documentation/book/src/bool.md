@@ -22,8 +22,8 @@ Literals for `bool` are either `true` or `false`.
 
 `bool` values are used in several of Move's control-flow constructs:
 
-- [`if (bool) { ... }`](./conditionals.md)
-- [`while (bool) { .. }`](./loops.md)
+- [`if (bool) { ... }`](./control-flow/conditionals.md)
+- [`while (bool) { .. }`](./control-flow/loops.md)
 - [`assert!(bool, u64)`](./abort-and-assert.md)
 
 ## Ownership

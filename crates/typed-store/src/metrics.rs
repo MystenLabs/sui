@@ -254,6 +254,7 @@ pub struct OperationMetrics {
     pub rocksdb_deletes: IntCounterVec,
     pub rocksdb_batch_commit_latency_seconds: HistogramVec,
     pub rocksdb_batch_commit_bytes: HistogramVec,
+    pub rocksdb_num_active_db_handles: IntGaugeVec,
 }
 
 impl OperationMetrics {
@@ -271,6 +272,9 @@ impl OperationMetrics {
                 "rocksdb_iter_bytes",
                 "Rocksdb iter size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -293,6 +297,9 @@ impl OperationMetrics {
                 "rocksdb_get_bytes",
                 "Rocksdb get call returned data size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry
             )
             .unwrap(),
@@ -308,6 +315,9 @@ impl OperationMetrics {
                 "rocksdb_multiget_bytes",
                 "Rocksdb multiget call returned data size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -323,6 +333,9 @@ impl OperationMetrics {
                 "rocksdb_put_bytes",
                 "Rocksdb put call puts data size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -352,6 +365,16 @@ impl OperationMetrics {
             rocksdb_batch_commit_bytes: register_histogram_vec_with_registry!(
                 "rocksdb_batch_commit_bytes",
                 "Rocksdb schema batch commit size in bytes",
+                &["db_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            rocksdb_num_active_db_handles: register_int_gauge_vec_with_registry!(
+                "rocksdb_num_active_db_handles",
+                "Number of active db handles",
                 &["db_name"],
                 registry,
             )
@@ -874,6 +897,18 @@ impl DBMetrics {
             // this happens many times during tests
             .tap_err(|_| warn!("DBMetrics registry overwritten"));
         ONCE.get().unwrap()
+    }
+    pub fn increment_num_active_dbs(&self, db_name: &str) {
+        self.op_metrics
+            .rocksdb_num_active_db_handles
+            .with_label_values(&[db_name])
+            .inc();
+    }
+    pub fn decrement_num_active_dbs(&self, db_name: &str) {
+        self.op_metrics
+            .rocksdb_num_active_db_handles
+            .with_label_values(&[db_name])
+            .dec();
     }
     pub fn get() -> &'static Arc<DBMetrics> {
         ONCE.get()

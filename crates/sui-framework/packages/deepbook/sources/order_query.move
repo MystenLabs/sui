@@ -159,7 +159,7 @@ module deepbook::order_query {
 
                 // if the order id is greater than max_id, we end the iteration for this tick level.
                 if (option::is_some(&max_id) && key > option::destroy_some(max_id)) {
-                    break;
+                    break
                 };
 
                 next_order_key = *linked_table::next(open_orders, key);
@@ -204,5 +204,3 @@ module deepbook::order_query {
         clob_v2::tick_level(order)
     }
 }
-
-

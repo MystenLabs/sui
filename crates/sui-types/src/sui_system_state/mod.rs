@@ -73,16 +73,20 @@ impl SuiSystemStateWrapper {
         }
     }
 
+    /// Advances epoch in safe mode natively in Rust, without involking Move.
+    /// This ensures that there cannot be any failure from Move and is guaranteed to succeed.
+    /// Returns the old and new inner system state object.
     pub fn advance_epoch_safe_mode(
         &self,
         params: &AdvanceEpochParams,
         object_store: &dyn ObjectStore,
         protocol_config: &ProtocolConfig,
-    ) -> Object {
+    ) -> (Object, Object) {
         let id = self.id.id.bytes;
-        let mut field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
+        let old_field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
             .expect("Dynamic field object of wrapper should always be present in the object store");
-        let move_object = field_object
+        let mut new_field_object = old_field_object.clone();
+        let move_object = new_field_object
             .data
             .try_as_move_mut()
             .expect("Dynamic field object must be a Move object");
@@ -127,7 +131,7 @@ impl SuiSystemStateWrapper {
             }
             _ => unreachable!(),
         }
-        field_object
+        (old_field_object, new_field_object)
     }
 
     fn advance_epoch_safe_mode_impl<T>(
@@ -171,7 +175,7 @@ pub trait SuiSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError>;
@@ -314,13 +318,12 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
 /// dynamic field as a Validator type. We need the version to determine which inner type to use for
 /// the Validator type. This is assuming that the validator is stored in the table as
 /// ValidatorWrapper type.
-pub fn get_validator_from_table<S, K>(
-    object_store: &S,
+pub fn get_validator_from_table<K>(
+    object_store: &dyn ObjectStore,
     table_id: ObjectID,
     key: &K,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
-    S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {
     let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)
@@ -381,12 +384,12 @@ pub fn get_validators_from_table_vec<S, ValidatorType>(
     table_size: u64,
 ) -> Result<Vec<ValidatorType>, SuiError>
 where
-    S: ObjectStore,
+    S: ObjectStore + ?Sized,
     ValidatorType: Serialize + DeserializeOwned,
 {
     let mut validators = vec![];
     for i in 0..table_size {
-        let validator: ValidatorType = get_dynamic_field_from_store(object_store, table_id, &i)
+        let validator: ValidatorType = get_dynamic_field_from_store(&object_store, table_id, &i)
             .map_err(|err| {
                 SuiError::SuiSystemStateReadError(format!(
                     "Failed to load validator from table: {:?}",

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toast } from 'react-hot-toast';
+
 import { useCreateKioskMutation } from '../../mutations/kiosk';
 import { Button } from '../Base/Button';
 
@@ -42,7 +43,7 @@ export function KioskCreation({ onCreate }: { onCreate: () => void }) {
 					address.
 				</p>
 				<Button
-					loading={createKiosk.isLoading}
+					loading={createKiosk.isPending}
 					onClick={() => createKiosk.mutate()}
 					className="mt-3 px-12 bg-primary text-white"
 				>

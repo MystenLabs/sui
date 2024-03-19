@@ -24,6 +24,10 @@ pub struct Clock {
 }
 
 impl Clock {
+    pub fn timestamp_ms(&self) -> u64 {
+        self.timestamp_ms
+    }
+
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,

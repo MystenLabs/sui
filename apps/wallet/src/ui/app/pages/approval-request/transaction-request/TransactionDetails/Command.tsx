@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_src/ui/app/shared/text';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 import { TypeTagSerializer, type TypeTag } from '@mysten/sui.js/bcs';
 import { type TransactionArgument, type Transactions } from '@mysten/sui.js/transactions';
 import { formatAddress, normalizeSuiAddress, toB64 } from '@mysten/sui.js/utils';
-
 import { useState } from 'react';
-
-import { Text } from '_src/ui/app/shared/text';
 
 type TransactionType = ReturnType<(typeof Transactions)[keyof typeof Transactions]>;
 type MakeMoveVecTransaction = ReturnType<(typeof Transactions)['MakeMoveVec']>;

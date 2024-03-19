@@ -1,0 +1,5 @@
+[package]
+name = "name"
+
+[dependencies]
+A = { local = "a", addr_subst = { "A" = 1 } }

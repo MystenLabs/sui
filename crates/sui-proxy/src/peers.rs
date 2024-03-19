@@ -56,21 +56,30 @@ pub struct SuiPeer {
 #[derive(Debug, Clone)]
 pub struct SuiNodeProvider {
     nodes: SuiPeers,
+    static_nodes: SuiPeers,
     rpc_url: String,
     rpc_poll_interval: Duration,
 }
 
 impl Allower for SuiNodeProvider {
     fn allowed(&self, key: &Ed25519PublicKey) -> bool {
-        self.nodes.read().unwrap().contains_key(key)
+        self.static_nodes.read().unwrap().contains_key(key)
+            || self.nodes.read().unwrap().contains_key(key)
     }
 }
 
 impl SuiNodeProvider {
-    pub fn new(rpc_url: String, rpc_poll_interval: Duration) -> Self {
+    pub fn new(rpc_url: String, rpc_poll_interval: Duration, static_peers: Vec<SuiPeer>) -> Self {
+        // build our hashmap with the static pub keys. we only do this one time at binary startup.
+        let static_nodes: HashMap<Ed25519PublicKey, SuiPeer> = static_peers
+            .into_iter()
+            .map(|v| (v.public_key.clone(), v))
+            .collect();
+        let static_nodes = Arc::new(RwLock::new(static_nodes));
         let nodes = Arc::new(RwLock::new(HashMap::new()));
         Self {
             nodes,
+            static_nodes,
             rpc_url,
             rpc_poll_interval,
         }
@@ -79,6 +88,15 @@ impl SuiNodeProvider {
     /// get is used to retrieve peer info in our handlers
     pub fn get(&self, key: &Ed25519PublicKey) -> Option<SuiPeer> {
         debug!("look for {:?}", key);
+        // check static nodes first
+        if let Some(v) = self.static_nodes.read().unwrap().get(key) {
+            return Some(SuiPeer {
+                name: v.name.to_owned(),
+                p2p_address: v.p2p_address.to_owned(),
+                public_key: v.public_key.to_owned(),
+            });
+        }
+        // check dynamic nodes
         if let Some(v) = self.nodes.read().unwrap().get(key) {
             return Some(SuiPeer {
                 name: v.name.to_owned(),
@@ -208,17 +226,31 @@ fn extract(summary: SuiSystemStateSummary) -> impl Iterator<Item = (Ed25519Publi
         match Ed25519PublicKey::from_bytes(&vm.network_pubkey_bytes) {
             Ok(public_key) => {
                 let Ok(p2p_address) = Multiaddr::try_from(vm.p2p_address) else {
-                    error!("refusing to add peer to allow list; unable to decode multiaddr for {}", vm.name);
-                    return None // scoped to filter_map
+                    error!(
+                        "refusing to add peer to allow list; unable to decode multiaddr for {}",
+                        vm.name
+                    );
+                    return None; // scoped to filter_map
                 };
-                debug!("adding public key {:?} for address {:?}", public_key, p2p_address);
-                Some((public_key.clone(), SuiPeer { name: vm.name, p2p_address, public_key })) // scoped to filter_map
-            },
+                debug!(
+                    "adding public key {:?} for address {:?}",
+                    public_key, p2p_address
+                );
+                Some((
+                    public_key.clone(),
+                    SuiPeer {
+                        name: vm.name,
+                        p2p_address,
+                        public_key,
+                    },
+                )) // scoped to filter_map
+            }
             Err(error) => {
                 error!(
-                "unable to decode public key for name: {:?} sui_address: {:?} error: {error}",
-                vm.name, vm.sui_address);
-                 None  // scoped to filter_map
+                    "unable to decode public key for name: {:?} sui_address: {:?} error: {error}",
+                    vm.name, vm.sui_address
+                );
+                None // scoped to filter_map
             }
         }
     })

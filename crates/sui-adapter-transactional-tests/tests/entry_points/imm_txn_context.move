@@ -6,7 +6,7 @@
 //# publish
 module Test::M {
     use sui::tx_context::{Self, TxContext};
-    struct Obj has key {
+    public struct Obj has key {
         id: sui::object::UID,
         value: u64
     }

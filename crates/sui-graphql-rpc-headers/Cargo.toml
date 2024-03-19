@@ -1,0 +1,10 @@
+[package]
+name = "sui-graphql-rpc-headers"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+axum.workspace = true

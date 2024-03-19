@@ -3,6 +3,7 @@
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
+use crate::sui_transaction::GenericSignature::Signature;
 use crate::{Filter, Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
@@ -10,9 +11,9 @@ use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use move_core_types::value::MoveTypeLayout;
 use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -23,13 +24,14 @@ use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
+use sui_types::crypto::SuiSignature;
+use sui_types::digests::{ConsensusCommitDigest, ObjectDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
+use sui_types::object::{MoveObject, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
@@ -43,7 +45,12 @@ use sui_types::transaction::{
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -98,6 +105,8 @@ pub struct SuiTransactionBlockResponseOptions {
     pub show_object_changes: bool,
     /// Whether to show balance_changes. Default to be False
     pub show_balance_changes: bool,
+    /// Whether to show raw transaction effects. Default to be False
+    pub show_raw_effects: bool,
 }
 
 impl SuiTransactionBlockResponseOptions {
@@ -113,6 +122,9 @@ impl SuiTransactionBlockResponseOptions {
             show_events: true,
             show_object_changes: true,
             show_balance_changes: true,
+            // This field is added for graphql execution. We keep it false here
+            // so current users of `full_content` will not get raw effects unexpectedly.
+            show_raw_effects: false,
         }
     }
 
@@ -146,6 +158,11 @@ impl SuiTransactionBlockResponseOptions {
         self
     }
 
+    pub fn with_raw_effects(mut self) -> Self {
+        self.show_raw_effects = true;
+        self
+    }
+
     /// default to return `WaitForEffectsCert` unless some options require
     /// local execution
     pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
@@ -170,6 +187,7 @@ impl SuiTransactionBlockResponseOptions {
             || self.show_events
             || self.show_balance_changes
             || self.show_object_changes
+            || self.show_raw_effects
     }
 
     pub fn only_digest(&self) -> bool {
@@ -213,6 +231,8 @@ pub struct SuiTransactionBlockResponse {
     pub checkpoint: Option<CheckpointSequenceNumber>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub errors: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_effects: Vec<u8>,
 }
 
 impl SuiTransactionBlockResponse {
@@ -237,6 +257,91 @@ impl PartialEq for SuiTransactionBlockResponse {
             && self.confirmed_local_execution == other.confirmed_local_execution
             && self.checkpoint == other.checkpoint
     }
+}
+
+impl Display for SuiTransactionBlockResponse {
+    fn fmt(&self, writer: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(writer, "Transaction Digest: {}", &self.digest)?;
+
+        if let Some(t) = &self.transaction {
+            writeln!(writer, "{}", t)?;
+        }
+
+        if let Some(e) = &self.effects {
+            writeln!(writer, "{}", e)?;
+        }
+
+        if let Some(e) = &self.events {
+            writeln!(writer, "{}", e)?;
+        }
+
+        if let Some(object_changes) = &self.object_changes {
+            let mut builder = TableBuilder::default();
+            let (
+                mut created,
+                mut deleted,
+                mut mutated,
+                mut published,
+                mut transferred,
+                mut wrapped,
+            ) = (vec![], vec![], vec![], vec![], vec![], vec![]);
+
+            for obj in object_changes {
+                match obj {
+                    ObjectChange::Created { .. } => created.push(obj),
+                    ObjectChange::Deleted { .. } => deleted.push(obj),
+                    ObjectChange::Mutated { .. } => mutated.push(obj),
+                    ObjectChange::Published { .. } => published.push(obj),
+                    ObjectChange::Transferred { .. } => transferred.push(obj),
+                    ObjectChange::Wrapped { .. } => wrapped.push(obj),
+                };
+            }
+
+            write_obj_changes(created, "Created", &mut builder)?;
+            write_obj_changes(deleted, "Deleted", &mut builder)?;
+            write_obj_changes(mutated, "Mutated", &mut builder)?;
+            write_obj_changes(published, "Published", &mut builder)?;
+            write_obj_changes(transferred, "Transferred", &mut builder)?;
+            write_obj_changes(wrapped, "Wrapped", &mut builder)?;
+
+            let mut table = builder.build();
+            table.with(TablePanel::header("Object Changes"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            writeln!(writer, "{}", table)?;
+        }
+
+        if let Some(balance_changes) = &self.balance_changes {
+            let mut builder = TableBuilder::default();
+            for balance in balance_changes {
+                builder.push_record(vec![format!("{}", balance)]);
+            }
+            let mut table = builder.build();
+            table.with(TablePanel::header("Balance Changes"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            writeln!(writer, "{}", table)?;
+        }
+        Ok(())
+    }
+}
+
+fn write_obj_changes<T: Display>(
+    values: Vec<T>,
+    output_string: &str,
+    builder: &mut TableBuilder,
+) -> std::fmt::Result {
+    if !values.is_empty() {
+        builder.push_record(vec![format!("{} Objects: ", output_string)]);
+        for obj in values {
+            builder.push_record(vec![format!("{}", obj)]);
+        }
+    }
+    Ok(())
 }
 
 pub fn get_new_package_obj_from_response(
@@ -287,8 +392,11 @@ pub enum SuiTransactionBlockKind {
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
     /// A transaction which updates global authenticator state
     AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate),
+    /// A transaction which updates global randomness state
+    RandomnessStateUpdate(SuiRandomnessStateUpdate),
     /// The transaction which occurs only at the end of the epoch
     EndOfEpochTransaction(SuiEndOfEpochTransaction),
+    ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2),
     // .. more transaction types go here
 }
 
@@ -297,33 +405,44 @@ impl Display for SuiTransactionBlockKind {
         let mut writer = String::new();
         match &self {
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind : Epoch Change")?;
-                writeln!(writer, "New epoch ID : {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
-                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
-                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
+                writeln!(writer, "Transaction Kind: Epoch Change")?;
+                writeln!(writer, "New epoch ID: {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp: {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind : Genesis Transaction")?;
+                writeln!(writer, "Transaction Kind: Genesis Transaction")?;
             }
             Self::ConsensusCommitPrologue(p) => {
-                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue")?;
                 writeln!(
                     writer,
-                    "Epoch: {}, Round: {}, Timestamp : {}",
+                    "Epoch: {}, Round: {}, Timestamp: {}",
                     p.epoch, p.round, p.commit_timestamp_ms
                 )?;
             }
+            Self::ConsensusCommitPrologueV2(p) => {
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue V2")?;
+                writeln!(
+                    writer,
+                    "Epoch: {}, Round: {}, Timestamp: {}, ConsensusCommitDigest: {}",
+                    p.epoch, p.round, p.commit_timestamp_ms, p.consensus_commit_digest
+                )?;
+            }
             Self::ProgrammableTransaction(p) => {
-                writeln!(writer, "Transaction Kind : Programmable")?;
-                write!(writer, "{p}")?;
+                write!(writer, "Transaction Kind: Programmable")?;
+                write!(writer, "{}", crate::displays::Pretty(p))?;
             }
             Self::AuthenticatorStateUpdate(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+                writeln!(writer, "Transaction Kind: Authenticator State Update")?;
+            }
+            Self::RandomnessStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind: Randomness State Update")?;
             }
             Self::EndOfEpochTransaction(_) => {
-                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+                writeln!(writer, "Transaction Kind: End of Epoch Transaction")?;
             }
         }
         write!(f, "{}", writer)
@@ -344,6 +463,14 @@ impl SuiTransactionBlockKind {
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
+            TransactionKind::ConsensusCommitPrologueV2(p) => {
+                Self::ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                })
+            }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
@@ -356,6 +483,13 @@ impl SuiTransactionBlockKind {
                         .into_iter()
                         .map(SuiActiveJwk::from)
                         .collect(),
+                })
+            }
+            TransactionKind::RandomnessStateUpdate(update) => {
+                Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
+                    epoch: update.epoch,
+                    randomness_round: update.randomness_round.0,
+                    random_bytes: update.random_bytes,
                 })
             }
             TransactionKind::EndOfEpochTransaction(end_of_epoch_tx) => {
@@ -376,6 +510,12 @@ impl SuiTransactionBlockKind {
                                     },
                                 )
                             }
+                            EndOfEpochTransactionKind::RandomnessStateCreate => {
+                                SuiEndOfEpochTransactionKind::RandomnessStateCreate
+                            }
+                            EndOfEpochTransactionKind::DenyListStateCreate => {
+                                SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
+                            }
                         })
                         .collect(),
                 })
@@ -395,8 +535,10 @@ impl SuiTransactionBlockKind {
             Self::ChangeEpoch(_) => "ChangeEpoch",
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
+            Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
@@ -632,112 +774,184 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
     }
 }
 
-impl SuiTransactionBlockEffects {}
+impl SuiTransactionBlockEffects {
+    #[cfg(any(feature = "test-utils", test))]
+    pub fn new_for_testing(
+        transaction_digest: TransactionDigest,
+        status: SuiExecutionStatus,
+    ) -> Self {
+        Self::V1(SuiTransactionBlockEffectsV1 {
+            transaction_digest,
+            status,
+            gas_object: OwnedObjectRef {
+                owner: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+                reference: sui_types::base_types::random_object_ref().into(),
+            },
+            executed_epoch: 0,
+            modified_at_versions: vec![],
+            gas_used: GasCostSummary::default(),
+            shared_objects: vec![],
+            created: vec![],
+            mutated: vec![],
+            unwrapped: vec![],
+            deleted: vec![],
+            unwrapped_then_deleted: vec![],
+            wrapped: vec![],
+            events_digest: None,
+            dependencies: vec![],
+        })
+    }
+}
 
 impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
     type Error = SuiError;
 
     fn try_from(effect: TransactionEffects) -> Result<Self, Self::Error> {
-        let message_version = effect
-            .message_version()
-            .expect("TransactionEffects defines message_version()");
-
-        match message_version {
-            1 => Ok(SuiTransactionBlockEffects::V1(
-                SuiTransactionBlockEffectsV1 {
-                    status: effect.status().clone().into(),
-                    executed_epoch: effect.executed_epoch(),
-                    modified_at_versions: effect
-                        .modified_at_versions()
+        Ok(SuiTransactionBlockEffects::V1(
+            SuiTransactionBlockEffectsV1 {
+                status: effect.status().clone().into(),
+                executed_epoch: effect.executed_epoch(),
+                modified_at_versions: effect
+                    .modified_at_versions()
+                    .into_iter()
+                    .map(|(object_id, sequence_number)| {
+                        SuiTransactionBlockEffectsModifiedAtVersions {
+                            object_id,
+                            sequence_number,
+                        }
+                    })
+                    .collect(),
+                gas_used: effect.gas_cost_summary().clone(),
+                shared_objects: to_sui_object_ref(
+                    effect
+                        .input_shared_objects()
                         .into_iter()
-                        .map(|(object_id, sequence_number)| {
-                            SuiTransactionBlockEffectsModifiedAtVersions {
-                                object_id,
-                                sequence_number,
-                            }
-                        })
+                        .map(|kind| kind.object_ref())
                         .collect(),
-                    gas_used: effect.gas_cost_summary().clone(),
-                    shared_objects: to_sui_object_ref(
-                        effect
-                            .input_shared_objects()
-                            .into_iter()
-                            .map(|(obj_ref, _)| obj_ref)
-                            .collect(),
-                    ),
-                    transaction_digest: *effect.transaction_digest(),
-                    created: to_owned_ref(effect.created()),
-                    mutated: to_owned_ref(effect.mutated().to_vec()),
-                    unwrapped: to_owned_ref(effect.unwrapped().to_vec()),
-                    deleted: to_sui_object_ref(effect.deleted().to_vec()),
-                    unwrapped_then_deleted: to_sui_object_ref(
-                        effect.unwrapped_then_deleted().to_vec(),
-                    ),
-                    wrapped: to_sui_object_ref(effect.wrapped().to_vec()),
-                    gas_object: OwnedObjectRef {
-                        owner: effect.gas_object().1,
-                        reference: effect.gas_object().0.into(),
-                    },
-                    events_digest: effect.events_digest().copied(),
-                    dependencies: effect.dependencies().to_vec(),
+                ),
+                transaction_digest: *effect.transaction_digest(),
+                created: to_owned_ref(effect.created()),
+                mutated: to_owned_ref(effect.mutated().to_vec()),
+                unwrapped: to_owned_ref(effect.unwrapped().to_vec()),
+                deleted: to_sui_object_ref(effect.deleted().to_vec()),
+                unwrapped_then_deleted: to_sui_object_ref(effect.unwrapped_then_deleted().to_vec()),
+                wrapped: to_sui_object_ref(effect.wrapped().to_vec()),
+                gas_object: OwnedObjectRef {
+                    owner: effect.gas_object().1,
+                    reference: effect.gas_object().0.into(),
                 },
-            )),
-
-            _ => Err(SuiError::UnexpectedVersion(format!(
-                "Support for TransactionEffects version {} not implemented",
-                message_version
-            ))),
-        }
+                events_digest: effect.events_digest().copied(),
+                dependencies: effect.dependencies().to_vec(),
+            },
+        ))
     }
+}
+
+fn owned_objref_string(obj: &OwnedObjectRef) -> String {
+    format!(
+        " ┌──\n │ ID: {} \n │ Owner: {} \n │ Version: {} \n │ Digest: {}\n └──",
+        obj.reference.object_id,
+        obj.owner,
+        u64::from(obj.reference.version),
+        obj.reference.digest
+    )
+}
+
+fn objref_string(obj: &SuiObjectRef) -> String {
+    format!(
+        " ┌──\n │ ID: {} \n │ Version: {} \n │ Digest: {}\n └──",
+        obj.object_id,
+        u64::from(obj.version),
+        obj.digest
+    )
 }
 
 impl Display for SuiTransactionBlockEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Status : {:?}", self.status())?;
+        let mut builder = TableBuilder::default();
+
+        builder.push_record(vec![format!("Digest: {}", self.transaction_digest())]);
+        builder.push_record(vec![format!("Status: {:?}", self.status())]);
+        builder.push_record(vec![format!("Executed Epoch: {}", self.executed_epoch())]);
+
         if !self.created().is_empty() {
-            writeln!(writer, "Created Objects:")?;
+            builder.push_record(vec![format!("\nCreated Objects: ")]);
+
             for oref in self.created() {
-                writeln!(
-                    writer,
-                    "  - ID: {} , Owner: {}",
-                    oref.reference.object_id, oref.owner
-                )?;
+                builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
+
         if !self.mutated().is_empty() {
-            writeln!(writer, "Mutated Objects:")?;
+            builder.push_record(vec![format!("Mutated Objects: ")]);
             for oref in self.mutated() {
-                writeln!(
-                    writer,
-                    "  - ID: {} , Owner: {}",
-                    oref.reference.object_id, oref.owner
-                )?;
+                builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
+
+        if !self.shared_objects().is_empty() {
+            builder.push_record(vec![format!("Shared Objects: ")]);
+            for oref in self.shared_objects() {
+                builder.push_record(vec![objref_string(oref)]);
+            }
+        }
+
         if !self.deleted().is_empty() {
-            writeln!(writer, "Deleted Objects:")?;
+            builder.push_record(vec![format!("Deleted Objects: ")]);
+
             for oref in self.deleted() {
-                writeln!(writer, "  - ID: {}", oref.object_id)?;
+                builder.push_record(vec![objref_string(oref)]);
             }
         }
+
         if !self.wrapped().is_empty() {
-            writeln!(writer, "Wrapped Objects:")?;
+            builder.push_record(vec![format!("Wrapped Objects: ")]);
+
             for oref in self.wrapped() {
-                writeln!(writer, "  - ID: {}", oref.object_id)?;
+                builder.push_record(vec![objref_string(oref)]);
             }
         }
+
         if !self.unwrapped().is_empty() {
-            writeln!(writer, "Unwrapped Objects:")?;
+            builder.push_record(vec![format!("Unwrapped Objects: ")]);
             for oref in self.unwrapped() {
-                writeln!(
-                    writer,
-                    "  - ID: {} , Owner: {}",
-                    oref.reference.object_id, oref.owner
-                )?;
+                builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
-        write!(f, "{}", writer)
+
+        builder.push_record(vec![format!(
+            "Gas Object: \n{}",
+            owned_objref_string(self.gas_object())
+        )]);
+
+        let gas_cost_summary = self.gas_cost_summary();
+        builder.push_record(vec![format!(
+            "Gas Cost Summary:\n   \
+             Storage Cost: {} MIST\n   \
+             Computation Cost: {} MIST\n   \
+             Storage Rebate: {} MIST\n   \
+             Non-refundable Storage Fee: {} MIST",
+            gas_cost_summary.storage_cost,
+            gas_cost_summary.computation_cost,
+            gas_cost_summary.storage_rebate,
+            gas_cost_summary.non_refundable_storage_fee,
+        )]);
+
+        let dependencies = self.dependencies();
+        if !dependencies.is_empty() {
+            builder.push_record(vec![format!("\nTransaction Dependencies:")]);
+            for dependency in dependencies {
+                builder.push_record(vec![format!("   {}", dependency)]);
+            }
+        }
+
+        let mut table = builder.build();
+        table.with(TablePanel::header("Transaction Effects"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "{}", table)
     }
 }
 
@@ -762,6 +976,26 @@ impl SuiTransactionBlockEvents {
         events: TransactionEvents,
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
+        resolver: &mut dyn LayoutResolver,
+    ) -> SuiResult<Self> {
+        Ok(Self {
+            data: events
+                .data
+                .into_iter()
+                .enumerate()
+                .map(|(seq, event)| {
+                    let layout = resolver.get_annotated_layout(&event.type_)?;
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
+                })
+                .collect::<Result<_, _>>()?,
+        })
+    }
+
+    // TODO: this is only called from the indexer. Remove this once indexer moves to its own resolver.
+    pub fn try_from_using_module_resolver(
+        events: TransactionEvents,
+        tx_digest: TransactionDigest,
+        timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
     ) -> SuiResult<Self> {
         Ok(Self {
@@ -770,11 +1004,54 @@ impl SuiTransactionBlockEvents {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, event)| {
-                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, resolver)
+                    let layout =
+                        MoveObject::get_layout_from_struct_tag(event.type_.clone(), resolver)?;
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
                 })
                 .collect::<Result<_, _>>()?,
         })
     }
+}
+
+impl Display for SuiTransactionBlockEvents {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.data.is_empty() {
+            writeln!(f, "╭─────────────────────────────╮")?;
+            writeln!(f, "│ No transaction block events │")?;
+            writeln!(f, "╰─────────────────────────────╯")
+        } else {
+            let mut builder = TableBuilder::default();
+
+            for event in &self.data {
+                builder.push_record(vec![format!("{}", event)]);
+            }
+
+            let mut table = builder.build();
+            table.with(TablePanel::header("Transaction Block Events"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            write!(f, "{}", table)
+        }
+    }
+}
+
+// TODO: this file might not be the best place for this struct.
+/// Additional rguments supplied to dev inspect beyond what is allowed in today's API.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "DevInspectArgs", rename_all = "camelCase")]
+pub struct DevInspectArgs {
+    /// The sponsor of the gas for the transaction, might be different from the sender.
+    pub gas_sponsor: Option<SuiAddress>,
+    /// The gas budget for the transaction.
+    pub gas_budget: Option<BigInt<u64>>,
+    /// The gas objects used to pay for the transaction.
+    pub gas_objects: Option<Vec<ObjectRef>>,
+    /// Whether to skip transaction checks for the transaction.
+    pub skip_checks: Option<bool>,
+    /// Whether to return the raw transaction data and effects.
+    pub show_raw_txn_data_and_effects: Option<bool>,
 }
 
 /// The response from processing a dev inspect transaction
@@ -793,6 +1070,12 @@ pub struct DevInspectResults {
     /// Execution error from executing the transactions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The raw transaction data that was dev inspected.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_txn_data: Vec<u8>,
+    /// The raw effects of the transaction that was dev inspected.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_effects: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -817,7 +1100,9 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
-        resolver: &impl GetModule,
+        raw_txn_data: Vec<u8>,
+        raw_effects: Vec<u8>,
+        resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
@@ -851,6 +1136,8 @@ impl DevInspectResults {
             events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
             results,
             error,
+            raw_txn_data,
+            raw_effects,
         })
     }
 }
@@ -930,6 +1217,19 @@ pub struct SuiGasData {
     pub budget: u64,
 }
 
+impl Display for SuiGasData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Gas Owner: {}", self.owner)?;
+        writeln!(f, "Gas Budget: {} MIST", self.budget)?;
+        writeln!(f, "Gas Price: {} MIST", self.price)?;
+        writeln!(f, "Gas Payment:")?;
+        for payment in &self.payment {
+            write!(f, "{} ", objref_string(payment))?;
+        }
+        writeln!(f)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[enum_dispatch(SuiTransactionBlockDataAPI)]
 #[serde(
@@ -990,16 +1290,9 @@ impl Display for SuiTransactionBlockData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::V1(data) => {
-                writeln!(f, "{}", data.transaction)?;
                 writeln!(f, "Sender: {}", data.sender)?;
-                write!(f, "Gas Payment: ")?;
-                for payment in &self.gas_data().payment {
-                    write!(f, "{} ", payment)?;
-                }
-                writeln!(f)?;
-                writeln!(f, "Gas Owner: {}", data.gas_data.owner)?;
-                writeln!(f, "Gas Price: {}", data.gas_data.price)?;
-                writeln!(f, "Gas Budget: {}", data.gas_data.budget)
+                writeln!(f, "{}", self.gas_data())?;
+                writeln!(f, "{}", data.transaction)
             }
         }
     }
@@ -1063,10 +1356,27 @@ impl SuiTransactionBlock {
 
 impl Display for SuiTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
-        write!(writer, "{}", &self.data)?;
-        write!(f, "{}", writer)
+        let mut builder = TableBuilder::default();
+
+        builder.push_record(vec![format!("{}", self.data)]);
+        builder.push_record(vec![format!("Signatures:")]);
+        for tx_sig in &self.tx_signatures {
+            builder.push_record(vec![format!(
+                "   {}\n",
+                match tx_sig {
+                    Signature(sig) => Base64::from_bytes(sig.signature_bytes()).encoded(),
+                    _ => Base64::from_bytes(tx_sig.as_ref()).encoded(), // the signatures for multisig and zklogin are not suited to be parsed out. they should be interpreted as a whole
+                }
+            )]);
+        }
+
+        let mut table = builder.build();
+        table.with(TablePanel::header("Transaction Data"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "{}", table)
     }
 }
 
@@ -1091,6 +1401,21 @@ pub struct SuiConsensusCommitPrologue {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiConsensusCommitPrologueV2 {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub round: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub commit_timestamp_ms: u64,
+    pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiAuthenticatorStateUpdate {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
@@ -1100,6 +1425,19 @@ pub struct SuiAuthenticatorStateUpdate {
     pub round: u64,
 
     pub new_active_jwks: Vec<SuiActiveJwk>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiRandomnessStateUpdate {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub randomness_round: u64,
+    pub random_bytes: Vec<u8>,
 }
 
 #[serde_as]
@@ -1114,6 +1452,8 @@ pub enum SuiEndOfEpochTransactionKind {
     ChangeEpoch(SuiChangeEpoch),
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
+    RandomnessStateCreate,
+    CoinDenyListStateCreate,
 }
 
 #[serde_as]
@@ -1239,7 +1579,9 @@ impl SuiProgrammableTransactionBlock {
             match command {
                 Command::MoveCall(c) => {
                     let id = ModuleId::new(c.package.into(), c.module.clone());
-                    let Some(types) = get_signature_types(id, c.function.as_ident_str(), module_cache) else {
+                    let Some(types) =
+                        get_signature_types(id, c.function.as_ident_str(), module_cache)
+                    else {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
@@ -1648,7 +1990,7 @@ impl SuiCallArg {
     ) -> Result<Self, anyhow::Error> {
         Ok(match value {
             CallArg::Pure(p) => SuiCallArg::Pure(SuiPureValue {
-                value_type: layout.map(|l| l.try_into()).transpose()?,
+                value_type: layout.map(|l| l.into()),
                 value: SuiJsonValue::from_bcs_bytes(layout, &p)?,
             }),
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, digest))) => {
@@ -1667,6 +2009,13 @@ impl SuiCallArg {
                 initial_shared_version,
                 mutable,
             }),
+            CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
+                SuiCallArg::Object(SuiObjectArg::Receiving {
+                    object_id,
+                    version,
+                    digest,
+                })
+            }
         })
     }
 
@@ -1680,9 +2029,8 @@ impl SuiCallArg {
     pub fn object(&self) -> Option<&ObjectID> {
         match self {
             SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. })
-            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
-                Some(object_id)
-            }
+            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. })
+            | SuiCallArg::Object(SuiObjectArg::Receiving { object_id, .. }) => Some(object_id),
             _ => None,
         }
     }
@@ -1730,6 +2078,15 @@ pub enum SuiObjectArg {
         #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         mutable: bool,
+    },
+    // A reference to a Move object that's going to be received in the transaction.
+    #[serde(rename_all = "camelCase")]
+    Receiving {
+        object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        version: SequenceNumber,
+        digest: ObjectDigest,
     },
 }
 

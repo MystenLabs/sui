@@ -42,6 +42,11 @@ module serializer::serializer_tests {
         clock.value = 20;
     }
 
+    public entry fun delete_value(clock: MutableShared) {
+        let MutableShared { id, value: _ } = clock;
+        object::delete(id);
+    }
+
     public fun test_abort() {
         abort 1
     }

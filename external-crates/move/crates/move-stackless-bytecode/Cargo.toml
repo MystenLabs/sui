@@ -1,0 +1,39 @@
+[package]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move stackless bytecode"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+move-model.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-command-line-common.workspace = true
+move-read-write-set-types.workspace = true
+move-compiler.workspace = true
+
+codespan.workspace = true
+codespan-reporting = { workspace = true, features = ["serde", "serialization"] }
+ethnum.workspace = true
+num.workspace = true
+im.workspace = true
+itertools.workspace = true
+log.workspace = true
+serde.workspace = true
+paste.workspace = true
+petgraph.workspace = true
+
+[dev-dependencies]
+move-stdlib.workspace = true
+datatest-stable.workspace = true
+move-prover-test-utils.workspace = true
+anyhow.workspace = true
+
+[[test]]
+name = "testsuite"
+harness = false

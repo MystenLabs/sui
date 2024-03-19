@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use move_cli::base;
+use move_package::source_package::layout::SourcePackageLayout;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use std::{fs, path::PathBuf};
@@ -28,9 +29,6 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
-    /// If `true`, enable linters
-    #[clap(long, global = true)]
-    pub lint: bool,
 }
 
 impl Build {
@@ -47,7 +45,6 @@ impl Build {
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
-            self.lint,
         )
     }
 
@@ -57,13 +54,11 @@ impl Build {
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
-        lint: bool,
     ) -> anyhow::Result<()> {
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
-            lint,
         }
         .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
@@ -105,7 +100,7 @@ pub fn resolve_lock_file_path(
 ) -> Result<MoveBuildConfig, anyhow::Error> {
     if build_config.lock_file.is_none() {
         let package_root = base::reroot_path(package_path)?;
-        let lock_file_path = package_root.join("Move.lock");
+        let lock_file_path = package_root.join(SourcePackageLayout::Lock.path());
         build_config.lock_file = Some(lock_file_path);
     }
     Ok(build_config)

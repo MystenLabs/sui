@@ -83,7 +83,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let transaction_response = sui
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]),
+            Transaction::from_data(tx_data, vec![signature]),
             SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )

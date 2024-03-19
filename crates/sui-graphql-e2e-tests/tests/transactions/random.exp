@@ -1,0 +1,88 @@
+processed 7 tasks
+
+task 1 'create-checkpoint'. lines 6-6:
+Checkpoint created: 1
+
+task 2 'advance-epoch'. lines 8-8:
+Epoch advanced: 0
+
+task 3 'run-graphql'. lines 10-46:
+Response: {
+  "data": {
+    "epoch": {
+      "protocolConfigs": {
+        "protocolVersion": 39,
+        "randomBeacon": {
+          "value": true
+        }
+      }
+    },
+    "object": {
+      "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+      "version": 2,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
+          },
+          "json": {
+            "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
+            "inner": {
+              "id": "0x3c4d339a23b4495c9e3b3c2b8619f8500e561ebcba8affde50966fa9cd1a4491",
+              "version": "1"
+            }
+          }
+        }
+      }
+    },
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "EndOfEpochTransaction",
+            "transactions": {
+              "edges": [
+                {
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
+                  "node": {
+                    "__typename": "RandomnessStateCreateTransaction"
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxLCJjIjoyfQ",
+                  "node": {
+                    "__typename": "ChangeEpochTransaction"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5 'create-checkpoint'. lines 52-52:
+Checkpoint created: 3
+
+task 6 'run-graphql'. lines 54-69:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "RandomnessStateUpdateTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "randomnessRound": 0,
+            "randomBytes": "SGVsbG8gU3Vp",
+            "randomnessObjInitialSharedVersion": 2
+          }
+        }
+      ]
+    }
+  }
+}

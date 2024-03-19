@@ -1,0 +1,8 @@
+# This manifest file is largely empty on purpose to make sure that the main dependency graph (with
+# actual dependencies) can simply be read from the lock file.
+
+[package]
+name = "D"
+
+[addresses]
+D = "0x0"

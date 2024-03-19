@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
-import { ZkLoginButtons } from '../../components/accounts/ZkLoginButtons';
-import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { Button } from '_app/shared/ButtonUI';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
@@ -13,13 +8,19 @@ import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { useFullscreenGuard, useInitializedGuard } from '_hooks';
 import WelcomeSplash from '_src/ui/assets/images/WelcomeSplash.svg';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
+import { ZkLoginButtons } from '../../components/accounts/ZkLoginButtons';
+import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 
 export function WelcomePage() {
 	const createAccountsMutation = useCreateAccountsMutation();
 	const isFullscreenGuardLoading = useFullscreenGuard(true);
 	const isInitializedLoading = useInitializedGuard(
 		false,
-		!(createAccountsMutation.isLoading || createAccountsMutation.isSuccess),
+		!(createAccountsMutation.isPending || createAccountsMutation.isSuccess),
 	);
 	const [, setAccountsFormValues] = useAccountsFormContext();
 	const navigate = useNavigate();
@@ -51,10 +52,10 @@ export function WelcomePage() {
 						buttonsDisabled={createAccountsMutation.isSuccess}
 						sourceFlow="Onboarding"
 						onButtonClick={async (provider) => {
-							setAccountsFormValues({ type: 'zk', provider });
+							setAccountsFormValues({ type: 'zkLogin', provider });
 							await createAccountsMutation.mutateAsync(
 								{
-									type: 'zk',
+									type: 'zkLogin',
 								},
 								{
 									onSuccess: () => {
@@ -74,7 +75,7 @@ export function WelcomePage() {
 						size="tall"
 						variant="secondary"
 						text="More Options"
-						disabled={createAccountsMutation.isLoading || createAccountsMutation.isSuccess}
+						disabled={createAccountsMutation.isPending || createAccountsMutation.isSuccess}
 					/>
 				</div>
 			</div>

@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SuiClient } from '@mysten/sui.js/client';
+import { screen } from '@testing-library/dom';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { screen } from '@testing-library/dom';
-import { SuiClientProvider } from '../../src/components/SuiClientProvider.js';
-import { useSuiClient, useSuiClientContext } from 'dapp-kit/src';
-import { SuiClient } from '@mysten/sui.js/client';
 import { useState } from 'react';
+
+import { SuiClientProvider } from '../../src/components/SuiClientProvider.js';
+import { useSuiClient, useSuiClientContext } from '../../src/index.js';
 
 describe('SuiClientProvider', () => {
 	it('renders without crashing', () => {

@@ -1,0 +1,5 @@
+[package]
+name = "Foo"
+
+[dependencies]
+Bar = { local = "bar" }

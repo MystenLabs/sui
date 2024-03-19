@@ -1,0 +1,13 @@
+Command `build -v -p ./C`:
+BUILDING Foo
+External Command `mv ./C/sources/Foo.move ./C/sources/Foo.move_old`:
+External Command `rm -rf ./C/build/Foo/sources`:
+Command `build -v -p ./B`:
+INCLUDING DEPENDENCY Foo
+BUILDING Bar
+External Command `mv ./B/sources/Bar.move ./C/sources/Bar.move_old`:
+External Command `rm -rf ./B/build/Bar/sources`:
+Command `build -v`:
+INCLUDING DEPENDENCY Bar
+INCLUDING DEPENDENCY Foo
+BUILDING A

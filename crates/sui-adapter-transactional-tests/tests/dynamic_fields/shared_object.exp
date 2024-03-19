@@ -1,0 +1,41 @@
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 8-75:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9690000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 77-77:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2470000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 79-81:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'run'. lines 82-82:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 5 'view-object'. lines 84-84:
+Owner: Shared
+Version: 4
+Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+
+task 6 'run'. lines 86-86:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 11) at offset 0, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) at command Some(0)
+
+task 7 'view-object'. lines 88-88:
+Owner: Shared
+Version: 4
+Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+
+task 8 'run'. lines 90-90:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 11) at offset 0, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(11), 0)] }), command: Some(0) } }

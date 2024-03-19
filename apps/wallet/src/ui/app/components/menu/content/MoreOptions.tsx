@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { MenuLayout } from './MenuLayout';
 import { Button } from '_app/shared/ButtonUI';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { persister } from '_src/ui/app/helpers/queryClient';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { ConfirmationModal } from '_src/ui/app/shared/ConfirmationModal';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+
+import { MenuLayout } from './MenuLayout';
 
 export function MoreOptions() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
@@ -32,7 +33,7 @@ export function MoreOptions() {
 				variant="warning"
 				text="Logout"
 				size="narrow"
-				loading={logoutMutation.isLoading}
+				loading={logoutMutation.isPending}
 				disabled={isLogoutDialogOpen}
 				onClick={() => setIsLogoutDialogOpen(true)}
 			/>

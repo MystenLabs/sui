@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
-
-import DisconnectApp from './DisconnectApp';
 import { ImageIcon } from '_app/shared/image-icon';
 import ExternalLink from '_components/external-link';
 import { ampli } from '_src/shared/analytics/ampli';
 import { getDAppUrl } from '_src/shared/utils';
 import { Text } from '_src/ui/app/shared/text';
+import { useState } from 'react';
+
+import DisconnectApp from './DisconnectApp';
 
 export type DAppEntry = {
 	name: string;

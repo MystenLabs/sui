@@ -1,36 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
+import type { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import type {
+	TransactionArgument,
+	TransactionObjectInput,
+	TransactionResult,
+} from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
-	SUI_CLOCK_OBJECT_ID,
-	SUI_FRAMEWORK_ADDRESS,
 	normalizeStructTag,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
+	SUI_CLOCK_OBJECT_ID,
 } from '@mysten/sui.js/utils';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import {
-	MODULE_CLOB,
-	PACKAGE_ID,
-	NORMALIZED_SUI_COIN_TYPE,
-	CREATION_FEE,
-	MODULE_CUSTODIAN,
-	ORDER_DEFAULT_EXPIRATION_IN_MS,
-} from './utils';
-import {
+
+import type {
 	Level2BookStatusPoint,
-	LimitOrderType,
 	MarketPrice,
 	Order,
 	PaginatedPoolSummary,
 	PoolSummary,
-	SelfMatchingPreventionStyle,
 	UserPosition,
-	bcs,
-} from './types';
+} from './types/index.js';
+import { bcs, LimitOrderType, SelfMatchingPreventionStyle } from './types/index.js';
+import {
+	CREATION_FEE,
+	MODULE_CLOB,
+	MODULE_CUSTODIAN,
+	NORMALIZED_SUI_COIN_TYPE,
+	ORDER_DEFAULT_EXPIRATION_IN_MS,
+	PACKAGE_ID,
+} from './utils/index.js';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
 
@@ -71,11 +74,11 @@ export class DeepBookClient {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// create a pool with CREATION_FEE
-		const [coin] = txb.splitCoins(txb.gas, [txb.pure(CREATION_FEE)]);
+		const [coin] = txb.splitCoins(txb.gas, [CREATION_FEE]);
 		txb.moveCall({
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_pool`,
-			arguments: [txb.pure(tickSize), txb.pure(lotSize), coin],
+			arguments: [txb.pure.u64(tickSize), txb.pure.u64(lotSize), coin],
 		});
 		return txb;
 	}
@@ -99,15 +102,15 @@ export class DeepBookClient {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		// create a pool with CREATION_FEE
-		const [coin] = txb.splitCoins(txb.gas, [txb.pure(CREATION_FEE)]);
+		const [coin] = txb.splitCoins(txb.gas, [CREATION_FEE]);
 		txb.moveCall({
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_customized_pool`,
 			arguments: [
-				txb.pure(tickSize),
-				txb.pure(lotSize),
-				txb.pure(takerFeeRate),
-				txb.pure(makerRebateRate),
+				txb.pure.u64(tickSize),
+				txb.pure.u64(lotSize),
+				txb.pure.u64(takerFeeRate),
+				txb.pure.u64(makerRebateRate),
 				coin,
 			],
 		});
@@ -115,17 +118,29 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description: Create and Transfer custodian account to user
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @description: Create Account Cap
+	 * @param txb
 	 */
-	createAccount(currentAddress: string = this.currentAddress): TransactionBlock {
-		const txb = new TransactionBlock();
+	createAccountCap(txb: TransactionBlock) {
 		let [cap] = txb.moveCall({
 			typeArguments: [],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_account`,
 			arguments: [],
 		});
-		txb.transferObjects([cap], txb.pure(this.#checkAddress(currentAddress)));
+		return cap;
+	}
+
+	/**
+	 * @description: Create and Transfer custodian account to user
+	 * @param currentAddress current address of the user
+	 * @param txb
+	 */
+	createAccount(
+		currentAddress: string = this.currentAddress,
+		txb: TransactionBlock = new TransactionBlock(),
+	): TransactionBlock {
+		const cap = this.createAccountCap(txb);
+		txb.transferObjects([cap], this.#checkAddress(currentAddress));
 		return txb;
 	}
 
@@ -144,7 +159,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CUSTODIAN}::create_child_account_cap`,
 			arguments: [txb.object(this.#checkAccountCap(accountCap))],
 		});
-		txb.transferObjects([childCap], txb.pure(this.#checkAddress(currentAddress)));
+		txb.transferObjects([childCap], this.#checkAddress(currentAddress));
 		return txb;
 	}
 
@@ -172,9 +187,9 @@ export class DeepBookClient {
 
 		const inputCoin = coinId ? txb.object(coinId) : txb.gas;
 
-		const [coin] = quantity ? txb.splitCoins(inputCoin, [txb.pure(quantity)]) : [inputCoin];
+		const [coin] = quantity ? txb.splitCoins(inputCoin, [quantity]) : [inputCoin];
 
-		const coinType = coinId ? await this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
+		const coinType = coinId ? await this.getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
 		if (coinType !== baseAsset && coinType !== quoteAsset) {
 			throw new Error(
 				`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`,
@@ -210,9 +225,9 @@ export class DeepBookClient {
 		const [withdraw] = txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::${functionName}`,
-			arguments: [txb.object(poolId), txb.pure(quantity), txb.object(this.#checkAccountCap())],
+			arguments: [txb.object(poolId), txb.pure.u64(quantity), txb.object(this.#checkAccountCap())],
 		});
-		txb.transferObjects([withdraw], txb.pure(this.#checkAddress(recipientAddress)));
+		txb.transferObjects([withdraw], this.#checkAddress(recipientAddress));
 		return txb;
 	}
 
@@ -242,13 +257,13 @@ export class DeepBookClient {
 		const txb = new TransactionBlock();
 		const args = [
 			txb.object(poolId),
-			txb.pure(clientOrderId ?? this.#nextClientOrderId()),
-			txb.pure(price),
-			txb.pure(quantity),
-			txb.pure(selfMatchingPrevention),
-			txb.pure(orderType === 'bid'),
-			txb.pure(expirationTimestamp),
-			txb.pure(restriction),
+			txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
+			txb.pure.u64(price),
+			txb.pure.u64(quantity),
+			txb.pure.u8(selfMatchingPrevention),
+			txb.pure.bool(orderType === 'bid'),
+			txb.pure.u64(expirationTimestamp),
+			txb.pure.u8(restriction),
 			txb.object(SUI_CLOCK_OBJECT_ID),
 			txb.object(this.#checkAccountCap()),
 		];
@@ -265,22 +280,25 @@ export class DeepBookClient {
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param quantity Amount of quote asset to swap in base asset
 	 * @param orderType bid for buying base with quote, ask for selling base for quote
-	 * @param baseCoin the objectId of the base coin
-	 * @param quoteCoin the objectId of the quote coin
+	 * @param baseCoin the objectId or the coin object of the base coin
+	 * @param quoteCoin the objectId or the coin object of the quote coin
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose. eg: "1" , "2", ... If omitted, the sdk will
-	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
-	 * @param recipientAddress: address to return the unused amounts, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * assign an increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * @param accountCap
+	 * @param recipientAddress the address to receive the swapped asset. If omitted, `this.currentAddress` will be used. The function
+	 * @param txb
 	 */
 	async placeMarketOrder(
+		accountCap: string | Extract<TransactionArgument, { kind: 'NestedResult' }>,
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',
-		baseCoin: string | undefined = undefined,
-		quoteCoin: string | undefined = undefined,
+		baseCoin: TransactionResult | string | undefined = undefined,
+		quoteCoin: TransactionResult | string | undefined = undefined,
 		clientOrderId: string | undefined = undefined,
-		recipientAddress: string = this.currentAddress,
+		recipientAddress: string | undefined = this.currentAddress,
+		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
-		const txb = new TransactionBlock();
 		const [baseAssetType, quoteAssetType] = await this.getPoolTypeArgs(poolId);
 		if (!baseCoin && orderType === 'ask') {
 			throw new Error('Must specify a valid base coin for an ask order');
@@ -292,58 +310,61 @@ export class DeepBookClient {
 			target: `0x2::coin::zero`,
 			arguments: [],
 		});
+
 		const [base_coin_ret, quote_coin_ret] = txb.moveCall({
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_market_order`,
 			arguments: [
 				txb.object(poolId),
-				txb.object(this.#checkAccountCap()),
-				txb.pure(clientOrderId ?? this.#nextClientOrderId()),
-				txb.pure(quantity),
-				txb.pure(orderType === 'bid'),
+				typeof accountCap === 'string' ? txb.object(this.#checkAccountCap(accountCap)) : accountCap,
+				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
+				txb.pure.u64(quantity),
+				txb.pure.bool(orderType === 'bid'),
 				baseCoin ? txb.object(baseCoin) : emptyCoin,
 				quoteCoin ? txb.object(quoteCoin) : emptyCoin,
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
 		const recipient = this.#checkAddress(recipientAddress);
-		txb.transferObjects([base_coin_ret], txb.pure(recipient));
-		txb.transferObjects([quote_coin_ret], txb.pure(recipient));
+		txb.transferObjects([base_coin_ret], recipient);
+		txb.transferObjects([quote_coin_ret], recipient);
+
 		return txb;
 	}
 
 	/**
 	 * @description: swap exact quote for base
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
-	 * @param tokenObjectIn: Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
-	 * @param amountIn: amount of token to buy or sell, eg: 10000000.
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @param tokenObjectIn Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
+	 * @param amountIn amount of token to buy or sell, eg: 10000000.
+	 * @param currentAddress current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose, eg: "1" , "2", ... If omitted, the sdk will
-	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * assign an increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * @param txb
 	 */
 	async swapExactQuoteForBase(
 		poolId: string,
-		tokenObjectIn: string,
-		amountIn: bigint,
+		tokenObjectIn: TransactionObjectInput,
+		amountIn: bigint, // quantity of USDC
 		currentAddress: string,
-		clientOrderId: string | undefined = undefined,
+		clientOrderId?: string,
+		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
-		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
 		const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_quote_for_base`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(clientOrderId ?? this.#nextClientOrderId()),
+				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.object(this.#checkAccountCap()),
-				txb.object(String(amountIn)),
+				txb.pure.u64(String(amountIn)),
 				txb.object(SUI_CLOCK_OBJECT_ID),
 				txb.object(tokenObjectIn),
 			],
 		});
-		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+		txb.transferObjects([base_coin_ret], currentAddress);
+		txb.transferObjects([quote_coin_ret], currentAddress);
 		return txb;
 	}
 
@@ -370,7 +391,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_base_for_quote`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(clientOrderId ?? this.#nextClientOrderId()),
+				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.object(this.#checkAccountCap()),
 				txb.object(String(amountIn)),
 				txb.object(tokenObjectIn),
@@ -382,8 +403,8 @@ export class DeepBookClient {
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
-		txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-		txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+		txb.transferObjects([base_coin_ret], currentAddress);
+		txb.transferObjects([quote_coin_ret], currentAddress);
 		return txb;
 	}
 
@@ -397,7 +418,7 @@ export class DeepBookClient {
 		txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::cancel_order`,
-			arguments: [txb.object(poolId), txb.pure(orderId), txb.object(this.#checkAccountCap())],
+			arguments: [txb.object(poolId), txb.pure.u64(orderId), txb.object(this.#checkAccountCap())],
 		});
 		return txb;
 	}
@@ -426,7 +447,11 @@ export class DeepBookClient {
 		txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::batch_cancel_order`,
-			arguments: [txb.object(poolId), txb.pure(orderIds), txb.object(this.#checkAccountCap())],
+			arguments: [
+				txb.object(poolId),
+				bcs.vector(bcs.U64).serialize(orderIds),
+				txb.object(this.#checkAccountCap()),
+			],
 		});
 		return txb;
 	}
@@ -448,8 +473,8 @@ export class DeepBookClient {
 			arguments: [
 				txb.object(poolId),
 				txb.object(SUI_CLOCK_OBJECT_ID),
-				txb.pure(orderIds),
-				txb.pure(orderOwners),
+				bcs.vector(bcs.U64).serialize(orderIds),
+				bcs.vector(bcs.Address).serialize(orderOwners),
 			],
 		});
 		return txb;
@@ -532,7 +557,7 @@ export class DeepBookClient {
 		txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_order_status`,
-			arguments: [txb.object(poolId), txb.object(orderId), txb.object(cap)],
+			arguments: [txb.object(poolId), txb.pure.u64(orderId), txb.object(cap)],
 		});
 		const results = (
 			await this.suiClient.devInspectTransactionBlock({
@@ -640,34 +665,71 @@ export class DeepBookClient {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param isBidSide true: query bid side, false: query ask side
+	 * @param side { 'bid' | 'ask' | 'both' } bid or ask or both sides.
 	 */
 	async getLevel2BookStatus(
 		poolId: string,
 		lowerPrice: bigint,
 		higherPrice: bigint,
-		side: 'bid' | 'ask',
-	): Promise<Level2BookStatusPoint[]> {
+		side: 'bid' | 'ask' | 'both',
+	): Promise<Level2BookStatusPoint[] | Level2BookStatusPoint[][]> {
 		const txb = new TransactionBlock();
-		txb.moveCall({
-			typeArguments: await this.getPoolTypeArgs(poolId),
-			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
-			arguments: [
-				txb.object(poolId),
-				txb.pure(String(lowerPrice)),
-				txb.pure(String(higherPrice)),
-				txb.object(SUI_CLOCK_OBJECT_ID),
-			],
+		if (side === 'both') {
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+		} else {
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+		}
+
+		const results = await this.suiClient.devInspectTransactionBlock({
+			transactionBlock: txb,
+			sender: this.currentAddress,
 		});
-		const results = (
-			await this.suiClient.devInspectTransactionBlock({
-				transactionBlock: txb,
-				sender: this.currentAddress,
-			})
-		).results![0].returnValues!.map(([bytes, _]) =>
-			bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
-		);
-		return results[0].map((price: bigint, i: number) => ({ price, depth: results[1][i] }));
+
+		if (side === 'both') {
+			const bidSide = results.results![0].returnValues!.map(([bytes, _]) =>
+				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+			);
+			const askSide = results.results![1].returnValues!.map(([bytes, _]) =>
+				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+			);
+			return [
+				bidSide[0].map((price: bigint, i: number) => ({ price, depth: bidSide[1][i] })),
+				askSide[0].map((price: bigint, i: number) => ({ price, depth: askSide[1][i] })),
+			];
+		} else {
+			const result = results.results![0].returnValues!.map(([bytes, _]) =>
+				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+			);
+			return result[0].map((price: bigint, i: number) => ({ price, depth: result[1][i] }));
+		}
 	}
 
 	#checkAccountCap(accountCap: string | undefined = undefined): string {
@@ -685,7 +747,7 @@ export class DeepBookClient {
 		return normalizeSuiAddress(recipientAddress);
 	}
 
-	async #getCoinType(coinId: string) {
+	public async getCoinType(coinId: string) {
 		const resp = await this.suiClient.getObject({
 			id: coinId,
 			options: { showType: true },
@@ -693,11 +755,20 @@ export class DeepBookClient {
 
 		const parsed = resp.data?.type != null ? parseStructTag(resp.data.type) : null;
 
-		return parsed?.address === SUI_FRAMEWORK_ADDRESS &&
+		// Modification handle case like 0x2::coin::Coin<0xf398b9ecb31aed96c345538fb59ca5a1a2c247c5e60087411ead6c637129f1c4::fish::FISH>
+		if (
+			parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
 			parsed.module === 'coin' &&
-			parsed.name === 'Coin'
-			? parsed.typeParams[0]
-			: null;
+			parsed.name === 'Coin' &&
+			parsed.typeParams.length > 0
+		) {
+			const firstTypeParam = parsed.typeParams[0];
+			return typeof firstTypeParam === 'object'
+				? firstTypeParam.address + '::' + firstTypeParam.module + '::' + firstTypeParam.name
+				: null;
+		} else {
+			return null;
+		}
 	}
 
 	#nextClientOrderId() {

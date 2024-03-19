@@ -1,6 +1,5 @@
 [package]
 name = "CustomPropertiesManifest"
-version = "0.0.0"
 published-at = "0x777"
 
 [addresses]

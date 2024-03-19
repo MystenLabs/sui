@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::MoveUtilsServer;
 use crate::authority_state::StateRead;
 use crate::error::{Error, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
@@ -11,13 +10,14 @@ use jsonrpsee::RpcModule;
 #[cfg(test)]
 use mockall::automock;
 use move_binary_format::{
-    file_format_common::VERSION_MAX,
+    binary_config::BinaryConfig,
     normalized::{Module as NormalizedModule, Type},
 };
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{MoveUtilsOpenRpc, MoveUtilsServer};
 use sui_json_rpc_types::{
     MoveFunctionArgType, ObjectValueKind, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct,
@@ -89,19 +89,19 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
 
         match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => {
-                match object.data {
+                match object.into_inner().data {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
+                        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
                         normalize_modules(
-                        p.serialized_module_map().values(),
-                        /* max_binary_format_version */ VERSION_MAX,
-                        /* no_extraneous_module_bytes */ false,
-                    )
-                    .map_err(|e| {
-                        error!("Failed to call get_move_modules_by_package for package: {package:?}");
-                        Error::from(e)
-                    })
+                            p.serialized_module_map().values(),
+                            &binary_config,
+                        )
+                        .map_err(|e| {
+                            error!("Failed to call get_move_modules_by_package for package: {package:?}");
+                            Error::from(e)
+                        })
                     }
                     _ => Err(SuiRpcInputError::GenericInvalid(format!(
                         "Object is not a package with ID {}",
@@ -140,7 +140,7 @@ impl SuiRpcModule for MoveUtils {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::MoveUtilsOpenRpc::module_doc()
+        MoveUtilsOpenRpc::module_doc()
     }
 }
 
@@ -227,16 +227,13 @@ impl MoveUtilsServer for MoveUtils {
             let object_read = self.internal.get_object_read(package)?;
 
             let normalized = match object_read {
-                ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
+                ObjectRead::Exists(_obj_ref, object, _layout) => match object.into_inner().data {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
-                        normalize_modules(
-                            p.serialized_module_map().values(),
-                            /* max_binary_format_version */ VERSION_MAX,
-                            /* no_extraneous_module_bytes */ false,
-                        )
-                        .map_err(Error::from)
+                        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
+                        normalize_modules(p.serialized_module_map().values(), &binary_config)
+                            .map_err(Error::from)
                     }
                     _ => Err(SuiRpcInputError::GenericInvalid(format!(
                         "Object is not a package with ID {}",

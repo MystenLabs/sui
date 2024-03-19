@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useZodForm } from '@mysten/core';
-import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { AutoLockSelector, zodSchema } from '../../accounts/AutoLockSelector';
-import Loading from '../../loading';
-import Overlay from '../../overlay';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import {
 	autoLockDataToMinutes,
@@ -16,6 +10,13 @@ import {
 import { useAutoLockMinutesMutation } from '_src/ui/app/hooks/useAutoLockMinutesMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Form } from '_src/ui/app/shared/forms/Form';
+import { useZodForm } from '@mysten/core';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import { AutoLockSelector, zodSchema } from '../../accounts/AutoLockSelector';
+import Loading from '../../loading';
+import Overlay from '../../overlay';
 
 export function AutoLockAccounts() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
@@ -39,7 +40,7 @@ export function AutoLockAccounts() {
 			title={'Auto-lock Accounts'}
 			closeOverlay={() => navigate(mainMenuUrl)}
 		>
-			<Loading loading={autoLock.isLoading}>
+			<Loading loading={autoLock.isPending}>
 				<Form
 					className="flex flex-col h-full pt-5"
 					form={form}

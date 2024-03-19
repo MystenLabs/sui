@@ -11,6 +11,7 @@ use move_core_types::language_storage::StructTag;
 
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::{TransactionBuilderOpenRpc, TransactionBuilderServer};
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
@@ -22,7 +23,6 @@ use sui_types::base_types::ObjectInfo;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
 
-use crate::api::TransactionBuilderServer;
 use crate::authority_state::StateRead;
 use crate::SuiRpcModule;
 
@@ -32,6 +32,10 @@ impl TransactionBuilderApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self(TransactionBuilder::new(reader))
+    }
+
+    pub fn new_with_data_reader(data_reader: Arc<dyn DataReader + Sync + Send>) -> Self {
+        Self(TransactionBuilder::new(data_reader))
     }
 }
 
@@ -259,6 +263,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     rpc_arguments,
                     gas,
                     *gas_budget,
+                    None,
                 )
                 .await?,
         )?)
@@ -317,6 +322,6 @@ impl SuiRpcModule for TransactionBuilderApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::TransactionBuilderOpenRpc::module_doc()
+        TransactionBuilderOpenRpc::module_doc()
     }
 }

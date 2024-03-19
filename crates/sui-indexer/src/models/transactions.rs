@@ -1,96 +1,245 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use diesel::prelude::*;
 
-use sui_json_rpc_types::{SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI};
+use move_bytecode_utils::module_cache::GetModule;
+use sui_json_rpc_types::BalanceChange;
+use sui_json_rpc_types::ObjectChange;
+use sui_json_rpc_types::SuiTransactionBlock;
+use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::SuiTransactionBlockEvents;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEvents;
+use sui_types::event::Event;
+use sui_types::transaction::SenderSignedData;
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
-use crate::types::TemporaryTransactionBlockResponseStore;
+use crate::types::IndexedObjectChange;
+use crate::types::IndexedTransaction;
+use crate::types::IndexerResult;
 
 #[derive(Clone, Debug, Queryable, Insertable, QueryableByName)]
 #[diesel(table_name = transactions)]
-pub struct Transaction {
-    #[diesel(deserialize_as = i64)]
-    pub id: Option<i64>,
-    pub transaction_digest: String,
-    pub sender: String,
-    pub checkpoint_sequence_number: Option<i64>,
-    pub timestamp_ms: Option<i64>,
-    pub transaction_kind: String,
-    pub transaction_count: i64,
-    pub execution_success: bool,
-    pub gas_object_id: String,
-    pub gas_object_sequence: i64,
-    pub gas_object_digest: String,
-    pub gas_budget: i64,
-    pub total_gas_cost: i64,
-    pub computation_cost: i64,
-    pub storage_cost: i64,
-    pub storage_rebate: i64,
-    pub non_refundable_storage_fee: i64,
-    pub gas_price: i64,
-    // BCS bytes of SenderSignedData
+pub struct StoredTransaction {
+    pub tx_sequence_number: i64,
+    pub transaction_digest: Vec<u8>,
     pub raw_transaction: Vec<u8>,
-    pub transaction_effects_content: String,
-    pub confirmed_local_execution: Option<bool>,
+    pub raw_effects: Vec<u8>,
+    pub checkpoint_sequence_number: i64,
+    pub timestamp_ms: i64,
+    pub object_changes: Vec<Option<Vec<u8>>>,
+    pub balance_changes: Vec<Option<Vec<u8>>>,
+    pub events: Vec<Option<Vec<u8>>>,
+    pub transaction_kind: i16,
+    pub success_command_count: i16,
 }
 
-impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
-    type Error = IndexerError;
+#[derive(Debug, Queryable)]
+pub struct TxSeq {
+    pub seq: i64,
+}
 
-    fn try_from(tx_resp: TemporaryTransactionBlockResponseStore) -> Result<Self, Self::Error> {
-        let TemporaryTransactionBlockResponseStore {
-            digest,
+impl Default for TxSeq {
+    fn default() -> Self {
+        Self { seq: -1 }
+    }
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionTimestamp {
+    pub tx_sequence_number: i64,
+    pub timestamp_ms: i64,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionCheckpoint {
+    pub tx_sequence_number: i64,
+    pub checkpoint_sequence_number: i64,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionSuccessCommandCount {
+    pub tx_sequence_number: i64,
+    pub checkpoint_sequence_number: i64,
+    pub success_command_count: i16,
+    pub timestamp_ms: i64,
+}
+
+impl From<&IndexedTransaction> for StoredTransaction {
+    fn from(tx: &IndexedTransaction) -> Self {
+        StoredTransaction {
+            tx_sequence_number: tx.tx_sequence_number as i64,
+            transaction_digest: tx.tx_digest.into_inner().to_vec(),
+            raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
+            raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
+            checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
+            object_changes: tx
+                .object_changes
+                .iter()
+                .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
+                .collect(),
+            balance_changes: tx
+                .balance_change
+                .iter()
+                .map(|bc| Some(bcs::to_bytes(&bc).unwrap()))
+                .collect(),
+            events: tx
+                .events
+                .iter()
+                .map(|e| Some(bcs::to_bytes(&e).unwrap()))
+                .collect(),
+            timestamp_ms: tx.timestamp_ms as i64,
+            transaction_kind: tx.transaction_kind.clone() as i16,
+            success_command_count: tx.successful_tx_num as i16,
+        }
+    }
+}
+
+impl StoredTransaction {
+    pub fn try_into_sui_transaction_block_response(
+        self,
+        options: &SuiTransactionBlockResponseOptions,
+        module: &impl GetModule,
+    ) -> IndexerResult<SuiTransactionBlockResponse> {
+        let tx_digest =
+            TransactionDigest::try_from(self.transaction_digest.as_slice()).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Can't convert {:?} as tx_digest. Error: {e}",
+                    self.transaction_digest
+                ))
+            })?;
+
+        let transaction = if options.show_input {
+            let sender_signed_data = self.try_into_sender_signed_data()?;
+            let tx_block = SuiTransactionBlock::try_from(sender_signed_data, module)?;
+            Some(tx_block)
+        } else {
+            None
+        };
+
+        let effects = if options.show_effects {
+            let effects = self.try_into_sui_transaction_effects()?;
+            Some(effects)
+        } else {
+            None
+        };
+
+        let raw_transaction = if options.show_raw_input {
+            self.raw_transaction
+        } else {
+            Vec::new()
+        };
+
+        let events = if options.show_events {
+            let events = self
+                .events
+                .into_iter()
+                .map(|event| match event {
+                    Some(event) => {
+                        let event: Event = bcs::from_bytes(&event).map_err(|e| {
+                            IndexerError::PersistentStorageDataCorruptionError(format!(
+                                "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
+                                tx_digest
+                            ))
+                        })?;
+                        Ok(event)
+                    }
+                    None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                        "Event should not be null, tx_digest={:?}",
+                        tx_digest
+                    ))),
+                })
+                .collect::<Result<Vec<Event>, IndexerError>>()?;
+            let timestamp = self.timestamp_ms as u64;
+            let tx_events = TransactionEvents { data: events };
+            let tx_events = SuiTransactionBlockEvents::try_from_using_module_resolver(
+                tx_events,
+                tx_digest,
+                Some(timestamp),
+                module,
+            )?;
+            Some(tx_events)
+        } else {
+            None
+        };
+
+        let object_changes = if options.show_object_changes {
+            let object_changes = self.object_changes.into_iter().map(|object_change| {
+                match object_change {
+                    Some(object_change) => {
+                        let object_change: IndexedObjectChange = bcs::from_bytes(&object_change)
+                            .map_err(|e| IndexerError::PersistentStorageDataCorruptionError(
+                                format!("Can't convert object_change bytes into IndexedObjectChange. tx_digest={:?} Error: {e}", tx_digest)
+                            ))?;
+                        Ok(ObjectChange::from(object_change))
+                    }
+                    None => Err(IndexerError::PersistentStorageDataCorruptionError(format!("object_change should not be null, tx_digest={:?}", tx_digest))),
+                }
+            }).collect::<Result<Vec<ObjectChange>, IndexerError>>()?;
+
+            Some(object_changes)
+        } else {
+            None
+        };
+
+        let balance_changes = if options.show_balance_changes {
+            let balance_changes = self.balance_changes.into_iter().map(|balance_change| {
+                match balance_change {
+                    Some(balance_change) => {
+                        let balance_change: BalanceChange = bcs::from_bytes(&balance_change)
+                            .map_err(|e| IndexerError::PersistentStorageDataCorruptionError(
+                                format!("Can't convert balance_change bytes into BalanceChange. tx_digest={:?} Error: {e}", tx_digest)
+                            ))?;
+                        Ok(balance_change)
+                    }
+                    None => Err(IndexerError::PersistentStorageDataCorruptionError(format!("object_change should not be null, tx_digest={:?}", tx_digest))),
+                }
+            }).collect::<Result<Vec<BalanceChange>, IndexerError>>()?;
+
+            Some(balance_changes)
+        } else {
+            None
+        };
+
+        Ok(SuiTransactionBlockResponse {
+            digest: tx_digest,
             transaction,
             raw_transaction,
             effects,
-            events: _,
-            object_changes: _,
-            balance_changes: _,
-            timestamp_ms,
-            confirmed_local_execution,
-            checkpoint,
-        } = tx_resp;
+            events,
+            object_changes,
+            balance_changes,
+            timestamp_ms: Some(self.timestamp_ms as u64),
+            checkpoint: Some(self.checkpoint_sequence_number as u64),
+            confirmed_local_execution: None,
+            errors: vec![],
+            raw_effects: self.raw_effects,
+        })
+    }
 
-        let tx_effect_json = serde_json::to_string(&effects).map_err(|err| {
-            IndexerError::InsertableParsingError(format!(
-                "Failed converting transaction block effects {:?} to JSON with error: {:?}",
-                effects.clone(),
-                err
+    fn try_into_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
+        let sender_signed_data: SenderSignedData =
+            bcs::from_bytes(&self.raw_transaction).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Can't convert raw_transaction of {} into SenderSignedData. Error: {e}",
+                    self.tx_sequence_number
+                ))
+            })?;
+        Ok(sender_signed_data)
+    }
+
+    pub fn try_into_sui_transaction_effects(&self) -> IndexerResult<SuiTransactionBlockEffects> {
+        let effects: TransactionEffects = bcs::from_bytes(&self.raw_effects).map_err(|e| {
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Can't convert raw_effects of {} into TransactionEffects. Error: {e}",
+                self.tx_sequence_number
             ))
         })?;
-
-        let gas_summary = effects.gas_cost_summary();
-        let computation_cost = gas_summary.computation_cost;
-        let storage_cost = gas_summary.storage_cost;
-        let storage_rebate = gas_summary.storage_rebate;
-        let non_refundable_storage_fee = gas_summary.non_refundable_storage_fee;
-        Ok(Transaction {
-            id: None,
-            transaction_digest: digest.base58_encode(),
-            sender: transaction.data.sender().to_string(),
-            checkpoint_sequence_number: checkpoint.map(|seq| seq as i64),
-            transaction_kind: transaction.data.transaction().name().to_string(),
-            transaction_count: transaction.data.transaction().transaction_count() as i64,
-            execution_success: effects.status().is_ok(),
-            timestamp_ms: timestamp_ms.map(|ts| ts as i64),
-            gas_object_id: effects.gas_object().reference.object_id.to_string(),
-            gas_object_sequence: effects.gas_object().reference.version.value() as i64,
-            gas_object_digest: effects.gas_object().reference.digest.base58_encode(),
-            // NOTE: cast u64 to i64 here is safe because
-            // max value of i64 is 9223372036854775807 MISTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
-            gas_budget: transaction.data.gas_data().budget as i64,
-            gas_price: transaction.data.gas_data().price as i64,
-            total_gas_cost: (computation_cost + storage_cost) as i64 - (storage_rebate as i64),
-            computation_cost: computation_cost as i64,
-            storage_cost: storage_cost as i64,
-            storage_rebate: storage_rebate as i64,
-            non_refundable_storage_fee: non_refundable_storage_fee as i64,
-            raw_transaction,
-            transaction_effects_content: tx_effect_json,
-            confirmed_local_execution,
-        })
+        let effects = SuiTransactionBlockEffects::try_from(effects)?;
+        Ok(effects)
     }
 }

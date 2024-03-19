@@ -1,3 +1,0 @@
-sandbox publish
-sandbox run scripts/test.move --args 0u8 --dry-run
-sandbox run scripts/test.move --args 1u8 --dry-run

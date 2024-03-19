@@ -6,9 +6,6 @@ module games::shared_tic_tac_toe_tests {
     use sui::test_scenario::{Self, Scenario};
     use games::shared_tic_tac_toe::{Self, TicTacToe, Trophy};
 
-    const SEND_MARK_FAILED: u64 = 0;
-    const UNEXPECTED_WINNER: u64 = 1;
-    const MARK_PLACEMENT_FAILED: u64 = 2;
     const IN_PROGRESS: u8 = 0;
     const X_WIN: u8 = 1;
     const DRAW: u8 = 3;

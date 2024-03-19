@@ -1,0 +1,13 @@
+# A override should be specified only in either "regular" dependencies section or "dev" dependencies
+# section but not in both
+
+[package]
+name = "Root-rename"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+C-rename = { local = "./deps_only/C-v1", override = true }
+
+[dev-dependencies]
+C-rename = { local = "./deps_only/C-v2", override = true }

@@ -12,7 +12,7 @@ fastcrypto.workspace = true
 jsonrpsee.workspace = true
 hyper.workspace = true
 itertools.workspace = true
-linked-hash-map.workspace = true
+indexmap.workspace = true
 tower.workspace = true
 axum.workspace = true
 tower-http.workspace = true
@@ -40,15 +40,15 @@ sui-core.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
+sui-json-rpc-api.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-json-rpc-types.workspace = true
 sui-transaction-builder.workspace = true
 mysten-metrics.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 shared-crypto.workspace = true
-typed-store.workspace = true
+typed-store-error.workspace = true
 cached.workspace = true
 
 [dev-dependencies]

@@ -6,7 +6,7 @@ use futures::FutureExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{random_object_ref, ExecutionDigests};
+use sui_types::base_types::{random_object_ref, ExecutionDigests, ObjectID, VersionNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -24,6 +24,8 @@ use sui_types::transaction::Transaction;
 
 use sui_storage::key_value_store::*;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+use sui_types::object::Object;
+use sui_types::storage::ObjectKey;
 
 fn random_tx() -> Transaction {
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
@@ -53,6 +55,7 @@ struct MockTxStore {
     checkpoint_summaries_by_digest: HashMap<CheckpointDigest, CertifiedCheckpointSummary>,
     checkpoint_contents_by_digest: HashMap<CheckpointContentsDigest, CheckpointContents>,
     tx_to_checkpoint: HashMap<TransactionDigest, CheckpointSequenceNumber>,
+    objects: HashMap<ObjectKey, Object>,
 
     next_seq_number: u64,
 }
@@ -93,9 +96,8 @@ impl MockTxStore {
     }
 
     fn add_random_checkpoint(&mut self) -> (CertifiedCheckpointSummary, CheckpointContents) {
-        let contents = CheckpointContents::new_with_causally_ordered_transactions(
-            [ExecutionDigests::random()].into_iter(),
-        );
+        let contents =
+            CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
 
         let next_seq = self.next_seq_number;
         self.next_seq_number += 1;
@@ -215,6 +217,24 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         digest: TransactionDigest,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
         Ok(self.tx_to_checkpoint.get(&digest).cloned())
+    }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: VersionNumber,
+    ) -> SuiResult<Option<Object>> {
+        Ok(self.objects.get(&ObjectKey(object_id, version)).cloned())
+    }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        Ok(digests
+            .iter()
+            .map(|digest| self.tx_to_checkpoint.get(digest).cloned())
+            .collect())
     }
 }
 

@@ -1,5 +1,193 @@
 # @mysten/sui.js
 
+## 0.51.0
+
+### Minor Changes
+
+- 0cafa94027: Remove deprecated types directory
+
+## 0.50.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/bcs@0.11.1
+
+## 0.50.0
+
+### Minor Changes
+
+- a34f1cb67d: Use Bech32 instead of Hex for private key export, supports both Hex and Bech32 for importing
+
+### Patch Changes
+
+- a34f1cb67d: deprecate ExportedKeypair
+- c08e3569ef: Export all keypair utilities
+- 9a14e61db4: Allow signer in signAndExecuteTransactionBlock to be a Signer rather than a Keypair
+- 13e922d9b1: Fix multiple shared objects not respecting mutable correctly
+- 220a766d86: Fix WebSocket constructor not being properly assigned in SuiClient HTTP transport
+- Updated dependencies [bae8802fe3]
+  - @mysten/bcs@0.11.0
+
+## 0.49.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/bcs@0.10.1
+
+## 0.49.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/bcs@0.10.0
+
+## 0.48.1
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [dd362ec1d6]
+  - @mysten/bcs@0.9.1
+
+## 0.48.0
+
+### Minor Changes
+
+- cdcfa76c43: Add a new client method for retrieving epoch metrics (suix_getEpochMetrics)
+
+### Patch Changes
+
+- Updated dependencies [fce0a08d0f]
+  - @mysten/bcs@0.9.0
+
+## 0.47.0
+
+### Minor Changes
+
+- 0259aec82: Removed dependency on @open-rpc/client-js and replaced it with standard fetch and WebSocket based APIs
+
+  If you are using the `subscribeEvent` or `subscribeTransaction` in environments that do not support the `WebSocket` api natively (This will be true for most versions of Node.js) you will need to provide a WebSocket implementation when creating your SuiClient. You can either use a global polyfill for the WebSocket class, or pass a compatible WebSocket implementation into SuiHTTPTransport (eg, using the `ws` package)
+
+  ```typescript
+  import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+  import { WebSocket } from 'ws';
+
+  new SuiClient({
+  	transport: new SuiHTTPTransport({
+  		url: getFullnodeUrl('mainnet'),
+  		// The typescript definitions may not match perfectly, casting to never avoids these minor incompatibilities
+  		WebSocketConstructor: WebSocket as never,
+  	}),
+  });
+  ```
+
+- 64d45ba27: Add support for zklogin sig inside multisig
+
+### Patch Changes
+
+- 194c980cb: Properly determine shared object mutability when being passed by value.
+- 9ac7e2f3d: Add additional type exports to zklogin package
+
+## 0.46.1
+
+### Patch Changes
+
+- 652bcdd92: Remove some multisig methods that had previously been deprecated and are no longer exported
+
+## 0.46.0
+
+### Minor Changes
+
+- 093554a0d: Remove deprecated framework code.
+
+### Patch Changes
+
+- 28c2c3330: Use the same issuer string in address derivation for the two google's iss values
+- 43444c58f: Extend the `TransactionBlock#object()` API to accept the `TransactionResult` type as well, so that it can be used flexibly in SDKs.
+- 8d1e74e52: Fix setting gasPrice for devInspectTransactionBlock
+- 3718a230b: Adds `txb.pure.id()` to pass ID pure values more intuitively
+
+## 0.45.1
+
+### Patch Changes
+
+- 30b47b758: Fix formatting when parsing addresses with bcs.Address
+
+## 0.45.0
+
+### Minor Changes
+
+- b9afb5567: adds "transfer to object" (receivingRef) support
+
+## 0.44.0
+
+### Minor Changes
+
+- 11cf4e68b: Remove deprecated methods.
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+- Updated dependencies [b48289346]
+  - @mysten/bcs@0.8.1
+
+## 0.43.3
+
+### Patch Changes
+
+- 004fb1991: Export TransactionResult type
+
+## 0.43.2
+
+### Patch Changes
+
+- 9b052166d: Register Option enum to sdk bcs registry
+
+## 0.43.1
+
+### Patch Changes
+
+- faa13ded9: Ensure that TransactionBlocks can be copied via structuredClone to workaround bug in sui wallet
+- c5684bb52: rename zk to zkLogin
+
+## 0.43.0
+
+### Minor Changes
+
+- 781d073d9: Update getFaucetRequestStatus to GET request
+- e4484852b: Improve APIs for building transaction inputs
+
+  - txb.splitCoins now accepts `amounts`` as raw JavaScript number
+  - txb.transferObjects now accepts `address` as JavaScript string
+  - All single objects, or lists of objects, now also accepts object IDs as JavaScript strings
+  - txb.pure accepts `SerializedBcs` (eg `txb.pure(bcs.U64.serialize(123))`)
+  - Added pure helpers (`txb.pure.address()`, `txb.bool()`, and `txb.pure.u{8-256}()`) to simplify serialization of pure values
+  - Deprecated using `txb.pure` with raw JavaScript values, or an explicit type argument.
+
+- 1bc430161: Updated BCS defintions to use new BCS schema builder
+
+### Patch Changes
+
+- 3764c464f: - add support for basic parsing of zkLogin signatures
+  - new zklogin package
+- 71e0a3197: zklogin improvements
+
+  - use new bcs api
+  - rename `toBufferBE` to `toBigEndianBytes`
+  - stop exporting `ZkLoginSignatureInputs` and `extractClaimValue`
+
+- Updated dependencies [1bc430161]
+- Updated dependencies [e4484852b]
+  - @mysten/bcs@0.8.0
+
 ## 0.42.0
 
 ### Minor Changes
@@ -627,7 +815,7 @@
 ### Minor Changes
 
 - e0b173b9e: Standardize Ed25519KeyPair key derivation with SLIP10
-- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the Typescript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
+- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the TypeScript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
 - 03e6b552b: Add util function to get coin balances
 - 4575c0a02: Fix type definition of SuiMoveNormalizedType
 - ccf7f148d: Added generic signAndExecuteTransaction method to the SDK, which can be used with any supported type of transaction.

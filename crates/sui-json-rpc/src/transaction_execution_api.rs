@@ -15,8 +15,9 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVer
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_json_rpc_api::{JsonRpcMetrics, WriteApiOpenRpc, WriteApiServer};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
+    DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -34,8 +35,6 @@ use sui_types::transaction::{
 };
 use tracing::instrument;
 
-use crate::api::JsonRpcMetrics;
-use crate::api::WriteApiServer;
 use crate::authority_state::StateRead;
 use crate::error::{Error, SuiRpcInputError};
 use crate::{
@@ -104,7 +103,7 @@ impl TransactionExecutionApi {
         for sig in signatures {
             sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
         }
-        let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
+        let txn = Transaction::from_generic_sig_data(tx_data, sigs);
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data())?
         } else {
@@ -158,16 +157,16 @@ impl TransactionExecutionApi {
         let (effects, transaction_events, is_executed_locally) = *cert;
         let mut events: Option<SuiTransactionBlockEvents> = None;
         if opts.show_events {
-            let module_cache = self
-                .state
-                .load_epoch_store_one_call_per_task()
-                .module_cache()
-                .clone();
+            let epoch_store = self.state.load_epoch_store_one_call_per_task();
+            let backing_package_store = self.state.get_backing_package_store();
+            let mut layout_resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(backing_package_store.as_ref()));
             events = Some(SuiTransactionBlockEvents::try_from(
                 transaction_events,
                 digest,
                 None,
-                module_cache.as_ref(),
+                layout_resolver.as_mut(),
             )?);
         }
 
@@ -195,6 +194,12 @@ impl TransactionExecutionApi {
             None
         };
 
+        let raw_effects = if opts.show_raw_effects {
+            bcs::to_bytes(&effects.effects)?
+        } else {
+            vec![]
+        };
+
         Ok(SuiTransactionBlockResponse {
             digest,
             transaction,
@@ -207,6 +212,7 @@ impl TransactionExecutionApi {
             confirmed_local_execution: Some(is_executed_locally),
             checkpoint: None,
             errors: vec![],
+            raw_effects,
         })
     }
 
@@ -289,11 +295,28 @@ impl WriteApiServer for TransactionExecutionApi {
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
         _epoch: Option<BigInt<u64>>,
+        additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
+            let DevInspectArgs {
+                gas_sponsor,
+                gas_budget,
+                gas_objects,
+                show_raw_txn_data_and_effects,
+                skip_checks,
+            } = additional_args.unwrap_or_default();
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
             self.state
-                .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
+                .dev_inspect_transaction_block(
+                    sender_address,
+                    tx_kind,
+                    gas_price.map(|i| *i),
+                    gas_budget.map(|i| *i),
+                    gas_sponsor,
+                    gas_objects,
+                    show_raw_txn_data_and_effects,
+                    skip_checks,
+                )
                 .await
                 .map_err(Error::from)
         })
@@ -314,6 +337,6 @@ impl SuiRpcModule for TransactionExecutionApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::WriteApiOpenRpc::module_doc()
+        WriteApiOpenRpc::module_doc()
     }
 }

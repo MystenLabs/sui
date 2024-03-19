@@ -8,7 +8,7 @@ use rocksdb::Direction;
 
 use crate::metrics::{DBMetrics, RocksDBPerfContext};
 
-use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
+use super::{be_fix_int_ser, RocksDBRawIter, TypedStoreError};
 use serde::{de::DeserializeOwned, Serialize};
 
 /// An iterator over all key-value pairs in a data map.
@@ -17,6 +17,7 @@ pub struct SafeIter<'a, K, V> {
     db_iter: RocksDBRawIter<'a>,
     _phantom: PhantomData<(K, V)>,
     direction: Direction,
+    is_initialized: bool,
     _timer: Option<HistogramTimer>,
     _perf_ctx: Option<RocksDBPerfContext>,
     bytes_scanned: Option<Histogram>,
@@ -41,6 +42,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> SafeIter<'a, K, V> {
             db_iter,
             _phantom: PhantomData,
             direction: Direction::Forward,
+            is_initialized: false,
             _timer,
             _perf_ctx,
             bytes_scanned,
@@ -56,6 +58,12 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'a, K, 
     type Item = Result<(K, V), TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // Implicitly set iterator to the first entry in the column family if it hasn't been initialized
+        // used for backward compatibility
+        if !self.is_initialized {
+            self.db_iter.seek_to_first();
+            self.is_initialized = true;
+        }
         if self.db_iter.valid() {
             let config = bincode::DefaultOptions::new()
                 .with_big_endian()
@@ -108,6 +116,7 @@ impl<'a, K: Serialize, V> SafeIter<'a, K, V> {
     /// the key.
     pub fn skip_to(mut self, key: &K) -> Result<Self, TypedStoreError> {
         self.db_iter.seek(be_fix_int_ser(key)?);
+        self.is_initialized = true;
         Ok(self)
     }
 
@@ -116,12 +125,14 @@ impl<'a, K: Serialize, V> SafeIter<'a, K, V> {
     /// no element prior to it, it returns an empty iterator.
     pub fn skip_prior_to(mut self, key: &K) -> Result<Self, TypedStoreError> {
         self.db_iter.seek_for_prev(be_fix_int_ser(key)?);
+        self.is_initialized = true;
         Ok(self)
     }
 
     /// Seeks to the last key in the database (at this column family).
     pub fn skip_to_last(mut self) -> Self {
         self.db_iter.seek_to_last();
+        self.is_initialized = true;
         self
     }
 

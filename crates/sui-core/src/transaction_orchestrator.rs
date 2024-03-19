@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::AuthorityState;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
@@ -31,7 +32,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::effects::{TransactionEffectsAPI, VerifiedCertifiedTransactionEffects};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::object::Object;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse,
@@ -71,7 +71,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let validators = AuthorityAggregator::new_from_local_system_state(
-            &validator_state.db(),
+            validator_state.get_cache_reader(),
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
             auth_agg_metrics.clone(),
@@ -79,7 +79,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
-            validator_state.db(),
+            validator_state.get_cache_reader().clone(),
             validator_state.clone_committee_store(),
             safe_client_metrics_base,
             auth_agg_metrics,
@@ -160,9 +160,9 @@ where
         // TODO check if tx is already executed on this node.
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
+        let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
 
-        let transaction = self
-            .validator_state
+        let transaction = epoch_store
             .verify_transaction(request.transaction)
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
@@ -202,10 +202,7 @@ where
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
 
-        let Ok(result) = timeout(
-            WAIT_FOR_FINALITY_TIMEOUT,
-            ticket,
-        ).await else {
+        let Ok(result) = timeout(WAIT_FOR_FINALITY_TIMEOUT, ticket).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
             self.metrics.wait_for_finality_timeout.inc();
             return Err(QuorumDriverError::TimeoutBeforeFinality);
@@ -223,11 +220,7 @@ where
             Ok(Err(err)) => Err(err),
             Ok(Ok(response)) => {
                 good_response_metrics.inc();
-                let QuorumDriverResponse {
-                    effects_cert,
-                    objects,
-                    ..
-                } = response;
+                let QuorumDriverResponse { effects_cert, .. } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
@@ -243,9 +236,9 @@ where
 
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
+                    &epoch_store,
                     &executable_tx,
                     &effects_cert,
-                    objects,
                     &self.metrics,
                 )
                 .await
@@ -287,13 +280,14 @@ where
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
         // to form a certificate for us again, to serve this request.
-        let effects_await = self
-            .validator_state
-            .database
-            .notify_read_executed_effects(vec![tx_digest]);
+        let cache_reader = self.validator_state.get_cache_reader().clone();
         let qd = self.clone_quorum_driver();
         Ok(async move {
-            match select(ticket, effects_await.boxed()).await {
+            let digests = [tx_digest];
+            let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            // let-and-return necessary to satisfy borrow checker.
+            #[allow(clippy::let_and_return)]
+            let res = match select(ticket, effects_await.boxed()).await {
                 Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
                 Either::Right((_, unfinished_quorum_driver_task)) => {
                     debug!(
@@ -303,20 +297,19 @@ where
                     qd.submit_transaction_no_ticket(transaction.into()).await?;
                     Ok(unfinished_quorum_driver_task.await)
                 }
-            }
+            };
+            res
         })
     }
 
     #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
-        objects: Vec<Object>,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
-        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
-
         // TODO: attempt a finalized tx at most once per request.
         // Every WaitForLocalExecution request will be attempted to execute twice,
         // one from the subscriber queue, one from the proactive execution before
@@ -347,8 +340,7 @@ where
             validator_state.fullnode_execute_certificate_with_effects(
                 transaction,
                 effects_cert,
-                objects,
-                &epoch_store,
+                epoch_store,
             ),
         )
         .instrument(error_span!(
@@ -391,14 +383,7 @@ where
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(Ok((
-                    transaction,
-                    QuorumDriverResponse {
-                        effects_cert,
-                        objects,
-                        ..
-                    },
-                ))) => {
+                Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
                     let tx_digest = transaction.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         panic!(
@@ -412,9 +397,11 @@ where
                         continue;
                     }
 
+                    let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+
                     // This is a redundant verification, but SignatureVerifier will cache the
                     // previous result.
-                    let transaction = match validator_state.verify_transaction(transaction) {
+                    let transaction = match epoch_store.verify_transaction(transaction) {
                         Ok(transaction) => transaction,
                         Err(err) => {
                             // This should be impossible, since we verified the transaction
@@ -434,9 +421,9 @@ where
 
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
+                        &epoch_store,
                         &executable_tx,
                         &effects_cert,
-                        objects,
                         &metrics,
                     )
                     .await;

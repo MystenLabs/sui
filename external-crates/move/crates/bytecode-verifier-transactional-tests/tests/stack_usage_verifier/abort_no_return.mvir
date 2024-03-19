@@ -1,0 +1,10 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0:
+    // no return needed
+    abort 0;
+}
+
+}

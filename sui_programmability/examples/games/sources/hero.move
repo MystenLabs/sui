@@ -99,10 +99,6 @@ module games::hero {
     // TODO: proper error codes
     /// The boar won the battle
     const EBOAR_WON: u64 = 0;
-    /// The hero is too tired to fight
-    const EHERO_TIRED: u64 = 1;
-    /// Trying to initialize from a non-admin account
-    const ENOT_ADMIN: u64 = 2;
     /// Not enough money to purchase the given item
     const EINSUFFICIENT_FUNDS: u64 = 3;
     /// Trying to remove a sword, but the hero does not have one

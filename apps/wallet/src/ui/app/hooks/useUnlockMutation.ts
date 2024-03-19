@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMutation } from '@tanstack/react-query';
-import { useBackgroundClient } from './useBackgroundClient';
+
 import { type BackgroundClient } from '../background-client';
+import { useBackgroundClient } from './useBackgroundClient';
 
 export function useUnlockMutation() {
 	const backgroundClient = useBackgroundClient();

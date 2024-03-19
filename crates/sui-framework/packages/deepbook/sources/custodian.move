@@ -11,6 +11,7 @@ module deepbook::custodian {
     friend deepbook::clob;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
+    #[test_only]
     const EUserBalanceDoesNotExist: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -147,6 +148,7 @@ module deepbook::custodian {
         table::borrow_mut(&mut custodian.account_balances, user)
     }
 
+    #[test_only]
     fun borrow_account_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
@@ -224,7 +226,7 @@ module deepbook::custodian {
         };
         test_scenario::next_tx(&mut test, bob);
         {
-            let custodian = take_shared<Custodian<USD>>(&mut test);
+            let custodian = take_shared<Custodian<USD>>(&test);
             let account_cap = take_from_sender<AccountCap>(&test);
             let account_cap_user = object::id(&account_cap);
             let _ = borrow_account_balance(&custodian, account_cap_user);
@@ -247,7 +249,7 @@ module deepbook::custodian {
         };
         test_scenario::next_tx(&mut test, bob);
         {
-            let custodian = take_shared<Custodian<USD>>(&mut test);
+            let custodian = take_shared<Custodian<USD>>(&test);
             let account_cap = take_from_sender<AccountCap>(&test);
             let account_cap_user = object::id(&account_cap);
             let (asset_available, asset_locked) = account_balance(&custodian, account_cap_user);
@@ -259,7 +261,7 @@ module deepbook::custodian {
         };
         test_scenario::next_tx(&mut test, bob);
         {
-            let custodian = take_shared<Custodian<USD>>(&mut test);
+            let custodian = take_shared<Custodian<USD>>(&test);
             let account_cap = take_from_sender<AccountCap>(&test);
             let account_cap_user = object::id(&account_cap);
             deposit(&mut custodian, mint_for_testing<USD>(10000, ctx(&mut test)), account_cap_user);

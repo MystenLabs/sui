@@ -7,6 +7,7 @@ export type QredoConnectIdentity = {
 	service: string;
 	apiUrl: string;
 	origin: string;
+	/** this was renamed to workspace in qredo side but keeping it as organization in wallet to avoid further changes */
 	organization: string;
 };
 

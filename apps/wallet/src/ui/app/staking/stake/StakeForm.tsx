@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinMetadata, useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
-import { Field, Form, useFormikContext } from 'formik';
-import { memo, useCallback, useMemo } from 'react';
-
-import { type FormValues } from './StakingCard';
-import { createStakeTransaction } from './utils/transaction';
-import { parseAmount } from '../../helpers';
-import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
@@ -17,6 +9,14 @@ import {
 	NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS,
 } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
+import { useCoinMetadata, useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
+import { Field, Form, useFormikContext } from 'formik';
+import { memo, useCallback, useMemo } from 'react';
+
+import { parseAmount } from '../../helpers';
+import { useActiveAddress, useTransactionGasBudget } from '../../hooks';
+import { type FormValues } from './StakingCard';
+import { createStakeTransaction } from './utils/transaction';
 
 const HIDE_MAX = true;
 
@@ -89,7 +89,7 @@ function StakeForm({ validatorAddress, coinBalance, coinType, epoch }: StakeFrom
 							<button
 								className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
 								onClick={setMaxToken}
-								disabled={queryResult.isLoading}
+								disabled={queryResult.isPending}
 								type="button"
 							>
 								Max

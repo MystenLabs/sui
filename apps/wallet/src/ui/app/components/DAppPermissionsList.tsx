@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { PermissionType } from '_messages/payloads/permissions';
 import { CheckFill12 } from '@mysten/icons';
 
 import { Text } from '../shared/text';
-
-import type { PermissionType } from '_messages/payloads/permissions';
 
 export type DAppPermissionsListProps = {
 	permissions: PermissionType[];

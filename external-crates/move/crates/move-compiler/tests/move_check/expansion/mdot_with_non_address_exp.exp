@@ -1,0 +1,27 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:9:13
+  │
+9 │         01u8::X::bar()
+  │             ^^
+  │             │
+  │             Unexpected '::'
+  │             Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:13:14
+   │
+13 │         false::X::bar()
+   │              ^^
+   │              │
+   │              Unexpected '::'
+   │              Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:22
+   │
+17 │         foo().bar().X::bar()
+   │                      ^^
+   │                      │
+   │                      Unexpected '::'
+   │                      Expected ';'
+

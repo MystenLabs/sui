@@ -5,13 +5,14 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
+use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -43,8 +44,8 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 pub struct MoveObject {
     /// The type of this object. Immutable
     type_: MoveObjectType,
-    /// Determines if it is usable with the TransferObject command
-    /// Derived from the type_
+    /// DEPRECATED this field is no longer used to determine whether a tx can transfer this
+    /// object. Instead, it is always calculated from the objects type when loaded in execution
     has_public_transfer: bool,
     /// Number that increases each time a tx takes this object as a mutable input
     /// This is a lamport timestamp, not a sequentially increasing version
@@ -56,28 +57,6 @@ pub struct MoveObject {
 
 /// Index marking the end of the object's ID + the beginning of its version
 pub const ID_END_INDEX: usize = ObjectID::LENGTH;
-
-/// Different schemes for converting a Move value into a structured representation
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct ObjectFormatOptions {
-    /// If true, include the type of each object as well as its fields; e.g.:
-    /// `{ "fields": { "f": 20, "g": { "fields" { "h": true }, "type": "0x0::MyModule::MyNestedType" }, "type": "0x0::MyModule::MyType" }`
-    ///  If false, include field names only; e.g.:
-    /// `{ "f": 20, "g": { "h": true } }`
-    include_types: bool,
-}
-
-impl ObjectFormatOptions {
-    pub fn with_types() -> Self {
-        ObjectFormatOptions {
-            include_types: true,
-        }
-    }
-
-    pub fn include_types(&self) -> bool {
-        self.include_types
-    }
-}
 
 impl MoveObject {
     /// Creates a new Move object of type `type_` with BCS encoded bytes in `contents`
@@ -216,8 +195,28 @@ impl MoveObject {
         self.contents.splice(ID_END_INDEX.., value.to_le_bytes());
     }
 
+    /// Update the `timestamp_ms: u64` field of the `Clock` type.
+    ///
+    /// Panics if the object isn't a `Clock`.
+    pub fn set_clock_timestamp_ms_unsafe(&mut self, timestamp_ms: u64) {
+        assert!(self.is_clock());
+        // 32 bytes for object ID, 8 for timestamp
+        assert!(self.contents.len() == 40);
+
+        self.contents
+            .splice(ID_END_INDEX.., timestamp_ms.to_le_bytes());
+    }
+
     pub fn is_coin(&self) -> bool {
         self.type_.is_coin()
+    }
+
+    pub fn is_staked_sui(&self) -> bool {
+        self.type_.is_staked_sui()
+    }
+
+    pub fn is_clock(&self) -> bool {
+        self.type_.is(&crate::clock::Clock::type_())
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -295,27 +294,19 @@ impl MoveObject {
     /// Get a `MoveStructLayout` for `self`.
     /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn get_layout(
-        &self,
-        format: ObjectFormatOptions,
-        resolver: &impl GetModule,
-    ) -> Result<MoveStructLayout, SuiError> {
-        Self::get_layout_from_struct_tag(self.type_().clone().into(), format, resolver)
+    pub fn get_layout(&self, resolver: &impl GetModule) -> Result<MoveStructLayout, SuiError> {
+        Self::get_layout_from_struct_tag(self.type_().clone().into(), resolver)
     }
 
     pub fn get_layout_from_struct_tag(
         struct_tag: StructTag,
-        format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
-        let layout = if format.include_types {
-            TypeLayoutBuilder::build_with_types(&type_, resolver)
-        } else {
-            TypeLayoutBuilder::build_with_fields(&type_, resolver)
-        }
-        .map_err(|e| SuiError::ObjectSerializationError {
-            error: e.to_string(),
+        let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
+            SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            }
         })?;
         match layout {
             MoveTypeLayout::Struct(l) => Ok(l),
@@ -337,10 +328,13 @@ impl MoveObject {
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_move_struct_with_resolver(
         &self,
-        format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStruct, SuiError> {
-        self.to_move_struct(&self.get_layout(format, resolver)?)
+        self.to_move_struct(&self.get_layout(resolver)?)
+    }
+
+    pub fn to_rust<'de, T: Deserialize<'de>>(&'de self) -> Option<T> {
+        bcs::from_bytes(self.contents()).ok()
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
@@ -382,7 +376,7 @@ impl MoveObject {
                 *balances.entry(type_tag).or_insert(0) += balance;
             }
         } else {
-            let layout = layout_resolver.get_layout(self, ObjectFormatOptions::with_types())?;
+            let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
             let move_struct = self.to_move_struct(&layout)?;
             Self::get_coin_balances_in_struct(&move_struct, &mut balances, 0)?;
         }
@@ -397,10 +391,10 @@ impl MoveObject {
         balances: &mut BTreeMap<TypeTag, u64>,
         value_depth: u64,
     ) -> Result<(), SuiError> {
-        let (struct_type, fields) = match s {
-            MoveStruct::WithTypes { type_, fields } => (type_, fields),
-            _ => unreachable!(),
-        };
+        let MoveStruct {
+            type_: struct_type,
+            fields,
+        } = s;
 
         if let Some(type_tag) = Self::is_balance(struct_type) {
             let balance = match fields[0].1 {
@@ -622,7 +616,8 @@ impl Display for Owner {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct Object {
+#[serde(rename = "Object")]
+pub struct ObjectInner {
     /// The meat of the object
     pub data: Data,
     /// The owner that unlocks this object
@@ -635,48 +630,60 @@ pub struct Object {
     pub storage_rebate: u64,
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub struct Object(Arc<ObjectInner>);
+
+impl From<ObjectInner> for Object {
+    fn from(inner: ObjectInner) -> Self {
+        Self(Arc::new(inner))
+    }
+}
+
 impl Object {
+    pub fn into_inner(self) -> ObjectInner {
+        match Arc::try_unwrap(self.0) {
+            Ok(inner) => inner,
+            Err(inner_arc) => (*inner_arc).clone(),
+        }
+    }
+
+    pub fn as_inner(&self) -> &ObjectInner {
+        &self.0
+    }
+
+    pub fn new_from_genesis(
+        data: Data,
+        owner: Owner,
+        previous_transaction: TransactionDigest,
+    ) -> Self {
+        ObjectInner {
+            data,
+            owner,
+            previous_transaction,
+            storage_rebate: 0,
+        }
+        .into()
+    }
+
     /// Create a new Move object
     pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
-        Object {
+        ObjectInner {
             data: Data::Move(o),
             owner,
             previous_transaction,
             storage_rebate: 0,
         }
-    }
-
-    /// Returns true if the object is a system package.
-    pub fn is_system_package(&self) -> bool {
-        self.is_package() && is_system_package(self.id())
-    }
-
-    /// Create a system package which is not subject to size limits. Panics if the object ID is not
-    /// a known system package.
-    pub fn new_system_package(
-        modules: &[CompiledModule],
-        version: SequenceNumber,
-        dependencies: Vec<ObjectID>,
-        previous_transaction: TransactionDigest,
-    ) -> Self {
-        let ret = Self::new_package_from_data(
-            Data::Package(MovePackage::new_system(version, modules, dependencies)),
-            previous_transaction,
-        );
-
-        #[cfg(not(msim))]
-        assert!(ret.is_system_package());
-
-        ret
+        .into()
     }
 
     pub fn new_package_from_data(data: Data, previous_transaction: TransactionDigest) -> Self {
-        Object {
+        ObjectInner {
             data,
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
         }
+        .into()
     }
 
     // Note: this will panic if `modules` is empty
@@ -733,6 +740,45 @@ impl Object {
         )
     }
 
+    /// Create a system package which is not subject to size limits. Panics if the object ID is not
+    /// a known system package.
+    pub fn new_system_package(
+        modules: &[CompiledModule],
+        version: SequenceNumber,
+        dependencies: Vec<ObjectID>,
+        previous_transaction: TransactionDigest,
+    ) -> Self {
+        let ret = Self::new_package_from_data(
+            Data::Package(MovePackage::new_system(version, modules, dependencies)),
+            previous_transaction,
+        );
+
+        #[cfg(not(msim))]
+        assert!(ret.is_system_package());
+
+        ret
+    }
+}
+
+impl std::ops::Deref for Object {
+    type Target = ObjectInner;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Object {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
+impl ObjectInner {
+    /// Returns true if the object is a system package.
+    pub fn is_system_package(&self) -> bool {
+        self.is_package() && is_system_package(self.id())
+    }
+
     pub fn is_immutable(&self) -> bool {
         self.owner.is_immutable()
     }
@@ -768,6 +814,10 @@ impl Object {
         (self.id(), self.version(), self.digest())
     }
 
+    pub fn digest(&self) -> ObjectDigest {
+        ObjectDigest::new(default_hash(self))
+    }
+
     pub fn id(&self) -> ObjectID {
         use Data::*;
 
@@ -792,10 +842,6 @@ impl Object {
 
     pub fn struct_tag(&self) -> Option<StructTag> {
         self.data.struct_tag()
-    }
-
-    pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(default_hash(self))
     }
 
     pub fn is_coin(&self) -> bool {
@@ -864,11 +910,10 @@ impl Object {
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
     pub fn get_layout(
         &self,
-        format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<Option<MoveStructLayout>, SuiError> {
         match &self.data {
-            Data::Move(m) => Ok(Some(m.get_layout(format, resolver)?)),
+            Data::Move(m) => Ok(Some(m.get_layout(resolver)?)),
             Data::Package(_) => Ok(None),
         }
     }
@@ -890,6 +935,10 @@ impl Object {
         let type_tag = move_struct.type_params[0].clone();
         Ok(type_tag)
     }
+
+    pub fn to_rust<'de, T: Deserialize<'de>>(&'de self) -> Option<T> {
+        self.data.try_as_move().and_then(|data| data.to_rust())
+    }
 }
 
 // Testing-related APIs.
@@ -910,12 +959,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::Immutable,
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn immutable_for_testing() -> Self {
@@ -937,7 +987,7 @@ impl Object {
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
         };
-        Object::new_move(obj, owner, TransactionDigest::genesis())
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
     }
 
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
@@ -947,12 +997,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::AddressOwner(owner),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn treasury_cap_for_testing(struct_tag: StructTag, treasury_cap: TreasuryCap) -> Self {
@@ -962,12 +1013,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: bcs::to_bytes(&treasury_cap).expect("Failed to serialize"),
         });
-        Self {
+        ObjectInner {
             owner: Owner::Immutable,
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn coin_metadata_for_testing(struct_tag: StructTag, metadata: CoinMetadata) -> Self {
@@ -977,12 +1029,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: bcs::to_bytes(&metadata).expect("Failed to serialize"),
         });
-        Self {
+        ObjectInner {
             owner: Owner::Immutable,
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
@@ -992,12 +1045,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::ObjectOwner(owner.into()),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
@@ -1016,12 +1070,13 @@ impl Object {
             version,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::AddressOwner(owner),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
@@ -1035,7 +1090,7 @@ impl Object {
         Object::new_move(
             obj,
             Owner::AddressOwner(owner),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
         )
     }
 
@@ -1101,14 +1156,6 @@ impl ObjectRead {
             Self::Deleted(oref) => oref.0,
             Self::NotExists(id) => *id,
             Self::Exists(oref, _, _) => oref.0,
-        }
-    }
-}
-
-impl Default for ObjectFormatOptions {
-    fn default() -> Self {
-        ObjectFormatOptions {
-            include_types: true,
         }
     }
 }
@@ -1204,6 +1251,32 @@ impl Display for PastObjectRead {
             }
         }
     }
+}
+
+// Ensure that object digest computation and bcs serialized format are not inadvertently changed.
+#[test]
+fn test_object_digest_and_serialized_format() {
+    let g = GasCoin::new_for_testing_with_id(ObjectID::ZERO, 123).to_object(OBJECT_START_VERSION);
+    let o = Object::new_move(
+        g,
+        Owner::AddressOwner(SuiAddress::ZERO),
+        TransactionDigest::ZERO,
+    );
+    let bytes = bcs::to_bytes(&o).unwrap();
+
+    assert_eq!(
+        bytes,
+        [
+            0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]
+    );
+
+    let objref = format!("{:?}", o.compute_object_reference());
+    assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
 }
 
 #[test]

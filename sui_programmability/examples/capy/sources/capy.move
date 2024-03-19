@@ -442,7 +442,7 @@ module capy::capy {
 
     /// Construct an image URL for the capy.
     fun img_url(c: &UID): Url {
-        let capy_url = *&IMAGE_URL;
+        let capy_url = IMAGE_URL;
         vec::append(&mut capy_url, sui::hex::encode(object::uid_to_bytes(c)));
         vec::append(&mut capy_url, b"/svg");
 
@@ -451,7 +451,7 @@ module capy::capy {
 
     /// Construct a Url to the capy.art.
     fun link_url(c: &UID): Url {
-        let capy_url = *&MAIN_URL;
+        let capy_url = MAIN_URL;
         vec::append(&mut capy_url, sui::hex::encode(object::uid_to_bytes(c)));
         url::new_unsafe_from_bytes(capy_url)
     }

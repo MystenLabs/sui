@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { lastValueFrom, map, take, type Observable } from 'rxjs';
-
 import { isErrorPayload, type Payload } from '_payloads';
+import { lastValueFrom, map, take, type Observable } from 'rxjs';
 
 export function mapToPromise<T extends Payload | void, R>(
 	stream: Observable<T>,

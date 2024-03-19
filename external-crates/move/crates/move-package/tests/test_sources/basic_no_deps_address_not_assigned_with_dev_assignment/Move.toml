@@ -1,0 +1,8 @@
+[package]
+name = "test"
+
+[addresses]
+A = "_"
+
+[dev-addresses]
+A = "0x1"

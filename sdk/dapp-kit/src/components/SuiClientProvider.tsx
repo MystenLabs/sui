@@ -1,17 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient, getFullnodeUrl, isSuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, isSuiClient, SuiClient } from '@mysten/sui.js/client';
 import type { SuiClientOptions } from '@mysten/sui.js/client';
 import { createContext, useMemo, useState } from 'react';
 
-type NetworkConfig = SuiClient | SuiClientOptions;
-type NetworkConfigs<T extends NetworkConfig = NetworkConfig> = Record<string, T>;
+import type { NetworkConfig } from '../hooks/networkConfig.js';
+
+type NetworkConfigs<T extends NetworkConfig | SuiClient = NetworkConfig | SuiClient> = Record<
+	string,
+	T
+>;
 
 export interface SuiClientProviderContext {
 	client: SuiClient;
 	networks: NetworkConfigs;
 	network: string;
+	config: NetworkConfig | null;
 	selectNetwork: (network: string) => void;
 }
 
@@ -69,6 +74,10 @@ export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProv
 			client,
 			networks,
 			network: currentNetwork,
+			config:
+				networks[currentNetwork] instanceof SuiClient
+					? null
+					: (networks[currentNetwork] as SuiClientOptions),
 			selectNetwork: (newNetwork) => {
 				if (currentNetwork === newNetwork) {
 					return;

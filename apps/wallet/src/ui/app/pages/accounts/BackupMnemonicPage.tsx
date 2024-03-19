@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_app/shared/ButtonUI';
+import { CardLayout } from '_app/shared/card-layout';
+import { Text } from '_app/shared/text';
+import Alert from '_components/alert';
+import Loading from '_components/loading';
+import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 import { ArrowLeft16, Check12 } from '@mysten/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -8,18 +14,12 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import { useAccountSources } from '../../hooks/useAccountSources';
 import { useExportPassphraseMutation } from '../../hooks/useExportPassphraseMutation';
-import { Button } from '_app/shared/ButtonUI';
-import { CardLayout } from '_app/shared/card-layout';
-import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
-import Loading from '_components/loading';
-import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 
 export function BackupMnemonicPage() {
 	const [passwordCopied, setPasswordCopied] = useState(false);
 	const { state } = useLocation();
 	const { accountSourceID } = useParams();
-	const { data: accountSources, isLoading } = useAccountSources();
+	const { data: accountSources, isPending } = useAccountSources();
 	const selectedSource = useMemo(
 		() => accountSources?.find(({ id }) => accountSourceID === id),
 		[accountSources, accountSourceID],
@@ -47,11 +47,11 @@ export function BackupMnemonicPage() {
 		}
 	}, [requirePassword, passwordConfirmed, showPasswordDialog]);
 	const navigate = useNavigate();
-	if (!isLoading && selectedSource?.type !== 'mnemonic') {
+	if (!isPending && selectedSource?.type !== 'mnemonic') {
 		return <Navigate to="/" replace />;
 	}
 	return (
-		<Loading loading={isLoading}>
+		<Loading loading={isPending}>
 			{showPasswordDialog ? (
 				<CardLayout>
 					<VerifyPasswordModal
@@ -86,7 +86,7 @@ export function BackupMnemonicPage() {
 									Your recovery phrase makes it easy to back up and restore your account.
 								</Text>
 							</div>
-							<Loading loading={passphraseMutation.isLoading}>
+							<Loading loading={passphraseMutation.isPending}>
 								{passphraseMutation.data ? (
 									<HideShowDisplayBox value={passphraseMutation.data} hideCopy />
 								) : (

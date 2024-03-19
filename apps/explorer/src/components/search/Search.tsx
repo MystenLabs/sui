@@ -11,7 +11,7 @@ import { ampli } from '~/utils/analytics/ampli';
 function Search() {
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query);
-	const { isLoading, data: results } = useSearch(debouncedQuery);
+	const { isPending, data: results } = useSearch(debouncedQuery);
 	const navigate = useNavigateWithQuery();
 	const handleSelectResult = useCallback(
 		(result: SearchResult) => {
@@ -42,7 +42,7 @@ function Search() {
 				onChange={(value) => setQuery(value?.trim() ?? '')}
 				onSelectResult={handleSelectResult}
 				placeholder="Search"
-				isLoading={isLoading || debouncedQuery !== query}
+				isLoading={isPending || debouncedQuery !== query}
 				options={results}
 			/>
 		</div>

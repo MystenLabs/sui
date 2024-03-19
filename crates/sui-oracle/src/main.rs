@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use clap::Parser;
-use mysten_metrics::RegistryService;
-use prometheus::{Registry, TextEncoder};
-use std::net::SocketAddr;
+use mysten_metrics::start_prometheus_server;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::Config;
@@ -22,37 +19,6 @@ struct Args {
     pub client_config_path: PathBuf,
 }
 
-const METRICS_ROUTE: &str = "/metrics";
-pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
-    let registry = Registry::new();
-
-    let registry_service = RegistryService::new(registry);
-
-    let app = Router::new()
-        .route(METRICS_ROUTE, get(metrics))
-        .layer(Extension(registry_service.clone()));
-
-    tokio::spawn(async move {
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
-    });
-    registry_service
-}
-
-// TODO dedup this function and move to mysten-metrics
-async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
-    let metrics_families = registry_service.gather_all();
-    match TextEncoder.encode_to_string(&metrics_families) {
-        Ok(metrics) => (StatusCode::OK, metrics),
-        Err(error) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encode metrics: {error}"),
-        ),
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -64,8 +30,7 @@ async fn main() -> anyhow::Result<()> {
         // TODO make this configurable
         Some(Duration::from_secs(10)), // request times out after 10 secs
         None,
-    )
-    .await?;
+    )?;
 
     // Init metrics server
     let registry_service = start_prometheus_server(config.metrics_address);

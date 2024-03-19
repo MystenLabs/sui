@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-
 import type { ReactNode } from 'react';
 
 // TODO: use a single svg and change background color instead of using multiple svgs

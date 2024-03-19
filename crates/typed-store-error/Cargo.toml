@@ -1,0 +1,13 @@
+[package]
+name = "typed-store-error"
+version = "0.4.0"
+license = "Apache-2.0"
+authors = ["Ade A. <ade@mystenlabs.com>"]
+description = "error types for typed-store crate"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+

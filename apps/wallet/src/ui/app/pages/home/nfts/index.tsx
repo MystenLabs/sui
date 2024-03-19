@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useOnScreen } from '@mysten/core';
-import { useRef, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
-
-import AssetsOptionsMenu from './AssetsOptionsMenu';
-import NonVisualAssets from './NonVisualAssets';
-import VisualAssets from './VisualAssets';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
 import FiltersPortal from '_components/filters-tags';
@@ -16,16 +9,24 @@ import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { setToSessionStorage } from '_src/background/storage-utils';
 import { AssetFilterTypes, useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
+import { useOnScreen } from '@mysten/core';
+import { useEffect, useMemo, useRef } from 'react';
+import { useParams } from 'react-router-dom';
+
+import { useHiddenAssets } from '../hidden-assets/HiddenAssetsProvider';
+import AssetsOptionsMenu from './AssetsOptionsMenu';
+import NonVisualAssets from './NonVisualAssets';
+import VisualAssets from './VisualAssets';
 
 function NftsPage() {
 	const accountAddress = useActiveAddress();
 	const {
 		data: ownedAssets,
 		hasNextPage,
-		isInitialLoading,
+		isLoading,
 		isFetchingNextPage,
 		error,
-		isLoading,
+		isPending,
 		fetchNextPage,
 		isError,
 	} = useGetNFTs(accountAddress);
@@ -47,8 +48,9 @@ function NftsPage() {
 		if (!filterType) return ownedAssets?.visual;
 		return ownedAssets?.[filterType as AssetFilterTypes] ?? [];
 	}, [ownedAssets, filterType]);
+	const { hiddenAssetIds } = useHiddenAssets();
 
-	if (isInitialLoading) {
+	if (isLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
 				<LoadingSpinner />
@@ -62,12 +64,12 @@ function NftsPage() {
 	];
 
 	return (
-		<div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
-			<PageTitle title="Assets" after={<AssetsOptionsMenu />} />
+		<div className="flex min-h-full flex-col flex-nowrap items-center gap-4">
+			<PageTitle title="Assets" after={hiddenAssetIds.length ? <AssetsOptionsMenu /> : null} />
 			{!!ownedAssets?.other.length && (
 				<FiltersPortal firstLastMargin tags={tags} callback={handleFilterChange} />
 			)}
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{isError ? (
 					<Alert>
 						<div>
@@ -88,7 +90,7 @@ function NftsPage() {
 					</div>
 				)}
 			</Loading>
-			<div className="mb-5" ref={observerElem}>
+			<div ref={observerElem}>
 				{isSpinnerVisible ? (
 					<div className="mt-1 flex w-full justify-center">
 						<LoadingSpinner />

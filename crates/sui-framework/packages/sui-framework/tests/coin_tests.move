@@ -12,6 +12,7 @@ module sui::coin_tests {
     use sui::tx_context;
     use std::string;
     use std::ascii;
+    use sui::deny_list;
 
     struct COIN_TESTS has drop {}
 
@@ -81,5 +82,61 @@ module sui::coin_tests {
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, tx_context::sender(test_scenario::ctx(test)));
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun deny_list() {
+        let scenario = test_scenario::begin(@0);
+        let test = &mut scenario;
+        deny_list::create_for_test(test_scenario::ctx(test));
+        test_scenario::next_tx(test, TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            test_scenario::ctx(test),
+        );
+        transfer::public_freeze_object(metadata);
+        transfer::public_freeze_object(treasury);
+        {
+            // test freezing an address
+            test_scenario::next_tx(test, TEST_ADDR);
+            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            test_scenario::return_shared(deny_list);
+        };
+        {
+            // test freezing an address over multiple "transactions"
+            test_scenario::next_tx(test, TEST_ADDR);
+            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            test_scenario::return_shared(deny_list);
+
+            test_scenario::next_tx(test, TEST_ADDR);
+            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            test_scenario::return_shared(deny_list);
+        };
+        transfer::public_freeze_object(deny_cap);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun address_is_frozen_with_arbitrary_types() {
+
     }
 }

@@ -7,6 +7,7 @@ use crate::{
     error::ExecutionError,
     execution::{RawValueType, Value},
     transaction::Argument,
+    transfer::Receiving,
     type_resolver::TypeTagResolver,
 };
 
@@ -154,6 +155,7 @@ impl ExecutionMode for System {
     type ExecutionResults = ();
 
     fn allow_arbitrary_function_calls() -> bool {
+        // allows bypassing visibility for system calls
         true
     }
 
@@ -197,27 +199,27 @@ impl ExecutionMode for System {
 /// WARNING! Using this mode will bypass all normal checks around Move entry functions! This
 /// includes the various rules for function arguments, meaning any object can be created just from
 /// BCS bytes!
-pub struct DevInspect;
+pub struct DevInspect<const SKIP_ALL_CHECKS: bool>;
 
 pub type ExecutionResult = (
     /*  mutable_reference_outputs */ Vec<(Argument, Vec<u8>, TypeTag)>,
     /*  return_values */ Vec<(Vec<u8>, TypeTag)>,
 );
 
-impl ExecutionMode for DevInspect {
+impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> {
     type ArgumentUpdates = Vec<(Argument, Vec<u8>, TypeTag)>;
     type ExecutionResults = Vec<ExecutionResult>;
 
     fn allow_arbitrary_function_calls() -> bool {
-        true
+        SKIP_ALL_CHECKS
     }
 
     fn allow_arbitrary_values() -> bool {
-        true
+        SKIP_ALL_CHECKS
     }
 
     fn skip_conservation_checks() -> bool {
-        true
+        SKIP_ALL_CHECKS
     }
 
     fn packages_are_predefined() -> bool {
@@ -277,6 +279,10 @@ fn value_to_bytes_and_tag(
             let tag = resolver.get_type_tag(ty)?;
             (tag, bytes.clone())
         }
+        Value::Receiving(id, seqno, _) => (
+            Receiving::type_tag(),
+            Receiving::new(*id, *seqno).to_bcs_bytes(),
+        ),
     };
     Ok((bytes, type_tag))
 }

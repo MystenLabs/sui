@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
+	MinimallyRequiredFeatures,
 	Wallet,
 	WalletWithFeatures,
-	MinimallyRequiredFeatures,
 } from '@mysten/wallet-standard';
 import { getWallets, isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard';
 
@@ -29,4 +29,8 @@ export function getRegisteredWallets<AdditionalFeatures extends Wallet['features
 		// Wallets in default order:
 		...suiWallets.filter((wallet) => !preferredWallets.includes(wallet.name)),
 	];
+}
+
+export function getWalletUniqueIdentifier(wallet?: Wallet) {
+	return wallet?.id ?? wallet?.name;
 }

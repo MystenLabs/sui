@@ -8,3 +8,5 @@ Examples of toy games built on top of Sui!
 * SeaHero: a permissionless mod of the Hero game where the hero can slay sea monsters to earn RUM tokens.
 * SeaHeroHelper: a permissionless mod of the economics of the Sea Hero game. A weak hero can request help from a stronger hero, who receives a share of the monster slaying reward.
 * RockPaperScissors: a commit-reveal scheme in which players first submit their commitments and then reveal the data that led to these commitments.
+* DrandBasedLottery: a lottery game that depends on randomness from drand
+* DrandBasedScratchCard: a scratch card game that depends on randomness from drand

@@ -7,66 +7,47 @@ import clsx from 'clsx';
 import { useState, useCallback, useEffect } from 'react';
 import { type Direction } from 'react-resizable-panels';
 
-import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
+import { ModuleCodeTabs } from './ModuleCodeTabs';
 
 type ModuleType = [moduleName: string, code: string];
 
 interface Props {
-	id?: string;
+	id: string;
 	modules: ModuleType[];
 	splitPanelOrientation: Direction;
-}
-
-interface ModuleViewWrapperProps {
-	id?: string;
-	selectedModuleName: string;
-	modules: ModuleType[];
-}
-
-function ModuleViewWrapper({ id, selectedModuleName, modules }: ModuleViewWrapperProps) {
-	const selectedModuleData = modules.find(([name]) => name === selectedModuleName);
-
-	if (!selectedModuleData) {
-		return null;
-	}
-
-	const [name, code] = selectedModuleData;
-
-	return <ModuleView id={id} name={name} code={code} />;
 }
 
 function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 	const isMediumOrAbove = useBreakpoint('md');
 
-	const modulenames = modules.map(([name]) => name);
 	const [searchParams, setSearchParams] = useSearchParamsMerged();
 	const [query, setQuery] = useState('');
 
-	// Extract module in URL or default to first module in list
-	const selectedModule =
-		searchParams.get('module') && modulenames.includes(searchParams.get('module')!)
-			? searchParams.get('module')!
-			: modulenames[0];
+	const moduleNameValue = searchParams.get('module');
+	const moduleFromParams = moduleNameValue
+		? modules.find(([moduleName]) => moduleName === moduleNameValue)
+		: undefined;
+
+	// Extract module in URL or default to first module in the list
+	const [selectedModuleName, selectedModuleCode] = moduleFromParams ?? modules[0];
 
 	// If module in URL exists but is not in module list, then delete module from URL
 	useEffect(() => {
-		if (searchParams.has('module') && !modulenames.includes(searchParams.get('module')!)) {
+		if (!moduleFromParams) {
 			setSearchParams({}, { replace: true });
 		}
-	}, [searchParams, setSearchParams, modulenames]);
+	}, [setSearchParams, moduleFromParams]);
 
-	const filteredModules =
-		query === ''
-			? modulenames
-			: modules
-					.filter(([name]) => name.toLowerCase().includes(query.toLowerCase()))
-					.map(([name]) => name);
+	const moduleNames = modules.map(([name]) => name);
+	const filteredModules = query
+		? moduleNames.filter(([name]) => name.toLowerCase().includes(query.toLowerCase()))
+		: moduleNames;
 
 	const submitSearch = useCallback(() => {
 		if (filteredModules.length === 1) {
@@ -87,44 +68,30 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 		);
 	};
 
-	const bytecodeContent = [
+	const isCompact = splitPanelOrientation === 'horizontal' || !isMediumOrAbove;
+	const panelContent = [
 		{
 			panel: (
-				<div key="bytecode" className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
-					<TabHeader size="md" title="Bytecode">
-						<div
-							className={clsx(
-								'overflow-auto',
-								(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
-									'h-verticalListLong',
-							)}
-						>
-							<ModuleViewWrapper id={id} modules={modules} selectedModuleName={selectedModule} />
-						</div>
-					</TabHeader>
-				</div>
+				<ModuleCodeTabs
+					packageId={id}
+					moduleName={selectedModuleName}
+					moduleBytecode={selectedModuleCode}
+					isCompact={isCompact}
+				/>
 			),
 			defaultSize: 40,
 		},
 		{
 			panel: (
-				<div key="execute" className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
+				<div className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
 					<TabHeader size="md" title="Execute">
-						<div
-							className={clsx(
-								'overflow-auto',
-								(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
-									'h-verticalListLong',
-							)}
-						>
-							{id && selectedModule ? (
-								<ModuleFunctionsInteraction
-									// force recreating everything when we change modules
-									key={`${id}-${selectedModule}`}
-									packageId={id}
-									moduleName={selectedModule}
-								/>
-							) : null}
+						<div className={clsx('overflow-auto', { 'h-verticalListLong': isCompact })}>
+							<ModuleFunctionsInteraction
+								// force recreating everything when we change modules
+								key={`${id}-${selectedModuleName}`}
+								packageId={id}
+								moduleName={selectedModuleName}
+							/>
 						</div>
 					</TabHeader>
 				</div>
@@ -154,9 +121,9 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 				</Combobox>
 				<div className="h-verticalListShort overflow-auto pt-3 md:h-verticalListLong">
 					<VerticalList>
-						{modulenames.map((name) => (
+						{moduleNames.map((name) => (
 							<div key={name} className="mx-0.5 mt-0.5 md:min-w-fit">
-								<ListItem active={selectedModule === name} onClick={() => onChangeModule(name)}>
+								<ListItem active={selectedModuleName === name} onClick={() => onChangeModule(name)}>
 									{name}
 								</ListItem>
 							</div>
@@ -166,10 +133,10 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 			</div>
 			{isMediumOrAbove ? (
 				<div className="w-4/5">
-					<SplitPanes direction={splitPanelOrientation} splitPanels={bytecodeContent} />
+					<SplitPanes direction={splitPanelOrientation} splitPanels={panelContent} />
 				</div>
 			) : (
-				bytecodeContent.map((panel, index) => <div key={index}>{panel.panel}</div>)
+				panelContent.map((panel, index) => <div key={index}>{panel.panel}</div>)
 			)}
 		</div>
 	);

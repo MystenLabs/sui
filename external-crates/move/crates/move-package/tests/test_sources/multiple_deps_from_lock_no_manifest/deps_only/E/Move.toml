@@ -1,0 +1,5 @@
+[package]
+name = "E"
+
+[addresses]
+E = "0x0"

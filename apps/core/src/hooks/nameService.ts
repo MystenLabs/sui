@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { useQuery } from '@tanstack/react-query';
 
 const SUI_NS_FEATURE_FLAG = 'suins';
 
@@ -17,9 +17,9 @@ export function useSuiNSEnabled() {
 	return useFeatureIsOn(SUI_NS_FEATURE_FLAG);
 }
 
-export function useResolveSuiNSAddress(name?: string | null) {
+export function useResolveSuiNSAddress(name?: string | null, enabled?: boolean) {
 	const client = useSuiClient();
-	const enabled = useSuiNSEnabled();
+	const enabledSuiNs = useSuiNSEnabled();
 
 	return useQuery({
 		queryKey: ['resolve-suins-address', name],
@@ -28,7 +28,7 @@ export function useResolveSuiNSAddress(name?: string | null) {
 				name: name!,
 			});
 		},
-		enabled: !!name && enabled,
+		enabled: !!name && enabled && enabledSuiNs,
 		refetchOnWindowFocus: false,
 		retry: false,
 	});

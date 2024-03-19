@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::VersionNumber;
+use crate::committee::EpochId;
 use crate::inner_temporary_store::WrittenObjects;
-use crate::storage::get_module_by_id;
+use crate::storage::{
+    get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
+};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
@@ -14,7 +17,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
@@ -24,8 +26,8 @@ pub struct InMemoryStorage {
 }
 
 impl BackingPackageStore for InMemoryStorage {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.persistent.get(package_id).cloned())
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        load_package_object_from_object_store(self, package_id)
     }
 }
 
@@ -56,6 +58,27 @@ impl ChildObjectResolver for InMemoryStorage {
         }
         Ok(Some(child_object))
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        let recv_object = match self.persistent.get(receiving_object_id).cloned() {
+            None => return Ok(None),
+            Some(obj) => obj,
+        };
+        if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+            return Ok(None);
+        }
+
+        if recv_object.version() != receive_object_at_version {
+            return Ok(None);
+        }
+        Ok(Some(recv_object))
+    }
 }
 
 impl ParentSync for InMemoryStorage {
@@ -71,14 +94,7 @@ impl ModuleResolver for InMemoryStorage {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
+        get_module(self, module_id)
     }
 }
 
@@ -91,7 +107,7 @@ impl ModuleResolver for &mut InMemoryStorage {
 }
 
 impl ObjectStore for InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> crate::storage::error::Result<Option<Object>> {
         Ok(self.persistent.get(object_id).cloned())
     }
 
@@ -99,7 +115,7 @@ impl ObjectStore for InMemoryStorage {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> crate::storage::error::Result<Option<Object>> {
         Ok(self
             .persistent
             .get(object_id)
@@ -115,7 +131,7 @@ impl ObjectStore for InMemoryStorage {
 }
 
 impl ObjectStore for &mut InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> crate::storage::error::Result<Option<Object>> {
         Ok(self.persistent.get(object_id).cloned())
     }
 
@@ -123,7 +139,7 @@ impl ObjectStore for &mut InMemoryStorage {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> crate::storage::error::Result<Option<Object>> {
         Ok(self
             .persistent
             .get(object_id)
@@ -148,12 +164,12 @@ impl GetModule for InMemoryStorage {
 }
 
 impl InMemoryStorage {
-    pub fn new(objects: Vec<Object>) -> Arc<Self> {
+    pub fn new(objects: Vec<Object>) -> Self {
         let mut persistent = BTreeMap::new();
         for o in objects {
             persistent.insert(o.id(), o);
         }
-        Arc::new(Self { persistent })
+        Self { persistent }
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {

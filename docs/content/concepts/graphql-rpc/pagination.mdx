@@ -1,0 +1,93 @@
+---
+title: Pagination
+---
+
+GraphQL supports queries that fetch multiple kinds of data, potentially nested. For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`.
+
+```graphql
+query {
+  epoch(id: 97) {
+    transactionBlocks(first: 10) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        digest
+        sender {
+          address
+        }
+        effects {
+          gasEffects {
+            gasObject {
+              address
+            }
+          }
+        }
+        gasInput {
+          gasPrice
+          gasBudget
+        }
+      }
+    }
+  }
+}
+```
+
+But what happens if there are too many transactions to return in a single response? The service applies a [limit](./limits) on the maximum page size for variable size responses (like the `transactionBlock` query) and further results need to be fetched via [pagination](https://graphql.org/learn/pagination/).
+
+## Connections
+Fields that return a paginated response accept at least the following optional parameters:
+
+- `first`, a limit on page size that is met by dropping excess results from the end.
+- `after`, a cursor that bounds the results from below, exclusively.
+- `last`, a limit on page size that is met by dropping excess results from the start.
+- `before`, a cursor that bounds the results from above, exclusively.
+
+They also return a type that conforms to the [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), meaning its name ends in `Connection`, and it contains at least the following fields:
+
+- `pageInfo`, of type [PageInfo](../../references/sui-api/sui-graphql/reference/objects/page-info.mdx), which indicates whethere there are further pages before or after the page returned.
+- `nodes`, the content of the paginated response, as a list of the type being paginated (`TransactionBlock` in the previous example).
+- `edges`, similar to `nodes` but associating each node with its [cursor](#cursors).
+
+## Cursors
+
+Cursors are opaque identifiers for paginated results. The only valid source for a cursor parameter (like `after` and `before`) is a cursor field from a previous paginated response (like `PageInfo.startCursor`, `PageInfo.endCursor`, or `Edge.cursor`). The underlying format of the cursor is an implementation detail, and is not guaranteed to remain fixed across versions of the GraphQL service, so it should not be relied on -- generating cursors out of thin air is not expected or supported.
+
+Cursors are used to bound results from below (with `after`) and above (with `before`). In both cases, the bound is exclusive, meaning it does not include the result that the cursor points to in the bounded region.
+
+### Consistency
+
+Cursors also guarantee **consistent** pagination. If the first paginated query reads the state of the network at checkpoint `X`, then a future call to fetch the next page of results using the cursors returned by the first query will continue to read from the network at checkpoint `X`, even if data for future checkpoints is now available.
+
+This property requires that cursors that are used together (for example when supplying an `after` and `before` bound) are fixed on the same checkpoint, otherwise the query will produce an error.
+
+### Available Range
+
+The GraphQL service does not support consistent pagination for arbitrarily old cursors. A cursor can grow stale, if the checkpoint it is from is no longer in the **available range**. The upper- and lower-bounds of that range can be queried as follows:
+
+```graphql
+{
+  availableRange {
+    first { sequenceNumber }
+    last { sequenceNumber }
+  }
+}
+```
+
+The results are the first and last checkpoint for which pagination will continue to work and produce a consistent result. At the time of writing the available range offers a 5 to 15 minute buffer period to finish pagination in.
+
+## Page Limits
+
+After results are bounded using cursors, a page size limit is applied using the `first` and `last` parameters. These parameters are required to be less than or equal to the max page size [limit](./limits), and if neither are provided, a default is selected. In addition to setting a limit, `first` and `last` control where excess elements are discarded from. For example, if there are `10` potential results -- `R0`, `R1`, ..., `R9` -- after cursor bounds have been applied, then
+
+- a limit of `first: 3` would select `R0`, `R1`, `R2`, and
+- a limit of `last: 3` would select `R7`, `R8`, `R9`.
+
+:::info
+It is an error to apply both a `first` and a `last` limit.
+:::
+
+## Examples
+
+To see these principles put into practice, consult the examples for [paginating forwards](../../guides/developer/getting-started/graphql-rpc#page-forward) and [paginating backwards](../../guides/developer/getting-started/graphql-rpc#page-back) in the getting started guide.

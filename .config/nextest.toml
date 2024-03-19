@@ -26,9 +26,9 @@ slow-timeout = { period = "7h", terminate-after = 1 }
 [profile.simtestnightly]
 # Print out output for failing tests as soon as they fail, and also at the end
 # of the run (for easy scrollability).
-failure-output = "immediate-final"
+failure-output = "immediate"
 # Show skipped tests in the CI output.
-status-level = "skip"
+status-level = "fail"
 # Do not cancel the test run on the first failure.
 fail-fast = false
 # Mark tests as slow after 20m, terminate after 1h

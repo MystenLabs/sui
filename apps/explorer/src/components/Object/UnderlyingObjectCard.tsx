@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useDynamicFieldObject, useNormalizedMoveStruct } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { LoadingIndicator } from '@mysten/ui';
 
 import { FieldItem } from './FieldItem';
@@ -20,7 +20,10 @@ export function UnderlyingObjectCard({
 	name,
 	dynamicFieldType,
 }: UnderlyingObjectCardProps) {
-	const { data, isLoading, isError, isFetched } = useDynamicFieldObject({ parentId, name });
+	const { data, isPending, isError, isFetched } = useSuiClientQuery('getDynamicFieldObject', {
+		parentId,
+		name,
+	});
 	const objectType =
 		data?.data?.type ??
 		(data?.data?.content?.dataType === 'package' ? 'package' : data?.data?.content?.type) ??
@@ -32,19 +35,22 @@ export function UnderlyingObjectCard({
 	const {
 		data: normalizedStruct,
 		isFetched: normalizedStructFetched,
-		isLoading: loadingNormalizedStruct,
-	} = useNormalizedMoveStruct({
+		isPending: loadingNormalizedStruct,
+	} = useSuiClientQuery('getNormalizedMoveStruct', {
 		package: packageId,
 		module: moduleName,
 		struct: functionName,
 	});
 
+	const isDataLoading = isPending || loadingNormalizedStruct;
+
 	// Check for error first before showing the loading spinner to avoid infinite loading if GetDynamicFieldObject fails
 	if (
-		isError ||
-		(data && data.error) ||
-		(isFetched && !data) ||
-		(!normalizedStruct && normalizedStructFetched)
+		!isDataLoading &&
+		(isError ||
+			(data && data.error) ||
+			(isFetched && !data) ||
+			(!normalizedStruct && normalizedStructFetched))
 	) {
 		return (
 			<Banner variant="error" spacing="lg" fullWidth>
@@ -53,7 +59,7 @@ export function UnderlyingObjectCard({
 		);
 	}
 
-	if (isLoading || loadingNormalizedStruct) {
+	if (isDataLoading) {
 		return (
 			<div className="mt-3 flex w-full justify-center pt-3">
 				<LoadingIndicator text="Loading data" />
@@ -62,7 +68,7 @@ export function UnderlyingObjectCard({
 	}
 
 	const fieldsData =
-		data.data?.content?.dataType === 'moveObject' ? data.data?.content.fields : null;
+		data?.data?.content?.dataType === 'moveObject' ? data.data?.content.fields : null;
 	// Return null if there are no fields
 	if (!fieldsData || !normalizedStruct?.fields || !objectType) {
 		return null;

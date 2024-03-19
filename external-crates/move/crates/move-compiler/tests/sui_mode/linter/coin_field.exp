@@ -1,0 +1,22 @@
+warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
+   ┌─ tests/sui_mode/linter/coin_field.move:11:12
+   │
+11 │     struct S2 has key, store {
+   │            ^^ The field 'c' of 'S2' has type 'sui::coin::Coin'
+12 │         id: UID,
+13 │         c: Coin<S1>,
+   │         - Storing 'sui::balance::Balance' in this field will typically be more space-efficient
+   │
+   = This warning can be suppressed with '#[allow(lint(coin_field))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
+   ┌─ tests/sui_mode/linter/coin_field.move:25:12
+   │
+25 │     struct S2 has key, store {
+   │            ^^ The field 'c' of 'S2' has type 'sui::coin::Coin'
+26 │         id: UID,
+27 │         c: Balance<S1>,
+   │         - Storing 'sui::balance::Balance' in this field will typically be more space-efficient
+   │
+   = This warning can be suppressed with '#[allow(lint(coin_field))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

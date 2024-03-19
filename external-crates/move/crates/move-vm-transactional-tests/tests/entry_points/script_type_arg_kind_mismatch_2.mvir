@@ -1,0 +1,9 @@
+//# run --type-args bool
+module 0x42.m {
+
+entry foo<T: key>() { // bool does not have key
+label b0:
+    return;
+}
+
+}

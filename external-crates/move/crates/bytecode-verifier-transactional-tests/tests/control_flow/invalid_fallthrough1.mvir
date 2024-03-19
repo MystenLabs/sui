@@ -1,0 +1,8 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0: // empty functions not allowed
+}
+
+}

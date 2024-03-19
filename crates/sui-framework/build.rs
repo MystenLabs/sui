@@ -3,9 +3,9 @@
 
 use anyhow::Result;
 use move_binary_format::CompiledModule;
-use move_package::BuildConfig as MoveBuildConfig;
-use std::thread::Builder;
+use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -28,19 +28,12 @@ fn main() {
     let sui_framework_path_clone = sui_framework_path.clone();
     let move_stdlib_path = packages_path.join("move-stdlib");
 
-    Builder::new()
-        .stack_size(16 * 1024 * 1024) // build_packages require bigger stack size on windows.
-        .spawn(move || {
-            build_packages(
-                deepbook_path_clone,
-                sui_system_path_clone,
-                sui_framework_path_clone,
-                out_dir,
-            )
-        })
-        .unwrap()
-        .join()
-        .unwrap();
+    build_packages(
+        deepbook_path_clone,
+        sui_system_path_clone,
+        sui_framework_path_clone,
+        out_dir,
+    );
 
     println!("cargo:rerun-if-changed=build.rs");
     println!(
@@ -85,7 +78,9 @@ fn build_packages(
 ) {
     let config = MoveBuildConfig {
         generate_docs: true,
+        warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
+        lint_flag: LintFlag::LEVEL_NONE,
         ..Default::default()
     };
     debug_assert!(!config.test_mode);
@@ -99,11 +94,14 @@ fn build_packages(
         "sui-framework",
         "move-stdlib",
         config,
+        true,
     );
     let config = MoveBuildConfig {
         generate_docs: true,
         test_mode: true,
+        warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
+        lint_flag: LintFlag::LEVEL_NONE,
         ..Default::default()
     };
     build_packages_with_move_config(
@@ -116,6 +114,7 @@ fn build_packages(
         "sui-framework-test",
         "move-stdlib-test",
         config,
+        false,
     );
 }
 
@@ -129,12 +128,12 @@ fn build_packages_with_move_config(
     framework_dir: &str,
     stdlib_dir: &str,
     config: MoveBuildConfig,
+    write_docs: bool,
 ) {
     let framework_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
-        lint: false,
     }
     .build(sui_framework_path)
     .unwrap();
@@ -142,7 +141,6 @@ fn build_packages_with_move_config(
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
-        lint: false,
     }
     .build(sui_system_path)
     .unwrap();
@@ -150,7 +148,6 @@ fn build_packages_with_move_config(
         config,
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
-        lint: false,
     }
     .build(deepbook_path)
     .unwrap();
@@ -165,21 +162,77 @@ fn build_packages_with_move_config(
     serialize_modules_to_file(deepbook, &out_dir.join(deepbook_dir)).unwrap();
     serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
     // write out generated docs
-    // TODO: remove docs of deleted files
-    for (fname, doc) in deepbook_pkg.package.compiled_docs.unwrap() {
-        let mut dst_path = PathBuf::from(DOCS_DIR);
-        dst_path.push(fname);
-        fs::write(dst_path, doc).unwrap();
+    if write_docs {
+        // Remove the old docs directory -- in case there was a module that was deleted (could
+        // happen during development).
+        if Path::new(DOCS_DIR).exists() {
+            std::fs::remove_dir_all(DOCS_DIR).unwrap();
+        }
+        let mut files_to_write = BTreeMap::new();
+        relocate_docs(
+            deepbook_dir,
+            &deepbook_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        relocate_docs(
+            system_dir,
+            &system_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        relocate_docs(
+            framework_dir,
+            &framework_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        for (fname, doc) in files_to_write {
+            let mut dst_path = PathBuf::from(DOCS_DIR);
+            dst_path.push(fname);
+            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
+            fs::write(dst_path, doc).unwrap();
+        }
     }
-    for (fname, doc) in system_pkg.package.compiled_docs.unwrap() {
-        let mut dst_path = PathBuf::from(DOCS_DIR);
-        dst_path.push(fname);
-        fs::write(dst_path, doc).unwrap();
-    }
-    for (fname, doc) in framework_pkg.package.compiled_docs.unwrap() {
-        let mut dst_path = PathBuf::from(DOCS_DIR);
-        dst_path.push(fname);
-        fs::write(dst_path, doc).unwrap();
+}
+
+/// Post process the generated docs so that they are in a format that can be consumed by
+/// docusaurus.
+/// * Flatten out the tree-like structure of the docs directory that we generate for a package into
+///   a flat list of packages;
+/// * Deduplicate packages (since multiple packages could share dependencies); and
+/// * Write out the package docs in a flat directory structure.
+fn relocate_docs(prefix: &str, files: &[(String, String)], output: &mut BTreeMap<String, String>) {
+    // Turn on multi-line mode so that `.` matches newlines, consume from the start of the file to
+    // beginning of the heading, then capture the heading and replace with the yaml tag for docusaurus. E.g.,
+    // ```
+    // -<a name="0x2_display"></a>
+    // -
+    // -# Module `0x2::display`
+    // -
+    // +---
+    // +title: Module `0x2::display`
+    // +---
+    //```
+    let re = regex::Regex::new(r"(?s).*\n#\s+(.*?)\n").unwrap();
+    for (file_name, file_content) in files {
+        let path = PathBuf::from(file_name);
+        let top_level = path.components().count() == 1;
+        let file_name = if top_level {
+            let mut new_path = PathBuf::from(prefix);
+            new_path.push(file_name);
+            new_path.to_string_lossy().to_string()
+        } else {
+            let mut new_path = PathBuf::new();
+            new_path.push(path.components().skip(1).collect::<PathBuf>());
+            new_path.to_string_lossy().to_string()
+        };
+        output.entry(file_name).or_insert_with(|| {
+            re.replace_all(
+                &file_content
+                    .replace("../../dependencies/", "../")
+                    .replace("dependencies/", "../"),
+                "\n---\ntitle: $1\n---\n",
+            )
+            .to_string()
+        });
     }
 }
 

@@ -9,10 +9,9 @@ use futures::future::{select, Either};
 use futures::pin_mut;
 use futures::FutureExt;
 use itertools::Itertools;
-use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
-use narwhal_worker::LocalNarwhalClient;
-use parking_lot::{Mutex, RwLockReadGuard};
+use narwhal_worker::LazyNarwhalClient;
+use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
@@ -26,7 +25,7 @@ use prometheus::{
 };
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
@@ -34,20 +33,25 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, CommitteeTrait};
 use sui_types::error::{SuiError, SuiResult};
 
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time::{self, sleep, timeout};
+use tokio::time::{self};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
+use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
+use crate::metrics::LatencyObserver;
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
+use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
 use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
+use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use tokio::time::Duration;
@@ -175,6 +179,7 @@ impl ConsensusAdapterMetrics {
     }
 }
 
+#[mockall::automock]
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
     async fn submit_to_consensus(
@@ -204,48 +209,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
                 warn!("Submit transaction failed with: {:?}", r);
             })?;
         Ok(())
-    }
-}
-
-/// A Narwhal client that instantiates LocalNarwhalClient lazily.
-pub struct LazyNarwhalClient {
-    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
-    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
-    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
-    addr: Multiaddr,
-}
-
-impl LazyNarwhalClient {
-    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
-    pub fn new(addr: Multiaddr) -> Self {
-        Self {
-            client: ArcSwapOption::empty(),
-            addr,
-        }
-    }
-
-    async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
-        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
-        // Retries should only happen on Sui process start.
-        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
-        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
-            loop {
-                match LocalNarwhalClient::get_global(&self.addr) {
-                    Some(c) => return c,
-                    None => {
-                        sleep(Duration::from_millis(100)).await;
-                    }
-                };
-            }
-        })
-        .await
-        {
-            return client;
-        }
-        panic!(
-            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
-            NARWHAL_WORKER_START_TIMEOUT, self.addr,
-        );
     }
 }
 
@@ -285,7 +248,7 @@ impl SubmitToConsensus for LazyNarwhalClient {
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
-    consensus_client: Box<dyn SubmitToConsensus>,
+    consensus_client: Arc<dyn SubmitToConsensus>,
     /// Authority pubkey.
     authority: AuthorityName,
     /// The limit to number of inflight transactions at this node.
@@ -299,14 +262,17 @@ pub struct ConsensusAdapter {
     /// as delay step.
     submit_delay_step_override: Option<Duration>,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
-    connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+    connection_monitor_status: Arc<dyn CheckConnection>,
     /// A structure to check the reputation scores populated by Consensus
     low_scoring_authorities: ArcSwap<Arc<ArcSwap<HashMap<AuthorityName, u64>>>>,
+    /// The throughput profiler to be used when making decisions to submit to consensus
+    consensus_throughput_profiler: ArcSwapOption<ConsensusThroughputProfiler>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
     submit_semaphore: Semaphore,
     latency_observer: LatencyObserver,
+    protocol_config: ProtocolConfig,
 }
 
 pub trait CheckConnection: Send + Sync {
@@ -330,14 +296,15 @@ pub struct ConnectionMonitorStatusForTests {}
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        consensus_client: Box<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn SubmitToConsensus>,
         authority: AuthorityName,
-        connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+        connection_monitor_status: Arc<dyn CheckConnection>,
         max_pending_transactions: usize,
         max_pending_local_submissions: usize,
         max_submit_position: Option<usize>,
         submit_delay_step_override: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
+        protocol_config: ProtocolConfig,
     ) -> Self {
         let num_inflight_transactions = Default::default();
         let low_scoring_authorities =
@@ -354,6 +321,8 @@ impl ConsensusAdapter {
             metrics,
             submit_semaphore: Semaphore::new(max_pending_local_submissions),
             latency_observer: LatencyObserver::new(),
+            consensus_throughput_profiler: ArcSwapOption::empty(),
+            protocol_config,
         }
     }
 
@@ -362,6 +331,10 @@ impl ConsensusAdapter {
         new_low_scoring: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     ) {
         self.low_scoring_authorities.swap(Arc::new(new_low_scoring));
+    }
+
+    pub fn swap_throughput_profiler(&self, profiler: Arc<ConsensusThroughputProfiler>) {
+        self.consensus_throughput_profiler.store(Some(profiler))
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
@@ -424,7 +397,7 @@ impl ConsensusAdapter {
         committee: &Committee,
         tx_digest: &TransactionDigest,
     ) -> (Duration, usize, usize, usize) {
-        let (mut position, positions_moved, preceding_disconected) =
+        let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
@@ -436,12 +409,11 @@ impl ConsensusAdapter {
 
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
+        let latency = latency * 2;
+        let latency = self.override_by_throughput_profiler(position, latency);
+        let (delay_step, position) =
+            self.override_by_max_submit_position_settings(latency, position);
 
-        if let Some(max_submit_position) = self.max_submit_position {
-            position = std::cmp::min(position, max_submit_position);
-        }
-
-        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 2);
         self.metrics
             .sequencing_resubmission_interval_ms
             .set(delay_step.as_millis() as i64);
@@ -450,8 +422,62 @@ impl ConsensusAdapter {
             delay_step * position as u32,
             position,
             positions_moved,
-            preceding_disconected,
+            preceding_disconnected,
         )
+    }
+
+    // According to the throughput profile we want to either allow some transaction duplication or not)
+    // When throughput profile is Low and the validator is in position = 1, then it will submit to consensus with much lower latency.
+    // When throughput profile is High then we go back to default operation and no-one co-submits.
+    fn override_by_throughput_profiler(&self, position: usize, latency: Duration) -> Duration {
+        const LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 0;
+        const MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 2_500;
+        const HIGH_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 3_500;
+
+        let p = self.consensus_throughput_profiler.load();
+
+        if let Some(profiler) = p.as_ref() {
+            let (level, _) = profiler.throughput_level();
+
+            // we only run this for the position = 1 validator to co-submit with the validator of
+            // position = 0. We also enable this only when the feature is enabled on the protocol config.
+            if self.protocol_config.throughput_aware_consensus_submission() && position == 1 {
+                return match level {
+                    Level::Low => Duration::from_millis(LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS),
+                    Level::Medium => {
+                        Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
+                    }
+                    Level::High => {
+                        let l = Duration::from_millis(HIGH_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS);
+
+                        // back off according to recorded latency if it's significantly higher
+                        if latency >= 2 * l {
+                            latency
+                        } else {
+                            l
+                        }
+                    }
+                };
+            }
+        }
+        latency
+    }
+
+    /// Overrides the latency and the position if there are defined settings for `max_submit_position` and
+    /// `submit_delay_step_override`. If the `max_submit_position` has defined, then that will always be used
+    /// irrespective of any so far decision. Same for the `submit_delay_step_override`.
+    fn override_by_max_submit_position_settings(
+        &self,
+        latency: Duration,
+        mut position: usize,
+    ) -> (Duration, usize) {
+        // Respect any manual override for position and latency from the settings
+        if let Some(max_submit_position) = self.max_submit_position {
+            position = std::cmp::min(position, max_submit_position);
+        }
+
+        let delay_step = self.submit_delay_step_override.unwrap_or(latency);
+        (delay_step, position)
     }
 
     /// Check when this authority should submit the certificate to consensus.
@@ -567,6 +593,14 @@ impl ConsensusAdapter {
         self.submit_semaphore.available_permits() > 0
     }
 
+    pub(crate) fn check_consensus_overload(&self) -> SuiResult {
+        fp_ensure!(
+            self.check_limits(),
+            SuiError::TooManyTransactionsPendingConsensus
+        );
+        Ok(())
+    }
+
     fn submit_unchecked(
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
@@ -645,11 +679,13 @@ impl ConsensusAdapter {
         };
 
         let transaction_key = transaction.key();
-        // Log warnings for capability or end of publish transactions that fail to get sequenced
+        // Log warnings for administrative transactions that fail to get sequenced
         let _monitor = if matches!(
             transaction.kind,
             ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
+                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
         ) {
             let transaction_key = transaction_key.clone();
             Some(CancelOnDrop(spawn_monitored_task!(async {
@@ -744,13 +780,17 @@ impl ConsensusAdapter {
         let send_end_of_publish = if let ConsensusTransactionKind::UserTransaction(_cert) =
             &transaction.kind
         {
-            let reconfig_guard = epoch_store.get_reconfig_state_read_lock_guard();
             // If we are in RejectUserCerts state and we just drained the list we need to
             // send EndOfPublish to signal other validators that we are not submitting more certificates to the epoch.
             // Note that there could be a race condition here where we enter this check in RejectAllCerts state.
             // In that case we don't need to send EndOfPublish because condition to enter
             // RejectAllCerts is when 2f+1 other validators already sequenced their EndOfPublish message.
-            if reconfig_guard.is_reject_user_certs() {
+            // Also note that we could sent multiple EndOfPublish due to that multiple tasks can enter here with
+            // pending_count == 0. This doesn't affect correctness.
+            if epoch_store
+                .get_reconfig_state_read_lock_guard()
+                .is_reject_user_certs()
+            {
                 let pending_count = epoch_store.pending_consensus_certificates_count();
                 debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
                 pending_count == 0 // send end of epoch if empty
@@ -872,6 +912,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             let send_end_of_publish = pending_count == 0;
             epoch_store.close_user_certs(reconfig_guard);
             send_end_of_publish
+            // reconfig_guard lock is dropped here.
         };
         if send_end_of_publish {
             if let Err(err) = self.submit(
@@ -986,51 +1027,6 @@ impl<'a> Drop for InflightDropGuard<'a> {
     }
 }
 
-struct LatencyObserver {
-    data: Mutex<LatencyObserverInner>,
-    latency_ms: AtomicU64,
-}
-
-#[derive(Default)]
-struct LatencyObserverInner {
-    points: VecDeque<Duration>,
-    sum: Duration,
-}
-
-impl LatencyObserver {
-    pub fn new() -> Self {
-        Self {
-            data: Mutex::new(LatencyObserverInner::default()),
-            latency_ms: AtomicU64::new(u64::MAX),
-        }
-    }
-
-    pub fn report(&self, latency: Duration) {
-        const MAX_SAMPLES: usize = 64;
-        let mut data = self.data.lock();
-        data.points.push_back(latency);
-        data.sum += latency;
-        if data.points.len() >= MAX_SAMPLES {
-            let pop = data.points.pop_front().expect("data vector is not empty");
-            data.sum -= pop; // This does not overflow because of how running sum is calculated
-        }
-        let latency = data.sum.as_millis() as u64 / data.points.len() as u64;
-        self.latency_ms.store(latency, Ordering::Relaxed);
-    }
-
-    pub fn latency(&self) -> Option<Duration> {
-        let latency = self.latency_ms.load(Ordering::Relaxed);
-        if latency == u64::MAX {
-            // Not initialized yet (0 data points)
-            None
-        } else {
-            Some(Duration::from_millis(latency))
-        }
-    }
-}
-
-use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
-
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
     async fn submit_to_consensus(
@@ -1095,16 +1091,17 @@ mod adapter_tests {
 
         // When we define max submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
             )),
             *committee.authority_by_index(0).unwrap(),
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             Some(1),
             Some(Duration::from_secs(2)),
             ConsensusAdapterMetrics::new_test(),
+            sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
         );
 
         // transaction to submit
@@ -1126,16 +1123,17 @@ mod adapter_tests {
 
         // Without submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
             )),
             *committee.authority_by_index(0).unwrap(),
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             None,
             None,
             ConsensusAdapterMetrics::new_test(),
+            sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
         );
 
         let (delay_step, position, positions_moved, _) =

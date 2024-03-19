@@ -16,6 +16,9 @@ const cardStyles = cva('overflow-hidden', {
 		height: {
 			full: 'h-full',
 		},
+		width: {
+			full: 'w-full',
+		},
 		rounded: {
 			lg: 'rounded-lg',
 			xl: 'rounded-xl',
@@ -58,6 +61,7 @@ export function Card({
 	shadow,
 	children,
 	height,
+	width,
 	growOnHover,
 }: CardProps) {
 	return (
@@ -69,6 +73,7 @@ export function Card({
 				border,
 				shadow,
 				height,
+				width,
 				growOnHover,
 			})}
 		>

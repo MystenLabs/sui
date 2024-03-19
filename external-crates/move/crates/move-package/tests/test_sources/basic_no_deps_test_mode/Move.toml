@@ -1,0 +1,5 @@
+[package]
+name = "test"
+
+[dev-dependencies]
+MoveStdlib = { local = "../../../../move-stdlib", addr_subst = { "std" = "0x1" } }

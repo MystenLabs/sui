@@ -5,12 +5,12 @@ import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
 import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
-import { TransactionBlockCard } from '~/ui/TransactionBlockCard';
+import { CollapsibleCard } from '~/ui/collapsible/CollapsibleCard';
 
 interface ProgrammableTxnBlockCardProps {
 	items: ReactNode[];
 	itemsLabel: string;
-	defaultItemsToShow: number;
+	defaultItemsToShow?: number;
 	noExpandableList?: boolean;
 	count?: number;
 	initialClose?: boolean;
@@ -19,20 +19,21 @@ interface ProgrammableTxnBlockCardProps {
 export function ProgrammableTxnBlockCard({
 	items,
 	itemsLabel,
-	defaultItemsToShow,
 	noExpandableList,
 	count,
 	initialClose,
+	defaultItemsToShow,
 }: ProgrammableTxnBlockCardProps) {
 	if (!items?.length) {
 		return null;
 	}
 
 	const cardTitle = count ? `${count} ${itemsLabel}` : itemsLabel;
+	const itemsToShow = defaultItemsToShow || items.length;
 
 	return (
-		<TransactionBlockCard collapsible initialClose={initialClose} title={cardTitle}>
-			<ExpandableList items={items} defaultItemsToShow={defaultItemsToShow} itemsLabel={itemsLabel}>
+		<CollapsibleCard growOnHover collapsible initialClose={initialClose} title={cardTitle}>
+			<ExpandableList items={items} defaultItemsToShow={itemsToShow} itemsLabel={itemsLabel}>
 				<div
 					className={clsx(
 						'flex flex-col gap-6 overflow-y-auto',
@@ -42,12 +43,12 @@ export function ProgrammableTxnBlockCard({
 					{noExpandableList ? <>{items}</> : <ExpandableListItems />}
 				</div>
 
-				{items.length > defaultItemsToShow && (
+				{items.length > itemsToShow && (
 					<div className="mt-6">
 						<ExpandableListControl />
 					</div>
 				)}
 			</ExpandableList>
-		</TransactionBlockCard>
+		</CollapsibleCard>
 	);
 }

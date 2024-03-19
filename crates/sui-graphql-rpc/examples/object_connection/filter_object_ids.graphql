@@ -1,0 +1,30 @@
+# Filter on objectIds
+{
+  objects(filter: { objectIds: [
+    "0x4bba2c7b9574129c272bca8f58594eba933af8001257aa6e0821ad716030f149"
+  ]}) {
+    edges {
+      node {
+        storageRebate
+        owner {
+          __typename
+          ... on Shared {
+            initialSharedVersion
+          }
+          __typename
+          ... on Parent {
+            parent {
+              address
+            }
+          }
+          __typename
+          ... on AddressOwner {
+            owner {
+              address
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -29,7 +29,7 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub async fn new(
+    pub fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
@@ -88,7 +88,7 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.keystore.addresses().get(0).unwrap()),
+                .unwrap_or(*self.config.keystore.addresses().first().unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
@@ -188,7 +188,7 @@ impl WalletContext {
             }
         }
         Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {budget}"
+            "No non-argument gas objects found for this address with value >= budget {budget}. Run sui client gas to check for gas objects."
         ))
     }
 
@@ -286,7 +286,7 @@ impl WalletContext {
             .sign_secure(&data.sender(), data, Intent::sui_transaction())
             .unwrap();
         // TODO: To support sponsored transaction, we should also look at the gas owner.
-        Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![sig])
+        Transaction::from_data(data.clone(), vec![sig])
     }
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.
@@ -295,8 +295,13 @@ impl WalletContext {
         &self,
         tx: Transaction,
     ) -> SuiTransactionBlockResponse {
+        tracing::debug!("Executing transaction: {:?}", tx);
         let response = self.execute_transaction_may_fail(tx).await.unwrap();
-        assert!(response.status_ok().unwrap());
+        assert!(
+            response.status_ok().unwrap(),
+            "Transaction failed: {:?}",
+            response
+        );
         response
     }
 
@@ -314,7 +319,6 @@ impl WalletContext {
                 tx,
                 SuiTransactionBlockResponseOptions::new()
                     .with_effects()
-                    .with_events()
                     .with_input()
                     .with_events()
                     .with_object_changes()

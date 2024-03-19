@@ -1,0 +1,5 @@
+[package]
+name = "C"
+
+[addresses]
+A = "_"

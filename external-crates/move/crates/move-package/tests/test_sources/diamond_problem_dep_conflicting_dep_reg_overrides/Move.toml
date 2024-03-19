@@ -1,0 +1,13 @@
+# A override should be specified only in either "regular" dependencies section or "dev" dependencies
+# section but not in both
+
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C-v1", override = true }
+
+[dev-dependencies]
+C = { local = "./deps_only/C-v2", override = true }

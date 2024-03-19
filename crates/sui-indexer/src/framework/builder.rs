@@ -3,6 +3,8 @@
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
+use crate::metrics::IndexerMetrics;
+
 use super::fetcher::CheckpointFetcher;
 use super::Handler;
 
@@ -11,18 +13,20 @@ pub struct IndexerBuilder {
     handlers: Vec<Box<dyn Handler>>,
     last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
     checkpoint_buffer_size: usize,
+    metrics: IndexerMetrics,
 }
 
 impl IndexerBuilder {
     const DEFAULT_CHECKPOINT_BUFFER_SIZE: usize = 1000;
 
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(metrics: IndexerMetrics) -> Self {
         Self {
             rest_url: None,
             handlers: Vec::new(),
             last_downloaded_checkpoint: None,
             checkpoint_buffer_size: Self::DEFAULT_CHECKPOINT_BUFFER_SIZE,
+            metrics,
         }
     }
 
@@ -66,6 +70,7 @@ impl IndexerBuilder {
             sui_rest_api::Client::new(rest_api_url),
             self.last_downloaded_checkpoint,
             downloaded_checkpoint_data_sender,
+            self.metrics.clone(),
         );
         mysten_metrics::spawn_monitored_task!(fetcher.run());
 

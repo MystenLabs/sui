@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PaginationFirst24, PaginationNext24, PaginationPrev24 } from '@mysten/icons';
-import { type UseInfiniteQueryResult } from '@tanstack/react-query';
+import { type InfiniteData, type UseInfiniteQueryResult } from '@tanstack/react-query';
 import { useState } from 'react';
 
 export interface PaginationProps {
@@ -22,7 +22,7 @@ export interface PaginationResponse<Cursor = string> {
 	hasNextPage: boolean;
 }
 
-export function useCursorPagination<T>(query: UseInfiniteQueryResult<T>) {
+export function useCursorPagination<T>(query: UseInfiniteQueryResult<InfiniteData<T>>) {
 	const [currentPage, setCurrentPage] = useState(0);
 
 	return {

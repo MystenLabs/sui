@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
+import Alert from '_src/ui/app/components/alert';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { X12, QrCode } from '@mysten/icons';
+import { QrCode, X12 } from '@mysten/icons';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
 import { useCallback, useMemo } from 'react';
+import type { ChangeEventHandler } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 
 import { useSuiAddressValidation } from './validation';
-import { Text } from '_app/shared/text';
-import Alert from '_src/ui/app/components/alert';
-
-import type { ChangeEventHandler } from 'react';
 
 export interface AddressInputProps {
 	disabled?: boolean;
@@ -67,7 +66,7 @@ export function AddressInput({
 			return null;
 		},
 		enabled: !!field.value,
-		cacheTime: 10 * 1000,
+		gcTime: 10 * 1000,
 		refetchOnMount: false,
 		refetchOnWindowFocus: false,
 		refetchInterval: false,

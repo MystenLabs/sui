@@ -1,0 +1,9 @@
+# Select the key and value of the specific protocol configuration, in this case `max_move_identifier_len`
+{
+  protocolConfig {
+    config(key: "max_move_identifier_len") {
+      key
+      value
+    }
+  }
+}

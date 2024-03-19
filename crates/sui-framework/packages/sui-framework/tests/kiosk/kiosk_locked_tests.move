@@ -35,7 +35,7 @@ module sui::kiosk_locked_test {
         kiosk::lock(&mut bob_kiosk, &bob_kiosk_cap, &policy, item);
 
         // The difference!
-        locked_policy::prove(&mut request, &mut bob_kiosk);
+        locked_policy::prove(&mut request, &bob_kiosk);
         policy::confirm_request(&policy, request);
 
         // Carl the Cleaner;

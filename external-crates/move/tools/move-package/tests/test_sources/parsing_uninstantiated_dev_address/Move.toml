@@ -1,7 +1,0 @@
-[package]
-name = "name"
-version = "0.1.2"
-
-[dev-addresses]
-a = "0x1"
-b = "_"

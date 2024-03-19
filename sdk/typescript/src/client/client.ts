@@ -1,46 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { fromB58, toB64, toHEX } from '@mysten/bcs';
+
+import type { Signer } from '../cryptography/index.js';
+import type { TransactionBlock } from '../transactions/index.js';
+import { isTransactionBlock } from '../transactions/index.js';
+import {
+	isValidSuiAddress,
+	isValidSuiObjectId,
+	isValidTransactionDigest,
+	normalizeSuiAddress,
+	normalizeSuiObjectId,
+} from '../utils/sui-types.js';
+import { SuiHTTPTransport } from './http-transport.js';
+import type { SuiTransport } from './http-transport.js';
 import type {
-	SuiTransactionBlockResponseQuery,
-	Order,
-	CoinMetadata,
-	SuiEvent,
-	SuiObjectResponseQuery,
-	TransactionEffects,
-	Unsubscribe,
-	PaginatedTransactionResponse,
-	SuiMoveFunctionArgType,
-	SuiMoveNormalizedFunction,
-	SuiMoveNormalizedModule,
-	SuiMoveNormalizedModules,
-	SuiMoveNormalizedStruct,
-	SuiTransactionBlockResponse,
-	PaginatedEvents,
-	DevInspectResults,
-	PaginatedCoins,
-	SuiObjectResponse,
-	DelegatedStake,
-	CoinBalance,
-	CoinSupply,
-	Checkpoint,
-	CommitteeInfo,
-	DryRunTransactionBlockResponse,
-	SuiSystemStateSummary,
-	PaginatedObjectsResponse,
-	ValidatorsApy,
-	MoveCallMetrics,
-	ObjectRead,
-	ResolvedNameServiceNames,
-	ProtocolConfig,
-	EpochInfo,
-	EpochPage,
-	CheckpointPage,
-	DynamicFieldPage,
-	NetworkMetrics,
 	AddressMetrics,
 	AllEpochsAddressMetrics,
+	Checkpoint,
+	CheckpointPage,
+	CoinBalance,
+	CoinMetadata,
+	CoinSupply,
+	CommitteeInfo,
+	DelegatedStake,
+	DevInspectResults,
 	DevInspectTransactionBlockParams,
 	DryRunTransactionBlockParams,
+	DryRunTransactionBlockResponse,
+	DynamicFieldPage,
+	EpochInfo,
+	EpochMetricsPage,
+	EpochPage,
 	ExecuteTransactionBlockParams,
 	GetAllBalancesParams,
 	GetAllCoinsParams,
@@ -64,29 +55,40 @@ import type {
 	GetStakesParams,
 	GetTotalSupplyParams,
 	GetTransactionBlockParams,
+	MoveCallMetrics,
 	MultiGetObjectsParams,
 	MultiGetTransactionBlocksParams,
+	NetworkMetrics,
+	ObjectRead,
+	Order,
+	PaginatedCoins,
+	PaginatedEvents,
+	PaginatedObjectsResponse,
+	PaginatedTransactionResponse,
+	ProtocolConfig,
 	QueryEventsParams,
 	QueryTransactionBlocksParams,
+	ResolvedNameServiceNames,
 	ResolveNameServiceAddressParams,
 	ResolveNameServiceNamesParams,
 	SubscribeEventParams,
 	SubscribeTransactionParams,
+	SuiEvent,
+	SuiMoveFunctionArgType,
+	SuiMoveNormalizedFunction,
+	SuiMoveNormalizedModule,
+	SuiMoveNormalizedModules,
+	SuiMoveNormalizedStruct,
+	SuiObjectResponse,
+	SuiObjectResponseQuery,
+	SuiSystemStateSummary,
+	SuiTransactionBlockResponse,
+	SuiTransactionBlockResponseQuery,
+	TransactionEffects,
 	TryGetPastObjectParams,
+	Unsubscribe,
+	ValidatorsApy,
 } from './types/index.js';
-import {
-	isValidTransactionDigest,
-	isValidSuiAddress,
-	isValidSuiObjectId,
-	normalizeSuiAddress,
-	normalizeSuiObjectId,
-} from '../utils/sui-types.js';
-import { fromB58, toB64, toHEX } from '@mysten/bcs';
-import type { TransactionBlock } from '../builder/index.js';
-import { isTransactionBlock } from '../builder/index.js';
-import { SuiHTTPTransport } from './http-transport.js';
-import type { SuiTransport } from './http-transport.js';
-import type { Keypair } from '../cryptography/index.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -427,7 +429,7 @@ export class SuiClient {
 		...input
 	}: {
 		transactionBlock: Uint8Array | TransactionBlock;
-		signer: Keypair;
+		signer: Signer;
 	} & Omit<
 		ExecuteTransactionBlockParams,
 		'transactionBlock' | 'signature'
@@ -437,7 +439,7 @@ export class SuiClient {
 		if (transactionBlock instanceof Uint8Array) {
 			transactionBytes = transactionBlock;
 		} else {
-			transactionBlock.setSenderIfNotSet(await signer.getPublicKey().toSuiAddress());
+			transactionBlock.setSenderIfNotSet(signer.toSuiAddress());
 			transactionBytes = await transactionBlock.build({ client: this });
 		}
 
@@ -578,7 +580,7 @@ export class SuiClient {
 
 		return await this.transport.request({
 			method: 'sui_devInspectTransactionBlock',
-			params: [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
+			params: [input.sender, devInspectTxBytes, input.gasPrice?.toString(), input.epoch],
 		});
 	}
 
@@ -667,6 +669,15 @@ export class SuiClient {
 
 	async getAddressMetrics(): Promise<AddressMetrics> {
 		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
+	}
+
+	async getEpochMetrics(
+		input?: { descendingOrder?: boolean } & PaginationArguments<EpochMetricsPage['nextCursor']>,
+	): Promise<EpochMetricsPage> {
+		return await this.transport.request({
+			method: 'suix_getEpochMetrics',
+			params: [input?.cursor, input?.limit, input?.descendingOrder],
+		});
 	}
 
 	async getAllEpochAddressMetrics(input?: {

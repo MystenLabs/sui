@@ -1,0 +1,5 @@
+[package]
+name = "test"
+
+[dependencies]
+Pkg = { custom = "localhost:8080", address = "0x1" }

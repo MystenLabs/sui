@@ -1,0 +1,12 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let x: bool;
+label b0:
+    x = !0;
+    return;
+}
+
+}
+// check: BOOLEAN_OP_TYPE_MISMATCH_ERROR

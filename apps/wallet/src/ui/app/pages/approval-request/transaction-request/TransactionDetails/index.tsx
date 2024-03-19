@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useTransactionData } from '_src/ui/app/hooks';
 import { Tab as HeadlessTab, type TabProps } from '@headlessui/react';
 import { type TransactionBlock } from '@mysten/sui.js/transactions';
 
+import { SummaryCard } from '../SummaryCard';
 import { Command } from './Command';
 import { Input } from './Input';
-import { SummaryCard } from '../SummaryCard';
-import { useTransactionData } from '_src/ui/app/hooks';
 
 interface Props {
 	sender?: string;
@@ -22,15 +22,15 @@ const Tab = (props: TabProps<'div'>) => (
 );
 
 export function TransactionDetails({ sender, transaction }: Props) {
-	const { data: transactionData, isLoading, isError } = useTransactionData(sender, transaction);
+	const { data: transactionData, isPending, isError } = useTransactionData(sender, transaction);
 	if (transactionData?.transactions.length === 0 && transactionData.inputs.length === 0) {
 		return null;
 	}
 	return (
 		<SummaryCard header="Transaction Details" initialExpanded>
-			{isLoading || isError ? (
+			{isPending || isError ? (
 				<div className="ml-0 text-steel-darker text-pBodySmall font-medium">
-					{isLoading ? 'Gathering data...' : "Couldn't gather data"}
+					{isPending ? 'Gathering data...' : "Couldn't gather data"}
 				</div>
 			) : transactionData ? (
 				<div>

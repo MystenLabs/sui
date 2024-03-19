@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.11.0"
+    "version": "1.22.0"
   },
   "methods": [
     {
@@ -52,6 +52,13 @@
           "schema": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
           }
+        },
+        {
+          "name": "additional_args",
+          "description": "Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks.",
+          "schema": {
+            "$ref": "#/components/schemas/DevInspectArgs"
+          }
         }
       ],
       "result": {
@@ -80,6 +87,10 @@
             {
               "name": "epoch",
               "value": 8888
+            },
+            {
+              "name": "additional_args",
+              "value": null
             }
           ],
           "result": {
@@ -365,7 +376,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": true,
-                "showBalanceChanges": true
+                "showBalanceChanges": true,
+                "showRawEffects": false
               }
             },
             {
@@ -1347,33 +1359,49 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "25",
+              "maxSupportedProtocolVersion": "40",
               "protocolVersion": "6",
               "featureFlags": {
+                "accept_zklogin_in_multisig": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
+                "allow_receiving_object_id": false,
                 "ban_entry_init": false,
                 "commit_root_state_digest": false,
                 "consensus_order_end_of_epoch_last": true,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "enable_coin_deny_list": false,
+                "enable_effects_v2": false,
+                "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
+                "enable_poseidon": false,
                 "end_of_epoch_transaction_supported": false,
+                "hardened_otw_check": false,
+                "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
+                "random_beacon": false,
+                "receive_objects": false,
+                "recompute_has_public_transfer_in_execution": false,
+                "reject_mutable_random_on_entry_functions": false,
                 "scoring_decision_with_validity_cutoff": true,
+                "shared_object_deletion": false,
                 "simple_conservation_checks": false,
                 "simplified_unwrap_then_delete": false,
+                "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
                 "upgraded_multisig_supported": false,
+                "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
               },
               "attributes": {
@@ -1392,6 +1420,20 @@
                 "base_tx_cost_per_byte": {
                   "u64": "0"
                 },
+                "binary_address_identifiers": null,
+                "binary_constant_pool": null,
+                "binary_field_handles": null,
+                "binary_field_instantiations": null,
+                "binary_friend_decls": null,
+                "binary_function_defs": null,
+                "binary_function_handles": null,
+                "binary_function_instantiations": null,
+                "binary_identifiers": null,
+                "binary_module_handles": null,
+                "binary_signatures": null,
+                "binary_struct_def_instantiations": null,
+                "binary_struct_defs": null,
+                "binary_struct_handles": null,
                 "bls12381_bls12381_min_pk_verify_cost_base": {
                   "u64": "52"
                 },
@@ -1413,7 +1455,11 @@
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
+                "check_zklogin_id_cost_base": null,
+                "check_zklogin_issuer_cost_base": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_max_transaction_size_bytes": null,
+                "consensus_max_transactions_in_block_bytes": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
@@ -1602,6 +1648,36 @@
                 "groth16_verify_groth16_proof_internal_public_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "group_ops_bls12381_decode_g1_cost": null,
+                "group_ops_bls12381_decode_g2_cost": null,
+                "group_ops_bls12381_decode_gt_cost": null,
+                "group_ops_bls12381_decode_scalar_cost": null,
+                "group_ops_bls12381_g1_add_cost": null,
+                "group_ops_bls12381_g1_div_cost": null,
+                "group_ops_bls12381_g1_hash_to_base_cost": null,
+                "group_ops_bls12381_g1_hash_to_cost_per_byte": null,
+                "group_ops_bls12381_g1_msm_base_cost": null,
+                "group_ops_bls12381_g1_msm_base_cost_per_input": null,
+                "group_ops_bls12381_g1_mul_cost": null,
+                "group_ops_bls12381_g1_sub_cost": null,
+                "group_ops_bls12381_g2_add_cost": null,
+                "group_ops_bls12381_g2_div_cost": null,
+                "group_ops_bls12381_g2_hash_to_base_cost": null,
+                "group_ops_bls12381_g2_hash_to_cost_per_byte": null,
+                "group_ops_bls12381_g2_msm_base_cost": null,
+                "group_ops_bls12381_g2_msm_base_cost_per_input": null,
+                "group_ops_bls12381_g2_mul_cost": null,
+                "group_ops_bls12381_g2_sub_cost": null,
+                "group_ops_bls12381_gt_add_cost": null,
+                "group_ops_bls12381_gt_div_cost": null,
+                "group_ops_bls12381_gt_mul_cost": null,
+                "group_ops_bls12381_gt_sub_cost": null,
+                "group_ops_bls12381_msm_max_len": null,
+                "group_ops_bls12381_pairing_cost": null,
+                "group_ops_bls12381_scalar_add_cost": null,
+                "group_ops_bls12381_scalar_div_cost": null,
+                "group_ops_bls12381_scalar_mul_cost": null,
+                "group_ops_bls12381_scalar_sub_cost": null,
                 "hash_blake2b256_cost_base": {
                   "u64": "52"
                 },
@@ -1718,6 +1794,7 @@
                 "max_num_transferred_move_object_ids_system_tx": {
                   "u64": "32768"
                 },
+                "max_package_dependencies": null,
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
@@ -1815,6 +1892,10 @@
                 "package_publish_cost_per_byte": {
                   "u64": "80"
                 },
+                "poseidon_bn254_cost_base": null,
+                "poseidon_bn254_cost_per_block": null,
+                "random_beacon_reduction_allowed_delta": null,
+                "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
@@ -1836,6 +1917,7 @@
                 "transfer_freeze_object_cost_base": {
                   "u64": "52"
                 },
+                "transfer_receive_object_cost_base": null,
                 "transfer_share_object_cost_base": {
                   "u64": "52"
                 },
@@ -1941,7 +2023,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
-                "showBalanceChanges": false
+                "showBalanceChanges": false,
+                "showRawEffects": false
               }
             }
           ],
@@ -2318,7 +2401,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
-                "showBalanceChanges": false
+                "showBalanceChanges": false,
+                "showRawEffects": false
               }
             }
           ],
@@ -2820,11 +2904,11 @@
               "name": "past_objects",
               "value": [
                 {
-                  "objectId": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
+                  "objectId": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449",
                   "version": "4"
                 },
                 {
-                  "objectId": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5",
+                  "objectId": "0xe81109dc075f537067726d63dd5287100e177404a969989215da2abfbfc098cf",
                   "version": "12"
                 }
               ]
@@ -2848,14 +2932,14 @@
               {
                 "status": "VersionFound",
                 "details": {
-                  "objectId": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
+                  "objectId": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449",
                   "version": "4",
-                  "digest": "J66shUHEGAe7eHtiw1bz5rvvjZcwpvnUTMEkxThxR3Kg",
+                  "digest": "F34PCnEHm5GAP5ksDKPSdRMKz49JiqrvLUTZsiojqJS2",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "owner": {
-                    "AddressOwner": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
+                    "AddressOwner": "0xfde53941b2a08a8bf752c20979842732ac019f52835282744318d6d84f3c52b3"
                   },
-                  "previousTransaction": "GcteyqtLYTc7Fig8CKtspCafwf6muuDgMtDUA1jrYKae",
+                  "previousTransaction": "EMLrFqmDkZtFvidxKy1T8bwAiHnUiLqramE58kSUcAf8",
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
@@ -2864,7 +2948,7 @@
                     "fields": {
                       "balance": "10000",
                       "id": {
-                        "id": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
+                        "id": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
                       }
                     }
                   }
@@ -2873,14 +2957,14 @@
               {
                 "status": "VersionFound",
                 "details": {
-                  "objectId": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5",
+                  "objectId": "0xe81109dc075f537067726d63dd5287100e177404a969989215da2abfbfc098cf",
                   "version": "12",
-                  "digest": "2HJk4eT4Jmekwf1nNeokfibZnuaUmMFS1JYcPJdw6eB9",
+                  "digest": "FvrqyqH5yA85sziA2NoPGJ8N23kmTxeXQh4HyJAbB7c2",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "owner": {
-                    "AddressOwner": "0xc65dfd6586b7d295a16b97bd4318995d4a920239e4c5d856bdbf1944a063a3ef"
+                    "AddressOwner": "0x13090a95287cde98d711fc27217b81e08d494bdb70c3b42f0fe27be8eb500568"
                   },
-                  "previousTransaction": "F34PCnEHm5GAP5ksDKPSdRMKz49JiqrvLUTZsiojqJS2",
+                  "previousTransaction": "6XEirxRenmgbeg4tviP43bAKsosqgySXwoBxGEWQVTii",
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
@@ -2889,7 +2973,7 @@
                     "fields": {
                       "balance": "20000",
                       "id": {
-                        "id": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
+                        "id": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
                       }
                     }
                   }
@@ -3138,14 +3222,12 @@
           "result": {
             "name": "Result",
             "value": {
-              "id": {
-                "id": "0x6d907beaa3a49db57bdfdb3557e6d405cbf01c293a53e01457d65e92b5d8dd68"
-              },
               "decimals": 9,
               "name": "Usdc",
               "symbol": "USDC",
               "description": "Stable coin.",
-              "icon_url": null
+              "iconUrl": null,
+              "id": "0x6d907beaa3a49db57bdfdb3557e6d405cbf01c293a53e01457d65e92b5d8dd68"
             }
           }
         }
@@ -3731,34 +3813,42 @@
           ],
           "result": {
             "name": "Result",
-            "value": {
-              "validatorAddress": "0x034462b6064a08845e2ae2942fe7c4ee816d754eb2eed23e6c6bb32c89fe1f21",
-              "stakingPool": "0xab588374445e72e0402aea014b295610579963ee67e81398729f87d81d62f399",
-              "stakes": [
-                {
-                  "stakedSuiId": "0xc041b0f8d0938923ea7e3917608ee62df4376710024f81dd33ab6833482ee803",
-                  "stakeRequestEpoch": "62",
-                  "stakeActiveEpoch": "63",
-                  "principal": "200000000000",
-                  "status": "Active",
-                  "estimatedReward": "520000000"
-                },
-                {
-                  "stakedSuiId": "0x4e779a48e6ef635c7f856df4905022458bfbd22bbb46f892c42d9ec0ae4de93e",
-                  "stakeRequestEpoch": "142",
-                  "stakeActiveEpoch": "143",
-                  "principal": "200000000000",
-                  "status": "Pending"
-                },
-                {
-                  "stakedSuiId": "0x02c75973a51c17180798237326a58694a2cf5cd6fa76ed1d18f05f15e3507525",
-                  "stakeRequestEpoch": "244",
-                  "stakeActiveEpoch": "245",
-                  "principal": "200000000000",
-                  "status": "Unstaked"
-                }
-              ]
-            }
+            "value": [
+              {
+                "validatorAddress": "0x034462b6064a08845e2ae2942fe7c4ee816d754eb2eed23e6c6bb32c89fe1f21",
+                "stakingPool": "0xab588374445e72e0402aea014b295610579963ee67e81398729f87d81d62f399",
+                "stakes": [
+                  {
+                    "stakedSuiId": "0xc041b0f8d0938923ea7e3917608ee62df4376710024f81dd33ab6833482ee803",
+                    "stakeRequestEpoch": "62",
+                    "stakeActiveEpoch": "63",
+                    "principal": "200000000000",
+                    "status": "Active",
+                    "estimatedReward": "520000000"
+                  },
+                  {
+                    "stakedSuiId": "0x4e779a48e6ef635c7f856df4905022458bfbd22bbb46f892c42d9ec0ae4de93e",
+                    "stakeRequestEpoch": "142",
+                    "stakeActiveEpoch": "143",
+                    "principal": "200000000000",
+                    "status": "Pending"
+                  }
+                ]
+              },
+              {
+                "validatorAddress": "0x02c75973a51c17180798237326a58694a2cf5cd6fa76ed1d18f05f15e3507525",
+                "stakingPool": "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
+                "stakes": [
+                  {
+                    "stakedSuiId": "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c",
+                    "stakeRequestEpoch": "244",
+                    "stakeActiveEpoch": "245",
+                    "principal": "200000000000",
+                    "status": "Unstaked"
+                  }
+                ]
+              }
+            ]
           }
         }
       ]
@@ -3800,19 +3890,19 @@
             {
               "name": "staked_sui_ids",
               "value": [
-                "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
-                "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c"
+                "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
+                "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4"
               ]
             }
           ],
           "result": {
             "name": "Result",
             "value": {
-              "validatorAddress": "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
-              "stakingPool": "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4",
+              "validatorAddress": "0xfb1b51ef9f3ed66000c0e45697dbee0954790a7b5c15ad7354f23b968be8bb06",
+              "stakingPool": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38",
               "stakes": [
                 {
-                  "stakedSuiId": "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
+                  "stakedSuiId": "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
                   "stakeRequestEpoch": "62",
                   "stakeActiveEpoch": "63",
                   "principal": "200000000000",
@@ -3820,7 +3910,7 @@
                   "estimatedReward": "520000000"
                 },
                 {
-                  "stakedSuiId": "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c",
+                  "stakedSuiId": "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4",
                   "stakeRequestEpoch": "244",
                   "stakeActiveEpoch": "245",
                   "principal": "200000000000",
@@ -4191,7 +4281,7 @@
           ],
           "result": {
             "name": "Result",
-            "value": "0xfb1b51ef9f3ed66000c0e45697dbee0954790a7b5c15ad7354f23b968be8bb06"
+            "value": "0x70f2d83f980fe0996a92d351d6749a0a0b47998aaf3d11da24c49e014d4ccb1d"
           }
         }
       ]
@@ -4241,11 +4331,11 @@
           "params": [
             {
               "name": "address",
-              "value": "0x70f2d83f980fe0996a92d351d6749a0a0b47998aaf3d11da24c49e014d4ccb1d"
+              "value": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5"
             },
             {
               "name": "cursor",
-              "value": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38"
+              "value": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
             },
             {
               "name": "limit",
@@ -4258,7 +4348,7 @@
               "data": [
                 "example.sui"
               ],
-              "nextCursor": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38",
+              "nextCursor": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
               "hasNextPage": false
             }
           }
@@ -5216,6 +5306,9 @@
       "BigInt_for_uint128": {
         "type": "string"
       },
+      "BigInt_for_uint16": {
+        "type": "string"
+      },
       "BigInt_for_uint32": {
         "type": "string"
       },
@@ -5480,8 +5573,23 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLogin"
+            ],
+            "properties": {
+              "ZkLogin": {
+                "$ref": "#/components/schemas/ZkLoginAuthenticatorAsBytes"
+              }
+            },
+            "additionalProperties": false
           }
         ]
+      },
+      "ConsensusCommitDigest": {
+        "$ref": "#/components/schemas/Digest"
       },
       "Data": {
         "oneOf": [
@@ -5564,6 +5672,71 @@
           }
         }
       },
+      "DevInspectArgs": {
+        "description": "Additional rguments supplied to dev inspect beyond what is allowed in today's API.",
+        "type": "object",
+        "properties": {
+          "gasBudget": {
+            "description": "The gas budget for the transaction.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gasObjects": {
+            "description": "The gas objects used to pay for the transaction.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/ObjectID"
+                },
+                {
+                  "$ref": "#/components/schemas/SequenceNumber"
+                },
+                {
+                  "$ref": "#/components/schemas/ObjectDigest"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
+            }
+          },
+          "gasSponsor": {
+            "description": "The sponsor of the gas for the transaction, might be different from the sender.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "showRawTxnDataAndEffects": {
+            "description": "Whether to return the raw transaction data and effects.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "skipChecks": {
+            "description": "Whether to skip transaction checks for the transaction.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
       "DevInspectResults": {
         "description": "The response from processing a dev inspect transaction",
         "type": "object",
@@ -5592,6 +5765,24 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "rawEffects": {
+            "description": "The raw effects of the transaction that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "rawTxnData": {
+            "description": "The raw transaction data that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
             }
           },
           "results": {
@@ -5903,7 +6094,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events emitted in a specified Move module.",
+            "description": "Return events emitted in a specified Move module. If the event is defined in Module A but emitted in a tx with Module B, query `MoveModule` by module B returns the event. Query `MoveEventModule` by module A returns the event too.",
             "type": "object",
             "required": [
               "MoveModule"
@@ -5934,7 +6125,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events with the given move event struct name",
+            "description": "Return events with the given Move event struct name (struct tag). For example, if the event is defined in `0xabcd::MyModule`, and named `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.",
             "type": "object",
             "required": [
               "MoveEventType"
@@ -5947,7 +6138,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events with the given move event module name",
+            "description": "Return events with the given Move module name where the event struct is defined. If the event is defined in Module A but emitted in a tx with Module B, query `MoveEventModule` by module A returns the event. Query `MoveModule` by module B returns the event too.",
             "type": "object",
             "required": [
               "MoveEventModule"
@@ -7679,6 +7870,18 @@
           {
             "type": "object",
             "required": [
+              "u16"
+            ],
+            "properties": {
+              "u16": {
+                "$ref": "#/components/schemas/BigInt_for_uint16"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
               "u32"
             ],
             "properties": {
@@ -7751,6 +7954,18 @@
             "properties": {
               "Secp256r1": {
                 "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLogin"
+            ],
+            "properties": {
+              "ZkLogin": {
+                "$ref": "#/components/schemas/ZkLoginPublicIdentifier"
               }
             },
             "additionalProperties": false
@@ -8147,6 +8362,32 @@
                     ]
                   }
                 }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "objectId",
+                  "objectType",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string",
+                    "enum": [
+                      "receiving"
+                    ]
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
               }
             ],
             "required": [
@@ -8267,7 +8508,9 @@
           {
             "type": "string",
             "enum": [
-              "AuthenticatorStateCreate"
+              "AuthenticatorStateCreate",
+              "RandomnessStateCreate",
+              "CoinDenyListStateCreate"
             ]
           },
           {
@@ -10094,6 +10337,38 @@
             }
           },
           {
+            "description": "A transaction which updates global randomness state",
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind",
+              "random_bytes",
+              "randomness_round"
+            ],
+            "properties": {
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "RandomnessStateUpdate"
+                ]
+              },
+              "random_bytes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              },
+              "randomness_round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
             "description": "The transaction which occurs only at the end of the epoch",
             "type": "object",
             "required": [
@@ -10112,6 +10387,36 @@
                 "items": {
                   "$ref": "#/components/schemas/SuiEndOfEpochTransactionKind"
                 }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV2"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }
           }
@@ -10186,6 +10491,14 @@
               "$ref": "#/components/schemas/ObjectChange"
             }
           },
+          "rawEffects": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
           "rawTransaction": {
             "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
             "allOf": [
@@ -10242,6 +10555,11 @@
           },
           "showObjectChanges": {
             "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showRawEffects": {
+            "description": "Whether to show raw transaction effects. Default to be False",
             "default": false,
             "type": "boolean"
           },
@@ -10589,6 +10907,9 @@
           }
         }
       },
+      "ZkLoginAuthenticatorAsBytes": {
+        "$ref": "#/components/schemas/Base64"
+      },
       "ZkLoginInputs": {
         "description": "All inputs required for the zk login proof verification and other public inputs.",
         "type": "object",
@@ -10644,6 +10965,14 @@
             }
           }
         }
+      },
+      "ZkLoginPublicIdentifier": {
+        "description": "A wrapper struct to retrofit in [enum PublicKey] for zkLogin. Useful to construct [struct MultiSigPublicKey].",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
       }
     }
   }

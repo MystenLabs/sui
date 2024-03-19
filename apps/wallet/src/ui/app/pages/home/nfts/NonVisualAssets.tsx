@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiObjectData } from '@mysten/sui.js/client';
-import { parseStructTag, formatAddress } from '@mysten/sui.js/utils';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
+import { type SuiObjectData } from '@mysten/sui.js/client';
+import { formatAddress, parseStructTag } from '@mysten/sui.js/utils';
 
 export default function NonVisualAssets({ items }: { items: SuiObjectData[] }) {
 	return (
 		<div className="flex flex-col items-center gap-4 w-full flex-1">
 			{items?.length ? (
-				<div className="flex flex-col flex-wrap w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-3 mb-5">
+				<div className="flex flex-col flex-wrap w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-3">
 					{items.map((item) => {
 						const { address, module, name } = parseStructTag(item.type!);
 						return (

@@ -1,28 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetKioskContents, isSuiNSName, useSuiNSEnabled } from '@mysten/core';
-import { useSuiClient } from '@mysten/dapp-kit';
-import { ArrowRight16 } from '@mysten/icons';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Form, Field, Formik } from 'formik';
-import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-
-import { useTransferKioskItem } from './useTransferKioskItem';
-import { createValidationSchema } from './validation';
-import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { ampli } from '_src/shared/analytics/ampli';
-import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useActiveAddress } from '_src/ui/app/hooks';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { useSigner } from '_src/ui/app/hooks/useSigner';
+import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
+import { isSuiNSName, useGetKioskContents, useSuiNSEnabled } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { ArrowRight16 } from '@mysten/icons';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Field, Form, Formik } from 'formik';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import { useTransferKioskItem } from './useTransferKioskItem';
+import { createValidationSchema } from './validation';
 
 export function TransferNFTForm({
 	objectId,
@@ -65,7 +65,7 @@ export function TransferNFTForm({
 			}
 
 			const tx = new TransactionBlock();
-			tx.transferObjects([tx.object(objectId)], tx.pure(to));
+			tx.transferObjects([tx.object(objectId)], to);
 
 			return signer.signAndExecuteTransactionBlock(
 				{
@@ -80,9 +80,9 @@ export function TransferNFTForm({
 			);
 		},
 		onSuccess: (response) => {
-			queryClient.invalidateQueries(['object', objectId]);
-			queryClient.invalidateQueries(['get-kiosk-contents']);
-			queryClient.invalidateQueries(['get-owned-objects']);
+			queryClient.invalidateQueries({ queryKey: ['object', objectId] });
+			queryClient.invalidateQueries({ queryKey: ['get-kiosk-contents'] });
+			queryClient.invalidateQueries({ queryKey: ['get-owned-objects'] });
 
 			ampli.sentCollectible({ objectId });
 
@@ -141,7 +141,7 @@ export function TransferNFTForm({
 							<Button
 								type="submit"
 								variant="primary"
-								loading={transferNFT.isLoading}
+								loading={transferNFT.isPending}
 								disabled={!isValid}
 								size="tall"
 								text="Send NFT Now"

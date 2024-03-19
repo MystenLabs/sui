@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_postfix_no_semi.move:5:1
+  │
+5 │ }
+  │ ^
+  │ │
+  │ Unexpected '}'
+  │ Expected one of: ',' or ';'
+

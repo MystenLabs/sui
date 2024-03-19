@@ -101,6 +101,9 @@ pub trait Message {
 
     fn digest(&self) -> Self::DigestType;
 
+    /// Perform cheap validity checks before any expensive crypto verification.
+    fn verify_user_input(&self) -> SuiResult;
+
     /// Verify that the message is from the correct epoch (e.g. for CertifiedCheckpointSummary
     /// we verify that the checkpoint is from the same epoch as the committee signatures).
     fn verify_epoch(&self, epoch: EpochId) -> SuiResult;
@@ -110,6 +113,9 @@ pub trait Message {
 pub trait AuthenticatedMessage {
     /// Verify internal signatures, e.g. for Transaction we verify the user signature(s).
     fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult;
+
+    /// Checks that still need to be verified outside cache.
+    fn verify_uncached_checks(&self, verify_params: &VerifyParams) -> SuiResult;
 }
 
 /// A marker trait to indicate !AuthenticatedMessage since rust does not allow negative trait

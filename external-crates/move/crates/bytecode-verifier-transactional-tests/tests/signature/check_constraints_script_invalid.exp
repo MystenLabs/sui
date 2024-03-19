@@ -1,0 +1,73 @@
+processed 9 tasks
+
+task 1 'run'. lines 17-24:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 2 'run'. lines 26-33:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 3 'run'. lines 35-42:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 4 'run'. lines 44-51:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 5 'run'. lines 53-60:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 6 'run'. lines 62-69:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 7 'run'. lines 71-78:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 8 'run'. lines 80-87:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}

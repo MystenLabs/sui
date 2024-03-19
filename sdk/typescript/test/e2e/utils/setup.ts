@@ -1,20 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { expect } from 'vitest';
 import { execSync } from 'child_process';
 import tmp from 'tmp';
-
-import { Coin } from '../../../src/framework';
-import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
-import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
-import { SuiClient, SuiObjectChangePublished, getFullnodeUrl } from '../../../src/client';
-import { Keypair } from '../../../src/cryptography';
+import { expect } from 'vitest';
+import { WebSocket } from 'ws';
+
+import type { SuiObjectChangePublished } from '../../../src/client/index.js';
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '../../../src/client/index.js';
+import type { Keypair } from '../../../src/cryptography/index.js';
+import {
+	FaucetRateLimitError,
+	getFaucetHost,
+	requestSuiFromFaucetV0,
+} from '../../../src/faucet/index.js';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519/index.js';
+import { TransactionBlock, UpgradePolicy } from '../../../src/transactions/index.js';
+import { SUI_TYPE_ARG } from '../../../src/utils/index.js';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
+
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =
@@ -37,17 +44,11 @@ export class TestToolbox {
 		return this.keypair.getPublicKey().toSuiAddress();
 	}
 
-	// TODO(chris): replace this with provider.getCoins instead
 	async getGasObjectsOwnedByAddress() {
-		const objects = await this.client.getOwnedObjects({
+		return await this.client.getCoins({
 			owner: this.address(),
-			options: {
-				showType: true,
-				showContent: true,
-				showOwner: true,
-			},
+			coinType: SUI_TYPE_ARG,
 		});
-		return objects.data.filter((obj) => Coin.isSUI(obj));
 	}
 
 	public async getActiveValidators() {
@@ -55,16 +56,27 @@ export class TestToolbox {
 	}
 }
 
-export function getClient(): SuiClient {
+export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 	return new SuiClient({
-		url: DEFAULT_FULLNODE_URL,
+		transport: new SuiHTTPTransport({
+			url,
+			WebSocketConstructor: WebSocket as never,
+		}),
 	});
 }
 
-export async function setup() {
+export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	const client = getClient();
+	return setupWithFundedAddress(keypair, address, options);
+}
+
+export async function setupWithFundedAddress(
+	keypair: Ed25519Keypair,
+	address: string,
+	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
+) {
+	const client = getClient(rpcURL);
 	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
 		// overall timeout in 60 seconds
@@ -73,6 +85,21 @@ export async function setup() {
 		retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
+
+	await retry(
+		async () => {
+			const balance = await client.getBalance({ owner: address });
+
+			if (balance.totalBalance === '0') {
+				throw new Error('Balance is still 0');
+			}
+		},
+		{
+			backoff: () => 1000,
+			timeout: 30 * 1000,
+			retryIf: () => true,
+		},
+	);
 	return new TestToolbox(keypair, client);
 }
 
@@ -110,6 +137,9 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			showObjectChanges: true,
 		},
 	});
+
+	await toolbox.client.waitForTransactionBlock({ digest: publishTxn.digest });
+
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(
@@ -212,7 +242,7 @@ export async function paySui(
 		).data[0].coinObjectId;
 
 	recipients.forEach((recipient, i) => {
-		const coin = tx.splitCoins(tx.object(coinId!), [tx.pure(amounts![i])]);
+		const coin = tx.splitCoins(coinId!, [tx.pure(amounts![i])]);
 		tx.transferObjects([coin], tx.pure(recipient));
 	});
 

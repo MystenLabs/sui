@@ -6,10 +6,10 @@
 //# publish --upgradeable --sender A
 module Test_V0::base {
     use sui::object::UID;
-    struct Foo {
+    public struct Foo {
         id: UID,
     }
-    struct Bar {
+    public struct Bar {
         id: UID,
     }
 }
@@ -17,10 +17,10 @@ module Test_V0::base {
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
     use sui::object::UID;
-    struct Foo has key {
+    public struct Foo has key {
         id: UID,
     }
-    struct Bar has key {
+    public struct Bar has key {
         id: UID,
     }
 }

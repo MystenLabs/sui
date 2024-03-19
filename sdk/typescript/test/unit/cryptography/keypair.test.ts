@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { toB64 } from '@mysten/bcs';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { bcs } from '../../../src/bcs/index.js';
+import { IntentScope } from '../../../src/cryptography/intent';
+import { PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
-import { PublicKey } from '../../../src/cryptography/publickey';
-import { toB64 } from '@mysten/bcs';
-import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope } from '../../../src/cryptography/intent';
 
 describe('Keypair', () => {
 	let k1: Ed25519Keypair,

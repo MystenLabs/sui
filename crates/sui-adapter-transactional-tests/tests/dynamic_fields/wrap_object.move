@@ -13,12 +13,12 @@ use sui::dynamic_object_field;
 use sui::object;
 use sui::tx_context::{sender, TxContext};
 
-struct Obj has key, store {
+public struct Obj has key, store {
     id: object::UID,
 }
 
 entry fun mint(ctx: &mut TxContext) {
-    let parent = object::new(ctx);
+    let mut parent = object::new(ctx);
     dynamic_object_field::add(&mut parent, 0, Obj { id: object::new(ctx) });
     sui::transfer::public_transfer(Obj { id: parent }, sender(ctx))
 }

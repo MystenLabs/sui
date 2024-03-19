@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { X32 } from '@mysten/icons';
-
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Portal } from '../../../shared/Portal';
 import { ampli } from '_src/shared/analytics/ampli';
 import ExternalLink from '_src/ui/app/components/external-link';
+import { X32 } from '@mysten/icons';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { Portal } from '../../../shared/Portal';
 
 export type InterstitialConfig = {
 	enabled: boolean;

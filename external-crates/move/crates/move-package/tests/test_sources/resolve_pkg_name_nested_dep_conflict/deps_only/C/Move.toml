@@ -1,0 +1,9 @@
+[package]
+name = "C"
+
+[dependencies.A]
+resolver = "../../../resolvers/successful_subst_name_resolution.sh"
+
+[dependencies.A.packages]
+Contains = "Anything"
+Has = { No = "Schema" }

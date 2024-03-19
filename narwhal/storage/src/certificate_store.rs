@@ -14,10 +14,7 @@ use tap::Tap;
 use crate::StoreResult;
 use config::AuthorityIdentifier;
 use mysten_common::sync::notify_read::NotifyRead;
-use store::{
-    rocks::{DBMap, TypedStoreError::RocksDBError},
-    Map,
-};
+use store::{rocks::DBMap, Map, TypedStoreError::RocksDBError};
 use types::{Certificate, CertificateDigest, Round};
 
 #[derive(Clone)]
@@ -800,23 +797,28 @@ mod test {
     fn certificates(rounds: u64) -> Vec<Certificate> {
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let mut current_round: Vec<_> = Certificate::genesis(&committee)
-            .into_iter()
-            .map(|cert| cert.header().clone())
-            .collect();
+        let mut current_round: Vec<_> =
+            Certificate::genesis(&latest_protocol_version(), &committee)
+                .into_iter()
+                .map(|cert| cert.header().clone())
+                .collect();
 
         let mut result: Vec<Certificate> = Vec::new();
         for i in 0..rounds {
             let parents: BTreeSet<_> = current_round
                 .iter()
-                .map(|header| fixture.certificate(header).digest())
+                .map(|header| {
+                    fixture
+                        .certificate(&latest_protocol_version(), header)
+                        .digest()
+                })
                 .collect();
             (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
 
             result.extend(
                 current_round
                     .iter()
-                    .map(|h| fixture.certificate(h))
+                    .map(|h| fixture.certificate(&latest_protocol_version(), h))
                     .collect::<Vec<Certificate>>(),
             );
         }

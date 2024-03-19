@@ -1,0 +1,8 @@
+[package]
+name = "A"
+
+[addresses]
+A = "0x1"
+
+[dependencies]
+Foo = { local = "./foo" }

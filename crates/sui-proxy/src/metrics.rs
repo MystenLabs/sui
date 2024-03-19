@@ -43,6 +43,7 @@ pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
     registry_service
 }
 
+// DO NOT remove this handler, it is not compatible with the mysten_metrics::metric equivalent
 async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
     let mut metric_families = registry_service.gather_all();
     metric_families.extend(prometheus::gather());

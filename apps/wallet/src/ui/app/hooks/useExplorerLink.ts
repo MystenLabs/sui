@@ -3,15 +3,15 @@
 
 import { useMemo } from 'react';
 
-import { useActiveAddress } from './useActiveAddress';
-import useAppSelector from './useAppSelector';
 import {
-	getObjectUrl,
 	getAddressUrl,
+	getObjectUrl,
 	getTransactionUrl,
 	getValidatorUrl,
 } from '../components/explorer-link//Explorer';
 import { ExplorerLinkType } from '../components/explorer-link/ExplorerLinkType';
+import { useActiveAddress } from './useActiveAddress';
+import useAppSelector from './useAppSelector';
 
 export type ExplorerLinkConfig =
 	| {
@@ -38,8 +38,8 @@ function useAddress(linkConfig: ExplorerLinkConfig) {
 export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
 	const { type } = linkConfig;
 	const address = useAddress(linkConfig);
-	const [selectedApiEnv, customRPC] = useAppSelector(({ app }) => [app.apiEnv, app.customRPC]);
-
+	const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
+	const customRPC = useAppSelector(({ app }) => app.customRPC);
 	const objectID = type === ExplorerLinkType.object ? linkConfig.objectID : null;
 	const transactionID = type === ExplorerLinkType.transaction ? linkConfig.transactionID : null;
 	const validator = type === ExplorerLinkType.validator ? linkConfig.validator : null;

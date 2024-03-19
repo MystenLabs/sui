@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::committee::EpochId;
-use crate::crypto::{SignatureScheme, SuiSignature};
+use crate::crypto::{
+    CompressedSignature, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes,
+};
+use crate::error::SuiError;
 use crate::multisig_legacy::MultiSigLegacy;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiResult, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
+use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
+use fastcrypto::secp256k1::{Secp256k1PublicKey, Secp256k1Signature};
+use fastcrypto::secp256r1::{Secp256r1PublicKey, Secp256r1Signature};
 use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
@@ -18,13 +24,14 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
-
 #[derive(Default, Debug, Clone)]
 pub struct VerifyParams {
     // map from JwkId (iss, kid) => JWK
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
     pub supported_providers: Vec<OIDCProvider>,
     pub zk_login_env: ZkLoginEnv,
+    pub verify_legacy_zklogin_address: bool,
+    pub accept_zklogin_in_multisig: bool,
 }
 
 impl VerifyParams {
@@ -32,11 +39,15 @@ impl VerifyParams {
         oidc_provider_jwks: ImHashMap<JwkId, JWK>,
         supported_providers: Vec<OIDCProvider>,
         zk_login_env: ZkLoginEnv,
+        verify_legacy_zklogin_address: bool,
+        accept_zklogin_in_multisig: bool,
     ) -> Self {
         Self {
             oidc_provider_jwks,
             supported_providers,
             zk_login_env,
+            verify_legacy_zklogin_address,
+            accept_zklogin_in_multisig,
         }
     }
 }
@@ -70,6 +81,15 @@ pub trait AuthenticatorTrait {
         }
         self.verify_claims(value, author, aux_verify_data)
     }
+
+    fn verify_uncached_checks<T>(
+        &self,
+        value: &IntentMessage<T>,
+        author: SuiAddress,
+        aux_verify_data: &VerifyParams,
+    ) -> SuiResult
+    where
+        T: Serialize;
 }
 
 /// Due to the incompatibility of [enum Signature] (which dispatches a trait that
@@ -92,6 +112,88 @@ impl GenericSignature {
 
     pub fn is_upgraded_multisig(&self) -> bool {
         matches!(self, GenericSignature::MultiSig(_))
+    }
+
+    /// Parse [enum CompressedSignature] from trait SuiSignature `flag || sig || pk`.
+    /// This is useful for the MultiSig to combine partial signature into a MultiSig public key.
+    pub fn to_compressed(&self) -> Result<CompressedSignature, SuiError> {
+        match self {
+            GenericSignature::Signature(s) => {
+                let bytes = s.signature_bytes();
+                match s.scheme() {
+                    SignatureScheme::ED25519 => Ok(CompressedSignature::Ed25519(
+                        (&Ed25519Signature::from_bytes(bytes).map_err(|_| {
+                            SuiError::InvalidSignature {
+                                error: "Cannot parse ed25519 sig".to_string(),
+                            }
+                        })?)
+                            .into(),
+                    )),
+                    SignatureScheme::Secp256k1 => Ok(CompressedSignature::Secp256k1(
+                        (&Secp256k1Signature::from_bytes(bytes).map_err(|_| {
+                            SuiError::InvalidSignature {
+                                error: "Cannot parse secp256k1 sig".to_string(),
+                            }
+                        })?)
+                            .into(),
+                    )),
+                    SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
+                        (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
+                            SuiError::InvalidSignature {
+                                error: "Cannot parse secp256r1 sig".to_string(),
+                            }
+                        })?)
+                            .into(),
+                    )),
+                    _ => Err(SuiError::UnsupportedFeatureError {
+                        error: "Unsupported signature scheme".to_string(),
+                    }),
+                }
+            }
+            GenericSignature::ZkLoginAuthenticator(s) => Ok(CompressedSignature::ZkLogin(
+                ZkLoginAuthenticatorAsBytes(s.as_ref().to_vec()),
+            )),
+            _ => Err(SuiError::UnsupportedFeatureError {
+                error: "Unsupported signature scheme".to_string(),
+            }),
+        }
+    }
+
+    /// Parse [struct PublicKey] from trait SuiSignature `flag || sig || pk`.
+    /// This is useful for the MultiSig to construct the bitmap in [struct MultiPublicKey].
+    pub fn to_public_key(&self) -> Result<PublicKey, SuiError> {
+        match self {
+            GenericSignature::Signature(s) => {
+                let bytes = s.public_key_bytes();
+                match s.scheme() {
+                    SignatureScheme::ED25519 => Ok(PublicKey::Ed25519(
+                        (&Ed25519PublicKey::from_bytes(bytes).map_err(|_| {
+                            SuiError::KeyConversionError("Cannot parse ed25519 pk".to_string())
+                        })?)
+                            .into(),
+                    )),
+                    SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(
+                        (&Secp256k1PublicKey::from_bytes(bytes).map_err(|_| {
+                            SuiError::KeyConversionError("Cannot parse secp256k1 pk".to_string())
+                        })?)
+                            .into(),
+                    )),
+                    SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
+                        (&Secp256r1PublicKey::from_bytes(bytes).map_err(|_| {
+                            SuiError::KeyConversionError("Cannot parse secp256r1 pk".to_string())
+                        })?)
+                            .into(),
+                    )),
+                    _ => Err(SuiError::UnsupportedFeatureError {
+                        error: "Unsupported signature scheme in MultiSig".to_string(),
+                    }),
+                }
+            }
+            GenericSignature::ZkLoginAuthenticator(s) => s.get_pk(),
+            _ => Err(SuiError::UnsupportedFeatureError {
+                error: "Unsupported signature scheme".to_string(),
+            }),
+        }
     }
 }
 
@@ -177,6 +279,17 @@ impl<'de> ::serde::Deserialize<'de> for GenericSignature {
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {
     fn verify_user_authenticator_epoch(&self, _: EpochId) -> SuiResult {
+        Ok(())
+    }
+    fn verify_uncached_checks<T>(
+        &self,
+        _value: &IntentMessage<T>,
+        _author: SuiAddress,
+        _aux_verify_data: &VerifyParams,
+    ) -> SuiResult
+    where
+        T: Serialize,
+    {
         Ok(())
     }
 

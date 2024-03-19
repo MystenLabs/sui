@@ -20,7 +20,7 @@ export function ModuleFunctionsInteraction({
 	const {
 		data: normalizedModule,
 		error,
-		isLoading,
+		isPending,
 	} = useNormalizedMoveModule(packageId, moduleName);
 	const executableFunctions = useMemo(() => {
 		if (!normalizedModule) {
@@ -30,8 +30,8 @@ export function ModuleFunctionsInteraction({
 			.filter(([_, anFn]) => anFn.isEntry)
 			.map(([fnName, details]) => ({ name: fnName, details }));
 	}, [normalizedModule]);
-	const isEmpty = !isLoading && !executableFunctions.length && !error;
-	if (isEmpty || error || isLoading) {
+	const isEmpty = !isPending && !executableFunctions.length && !error;
+	if (isEmpty || error || isPending) {
 		return (
 			<div className="flex h-full items-center justify-center">
 				{error ? (

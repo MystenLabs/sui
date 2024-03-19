@@ -1,0 +1,74 @@
+processed 16 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 9-62:
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7), object(1,8), object(1,9), object(1,10)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 33082800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'view-object'. lines 64-64:
+1,0::{first_coin, second_coin}
+
+task 3 'view-object'. lines 66-66:
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<test::first_coin::FIRST_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,1)}}, balance: sui::balance::Balance<test::first_coin::FIRST_COIN> {value: 10000u64}}
+
+task 4 'view-object'. lines 68-68:
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<test::second_coin::SECOND_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,2)}}, balance: sui::balance::Balance<test::second_coin::SECOND_COIN> {value: 10000u64}}
+
+task 5 'view-object'. lines 70-70:
+Owner: Immutable
+Version: 2
+Contents: sui::coin::CoinMetadata<test::first_coin::FIRST_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,3)}}, decimals: 9u8, name: std::string::String {bytes: vector[82u8, 69u8, 71u8, 85u8, 76u8, 65u8, 84u8, 69u8, 68u8, 95u8, 67u8, 79u8, 73u8, 78u8]}, symbol: std::ascii::String {bytes: vector[82u8, 67u8]}, description: std::string::String {bytes: vector[65u8, 32u8, 110u8, 101u8, 119u8, 32u8, 114u8, 101u8, 103u8, 117u8, 108u8, 97u8, 116u8, 101u8, 100u8, 32u8, 99u8, 111u8, 105u8, 110u8]}, icon_url: std::option::Option<sui::url::Url> {vec: vector[]}}
+
+task 6 'view-object'. lines 72-72:
+Owner: Immutable
+Version: 2
+Contents: sui::coin::CoinMetadata<test::second_coin::SECOND_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,4)}}, decimals: 9u8, name: std::string::String {bytes: vector[82u8, 69u8, 71u8, 85u8, 76u8, 65u8, 84u8, 69u8, 68u8, 95u8, 67u8, 79u8, 73u8, 78u8]}, symbol: std::ascii::String {bytes: vector[82u8, 67u8]}, description: std::string::String {bytes: vector[65u8, 32u8, 110u8, 101u8, 119u8, 32u8, 114u8, 101u8, 103u8, 117u8, 108u8, 97u8, 116u8, 101u8, 100u8, 32u8, 99u8, 111u8, 105u8, 110u8]}, icon_url: std::option::Option<sui::url::Url> {vec: vector[]}}
+
+task 7 'view-object'. lines 74-74:
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::DenyCap<test::first_coin::FIRST_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,5)}}}
+
+task 8 'view-object'. lines 76-76:
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::DenyCap<test::second_coin::SECOND_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,6)}}}
+
+task 9 'view-object'. lines 78-78:
+Owner: Immutable
+Version: 2
+Contents: sui::coin::RegulatedCoinMetadata<test::first_coin::FIRST_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,7)}}, coin_metadata_object: sui::object::ID {bytes: fake(1,3)}, deny_cap_object: sui::object::ID {bytes: fake(1,5)}}
+
+task 10 'view-object'. lines 80-80:
+Owner: Immutable
+Version: 2
+Contents: sui::coin::RegulatedCoinMetadata<test::second_coin::SECOND_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,8)}}, coin_metadata_object: sui::object::ID {bytes: fake(1,4)}, deny_cap_object: sui::object::ID {bytes: fake(1,6)}}
+
+task 11 'view-object'. lines 82-82:
+Owner: Immutable
+Version: 2
+Contents: sui::coin::TreasuryCap<test::first_coin::FIRST_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,9)}}, total_supply: sui::balance::Supply<test::first_coin::FIRST_COIN> {value: 10000u64}}
+
+task 12 'view-object'. lines 84-86:
+Owner: Immutable
+Version: 2
+Contents: sui::coin::TreasuryCap<test::second_coin::SECOND_COIN> {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,10)}}, total_supply: sui::balance::Supply<test::second_coin::SECOND_COIN> {value: 10000u64}}
+
+task 13 'run'. lines 87-89:
+created: object(13,0), object(13,1)
+mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,5)
+gas summary: computation_cost: 1000000, storage_cost: 11293600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 14 'transfer-object'. lines 90-92:
+Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,0)::first_coin::FIRST_COIN" }
+
+task 15 'transfer-object'. lines 93-93:
+mutated: object(0,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168

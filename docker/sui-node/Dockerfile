@@ -2,7 +2,7 @@
 #
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
-FROM rust:1.70.0 AS builder
+FROM rust:1.75-bullseye AS builder
 ARG PROFILE=release
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -10,6 +10,7 @@ WORKDIR "$WORKDIR/sui"
 RUN apt-get update && apt-get install -y cmake clang
 
 COPY Cargo.toml Cargo.lock ./
+COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY narwhal narwhal
@@ -25,7 +26,7 @@ ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
 # Both bench and release profiles copy from release dir
-COPY --from=builder /sui/target/release/sui-node /opt/sui/bin
+COPY --from=builder /sui/target/release/sui-node /opt/sui/bin/sui-node
 # Support legacy usages of /usr/local/bin/sui-node
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 

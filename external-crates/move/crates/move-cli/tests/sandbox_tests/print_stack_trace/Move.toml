@@ -1,0 +1,8 @@
+[package]
+name = "print_stack_trace"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveNursery = { local = "../../../../move-stdlib/nursery" }

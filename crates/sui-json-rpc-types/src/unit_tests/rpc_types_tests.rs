@@ -4,10 +4,10 @@
 use std::str::FromStr;
 
 use anyhow::anyhow;
+use move_core_types::annotated_value::{MoveStruct, MoveValue};
 use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::value::{MoveStruct, MoveValue};
 use serde_json::json;
 
 use sui_types::base_types::{ObjectDigest, SequenceNumber};
@@ -43,7 +43,7 @@ fn test_move_value_to_string() {
         .map(|u8| MoveValue::U8(*u8))
         .collect::<Vec<_>>();
 
-    let move_value = MoveValue::Struct(MoveStruct::WithTypes {
+    let move_value = MoveValue::Struct(MoveStruct {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: ident_str!("string").to_owned(),
@@ -61,7 +61,7 @@ fn test_move_value_to_string() {
 #[test]
 fn test_option() {
     // bugfix for https://github.com/MystenLabs/sui/issues/4995
-    let option = MoveValue::Struct(MoveStruct::WithTypes {
+    let option = MoveValue::Struct(MoveStruct {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: Identifier::from_str("option").unwrap(),
@@ -89,7 +89,7 @@ fn test_move_value_to_url() {
         .map(|u8| MoveValue::U8(*u8))
         .collect::<Vec<_>>();
 
-    let string_move_value = MoveValue::Struct(MoveStruct::WithTypes {
+    let string_move_value = MoveValue::Struct(MoveStruct {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: ident_str!("string").to_owned(),
@@ -99,7 +99,7 @@ fn test_move_value_to_url() {
         fields: vec![(ident_str!("bytes").to_owned(), MoveValue::Vector(values))],
     });
 
-    let url_move_value = MoveValue::Struct(MoveStruct::WithTypes {
+    let url_move_value = MoveValue::Struct(MoveStruct {
         type_: StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: ident_str!("url").to_owned(),

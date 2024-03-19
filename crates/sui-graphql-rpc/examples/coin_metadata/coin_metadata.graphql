@@ -1,0 +1,11 @@
+query CoinMetadata {
+  coinMetadata(coinType: "0x2::sui::SUI") {
+    decimals
+    name
+    symbol
+    description
+    iconUrl
+    supply
+    hasPublicTransfer
+  }
+}

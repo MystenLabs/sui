@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toast } from 'react-hot-toast';
-import { PasswordModalDialog } from './PasswordInputDialog';
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { toast } from 'react-hot-toast';
+
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { PasswordModalDialog } from './PasswordInputDialog';
 
 type UnlockAccountModalProps = {
 	onClose: () => void;

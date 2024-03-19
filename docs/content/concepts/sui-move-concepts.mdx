@@ -1,0 +1,90 @@
+---
+title: Move Concepts
+description: Move is an open source language for writing safe packages to manipulate on-chain objects
+---
+
+{@include: ../snippets/move-summary.mdx}
+
+You can use Move to define, create, and manage programmable Sui objects representing user-level assets. Sui's object system is implemented by adding new functionality to Move while also imposing additional restrictions. See [Object Model](./object-model.mdx) for more details.
+
+## Move on Sui
+
+
+Move on Sui contains some important differences from Move on other blockchains. Sui takes advantage of Move's security and flexibility and enhances it with the features described in the following sections to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](/doc/sui.pdf) white paper.
+
+
+:::tip
+
+Where the Sui documentation refers to the Move language, the content is documenting the specific Move implementation on the Sui blockchain. If relevant, the documentation expressly refers to the original use case for the Move language as Move on Diem.
+
+:::
+
+In general, Move on Diem code written for other systems works in Sui with these exceptions:
+
+- [Global storage operators](https://move-language.github.io/move/global-storage-operators.html)
+- [Key abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md)
+
+## Key differences {#differences}
+
+Key differences with Move on Sui include:
+
+- Sui uses its own [object-centric global storage](#global-storage)
+- Addresses represent [Object IDs](#object-ids)
+- Sui objects have [globally unique IDs](#global-unique)
+- Sui has [module initializers](#module-initializers) (init)
+- Sui [entry points](#entry-points) take object references as input
+
+### Object-centric global storage {#global-storage}
+
+In Move on Diem, global storage is part of the programming model. Resources and modules are held in global storage, owned by an account which has an address. Transactions are free to access resources from any account in global storage when they run, using special operations such as `move_to` and `move_from`.
+
+This approach introduces a scaling issue, as it is not possible to statically determine which transactions are contending over the same resource and which are not.  This is similar to the scaling issues faced by other blockchains where smart contracts typically store account information in large, internal mappings, which limit throughput.
+
+Move on Sui addresses the scaling issue by not having global storage, or its related operations. When objects (in contrast to resources) and packages (sets of modules) are stored on Sui, they are each given unique identifiers.  All a transaction's inputs are explicitly specified up-front using these unique identifiers, to allow the chain to schedule transactions with non-overlapping inputs in parallel.
+
+### Addresses represent Object IDs {#object-ids}
+
+In Move on Diem, there is a 16-byte `address` type used to represent account addresses in global storage. A 16 byte address is sufficient for the Move on Diem security model.
+
+Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transaction context, and each object stores its `address` wrapped in its `id: UID` field. (Refer to [object.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) in the Sui framework for details).
+
+### Object with key ability, globally unique IDs {#global-unique}
+
+In Move on Diem, the `key` ability indicates that the type is a resource, meaning it (along with an account address) can be used as a key in global storage.
+
+On Sui, the `key` ability indicates that a struct is an object type and comes with an additional requirement that the first field of the struct has signature `id: UID`, to contain the object's unique address on-chain. Sui's bytecode verifier ensures that new objects are always assigned fresh `UID`s (identifiers are never re-used).
+
+### Module initializers {#module-initializers}
+
+As described in [Object-centric global storage](#global-storage), you publish Move modules into Sui storage. The Sui runtime executes a special [initializer function](./sui-move-concepts/init.mdx) you optionally define in a module only once at the time of module publication to pre-initialize module-specific data (for example, creating singleton objects).
+
+### Entry points take object references as input {#entry-points}
+
+You can call public functions from Sui transactions (called programmable transaction blocks). These functions can take objects by value, by immutable reference, or by mutable reference. If taken by value, you can destroy the object, wrap it (in another object), or transfer it (to a Sui ID specified by an address). If taken by mutable reference, the modified version of the object saves to storage without any change in ownership. In any case, the Sui network authenticates the object and declares it's usage as a part of the transaction.
+
+In addition to calling public functions, you can call a function that is marked [entry](./sui-move-concepts/entry-functions.mdx) even if it is private as long as other non-`entry` functions have not used its inputs.
+
+
+## Explore concepts
+
+Some of the features of Move are defined in this section using commented code examples.
+
+### Init
+
+The `init` function is a special function that executes only once - when you publish the associated module. See [Init](./sui-move-concepts/init.mdx) for details.
+
+### Entry functions
+
+The `entry` modifier for functions enables safe and direct invocation of module functions, much like scripts. See [Entry](./sui-move-concepts/entry-functions.mdx) for details.
+
+### Strings
+
+Move does not have a native type for strings, but it has a useful wrapper. See [Strings](./sui-move-concepts/strings.mdx) for examples.
+
+### One-time witness
+
+A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness.mdx) for an example.
+
+### Patterns
+
+Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. See the [Patterns](./sui-move-concepts/patterns.mdx) section for a list of documented coding patterns.

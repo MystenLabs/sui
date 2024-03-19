@@ -1,0 +1,23 @@
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 8-26:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5031200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 28-28:
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 30-30:
+Owner: Shared
+Version: 3
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 4 'programmable'. lines 32-33:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None

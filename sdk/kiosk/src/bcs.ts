@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
+
 import {
 	KIOSK_PURCHASE_CAP,
 	KIOSK_TYPE,
 	TRANSFER_POLICY_CREATED_EVENT,
 	TRANSFER_POLICY_TYPE,
-} from './types';
+} from './types/index.js';
 
 // Register the `Kiosk` struct for faster queries.
 bcs.registerStructType(KIOSK_TYPE, {

@@ -1,0 +1,14 @@
+//# publish
+module 0x1.M {
+    struct Cup<T> { flag: u64 }
+}
+
+//# run --type-args 0x1::M::Cup<0x1::M::Cup<bool>>
+module 0x42.m {
+
+entry foo<T>() {
+label b0:
+    return;
+}
+
+}

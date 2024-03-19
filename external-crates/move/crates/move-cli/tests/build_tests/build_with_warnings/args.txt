@@ -1,0 +1,5 @@
+build
+disassemble --package Test --name m
+build --silence-warnings
+build --silence-warnings --warnings-are-errors
+build --warnings-are-errors

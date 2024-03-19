@@ -1,26 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	useCoinMetadata,
-	useFormatCoin,
-	CoinFormat,
-	isSuiNSName,
-	useSuiNSEnabled,
-} from '@mysten/core';
-import { useSuiClient } from '@mysten/dapp-kit';
-import { ArrowRight16 } from '@mysten/icons';
-import { type CoinStruct } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import { useQuery } from '@tanstack/react-query';
-import { Field, Form, useFormikContext, Formik } from 'formik';
-import { useMemo, useEffect } from 'react';
-
-import { createTokenTransferTransaction } from './utils/transaction';
-import { createValidationSchemaStepOne } from './validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
-import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
@@ -29,6 +12,23 @@ import { parseAmount } from '_helpers';
 import { useGetAllCoins } from '_hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
+import {
+	CoinFormat,
+	isSuiNSName,
+	useCoinMetadata,
+	useFormatCoin,
+	useSuiNSEnabled,
+} from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { ArrowRight16 } from '@mysten/icons';
+import { type CoinStruct } from '@mysten/sui.js/client';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { useQuery } from '@tanstack/react-query';
+import { Field, Form, Formik, useFormikContext } from 'formik';
+import { useEffect, useMemo } from 'react';
+
+import { createTokenTransferTransaction } from './utils/transaction';
+import { createValidationSchemaStepOne } from './validation';
 
 const initialValues = {
 	to: '',
@@ -150,9 +150,9 @@ export function SendTokenForm({
 	const client = useSuiClient();
 	const activeAddress = useActiveAddress();
 	// Get all coins of the type
-	const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(coinType, activeAddress!);
+	const { data: coinsData, isPending: coinsIsPending } = useGetAllCoins(coinType, activeAddress!);
 
-	const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetAllCoins(
+	const { data: suiCoinsData, isPending: suiCoinsIsPending } = useGetAllCoins(
 		SUI_TYPE_ARG,
 		activeAddress!,
 	);
@@ -180,7 +180,7 @@ export function SendTokenForm({
 	return (
 		<Loading
 			loading={
-				queryResult.isLoading || coinMetadata.isLoading || suiCoinsIsLoading || coinsIsLoading
+				queryResult.isPending || coinMetadata.isPending || suiCoinsIsPending || coinsIsPending
 			}
 		>
 			<Formik
@@ -266,7 +266,7 @@ export function SendTokenForm({
 											}}
 											actionDisabled={
 												parseAmount(values?.amount, coinDecimals) === coinBalance ||
-												queryResult.isLoading ||
+												queryResult.isPending ||
 												!coinBalance
 											}
 										/>

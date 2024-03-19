@@ -1,0 +1,5 @@
+[package]
+name = "NestedDeps"
+
+[dependencies]
+Nested = { local = "./deps_only/nested" }

@@ -1,0 +1,8 @@
+[package]
+name = "MoveNursery"
+
+[dependencies]
+MoveStdlib = { local = ".." }
+
+[dev-addresses]
+std = "0x1"

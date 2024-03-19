@@ -1,0 +1,7 @@
+[package]
+name = "Defn"
+edition = "2024.alpha"
+
+[addresses]
+A = "0x2"
+B = "0x3"

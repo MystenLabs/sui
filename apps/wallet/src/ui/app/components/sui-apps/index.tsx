@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import { useMemo } from 'react';
-import { useParams } from 'react-router-dom';
-
-import { AppsPageBanner } from './Banner';
-import { SuiApp, type DAppEntry } from './SuiApp';
-import { SuiAppEmpty } from './SuiAppEmpty';
-import { permissionsSelectors } from '../../redux/slices/permissions';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
+import { useFeature } from '@growthbook/growthbook-react';
+import { useMemo } from 'react';
+import { useParams } from 'react-router-dom';
+
+import { permissionsSelectors } from '../../redux/slices/permissions';
+import { AppsPageBanner } from './Banner';
+import { SuiApp, type DAppEntry } from './SuiApp';
+import { SuiAppEmpty } from './SuiAppEmpty';
 
 function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
@@ -60,7 +60,7 @@ function AppsPlayGround() {
 			) : null}
 
 			{filteredEcosystemApps?.length ? (
-				<div className="flex flex-col divide-y divide-gray-45 divide-solid divide-x-0 mt-2 mb-28">
+				<div className="flex flex-col divide-y divide-gray-45 divide-solid divide-x-0 mt-2">
 					{filteredEcosystemApps.map((app) => (
 						<SuiApp
 							key={app.link}

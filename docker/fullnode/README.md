@@ -29,7 +29,7 @@ The genesis blob contains the information that defined the Sui network configura
 
 ## Start your Sui Full node
 
-Run the following command to start the Sui Full in Docker:
+Run the following command to start the Sui fullnode in Docker:
 
 ```shell
 docker compose up

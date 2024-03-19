@@ -11,7 +11,7 @@ module test::m1 {
     use sui::tx_context::TxContext;
 
     // not a native coin, but same type structure and BCS layout
-    struct Coin<phantom T> has key, store {
+    public struct Coin<phantom T> has key, store {
         id: UID,
         value: u64,
     }

@@ -47,8 +47,6 @@ module sui::kiosk_extension {
 
     /// Trying to add an extension while not being the owner of the Kiosk.
     const ENotOwner: u64 = 0;
-    /// Extension is trying to access a permissioned action while being disabled.
-    const EExtensionDisabled: u64 = 1;
     /// Extension is trying to access a permissioned action while not having
     /// the required permission.
     const EExtensionNotAllowed: u64 = 2;

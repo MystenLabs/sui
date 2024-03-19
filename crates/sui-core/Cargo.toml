@@ -13,26 +13,33 @@ async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+consensus-core.workspace = true
+consensus-config.workspace = true
 dashmap.workspace = true
+diffy = { version = "0.3", default-features = false }
 either.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
 futures.workspace = true
 im.workspace = true
+indexmap.workspace = true
 itertools.workspace = true
 lru.workspace = true
+mockall.workspace = true
 num_cpus.workspace = true
 object_store.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
+roaring.workspace = true
 rocksdb.workspace = true
 scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 signature.workspace = true
+static_assertions.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
@@ -40,8 +47,11 @@ tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-retry.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
+twox-hash.workspace = true
 
+anemo.workspace = true
 fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -60,11 +70,13 @@ narwhal-crypto.workspace = true
 narwhal-executor.workspace = true
 narwhal-network.workspace = true
 narwhal-node.workspace = true
+narwhal-test-utils.workspace = true
 narwhal-types.workspace = true
 narwhal-worker.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
 sui-config.workspace = true
+sui-authority-aggregation.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
@@ -78,7 +90,7 @@ sui-transaction-checks.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize.workspace = true
 
 [dev-dependencies]
 clap.workspace = true
@@ -89,10 +101,11 @@ more-asserts.workspace = true
 pretty_assertions.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
+num-bigint = "0.4.4"
 
+test-cluster.workspace = true
 move-symbol-pool.workspace = true
 
-narwhal-test-utils.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 
@@ -102,6 +115,15 @@ test-fuzz.workspace = true
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
+
+# moka uses `quanta` by default for timing, which is not compatible with the simulator
+[target.'cfg(msim)'.dependencies]
+moka = { workspace = true, default-features = false, features = [
+    "sync",
+    "atomic64",
+] }
+[target.'cfg(not(msim))'.dependencies]
+moka = { workspace = true, features = ["sync"] }
 
 [[example]]
 name = "generate-format"

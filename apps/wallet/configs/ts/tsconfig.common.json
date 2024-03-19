@@ -43,7 +43,6 @@
 			"_values/*": ["./src/ui/styles/values/*"],
 			"_utils": ["./src/ui/styles/utils"],
 			"_utils/*": ["./src/ui/styles/utils/*"],
-			"@mysten/sui.js/transactions": ["../../sdk/typescript/src/builder/export.ts"],
 			"@mysten/sui.js/*": ["../../sdk/typescript/src/*"],
 			"@mysten/sui.js": ["../../sdk/typescript/src/"],
 			"@mysten/kiosk": ["../../sdk/kiosk/src/index.ts"],
@@ -51,7 +50,8 @@
 			"@mysten/dapp-kit": ["../../sdk/dapp-kit/src/"],
 			"@mysten/ledgerjs-hw-app-sui": ["../../sdk/ledgerjs-hw-app-sui/src/Sui.ts"],
 			"@mysten/wallet-standard": ["../../sdk/wallet-standard/src/"],
-			"@mysten/zklogin": ["../../sdk/zklogin/src/"]
+			"@mysten/zklogin": ["../../sdk/zklogin/src/"],
+			"@mysten/deepbook": ["../../sdk/deepbook/src/"]
 		}
 	},
 	"include": ["../../src", "../../tests"],

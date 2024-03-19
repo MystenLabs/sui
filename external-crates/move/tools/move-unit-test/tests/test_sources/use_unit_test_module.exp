@@ -1,5 +1,0 @@
-Running Move unit tests
-[ PASS    ] 0x1::M::poison_call
-0x1::M::poison_call
-Output: Ok(ChangeSet { accounts: {} })
-Test result: OK. Total tests: 1; passed: 1; failed: 0

@@ -1,0 +1,31 @@
+---
+title: Limits
+---
+
+The GraphQL service for Sui RPC is rate-limited on all available instances to keep network throughput optimized and to protect against excessive or abusive calls to the service.
+
+## Rate limits
+Queries are rate-limited at the number of attempts per minute to ensure high availability of the service to all users.
+
+## Query limits
+
+In addition to rate limits, queries are also validated against a number of rules on their complexity, such as the number of nodes, the depth of the query, or their payload size. These limits can be retrieved by querying the `serviceConfig` field. An example of how to query for some of the available limits follows:
+
+```graphql
+{
+  serviceConfig {
+    maxQueryDepth
+    maxQueryNodes
+    maxOutputNodes
+    maxDbQueryCost
+    defaultPageSize
+    maxPageSize
+    requestTimeoutMs
+    maxQueryPayloadSize
+    maxTypeArgumentDepth
+    maxTypeArgumentWidth
+    maxTypeNodes
+    maxMoveValueDepth
+  }
+}
+```

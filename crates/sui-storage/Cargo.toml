@@ -12,6 +12,7 @@ async-trait.workspace = true
 futures.workspace = true
 num_enum.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
 rocksdb.workspace = true
 tracing.workspace = true
@@ -19,6 +20,9 @@ byteorder.workspace = true
 anyhow.workspace = true
 tempfile.workspace = true
 tap.workspace = true
+reqwest.workspace = true
+percent-encoding = "2.2.0"
+chrono.workspace = true
 object_store.workspace = true
 backoff.workspace = true
 bytes.workspace = true
@@ -34,15 +38,16 @@ hyper.workspace = true
 hyper-rustls.workspace = true
 base64-url.workspace = true
 telemetry-subscribers.workspace = true
+indicatif.workspace = true
 
 sui-types.workspace = true
 mysten-metrics.workspace = true
 move-core-types.workspace = true
 sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
+sui-config.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre.workspace = true
 lru.workspace = true
 

@@ -1,0 +1,35 @@
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-30:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6634800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 32-32:
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 34-34:
+Owner: Object ID: ( fake(2,2) )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,1)}}
+
+task 4 'view-object'. lines 36-36:
+Owner: Object ID: ( fake(2,0) )
+Version: 2
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+
+task 5 'view-object'. lines 38-40:
+Owner: Account Address ( A )
+Version: 2
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
+
+task 6 'run'. lines 41-43:
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(2,1), parent_id: object(2,0) }
+
+task 7 'run'. lines 44-44:
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(2,0), parent_id: object(2,2) }

@@ -96,6 +96,10 @@ module sui::transfer_policy {
     /// making the discoverability and tracking the supported types easier.
     struct TransferPolicyCreated<phantom T> has copy, drop { id: ID }
 
+    /// Event that is emitted when a publisher destroys a `TransferPolicyCap`.
+    /// Allows for tracking supported policies.
+    struct TransferPolicyDestroyed<phantom T> has copy, drop { id: ID }
+
     /// Key to store "Rule" configuration for a specific `TransferPolicy`.
     struct RuleKey<phantom T: drop> has copy, store, drop {}
 
@@ -128,7 +132,7 @@ module sui::transfer_policy {
         )
     }
 
-    #[lint_allow(self_transfer, share_owned)]
+    #[allow(lint(self_transfer, share_owned))]
     /// Initialize the Tranfer Policy in the default scenario: Create and share
     /// the `TransferPolicy`, transfer `TransferPolicyCap` to the transaction
     /// sender.
@@ -166,11 +170,12 @@ module sui::transfer_policy {
     ): Coin<SUI> {
         assert!(object::id(&self) == cap.policy_id, ENotOwner);
 
-        let TransferPolicyCap { id: cap_id, policy_id: _ } = cap;
+        let TransferPolicyCap { id: cap_id, policy_id } = cap;
         let TransferPolicy { id, rules: _, balance } = self;
 
         object::delete(id);
         object::delete(cap_id);
+        event::emit(TransferPolicyDestroyed<T> { id: policy_id });
         coin::from_balance(balance, ctx)
     }
 
@@ -284,4 +289,18 @@ module sui::transfer_policy {
 
     /// Get the `from` field of the `TransferRequest`.
     public fun from<T>(self: &TransferRequest<T>): ID { self.from }
+
+    // === Tests ===
+
+    #[test_only]
+    /// Create a new TransferPolicy for testing purposes.
+    public fun new_for_testing<T>(ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {
+        let id = object::new(ctx);
+        let policy_id = object::uid_to_inner(&id);
+
+        (
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
+            TransferPolicyCap { id: object::new(ctx), policy_id }
+        )
+    }
 }

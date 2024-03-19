@@ -9,11 +9,13 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
+use move_binary_format::binary_config::BinaryConfig;
+use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 
-use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
+use sui_json::{is_receiving_argument, resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectResponse, SuiRawData,
     SuiTypeTag,
@@ -257,6 +259,7 @@ impl TransactionBuilder {
         call_args: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<TransactionData> {
         let mut builder = ProgrammableTransactionBuilder::new();
         self.single_move_call(
@@ -277,7 +280,11 @@ impl TransactionBuilder {
                 _ => None,
             })
             .collect();
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = if let Some(gas_price) = gas_price {
+            gas_price
+        } else {
+            self.0.get_reference_gas_price().await?
+        };
         let gas = self
             .select_gas(signer, gas, gas_budget, input_objects, gas_price)
             .await?;
@@ -325,6 +332,8 @@ impl TransactionBuilder {
         id: ObjectID,
         objects: &mut BTreeMap<ObjectID, Object>,
         is_mutable_ref: bool,
+        view: &BinaryIndexedView<'_>,
+        arg_type: &SignatureToken,
     ) -> Result<ObjectArg, anyhow::Error> {
         let response = self
             .0
@@ -335,6 +344,9 @@ impl TransactionBuilder {
         let obj_ref = obj.compute_object_reference();
         let owner = obj.owner;
         objects.insert(id, obj);
+        if is_receiving_argument(view, arg_type) {
+            return Ok(ObjectArg::Receiving(obj_ref));
+        }
         Ok(match owner {
             Owner::Shared {
                 initial_shared_version,
@@ -364,7 +376,10 @@ impl TransactionBuilder {
             .await?
             .into_object()?;
         let Some(SuiRawData::Package(package)) = object.bcs else {
-            bail!("Bcs field in object [{}] is missing or not a package.", package_id);
+            bail!(
+                "Bcs field in object [{}] is missing or not a package.",
+                package_id
+            );
         };
         let package: MovePackage = MovePackage::new(
             package.id,
@@ -385,6 +400,8 @@ impl TransactionBuilder {
 
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
+        let module = package.deserialize_module(module, &BinaryConfig::standard())?;
+        let view = BinaryIndexedView::Module(&module);
         for (arg, expected_type) in json_args_and_tokens {
             args.push(match arg {
                 ResolvedCallArg::Pure(p) => builder.input(CallArg::Pure(p)),
@@ -393,7 +410,11 @@ impl TransactionBuilder {
                     self.get_object_arg(
                         id,
                         &mut objects,
-                        matches!(expected_type, SignatureToken::MutableReference(_)),
+                        // Is mutable if passed by mutable reference or by value
+                        matches!(expected_type, SignatureToken::MutableReference(_))
+                            || !expected_type.is_reference(),
+                        &view,
+                        &expected_type,
                     )
                     .await?,
                 )),
@@ -402,8 +423,14 @@ impl TransactionBuilder {
                     let mut object_ids = vec![];
                     for id in v {
                         object_ids.push(
-                            self.get_object_arg(id, &mut objects, /* is_mutable_ref */ false)
-                                .await?,
+                            self.get_object_arg(
+                                id,
+                                &mut objects,
+                                /* is_mutable_ref */ false,
+                                &view,
+                                &expected_type,
+                            )
+                            .await?,
                         )
                     }
                     builder.make_obj_vec(object_ids)
@@ -672,8 +699,8 @@ impl TransactionBuilder {
             .ok_or_else(|| anyhow!("Coins input should contain at lease one coin object."))?;
         let (oref, coin_type) = self.get_object_ref_and_type(coin).await?;
 
-        let ObjectType::Struct(type_) = &coin_type else{
-            return Err(anyhow!("Provided object [{coin}] is not a move object."))
+        let ObjectType::Struct(type_) = &coin_type else {
+            return Err(anyhow!("Provided object [{coin}] is not a move object."));
         };
         ensure!(
             type_.is_coin(),
@@ -749,7 +776,7 @@ impl TransactionBuilder {
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
-    async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         self.get_object_ref_and_type(object_id)
             .await
             .map(|(oref, _)| oref)

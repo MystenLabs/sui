@@ -1,15 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::sql_types::BigInt;
-use diesel::sql_types::Double;
-use diesel::sql_types::Text;
-use diesel::QueryableByName;
+use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Double, Float8};
 
 use sui_json_rpc_types::NetworkMetrics;
 
+use crate::schema::epoch_peak_tps;
+
+#[derive(Clone, Debug, Queryable, Insertable)]
+#[diesel(table_name = epoch_peak_tps)]
+pub struct StoredEpochPeakTps {
+    pub epoch: i64,
+    pub peak_tps: f64,
+    pub peak_tps_30d: f64,
+}
+
+impl Default for StoredEpochPeakTps {
+    fn default() -> Self {
+        Self {
+            epoch: -1,
+            peak_tps: 0.0,
+            peak_tps_30d: 0.0,
+        }
+    }
+}
+
 #[derive(QueryableByName, Debug, Clone, Default)]
-pub struct DBNetworkMetrics {
+pub struct StoredNetworkMetrics {
     #[diesel(sql_type = Double)]
     pub current_tps: f64,
     #[diesel(sql_type = Double)]
@@ -26,22 +44,8 @@ pub struct DBNetworkMetrics {
     pub current_checkpoint: i64,
 }
 
-#[derive(QueryableByName, Debug, Clone, Default)]
-pub struct DBMoveCallMetrics {
-    #[diesel(sql_type = BigInt)]
-    pub day: i64,
-    #[diesel(sql_type = Text)]
-    pub move_package: String,
-    #[diesel(sql_type = Text)]
-    pub move_module: String,
-    #[diesel(sql_type = Text)]
-    pub move_function: String,
-    #[diesel(sql_type = BigInt)]
-    pub count: i64,
-}
-
-impl From<DBNetworkMetrics> for NetworkMetrics {
-    fn from(db: DBNetworkMetrics) -> Self {
+impl From<StoredNetworkMetrics> for NetworkMetrics {
+    fn from(db: StoredNetworkMetrics) -> Self {
         Self {
             current_tps: db.current_tps,
             tps_30_days: db.tps_30_days,
@@ -52,4 +56,10 @@ impl From<DBNetworkMetrics> for NetworkMetrics {
             current_checkpoint: db.current_checkpoint as u64,
         }
     }
+}
+
+#[derive(Debug, QueryableByName)]
+pub struct Tps {
+    #[diesel(sql_type = Float8)]
+    pub peak_tps: f64,
 }

@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli, type AddedAccountsProperties } from '_src/shared/analytics/ampli';
 import { useMutation } from '@tanstack/react-query';
-import { useBackgroundClient } from './useBackgroundClient';
+
 import {
-	type AccountsFormValues,
 	useAccountsFormContext,
+	type AccountsFormValues,
 } from '../components/accounts/AccountsFormContext';
-import { type AddedAccountsProperties, ampli } from '_src/shared/analytics/ampli';
+import { useBackgroundClient } from './useBackgroundClient';
 
 export type CreateType = NonNullable<AccountsFormValues>['type'];
 
@@ -22,14 +23,14 @@ function validateAccountFormValues<T extends CreateType>(
 	if (values.type !== createType) {
 		throw new Error('Account data values type mismatch');
 	}
-	if (values.type !== 'zk' && !password) {
+	if (values.type !== 'zkLogin' && values.type !== 'mnemonic-derived' && !password) {
 		throw new Error('Missing password');
 	}
 	return true;
 }
 
 const createTypeToAmpliAccount: Record<CreateType, AddedAccountsProperties['accountType']> = {
-	zk: 'Zklogin',
+	zkLogin: 'Zklogin',
 	'new-mnemonic': 'Derived',
 	'import-mnemonic': 'Derived',
 	'mnemonic-derived': 'Derived',
@@ -46,7 +47,7 @@ export function useCreateAccountsMutation() {
 		mutationFn: async ({ type, password }: { type: CreateType; password?: string }) => {
 			let createdAccounts;
 			const accountsFormValues = accountsFormValuesRef.current;
-			if (type === 'zk' && validateAccountFormValues(type, accountsFormValues)) {
+			if (type === 'zkLogin' && validateAccountFormValues(type, accountsFormValues)) {
 				createdAccounts = await backgroundClient.createAccounts(accountsFormValues);
 			} else if (
 				(type === 'new-mnemonic' || type === 'import-mnemonic') &&
@@ -69,10 +70,12 @@ export function useCreateAccountsMutation() {
 				type === 'mnemonic-derived' &&
 				validateAccountFormValues(type, accountsFormValues, password)
 			) {
-				await backgroundClient.unlockAccountSourceOrAccount({
-					password,
-					id: accountsFormValues.sourceID,
-				});
+				if (password) {
+					await backgroundClient.unlockAccountSourceOrAccount({
+						password,
+						id: accountsFormValues.sourceID,
+					});
+				}
 				createdAccounts = await backgroundClient.createAccounts({
 					type: 'mnemonic-derived',
 					sourceID: accountsFormValues.sourceID,

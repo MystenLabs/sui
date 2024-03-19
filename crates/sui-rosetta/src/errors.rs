@@ -21,7 +21,7 @@ use strum::EnumProperty;
 use strum_macros::Display;
 use strum_macros::EnumDiscriminants;
 use thiserror::Error;
-use typed_store::rocks::TypedStoreError;
+use typed_store::TypedStoreError;
 
 /// Sui-Rosetta specific error types.
 /// This contains all the errors returns by the sui-rosetta server.

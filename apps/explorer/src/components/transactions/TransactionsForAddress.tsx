@@ -15,10 +15,53 @@ interface Props {
 	type: 'object' | 'address';
 }
 
+export function TransactionsForAddressTable({
+	data,
+	isPending,
+	isError,
+	address,
+}: {
+	data: SuiTransactionBlockResponse[];
+	isPending: boolean;
+	isError: boolean;
+	address: string;
+}) {
+	if (isPending) {
+		return (
+			<div>
+				<LoadingIndicator />
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<Banner variant="error" fullWidth>
+				Transactions could not be extracted on the following specified address: {address}
+			</Banner>
+		);
+	}
+
+	const tableData = genTableDataFromTxData(data);
+	const hasTxns = data?.length > 0;
+
+	if (!hasTxns) {
+		return (
+			<div className="flex h-20 items-center justify-center md:h-full">
+				<Text variant="body/medium" color="steel-dark">
+					No transactions found
+				</Text>
+			</div>
+		);
+	}
+
+	return <TableCard data={tableData.data} columns={tableData.columns} />;
+}
+
 export function TransactionsForAddress({ address, type }: Props) {
 	const client = useSuiClient();
 
-	const { data, isLoading, isError } = useQuery({
+	const { data, isPending, isError } = useQuery({
 		queryKey: ['transactions-for-address', address, type],
 		queryFn: async () => {
 			const filters =
@@ -55,34 +98,12 @@ export function TransactionsForAddress({ address, type }: Props) {
 		},
 	});
 
-	if (isLoading) {
-		return (
-			<div>
-				<LoadingIndicator />
-			</div>
-		);
-	}
-
-	if (isError) {
-		return (
-			<Banner variant="error" fullWidth>
-				Transactions could not be extracted on the following specified address: {address}
-			</Banner>
-		);
-	}
-
-	const tableData = genTableDataFromTxData(data);
-	const hasTxns = data?.length > 0;
-
-	if (!hasTxns) {
-		return (
-			<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-				<Text variant="body/medium" color="steel-dark">
-					No transactions found
-				</Text>
-			</div>
-		);
-	}
-
-	return <TableCard noBorderBottom data={tableData.data} columns={tableData.columns} />;
+	return (
+		<TransactionsForAddressTable
+			data={data ?? []}
+			isPending={isPending}
+			isError={isError}
+			address={address}
+		/>
+	);
 }

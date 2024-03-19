@@ -1,0 +1,28 @@
+[package]
+name = "sui-json-rpc-api"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+jsonrpsee.workspace = true
+once_cell.workspace = true
+prometheus.workspace = true
+tap.workspace = true
+tracing.workspace = true
+fastcrypto.workspace = true
+mysten-metrics.workspace = true
+sui-json.workspace = true
+sui-json-rpc-types.workspace = true
+sui-open-rpc.workspace = true
+sui-open-rpc-macros.workspace = true
+sui-types.workspace = true
+
+# NOTE: It's important to keep the above dependency list short.
+# This and the sui-sdk crate are widely used to develop on Sui and it's valuable
+# to not have to pull in the entire sui repo for it.
+
+[dev-dependencies]

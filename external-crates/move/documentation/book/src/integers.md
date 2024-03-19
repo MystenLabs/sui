@@ -1,6 +1,7 @@
 # Integers
 
-Move supports six unsigned integer types: `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`. Values of these types range from 0 to a maximum that depends on the size of the type.
+Move supports six unsigned integer types: `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`. Values of
+these types range from 0 to a maximum that depends on the size of the type.
 
 | Type                             | Value Range              |
 | -------------------------------- | ------------------------ |
@@ -13,9 +14,13 @@ Move supports six unsigned integer types: `u8`, `u16`, `u32`, `u64`, `u128`, and
 
 ## Literals
 
-Literal values for these types are specified either as a sequence of digits (e.g.,`112`) or as hex literals, e.g., `0xFF`. The type of the literal can optionally be added as a suffix, e.g., `112u8`. If the type is not specified, the compiler will try to infer the type from the context where the literal is used. If the type cannot be inferred, it is assumed to be `u64`.
+Literal values for these types are specified either as a sequence of digits (e.g.,`112`) or as hex
+literals, e.g., `0xFF`. The type of the literal can optionally be added as a suffix, e.g., `112u8`.
+If the type is not specified, the compiler will try to infer the type from the context where the
+literal is used. If the type cannot be inferred, it is assumed to be `u64`.
 
-Number literals can be separated by underscores for grouping and readability. (e.g.,`1_234_5678`, `1_000u128`, `0xAB_CD_12_35`).
+Number literals can be separated by underscores for grouping and readability. (e.g.,`1_234_5678`,
+`1_000u128`, `0xAB_CD_12_35`).
 
 If a literal is too large for its specified (or inferred) size range, an error is reported.
 
@@ -66,78 +71,94 @@ let hex_u256: u256 = 0x1123_456A_BCDE_F;
 
 ### Arithmetic
 
-Each of these types supports the same set of checked arithmetic operations. For all of these operations, both arguments (the left and right side operands) *must* be of the same type. If you need to operate over values of different types, you will need to first perform a [cast](#casting). Similarly, if you expect the result of the operation to be too large for the integer type, perform a [cast](#casting) to a larger size before performing the operation.
+Each of these types supports the same set of checked arithmetic operations. For all of these
+operations, both arguments (the left and right side operands) _must_ be of the same type. If you
+need to operate over values of different types, you will need to first perform a [cast](#casting).
+Similarly, if you expect the result of the operation to be too large for the integer type, perform a
+[cast](#casting) to a larger size before performing the operation.
 
-All arithmetic operations abort instead of behaving in a way that mathematical integers would not (e.g., overflow, underflow, divide-by-zero).
+All arithmetic operations abort instead of behaving in a way that mathematical integers would not
+(e.g., overflow, underflow, divide-by-zero).
 
-| Syntax | Operation | Aborts If
-|--------|-----------|-------------------------------------
-| `+` |addition | Result is too large for the integer type
-| `-` | subtraction | Result is less than zero
-| `*` | multiplication | Result is too large for the integer type
-| `%` | modular division | The divisor is `0`
-| `/` | truncating division | The divisor is `0`
+| Syntax | Operation           | Aborts If                                |
+| ------ | ------------------- | ---------------------------------------- |
+| `+`    | addition            | Result is too large for the integer type |
+| `-`    | subtraction         | Result is less than zero                 |
+| `*`    | multiplication      | Result is too large for the integer type |
+| `%`    | modular division    | The divisor is `0`                       |
+| `/`    | truncating division | The divisor is `0`                       |
 
 ### Bitwise
 
-The integer types support the following bitwise operations that treat each number as a series of individual bits, either 0 or 1, instead of as numerical integer values.
+The integer types support the following bitwise operations that treat each number as a series of
+individual bits, either 0 or 1, instead of as numerical integer values.
 
 Bitwise operations do not abort.
 
 | Syntax              | Operation   | Description                                           |
-|---------------------|-------------|-------------------------------------------------------|
+| ------------------- | ----------- | ----------------------------------------------------- |
 | `&`                 | bitwise and | Performs a boolean and for each bit pairwise          |
 | <code>&#124;</code> | bitwise or  | Performs a boolean or for each bit pairwise           |
 | `^`                 | bitwise xor | Performs a boolean exclusive or for each bit pairwise |
 
 ### Bit Shifts
 
-Similar to the bitwise operations, each integer type supports bit shifts. But unlike the other operations, the righthand side operand (how many bits to shift by) must *always* be a `u8` and need not match the left side operand (the number you are shifting).
+Similar to the bitwise operations, each integer type supports bit shifts. But unlike the other
+operations, the righthand side operand (how many bits to shift by) must _always_ be a `u8` and need
+not match the left side operand (the number you are shifting).
 
-Bit shifts can abort if the number of bits to shift by is greater than or equal to `8`, `16`, `32`, `64`, `128` or `256` for `u8`, `u16`, `u32`, `u64`, `u128` and `u256` respectively.
+Bit shifts can abort if the number of bits to shift by is greater than or equal to `8`, `16`, `32`,
+`64`, `128` or `256` for `u8`, `u16`, `u32`, `u64`, `u128` and `u256` respectively.
 
-| Syntax | Operation  | Aborts if
-|--------|------------|----------
-|`<<`    | shift left | Number of bits to shift by is greater than the size of the integer type
-|`>>`    | shift right| Number of bits to shift by is greater than the size of the integer type
+| Syntax | Operation   | Aborts if                                                               |
+| ------ | ----------- | ----------------------------------------------------------------------- |
+| `<<`   | shift left  | Number of bits to shift by is greater than the size of the integer type |
+| `>>`   | shift right | Number of bits to shift by is greater than the size of the integer type |
 
 ### Comparisons
 
-Integer types are the *only* types in Move that can use the comparison operators. Both arguments need to be of the same type. If you need to compare integers of different types, you will need to [cast](#casting) one of them first.
+Integer types are the _only_ types in Move that can use the comparison operators. Both arguments
+need to be of the same type. If you need to compare integers of different types, you must
+[cast](#casting) one of them first.
 
 Comparison operations do not abort.
 
-| Syntax | Operation
-|--------|-----------
-| `<`    | less than
-| `>`    | greater than
-| `<=`   | less than or equal to
-| `>=`   | greater than or equal to
+| Syntax | Operation                |
+| ------ | ------------------------ |
+| `<`    | less than                |
+| `>`    | greater than             |
+| `<=`   | less than or equal to    |
+| `>=`   | greater than or equal to |
 
 ### Equality
 
-Like all types with [`drop`](./abilities.md) in Move, all integer types support the ["equal"](./equality.md) and ["not equal"](./equality.md)  operations. Both arguments need to be of the same type. If you need to compare integers of different types, you will need to [cast](#casting) one of them first.
+Like all types with [`drop`](./abilities.md) in Move, all integer types support the
+["equal"](./equality.md) and ["not equal"](./equality.md) operations. Both arguments need to be of
+the same type. If you need to compare integers of different types, you must [cast](#casting)
+one of them first.
 
 Equality operations do not abort.
 
-| Syntax | Operation
-|--------|----------
-| `==`   | equal
-| `!=`   | not equal
+| Syntax | Operation |
+| ------ | --------- |
+| `==`   | equal     |
+| `!=`   | not equal |
 
 For more details see the section on [equality](./equality.md)
 
 ## Casting
 
-Integer types of one size can be cast to integer types of another size. Integers are the only types in Move that support casting.
+Integer types of one size can be cast to integer types of another size. Integers are the only types
+in Move that support casting.
 
-Casts *do not* truncate. Casting will abort if the result is too large for the specified type
+Casts _do not_ truncate. Casting aborts if the result is too large for the specified type.
 
-| Syntax     | Operation                                                                       | Aborts if
-|------------|---------------------------------------------------------------------------------|---------------------------------------
-| `(e as T)`| Cast integer expression `e` into an integer type `T` | `e` is too large to represent as a `T`
+| Syntax     | Operation                                            | Aborts if                              |
+| ---------- | ---------------------------------------------------- | -------------------------------------- |
+| `(e as T)` | Cast integer expression `e` into an integer type `T` | `e` is too large to represent as a `T` |
 
-Here, the type of `e` must be `8`, `16`, `32`, `64`, `128` or `256` and `T` must be `u8`, `u16`, `u32`, `u64`, `u128` oe `u256`.
+Here, the type of `e` must be `8`, `16`, `32`, `64`, `128` or `256` and `T` must be `u8`, `u16`,
+`u32`, `u64`, `u128`, or `u256`.
 
 For example:
 
@@ -150,4 +171,6 @@ For example:
 
 ## Ownership
 
-As with the other scalar values built-in to the language, integer values are implicitly copyable, meaning they can be copied without an explicit instruction such as [`copy`](./variables.md#move-and-copy).
+As with the other scalar values built-in to the language, integer values are implicitly copyable,
+meaning they can be copied without an explicit instruction such as
+[`copy`](./variables.md#move-and-copy).

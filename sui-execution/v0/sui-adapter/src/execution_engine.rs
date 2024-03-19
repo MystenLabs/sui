@@ -5,7 +5,6 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
@@ -13,7 +12,6 @@ mod checked {
     use move_binary_format::access::ModuleAccess;
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
-    use once_cell::sync::Lazy;
     use std::{collections::HashSet, sync::Arc};
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::balance::{
@@ -24,13 +22,15 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
+    use sui_types::execution::is_certificate_denied;
+    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::gas_coin::GAS;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -39,55 +39,24 @@ mod checked {
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::transaction::InputObjects;
+    use sui_types::transaction::CheckedInputObjects;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
-        object::Object,
+        object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_FRAMEWORK_ADDRESS,
     };
     use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
     use tracing::{info, instrument, trace, warn};
 
-    /// If a transaction digest shows up in this list, when executing such transaction,
-    /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
-    /// gas smashing). Because this list is not gated by protocol version, there are a few important
-    /// criteria for adding a digest to this list:
-    /// 1. The certificate must be causing all validators to either panic or hang forever deterministically.
-    /// 2. If we ever ship a fix to make it no longer panic or hang when executing such transaction,
-    /// we must make sure the transaction is already in this list. Otherwise nodes running the newer version
-    /// without these transactions in the list will generate forked result.
-    /// Below is a scenario of when we need to use this list:
-    /// 1. We detect that a specific transaction is causing all validators to either panic or hang forever deterministically.
-    /// 2. We push a CertificateDenyConfig to deny such transaction to all validators asap.
-    /// 3. To make sure that all fullnodes are able to sync to the latest version, we need to add the transaction digest
-    /// to this list as well asap, and ship this binary to all fullnodes, so that they can sync past this transaction.
-    /// 4. We then can start fixing the issue, and ship the fix to all nodes.
-    /// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so, any future
-    /// node that sync from genesis will fork on this transaction. We may be able to remove it once
-    /// we have stable snapshots and the binary has a minimum supported protocol version past the epoch.
-    pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
-        static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> =
-            Lazy::new(|| HashSet::from([]));
-        Lazy::force(&DENIED_CERTIFICATES)
-    }
-
-    fn is_certificate_denied(
-        transaction_digest: &TransactionDigest,
-        certificate_deny_set: &HashSet<TransactionDigest>,
-    ) -> bool {
-        certificate_deny_set.contains(transaction_digest)
-            || get_denied_certificates().contains(transaction_digest)
-    }
-
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -102,9 +71,11 @@ mod checked {
         certificate_deny_set: &HashSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let input_objects = input_objects.into_inner();
         let shared_object_refs = input_objects.filter_shared_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
@@ -132,6 +103,7 @@ mod checked {
             metrics,
             enable_expensive_checks,
             deny_cert,
+            false,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -188,7 +160,7 @@ mod checked {
         );
 
         // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
@@ -205,7 +177,12 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
-        (inner, effects, execution_result)
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            execution_result,
+        )
     }
 
     pub fn execute_genesis_state_update(
@@ -214,9 +191,10 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         move_vm: &Arc<MoveVM>,
         tx_context: &mut TxContext,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let input_objects = input_objects.into_inner();
         let mut temporary_store =
             TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
@@ -244,6 +222,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         deny_cert: bool,
+        contains_deleted_input: bool,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -265,6 +244,11 @@ mod checked {
             let mut execution_result = if deny_cert {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::CertificateDenied,
+                    None,
+                ))
+            } else if contains_deleted_input {
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::InputObjectDeleted,
                     None,
                 ))
             } else {
@@ -433,13 +417,13 @@ mod checked {
                 for genesis_object in objects {
                     match genesis_object {
                         sui_types::transaction::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
+                            let object = ObjectInner {
                                 data,
                                 owner,
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.write_object(object, WriteKind::Create);
+                            temporary_store.write_object(object.into(), WriteKind::Create);
                         }
                     }
                 }
@@ -447,7 +431,20 @@ mod checked {
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
-                    prologue,
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -470,10 +467,13 @@ mod checked {
                 )
             }
             TransactionKind::AuthenticatorStateUpdate(_) => {
-                panic!("AuthenticatorStateUpdate should not exist in suivm");
+                panic!("AuthenticatorStateUpdate should not exist in execution layer v0");
+            }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                panic!("RandomnessStateUpdate should not exist in execution layer v0");
             }
             TransactionKind::EndOfEpochTransaction(_) => {
-                panic!("EndOfEpochTransaction should not exist in suivm");
+                panic!("EndOfEpochTransaction should not exist in execution layer v0");
             }
         }
     }
@@ -676,18 +676,11 @@ mod checked {
             }
         }
 
+        let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
-            let max_format_version = protocol_config.move_binary_format_version();
             let deserialized_modules: Vec<_> = modules
                 .iter()
-                .map(|m| {
-                    CompiledModule::deserialize_with_config(
-                        m,
-                        max_format_version,
-                        protocol_config.no_extraneous_module_bytes(),
-                    )
-                    .unwrap()
-                })
+                .map(|m| CompiledModule::deserialize_with_config(m, &binary_config).unwrap())
                 .collect();
 
             if version == OBJECT_START_VERSION {
@@ -744,7 +737,7 @@ mod checked {
     /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
     ///   consensus.
     fn setup_consensus_commit(
-        prologue: ConsensusCommitPrologue,
+        consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
@@ -761,7 +754,7 @@ mod checked {
                 vec![],
                 vec![
                     CallArg::CLOCK_MUT,
-                    CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&consensus_commit_timestamp_ms).unwrap()),
                 ],
             );
             assert_invariant!(

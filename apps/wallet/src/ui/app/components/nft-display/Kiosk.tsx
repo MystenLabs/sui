@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { getKioskIdFromOwnerCap, hasDisplayData, useGetKioskContents } from '@mysten/core';
-
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
-import { getObjectDisplay } from '@mysten/sui.js/types';
-import cl from 'classnames';
+import cl from 'clsx';
 
-import { NftImage, type NftImageProps } from './NftImage';
 import { useActiveAddress } from '../../hooks';
 import { Text } from '../../shared/text';
+import { NftImage, type NftImageProps } from './NftImage';
 
 type KioskProps = {
 	object: SuiObjectResponse;
@@ -29,13 +27,13 @@ const cardStyles = [
 
 function getLabel(item?: SuiObjectResponse) {
 	if (!item) return;
-	const display = getObjectDisplay(item)?.data;
+	const display = item.data?.display?.data;
 	return display?.name ?? display?.description ?? item.data?.objectId;
 }
 
 export function Kiosk({ object, orientation, ...nftImageProps }: KioskProps) {
 	const address = useActiveAddress();
-	const { data: kioskData, isLoading } = useGetKioskContents(address);
+	const { data: kioskData, isPending } = useGetKioskContents(address);
 
 	const kioskId = getKioskIdFromOwnerCap(object);
 	const kiosk = kioskData?.kiosks.get(kioskId!);
@@ -48,7 +46,7 @@ export function Kiosk({ object, orientation, ...nftImageProps }: KioskProps) {
 	// get the label for the first item to show on hover
 	const displayName = getLabel(items[0]);
 
-	if (isLoading) return null;
+	if (isPending) return null;
 
 	return (
 		<div className="relative hover:bg-transparent group rounded-xl transform-gpu overflow-visible w-36 h-36">

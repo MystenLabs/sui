@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMemo } from 'react';
+
 import { useAccounts } from './useAccounts';
 
 export function useAccountByAddress(accountAddress?: string | null) {

@@ -9,7 +9,7 @@ export function useGetAddressMetrics() {
 	return useQuery({
 		queryKey: ['home', 'addresses'],
 		queryFn: () => client.getAddressMetrics(),
-		cacheTime: 24 * 60 * 60 * 1000,
+		gcTime: 24 * 60 * 60 * 1000,
 		staleTime: Infinity,
 		retry: 5,
 	});

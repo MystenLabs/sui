@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSuiClient } from '@mysten/dapp-kit';
-import useAppSelector from './useAppSelector';
-import { useBackgroundClient } from './useBackgroundClient';
-import { useQredoAPI } from './useQredoAPI';
-import { LedgerSigner } from '../LedgerSigner';
-import { QredoSigner } from '../QredoSigner';
-import { type WalletSigner } from '../WalletSigner';
-import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
-import { thunkExtras } from '../redux/store/thunk-extras';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
+import { useSuiClient } from '@mysten/dapp-kit';
+
+import { walletApiProvider } from '../ApiProvider';
+import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
+import { LedgerSigner } from '../LedgerSigner';
+import { QredoSigner } from '../QredoSigner';
+import { type WalletSigner } from '../WalletSigner';
+import useAppSelector from './useAppSelector';
+import { useBackgroundClient } from './useBackgroundClient';
+import { useQredoAPI } from './useQredoAPI';
 
 export function useSigner(account: SerializedUIAccount | null): WalletSigner | null {
 	const { connectToLedger } = useSuiLedgerClient();
@@ -33,5 +34,5 @@ export function useSigner(account: SerializedUIAccount | null): WalletSigner | n
 	if (isQredoAccountSerializedUI(account)) {
 		return qredoAPI ? new QredoSigner(api, account, qredoAPI, networkName) : null;
 	}
-	return thunkExtras.api.getSignerInstance(account, background);
+	return walletApiProvider.getSignerInstance(account, background);
 }

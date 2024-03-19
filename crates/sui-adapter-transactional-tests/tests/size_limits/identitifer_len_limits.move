@@ -39,8 +39,8 @@ module Test::M1_1234567891234567890123456789012345678912345678901234567 {
     use std::vector;
 
     public entry fun create_n_(n: u64, ctx: &mut TxContext) {
-        let v: vector<UID> = vector::empty();
-        let i = 0;
+        let mut v: vector<UID> = vector::empty();
+        let mut i = 0;
         while (i < n) {
             let id = object::new(ctx);
             vector::push_back(&mut v, id);

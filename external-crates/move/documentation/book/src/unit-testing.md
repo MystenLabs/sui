@@ -2,17 +2,23 @@
 
 Unit testing for Move adds three new annotations to the Move source language:
 
-* `#[test]`
-* `#[test_only]`, and
-* `#[expected_failure]`.
+- `#[test]`
+- `#[test_only]`, and
+- `#[expected_failure]`.
 
-They respectively mark a function as a test, mark a module or module member (`use`, function, or struct) as code to be included for testing only, and mark that a test is expected to fail. These annotations can be placed on a function with any visibility. Whenever a module or module member is annotated as `#[test_only]` or `#[test]`, it will not be included in the compiled bytecode unless it is compiled for testing.
+They respectively mark a function as a test, mark a module or module member (`use`, function, or
+struct) as code to be included for testing only, and mark that a test is expected to fail. These
+annotations can be placed on a function with any visibility. Whenever a module or module member is
+annotated as `#[test_only]` or `#[test]`, it will not be included in the compiled bytecode unless it
+is compiled for testing.
 
 ## Testing Annotations: Their Meaning and Usage
 
-Both the `#[test]` and `#[expected_failure]` annotations can be used either with or without arguments.
+Both the `#[test]` and `#[expected_failure]` annotations can be used either with or without
+arguments.
 
-Without arguments, the `#[test]` annotation can only be placed on a function with no parameters. This annotation simply marks this function as a test to be run by the unit testing harness.
+Without arguments, the `#[test]` annotation can only be placed on a function with no parameters.
+This annotation simply marks this function as a test to be run by the unit testing harness.
 
 ```
 #[test] // OK
@@ -22,7 +28,11 @@ fun this_is_a_test() { ... }
 fun this_is_not_correct(arg: signer) { ... }
 ```
 
-A test can also be annotated as an `#[expected_failure]`. This annotation marks that the test should is expected to raise an error. You can ensure that a test is aborting with a specific abort code by annotating it with `#[expected_failure(abort_code = <code>)]`, if it then fails with a different abort code or with a non-abort error the test will fail. Only functions that have the `#[test]` annotation can also be annotated as an #`[expected_failure]`.
+A test can also be annotated as an `#[expected_failure]`. This annotation marks that the test is
+expected to raise an error. You can ensure that a test is aborting with a specific abort code by
+annotating it with `#[expected_failure(abort_code = <code>)]`, if it then fails with a different
+abort code or with a non-abort error the test will fail. Only functions that have the `#[test]`
+annotation can also be annotated as an #`[expected_failure]`.
 
 ```
 #[test]
@@ -41,9 +51,15 @@ public fun test_will_error_and_fail() { 1/0; }
 public fun this_other_test_will_abort_and_pass() { abort 1 }
 ```
 
-With arguments, a test annotation takes the form `#[test(<param_name_1> = <address>, ..., <param_name_n> = <address>)]`. If a function is annotated in such a manner, the function's parameters must be a permutation of the parameters <`param_name_1>, ..., <param_name_n>`, i.e., the order of these parameters as they occur in the function and their order in the test annotation do not have to be the same, but they must be able to be matched up with each other by name.
+With arguments, a test annotation takes the form
+`#[test(<param_name_1> = <address>, ..., <param_name_n> = <address>)]`. If a function is annotated
+in such a manner, the function's parameters must be a permutation of the parameters
+<`param_name_1>, ..., <param_name_n>`, i.e., the order of these parameters as they occur in the
+function and their order in the test annotation do not have to be the same, but they must be able to
+be matched up with each other by name.
 
-Only parameters with a type of `signer` are supported as test parameters. If a non-`signer` parameter is supplied, the test will result in an error when run.
+Only parameters with a type of `signer` are supported as test parameters. If a non-`signer`
+parameter is supplied, the test will result in an error when run.
 
 ```
 #[test(arg = @0xC0FFEE)] // OK
@@ -63,7 +79,9 @@ address TEST_NAMED_ADDR = @0x1;
 fun this_is_correct_now(arg: signer) { ... }
 ```
 
-An expected failure annotation can also take the form `#[expected_failure(abort_code = <u64>)]`. If a test function is annotated in such a way, the test must abort with an abort code equal to `<u64>`. Any other failure or abort code will result in a test failure.
+An expected failure annotation can also take the form `#[expected_failure(abort_code = <u64>)]`. If
+a test function is annotated in such a way, the test must abort with an abort code equal to `<u64>`.
+Any other failure or abort code will result in a test failure.
 
 ```
 #[test, expected_failure(abort_code = 1)] // This test will fail
@@ -74,7 +92,10 @@ fun this_test_should_abort_and_fail() { abort 0 }
 fun this_test_should_abort_and_pass_too() { abort 0 }
 ```
 
-A module and any of its members can be declared as test only. In such a case the item will only be included in the compiled Move bytecode when compiled in test mode. Additionally, when compiled outside of test mode, any non-test `use`s of a `#[test_only]` module will raise an error during compilation.
+A module and any of its members can be declared as test only. In such a case the item will only be
+included in the compiled Move bytecode when compiled in test mode. Additionally, when compiled
+outside of test mode, any non-test `use`s of a `#[test_only]` module will raise an error during
+compilation.
 
 ```
 #[test_only] // test only attributes can be attached to modules
@@ -95,14 +116,20 @@ fun test_only_function(...) { ... }
 
 ## Running Unit Tests
 
-Unit tests for a Move package can be run with the [`move test`
-command](./packages.md).
+Unit tests for a Move package can be run with the [`move test` command](./packages.md).
 
-When running tests, every test will either `PASS`, `FAIL`, or `TIMEOUT`. If a test case fails, the location of the failure along with the function name that caused the failure will be reported if possible. You can see an example of this below.
+When running tests, every test will either `PASS`, `FAIL`, or `TIMEOUT`. If a test case fails, the
+location of the failure along with the function name that caused the failure will be reported if
+possible. You can see an example of this below.
 
-A test will be marked as timing out if it exceeds the maximum number of instructions that can be executed for any single test. This bound can be changed using the options below, and its default value is set to 5000 instructions. Additionally, while the result of a test is always deterministic, tests are run in parallel by default, so the ordering of test results in a test run is non-deterministic unless running with only one thread (see `OPTIONS` below).
+A test will be marked as timing out if it exceeds the maximum number of instructions that can be
+executed for any single test. This bound can be changed using the options below, and its default
+value is set to 5000 instructions. Additionally, while the result of a test is always deterministic,
+tests are run in parallel by default, so the ordering of test results in a test run is
+non-deterministic unless running with only one thread (see `OPTIONS` below).
 
-There are also a number of options that can be passed to the unit testing binary to fine-tune testing and to help debug failing tests. These can be found using the the help flag:
+There are also a number of options that can be passed to the unit testing binary to fine-tune
+testing and to help debug failing tests. These can be found using the the help flag:
 
 ```
 $ move -h
@@ -190,7 +217,9 @@ Test result: OK. Total tests: 3; passed: 3; failed: 0
 ### Using Test Flags
 
 #### `-f <str>` or `--filter <str>`
-This will only run tests whose fully qualified name contains `<str>`. For example if we wanted to only run tests with `"zero_coin"` in their name:
+
+This will only run tests whose fully qualified name contains `<str>`. For example if we wanted to
+only run tests with `"zero_coin"` in their name:
 
 ```
 $ move test -f zero_coin
@@ -203,6 +232,7 @@ Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```
 
 #### `-i <bound>` or `--gas_used <bound>`
+
 This bounds the amount of gas that can be consumed for any one test to `<bound>`:
 
 ```
@@ -236,7 +266,9 @@ Test result: FAILED. Total tests: 3; passed: 0; failed: 3
 ```
 
 #### `-s` or `--statistics`
-With these flags you can gather statistics about the tests run and report the runtime and gas used for each test. For example, if we wanted to see the statistics for the tests in the example above:
+
+With these flags you can gather statistics about the tests run and report the runtime and gas used
+for each test. For example, if we wanted to see the statistics for the tests in the example above:
 
 ```
 $ move test -s
@@ -263,7 +295,9 @@ Test result: OK. Total tests: 3; passed: 3; failed: 0
 ```
 
 #### `-g` or `--state-on-error`
-These flags will print the global state for any test failures. e.g., if we added the following (failing) test to the `my_module` example:
+
+These flags will print the global state for any test failures. e.g., if we added the following
+(failing) test to the `my_module` example:
 
 ```
 module 0x1::my_module {

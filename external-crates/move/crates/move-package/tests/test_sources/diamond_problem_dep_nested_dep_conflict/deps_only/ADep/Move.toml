@@ -1,0 +1,5 @@
+[package]
+name = "ADep"
+
+[addresses]
+A = "0x0"

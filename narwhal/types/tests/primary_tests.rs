@@ -9,10 +9,10 @@ use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
-use test_utils::{AuthorityFixture, CommitteeFixture};
+use test_utils::{latest_protocol_version, AuthorityFixture, CommitteeFixture};
 
 #[tokio::test]
-async fn test_certificate_singers_are_ordered() {
+async fn test_certificate_signers_are_ordered() {
     // GIVEN
     let fixture = CommitteeFixture::builder()
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -29,11 +29,11 @@ async fn test_certificate_singers_are_ordered() {
 
     // WHEN
     let mut votes: Vec<(AuthorityIdentifier, Signature)> = Vec::new();
-    let mut sorted_singers: Vec<PublicKey> = Vec::new();
+    let mut sorted_signers: Vec<PublicKey> = Vec::new();
 
     // The authorities on position 1, 2, 3 are the ones who would sign
     for authority in &authorities[1..=3] {
-        sorted_singers.push(authority.keypair().public().clone());
+        sorted_signers.push(authority.keypair().public().clone());
 
         let vote = Vote::new_with_signer(
             &Header::V1(header.clone()),
@@ -47,7 +47,13 @@ async fn test_certificate_singers_are_ordered() {
     votes.shuffle(&mut OsRng);
 
     // Create a certificate
-    let certificate = Certificate::new_unverified(&committee, Header::V1(header), votes).unwrap();
+    let certificate = Certificate::new_unverified(
+        &latest_protocol_version(),
+        &committee,
+        Header::V1(header),
+        votes,
+    )
+    .unwrap();
 
     let (stake, signers) = certificate.signed_by(&committee);
 
@@ -55,7 +61,7 @@ async fn test_certificate_singers_are_ordered() {
     assert_eq!(signers.len(), 3);
 
     // AND authorities public keys are returned in order
-    assert_eq!(signers, sorted_singers);
+    assert_eq!(signers, sorted_signers);
 
     assert_eq!(stake, 9 as Stake);
 }

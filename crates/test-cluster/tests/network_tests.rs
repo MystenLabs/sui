@@ -3,7 +3,7 @@
 
 use move_binary_format::access::ModuleAccess;
 use sui_framework::BuiltInFramework;
-use sui_json_rpc::api::ReadApiClient;
+use sui_json_rpc_api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_macros::sim_test;
 use sui_types::{
@@ -60,7 +60,7 @@ async fn test_package_override() {
 
         let package_override = Object::new_package_for_testing(
             &framework_modules,
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
             [
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
                 BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)

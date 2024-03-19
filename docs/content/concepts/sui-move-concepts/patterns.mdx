@@ -1,0 +1,29 @@
+---
+title: Patterns
+description: Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. These include capabilities, witness and transferrable witness, hot potato, and ID pointer. 
+---
+
+Topics in this section introduce Move coding patterns that solve various logic needs in your package development. 
+
+## Capabilities
+
+A capability is a pattern that allows authorizing actions with an object. See [Capabilities](./patterns/capabilities.mdx) for an example of this pattern.
+
+## Witness and transferrable witness
+
+A witness is a type with `drop` that proves that its owner was present at the time of some privileged operation, for example having access to the one-time witness (OTW) for a module proves that the code is being run at the time the module was first published. See the following topics for details.
+
+- [Witness](./patterns/witness)
+- [Transferrable Witness](./patterns/transferrable-witness)
+
+## Hot potato
+
+A hot potato is a struct that has no capabilities, therefore you can only pack and unpack it in its module.
+
+- [Hot Potato](./patterns/hot-potato)
+
+## ID pointer
+
+Objects can refer to each other by using their IDs as pointers.  For example a capability that guards access to another object may store that object's `ID` to perform an authorization check.
+
+- [ID Pointer](./patterns/id-pointer)

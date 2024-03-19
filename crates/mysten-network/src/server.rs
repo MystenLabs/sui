@@ -278,8 +278,8 @@ mod test {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tonic::Code;
-    use tonic_health::proto::health_client::HealthClient;
-    use tonic_health::proto::HealthCheckRequest;
+    use tonic_health::pb::health_client::HealthClient;
+    use tonic_health::pb::HealthCheckRequest;
 
     #[test]
     fn document_multiaddr_limitation_for_unix_protocol() {

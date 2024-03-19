@@ -6,9 +6,11 @@ module sui::tx_context {
     #[test_only]
     use std::vector;
 
+    #[test_only]
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;
 
+    #[test_only]
     /// Expected an tx hash of length 32, but found a different length
     const EBadTxHashLength: u64 = 0;
 
@@ -74,13 +76,6 @@ module sui::tx_context {
 
     /// Native function for deriving an ID via hash(tx_hash || ids_created)
     native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
-
-    spec derive_id {
-        pragma opaque;
-        // this function never aborts
-        aborts_if [abstract] false;
-        // TODO: specify actual function behavior
-    }
 
     // ==== test-only functions ====
 

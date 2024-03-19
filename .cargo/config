@@ -19,6 +19,8 @@ move-clippy = [
     "-Wclippy::disallowed_methods",
     "-Aclippy::upper_case_acronyms",
     "-Aclippy::type_complexity",
+    # Remove after https://github.com/rust-lang/rust-clippy/pull/11792 is released.
+    "-Aclippy::map_identity",
     "-Aclippy::new_without_default",
     "-Aclippy::box_default",
     "-Aclippy::manual_slice_size_calculation",

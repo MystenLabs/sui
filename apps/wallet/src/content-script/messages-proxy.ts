@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { take } from 'rxjs';
-
 import { PortStream } from '_messaging/PortStream';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
-
 import type { Message } from '_src/shared/messaging/messages';
+import { take } from 'rxjs';
 
 function createPort(windowMsgStream: WindowMessageStream, currentMsg?: Message) {
 	const port = PortStream.connectToBackgroundService('sui_content<->background');

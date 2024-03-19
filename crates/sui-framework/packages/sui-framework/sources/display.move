@@ -102,7 +102,7 @@ module sui::display {
 
     // === Entry functions: Create ===
 
-    #[lint_allow(self_transfer)]
+    #[allow(lint(self_transfer))]
     /// Create a new empty Display<T> object and keep it.
     entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
         transfer::public_transfer(new<T>(pub, ctx), sender(ctx))
@@ -202,6 +202,7 @@ module sui::display_tests {
     use sui::package;
     use sui::display;
 
+    #[allow(unused_field)]
     /// An example object.
     /// Purely for visibility.
     struct Capy has key {

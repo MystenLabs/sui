@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import Overlay from '_components/overlay';
+import { useAppSelector } from '_hooks';
+import { permissionsSelectors } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 import { formatAddress } from '@mysten/sui.js/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { type DAppEntry } from './SuiApp';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Button } from '../../shared/ButtonUI';
 import { Text } from '../../shared/text';
@@ -14,10 +17,7 @@ import { DAppInfoCard } from '../DAppInfoCard';
 import { DAppPermissionsList } from '../DAppPermissionsList';
 import { SummaryCard } from '../SummaryCard';
 import { WalletListSelect } from '../WalletListSelect';
-import Overlay from '_components/overlay';
-import { useAppSelector } from '_hooks';
-import { permissionsSelectors } from '_redux/slices/permissions';
-import { ampli } from '_src/shared/analytics/ampli';
+import { type DAppEntry } from './SuiApp';
 
 export interface DisconnectAppProps extends Omit<DAppEntry, 'description' | 'tags'> {
 	permissionID: string;
@@ -85,7 +85,7 @@ function DisconnectApp({
 						values={accountsToDisconnect}
 						onChange={setAccountsToDisconnect}
 						mode="disconnect"
-						disabled={disconnectMutation.isLoading}
+						disabled={disconnectMutation.isPending}
 					/>
 				) : (
 					<SummaryCard
@@ -109,7 +109,7 @@ function DisconnectApp({
 								? 'Disconnect All'
 								: 'Disconnect Selected'
 						}
-						loading={disconnectMutation.isLoading}
+						loading={disconnectMutation.isPending}
 						onClick={() => disconnectMutation.mutate()}
 					/>
 				</div>

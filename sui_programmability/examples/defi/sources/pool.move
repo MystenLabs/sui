@@ -51,9 +51,6 @@ module defi::pool {
     /// For when someone tries to swap in an empty pool.
     const EReservesEmpty: u64 = 2;
 
-    /// For when initial LSP amount is zero.
-    const EShareEmpty: u64 = 3;
-
     /// For when someone attempts to add more liquidity than u128 Math allows.
     const EPoolFull: u64 = 4;
 
@@ -75,7 +72,7 @@ module defi::pool {
     /// The pool with exchange.
     ///
     /// - `fee_percent` should be in the range: [0-10000), meaning
-    /// that 1000 is 100% and 1 is 0.1%
+    /// that 10000 is 100% and 1 is 0.1%
     struct Pool<phantom P, phantom T> has key {
         id: UID,
         sui: Balance<SUI>,
@@ -434,8 +431,7 @@ module defi::pool_tests {
         next_tx(test, owner);
         {
             let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
-            let pool_mut = &mut pool;
-            let (amt_sui, amt_tok, lsp_supply) = pool::get_amounts(pool_mut);
+            let (amt_sui, amt_tok, lsp_supply) = pool::get_amounts(&pool);
 
             assert!(lsp_supply == 31622000, 0);
             assert!(amt_sui == SUI_AMT, 0);

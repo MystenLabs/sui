@@ -4,16 +4,16 @@
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use crate::digests::TransactionEventsDigest;
-use crate::effects::{InputSharedObjectKind, TransactionEffectsAPI};
+use crate::digests::{ObjectDigest, TransactionEventsDigest};
+use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::Message;
 use crate::object::Owner;
-use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
+
+use super::{IDOperation, ObjectChange};
 
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ pub struct TransactionEffectsV1 {
     /// Unwrapped objects are objects that were wrapped into other objects in the past,
     /// and just got extracted out.
     unwrapped: Vec<(ObjectRef, Owner)>,
-    /// Object Refs of objects now deleted (the old refs).
+    /// Object Refs of objects now deleted (the new refs).
     deleted: Vec<ObjectRef>,
     /// Object refs of objects previously wrapped in other objects but now deleted.
     unwrapped_then_deleted: Vec<ObjectRef>,
@@ -93,79 +93,149 @@ impl TransactionEffectsV1 {
             dependencies,
         }
     }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            gas_object,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            status,
-            ..Default::default()
-        }
-    }
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn status(&self) -> &ExecutionStatus {
         &self.status
     }
+
     fn into_status(self) -> ExecutionStatus {
         self.status
     }
+
+    fn executed_epoch(&self) -> EpochId {
+        self.executed_epoch
+    }
+
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
         self.modified_at_versions.clone()
     }
 
-    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {
+    fn lamport_version(&self) -> SequenceNumber {
+        SequenceNumber::lamport_increment(self.modified_at_versions.iter().map(|(_, v)| *v))
+    }
+
+    fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)> {
+        unimplemented!("Only supposed by v2 and above");
+    }
+
+    fn input_shared_objects(&self) -> Vec<InputSharedObject> {
         let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
         self.shared_objects
             .iter()
             .map(|r| {
-                let kind = if modified.contains(&r.0) {
-                    InputSharedObjectKind::Mutate
+                if modified.contains(&r.0) {
+                    InputSharedObject::Mutate(*r)
                 } else {
-                    InputSharedObjectKind::ReadOnly
-                };
-                (*r, kind)
+                    InputSharedObject::ReadOnly(*r)
+                }
             })
             .collect()
     }
+
     fn created(&self) -> Vec<(ObjectRef, Owner)> {
         self.created.clone()
     }
+
     fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         self.mutated.clone()
     }
+
     fn unwrapped(&self) -> Vec<(ObjectRef, Owner)> {
         self.unwrapped.clone()
     }
+
     fn deleted(&self) -> Vec<ObjectRef> {
         self.deleted.clone()
     }
+
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef> {
         self.unwrapped_then_deleted.clone()
     }
+
     fn wrapped(&self) -> Vec<ObjectRef> {
         self.wrapped.clone()
     }
+
+    fn object_changes(&self) -> Vec<ObjectChange> {
+        let modified_at: BTreeMap<_, _> = self.modified_at_versions.iter().copied().collect();
+
+        let created = self.created.iter().map(|((id, v, d), _)| ObjectChange {
+            id: *id,
+            input_version: None,
+            input_digest: None,
+            output_version: Some(*v),
+            output_digest: Some(*d),
+            id_operation: IDOperation::Created,
+        });
+
+        let mutated = self.mutated.iter().map(|((id, v, d), _)| ObjectChange {
+            id: *id,
+            input_version: modified_at.get(id).copied(),
+            input_digest: None,
+            output_version: Some(*v),
+            output_digest: Some(*d),
+            id_operation: IDOperation::None,
+        });
+
+        let unwrapped = self.unwrapped.iter().map(|((id, v, d), _)| ObjectChange {
+            id: *id,
+            input_version: None,
+            input_digest: None,
+            output_version: Some(*v),
+            output_digest: Some(*d),
+            id_operation: IDOperation::None,
+        });
+
+        let deleted = self.deleted.iter().map(|(id, _, _)| ObjectChange {
+            id: *id,
+            input_version: modified_at.get(id).copied(),
+            input_digest: None,
+            output_version: None,
+            output_digest: None,
+            id_operation: IDOperation::Deleted,
+        });
+
+        let unwrapped_then_deleted =
+            self.unwrapped_then_deleted
+                .iter()
+                .map(|(id, _, _)| ObjectChange {
+                    id: *id,
+                    input_version: None,
+                    input_digest: None,
+                    output_version: None,
+                    output_digest: None,
+                    id_operation: IDOperation::Deleted,
+                });
+
+        let wrapped = self.wrapped.iter().map(|(id, _, _)| ObjectChange {
+            id: *id,
+            input_version: modified_at.get(id).copied(),
+            input_digest: None,
+            output_version: None,
+            output_digest: None,
+            id_operation: IDOperation::None,
+        });
+
+        created
+            .chain(mutated)
+            .chain(unwrapped)
+            .chain(deleted)
+            .chain(unwrapped_then_deleted)
+            .chain(wrapped)
+            .collect()
+    }
+
     fn gas_object(&self) -> (ObjectRef, Owner) {
         self.gas_object
     }
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()
     }
+
     fn dependencies(&self) -> &[TransactionDigest] {
         &self.dependencies
-    }
-
-    fn executed_epoch(&self) -> EpochId {
-        self.executed_epoch
     }
 
     fn transaction_digest(&self) -> &TransactionDigest {
@@ -179,32 +249,41 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }
+
     fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary {
         &mut self.gas_used
     }
+
     fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest {
         &mut self.transaction_digest
     }
+
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest> {
         &mut self.dependencies
     }
 
-    fn unsafe_add_input_shared_object_for_testing(
-        &mut self,
-        obj_ref: ObjectRef,
-        kind: InputSharedObjectKind,
-    ) {
-        self.shared_objects.push(obj_ref);
+    fn unsafe_add_input_shared_object_for_testing(&mut self, kind: InputSharedObject) {
         match kind {
-            InputSharedObjectKind::Mutate => {
+            InputSharedObject::Mutate(obj_ref) => {
+                self.shared_objects.push(obj_ref);
                 self.modified_at_versions.push((obj_ref.0, obj_ref.1));
             }
-            InputSharedObjectKind::ReadOnly => (),
+            InputSharedObject::ReadOnly(obj_ref) => {
+                self.shared_objects.push(obj_ref);
+            }
+            InputSharedObject::ReadDeleted(id, version)
+            | InputSharedObject::MutateDeleted(id, version) => {
+                self.shared_objects
+                    .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
+            }
         }
     }
 
-    fn unsafe_add_deleted_object_for_testing(&mut self, object: ObjectRef) {
+    fn unsafe_add_deleted_live_object_for_testing(&mut self, object: ObjectRef) {
         self.modified_at_versions.push((object.0, object.1));
+    }
+
+    fn unsafe_add_object_tombstone_for_testing(&mut self, object: ObjectRef) {
         self.deleted.push(object);
     }
 }

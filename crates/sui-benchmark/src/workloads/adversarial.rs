@@ -5,6 +5,7 @@ use super::{
     workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
     WorkloadBuilderInfo, WorkloadParams,
 };
+use crate::drivers::Interval;
 use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
@@ -405,6 +406,8 @@ impl AdversarialWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         adversarial_payload_cfg: AdversarialPayloadCfg,
+        duration: Interval,
+        group: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -416,6 +419,8 @@ impl AdversarialWorkloadBuilder {
                 target_qps,
                 num_workers,
                 max_ops,
+                duration,
+                group,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 AdversarialWorkloadBuilder {

@@ -10,7 +10,6 @@ module nfts::cross_chain_airdrop_tests {
     // Error codes
 
     /// Trying to claim a token that has already been claimed
-    const ETOKEN_ID_CLAIMED: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;
 
     const ORACLE_ADDRESS: address = @0x1000;

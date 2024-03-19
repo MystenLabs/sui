@@ -7,8 +7,6 @@ import { expect, test } from './fixtures';
 import { createWallet } from './utils/auth';
 import { demoDappConnect } from './utils/dapp-connect';
 
-test.skip();
-
 function getInAppMessage(page: Page, id: string) {
 	return page.evaluate(
 		(anId) =>

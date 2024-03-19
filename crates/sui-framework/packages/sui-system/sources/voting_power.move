@@ -13,6 +13,7 @@ module sui_system::voting_power {
     #[test_only]
     friend sui_system::voting_power_tests;
 
+    #[allow(unused_field)]
     /// Deprecated. Use VotingPowerInfoV2 instead.
     struct VotingPowerInfo has drop {
         validator_index: u64,

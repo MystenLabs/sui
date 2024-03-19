@@ -1,0 +1,81 @@
+//# publish
+module 0x42.M {
+    struct Box<T> has key, store { x: T }
+    struct Box3<T> has store { x: Self.Box<Self.Box<T>> }
+    struct Box7<T> has store { x: Self.Box3<Self.Box3<T>> }
+    struct Box15<T> has store { x: Self.Box7<Self.Box7<T>> }
+    struct Box31<T> has store { x: Self.Box15<Self.Box15<T>> }
+    struct Box63<T> has store { x: Self.Box31<Self.Box31<T>> }
+    struct Box127<T> has key, store { x: Self.Box63<Self.Box63<T>> }
+    struct Box128<T> has key, store { x: Self.Box127<T> }
+    struct Box255<T> has key, store { x: Self.Box127<Self.Box127<T>> }
+
+    public box3<T>(x: T): Self.Box3<T> {
+    label b0:
+        return Box3<T> { x: Box<Self.Box<T>> { x: Box<T> { x: move(x) } } };
+    }
+
+    public box7<T>(x: T): Self.Box7<T> {
+    label b0:
+        return Box7<T> { x: Self.box3<Self.Box3<T>>(Self.box3<T>(move(x))) };
+    }
+
+    public box15<T>(x: T): Self.Box15<T> {
+    label b0:
+        return Box15<T> { x: Self.box7<Self.Box7<T>>(Self.box7<T>(move(x))) };
+    }
+
+    public box31<T>(x: T): Self.Box31<T> {
+    label b0:
+        return Box31<T> { x: Self.box15<Self.Box15<T>>(Self.box15<T>(move(x))) };
+    }
+
+    public box63<T>(x: T): Self.Box63<T> {
+    label b0:
+        return Box63<T> { x: Self.box31<Self.Box31<T>>(Self.box31<T>(move(x))) };
+    }
+
+    public box127<T>(x: T): Self.Box127<T> {
+    label b0:
+        return Box127<T> { x: Self.box63<Self.Box63<T>>(Self.box63<T>(move(x))) };
+    }
+
+    public box128<T>(x: T): Self.Box128<T> {
+    label b0:
+        return Box128<T> { x: Self.box127<T>(move(x)) };
+    }
+
+    public box255<T>(x: T): Self.Box255<T> {
+    label b0:
+        return Box255<T> { x: Self.box127<Self.Box127<T>>(Self.box127<T>(move(x))) };
+    }
+
+    public publish_127(): Self.Box127<bool> {
+    label b0:
+        return Self.box127<bool>(true);
+    }
+
+
+    public publish_128(): Self.Box128<bool> {
+    label b0:
+        return Self.box128<bool>(true);
+    }
+
+    public publish_256(): Self.Box255<bool> {
+    label b0:
+        return Self.box255<bool>(true);
+    }
+
+    public publish_257(): Self.Box<Self.Box255<bool>> {
+    label b0:
+        return Box<Self.Box255<bool>> { x: Self.box255<bool>(true) };
+    }
+}
+
+//# run 0x42::M::publish_127
+
+//# run 0x42::M::publish_128
+
+//# run 0x42::M::publish_256
+
+//# run 0x42::M::publish_257

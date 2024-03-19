@@ -1,0 +1,8 @@
+[package]
+name = "Root"
+
+[addresses]
+A = "0x1"
+
+[dependencies]
+OtherDep = { local = "./deps_only/other_dep", addr_subst = { "A" = "B" }, digest = "A666AE1AFDBA7E287476E851C0011503D19EE73E89CBDB307D4E0067E8BBA22C"}

@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentProps, type ReactNode, forwardRef } from 'react';
-import FormField from './FormField';
+import { forwardRef, type ComponentProps, type ReactNode } from 'react';
+
 import { TextArea } from './controls/TextArea';
+import FormField from './FormField';
 
 type TextAreaFieldProps = {
 	name: string;

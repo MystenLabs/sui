@@ -5,10 +5,12 @@ use jsonrpsee::core::Error as JsonRpseeError;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Debug;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -17,13 +19,13 @@ use sui_types::object::Object;
 use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::config::ReplayableNetworkConfigSet;
 
 // TODO: make these configurable
-pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
-pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(100_000);
+pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 3;
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Struct tag used in system epoch change events
@@ -32,7 +34,7 @@ pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
 
 pub(crate) const ONE_DAY_MS: u64 = 24 * 60 * 60 * 1000;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
     pub sender_signed_data: SenderSignedData,
@@ -47,12 +49,19 @@ pub struct OnChainTransactionInfo {
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
     pub effects: SuiTransactionBlockEffects,
-    pub protocol_config: ProtocolConfig,
+    pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
+    #[serde(default = "unspecified_chain")]
+    pub chain: Chain,
 }
 
-#[derive(Clone, Debug, Default)]
+fn unspecified_chain() -> Chain {
+    warn!("Unable to determine chain id. Defaulting to unknown");
+    Chain::Unknown
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DiagInfo {
     pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
 }
@@ -127,9 +136,9 @@ pub enum ReplayEngineError {
     GenesisReplayNotSupported { digest: TransactionDigest },
 
     #[error(
-        "Fatal! No framework versions for epoch {epoch}. Make sure version tables are populated"
+        "Fatal! No framework versions for protocol version {protocol_version}. Make sure version tables are populated"
     )]
-    FrameworkObjectVersionTableNotPopulated { epoch: u64 },
+    FrameworkObjectVersionTableNotPopulated { protocol_version: u64 },
 
     #[error("Protocol version not found for epoch {epoch}")]
     ProtocolVersionNotFound { epoch: u64 },
@@ -178,6 +187,9 @@ pub enum ReplayEngineError {
         cfgs
     )]
     UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
+
+    #[error("Unable to get chain id: {}", err)]
+    UnableToGetChainId { err: String },
 }
 
 impl From<SuiObjectResponseError> for ReplayEngineError {
@@ -275,5 +287,11 @@ pub enum ExecutionStoreEvent {
     GetModuleGetModuleByModuleId {
         id: ModuleId,
         result: SuiResult<Option<CompiledModule>>,
+    },
+    ReceiveObject {
+        owner: ObjectID,
+        receive: ObjectID,
+        receive_at_version: SequenceNumber,
+        result: SuiResult<Option<Object>>,
     },
 }

@@ -1,0 +1,9 @@
+[package]
+name = "Usage"
+edition = "2024.alpha"
+
+[addresses]
+A = "0x1"
+
+[dependencies]
+Defn = { local = "./defn" }

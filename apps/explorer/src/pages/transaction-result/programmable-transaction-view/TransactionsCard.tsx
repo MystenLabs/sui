@@ -5,9 +5,7 @@ import { type SuiTransaction } from '@mysten/sui.js/client';
 
 import { Transaction } from './Transaction';
 import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
-import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
-
-const DEFAULT_ITEMS_TO_SHOW = 5;
+import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
 interface TransactionsCardProps {
 	transactions: SuiTransaction[];
@@ -22,11 +20,11 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
 		const [[type, data]] = Object.entries(transaction);
 
 		return (
-			<TransactionBlockCardSection defaultOpen key={index} title={type}>
+			<CollapsibleSection defaultOpen key={index} title={type}>
 				<div data-testid="transactions-card-content">
 					<Transaction key={index} type={type} data={data} />
 				</div>
-			</TransactionBlockCardSection>
+			</CollapsibleSection>
 		);
 	});
 
@@ -36,8 +34,6 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
 			items={expandableItems}
 			itemsLabel={transactions.length > 1 ? 'Transactions' : 'Transaction'}
 			count={transactions.length}
-			defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-			noExpandableList={transactions.length < DEFAULT_ITEMS_TO_SHOW}
 		/>
 	);
 }

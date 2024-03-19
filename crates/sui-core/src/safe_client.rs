@@ -7,7 +7,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
-use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
@@ -15,8 +14,8 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
@@ -322,21 +321,6 @@ where
         Ok(response)
     }
 
-    fn verify_certificate_response(
-        &self,
-        digest: &TransactionDigest,
-        response: HandleCertificateResponse,
-    ) -> SuiResult<HandleCertificateResponse> {
-        Ok(HandleCertificateResponse {
-            signed_effects: self.check_signed_effects_plain(
-                digest,
-                response.signed_effects,
-                None,
-            )?,
-            events: response.events,
-        })
-    }
-
     fn verify_certificate_response_v2(
         &self,
         digest: &TransactionDigest,
@@ -345,38 +329,10 @@ where
         let signed_effects =
             self.check_signed_effects_plain(digest, response.signed_effects, None)?;
 
-        // For now, validators only pass back input shared object.
-        let fastpath_input_objects = if !response.fastpath_input_objects.is_empty() {
-            let input_shared_objects = signed_effects
-                .input_shared_objects()
-                .into_iter()
-                .map(|(obj_ref, _kind)| obj_ref)
-                .collect::<HashSet<_>>();
-            for object in &response.fastpath_input_objects {
-                let obj_ref = object.compute_object_reference();
-                if !input_shared_objects.contains(&obj_ref) {
-                    error!(tx_digest=?digest, name=?self.address, ?obj_ref, "Object returned from HandleCertificateResponseV2 is not in the input shared objects of the transaction");
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: format!(
-                            "Object {:?} returned from HandleCertificateResponseV2 is not in the input shared objects of tx: {:?}",
-                            obj_ref, digest
-                        ),
-                    });
-                }
-            }
-            response
-                .fastpath_input_objects
-                .into_iter()
-                .collect::<Vec<_>>()
-        } else {
-            vec![]
-        };
-
         Ok(HandleCertificateResponseV2 {
             signed_effects,
             events: response.events,
-            fastpath_input_objects,
+            fastpath_input_objects: vec![], // unused field
         })
     }
 
@@ -395,25 +351,6 @@ where
         let verified = check_error!(
             self.address,
             self.verify_certificate_response_v2(&digest, response),
-            "Client error in handle_certificate"
-        )?;
-        Ok(verified)
-    }
-
-    pub async fn handle_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        let digest = *certificate.digest();
-        let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
-            .handle_certificate(certificate)
-            .await?;
-
-        let verified = check_error!(
-            self.address,
-            self.verify_certificate_response(&digest, response),
             "Client error in handle_certificate"
         )?;
         Ok(verified)

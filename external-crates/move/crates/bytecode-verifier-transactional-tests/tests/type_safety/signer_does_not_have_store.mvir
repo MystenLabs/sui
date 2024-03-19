@@ -1,0 +1,15 @@
+//# publish
+module 0x42.M {
+    struct S<T> {
+        f: T,
+    }
+
+    needs_store<T: store>() { label b0: return; }
+
+    t(account: &signer, s: signer) {
+    label b0:
+        // error signer does not have store
+        Self.needs_store<Self.S<signer>>();
+        return;
+    }
+}

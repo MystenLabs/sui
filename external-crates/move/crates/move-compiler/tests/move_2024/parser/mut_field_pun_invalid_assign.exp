@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
+  │
+6 │         S { mut f } = s1;
+  │             ^^^
+  │             │
+  │             Unexpected 'mut'
+  │             Expected an identifier
+

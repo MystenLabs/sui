@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, isValidSuiAddress } from '@mysten/sui.js/utils';
-
-import { SummaryCardFooter } from './Card';
-import { Text } from '../text';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { useActiveAddress } from '_src/ui/app/hooks';
+import { formatAddress, isValidSuiAddress } from '@mysten/sui.js/utils';
+
+import { Text } from '../text';
+import { SummaryCardFooter } from './Card';
 
 export function OwnerFooter({ owner, ownerType }: { owner?: string; ownerType?: string }) {
 	const address = useActiveAddress();

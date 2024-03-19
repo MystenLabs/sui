@@ -9,7 +9,7 @@ To request SUI from a faucet, import the `requestSuiFromFaucetV0` function from 
 `@mysten/sui.js/faucet` package to your project.
 
 ```typescript
-import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 ```
 
 Use `requestSuiFromFaucetV0` in your TypeScript code to request SUI from the network's faucet.
@@ -17,7 +17,7 @@ Use `requestSuiFromFaucetV0` in your TypeScript code to request SUI from the net
 ```typescript
 await requestSuiFromFaucetV0({
 	host: getFaucetHost('testnet'),
-	recipient: <RECEPIENT_ADDRESS>,
+	recipient: <RECIPIENT_ADDRESS>,
 });
 ```
 

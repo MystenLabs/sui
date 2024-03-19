@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Info16, CheckStroke16 } from '@mysten/icons';
-import { cva, type VariantProps } from 'class-variance-authority';
-
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-
+import { CheckStroke16, Info16 } from '@mysten/icons';
+import { cva, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
 
 const alertStyles = cva(

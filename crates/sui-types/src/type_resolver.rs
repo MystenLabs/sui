@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    error::{ExecutionError, SuiError},
-    object::{MoveObject, ObjectFormatOptions},
+use crate::error::{ExecutionError, SuiError};
+use move_core_types::{
+    annotated_value as A,
+    language_storage::{StructTag, TypeTag},
 };
-use move_core_types::{language_storage::TypeTag, value::MoveStructLayout};
 use move_vm_types::loaded_data::runtime_types::Type;
 
 pub trait LayoutResolver {
-    fn get_layout(
+    fn get_annotated_layout(
         &mut self,
-        object: &MoveObject,
-        format: ObjectFormatOptions,
-    ) -> Result<MoveStructLayout, SuiError>;
+        struct_tag: &StructTag,
+    ) -> Result<A::MoveStructLayout, SuiError>;
 }
 
 pub trait TypeTagResolver {

@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_infix_and_postfix_native_struct.move:5:46
+  │
+5 │     public native struct Foo has copy, drop; has store;
+  │                                              ^^^
+  │                                              │
+  │                                              Unexpected 'has'
+  │                                              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+

@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::language_storage::StructTag;
+use move_core_types::resolver::ResourceResolver;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
+use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -56,14 +55,14 @@ pub struct TemporaryStore<'backing> {
     deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
     /// Child objects loaded during dynamic field opers
     /// Currently onply populated for full nodes, not for validators
-    loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+    loaded_child_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     protocol_config: ProtocolConfig,
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObject>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -76,8 +75,9 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &ProtocolConfig,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
-        let lamport_timestamp = input_objects.lamport_timestamp();
+        let lamport_timestamp = input_objects.lamport_timestamp(&[]);
         let objects = input_objects.into_object_map();
+
         Self {
             store,
             tx_digest,
@@ -152,14 +152,10 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, (obj, _))| (id, obj))
                 .collect(),
             events: TransactionEvents { data: self.events },
-            max_binary_format_version: self.protocol_config.move_binary_format_version(),
-            loaded_child_objects: self
-                .loaded_child_objects
-                .into_iter()
-                .map(|(id, metadata)| (id, metadata.version))
-                .collect(),
-            no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
-            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
+            loaded_runtime_objects: self.loaded_child_objects,
+            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
+            lamport_version: self.lamport_timestamp,
+            binary_config: to_binary_config(&self.protocol_config),
         }
     }
 
@@ -178,13 +174,13 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.write_object(object, WriteKind::Mutate);
+            self.write_object(object.clone(), WriteKind::Mutate);
         }
     }
 
     pub fn to_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -260,11 +256,19 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
 
-        let effects = TransactionEffects::new_from_execution(
-            protocol_version,
+        let shared_object_refs = shared_object_refs
+            .into_iter()
+            .map(|shared_input| match shared_input {
+                SharedInput::Existing(oref) => oref,
+                SharedInput::Deleted(_) => {
+                    unreachable!("Shared object deletion not supported in effects v1")
+                }
+            })
+            .collect();
+
+        let effects = TransactionEffects::new_from_execution_v1(
             status,
             epoch,
             gas_cost_summary,
@@ -422,31 +426,31 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    pub fn save_loaded_child_objects(
+    pub fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
         #[cfg(debug_assertions)]
         {
-            for (id, v1) in &loaded_child_objects {
+            for (id, v1) in &loaded_runtime_objects {
                 if let Some(v2) = self.loaded_child_objects.get(id) {
                     assert_eq!(v1, v2);
                 }
             }
             for (id, v1) in &self.loaded_child_objects {
-                if let Some(v2) = loaded_child_objects.get(id) {
+                if let Some(v2) = loaded_runtime_objects.get(id) {
                     assert_eq!(v1, v2);
                 }
             }
         }
         // Merge the two maps because we may be calling the execution engine more than once
         // (e.g. in advance epoch transaction, where we may be publishing a new system package).
-        self.loaded_child_objects.extend(loaded_child_objects);
+        self.loaded_child_objects.extend(loaded_runtime_objects);
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         // In the worst case, the number of deps is equal to the number of input objects
-        TransactionEffects::estimate_effects_size_upperbound(
+        TransactionEffects::estimate_effects_size_upperbound_v1(
             self.written.len(),
             self.mutable_input_refs.len(),
             self.deleted.len(),
@@ -701,7 +705,7 @@ impl<'backing> TemporaryStore<'backing> {
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate =
-                gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
+                gas_charger.track_storage_mutation(*object_id, new_object_size, old_storage_rebate);
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
@@ -724,7 +728,7 @@ impl<'backing> TemporaryStore<'backing> {
                 | DeleteKindWithOldVersion::Normal(version) => {
                     // get and track the deleted object `storage_rebate`
                     let storage_rebate = self.get_input_storage_rebate(object_id, *version);
-                    gas_charger.track_storage_mutation(0, storage_rebate);
+                    gas_charger.track_storage_mutation(*object_id, 0, storage_rebate);
                 }
                 DeleteKindWithOldVersion::UnwrapThenDelete
                 | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
@@ -746,7 +750,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) {
         let wrapper = get_sui_system_state_wrapper(self.store.as_object_store())
             .expect("System state wrapper object must exist");
-        let new_object =
+        let (new_object, _) =
             wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
         self.write_object(new_object, WriteKind::Mutate);
     }
@@ -780,7 +784,7 @@ impl<'backing> TemporaryStore<'backing> {
             })
         } else {
             // not in input objects, must be a dynamic field
-            let Ok(Some(obj))= self.store.get_object_by_key(id, expected_version) else {
+            let Ok(Some(obj)) = self.store.get_object_by_key(id, expected_version) else {
                 invariant_violation!(
                     "Failed looking up dynamic field {id} in SUI conservation checking"
                 );
@@ -941,6 +945,25 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
                 .read_child_object(parent, child, child_version_upper_bound)
         }
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        // You should never be able to try and receive an object after deleting it or writing it in the same
+        // transaction since `Receiving` doesn't have copy.
+        debug_assert!(self.deleted.get(receiving_object_id).is_none());
+        debug_assert!(self.written.get(receiving_object_id).is_none());
+        self.store.get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<'backing> Storage for TemporaryStore<'backing> {
@@ -962,58 +985,43 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         }
     }
 
-    fn save_loaded_child_objects(
+    fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
-        TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
+        TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
+    }
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    ) {
+        unreachable!("Unused in v0")
     }
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(obj.clone()))
+            Ok(Some(PackageObject::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
-                    // TODO: Can this lock ever block execution?
-                    self.runtime_packages_loaded_from_db
-                        .write()
-                        .insert(*package_id, v);
+                if let Some(v) = &obj {
+                    if !self
+                        .runtime_packages_loaded_from_db
+                        .read()
+                        .contains_key(package_id)
+                    {
+                        // TODO: Can this lock ever block execution?
+                        // TODO: Why do we need a RwLock anyway???
+                        self.runtime_packages_loaded_from_db
+                            .write()
+                            .insert(*package_id, v.clone());
+                    }
                 }
                 obj
             })
-        }
-    }
-}
-
-impl<'backing> ModuleResolver for TemporaryStore<'backing> {
-    type Error = SuiError;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        let package_obj;
-        let package = match self.read_object(package_id) {
-            Some(object) => object,
-            None => match self.store.get_package_object(package_id)? {
-                Some(object) => {
-                    package_obj = object;
-                    &package_obj
-                }
-                None => {
-                    return Ok(None);
-                }
-            },
-        };
-        match &package.data {
-            Data::Package(c) => Ok(c
-                .serialized_module_map()
-                .get(module_id.name().as_str())
-                .cloned()),
-            _ => Err(SuiError::BadObjectType {
-                error: "Expected module object".to_string(),
-            }),
         }
     }
 }
@@ -1062,28 +1070,5 @@ impl<'backing> ParentSync for TemporaryStore<'backing> {
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref_deprecated(object_id)
-    }
-}
-
-impl<'backing> GetModule for TemporaryStore<'backing> {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(
-                obj.data
-                    .try_as_package()
-                    .expect("Bad object type--expected package")
-                    .deserialize_module(
-                        &module_id.name().to_owned(),
-                        self.protocol_config.move_binary_format_version(),
-                        self.protocol_config.no_extraneous_module_bytes(),
-                    )?,
-            ))
-        } else {
-            self.store.get_module_by_id(module_id)
-        }
     }
 }

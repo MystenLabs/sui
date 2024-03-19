@@ -1,31 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createMessage, type Message } from '_src/shared/messaging/messages';
+import {
+	isMethodPayload,
+	type MethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 import { fromB64 } from '@mysten/sui.js/utils';
 import Dexie from 'dexie';
+
+import { getAccountSourceByID } from '../account-sources';
+import { accountSourcesEvents } from '../account-sources/events';
+import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
+import { type UiConnection } from '../connections/UiConnection';
+import { backupDB, getDB } from '../db';
+import { LegacyVault } from '../legacy-accounts/LegacyVault';
+import { makeUniqueKey } from '../storage-utils';
 import {
 	isKeyPairExportableAccount,
 	isPasswordUnLockable,
 	isSigningAccount,
 	type SerializedAccount,
 } from './Account';
+import { accountsEvents } from './events';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
-import { accountsEvents } from './events';
-import { ZkAccount } from './zk/ZkAccount';
-import { getAccountSourceByID } from '../account-sources';
-import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
-import { type UiConnection } from '../connections/UiConnection';
-import { backupDB, getDB } from '../db';
-import { makeUniqueKey } from '../storage-utils';
-import { createMessage, type Message } from '_src/shared/messaging/messages';
-import {
-	type MethodPayload,
-	isMethodPayload,
-} from '_src/shared/messaging/messages/payloads/MethodPayload';
-import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
+import { ZkLoginAccount, type ZkLoginAccountSerialized } from './zklogin/ZkLoginAccount';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -40,8 +43,8 @@ function toAccount(account: SerializedAccount) {
 	if (QredoAccount.isOfType(account)) {
 		return new QredoAccount({ id: account.id, cachedData: account });
 	}
-	if (ZkAccount.isOfType(account)) {
-		return new ZkAccount({ id: account.id, cachedData: account });
+	if (ZkLoginAccount.isOfType(account)) {
+		return new ZkLoginAccount({ id: account.id, cachedData: account });
 	}
 	throw new Error(`Unknown account of type ${account.type}`);
 }
@@ -82,8 +85,8 @@ export async function getAccountsStatusData(
 ): Promise<Required<WalletStatusChange>['accounts']> {
 	const allAccounts = await (await getDB()).accounts.toArray();
 	return allAccounts
-		.filter(({ address }) => !accountsFilter?.length || accountsFilter.includes(address))
-		.map(({ address, publicKey }) => ({ address, publicKey }));
+		.filter(({ address }) => !accountsFilter || accountsFilter.includes(address))
+		.map(({ address, publicKey, nickname }) => ({ address, publicKey, nickname }));
 }
 
 export async function changeActiveAccount(accountID: string) {
@@ -211,9 +214,6 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		const account = await getAccountByID(id);
 		if (account) {
 			if (isPasswordUnLockable(account)) {
-				if (!password) {
-					throw new Error('Missing password to unlock the account');
-				}
 				await account.passwordUnlock(password);
 			} else {
 				await account.unlock();
@@ -263,8 +263,8 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			for (const aLedgerAccount of accounts) {
 				newSerializedAccounts.push(await LedgerAccount.createNew({ ...aLedgerAccount, password }));
 			}
-		} else if (type === 'zk') {
-			newSerializedAccounts.push(await ZkAccount.createNew(payload.args));
+		} else if (type === 'zkLogin') {
+			newSerializedAccounts.push(await ZkLoginAccount.createNew(payload.args));
 		} else {
 			throw new Error(`Unknown accounts type to create ${type}`);
 		}
@@ -291,6 +291,13 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		return true;
 	}
 	if (isMethodPayload(payload, 'verifyPassword')) {
+		if (payload.args.legacyAccounts) {
+			if (!(await LegacyVault.verifyPassword(payload.args.password))) {
+				throw new Error('Wrong password');
+			}
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
 		const allAccounts = await getAllAccounts();
 		for (const anAccount of allAccounts) {
 			if (isPasswordUnLockable(anAccount)) {
@@ -334,6 +341,48 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 				msg.id,
 			),
 		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'removeAccount')) {
+		const { accountID } = payload.args;
+		const db = await getDB();
+		await db.transaction('rw', db.accounts, db.accountSources, async () => {
+			const account = await db.accounts.get(accountID);
+			if (!account) {
+				throw new Error(`Account with id ${accountID} not found.`);
+			}
+			const accountSourceID =
+				'sourceID' in account && typeof account.sourceID === 'string' && account.sourceID;
+			await db.accounts.delete(account.id);
+			if (accountSourceID) {
+				const totalSameSourceAccounts = await db.accounts
+					.where('sourceID')
+					.equals(accountSourceID)
+					.count();
+				if (totalSameSourceAccounts === 0) {
+					await db.accountSources.delete(accountSourceID);
+				}
+			}
+		});
+		await backupDB();
+		accountsEvents.emit('accountsChanged');
+		accountSourcesEvents.emit('accountSourcesChanged');
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+		return true;
+	}
+	if (isMethodPayload(payload, 'acknowledgeZkLoginWarning')) {
+		const { accountID } = payload.args;
+		const account = await getAccountByID(accountID);
+		if (!account) {
+			throw new Error(`Account with id ${accountID} not found.`);
+		}
+		if (!(account instanceof ZkLoginAccount)) {
+			throw new Error(`Account with id ${accountID} is not a zkLogin account.`);
+		}
+		const updates: Partial<ZkLoginAccountSerialized> = { warningAcknowledged: true };
+		await (await getDB()).accounts.update(accountID, updates);
+		accountsEvents.emit('accountStatusChanged', { accountID });
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
 	return false;

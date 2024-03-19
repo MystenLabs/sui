@@ -2,180 +2,139 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
+use sui_json_rpc::error::SuiRpcInputError;
+use sui_types::error::SuiObjectResponseError;
+use sui_types::object::ObjectRead;
 
-use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
+use crate::errors::IndexerError;
+use crate::indexer_reader::IndexerReader;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
-use crate::errors::IndexerError;
-use crate::store::IndexerStore;
-use crate::types::SuiTransactionBlockResponseWithOptions;
 use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 
-pub(crate) struct ReadApi<S> {
-    fullnode: HttpClient,
-    state: S,
-    migrated_methods: Vec<String>,
+#[derive(Clone)]
+pub(crate) struct ReadApi {
+    inner: IndexerReader,
 }
 
-impl<S: IndexerStore> ReadApi<S> {
-    pub fn new(state: S, fullnode_client: HttpClient, migrated_methods: Vec<String>) -> Self {
-        Self {
-            state,
-            fullnode: fullnode_client,
-            migrated_methods,
+impl ReadApi {
+    pub fn new(inner: IndexerReader) -> Self {
+        Self { inner }
+    }
+
+    async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
+        match self
+            .inner
+            .spawn_blocking(move |this| this.get_checkpoint(id))
+            .await
+        {
+            Ok(Some(epoch_info)) => Ok(epoch_info),
+            Ok(None) => Err(IndexerError::InvalidArgumentError(format!(
+                "Checkpoint {id:?} not found"
+            ))),
+            Err(e) => Err(e),
         }
     }
 
-    async fn get_total_transaction_blocks_internal(&self) -> Result<u64, IndexerError> {
-        self.state
-            .get_total_transaction_number_from_checkpoints()
+    async fn get_latest_checkpoint(&self) -> Result<Checkpoint, IndexerError> {
+        self.inner
+            .spawn_blocking(|this| this.get_latest_checkpoint())
             .await
-            .map(|n| n as u64)
     }
 
-    async fn get_transaction_block_internal(
-        &self,
-        digest: &TransactionDigest,
-        options: Option<SuiTransactionBlockResponseOptions>,
-    ) -> Result<SuiTransactionBlockResponse, IndexerError> {
-        let tx = self
-            .state
-            .get_transaction_by_digest(&digest.base58_encode())
-            .await?;
-        let sui_tx_resp = self
-            .state
-            .compose_sui_transaction_block_response(tx, options.as_ref())
-            .await?;
-        let sui_transaction_response = SuiTransactionBlockResponseWithOptions {
-            response: sui_tx_resp,
-            options: options.unwrap_or_default(),
-        }
-        .into();
-        Ok(sui_transaction_response)
-    }
-
-    async fn multi_get_transaction_blocks_internal(
-        &self,
-        digests: &[TransactionDigest],
-        options: Option<SuiTransactionBlockResponseOptions>,
-    ) -> Result<Vec<SuiTransactionBlockResponse>, IndexerError> {
-        let digest_strs = digests
-            .iter()
-            .map(|digest| digest.base58_encode())
-            .collect::<Vec<_>>();
-        let tx_vec = self
-            .state
-            .multi_get_transactions_by_digests(&digest_strs)
-            .await?;
-        let ordered_tx_vec = digest_strs
-            .iter()
-            .filter_map(|digest| {
-                tx_vec
-                    .iter()
-                    .find(|tx| tx.transaction_digest == *digest)
-                    .cloned()
-            })
-            .collect::<Vec<_>>();
-        if ordered_tx_vec.len() != tx_vec.len() {
-            return Err(IndexerError::PostgresReadError(
-                "Transaction count changed after reorder, this should never happen.".to_string(),
-            ));
-        }
-        let sui_tx_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
-            self.state
-                .compose_sui_transaction_block_response(tx, options.as_ref())
-        });
-        let sui_tx_resp_vec = join_all(sui_tx_resp_futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(sui_tx_resp_vec)
-    }
-
-    async fn get_object_internal(
-        &self,
-        object_id: ObjectID,
-        options: Option<SuiObjectDataOptions>,
-    ) -> Result<SuiObjectResponse, IndexerError> {
-        let read = self.state.get_object(object_id, None).await?;
-        Ok((read, options.unwrap_or_default()).try_into()?)
-    }
-
-    async fn get_latest_checkpoint_sequence_number_internal(&self) -> Result<u64, IndexerError> {
-        self.state
-            .get_latest_tx_checkpoint_sequence_number()
-            .await
-            .map(|n| n as u64)
+    async fn get_chain_identifier(&self) -> RpcResult<ChainIdentifier> {
+        let genesis_checkpoint = self.get_checkpoint(CheckpointId::SequenceNumber(0)).await?;
+        Ok(ChainIdentifier::from(genesis_checkpoint.digest))
     }
 }
 
 #[async_trait]
-impl<S> ReadApiServer for ReadApi<S>
-where
-    S: IndexerStore + Sync + Send + 'static,
-{
+impl ReadApiServer for ReadApi {
     async fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        if !self.migrated_methods.contains(&"get_object".into()) {
-            let obj_guard = self
-                .state
-                .indexer_metrics()
-                .get_object_latency
-                .start_timer();
-            let obj_resp = self.fullnode.get_object(object_id, options).await;
-            obj_guard.stop_and_record();
-            return obj_resp;
-        }
+        let options = options.unwrap_or_default();
+        let object_read = self
+            .inner
+            .get_object_read_in_blocking_task(object_id)
+            .await?;
 
-        Ok(self.get_object_internal(object_id, options).await?)
+        match object_read {
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
+            ObjectRead::Exists(object_ref, o, layout) => {
+                let mut display_fields = None;
+                if options.show_display {
+                    match self.inner.get_display_fields(&o, &layout).await {
+                        Ok(rendered_fields) => display_fields = Some(rendered_fields),
+                        Err(e) => {
+                            return Ok(SuiObjectResponse::new(
+                                Some((object_ref, o, layout, options, None).try_into()?),
+                                Some(SuiObjectResponseError::DisplayError {
+                                    error: e.to_string(),
+                                }),
+                            ));
+                        }
+                    }
+                }
+                Ok(SuiObjectResponse::new_with_data(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
+        }
     }
 
+    // For ease of implementation we just forward to the single object query, although in the
+    // future we may want to improve the performance by having a more naitive multi_get
+    // functionality
     async fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        let objs_guard = self
-            .state
-            .indexer_metrics()
-            .multi_get_objects_latency
-            .start_timer();
-        let objs_resp = self.fullnode.multi_get_objects(object_ids, options).await;
-        objs_guard.stop_and_record();
-        objs_resp
+        if object_ids.len() > *QUERY_MAX_RESULT_LIMIT {
+            return Err(
+                SuiRpcInputError::SizeLimitExceeded(QUERY_MAX_RESULT_LIMIT.to_string()).into(),
+            );
+        }
+
+        let mut futures = vec![];
+        for object_id in object_ids {
+            futures.push(self.get_object(object_id, options.clone()));
+        }
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
-        if !self
-            .migrated_methods
-            .contains(&"get_total_transaction_blocks".to_string())
-        {
-            let total_tx_guard = self
-                .state
-                .indexer_metrics()
-                .get_total_transaction_blocks_latency
-                .start_timer();
-            let total_tx_resp = self.fullnode.get_total_transaction_blocks().await;
-            total_tx_guard.stop_and_record();
-            return total_tx_resp;
-        }
-        Ok(self.get_total_transaction_blocks_internal().await?.into())
+        let checkpoint = self.get_latest_checkpoint().await?;
+        Ok(BigInt::from(checkpoint.network_total_transactions))
     }
 
     async fn get_transaction_block(
@@ -183,22 +142,15 @@ where
         digest: TransactionDigest,
         options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        if !self
-            .migrated_methods
-            .contains(&"get_transaction_block".to_string())
-        {
-            let tx_guard = self
-                .state
-                .indexer_metrics()
-                .get_transaction_block_latency
-                .start_timer();
-            let tx_resp = self.fullnode.get_transaction_block(digest, options).await;
-            tx_guard.stop_and_record();
-            return tx_resp;
-        }
-        Ok(self
-            .get_transaction_block_internal(&digest, options)
-            .await?)
+        let mut txn = self
+            .multi_get_transaction_blocks(vec![digest], options)
+            .await?;
+
+        let txn = txn.pop().ok_or_else(|| {
+            IndexerError::InvalidArgumentError(format!("Transaction {digest} not found"))
+        })?;
+
+        Ok(txn)
     }
 
     async fn multi_get_transaction_blocks(
@@ -206,99 +158,52 @@ where
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
-        if !self
-            .migrated_methods
-            .contains(&"multi_get_transaction_blocks".to_string())
-        {
-            let multi_tx_guard = self
-                .state
-                .indexer_metrics()
-                .multi_get_transaction_blocks_latency
-                .start_timer();
-            let multi_tx_resp = self
-                .fullnode
-                .multi_get_transaction_blocks(digests, options)
-                .await;
-            multi_tx_guard.stop_and_record();
-            return multi_tx_resp;
+        let num_digests = digests.len();
+        if num_digests > *QUERY_MAX_RESULT_LIMIT {
+            Err(SuiRpcInputError::SizeLimitExceeded(
+                QUERY_MAX_RESULT_LIMIT.to_string(),
+            ))?
         }
-        Ok(self
-            .multi_get_transaction_blocks_internal(&digests, options)
-            .await?)
+
+        let options = options.unwrap_or_default();
+        let txns = self
+            .inner
+            .multi_get_transaction_block_response_in_blocking_task(digests, options)
+            .await?;
+
+        Ok(txns)
     }
 
     async fn try_get_past_object(
         &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-        options: Option<SuiObjectDataOptions>,
+        _object_id: ObjectID,
+        _version: SequenceNumber,
+        _options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        let past_obj_guard = self
-            .state
-            .indexer_metrics()
-            .try_get_past_object_latency
-            .start_timer();
-        let past_obj_resp = self
-            .fullnode
-            .try_get_past_object(object_id, version, options)
-            .await;
-        past_obj_guard.stop_and_record();
-        past_obj_resp
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn try_multi_get_past_objects(
         &self,
-        past_objects: Vec<SuiGetPastObjectRequest>,
-        options: Option<SuiObjectDataOptions>,
+        _past_objects: Vec<SuiGetPastObjectRequest>,
+        _options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        let multi_past_obj_guard = self
-            .state
-            .indexer_metrics()
-            .try_multi_get_past_objects_latency
-            .start_timer();
-        let multi_past_obj_resp = self
-            .fullnode
-            .try_multi_get_past_objects(past_objects, options)
-            .await;
-        multi_past_obj_guard.stop_and_record();
-        multi_past_obj_resp
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
-        if !self
-            .migrated_methods
-            .contains(&"get_latest_checkpoint_sequence_number".to_string())
-        {
-            let latest_cp_guard = self
-                .state
-                .indexer_metrics()
-                .get_latest_checkpoint_sequence_number_latency
-                .start_timer();
-            let latest_cp_resp = self.fullnode.get_latest_checkpoint_sequence_number().await;
-            latest_cp_guard.stop_and_record();
-            return latest_cp_resp;
-        }
-        Ok(self
-            .get_latest_checkpoint_sequence_number_internal()
-            .await?
-            .into())
+        let checkpoint = self.get_latest_checkpoint().await?;
+        Ok(BigInt::from(checkpoint.sequence_number))
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        if !self
-            .migrated_methods
-            .contains(&"get_checkpoint".to_string())
-        {
-            let cp_guard = self
-                .state
-                .indexer_metrics()
-                .get_checkpoint_latency
-                .start_timer();
-            let cp_resp = self.fullnode.get_checkpoint(id).await;
-            cp_guard.stop_and_record();
-            return cp_resp;
-        }
-        Ok(self.state.get_checkpoint(id).await?)
+        self.get_checkpoint(id).await.map_err(Into::into)
     }
 
     async fn get_checkpoints(
@@ -307,17 +212,28 @@ where
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        let cps_guard = self
-            .state
-            .indexer_metrics()
-            .get_checkpoints_latency
-            .start_timer();
-        let cps_resp = self
-            .fullnode
-            .get_checkpoints(cursor, limit, descending_order)
-            .await;
-        cps_guard.stop_and_record();
-        cps_resp
+        let cursor = cursor.map(BigInt::into_inner);
+        let limit = sui_json_rpc_api::validate_limit(
+            limit,
+            sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+        )
+        .map_err(SuiRpcInputError::from)?;
+
+        let mut checkpoints = self
+            .inner
+            .spawn_blocking(move |this| this.get_checkpoints(cursor, limit + 1, descending_order))
+            .await?;
+
+        let has_next_page = checkpoints.len() > limit;
+        checkpoints.truncate(limit);
+
+        let next_cursor = checkpoints.last().map(|d| d.sequence_number.into());
+
+        Ok(CheckpointPage {
+            data: checkpoints,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn get_checkpoints_deprecated_limit(
@@ -326,67 +242,66 @@ where
         limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
-            .await
+        self.get_checkpoints(
+            cursor,
+            limit.map(|l| l.into_inner() as usize),
+            descending_order,
+        )
+        .await
     }
 
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
-        let events_guard = self
-            .state
-            .indexer_metrics()
-            .get_events_latency
-            .start_timer();
-        let events_resp = self.fullnode.get_events(transaction_digest).await;
-        events_guard.stop_and_record();
-        events_resp
+        self.inner
+            .get_transaction_events_in_blocking_task(transaction_digest)
+            .await
+            .map_err(Into::into)
     }
+
     async fn get_loaded_child_objects(
         &self,
-        digest: TransactionDigest,
+        _digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        let dynamic_fields_load_obj_guard = self
-            .state
-            .indexer_metrics()
-            .get_loaded_child_objects_latency
-            .start_timer();
-        let dyn_fields_resp = self.fullnode.get_loaded_child_objects(digest).await;
-        dynamic_fields_load_obj_guard.stop_and_record();
-        dyn_fields_resp
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse> {
-        let protocol_config_guard = self
-            .state
-            .indexer_metrics()
-            .get_protocol_config_latency
-            .start_timer();
-        let protocol_config_resp = self.fullnode.get_protocol_config(version).await;
-        protocol_config_guard.stop_and_record();
-        protocol_config_resp
+        let chain = self.get_chain_identifier().await?.chain();
+        let version = if let Some(version) = version {
+            (*version).into()
+        } else {
+            let latest_epoch = self
+                .inner
+                .spawn_blocking(|this| this.get_latest_epoch_info_from_db())
+                .await?;
+            (latest_epoch.protocol_version as u64).into()
+        };
+
+        ProtocolConfig::get_for_version_if_supported(version, chain)
+            .ok_or(SuiRpcInputError::ProtocolVersionUnsupported(
+                ProtocolVersion::MIN.as_u64(),
+                ProtocolVersion::MAX.as_u64(),
+            ))
+            .map_err(Into::into)
+            .map(ProtocolConfigResponse::from)
     }
 
     async fn get_chain_identifier(&self) -> RpcResult<String> {
-        let ci = self
-            .state
-            .get_checkpoint(CheckpointId::SequenceNumber(0))
-            .await?
-            .digest;
-        Ok(ChainIdentifier::from(ci).to_string())
+        self.get_chain_identifier().await.map(|id| id.to_string())
     }
 }
 
-impl<S> SuiRpcModule for ReadApi<S>
-where
-    S: IndexerStore + Sync + Send + 'static,
-{
+impl SuiRpcModule for ReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::ReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::ReadApiOpenRpc::module_doc()
     }
 }

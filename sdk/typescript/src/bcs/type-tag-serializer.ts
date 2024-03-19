@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { splitGenericParameters } from '@mysten/bcs';
-import type { TypeTag } from './index.js';
+
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import type { TypeTag } from './index.js';
 
 const VECTOR_REGEX = /^vector<(.+)>$/;
 const STRUCT_REGEX = /^([^:]+)::([^:]+)::([^<]+)(<(.+)>)?/;

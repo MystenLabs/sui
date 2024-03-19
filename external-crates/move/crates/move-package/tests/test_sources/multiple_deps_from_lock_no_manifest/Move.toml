@@ -1,0 +1,22 @@
+# The purpose of this test is to make sure that the dependency graph is correctly read from lock
+# files (fast [path) without relying on the information in the manifest files. This is accomplished
+# by stripping dependency information from manifest files of packages C and D and expecting that
+# reading these dependencies will instead happen from C's and D's lock files. In order to only have
+# C's and D's files read and C's and D's manifest files skipped,, C's and D's lock files are updated
+# by-hand to contain a manifest digest reflecting the content of the respective stripped manifest
+# files.
+#
+# The Move.locked file is not generated due to how the test harness works but the graph is correctly
+# included in the Move.resolved file. Please note that while dependency graph is correct, the
+# resolved graph is missing some information as it includes data read from manifest files during
+# graph resolution (but NOT during dependency graph construction) that are now stripped.
+
+[package]
+name = "test"
+
+[addresses]
+A = "0x0"
+
+[dependencies]
+C = { local = "./deps_only/C" }
+D = { local = "./deps_only/D" }

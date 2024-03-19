@@ -3,16 +3,24 @@
 
 module sui::ecdsa_k1 {
 
-    /// Error if the public key cannot be recovered from the signature. 
+    #[allow(unused_const)]
+    /// Error if the public key cannot be recovered from the signature.
     const EFailToRecoverPubKey: u64 = 0;
 
+    #[allow(unused_const)]
     /// Error if the signature is invalid.
     const EInvalidSignature: u64 = 1;
-    
-    /// Hash function name that are valid for ecrecover and secp256k1_verify. 
+
+    #[allow(unused_const)]
+    /// Error if the public key is invalid.
+    const EInvalidPubKey: u64 = 2;
+
+    #[allow(unused_const)]
+    /// Hash function name that are valid for ecrecover and secp256k1_verify.
     const KECCAK256: u8 = 0;
+    #[allow(unused_const)]
     const SHA256: u8 = 1;
-    
+
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
     /// Secp256k1. Reference implementation on signature generation using RFC6979:
     /// https://github.com/MystenLabs/narwhal/blob/5d6f6df8ccee94446ff88786c0dbbc98be7cfc09/crypto/src/secp256k1.rs
@@ -22,13 +30,13 @@ module sui::ecdsa_k1 {
     ///
     /// If the signature is valid, return the corresponding recovered Secpk256k1 public
     /// key, otherwise throw error. This is similar to ecrecover in Ethereum, can only be
-    /// applied to Secp256k1 signatures.
+    /// applied to Secp256k1 signatures. May abort with `EFailToRecoverPubKey` or `EInvalidSignature`.
     public native fun secp256k1_ecrecover(signature: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>;
 
     /// @param pubkey: A 33-bytes compressed public key, a prefix either 0x02 or 0x03 and a 256-bit integer.
     ///
     /// If the compressed public key is valid, return the 65-bytes uncompressed public key,
-    /// otherwise throw error.
+    /// otherwise throw error. May abort with `EInvalidPubKey`.
     public native fun decompress_pubkey(pubkey: &vector<u8>): vector<u8>;
 
     /// @param signature: A 64-bytes signature in form (r, s) that is signed using

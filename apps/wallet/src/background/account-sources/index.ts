@@ -1,6 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createMessage, type Message } from '_src/shared/messaging/messages';
+import {
+	isMethodPayload,
+	type MethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { toEntropy } from '_src/shared/utils/bip39';
+
+import { type UiConnection } from '../connections/UiConnection';
+import { getDB } from '../db';
+import { type QredoConnectIdentity } from '../qredo/types';
+import { isSameQredoConnection } from '../qredo/utils';
 import {
 	type AccountSource,
 	type AccountSourceSerialized,
@@ -8,16 +19,6 @@ import {
 } from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
-import { type UiConnection } from '../connections/UiConnection';
-import { getDB } from '../db';
-import { type QredoConnectIdentity } from '../qredo/types';
-import { isSameQredoConnection } from '../qredo/utils';
-import { type Message, createMessage } from '_src/shared/messaging/messages';
-import {
-	type MethodPayload,
-	isMethodPayload,
-} from '_src/shared/messaging/messages/payloads/MethodPayload';
-import { toEntropy } from '_src/shared/utils/bip39';
 
 function toAccountSource(accountSource: AccountSourceSerialized) {
 	if (MnemonicAccountSource.isOfType(accountSource)) {
@@ -114,6 +115,7 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 		);
 		return true;
 	}
+
 	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
 		const { id, password } = payload.args;
 		const accountSource = await getAccountSourceByID(id);
@@ -152,6 +154,19 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 				msg.id,
 			),
 		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'verifyPasswordRecoveryData')) {
+		const { accountSourceID, entropy } = payload.args.data;
+		const accountSource = await getAccountSourceByID(accountSourceID);
+		if (!accountSource) {
+			throw new Error('Account source not found');
+		}
+		if (!(accountSource instanceof MnemonicAccountSource)) {
+			throw new Error('Invalid account source type');
+		}
+		await accountSource.verifyRecoveryData(entropy);
+		uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
 	return false;

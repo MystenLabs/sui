@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type GetWalletsParams } from '_src/shared/qredo-api';
 import { useQuery } from '@tanstack/react-query';
 
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoAPI } from '../../hooks/useQredoAPI';
-import { type GetWalletsParams } from '_src/shared/qredo-api';
 
 export function useQredoUIPendingRequest(requestID?: string) {
 	const backgroundClient = useBackgroundClient();

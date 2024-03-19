@@ -30,6 +30,8 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::ConciseableName;
+use sui_types::committee::CommitteeTrait;
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
@@ -71,8 +73,8 @@ pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
 use futures::FutureExt;
-use sui_types::messages_grpc::{HandleCertificateResponse, TransactionStatus};
-use sui_types::quorum_driver_types::QuorumDriverResponse;
+use sui_types::messages_grpc::{HandleCertificateResponseV2, TransactionStatus};
+use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
@@ -368,12 +370,14 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     let QuorumDriverResponse {
                         effects_cert,
                         events,
-                        ..
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),
                         events,
                     ));
+                }
+                Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
+                    bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
                 }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
@@ -515,7 +519,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let name = *name;
             futures.push(async move {
                 client
-                    .handle_certificate(certificate)
+                    .handle_certificate_v2(certificate)
                     .map(move |r| (r, name))
                     .await
             });
@@ -530,9 +534,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             auth_agg.metrics.inflight_certificate_requests.dec();
             match response {
                 // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse {
+                Ok(HandleCertificateResponseV2 {
                     signed_effects,
                     events,
+                    fastpath_input_objects: _, // unused field
                 }) => {
                     let author = signed_effects.auth_sig().authority;
                     transaction_effects = Some(signed_effects.data().clone());
@@ -637,8 +642,7 @@ impl FullNodeProxy {
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
         let committee_vec = resp.validators;
-        let committee_map =
-            BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
+        let committee_map = BTreeMap::from_iter(committee_vec.into_iter());
         let committee =
             Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
 
@@ -857,6 +861,9 @@ impl From<CallArg> for BenchMoveCallArg {
                     initial_shared_version,
                     mutable,
                 } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                ObjectArg::Receiving(_) => {
+                    unimplemented!("Receiving is not supported for benchmarks")
+                }
             },
         }
     }

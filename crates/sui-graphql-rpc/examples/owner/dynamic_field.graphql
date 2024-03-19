@@ -1,0 +1,51 @@
+fragment DynamicFieldValueSelection on DynamicFieldValue {
+  ... on MoveValue {
+    type {
+      repr
+    }
+    data
+    __typename
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      type {
+        repr
+      }
+      data
+    }
+    __typename
+  }
+}
+
+fragment DynamicFieldNameSelection on MoveValue {
+  type {
+    repr
+  }
+  data
+  bcs
+}
+
+fragment DynamicFieldSelect on DynamicField {
+  name {
+    ...DynamicFieldNameSelection
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
+}
+
+query DynamicField {
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Listing",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
+}

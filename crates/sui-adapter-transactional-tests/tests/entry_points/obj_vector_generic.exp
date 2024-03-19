@@ -29,7 +29,7 @@ mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 task 6 'run'. lines 129-133:
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0xc7f065f57e819836de7be3316b9106fb484b971ea18fdbd5034904850342d3ca, parent_id: 0xffddb920cb12e53ca4fb828fb0ecad515e6e889d3f183889a4e10908cb39b2e0 }
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(5,0), parent_id: object(5,1) }
 
 task 7 'run'. lines 135-135:
 created: object(7,0)
@@ -60,8 +60,9 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 13 'run'. lines 153-156:
-Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
-Cannot return execution error with shared objects. Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
+mutated: object(0,0)
+deleted: object(12,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 task 14 'run'. lines 158-158:
 created: object(14,0)

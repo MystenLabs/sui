@@ -34,3 +34,5 @@ export * from './utils/kiosk';
 export * from './hooks/useElementDimensions';
 export * from './hooks/useSuiCoinData';
 export * from './hooks/useLocalStorage';
+export * from './hooks/useGetDelegatedStake';
+export * from './hooks/useTokenPrice';

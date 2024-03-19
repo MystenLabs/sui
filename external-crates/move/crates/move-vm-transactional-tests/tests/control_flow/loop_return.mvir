@@ -1,0 +1,11 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+label loop:
+    return;
+    assert(false, 42);
+    jump loop;
+}
+
+}

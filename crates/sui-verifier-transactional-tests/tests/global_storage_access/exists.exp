@@ -1,9 +1,0 @@
-processed 2 tasks
-
-task 0 'publish'. lines 4-14:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Access to Move global storage is not allowed. Found in function no: [Exists(StructDefinitionIndex(0))]"), command: Some(0) } }
-
-task 1 'publish'. lines 16-25:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Access to Move global storage is not allowed. Found in function no: [ExistsGeneric(StructDefInstantiationIndex(0))]"), command: Some(0) } }

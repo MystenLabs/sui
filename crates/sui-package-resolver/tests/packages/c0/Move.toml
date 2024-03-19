@@ -1,0 +1,11 @@
+[package]
+name = "C"
+version = "0.0.1"
+published-at = "0xc0"
+
+[dependencies]
+A = { local = "../a1", override = true }
+B = { local = "../b0" }
+
+[addresses]
+c = "0xc0"

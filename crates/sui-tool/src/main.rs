@@ -13,9 +13,9 @@ async fn main() {
     colored::control::set_virtual_terminal(true).unwrap();
 
     let cmd: ToolCommand = ToolCommand::parse();
-    let _guard = telemetry_subscribers::TelemetryConfig::new()
+    let (_guards, handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
-    exit_main!(cmd.execute().await);
+    exit_main!(cmd.execute(handle).await);
 }
