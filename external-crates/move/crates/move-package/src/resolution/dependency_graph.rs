@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toml_edit::{ArrayOfTables, Document, Item, Table};
+use toml_edit::{Array, ArrayOfTables, Document, Item, Table, Value};
 
 use crate::{
     lock_file::{schema, LockFile},
@@ -1215,6 +1215,7 @@ impl DependencyGraph {
     /// This operation fails, writing nothing, if the graph contains a cycle, and can fail with an
     /// undefined output if it cannot be represented in a TOML file.
     pub fn write_to_lock(&self, install_dir: PathBuf) -> Result<LockFile> {
+        use toml_edit::value;
         let lock = LockFile::new(
             install_dir,
             self.manifest_digest.clone(),
@@ -1223,7 +1224,17 @@ impl DependencyGraph {
         let mut writer = BufWriter::new(&*lock);
         let mut doc = Document::new(); // TODO: parse doc from existing toml
 
-        self.write_dependencies_to_lock(self.root_package_id, &mut writer)?;
+        let (deps, dev_deps) =
+            self.write_dependencies_to_lock(self.root_package_id, &mut writer)?;
+
+        let move_table = doc
+            .entry("move")
+            .or_insert_with(|| Item::Table(Table::new()))
+            .as_table_mut()
+            .unwrap();
+
+        move_table["dependencies"] = value(deps);
+
         // TODO: pass mut doc to dependencies
 
         let move_package_array = doc
@@ -1237,12 +1248,13 @@ impl DependencyGraph {
             .unwrap();
 
         for (id, pkg) in &self.package_table {
-            use toml_edit::value;
             println!("processing {}", id);
 
             let mut package = Table::new();
             package["name"] = value(id.as_str());
-            package["source"] = value(PackageTOML(pkg).to_string());
+            let table_string = PackageTOML(pkg).to_string();
+            let table_value = table_string.parse::<Value>().expect("fail"); // TODO better
+            package["source"] = value(table_value);
             if let Some(version) = &pkg.version {
                 package["version"] = value(version.to_string());
             }
@@ -1261,7 +1273,6 @@ impl DependencyGraph {
             move_package_array.push(package);
         }
 
-        println!("move_package_array: {}", move_package_array);
         println!("doc: {}", doc);
 
         writer.flush()?;
@@ -1276,7 +1287,7 @@ impl DependencyGraph {
         &self,
         id: PackageIdentifier,
         writer: &mut W,
-    ) -> Result<()> {
+    ) -> Result<(Array, Array)> {
         let mut deps: Vec<_> = self
             .package_graph
             .edges(id)
@@ -1287,6 +1298,71 @@ impl DependencyGraph {
         // stable.
         deps.sort_by_key(|(dep, pkg)| (dep.mode, *pkg));
         let mut deps = deps.into_iter().peekable();
+
+        //////////////// END /////////////////////
+
+        let mut dependencies = Array::new();
+        let mut dev_dependencies = Array::new();
+
+        // Iterate over dependencies with mode "Always"
+        if let Some((
+            Dependency {
+                mode: DependencyMode::Always,
+                ..
+            },
+            _,
+        )) = deps.peek()
+        {
+            writeln!(writer, "\ndependencies = [")?;
+            while let Some((
+                dep @ Dependency {
+                    mode: DependencyMode::Always,
+                    ..
+                },
+                pkg,
+            )) = deps.peek()
+            {
+                writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
+                // {
+                // name = name
+                // digest = digest
+                // addr_subst = subst
+                // }
+                let table_string = format!("{}", DependencyTOML(*pkg, dep));
+                let table_value = table_string.parse::<Value>().expect("fail"); // TODO better
+                dependencies.push(table_value);
+                deps.next();
+            }
+            writeln!(writer, "]")?;
+        }
+
+        // Iterate over dependencies with mode "DevOnly"
+        /*
+            if let Some((
+                Dependency {
+                    mode: DependencyMode::DevOnly,
+                    ..
+                },
+                _,
+            )) = deps.peek()
+            {
+                writeln!(writer, "\ndev-dependencies = [")?;
+                while let Some((
+                    dep @ Dependency {
+                        mode: DependencyMode::DevOnly,
+                        ..
+                    },
+                    pkg,
+                )) = deps.peek()
+                {
+                    writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
+                    deps.next();
+                }
+                writeln!(writer, "]")?;
+        }
+        */
+
+        //////////////// END /////////////////////
 
         macro_rules! write_deps {
             ($mode: pat, $label: literal) => {
@@ -1304,7 +1380,7 @@ impl DependencyGraph {
         write_deps!(DependencyMode::Always, "dependencies");
         write_deps!(DependencyMode::DevOnly, "dev-dependencies");
 
-        Ok(())
+        Ok((dependencies, dev_dependencies))
     }
 
     /// Returns packages in the graph in topological order (a package is ordered before its
