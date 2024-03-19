@@ -8,7 +8,7 @@
 // 2          | 3
 // 3          | 2
 
-//# init --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {

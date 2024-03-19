@@ -5,7 +5,7 @@
 // The emitting module is where the entrypoint function is defined -
 // in other words, the function called by a programmable transaction block.
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
