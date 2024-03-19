@@ -11,7 +11,7 @@ use consensus_config::ProtocolKeyPair;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
 use crate::transaction::TransactionGuard;
@@ -131,7 +131,12 @@ impl Core {
         self.add_accepted_blocks(last_quorum);
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
-        self.try_propose(true).unwrap();
+        if self.try_propose(true).unwrap().is_none() {
+            // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
+            self.signals
+                .new_block(self.last_proposed_block.clone())
+                .unwrap();
+        }
 
         self
     }
@@ -296,7 +301,7 @@ impl Core {
             .into_iter()
             .for_each(TransactionGuard::acknowledge);
 
-        tracing::info!("Created block {}", verified_block);
+        info!("Created block {}", verified_block);
 
         Some(verified_block)
     }
