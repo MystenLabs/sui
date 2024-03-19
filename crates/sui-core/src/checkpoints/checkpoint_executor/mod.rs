@@ -64,7 +64,8 @@ mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
-type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
+type CheckpointExecutionBuffer =
+    FuturesOrdered<JoinHandle<(VerifiedCheckpoint, Vec<TransactionDigest>)>>;
 
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
@@ -219,8 +220,8 @@ impl CheckpointExecutor {
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
-                Some(Ok(checkpoint)) = pending.next() => {
-                    self.process_executed_checkpoint(&checkpoint);
+                Some(Ok((checkpoint, tx_digests))) = pending.next() => {
+                    self.process_executed_checkpoint(&epoch_store, &checkpoint, &tx_digests).await;
                     highest_executed = Some(checkpoint.clone());
 
                     // Estimate TPS every 10k transactions or 30 sec
@@ -278,10 +279,7 @@ impl CheckpointExecutor {
             .set(is_inconsistent_state as i64);
     }
 
-    /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
-    /// to be called in the order of checkpoint sequence number.
-    #[instrument(level = "debug", skip_all)]
-    fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+    fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
         debug!("Bumping highest_executed_checkpoint watermark to {seq:?}");
@@ -327,6 +325,30 @@ impl CheckpointExecutor {
             .last_executed_checkpoint_timestamp_ms
             .set(checkpoint.timestamp_ms as i64);
         checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
+    }
+
+    /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
+    /// to be called in the order of checkpoint sequence number.
+    #[instrument(level = "debug", skip_all)]
+    async fn process_executed_checkpoint(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint: &VerifiedCheckpoint,
+        all_tx_digests: &[TransactionDigest],
+    ) {
+        // Commit all transaction effects to disk
+        let cache_commit = self.state.get_cache_commit();
+        debug!(seq = ?checkpoint.sequence_number, "committing checkpoint transactions to disk");
+        for digest in all_tx_digests {
+            cache_commit
+                .commit_transaction_outputs(epoch_store.epoch(), digest)
+                .await
+                .expect("commit_transaction_outputs cannot fail");
+        }
+
+        if !checkpoint.is_last_checkpoint_of_epoch() {
+            self.bump_highest_executed_checkpoint(checkpoint);
+        }
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -409,31 +431,37 @@ impl CheckpointExecutor {
 
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
-            while let Err(err) = execute_checkpoint(
-                checkpoint.clone(),
-                &state,
-                cache_reader.as_ref(),
-                checkpoint_store.clone(),
-                epoch_store.clone(),
-                tx_manager.clone(),
-                accumulator.clone(),
-                local_execution_timeout_sec,
-                &metrics,
-                data_ingestion_dir.clone(),
-            )
-            .await
-            {
-                error!(
-                    "Error while executing checkpoint, will retry in 1s: {:?}",
-                    err
-                );
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                metrics.checkpoint_exec_errors.inc();
-            }
-            checkpoint
+            let tx_digests = loop {
+                match execute_checkpoint(
+                    checkpoint.clone(),
+                    &state,
+                    cache_reader.as_ref(),
+                    checkpoint_store.clone(),
+                    epoch_store.clone(),
+                    tx_manager.clone(),
+                    accumulator.clone(),
+                    local_execution_timeout_sec,
+                    &metrics,
+                    data_ingestion_dir.clone(),
+                )
+                .await
+                {
+                    Err(err) => {
+                        error!(
+                            "Error while executing checkpoint, will retry in 1s: {:?}",
+                            err
+                        );
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        metrics.checkpoint_exec_errors.inc();
+                    }
+                    Ok(tx_digests) => break tx_digests,
+                }
+            };
+            (checkpoint, tx_digests)
         }));
     }
 
+    #[instrument(level = "info", skip_all)]
     async fn execute_change_epoch_tx(
         &self,
         execution_digests: ExecutionDigests,
@@ -516,6 +544,12 @@ impl CheckpointExecutor {
                     )
                     .await;
 
+                    let cache_commit = self.state.get_cache_commit();
+                    cache_commit
+                        .commit_transaction_outputs(cur_epoch, &change_epoch_tx_digest)
+                        .await
+                        .expect("commit_transaction_outputs cannot fail");
+
                     fail_point_async!("prune-and-compact");
 
                     // For finalizing the checkpoint, we need to pass in all checkpoint
@@ -562,6 +596,8 @@ impl CheckpointExecutor {
                         .await
                         .expect("Accumulating epoch cannot fail");
 
+                    self.bump_highest_executed_checkpoint(checkpoint);
+
                     return true;
                 }
             }
@@ -584,7 +620,7 @@ async fn execute_checkpoint(
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
     data_ingestion_dir: Option<PathBuf>,
-) -> SuiResult {
+) -> SuiResult<Vec<TransactionDigest>> {
     debug!("Preparing checkpoint for execution",);
     let prepare_start = Instant::now();
 
@@ -637,7 +673,7 @@ async fn execute_checkpoint(
         }
     }
 
-    Ok(())
+    Ok(all_tx_digests)
 }
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
@@ -1135,12 +1171,6 @@ async fn finalize_checkpoint(
     effects: Vec<TransactionEffects>,
     data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
-    let cache_commit = state.get_cache_commit();
-    for digest in tx_digests {
-        cache_commit
-            .commit_transaction_outputs(epoch_store.epoch(), digest)
-            .await?;
-    }
     if epoch_store.per_epoch_finalized_txns_enabled() {
         epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
     }
