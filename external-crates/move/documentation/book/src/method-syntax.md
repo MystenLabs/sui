@@ -76,8 +76,7 @@ The syntax for a `use fun` statement is as follows:
 use fun <function> as <type>.<method alias>;
 ```
 
-This creates an alias for the `<function>`, which the `<type>` can receive as
-`<method alias>`.
+This creates an alias for the `<function>`, which the `<type>` can receive as `<method alias>`.
 
 For example
 
@@ -152,8 +151,8 @@ Normally, we would be stuck having to call it as `double(&c)` because `b::exampl
     }
 ```
 
-While `use fun` can be made in any scope, the target `<function>` of the `use fun` must have a
-first argument that is the same as the `<type>`.
+While `use fun` can be made in any scope, the target `<function>` of the `use fun` must have a first
+argument that is the same as the `<type>`.
 
 ```move
 public struct X() has copy, drop, store;
@@ -231,9 +230,9 @@ module b::example {
 }
 ```
 
-The `public use fun` declarations thus serve as a way of renaming a function if you want to give it a cleaner
-name for use with method syntax. This is especially helpful if you have a module with multiple
-types, and similarly named functions for each type.
+The `public use fun` declarations thus serve as a way of renaming a function if you want to give it
+a cleaner name for use with method syntax. This is especially helpful if you have a module with
+multiple types, and similarly named functions for each type.
 
 ```move
 module a::shapes {
@@ -309,11 +308,11 @@ module b::other {
 }
 ```
 
-A helpful way to think about this is that `use` creates an implicit `use fun` alias
-for the function whenever it can. In this case the `use a::cup::cup_borrow as borrow` creates an
-implicit `use fun a::cup::cup_borrow as Cup.borrow` because it would be a valid `use fun` alias. Both
-views are equivalent. This line of reasoning can inform how specific methods will resolve with
-shadowing. See the cases in [Scoping](#scoping) for more details.
+A helpful way to think about this is that `use` creates an implicit `use fun` alias for the function
+whenever it can. In this case the `use a::cup::cup_borrow as borrow` creates an implicit
+`use fun a::cup::cup_borrow as Cup.borrow` because it would be a valid `use fun` alias. Both views
+are equivalent. This line of reasoning can inform how specific methods will resolve with shadowing.
+See the cases in [Scoping](#scoping) for more details.
 
 ### Scoping
 
@@ -435,8 +434,8 @@ module b::example {
 }
 ```
 
-In this example, `l.start().x()` the compiler first resolves `l.start()` to `a::shapes::start(&l)`.
-Then `.x()` is resolved to `a::shapes::x(a::shapes::start(&l))`. Similarly, `l.end().x()`. Keep in
-mind, this feature is not "special"--the left-hand side of the `.` can be any expression, and the
-compiler will resolve the method call as normal. We simply draw attention to this sort of "chaining"
-because it is a common practice to increase readability.
+In this example for `l.start().x()`, the compiler first resolves `l.start()` to
+`a::shapes::start(&l)`. Then `.x()` is resolved to `a::shapes::x(a::shapes::start(&l))`. Similarly
+for `l.end().x()`. Keep in mind, this feature is not "special"--the left-hand side of the `.` can be
+any expression, and the compiler will resolve the method call as normal. We simply draw attention to
+this sort of "chaining" because it is a common practice to increase readability.
