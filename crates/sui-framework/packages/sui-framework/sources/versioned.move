@@ -80,7 +80,7 @@ module sui::versioned {
     public fun destroy<T: store>(self: Versioned): T {
         let Versioned { mut id, version } = self;
         let ret = dynamic_field::remove(&mut id, version);
-        object::delete(id);
+        id.delete();
         ret
     }
 }

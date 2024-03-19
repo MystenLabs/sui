@@ -109,6 +109,6 @@ module sui::bag {
     public fun destroy_empty(bag: Bag) {
         let Bag { id, size } = bag;
         assert!(size == 0, EBagNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 }

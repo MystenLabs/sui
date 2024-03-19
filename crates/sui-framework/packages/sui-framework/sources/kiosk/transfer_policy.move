@@ -121,7 +121,7 @@ module sui::transfer_policy {
     ): (TransferPolicy<T>, TransferPolicyCap<T>) {
         assert!(package::from_package<T>(pub), 0);
         let id = object::new(ctx);
-        let policy_id = object::uid_to_inner(&id);
+        let policy_id = id.to_inner();
 
         event::emit(TransferPolicyCreated<T> { id: policy_id });
 
@@ -172,8 +172,8 @@ module sui::transfer_policy {
         let TransferPolicyCap { id: cap_id, policy_id } = cap;
         let TransferPolicy { id, rules: _, balance } = self;
 
-        object::delete(id);
-        object::delete(cap_id);
+        id.delete();
+        cap_id.delete();
         event::emit(TransferPolicyDestroyed<T> { id: policy_id });
         coin::from_balance(balance, ctx)
     }
@@ -295,7 +295,7 @@ module sui::transfer_policy {
     /// Create a new TransferPolicy for testing purposes.
     public fun new_for_testing<T>(ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {
         let id = object::new(ctx);
-        let policy_id = object::uid_to_inner(&id);
+        let policy_id = id.to_inner();
 
         (
             TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },

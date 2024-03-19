@@ -85,7 +85,7 @@ module sui::coin {
     /// to different security guarantees (TreasuryCap can be created only once for a type)
     public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
         let TreasuryCap { id, total_supply } = treasury;
-        object::delete(id);
+        id.delete();
         total_supply
     }
 
@@ -124,7 +124,7 @@ module sui::coin {
     /// Destruct a Coin wrapper and keep the balance.
     public fun into_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
-        object::delete(id);
+        id.delete();
         balance
     }
 
@@ -150,7 +150,7 @@ module sui::coin {
     /// Aborts if `c.value + self.value > U64_MAX`
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
-        object::delete(id);
+        id.delete();
         balance::join(&mut self.balance, balance);
     }
 
@@ -189,7 +189,7 @@ module sui::coin {
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
-        object::delete(id);
+        id.delete();
         balance::destroy_zero(balance)
     }
 
@@ -282,7 +282,7 @@ module sui::coin {
     /// accordingly.
     public entry fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
-        object::delete(id);
+        id.delete();
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
@@ -416,7 +416,7 @@ module sui::coin {
     /// Burn coins of any type for testing purposes only
     public fun burn_for_testing<T>(coin: Coin<T>): u64 {
         let Coin { id, balance } = coin;
-        object::delete(id);
+        id.delete();
         balance::destroy_for_testing(balance)
     }
 

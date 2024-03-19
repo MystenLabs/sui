@@ -96,6 +96,9 @@ module sui::kiosk {
     use sui::sui::SUI;
     use sui::event;
 
+    /// Allows calling `cap.`for`()` to retrieve `for` field from `KioskOwnerCap`.
+    public use fun kiosk_owner_cap_for as KioskOwnerCap.`for`;
+
     // Gets access to:
     // - `place_internal`
     // - `lock_internal`
@@ -268,11 +271,11 @@ module sui::kiosk {
         let Kiosk { id, profits, owner: _, item_count, allow_extensions: _ } = self;
         let KioskOwnerCap { id: cap_id, `for` } = cap;
 
-        assert!(object::uid_to_inner(&id) == `for`, ENotOwner);
+        assert!(id.to_inner() == `for`, ENotOwner);
         assert!(item_count == 0, ENotEmpty);
 
-        object::delete(cap_id);
-        object::delete(id);
+        cap_id.delete();
+        id.delete();
 
         coin::from_balance(profits, ctx)
     }
@@ -424,7 +427,7 @@ module sui::kiosk {
         self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
         let PurchaseCap { id, item_id, kiosk_id, min_price } = purchase_cap;
-        object::delete(id);
+        id.delete();
 
         let id = item_id;
         let paid = payment.value();
@@ -450,7 +453,7 @@ module sui::kiosk {
 
         assert!(object::id(self) == kiosk_id, EWrongKiosk);
         df::remove<Listing, u64>(&mut self.id, Listing { id: item_id, is_exclusive: true });
-        object::delete(id)
+        id.delete()
     }
 
     /// Withdraw profits from the Kiosk.

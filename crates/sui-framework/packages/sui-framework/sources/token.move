@@ -199,7 +199,7 @@ module sui::token {
     /// request and join the spent balance with the `TokenPolicy.spent_balance`.
     public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
         let Token { id, balance } = t;
-        object::delete(id);
+        id.delete();
 
         new_request(
             spend_action(),
@@ -217,7 +217,7 @@ module sui::token {
     ): (Coin<T>, ActionRequest<T>) {
         let Token { id, balance } = t;
         let amount = balance.value();
-        object::delete(id);
+        id.delete();
 
         (
             coin::from_balance(balance, ctx),
@@ -260,7 +260,7 @@ module sui::token {
     public fun join<T>(token: &mut Token<T>, another: Token<T>) {
         let Token { id, balance } = another;
         token.balance.join(balance);
-        object::delete(id);
+        id.delete();
     }
 
     /// Split a `Token` with `amount`.
@@ -289,7 +289,7 @@ module sui::token {
         let Token { id, balance } = token;
         assert!(balance.value() == 0, ENotZero);
         balance.destroy_zero();
-        object::delete(id);
+        id.delete();
     }
 
     #[allow(lint(self_transfer))]
@@ -598,7 +598,7 @@ module sui::token {
     public fun burn<T>(cap: &mut TreasuryCap<T>, token: Token<T>) {
         let Token { id, balance } = token;
         coin::supply_mut(cap).decrease_supply(balance);
-        object::delete(id);
+        id.delete();
     }
 
     /// Flush the `TokenPolicy.spent_balance` into the `TreasuryCap`. This
@@ -730,8 +730,8 @@ module sui::token {
         let TokenPolicyCap { id: cap_id, `for`: _ } = cap;
         let TokenPolicy { id, rules: _, spent_balance } = policy;
         spent_balance.destroy_for_testing();
-        object::delete(cap_id);
-        object::delete(id);
+        cap_id.delete();
+        id.delete();
     }
 
     #[test_only]
@@ -744,6 +744,6 @@ module sui::token {
     public fun burn_for_testing<T>(token: Token<T>) {
         let Token { id, balance } = token;
         balance.destroy_for_testing();
-        object::delete(id);
+        id.delete();
     }
 }

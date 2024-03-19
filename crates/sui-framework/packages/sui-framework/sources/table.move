@@ -92,13 +92,13 @@ module sui::table {
     public fun destroy_empty<K: copy + drop + store, V: store>(table: Table<K, V>) {
         let Table { id, size } = table;
         assert!(size == 0, ETableNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 
     /// Drop a possibly non-empty table.
     /// Usable only if the value type `V` has the `drop` ability
     public fun drop<K: copy + drop + store, V: drop + store>(table: Table<K, V>) {
         let Table { id, size: _ } = table;
-        object::delete(id)
+        id.delete()
     }
 }

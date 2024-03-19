@@ -12,7 +12,7 @@
 /// More entry functions might be added in the future depending on the use cases.
 module sui::display {
     use sui::package::Publisher;
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::TxContext;
     use sui::vec_map::{Self, VecMap};
     use sui::object::{Self, ID, UID};
     use sui::transfer;
@@ -115,7 +115,7 @@ module sui::display {
         event::emit(VersionUpdated<T> {
             version: display.version,
             fields: *&display.fields,
-            id: object::uid_to_inner(&display.id),
+            id: display.id.to_inner(),
         })
     }
 
@@ -176,7 +176,7 @@ module sui::display {
         let uid = object::new(ctx);
 
         event::emit(DisplayCreated<T> {
-            id: object::uid_to_inner(&uid)
+            id: uid.to_inner()
         });
 
         Display {

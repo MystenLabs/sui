@@ -91,6 +91,6 @@ module sui::clock {
     #[test_only]
     public fun destroy_for_testing(clock: Clock) {
         let Clock { id, timestamp_ms: _ }  = clock;
-        object::delete(id);
+        id.delete();
     }
 }

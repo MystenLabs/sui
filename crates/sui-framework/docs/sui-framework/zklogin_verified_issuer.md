@@ -189,7 +189,7 @@ Aborts with <code><a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issue
     issuer: String,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> sender = ctx.sender();
     <b>assert</b>!(<a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer">check_zklogin_issuer</a>(sender, address_seed, &issuer), <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_EInvalidProof">EInvalidProof</a>);
     <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(
         <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_VerifiedIssuer">VerifiedIssuer</a> {

@@ -114,7 +114,7 @@ module sui::package {
     /// associated with it.
     public fun burn_publisher(self: Publisher) {
         let Publisher { id, package: _, module_name: _ } = self;
-        object::delete(id);
+        id.delete();
     }
 
     /// Check whether type belongs to the same package as the publisher object.
@@ -218,7 +218,7 @@ module sui::package {
     /// Discard the `UpgradeCap` to make a package immutable.
     public entry fun make_immutable(cap: UpgradeCap) {
         let UpgradeCap { id, package: _, version: _, policy: _ } = cap;
-        object::delete(id);
+        id.delete();
     }
 
     /// Issue a ticket authorizing an upgrade to a particular new bytecode
@@ -236,7 +236,7 @@ module sui::package {
         policy: u8,
         digest: vector<u8>
     ): UpgradeTicket {
-        let id_zero = object::id_from_address(@0x0);
+        let id_zero = @0x0.to_id();
         assert!(cap.package != id_zero, EAlreadyAuthorized);
         assert!(policy >= cap.policy, ETooPermissive);
 
@@ -260,7 +260,7 @@ module sui::package {
         let UpgradeReceipt { cap: cap_id, package } = receipt;
 
         assert!(object::id(cap) == cap_id, EWrongUpgradeCap);
-        assert!(object::id_to_address(&cap.package) == @0x0, ENotAuthorized);
+        assert!(cap.package.to_address() == @0x0, ENotAuthorized);
 
         cap.package = package;
         cap.version = cap.version + 1;
@@ -299,8 +299,8 @@ module sui::package {
 
         // Generate a fake package ID for the upgraded package by
         // hashing the existing package and cap ID.
-        let mut data = object::id_to_bytes(&cap);
-        data.append(object::id_to_bytes(&package));
+        let mut data = cap.to_bytes();
+        data.append(package.to_bytes());
         let package = object::id_from_bytes(sui::hash::blake2b256(&data));
 
         UpgradeReceipt {

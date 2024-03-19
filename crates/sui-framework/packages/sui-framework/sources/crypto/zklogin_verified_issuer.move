@@ -39,7 +39,7 @@ module sui::zklogin_verified_issuer {
     /// Delete a VerifiedIssuer
     public fun delete(verified_issuer: VerifiedIssuer) {
         let VerifiedIssuer { id, owner: _, issuer: _ } = verified_issuer;
-        object::delete(id);
+        id.delete();
     }
 
     /// Verify that the caller's address was created using zklogin with the given issuer. If so, a VerifiedIssuer object

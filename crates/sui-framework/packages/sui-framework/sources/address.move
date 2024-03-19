@@ -1,19 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[defines_primitive(address)]
 module sui::address {
+    use sui::hex;
     use std::ascii;
     use std::bcs;
     use std::string;
 
-    use fun to_ascii_string as address.to_ascii_string;
-    use fun to_bytes as address.to_bytes;
-
-    use fun hex_char_value as u8.hex_char_value;
-
-    use fun sui::hex::encode as vector.hex_encode;
-    use fun ascii::string as vector.to_string;
-    use fun string::from_ascii as ascii::String.from_ascii;
+    /// Allows calling `.to_id()` on an address to get its `ID`.
+    public use fun sui::object::id_from_address as address.to_id;
 
     /// The length of an address, in bytes
     const LENGTH: u64 = 32;
@@ -44,12 +40,12 @@ module sui::address {
 
     /// Convert `a` to a hex-encoded ASCII string
     public fun to_ascii_string(a: address): ascii::String {
-        a.to_bytes().hex_encode().to_string()
+        hex::encode(to_bytes(a)).to_ascii_string()
     }
 
-    /// Convert `a` to a hex-encoded ASCII string
+    /// Convert `a` to a hex-encoded string
     public fun to_string(a: address): string::String {
-        a.to_ascii_string().from_ascii()
+        to_ascii_string(a).to_string()
     }
 
     /// Converts an ASCII string to an address, taking the numerical value for each character. The
@@ -63,8 +59,8 @@ module sui::address {
         let mut hex_bytes = vector[];
         let mut i = 0;
         while (i < 64) {
-            let hi = bytes[i].hex_char_value();
-            let lo = bytes[i+1].hex_char_value();
+            let hi = hex_char_value(bytes[i]);
+            let lo = hex_char_value(bytes[i+1]);
             hex_bytes.push_back((hi << 4) | lo);
             i = i + 2;
         };

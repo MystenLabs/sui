@@ -74,7 +74,7 @@ module sui::borrow {
         put_back(&mut ref, value, borrow);
 
         let Test { id } = destroy(ref);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -92,10 +92,10 @@ module sui::borrow {
         put_back(&mut ref_2, v_1, b_2);
 
         let Test { id } = destroy(ref_1);
-        object::delete(id);
+        id.delete();
 
         let Test { id } = destroy(ref_2);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -113,9 +113,9 @@ module sui::borrow {
         put_back(&mut ref_2, v_1, b_1);
 
         let Test { id } = destroy(ref_1);
-        object::delete(id);
+        id.delete();
 
         let Test { id } = destroy(ref_2);
-        object::delete(id);
+        id.delete();
     }
 }

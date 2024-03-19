@@ -190,13 +190,13 @@ module sui::linked_table {
     public fun destroy_empty<K: copy + drop + store, V: store>(table: LinkedTable<K, V>) {
         let LinkedTable { id, size, head: _, tail: _ } = table;
         assert!(size == 0, ETableNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 
     /// Drop a possibly non-empty table.
     /// Usable only if the value type `V` has the `drop` ability
     public fun drop<K: copy + drop + store, V: drop + store>(table: LinkedTable<K, V>) {
         let LinkedTable { id, size: _, head: _, tail: _ } = table;
-        object::delete(id)
+        id.delete()
     }
 }

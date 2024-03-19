@@ -16,6 +16,24 @@ module sui::object {
     /* friend sui::random; */
     /* friend sui::deny_list; */
 
+    /// Allows calling `.to_address` on an `ID` to get an `address`.
+    public use fun id_to_address as ID.to_address;
+
+    /// Allows calling `.to_bytes` on an `ID` to get a `vector<u8>`.
+    public use fun id_to_bytes as ID.to_bytes;
+
+    /// Allows calling `.as_inner` on a `UID` to get an `&ID`.
+    public use fun uid_as_inner as UID.as_inner;
+
+    /// Allows calling `.to_inner` on a `UID` to get an `ID`.
+    public use fun uid_to_inner as UID.to_inner;
+
+    /// Allows calling `.to_address` on a `UID` to get an `address`.
+    public use fun uid_to_address as UID.to_address;
+
+    /// Allows calling `.to_bytes` on a `UID` to get a `vector<u8>`.
+    public use fun uid_to_bytes as UID.to_bytes;
+
     /* #[test_only] */
     /* friend sui::test_scenario; */
 

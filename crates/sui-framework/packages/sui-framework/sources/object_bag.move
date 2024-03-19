@@ -94,7 +94,7 @@ module sui::object_bag {
     public fun destroy_empty(bag: ObjectBag) {
         let ObjectBag { id, size } = bag;
         assert!(size == 0, EBagNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 
     /// Returns the ID of the object associated with the key if the bag has an entry with key `k: K`
