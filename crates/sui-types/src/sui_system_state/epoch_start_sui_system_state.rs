@@ -201,13 +201,18 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         // in the Sui committee returned from get_sui_committee().
         authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
 
-        for ((sui_authority_name, _), mysticeti_authority) in
-            self.get_sui_committee().members().zip(authorities.iter())
+        for ((i, mysticeti_authority), sui_authority_name) in authorities
+            .iter()
+            .enumerate()
+            .zip(self.get_sui_committee().names())
         {
             if sui_authority_name
                 != &AuthorityPublicKeyBytes::from(&mysticeti_authority.protocol_key)
             {
-                error!("Mismatched Sui and Mysticeti committee! Sui authority: {:?} Mysticeti authority: {:?}", sui_authority_name, mysticeti_authority);
+                error!(
+                    "Mismatched authority order between Sui and Mysticeti! Index {}, Mysticeti authority {:?}\nSui authority name {}",
+                    i, mysticeti_authority, sui_authority_name
+                );
             }
         }
 
