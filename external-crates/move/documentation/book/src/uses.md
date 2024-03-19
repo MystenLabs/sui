@@ -236,8 +236,10 @@ will result in a parsing error
     use std::vector; // ERROR!
 }
 ```
+
 This allows you to shorten your import blocks in many situations. Note that these imports, as the
-previous ones, are all subject to the naming and uniqueness rules described in the following sections.
+previous ones, are all subject to the naming and uniqueness rules described in the following
+sections.
 
 ## Naming rules
 

@@ -2,11 +2,11 @@
 
 [Introduction](introduction.md)
 
-## Getting Started
+# Getting Started
 
 - [Modules](modules.md)
 
-## Primitive Types
+# Primitive Types
 
 - [Integers](integers.md)
 - [Bool](bool.md)
@@ -15,7 +15,7 @@
 - [References](references.md)
 - [Tuples and Unit](tuples.md)
 
-## Basic Concepts
+# Basic Concepts
 
 - [Local Variables and Scopes](variables.md)
 - [Equality](equality.md)
@@ -33,14 +33,15 @@
 - [Packages](packages.md)
 - [Unit Tests](unit-testing.md)
 
-## Advanced Concepts
+# Advanced Concepts
 
+- [Method Syntax](method-syntax.md)
 - [Index Syntax Methods](index-syntax.md)
 
-## Reference
+# Reference
 
 - [Coding Conventions](coding-conventions.md)
 
-## Deprecated
+# Deprecated
 
 - [Friends](friends.md)
