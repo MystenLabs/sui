@@ -542,10 +542,20 @@ impl TransactionManager {
         let pending_cert_enqueue_time = Instant::now();
 
         for (cert, expected_effects_digest, input_object_keys) in certs {
+            let waiting_input_objects = input_object_keys
+                .into_iter()
+                .filter(|input_key| {
+                    if let Some(version) = input_key.version() {
+                        version != SequenceNumber::CONGESTED
+                    } else {
+                        true
+                    }
+                })
+                .collect();
             pending.push(PendingCertificate {
                 certificate: cert,
                 expected_effects_digest,
-                waiting_input_objects: input_object_keys,
+                waiting_input_objects,
                 stats: PendingCertificateStats {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
@@ -831,6 +841,7 @@ impl TransactionManager {
         );
         tx_data.digest();
 
+        // TODO: turn off object queue limit in transaction manager once object queue in consensus commit is enforced.
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
                 .transaction_data()

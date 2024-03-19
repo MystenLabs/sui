@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::transaction::TransactionDataAPI;
 use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
@@ -61,5 +62,9 @@ impl VerifiedExecutableTransaction {
             CertificateProof::Certified(sig) => Some(sig),
             _ => None,
         }
+    }
+
+    pub fn gas_budget(&self) -> u64 {
+        self.data().transaction_data().gas_budget()
     }
 }

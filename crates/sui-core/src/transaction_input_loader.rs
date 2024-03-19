@@ -208,6 +208,7 @@ impl TransactionInputLoader {
                     fetches.push((i, input));
                 }
                 InputObjectKind::SharedMoveObject { id, .. } => {
+                    // TODO: we can move this outside of for loop?
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             shared_lock_store
@@ -245,7 +246,12 @@ impl TransactionInputLoader {
                 (None, InputObjectKind::SharedMoveObject { id, .. }) => {
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
-                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
+                    if version == SequenceNumber::CONGESTED {
+                        ObjectReadResult {
+                            input_object_kind: *input,
+                            object: ObjectReadResultKind::CongestedSharedObject()
+                        }
+                    } else if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),

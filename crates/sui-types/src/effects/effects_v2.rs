@@ -422,6 +422,16 @@ impl TransactionEffectsV2 {
                         Some((id, UnchangedSharedKind::ReadDeleted(version)))
                     }
                 }
+                SharedInput::Congested(id) => {
+                    debug_assert!(!changed_objects.contains_key(&id));
+                    Some((
+                        id,
+                        UnchangedSharedKind::ReadOnlyRoot((
+                            SequenceNumber::CONGESTED,
+                            ObjectDigest::OBJECT_DIGEST_CONGESTED,
+                        )),
+                    ))
+                }
             })
             .collect();
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();

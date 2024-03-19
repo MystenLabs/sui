@@ -397,6 +397,7 @@ mod checked {
                 }
                 // We skip checking a deleted shared object because it no longer exists
                 ObjectReadResultKind::DeletedSharedObject(_, _) => (),
+                ObjectReadResultKind::CongestedSharedObject() => (),
             }
         }
 
