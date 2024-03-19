@@ -2835,14 +2835,6 @@ impl ObjectReadResult {
         }
     }
 
-    pub fn is_congested_shared_object(&self) -> bool {
-        if let ObjectReadResultKind::CongestedSharedObject() = &self.object {
-            true
-        } else {
-            false
-        }
-    }
-
     /// Return the object ref iff the object is an owned object (i.e. not shared, not immutable).
     pub fn get_owned_objref(&self) -> Option<ObjectRef> {
         match (&self.input_object_kind, &self.object) {
@@ -2889,11 +2881,11 @@ impl ObjectReadResult {
         }
     }
 
-    pub fn get_previous_transaction(&self) -> TransactionDigest {
+    pub fn get_previous_transaction(&self) -> Option<TransactionDigest> {
         match &self.object {
-            ObjectReadResultKind::Object(obj) => obj.previous_transaction,
-            ObjectReadResultKind::DeletedSharedObject(_, digest) => *digest,
-            ObjectReadResultKind::CongestedSharedObject() => unreachable!(),
+            ObjectReadResultKind::Object(obj) => Some(obj.previous_transaction),
+            ObjectReadResultKind::DeletedSharedObject(_, digest) => Some(*digest),
+            ObjectReadResultKind::CongestedSharedObject() => None,
         }
     }
 }
@@ -3000,7 +2992,7 @@ impl InputObjects {
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
         self.objects
             .iter()
-            .map(|obj| obj.get_previous_transaction())
+            .filter_map(|obj| obj.get_previous_transaction())
             .collect()
     }
 
