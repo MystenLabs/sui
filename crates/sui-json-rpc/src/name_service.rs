@@ -91,6 +91,7 @@ impl Domain {
         self.labels.len() as u8
     }
 
+    /// Formats a domain into a string with the different available formats.
     pub fn format(&self, separator: char, is_new_format: bool) -> String {
         let mut labels = self.labels.clone();
         let sep = separator.to_string();
@@ -101,7 +102,7 @@ impl Domain {
         if is_new_format {
             let _tld = labels.pop();
             let sld = labels.pop().unwrap();
-            return format!("{}@{}", labels.join(&sep), sld);
+            return format!("{}{}{}", labels.join(&sep), SUI_NEW_FORMAT_SEPARATOR, sld);
         };
 
         labels.join(&sep)
@@ -280,7 +281,7 @@ fn validate_label(label: &str) -> Result<&str, NameServiceError> {
 impl fmt::Display for Domain {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let output = self.format(ACCEPTED_SEPARATORS[0], false);
-        let _ = f.write_str(&output);
+        f.write_str(&output)?;
 
         Ok(())
     }
