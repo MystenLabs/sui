@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
@@ -48,15 +49,24 @@ const SIZE_BUCKETS: &[f64] = &[
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) channel_metrics: ChannelMetrics,
+    pub(crate) network_metrics: NetworkMetrics,
+    pub(crate) quinn_connection_metrics: QuinnConnectionMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
     let channel_metrics = ChannelMetrics::new(&registry);
+    let network_metrics = NetworkMetrics {
+        inbound: NetworkRouteMetrics::new("inbound", &registry),
+        outbound: NetworkRouteMetrics::new("outbound", &registry),
+    };
+    let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
         node_metrics,
         channel_metrics,
+        network_metrics,
+        quinn_connection_metrics,
     })
 }
 
@@ -290,4 +300,10 @@ impl ChannelMetrics {
             ).unwrap(),
         }
     }
+}
+
+// Fields for network-agnostic metrics can be added here
+pub(crate) struct NetworkMetrics {
+    pub inbound: NetworkRouteMetrics,
+    pub outbound: NetworkRouteMetrics,
 }
