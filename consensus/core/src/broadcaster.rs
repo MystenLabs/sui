@@ -17,7 +17,10 @@ use tokio::{
 use tracing::{trace, warn};
 
 use crate::{
-    block::VerifiedBlock, context::Context, core::CoreSignalsReceivers, error::ConsensusResult,
+    block::{BlockAPI as _, VerifiedBlock},
+    context::Context,
+    core::CoreSignalsReceivers,
+    error::ConsensusResult,
     network::NetworkClient,
 };
 
@@ -73,6 +76,16 @@ impl Broadcaster {
     ) {
         let peer_hostname = context.committee.authority(peer).hostname.clone();
 
+        // Record the last block to be broadcasted, to retry in case no new block is produced for awhile.
+        // Even if the peer has acknowledged the last block, the block might have been dropped afterwards
+        // if the peer crashed.
+        let mut last_block: Option<VerifiedBlock> = None;
+
+        // Retry last block with an interval.
+        const RETRY_INTERVAL: Duration = Duration::from_secs(2);
+        let mut retry_timer = tokio::time::interval(RETRY_INTERVAL);
+        retry_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
         // Use a simple exponential-decay RTT estimator to adjust the timeout for each block sent.
         // The estimation logic will be removed once the underlying transport switches to use
         // streaming and the streaming implementation can be relied upon for retries.
@@ -118,8 +131,12 @@ impl Broadcaster {
                             continue;
                         }
                     };
-                    requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
+                    requests.push(send_block(network_client.clone(), peer, rtt_estimate, block.clone()));
+                    if last_block.is_none() || last_block.as_ref().unwrap().round() < block.round() {
+                        last_block = Some(block);
+                    }
                 }
+
                 Some((resp, start, block)) = requests.next() => {
                     match resp {
                         Ok(Ok(_)) => {
@@ -135,7 +152,16 @@ impl Broadcaster {
                         },
                     };
                 }
+
+                _ = retry_timer.tick() => {
+                    if requests.is_empty() {
+                        if let Some(block) = last_block.clone() {
+                            requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
+                        }
+                    }
+                }
             };
+
             // Limit RTT estimate to be between 5ms and 5s.
             rtt_estimate = min(rtt_estimate, Duration::from_secs(5));
             rtt_estimate = max(rtt_estimate, Duration::from_millis(5));
