@@ -3,6 +3,7 @@
 
 #[allow(unused_use)]
 module bridge::committee {
+    use std::option;
     use std::vector;
 
     use sui::ecdsa_k1;
@@ -173,11 +174,10 @@ module bridge::committee {
     // This is to ensure we don't fail the end of epoch transaction.
     public(friend) fun try_create_next_committee(
         self: &mut BridgeCommittee,
-        system_state: &mut SuiSystemState,
+        active_validator_voting_power: VecMap<address, u64>,
         min_stake_participation_percentage: u64,
         ctx: &TxContext
     ) {
-        let validators = sui_system::active_validator_addresses(system_state);
         let i = 0;
         let new_members = vec_map::empty();
         let stake_participation_percentage = 0;
@@ -188,8 +188,9 @@ module bridge::committee {
             // Find validator stake amount from system state
 
             // Process registration if it's active validator
-            if (vector::contains(&validators, &registration.sui_address)) {
-                let voting_power = sui_system::validator_voting_power(system_state, registration.sui_address);
+            let voting_power = vec_map::try_get(&active_validator_voting_power, &registration.sui_address);
+            if (option::is_some(&voting_power)) {
+                let voting_power = option::destroy_some(voting_power);
                 stake_participation_percentage = stake_participation_percentage + voting_power;
                 let member = CommitteeMember {
                     sui_address: registration.sui_address,
@@ -358,7 +359,8 @@ module bridge::committee {
         assert!(vec_map::is_empty(&committee.members), 0);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        try_create_next_committee(&mut committee, &mut system_state, 6000, ctx);
+        let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
+        try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
         assert_eq(2, vec_map::size(&committee.members));
         let (_, member0) = vec_map::get_entry_by_idx(&committee.members, 0);
@@ -432,7 +434,8 @@ module bridge::committee {
 
         // create committee should not create a committe because of not enough stake.
         let ctx = test_scenario::ctx(&mut scenario);
-        try_create_next_committee(&mut committee, &mut system_state, 6000, ctx);
+        let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
+        try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
         assert!(vec_map::is_empty(&committee.members), 0);
 
@@ -504,7 +507,8 @@ module bridge::committee {
         assert!(vec_map::is_empty(&committee.members), 0);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        try_create_next_committee(&mut committee, &mut system_state, 6000, ctx);
+        let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
+        try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
         // committee should be empty because registration did not reach min stake threshold.
         assert!(vec_map::is_empty(&committee.members), 0);

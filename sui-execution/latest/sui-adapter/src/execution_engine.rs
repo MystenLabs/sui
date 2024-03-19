@@ -9,6 +9,7 @@ mod checked {
 
     use move_binary_format::access::ModuleAccess;
     use move_binary_format::CompiledModule;
+    use move_core_types::ident_str;
     use move_vm_runtime::move_vm::MoveVM;
     use tracing::{info, instrument, trace, warn};
 
@@ -1051,6 +1052,14 @@ mod checked {
             .obj(ObjectArg::SUI_SYSTEM_MUT)
             .expect("Unable to create System State object arg!");
 
+        let voting_power = builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("validator_voting_powers").to_owned(),
+            vec![],
+            vec![system_state],
+        );
+
         // Hardcoding min stake participation to 75.00%
         // TODO: We need to set a correct value or make this configurable.
         let min_stake_participation_percentage = builder
@@ -1062,7 +1071,7 @@ mod checked {
             BRIDGE_MODULE_NAME.to_owned(),
             BRIDGE_INIT_COMMITTEE_FUNCTION_NAME.to_owned(),
             vec![],
-            vec![bridge, system_state, min_stake_participation_percentage],
+            vec![bridge, voting_power, min_stake_participation_percentage],
         );
         builder
     }
