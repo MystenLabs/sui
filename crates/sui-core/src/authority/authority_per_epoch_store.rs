@@ -3198,6 +3198,11 @@ impl AuthorityPerEpochStore {
                         );
                         return Ok(ConsensusCertificateResult::Deferred(deferral_key));
                     } else {
+                        debug!(
+                            "ZZZZZ Deferring exceeded limit. Fail txn. {:?} {:?}",
+                            congested_object,
+                            certificate.digest()
+                        );
                         assert!(congested_object.is_some(), "When a txn exceeds the deferral limit, it should also have a congested object.");
                     }
                 }
