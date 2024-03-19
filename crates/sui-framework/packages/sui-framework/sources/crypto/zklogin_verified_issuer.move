@@ -8,7 +8,6 @@ module sui::zklogin_verified_issuer {
     use sui::object;
     use sui::object::UID;
     use sui::tx_context::TxContext;
-    use sui::tx_context;
 
     /// Error if the proof consisting of the inputs provided to the verification function is invalid.
     const EInvalidInput: u64 = 0;
@@ -52,7 +51,7 @@ module sui::zklogin_verified_issuer {
         issuer: String,
         ctx: &mut TxContext,
     ) {
-        let sender = tx_context::sender(ctx);
+        let sender = ctx.sender();
         assert!(check_zklogin_issuer(sender, address_seed, &issuer), EInvalidProof);
         transfer::transfer(
             VerifiedIssuer {
