@@ -35,6 +35,7 @@ use std::{
     iter::FromIterator,
     ops::Range,
     path::PathBuf,
+    sync::Arc,
 };
 
 use self::codes::UnusedItem;
@@ -46,8 +47,7 @@ use self::codes::UnusedItem;
 pub type FileId = usize;
 pub type FileName = Symbol;
 
-pub type FilesSourceText = HashMap<FileHash, (FileName, String)>;
-type FileMapping = HashMap<FileHash, FileId>;
+pub type FilesSourceText = HashMap<FileHash, (FileName, Arc<str>)>;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 #[must_use]
@@ -103,9 +103,77 @@ enum MigrationChange {
 
 // All of the migration changes
 pub struct Migration {
-    files: SimpleFiles<Symbol, String>,
-    file_mapping: FileMapping,
+    mapped_files: MappedFiles,
     changes: BTreeMap<FileId, BTreeMap<usize, Vec<(usize, MigrationChange)>>>,
+}
+
+/// A mapping from file ids to file contents along with the mapping of filehash to fileID.
+pub struct MappedFiles {
+    files: SimpleFiles<Symbol, Arc<str>>,
+    file_mapping: HashMap<FileHash, FileId>,
+}
+
+/// A file, and the line:column start, and line:column end that corresponds to a `Loc`
+pub struct FileLineColSpan {
+    file_id: FileId,
+    start: LineColLocation,
+    end: LineColLocation,
+}
+
+/// A line and column location in a file
+pub struct LineColLocation {
+    pub line: usize,
+    pub column: usize,
+}
+
+impl MappedFiles {
+    pub fn new(files: FilesSourceText) -> Self {
+        let mut simple_files = SimpleFiles::new();
+        let mut file_mapping = HashMap::new();
+        for (fhash, (fname, source)) in files {
+            let id = simple_files.add(fname, source);
+            file_mapping.insert(fhash, id);
+        }
+        Self {
+            files: simple_files,
+            file_mapping,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            files: SimpleFiles::new(),
+            file_mapping: HashMap::new(),
+        }
+    }
+
+    pub fn file_hash_to_file_id(&self, fhash: &FileHash) -> Option<FileId> {
+        self.file_mapping.get(fhash).copied()
+    }
+
+    pub fn add(&mut self, fhash: FileHash, fname: FileName, source: Arc<str>) {
+        let id = self.files.add(fname, source);
+        self.file_mapping.insert(fhash, id);
+    }
+
+    pub fn location(&self, loc: Loc) -> FileLineColSpan {
+        let start_loc = loc.start() as usize;
+        let end_loc = loc.end() as usize;
+        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
+        let star_loc = self.files.location(file_id, start_loc).unwrap();
+        let end_loc = self.files.location(file_id, end_loc).unwrap();
+        FileLineColSpan {
+            file_id,
+            start: LineColLocation {
+                line: star_loc.line_number,
+                column: star_loc.column_number - 1,
+            },
+            end: LineColLocation {
+                line: end_loc.line_number,
+                column: end_loc.column_number - 1,
+            },
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -197,21 +265,11 @@ fn output_diagnostics<W: WriteColor>(
     sources: &FilesSourceText,
     diags: Diagnostics,
 ) {
-    let mut files = SimpleFiles::new();
-    let mut file_mapping = HashMap::new();
-    for (fhash, (fname, source)) in sources {
-        let id = files.add(*fname, source.as_str());
-        file_mapping.insert(*fhash, id);
-    }
-    render_diagnostics(writer, &files, &file_mapping, diags);
+    let mapping = MappedFiles::new(sources.clone());
+    render_diagnostics(writer, mapping, diags);
 }
 
-fn render_diagnostics(
-    writer: &mut dyn WriteColor,
-    files: &SimpleFiles<Symbol, &str>,
-    file_mapping: &FileMapping,
-    diags: Diagnostics,
-) {
+fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
     let Diagnostics(Some(mut diags)) = diags else {
         return;
     };
@@ -230,25 +288,25 @@ fn render_diagnostics(
             continue;
         }
         seen.insert(diag.clone());
-        let rendered = render_diagnostic(file_mapping, diag);
-        emit(writer, &Config::default(), files, &rendered).unwrap()
+        let rendered = render_diagnostic(&mapping, diag);
+        emit(writer, &Config::default(), &mapping.files, &rendered).unwrap()
     }
 }
 
-fn convert_loc(file_mapping: &FileMapping, loc: Loc) -> (FileId, Range<usize>) {
+fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> (FileId, Range<usize>) {
     let fname = loc.file_hash();
-    let id = *file_mapping.get(&fname).unwrap();
+    let id = mapped_files.file_hash_to_file_id(&fname).unwrap();
     let range = loc.usize_range();
     (id, range)
 }
 
 fn render_diagnostic(
-    file_mapping: &FileMapping,
+    mapped_files: &MappedFiles,
     diag: Diagnostic,
 ) -> csr::diagnostic::Diagnostic<FileId> {
     use csr::diagnostic::{Label, LabelStyle};
     let mk_lbl = |style: LabelStyle, msg: (Loc, String)| -> Label<FileId> {
-        let (id, range) = convert_loc(file_mapping, msg.0);
+        let (id, range) = convert_loc(mapped_files, msg.0);
         csr::diagnostic::Label::new(style, id, range).with_message(msg.1)
     };
     let Diagnostic {
@@ -790,16 +848,10 @@ impl Migration {
         sources: FilesSourceText,
         diags: Vec<Diagnostic>,
     ) -> (Migration, /* Migration errors */ Diagnostics) {
-        let mut files = SimpleFiles::new();
-        let mut file_mapping = HashMap::new();
-        for (fhash, (fname, source)) in sources {
-            let id = files.add(fname, source);
-            file_mapping.insert(fhash, id);
-        }
+        let mapped_files = MappedFiles::new(sources);
         let mut mig = Migration {
-            files,
-            file_mapping,
             changes: BTreeMap::new(),
+            mapped_files,
         };
 
         let mut migration_errors = Diagnostics::new();
@@ -819,8 +871,19 @@ impl Migration {
         const REMOVE_FRIEND: u8 = codes::Migration::RemoveFriend as u8;
         const MAKE_PUB_PACKAGE: u8 = codes::Migration::MakePubPackage as u8;
 
-        let (file_id, (start_line, start_col), (end_line, end_col)) =
-            self.find_file_location(&diag);
+        let FileLineColSpan {
+            file_id,
+            start:
+                LineColLocation {
+                    line: start_line,
+                    column: start_col,
+                },
+            end:
+                LineColLocation {
+                    line: end_line,
+                    column: end_col,
+                },
+        } = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
         let line_change_entry = file_change_entry.entry(start_line).or_default();
         match (diag.info().category(), diag.info().code()) {
@@ -857,23 +920,18 @@ impl Migration {
         }
     }
 
-    fn find_file_location(&mut self, diag: &Diagnostic) -> (usize, (usize, usize), (usize, usize)) {
+    fn find_file_location(&mut self, diag: &Diagnostic) -> FileLineColSpan {
         let (loc, _msg) = &diag.primary_label;
-        let start_loc = loc.start() as usize;
-        let end_loc = loc.end() as usize;
-        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        let star_loc = self.files.location(file_id, start_loc).unwrap();
-        let end_loc = self.files.location(file_id, end_loc).unwrap();
-        (
-            file_id,
-            (star_loc.line_number, star_loc.column_number - 1),
-            (end_loc.line_number, end_loc.column_number - 1),
-        )
+        self.mapped_files.location(*loc)
     }
 
     fn get_line(&self, file_id: FileId, line_index: usize) -> String {
-        let line_range = self.files.line_range(file_id, line_index).unwrap();
-        self.files.source(file_id).unwrap()[line_range].to_string()
+        let line_range = self
+            .mapped_files
+            .files
+            .line_range(file_id, line_index)
+            .unwrap();
+        self.mapped_files.files.source(file_id).unwrap()[line_range].to_string()
     }
 
     fn render_line(
@@ -923,7 +981,7 @@ impl Migration {
         let mut output = vec![];
         let mut names = changes
             .keys()
-            .map(|id| (*id, *self.files.get(*id).unwrap().name()))
+            .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
             .collect::<Vec<_>>();
         names.sort_by_key(|(_, name)| *name);
         for (file_id, name) in names {
@@ -956,7 +1014,7 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, self.files.get(*id).unwrap()))
+            .map(|id| (*id, self.mapped_files.files.get(*id).unwrap()))
             .collect::<Vec<_>>();
         names.sort_by_key(|(_, file)| file.name());
         for (file_id, file) in names {
