@@ -169,7 +169,7 @@ export function RedirectHeader() {
 				</div>
 			) : (
 				<Heading variant="heading3/semibold">
-					Experience two amazing blockchain explorers on Sui!
+					Experience two amazing explorers on Sui!
 				</Heading>
 			)}
 		</section>
