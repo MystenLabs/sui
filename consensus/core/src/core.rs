@@ -18,7 +18,7 @@ use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock,
+        Slot, VerifiedBlock, GENESIS_ROUND
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
@@ -132,6 +132,7 @@ impl Core {
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
         if self.try_propose(true).unwrap().is_none() {
+            assert!(self.last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
             // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
             self.signals
                 .new_block(self.last_proposed_block.clone())
