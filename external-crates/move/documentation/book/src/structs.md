@@ -229,7 +229,7 @@ module a::m {
 
 Fields of a struct can be accessed using the dot operator `.`. 
 
-For structs with named fields the fields can be accessed by their name:
+For structs with named fields, the fields can be accessed by their name:
 
 ```move
 public struct Foo { x: u64, y: bool }
