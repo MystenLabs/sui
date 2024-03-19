@@ -1,0 +1,5 @@
+{
+    "redirects": [
+        { "source": "/wallet/faq", "destination": "/faq", "permanent": false }
+    ]
+}
