@@ -14,6 +14,8 @@ module sui::coin {
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
+    #[test_only]
+    use sui::test_utils::destroy;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -408,6 +410,24 @@ module sui::coin {
         let Coin { id, balance } = coin;
         object::delete(id);
         balance::destroy_for_testing(balance)
+    }
+
+    #[test_only]
+    /// Create a CoinMetadata for testing purposes only
+    public fun new_coin_metadata_for_testing<T: drop>(
+        witness: T,
+        decimals: u8,
+        symbol: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        icon_url: Option<Url>,
+        ctx: &mut TxContext        
+    ): CoinMetadata<T>  {
+        let (treasury_cap, coin_metadata) = create_currency(witness, decimals, symbol, name, description, icon_url, ctx);
+
+        destroy(treasury_cap);
+
+        coin_metadata
     }
 
     // === Deprecated code ===

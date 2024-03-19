@@ -8,7 +8,7 @@ module sui::sui {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::transfer;
-    use sui::coin;
+    use sui::coin::{Self, CoinMetadata};
 
     const EAlreadyMinted: u64 = 0;
     /// Sender is not @0x0 the system address.
@@ -55,13 +55,16 @@ module sui::sui {
         transfer::public_transfer(c, recipient)
     }
 
-    #[test_only]    
-    /// Initiates the Sui Coin in tests.
-    /// It allows the `sui::coin::CoinMetadata` to be accessible in test modules. 
-    /// The Sui Coin decimals is often needed in DeFi to perform fixed-point math operations.  
-    /// The functions `sui::coin::mint_for_testing` and `sui::balance::create_for_testing` allow 
-    /// the user to mint Sui but do not share its metadata.
-    public fun new_for_testing(ctx: &mut TxContext): Balance<SUI> {
-        new(ctx)
+    #[test_only]
+    public fun new_metadata_for_testing(ctx: &mut TxContext): CoinMetadata<SUI> {
+        coin::new_coin_metadata_for_testing(
+            SUI {}, 
+            9, 
+            b"SUI", 
+            b"Sui", 
+            b"", 
+            option::none(), 
+            ctx
+        )
     }
 }
