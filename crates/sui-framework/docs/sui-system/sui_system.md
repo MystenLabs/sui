@@ -83,7 +83,6 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#0x3_sui_system_load_inner_maybe_upgrade)
--  [Function `validator_stake_amount`](#0x3_sui_system_validator_stake_amount)
 -  [Function `validator_voting_power`](#0x3_sui_system_validator_voting_power)
 
 
@@ -1486,33 +1485,6 @@ gas coins.
     );
     <b>assert</b>!(inner.system_state_version() == self.version, <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_sui_system_validator_stake_amount"></a>
-
-## Function `validator_stake_amount`
-
-Returns the total amount staked with <code>validator_addr</code>.
-Aborts if <code>validator_addr</code> is not an active validator.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
-    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
-    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validator_stake_amount">sui_system_state_inner::validator_stake_amount</a>(self, validator_addr)
 }
 </code></pre>
 
