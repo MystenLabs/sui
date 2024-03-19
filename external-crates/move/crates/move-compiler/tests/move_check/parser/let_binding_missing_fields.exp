@@ -13,9 +13,3 @@ error[E01002]: unexpected token
   │                          Unexpected '='
   │                          Expected '{'
 
-error[E03009]: unbound variable
-  ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:28
-  │
-6 │         let Generic<u64> = g; // Test a type name with no field bindings
-  │                            ^ Unbound variable 'g'
-

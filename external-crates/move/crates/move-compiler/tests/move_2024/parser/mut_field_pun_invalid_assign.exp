@@ -9,18 +9,12 @@ warning[W09002]: unused variable
 error[E04016]: too few arguments
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:9
   │
-6 │         S { mut f } = s1;
+6 │         S { mut f } = s;
   │         ^^^^^^^^^^^ Missing assignment for field 'f' in 'a::m::S'
 
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
   │
-6 │         S { mut f } = s1;
+6 │         S { mut f } = s;
   │             ^ Expected a field expression
-
-error[E03009]: unbound variable
-  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:23
-  │
-6 │         S { mut f } = s1;
-  │                       ^^ Unbound variable 's1'
 

@@ -17,7 +17,7 @@ module 0x42::m {
         just_name();
         just_type_args<u64>();
         just_param<u64>(42);
-        let n1 = just_ret<u64>(42);
-        let n2 = everything<u64>(42);
+        let _n1 = just_ret<u64>(42);
+        let _n2 = everything<u64>(42);
     }
 }

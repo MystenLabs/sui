@@ -26,19 +26,3 @@ error[E04007]: incompatible types
 11 │     
 12 │ ╭ ╭     fun everything<T>(u: u64): u64 {
 
-warning[W09002]: unused variable
-   ┌─ tests/move_check/parser/function_incomplete.move:20:13
-   │
-20 │         let n1 = just_ret<u64>(42);
-   │             ^^ Unused local variable 'n1'. Consider removing or prefixing with an underscore: '_n1'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09002]: unused variable
-   ┌─ tests/move_check/parser/function_incomplete.move:21:13
-   │
-21 │         let n2 = everything<u64>(42);
-   │             ^^ Unused local variable 'n2'. Consider removing or prefixing with an underscore: '_n2'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

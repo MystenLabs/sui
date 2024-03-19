@@ -55,18 +55,12 @@ error[E01002]: unexpected token
    │                                              Unexpected '+'
    │                                              Expected ','
 
-error[E03004]: unbound type
-   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:19:22
-   │
-19 │         call!(|x| -> u6 { x } + 1); // parsing error, lambdas cant appear in binop
-   │                      ^^ Unbound type 'u6' in current scope
-
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:19:31
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:19:32
    │
-19 │         call!(|x| -> u6 { x } + 1); // parsing error, lambdas cant appear in binop
-   │                               ^
-   │                               │
-   │                               Unexpected '+'
-   │                               Expected ','
+19 │         call!(|x| -> u64 { x } + 1); // parsing error, lambdas cant appear in binop
+   │                                ^
+   │                                │
+   │                                Unexpected '+'
+   │                                Expected ','
 
