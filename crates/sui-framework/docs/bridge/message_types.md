@@ -1,7 +1,7 @@
 
-<a name="0xb_message_types"></a>
-
-# Module `0xb::message_types`
+---
+title: Module `0xb::message_types`
+---
 
 
 
