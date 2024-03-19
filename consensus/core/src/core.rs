@@ -18,7 +18,7 @@ use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock, GENESIS_ROUND
+        Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
