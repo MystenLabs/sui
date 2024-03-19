@@ -1,0 +1,77 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:11:9
+   │
+ 5 │     const X: vector<u8> = b"foo";
+   │              ---------- Given: 'vector<u8>'
+   ·
+11 │         assert!(false, X);
+   │         ^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid call of 'assert'. Invalid argument for parameter '1'
+   │         Expected: 'u64'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:11:24
+   │
+11 │         assert!(false, X);
+   │                        ^ Clever assertions are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:15:9
+   │
+ 8 │     const Foo: vector<u8> = b"Foo";
+   │                ---------- Given: 'vector<u8>'
+   ·
+15 │         assert!(false, Foo);
+   │         ^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid call of 'assert'. Invalid argument for parameter '1'
+   │         Expected: 'u64'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:15:24
+   │
+15 │         assert!(false, Foo);
+   │                        ^^^ Clever assertions are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:19:9
+   │
+ 5 │     const X: vector<u8> = b"foo";
+   │              ---------- Given: 'vector<u8>'
+   ·
+19 │         abort X
+   │         ^^^^^^^
+   │         │
+   │         Invalid abort
+   │         Expected: 'u64'
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:19:15
+   │
+19 │         abort X
+   │               ^ Clever assertions are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:23:9
+   │
+23 │         assert!(false);
+   │         ^^^^^^ Clever assertions are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04016]: too few arguments
+   ┌─ tests/move_check/to_bytecode/clever_assertions.move:23:9
+   │
+23 │         assert!(false);
+   │         ^^^^^^^^^^^^^^
+   │         │      │
+   │         │      Found 1 argument(s) here
+   │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1
+

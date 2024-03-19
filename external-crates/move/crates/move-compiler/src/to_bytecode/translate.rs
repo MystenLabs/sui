@@ -404,6 +404,10 @@ fn constant(
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
+    let is_error_constant = c
+        .attributes
+        .contains_key_(&known_attributes::ErrorAttribute.into());
+    context.add_constant_definition_attributes(m, n, c.attributes);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, c.signature);
     let value = c.value.unwrap();
@@ -411,6 +415,7 @@ fn constant(
         name,
         signature,
         value,
+        is_error_constant,
     }
 }
 
@@ -789,7 +794,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             code.push(sp(loc, B::WriteRef));
         }
         C::Abort(ecode) => {
-            exp(context, code, ecode);
+            abort_code(context, code, ecode);
             code.push(sp(loc, B::Abort));
         }
         C::Return { exp: e, .. } => {
@@ -1076,4 +1081,32 @@ fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
             O::Range | O::Implies | O::Iff => panic!("specification operator unexpected"),
         },
     ));
+}
+
+fn abort_code(context: &mut Context, code: &mut IR::BytecodeBlock, ecode: H::Exp) {
+    use IR::Bytecode_ as B;
+    match ecode.exp {
+        sp!(cloc, H::UnannotatedExp_::Constant(nm))
+            if context.current_module().is_some_and(|m| {
+                context.constant_attributes(m, nm).is_some_and(|attrs| {
+                    attrs.contains_key_(&known_attributes::ErrorAttribute.into())
+                })
+            }) =>
+        {
+            let line_no = context.env.file_mapping().location(cloc).start.line;
+
+            // Clamp line number to u16::MAX -- so if the line number exceeds u16::MAX, we don't
+            // record the line number essentially.
+            let line_number = std::cmp::min(line_no, u16::MAX as usize) as u16;
+
+            code.push(sp(
+                cloc,
+                B::ErrorConstant {
+                    line_number,
+                    constant: Some(context.constant_name(nm)),
+                },
+            ));
+        }
+        _ => exp(context, code, ecode),
+    }
 }
