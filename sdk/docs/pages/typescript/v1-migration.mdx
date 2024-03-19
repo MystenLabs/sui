@@ -33,11 +33,16 @@
 - `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
 - added getBlockData that returns new v2 blockData
 
+### exports
+
+- getPureSerializationType removed
+- added getPureBcsSchema, normalizedTypeToMoveTypeSignature
+
 ## /utils
 
 Removed `is` and `assert` helpers
 
-## /mutltisig
+## /multisig
 
 - publicKeyFromSuiBytes moved to /verify
 
@@ -45,7 +50,6 @@ Removed `is` and `assert` helpers
 
 - Remove Input and Transaction exports?
 - Move helpers in inputs.ts
-- `getPureSerializationType` should be replaced
 - Should remove legacy BCS registry
 - Should remove BCS registry name exports
 - TransactionBlock constructor args?
