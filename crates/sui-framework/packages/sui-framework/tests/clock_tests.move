@@ -11,12 +11,12 @@ module sui::clock_tests {
         let mut ctx = tx_context::dummy();
         let mut clock = clock::create_for_testing(&mut ctx);
 
-        clock::increment_for_testing(&mut clock, 42);
-        assert!(clock::timestamp_ms(&clock) == 42, 1);
+        clock.increment_for_testing(42);
+        assert!(clock.timestamp_ms() == 42, 1);
 
-        clock::set_for_testing(&mut clock, 50);
-        assert!(clock::timestamp_ms(&clock) == 50, 1);
+        clock.set_for_testing(50);
+        assert!(clock.timestamp_ms() == 50, 1);
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     }
 }

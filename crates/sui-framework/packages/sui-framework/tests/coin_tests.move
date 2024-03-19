@@ -26,11 +26,11 @@ module sui::coin_tests {
         let witness = COIN_TESTS{};
         let (treasury, mut metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
 
-        let decimals = coin::get_decimals(&metadata);
-        let symbol_bytes = ascii::as_bytes(&coin::get_symbol<COIN_TESTS>(&metadata));
-        let name_bytes = string::bytes(&coin::get_name<COIN_TESTS>(&metadata));
-        let description_bytes = string::bytes(&coin::get_description<COIN_TESTS>(&metadata));
-        let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&coin::get_icon_url<COIN_TESTS>(&metadata))));
+        let decimals = metadata.get_decimals();
+        let symbol_bytes = ascii::as_bytes(&metadata.get_symbol<COIN_TESTS>());
+        let name_bytes = string::bytes(&metadata.get_name<COIN_TESTS>());
+        let description_bytes = string::bytes(&metadata.get_description<COIN_TESTS>());
+        let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&metadata.get_icon_url<COIN_TESTS>())));
 
         assert!(decimals == 6, 0);
         assert!(*symbol_bytes == b"COIN_TESTS", 0);
@@ -39,15 +39,15 @@ module sui::coin_tests {
         assert!(*icon_url == b"icon_url", 0);
 
         // Update
-        coin::update_symbol<COIN_TESTS>(&treasury, &mut metadata, ascii::string(b"NEW_COIN_TESTS"));
-        coin::update_name<COIN_TESTS>(&treasury, &mut metadata, string::utf8(b"new_coin_name"));
-        coin::update_description<COIN_TESTS>(&treasury, &mut metadata, string::utf8(b"new_description"));
-        coin::update_icon_url<COIN_TESTS>(&treasury, &mut metadata, ascii::string(b"new_icon_url"));
+        treasury.update_symbol<COIN_TESTS>(&mut metadata, b"NEW_COIN_TESTS".to_ascii_string());
+        treasury.update_name<COIN_TESTS>(&mut metadata, b"new_coin_name".to_string());
+        treasury.update_description<COIN_TESTS>(&mut metadata, b"new_description".to_string());
+        treasury.update_icon_url<COIN_TESTS>(&mut metadata, b"new_icon_url".to_ascii_string());
 
-        let symbol_bytes = ascii::as_bytes(&coin::get_symbol<COIN_TESTS>(&metadata));
-        let name_bytes = string::bytes(&coin::get_name<COIN_TESTS>(&metadata));
-        let description_bytes = string::bytes(&coin::get_description<COIN_TESTS>(&metadata));
-        let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&coin::get_icon_url<COIN_TESTS>(&metadata))));
+        let symbol_bytes = metadata.get_symbol<COIN_TESTS>().as_bytes();
+        let name_bytes = metadata.get_name<COIN_TESTS>().bytes();
+        let description_bytes = metadata.get_description<COIN_TESTS>().bytes();
+        let icon_url = url::inner_url(metadata.get_icon_url<COIN_TESTS>().borrow()).as_bytes();
 
         assert!(*symbol_bytes == b"NEW_COIN_TESTS", 0);
         assert!(*name_bytes == b"new_coin_name", 0);
@@ -68,14 +68,14 @@ module sui::coin_tests {
 
         let balance = coin::mint_balance<COIN_TESTS>(&mut treasury, 1000);
         let coin = coin::from_balance(balance, test_scenario::ctx(test));
-        let value = coin::value(&coin);
+        let value = coin.value();
         assert!(value == 1000, 0);
         pay::keep(coin, test_scenario::ctx(test));
 
         coin::mint_and_transfer<COIN_TESTS>(&mut treasury, 42, TEST_ADDR, test_scenario::ctx(test));
         test_scenario::next_epoch(test, TEST_ADDR); // needed or else we won't have a value for `most_recent_id_for_address` coming up next.
         let coin = test_scenario::take_from_address<Coin<COIN_TESTS>>(test, TEST_ADDR);
-        let value = coin::value(&coin);
+        let value = coin.value();
         assert!(value == 42, 0);
         pay::keep(coin, test_scenario::ctx(test));
 
