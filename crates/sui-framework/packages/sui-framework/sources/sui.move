@@ -58,7 +58,7 @@ module sui::sui {
     }
 
     #[test_only]
-    // Creates a `sui::coin::CoinMetadata` for Sui for testing purposes.
+    /// Creates a `sui::coin::CoinMetadata` for Sui for testing purposes.
     public fun new_metadata_for_testing(ctx: &mut TxContext): CoinMetadata<SUI> {
         coin::new_coin_metadata_for_testing(
             SUI {}, 
