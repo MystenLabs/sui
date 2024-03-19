@@ -11,11 +11,7 @@ import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js
 import type { Argument, CallArg, OpenMoveTypeSignature, Transaction } from './blockData/v2.js';
 import { ObjectRef } from './blockData/v2.js';
 import { Inputs, isMutableSharedObjectInput } from './Inputs.js';
-import {
-	isTxContext,
-	normalizedTypeToMoveTypeSignature,
-	pureBcsSchemaFromOpenMoveTypeSignatureBody,
-} from './serializer.js';
+import { getPureBcsSchema, isTxContext, normalizedTypeToMoveTypeSignature } from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 
 export type MaybePromise<T> = T | Promise<T>;
@@ -329,8 +325,8 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 						const typeSignature = normalizedTypeToMoveTypeSignature(param);
 
-						if (typeof typeSignature.body !== 'object' || 'vector' in typeSignature.body) {
-							const schema = pureBcsSchemaFromOpenMoveTypeSignatureBody(typeSignature.body);
+						const schema = getPureBcsSchema(typeSignature.body);
+						if (schema) {
 							inputs[inputs.indexOf(input)] = Inputs.Pure(schema.serialize(inputValue));
 							return;
 						}

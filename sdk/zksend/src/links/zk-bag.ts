@@ -62,7 +62,7 @@ export class ZkBag<IDs> {
 			];
 			typeArguments: [string];
 		},
-	): Extract<TransactionArgument, { kind: 'Result' }> {
+	): Extract<TransactionArgument, { $kind: 'Result' }> {
 		return txb.moveCall({
 			target: `${this.#package}::${this.#module}::add`,
 			arguments: [
@@ -120,12 +120,12 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				claim: Extract<TransactionArgument, { kind: 'NestedResult' }>,
+				claim: Extract<TransactionArgument, { $kind: 'NestedResult' }>,
 				id: TransactionObjectArgument | string,
 			];
 			typeArguments: [string];
 		},
-	): Extract<TransactionArgument, { kind: 'Result' }> {
+	): Extract<TransactionArgument, { $kind: 'Result' }> {
 		return txb.moveCall({
 			target: `${this.#package}::${this.#module}::claim`,
 			arguments: [txb.object(bag), txb.object(claim), typeof id === 'string' ? txb.object(id) : id],
@@ -140,7 +140,7 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				claim: Extract<TransactionArgument, { kind: 'NestedResult' }>,
+				claim: Extract<TransactionArgument, { $kind: 'NestedResult' }>,
 			];
 		},
 	) {

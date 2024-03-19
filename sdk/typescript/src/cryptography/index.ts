@@ -19,7 +19,7 @@ export {
 	mnemonicToSeed,
 	mnemonicToSeedHex,
 } from './mnemonics.js';
-export { type Intent, IntentScope, IntentVersion, AppId, messageWithIntent } from './intent.js';
+export { messageWithIntent, IntentScope } from './intent.js';
 export {
 	PRIVATE_KEY_SIZE,
 	LEGACY_PRIVATE_KEY_SIZE,
