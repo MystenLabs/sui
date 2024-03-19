@@ -2,29 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
-use std::fmt::{Debug, Display, Formatter};
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    hash::Hash,
-    iter,
-};
-
-use enum_dispatch::enum_dispatch;
-use fastcrypto::{encoding::Base64, hash::HashFunction};
-use itertools::Either;
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
-use nonempty::{nonempty, NonEmpty};
-use serde::{Deserialize, Serialize};
-use strum::IntoStaticStr;
-use tap::Pipe;
-use tracing::trace;
-
-use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
-
+use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
 use crate::authenticator_state::ActiveJwk;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{

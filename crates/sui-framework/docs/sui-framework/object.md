@@ -137,7 +137,7 @@ The hardcoded ID for the singleton AuthenticatorState Object.
 The hardcoded ID for the Bridge Object.
 
 
-<pre><code><b>const</b> <a href="object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a>: <b>address</b> = 9;
+<pre><code><b>const</b> <a href="../sui-framework/object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a>: <b>address</b> = 9;
 </code></pre>
 
 
@@ -427,11 +427,11 @@ This should only be called once from <code><a href="../sui-framework/deny_list.m
 
 ## Function `bridge`
 
-Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singleton <code>Bridge</code> object.
+Create the <code><a href="../sui-framework/object.md#0x2_object_UID">UID</a></code> for the singleton <code>Bridge</code> object.
 This should only be called once from <code>bridge</code>.
 
 
-<pre><code><b>fun</b> <a href="object.md#0x2_object_bridge">bridge</a>(): <a href="object.md#0x2_object_UID">object::UID</a>
+<pre><code><b>fun</b> <a href="../sui-framework/object.md#0x2_object_bridge">bridge</a>(): <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -440,9 +440,9 @@ This should only be called once from <code>bridge</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="object.md#0x2_object_bridge">bridge</a>(): <a href="object.md#0x2_object_UID">UID</a> {
-    <a href="object.md#0x2_object_UID">UID</a> {
-        id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a> }
+<pre><code><b>fun</b> <a href="../sui-framework/object.md#0x2_object_bridge">bridge</a>(): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+    <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
+        id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a> }
     }
 }
 </code></pre>

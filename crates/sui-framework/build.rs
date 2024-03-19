@@ -209,7 +209,11 @@ fn build_packages_with_move_config(
             &deepbook_pkg.package.compiled_docs.unwrap(),
             &mut files_to_write,
         );
-        relocate_docs(bridge_dir);
+        relocate_docs(
+            bridge_dir,
+            &bridge_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
         relocate_docs(
             system_dir,
             &system_pkg.package.compiled_docs.unwrap(),
