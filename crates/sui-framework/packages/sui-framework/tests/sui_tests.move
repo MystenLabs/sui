@@ -15,7 +15,7 @@ module sui::sui_tests {
   const SUI_TOTAL_SUPPLY: u64 = 10_000_000_000_000_000_000;
 
   #[test]
-  fun init_sui_currency() {
+  fun sui_tests_new_metadata_for_testing() {
     let ctx = tx_context::dummy();
     let metadata = sui::new_metadata_for_testing(&mut ctx);
 
@@ -23,13 +23,12 @@ module sui::sui_tests {
     let symbol_bytes = ascii::as_bytes(&coin::get_symbol(&metadata));
     let name_bytes = string::bytes(&coin::get_name(&metadata));
     let description_bytes = string::bytes(&coin::get_description(&metadata));
-    let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&coin::get_icon_url(&metadata))));
 
     assert_eq(decimals, SUI_DECIMALS);
     assert_eq(*symbol_bytes, b"SUI");
     assert_eq(*name_bytes, b"Sui");
     assert_eq(*description_bytes, b"");
-    assert_eq(*icon_url, vector[]);
+    assert_eq(option::is_none(&coin::get_icon_url(&metadata)), true);
 
     destroy(metadata);
   }
