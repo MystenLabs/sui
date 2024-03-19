@@ -57,6 +57,25 @@ contract MockSmallUSDC is ERC20 {
     function testMock() public {}
 }
 
+contract MockUSDT is ERC20 {
+    constructor() ERC20("Tether", "USDT") {}
+
+    function mint(address to, uint256 amount) public virtual {
+        _mint(to, amount);
+    }
+
+    function burn(address form, uint256 amount) public virtual {
+        _burn(form, amount);
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return 6;
+    }
+
+    function testMock() public {}
+}
+
+
 contract WETH {
     string public name = "Wrapped Ether";
     string public symbol = "WETH";

@@ -34,13 +34,16 @@ contract DeployBridge is Script {
             // deploy mock tokens
             MockWBTC wBTC = new MockWBTC();
             MockUSDC USDC = new MockUSDC();
+            MockUSDT USDT = new MockUSDT();
 
             // update config with mock addresses
             config.supportedTokens = new address[](4);
-            config.supportedTokens[0] = address(0);
-            config.supportedTokens[1] = address(wBTC);
-            config.supportedTokens[2] = config.WETH;
-            config.supportedTokens[3] = address(USDC);
+            // In BridgeConfig.sol `supportedTokens is shifted by one
+            // and the first token is SUI.
+            config.supportedTokens[0] = address(wBTC);
+            config.supportedTokens[1] = config.WETH;
+            config.supportedTokens[2] = address(USDC);
+            config.supportedTokens[3] = address(USDT);
         }
 
         // convert supported chains from uint256 to uint8[]
@@ -112,6 +115,18 @@ contract DeployBridge is Script {
         // transfer limiter ownership to bridge
         BridgeLimiter instance = BridgeLimiter(limiter);
         instance.transferOwnership(suiBridge);
+
+        // print deployed addresses for post deployment setup
+        console.log("[Deployed] BridgeConfig:", address(bridgeConfig));
+        console.log("[Deployed] SuiBridge:", suiBridge);
+        console.log("[Deployed] BridgeLimiter:", limiter);
+        console.log("[Deployed] BridgeCommittee:", bridgeCommittee);
+        console.log("[Deployed] BridgeVault:", address(vault));
+        console.log("[Deployed] BTC:", bridgeConfig.getTokenAddress(1));
+        console.log("[Deployed] ETH:", bridgeConfig.getTokenAddress(2));
+        console.log("[Deployed] USDC:", bridgeConfig.getTokenAddress(3));
+        console.log("[Deployed] USDT:", bridgeConfig.getTokenAddress(4));
+
         vm.stopBroadcast();
     }
 
