@@ -2460,9 +2460,9 @@ impl AuthorityPerEpochStore {
                 .expect("randomness manager should exist if randomness is enabled")
                 .is_dkg_closed();
         if dkg_closed {
-            let deferred_randomness_tx =
+            let deferred_randomness_txs =
                 self.load_deferred_transactions_for_randomness(&mut batch)?;
-            previously_deferred_tx_digests.extend(deferred_randomness_tx.iter().map(|tx| {
+            previously_deferred_tx_digests.extend(deferred_randomness_txs.iter().map(|tx| {
                 match tx.0.transaction.key() {
                     SequencedConsensusTransactionKey::External(
                         ConsensusTransactionKey::Certificate(digest),
@@ -2472,7 +2472,7 @@ impl AuthorityPerEpochStore {
                     }
                 }
             }));
-            sequenced_randomness_transactions.extend(deferred_randomness_tx);
+            sequenced_randomness_transactions.extend(deferred_randomness_txs);
         }
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.

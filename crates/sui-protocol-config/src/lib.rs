@@ -952,7 +952,7 @@ pub struct ProtocolConfig {
 
     /// Consensus Round after which DKG should be aborted and randomness disabled for
     /// the epoch, if it hasn't already completed.
-    random_beacon_dkg_timeout_round: Option<u16>,
+    random_beacon_dkg_timeout_round: Option<u32>,
 
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
