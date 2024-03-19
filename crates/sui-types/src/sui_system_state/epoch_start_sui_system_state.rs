@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
+use crate::crypto::AuthorityPublicKeyBytes;
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
@@ -13,7 +14,7 @@ use consensus_config::{Authority, Committee as ConsensusCommittee};
 use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
-use tracing::warn;
+use tracing::{error, warn};
 
 #[enum_dispatch]
 pub trait EpochStartSystemStateTrait {
@@ -167,7 +168,6 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         Committee::new(self.epoch, voting_rights)
     }
 
-    #[allow(clippy::mutable_key_type)]
     fn get_narwhal_committee(&self) -> NarwhalCommittee {
         let mut committee_builder = CommitteeBuilder::new(self.epoch as narwhal_config::Epoch);
 
@@ -184,7 +184,6 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         committee_builder.build()
     }
 
-    #[allow(clippy::mutable_key_type)]
     fn get_mysticeti_committee(&self) -> ConsensusCommittee {
         let mut authorities = vec![];
         for validator in self.active_validators.iter() {
@@ -198,9 +197,24 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             });
         }
 
-        // Sort the authorities by their protocol (public) key in ascending order. That's the sorting
-        // SUI committee follows and we
+        // Sort the authorities by their protocol (public) key in ascending order, same as the order
+        // in the Sui committee returned from get_sui_committee().
         authorities.sort_by(|a1, a2| a1.protocol_key.cmp(&a2.protocol_key));
+
+        for ((i, mysticeti_authority), sui_authority_name) in authorities
+            .iter()
+            .enumerate()
+            .zip(self.get_sui_committee().names())
+        {
+            if sui_authority_name
+                != &AuthorityPublicKeyBytes::from(&mysticeti_authority.protocol_key)
+            {
+                error!(
+                    "Mismatched authority order between Sui and Mysticeti! Index {}, Mysticeti authority {:?}\nSui authority name {}",
+                    i, mysticeti_authority, sui_authority_name
+                );
+            }
+        }
 
         ConsensusCommittee::new(self.epoch as consensus_config::Epoch, authorities)
     }
