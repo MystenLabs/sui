@@ -135,7 +135,7 @@ import { ZkSendLink } from '@mysten/zksend';
 const link = await ZkSendLink.fromUrl('https://zksend.com/claim#$abc...');
 
 // list what claimable assets the link has
-const { nfts, balances } = await link.listClaimableAssets(addressOfClaimer);
+const { nfts, balances } = link.assets;
 
 // claim all the assets from the link
 await link.claimAssets(addressOfClaimer);
@@ -152,8 +152,8 @@ const { links, hasNextPage, cursor } = await listCreatedLinks({
 	address: addressOfCreator,
 });
 
-// links will be an array of ZkSendLinks, but won't be claimable since they don't have access to the links private key
-const { nfts, balances } = await links[0].listClaimableAssets(addressOfClaimer);
+// get the claimable assets for this link (will be empty if the link has been claimed)
+const { nfts, balances } = await links[0].assets;
 ```
 
 ## Regenerating links
@@ -169,11 +169,42 @@ const { links, hasNextPage, cursor } = await listCreatedLinks({
 });
 
 // url will be the new link url
-const { url, transactionBlock } = await links[0].createRegenerateTransaction(addressOfLinkCreator);
+const { url, transactionBlock } = await links[0].link.createRegenerateTransaction(
+	addressOfLinkCreator,
+);
 
 // Execute the transaction block to regenerate the link
 await client.signAndExecuteTransactionBlock({
 	transactionBlock,
+	signer: keypair,
+});
+```
+
+## Bulk link creation
+
+To create multiple links in a single transaction block, you can use `ZkSendLinkBuilder.createLinks`:
+
+```ts
+const links = [];
+
+for (let i = 0; i < 10; i++) {
+	const link = new ZkSendLinkBuilder({
+		client,
+		sender: keypair.toSuiAddress(),
+	});
+
+	link.addClaimableMist(100n);
+	links.push(link);
+}
+
+const urls = links.map((link) => link.getLink());
+
+const txb = await ZkSendLinkBuilder.createLinks({
+	links,
+});
+
+await client.signAndExecuteTransactionBlock({
+	transactionBlock: txb,
 	signer: keypair,
 });
 ```
