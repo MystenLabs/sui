@@ -580,6 +580,41 @@ async fn test_deferral_key_sort_order() {
             }
         }
     }
+
+    let min_future_round = 100;
+    let max_future_round = 300;
+    for _ in 0..10000 {
+        let future_round = rand::thread_rng().gen_range(min_future_round..=max_future_round);
+        let current_round = rand::thread_rng().gen_range(0..u64::MAX);
+
+        let key = DeferralKey::new_for_consensus_round(future_round, current_round);
+        db.deferred_certs.insert(&key, &()).unwrap();
+        db.deferred_certs
+            .insert(&DeferralKey::new_for_randomness(current_round), &())
+            .unwrap();
+    }
+
+    let mut previous_future_round = 0;
+    let (min, max) = DeferralKey::range_for_up_to_consensus_round(200);
+    let mut result_count = 0;
+    for result in db
+        .deferred_certs
+        .safe_iter_with_bounds(Some(min), Some(max))
+    {
+        let (key, _) = result.unwrap();
+        match key {
+            DeferralKey::RandomnessDkg { .. } => {
+                panic!("Should not receive randomness deferral txn.")
+            }
+            DeferralKey::ConsensusRound { future_round, .. } => {
+                assert!(previous_future_round <= future_round);
+                previous_future_round = future_round;
+                assert!(future_round <= 200);
+                result_count += 1;
+            }
+        }
+    }
+    assert!(result_count > 0);
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
