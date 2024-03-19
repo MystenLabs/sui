@@ -179,10 +179,12 @@ pub trait ExecutionCacheRead: Send + Sync {
             )?
             .into_iter(),
         ) {
+            // Congested object input should always be available, and therefore should not block any txn execution.
             assert!(
-                !input_key.version().is_some()
+                input_key.version().is_none()
                     || input_key.version().unwrap() != SequenceNumber::CONGESTED
             );
+
             // If the key exists at the specified version, then the object is available.
             if has_key {
                 versioned_results.push((*idx, true))

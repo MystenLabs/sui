@@ -1520,14 +1520,6 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         let (min, max) = DeferralKey::full_range_for_randomness();
         self.load_deferred_transactions(batch, min, max)
-        /*
-        let deferred_txn = self.load_deferred_transactions(batch, min, max)?;
-        let mut txns = Vec::new();
-        for deferred_batch in deferred_txn {
-            txns.extend(deferred_batch.1);
-        }
-        Ok(txns)
-        */
     }
 
     fn load_deferred_transactions_for_consensus_round(
@@ -1546,7 +1538,7 @@ impl AuthorityPerEpochStore {
         min: DeferralKey,
         max: DeferralKey,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
-        debug!("ZZZZ query db to load deferred txn {:?} {:?}", min, max);
+        debug!("Query epoch store to load deferred txn {:?} {:?}", min, max);
         let mut keys = Vec::new();
         let mut txns = Vec::new();
         self.tables()?
@@ -1554,6 +1546,11 @@ impl AuthorityPerEpochStore {
             .safe_iter_with_bounds(Some(min), Some(max))
             .try_for_each(|result| match result {
                 Ok((key, txs)) => {
+                    debug!(
+                        "Loaded {:?} deferred txn with deferral key {:?}",
+                        txs.len(),
+                        key
+                    );
                     keys.push(key);
                     txns.push((key, txs));
                     Ok(())
@@ -1598,8 +1595,8 @@ impl AuthorityPerEpochStore {
             PerObjectCongestionControlMode::None => (None, None),
             PerObjectCongestionControlMode::TotalGasBudget => {
                 for obj in cert.shared_input_objects() {
-                    if object_total_cost.get(&obj.id).unwrap_or(&0).clone()
-                        > self
+                    if object_total_cost.get(&obj.id).unwrap_or(&0)
+                        > &self
                             .protocol_config()
                             .max_accumulated_txn_cost_per_object_in_checkpoint()
                     {
@@ -1608,6 +1605,7 @@ impl AuthorityPerEpochStore {
                             deferred_from_round,
                         }) = previously_deferred_tx_digests.get(cert.digest())
                         {
+                            // This transaction has been deferred before.
                             return (
                                 Some(DeferralKey::new_for_consensus_round(
                                     commit_round + 1,
@@ -2095,16 +2093,14 @@ impl AuthorityPerEpochStore {
             let (input_version, input_object_key_version, is_mutable) =
                 if let Some(congested_object_id) = congested_object_to_fail_txn {
                     if id == &congested_object_id {
-                        (SequenceNumber::CONGESTED, SequenceNumber::MIN, false) // This has to be inmutable. Otherwise, we may use old version of data to override newer version.
+                        (SequenceNumber::CONGESTED, SequenceNumber::MIN, false) // This has to be inmutable. Otherwise, we may use old version of data to override newer version. When constructing new version of object in execution.
                     } else {
-                        (version, version, mutable.clone())
+                        (version, version, *mutable)
                     }
                 } else {
-                    max_object_cost = core::cmp::max(
-                        object_total_cost.get(id).unwrap_or(&0).clone(),
-                        max_object_cost,
-                    );
-                    (version, version, mutable.clone())
+                    max_object_cost =
+                        core::cmp::max(*object_total_cost.get(id).unwrap_or(&0), max_object_cost);
+                    (version, version, *mutable)
                 };
 
             assigned_versions.push((*id, input_version));
@@ -2112,18 +2108,14 @@ impl AuthorityPerEpochStore {
             is_mutable_input.push(is_mutable);
         }
 
-        max_object_cost += match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => 0,
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                if congested_object_to_fail_txn.is_some() {
-                    0
-                } else {
-                    certificate.gas_budget()
-                }
+        if congested_object_to_fail_txn.is_none() {
+            max_object_cost += match self.protocol_config().per_object_congestion_control_mode() {
+                PerObjectCongestionControlMode::None => 0,
+                PerObjectCongestionControlMode::TotalGasBudget => certificate.gas_budget(),
+            };
+            for obj in shared_input_objects {
+                object_total_cost.insert(obj.id, max_object_cost);
             }
-        };
-        for obj in shared_input_objects {
-            object_total_cost.insert(obj.id, max_object_cost);
         }
 
         let next_version =
@@ -2518,7 +2510,7 @@ impl AuthorityPerEpochStore {
                     txs.iter().map(|tx| match tx.0.transaction.key() {
                         SequencedConsensusTransactionKey::External(
                             ConsensusTransactionKey::Certificate(digest),
-                        ) => (digest, deferral_key.clone()),
+                        ) => (digest, *deferral_key),
                         _ => panic!("deferred transaction was not a user certificate: {tx:?}"),
                     })
                 })
@@ -2548,7 +2540,6 @@ impl AuthorityPerEpochStore {
         }
 
         sequenced_transactions.extend(current_consensus_sequenced_transactions);
-        sequenced_randomness_transactions.extend(current_sequenced_randomness_transactions);
 
         // If DKG is closed, we should now load any previously-deferred randomness-using tx
         // so we can decide what to do with them (execute or ignore, depending on whether
@@ -2567,7 +2558,7 @@ impl AuthorityPerEpochStore {
                     txs.iter().map(|tx| match tx.0.transaction.key() {
                         SequencedConsensusTransactionKey::External(
                             ConsensusTransactionKey::Certificate(digest),
-                        ) => (digest, deferral_key.clone()),
+                        ) => (digest, *deferral_key),
                         _ => panic!(
                             "deferred randomness transaction was not a user certificate: {tx:?}"
                         ),
@@ -2577,6 +2568,7 @@ impl AuthorityPerEpochStore {
             sequenced_randomness_transactions
                 .extend(deferred_randomness_txs.into_iter().flat_map(|(_, txs)| txs));
         }
+        sequenced_randomness_transactions.extend(current_sequenced_randomness_transactions);
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
         let mut roots: BTreeSet<_> = system_transactions
@@ -3187,7 +3179,7 @@ impl AuthorityPerEpochStore {
                         return Ok(ConsensusCertificateResult::Deferred(deferral_key));
                     } else {
                         debug!(
-                            "ZZZZZ Deferring exceeded limit. Fail txn. {:?} {:?}",
+                            "Max deferring consensus round reached. Failing txn. Congested object: {:?}, txn: {:?}",
                             congested_object,
                             certificate.digest()
                         );
