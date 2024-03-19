@@ -494,6 +494,7 @@ impl Inner {
                         .metrics
                         .epoch_random_beacon_dkg_epoch_start_completion_time_ms
                         .set(epoch_elapsed as i64);
+                    epoch_store.metrics.epoch_random_beacon_dkg_failed.set(0);
                     if let Some(elapsed) = elapsed {
                         epoch_store
                             .metrics
@@ -528,6 +529,7 @@ impl Inner {
                     .into()
         {
             error!("random beacon: DKG timed out. Randomness disabled for this epoch. All randomness-using transactions will fail.");
+            epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
             self.dkg_output
                 .set(None)
                 .expect("checked above that `dkg_output` is uninitialized");
