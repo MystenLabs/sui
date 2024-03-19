@@ -6,7 +6,7 @@ use crate::types::big_int::BigInt;
 use async_graphql::*;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
 
 // TODO: calculate proper cost limits
@@ -135,8 +135,39 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
-#[derive(Debug)]
-pub struct Version(pub &'static str);
+#[derive(Copy, Clone, Debug)]
+pub struct Version {
+    /// The major version is set as the year
+    pub major: &'static str,
+    /// The minor version is set as the quarter when this release happened
+    pub minor: &'static str,
+    /// The patch is just an integer that is incremented with each release
+    /// in that quarter
+    pub patch: &'static str,
+    /// The commit sha for this release
+    pub sha: &'static str,
+}
+
+impl Version {
+    pub fn for_testing() -> Self {
+        Self {
+            major: env!("CARGO_PKG_VERSION_MAJOR"),
+            minor: env!("CARGO_PKG_VERSION_MINOR"),
+            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            sha: "unknown",
+        }
+    }
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}-{}",
+            self.major, self.minor, self.patch, self.sha
+        )
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]

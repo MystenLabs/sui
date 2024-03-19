@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::{
+    extract::State,
     headers,
     http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
@@ -9,11 +10,10 @@ use axum::{
     TypedHeader,
 };
 
-use crate::error::{code, graphql_error_response};
-
-const RPC_VERSION_FULL: &str = env!("CARGO_PKG_VERSION");
-const RPC_VERSION_YEAR: &str = env!("CARGO_PKG_VERSION_MAJOR");
-const RPC_VERSION_MONTH: &str = env!("CARGO_PKG_VERSION_MINOR");
+use crate::{
+    config::Version,
+    error::{code, graphql_error_response},
+};
 
 pub(crate) static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
 
@@ -50,11 +50,12 @@ impl headers::Header for SuiRpcVersion {
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
 pub(crate) async fn check_version_middleware<B>(
-    version: Option<TypedHeader<SuiRpcVersion>>,
+    user_version: Option<TypedHeader<SuiRpcVersion>>,
+    State(version): State<Version>,
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if let Some(TypedHeader(SuiRpcVersion(req_version, rest))) = version {
+    if let Some(TypedHeader(SuiRpcVersion(req_version, rest))) = user_version {
         if !rest.is_empty() {
             return (
                 StatusCode::BAD_REQUEST,
@@ -91,7 +92,7 @@ pub(crate) async fn check_version_middleware<B>(
                 .into_response();
         };
 
-        if year != RPC_VERSION_YEAR || month != RPC_VERSION_MONTH {
+        if year != version.major || month != version.minor {
             return (
                 StatusCode::MISDIRECTED_REQUEST,
                 graphql_error_response(
@@ -108,12 +109,18 @@ pub(crate) async fn check_version_middleware<B>(
 
 /// Mark every outgoing response with a header indicating the precise version of the RPC that was
 /// used (including the patch version).
-pub(crate) async fn set_version_middleware<B>(request: Request<B>, next: Next<B>) -> Response {
+pub(crate) async fn set_version_middleware<B>(
+    State(version): State<Version>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
+    let version = version.to_string();
     headers.insert(
         VERSION_HEADER.clone(),
-        HeaderValue::from_static(RPC_VERSION_FULL),
+        HeaderValue::from_str(version.as_str())
+            .unwrap_or_else(|_| HeaderValue::from_static(env!("CARGO_PKG_VERSION"))),
     );
     response
 }
@@ -135,17 +142,39 @@ fn parse_version(version: &str) -> Option<(&str, &str)> {
 
 #[cfg(test)]
 mod tests {
-    use axum::{body::Body, middleware, routing::get, Router};
-    use expect_test::expect;
-    use tower::ServiceExt;
+    use std::net::SocketAddr;
 
     use super::*;
+    use crate::config::{ConnectionConfig, Version};
+    use crate::metrics::Metrics;
+    use crate::server::builder::AppState;
+    use axum::{body::Body, middleware, routing::get, Router};
+    use expect_test::expect;
+    use mysten_metrics;
+    use tower::ServiceExt;
 
+    fn test_version() -> Version {
+        Version::for_testing()
+    }
+
+    fn metrics() -> Metrics {
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
+        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
+        Metrics::new(&registry)
+    }
     fn service() -> Router {
+        let metrics = metrics();
+        let version = test_version();
+        let server_config = ConnectionConfig::ci_integration_test_cfg();
+        let state = AppState::new(server_config.clone(), metrics.clone(), version.clone());
+
         Router::new()
             .route("/", get(|| async { "Hello, Versioning!" }))
             .layer(middleware::from_fn(check_version_middleware))
-            .layer(middleware::from_fn(set_version_middleware))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                set_version_middleware,
+            ))
     }
 
     fn plain_request() -> Request<Body> {
@@ -175,11 +204,10 @@ mod tests {
             .oneshot(header_request(&[(&VERSION_HEADER, version.as_bytes())]))
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
     }
 
@@ -198,7 +226,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
     }
 
@@ -210,7 +238,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
     }
 
@@ -225,7 +253,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::MISDIRECTED_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
 
         let expect = expect![[r#"
@@ -257,7 +285,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
 
         let expect = expect![[r#"
@@ -286,7 +314,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
 
         let expect = expect![[r#"
@@ -318,7 +346,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
         );
 
         let expect = expect![[r#"

@@ -131,6 +131,7 @@ pub(crate) struct AppState {
     service: ServiceConfig,
     metrics: Metrics,
     cancellation_token: CancellationToken,
+    pub version: Version,
 }
 
 /// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
@@ -144,12 +145,14 @@ impl AppState {
         service: ServiceConfig,
         metrics: Metrics,
         cancellation_token: CancellationToken,
+        version: Version,
     ) -> Self {
         Self {
             connection,
             service,
             metrics,
             cancellation_token,
+            version,
         }
     }
 }
@@ -163,6 +166,12 @@ impl FromRef<AppState> for ConnectionConfig {
 impl FromRef<AppState> for Metrics {
     fn from_ref(app_state: &AppState) -> Metrics {
         app_state.metrics.clone()
+    }
+}
+
+impl FromRef<AppState> for Version {
+    fn from_ref(app_state: &AppState) -> Version {
+        app_state.version.clone()
     }
 }
 
@@ -230,13 +239,16 @@ impl ServerBuilder {
                 .route("/health", axum::routing::get(health_checks))
                 .with_state(self.state.clone())
                 .route_layer(middleware::from_fn_with_state(
-                    self.state.metrics.clone(),
+                    self.state.version,
+                    set_version_middleware,
+                ))
+                .route_layer(middleware::from_fn_with_state(
+                    self.state.version,
                     check_version_middleware,
                 ))
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
-                }))
-                .layer(middleware::from_fn(set_version_middleware));
+                }));
             self.router = Some(router);
         }
     }
@@ -336,12 +348,15 @@ impl ServerBuilder {
                 config.connection.prom_url, config.connection.prom_port
             ))
         })?;
+
         let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
         info!("Starting Prometheus HTTP endpoint at {}", prom_addr);
         let registry = registry_service.default_registry();
         registry
             .register(mysten_metrics::uptime_metric(
-                "graphql", version.0, "unknown",
+                "graphql",
+                Box::leak(Box::new(version.clone().to_string())),
+                "unknown",
             ))
             .unwrap();
 
@@ -352,6 +367,7 @@ impl ServerBuilder {
             config.service.clone(),
             metrics.clone(),
             cancellation_token,
+            version.clone(),
         );
         let mut builder = ServerBuilder::new(state);
 
@@ -591,7 +607,7 @@ pub(crate) async fn update_watermark(
 pub mod tests {
     use super::*;
     use crate::{
-        config::{ConnectionConfig, Limits, ServiceConfig},
+        config::{ConnectionConfig, Limits, ServiceConfig, Version},
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
