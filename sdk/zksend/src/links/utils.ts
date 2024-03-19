@@ -1,155 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import '@mysten/sui.js/graphql/schemas/2024-01';
-
-import { bcs } from '@mysten/sui.js/bcs';
-import type { SuiClient } from '@mysten/sui.js/client';
-import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
+import type {
+	ObjectOwner,
+	SuiObjectChange,
+	SuiTransactionBlockResponse,
+} from '@mysten/sui.js/client';
 import type { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
-import { ZkSendLink } from './claim.js';
-import type { ZkBagContractOptions } from './zk-bag.js';
+// eslint-disable-next-line import/no-cycle
 
-const ListCreatedLinksQuery = graphql(`
-	query listCreatedLinks($address: SuiAddress!, $function: String!, $cursor: String) {
-		transactionBlocks(
-			last: 10
-			before: $cursor
-			filter: { signAddress: $address, function: $function, kind: PROGRAMMABLE_TX }
-		) {
-			pageInfo {
-				startCursor
-				hasPreviousPage
-			}
-			nodes {
-				digest
-				kind {
-					__typename
-					... on ProgrammableTransactionBlock {
-						inputs(first: 10) {
-							nodes {
-								__typename
-								... on Pure {
-									bytes
-								}
-							}
-						}
-						transactions(first: 10) {
-							nodes {
-								__typename
-								... on MoveCallTransaction {
-									module
-									functionName
-									package
-									arguments {
-										__typename
-										... on Input {
-											ix
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-`);
+export interface LinkAssets {
+	balances: {
+		coinType: string;
+		amount: bigint;
+	}[];
 
-export async function listCreatedLinks({
-	address,
-	cursor,
-	network,
-	contract,
-	...linkOptions
-}: {
-	address: string;
-	contract: ZkBagContractOptions;
-	cursor?: string;
-	network?: 'mainnet' | 'testnet';
-	// Link options:
-	host?: string;
-	path?: string;
-	client?: SuiClient;
-}) {
-	const gqlClient = new SuiGraphQLClient({
-		url:
-			network === 'testnet'
-				? 'https://sui-testnet.mystenlabs.com/graphql'
-				: 'https://sui-mainnet.mystenlabs.com/graphql',
-	});
+	nfts: {
+		objectId: string;
+		type: string;
+		version: string;
+		digest: string;
+	}[];
 
-	const packageId = normalizeSuiAddress(contract.packageId);
-
-	const page = await gqlClient.query({
-		query: ListCreatedLinksQuery,
-		variables: {
-			address,
-			cursor,
-			function: `${packageId}::zk_bag::new`,
-		},
-	});
-
-	const transactionBlocks = page.data?.transactionBlocks;
-
-	if (!transactionBlocks || page.errors?.length) {
-		throw new Error('Failed to load created links');
-	}
-
-	const links = transactionBlocks.nodes
-		.map((node) => {
-			if (node.kind?.__typename !== 'ProgrammableTransactionBlock') {
-				throw new Error('Invalid transaction block');
-			}
-
-			const fn = node.kind.transactions.nodes.find(
-				(fn) =>
-					fn.__typename === 'MoveCallTransaction' &&
-					fn.package === packageId &&
-					fn.module === 'zk_bag' &&
-					fn.functionName === 'new',
-			);
-
-			if (fn?.__typename !== 'MoveCallTransaction') {
-				return null;
-			}
-
-			const addressArg = fn.arguments[1];
-
-			if (addressArg.__typename !== 'Input') {
-				throw new Error('Invalid address argument');
-			}
-
-			const input = node.kind.inputs.nodes[addressArg.ix];
-
-			if (input.__typename !== 'Pure') {
-				throw new Error('Expected Address input to be a Pure value');
-			}
-
-			const address = bcs.Address.parse(fromB64(input.bytes as string));
-
-			return new ZkSendLink({
-				network,
-				address,
-				contract,
-				isContractLink: true,
-				...linkOptions,
-			});
-		})
-		.reverse()
-		.filter(Boolean) as ZkSendLink[];
-
-	await Promise.all(links.map((link) => link.loadOwnedData()));
-
-	return {
-		cursor: transactionBlocks.pageInfo.startCursor,
-		hasNextPage: transactionBlocks.pageInfo.hasPreviousPage,
-		links,
-	};
+	coins: {
+		objectId: string;
+		type: string;
+		version: string;
+		digest: string;
+	}[];
 }
 
 export function isClaimTransaction(
@@ -190,4 +70,123 @@ export function isClaimTransaction(
 	}
 
 	return transfers === 1;
+}
+
+export function getAssetsFromTxnBlock({
+	transactionBlock,
+	address,
+	isSent,
+}: {
+	transactionBlock: SuiTransactionBlockResponse;
+	address: string;
+	isSent: boolean;
+}): LinkAssets {
+	const normalizedAddress = normalizeSuiAddress(address);
+	const balances: {
+		coinType: string;
+		amount: bigint;
+	}[] = [];
+
+	const nfts: {
+		objectId: string;
+		type: string;
+		version: string;
+		digest: string;
+	}[] = [];
+
+	const coins: {
+		objectId: string;
+		type: string;
+		version: string;
+		digest: string;
+	}[] = [];
+
+	transactionBlock.balanceChanges?.forEach((change) => {
+		const validAmountChange = isSent ? BigInt(change.amount) < 0n : BigInt(change.amount) > 0n;
+		if (validAmountChange && isOwner(change.owner, normalizedAddress)) {
+			balances.push({
+				coinType: normalizeStructTag(change.coinType),
+				amount: BigInt(change.amount),
+			});
+		}
+	});
+
+	transactionBlock.objectChanges?.forEach((change) => {
+		if ('objectType' in change) {
+			const type = parseStructTag(change.objectType);
+
+			if (
+				type.address === normalizeSuiAddress('0x2') &&
+				type.module === 'coin' &&
+				type.name === 'Coin'
+			) {
+				if (
+					change.type === 'created' ||
+					change.type === 'transferred' ||
+					change.type === 'mutated'
+				) {
+					coins.push(change);
+				}
+				return;
+			}
+		}
+
+		if (
+			isObjectOwner(change, normalizedAddress, isSent) &&
+			(change.type === 'created' || change.type === 'transferred' || change.type === 'mutated')
+		) {
+			nfts.push(change);
+		}
+	});
+
+	return {
+		balances,
+		nfts,
+		coins,
+	};
+}
+
+function getObjectOwnerFromObjectChange(objectChange: SuiObjectChange, isSent: boolean) {
+	if (isSent) {
+		return 'owner' in objectChange ? objectChange.owner : null;
+	}
+
+	return 'recipient' in objectChange ? objectChange.recipient : null;
+}
+
+function isObjectOwner(objectChange: SuiObjectChange, address: string, isSent: boolean) {
+	const owner = getObjectOwnerFromObjectChange(objectChange, isSent);
+
+	if (isSent) {
+		return owner && typeof owner === 'object' && 'AddressOwner' in owner;
+	}
+
+	return ownedAfterChange(objectChange, address);
+}
+
+export function ownedAfterChange(
+	objectChange: SuiObjectChange,
+	address: string,
+): objectChange is Extract<SuiObjectChange, { type: 'created' | 'transferred' | 'mutated' }> {
+	if (objectChange.type === 'transferred' && isOwner(objectChange.recipient, address)) {
+		return true;
+	}
+
+	if (
+		(objectChange.type === 'created' || objectChange.type === 'mutated') &&
+		isOwner(objectChange.owner, address)
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+export function isOwner(owner: ObjectOwner, address: string): owner is { AddressOwner: string } {
+	return (
+		owner &&
+		typeof owner === 'object' &&
+		'AddressOwner' in owner &&
+		normalizeSuiAddress(owner.AddressOwner) === address
+	);
 }
