@@ -1,5 +1,5 @@
 {
     "redirects": [
-        { "source": "/wallet/faq", "destination": "/faq", "permanent": false }
+        { "source": "/wallet/:path*", "destination": "/:path*", "permanent": false }
     ]
 }
