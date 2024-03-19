@@ -1,5 +1,3 @@
 {
-    "redirects": [
-        { "source": "/wallet/:path*", "destination": "/:path*", "permanent": false }
-    ]
+	"redirects": [{ "source": "/wallet/:path*", "destination": "/:path*", "permanent": false }]
 }
