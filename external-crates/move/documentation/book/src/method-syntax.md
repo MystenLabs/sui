@@ -38,7 +38,7 @@ argument to the function, whether by-value or by-reference.
 
 In this section, when we say a method "resolves" to a function, we mean that the compiler will
 statically replace the method with a normal [function](./functions.md) call. For example if we have
-`x.foo(e)` with foo resolving to `a::m::foo`, the compiler will replace `x.foo(e)` with
+`x.foo(e)` with `foo` resolving to `a::m::foo`, the compiler will replace `x.foo(e)` with
 `a::m::foo(x, e)`, potentially [automatically borrowing](#automatic-borrowing) `x`.
 
 ### Functions in the Defining Module
@@ -76,7 +76,7 @@ The syntax for a `use fun` statement is as follows:
 use fun <function> as <type>.<method alias>;
 ```
 
-This creates an alias for the `<function>` which can be received by the `<type>` as
+This creates an alias for the `<function>`, which the `<type>` can receive as
 `<method alias>`.
 
 For example
@@ -129,7 +129,7 @@ can be used instead, so the declarations in the above example could equivalently
 
 While these examples are cute for renaming the functions in the current module, the feature is
 perhaps more useful for declaring methods on types from other modules. For example, if we wanted to
-add a new utility to `Cup` we could do so with a `use fun` alias and still use method syntax
+add a new utility to `Cup`, we could do so with a `use fun` alias and still use method syntax
 
 ```move
 module b::example {
@@ -142,7 +142,7 @@ module b::example {
 }
 ```
 
-Normally, we would be stuck having to call it as `double(&c)` since `b::example` did not define
+Normally, we would be stuck having to call it as `double(&c)` because `b::example` did not define
 `Cup`, but instead we can use a `use fun` alias
 
 ```move
@@ -152,7 +152,7 @@ Normally, we would be stuck having to call it as `double(&c)` since `b::example`
     }
 ```
 
-While a `use fun` can be made in any scope, the target `<function>` of the `use fun` must have a
+While `use fun` can be made in any scope, the target `<function>` of the `use fun` must have a
 first argument that is the same as the `<type>`.
 
 ```move
@@ -231,7 +231,7 @@ module b::example {
 }
 ```
 
-`public use fun`s thus serve as a way of renaming a function if you need wish to give it a cleaner
+The `public use fun` declarations thus serve as a way of renaming a function if you want to give it a cleaner
 name for use with method syntax. This is especially helpful if you have a module with multiple
 types, and similarly named functions for each type.
 
@@ -256,7 +256,7 @@ module a::shapes {
 }
 ```
 
-Another use for `public use fun`s is adding methods to types from other modules. This can be helpful
+Another use for `public use fun` is adding methods to types from other modules. This can be helpful
 in conjunction with functions spread out across a single package.
 
 ```move
@@ -309,10 +309,10 @@ module b::other {
 }
 ```
 
-A potentially helpful way to think about this is that a `use` creates an implicit `use fun` alias
+A helpful way to think about this is that `use` creates an implicit `use fun` alias
 for the function whenever it can. In this case the `use a::cup::cup_borrow as borrow` creates an
-implicit `use fun a::cup::cup_borrow as Cup.borrow` since it would be a valid `use fun` alias. Both
-views are equivalent. This line of reasoning can help to how specific methods will resolve with
+implicit `use fun a::cup::cup_borrow as Cup.borrow` because it would be a valid `use fun` alias. Both
+views are equivalent. This line of reasoning can inform how specific methods will resolve with
 shadowing. See the cases in [Scoping](#scoping) for more details.
 
 ### Scoping
@@ -410,7 +410,7 @@ module a::m {
 
 ## Chaining
 
-Method calls can be chained, since the receiver of the method can be any expression.
+Method calls can be chained, because any expression can be the receiver of the method.
 
 ```move
 module a::shapes {
@@ -435,8 +435,8 @@ module b::example {
 }
 ```
 
-In this example, `l.start().x()` the compiler first resovles `l.start()` to `a::shapes::start(&l)`.
+In this example, `l.start().x()` the compiler first resolves `l.start()` to `a::shapes::start(&l)`.
 Then `.x()` is resolved to `a::shapes::x(a::shapes::start(&l))`. Similarly, `l.end().x()`. Keep in
 mind, this feature is not "special"--the left-hand side of the `.` can be any expression, and the
 compiler will resolve the method call as normal. We simply draw attention to this sort of "chaining"
-since it is a common practice to increase readability.
+because it is a common practice to increase readability.
