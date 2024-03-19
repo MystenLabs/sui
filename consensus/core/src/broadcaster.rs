@@ -144,6 +144,10 @@ impl Broadcaster {
                         Ok(Ok(_)) => {
                             let now = Instant::now();
                             rtt_estimate = rtt_estimate.mul_f64(RTT_ESTIMATE_DECAY) + (now - start).mul_f64(1.0 - RTT_ESTIMATE_DECAY);
+                            // Avoid immediately retrying a successfully sent block.
+                            // Resetting timer is unnecessary otherwise because there are
+                            // additional inflight requests.
+                            retry_timer.reset_after(Self::LAST_BLOCK_RETRY_INTERVAL);
                         },
                         Err(Elapsed { .. }) => {
                             rtt_estimate = rtt_estimate.mul_f64(TIMEOUT_RTT_INCREMENT_FACTOR);
