@@ -84,7 +84,7 @@ The object model of the `nft_rental` module provides the structure of the app, b
 struct Rentables has drop {}
 ```
 
-The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. 
+The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. It is used as the DF key in the borrower's Bag <key, value> entry when an item is actively being borrowed by someone.
 
 ```move
 struct Rented has store, copy, drop { 
@@ -92,7 +92,7 @@ struct Rented has store, copy, drop {
 }
 ```
 
-The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object.
+The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object. It is used as the DF key in the renter's Bag <key, value> entry once an item is listed for renting. 
 
 ```move
 struct Listed has store, copy, drop { 
@@ -101,9 +101,11 @@ struct Listed has store, copy, drop {
 ```
 
 The `Promise` struct is created for borrowing by value. The `Promise` operates as the [hot potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx) that can only be resolved by returning the item back to the extension's `Bag`.
+The Promise field lacks the `store` ability as it shouldn't be wrapped inside other objects.
+It also lacks the `drop` ability since it can only be consumed by the `return_val` function.
 
 ```move
-struct Promise has store {
+struct Promise {
   item_id: Rented,
   duration: u64,
   start_date: u64,
@@ -114,6 +116,7 @@ struct Promise has store {
 ```
 
 The `Rentable` struct is as a wrapper object that holds an asset that is being rented. Contains information relevant to the rental period, cost, and renter.
+This struct requires the `store` ability since it stores a value `T` that will definitely also have `store`.
 
 ```move
 struct Rentable<T: key + store> has store {
@@ -139,7 +142,9 @@ struct RentalPolicy<phantom T> has key, store {
 }
 ```
 
-The `ProtectedTP` object is a shared object that every creator mints, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
+The `ProtectedTP` object is a shared object that every creator, that would like to enable renting, mints, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
+A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to be resolved (like lock rule, loyalty rule, etc).
+If the creator desires to enforce royalties on rentals, they can do so via the `RentalPolicy` above.
 
 ```move
 struct ProtectedTP<phantom T> has key, store {
@@ -153,13 +158,15 @@ struct ProtectedTP<phantom T> has key, store {
 
 The NFT Rental example includes the following functions that define the project's logic. 
 
-The `install` function enables installation of the `Rentables` extension in a Kiosk.
+The `install` function enables installation of the `Rentables` extension in a Kiosk. 
+The party facilitating the rental process is responsible to ensure that the extension has been installed in the user's Kiosk.
 
 ```move
 public fun install(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext)
 ```
 
 The `remove` function enables the owner (and only the owner) of the kiosk to remove the extension. The extension storage must be empty for the transaction to succeed.
+The extension storage empties once the user is no longer borrowing or renting any items.
 
 ```move
 public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, _ctx: &mut TxContext)
