@@ -10,8 +10,6 @@ module sui::sui_tests {
   use sui::test_utils::destroy;
   use sui::test_utils::assert_eq;
 
-  const SUI_DECIMALS: u8 = 9;
-
   #[test]
   fun sui_tests_new_metadata_for_testing() {
     let ctx = tx_context::dummy();
@@ -22,7 +20,7 @@ module sui::sui_tests {
     let name_bytes = string::bytes(&coin::get_name(&metadata));
     let description_bytes = string::bytes(&coin::get_description(&metadata));
 
-    assert_eq(decimals, SUI_DECIMALS);
+    assert_eq(decimals, 9);
     assert_eq(*symbol_bytes, b"SUI");
     assert_eq(*name_bytes, b"Sui");
     assert_eq(*description_bytes, b"");
