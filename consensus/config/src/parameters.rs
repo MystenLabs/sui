@@ -86,7 +86,7 @@ impl Default for Parameters {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AnemoParameters {
     /// Size in bytes above which network messages are considered excessively large. Excessively
     /// large messages will still be handled, but logged and reported in metrics for debugging.
@@ -96,12 +96,20 @@ pub struct AnemoParameters {
     excessive_message_size: usize,
 }
 
-impl AnemoParameters {
-    pub fn default_excessive_message_size() -> usize {
-        8 << 20
+impl Default for AnemoParameters {
+    fn default() -> Self {
+        Self {
+            excessive_message_size: AnemoParameters::default_excessive_message_size(),
+        }
     }
+}
 
+impl AnemoParameters {
     pub fn excessive_message_size(&self) -> usize {
         self.excessive_message_size
+    }
+
+    fn default_excessive_message_size() -> usize {
+        8 << 20
     }
 }
