@@ -18,7 +18,9 @@ use sui_core::consensus_adapter::{
 use sui_core::state_accumulator::AccumulatorStore;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
-use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{
+    AuthorityName, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -40,11 +42,7 @@ pub struct SingleValidator {
 }
 
 impl SingleValidator {
-    pub(crate) async fn new(
-        genesis_objects: &[Object],
-        component: Component,
-        checkpoint_size: usize,
-    ) -> Self {
+    pub(crate) async fn new(genesis_objects: &[Object], component: Component) -> Self {
         let validator = TestAuthorityBuilder::new()
             .disable_indexer()
             .with_starting_objects(genesis_objects)
@@ -54,9 +52,7 @@ impl SingleValidator {
             .await;
         let epoch_store = validator.epoch_store_for_testing().clone();
         let consensus_mode = match component {
-            Component::ValidatorWithFakeConsensus => {
-                ConsensusMode::DirectSequencing(checkpoint_size)
-            }
+            Component::ValidatorWithFakeConsensus => ConsensusMode::DirectSequencing,
             _ => ConsensusMode::Noop,
         };
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
@@ -270,6 +266,58 @@ impl SingleValidator {
             })
             .collect();
         InMemoryObjectStore::new(objects)
+    }
+
+    pub(crate) async fn assigned_shared_object_versions(
+        &self,
+        transactions: impl Iterator<Item = &Transaction>,
+    ) {
+        let mut versions = HashMap::new();
+        for transaction in transactions {
+            let mut assigned_versions = Vec::new();
+            let mut init_versions = Vec::new();
+            for input in transaction.shared_input_objects() {
+                init_versions.push((input.id, input.initial_shared_version));
+                if let Some(v) = versions.get(&input.id) {
+                    assigned_versions.push((input.id, *v));
+                } else {
+                    // If we have never assigned a version for this shared object,
+                    // it must be the initial version.
+                    assigned_versions.push((input.id, input.initial_shared_version));
+                }
+            }
+            self.epoch_store
+                .set_assigned_shared_object_versions(
+                    &transaction.key(),
+                    &init_versions,
+                    &assigned_versions,
+                    self.get_validator().get_cache_reader().as_ref(),
+                )
+                .await
+                .unwrap();
+            let lamport_version = SequenceNumber::lamport_increment(
+                transaction
+                    .transaction_data()
+                    .input_objects()
+                    .unwrap()
+                    .into_iter()
+                    .filter_map(|input| input.version())
+                    .chain(assigned_versions.into_iter().map(|(_, version)| version))
+                    .chain(
+                        transaction
+                            .transaction_data()
+                            .receiving_objects()
+                            .into_iter()
+                            .map(|oref| oref.1),
+                    ),
+            );
+            for input in transaction.shared_input_objects() {
+                // For each mutable shared object, their next version needs to be updated.
+                if input.mutable {
+                    versions.insert(input.id, lamport_version);
+                }
+            }
+        }
     }
 }
 
