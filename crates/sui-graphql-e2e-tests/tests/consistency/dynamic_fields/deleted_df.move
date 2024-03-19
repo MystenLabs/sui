@@ -9,7 +9,7 @@
 // 5       | removed df1, df2, df3
 // 6       | mutated parent
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
