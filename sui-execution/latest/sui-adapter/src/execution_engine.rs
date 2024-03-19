@@ -293,10 +293,10 @@ mod checked {
                     ExecutionErrorKind::InputObjectDeleted,
                     None,
                 ))
-            } else if congested_input_object.is_some() {
+            } else if let Some(congested_input_object) = congested_input_object {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::ExecutionCancelledDueToCongestionOnObject {
-                        object: congested_input_object.unwrap(),
+                        object: congested_input_object,
                     },
                     None,
                 ))

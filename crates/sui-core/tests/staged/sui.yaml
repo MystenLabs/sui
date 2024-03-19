@@ -424,6 +424,11 @@ ExecutionFailureStatus:
       SharedObjectOperationNotAllowed: UNIT
     32:
       InputObjectDeleted: UNIT
+    33:
+      ExecutionCancelledDueToCongestionOnObject:
+        STRUCT:
+          - object:
+              TYPENAME: ObjectID
 ExecutionStatus:
   ENUM:
     0:
