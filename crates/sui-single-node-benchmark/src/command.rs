@@ -33,6 +33,12 @@ pub struct Command {
     pub print_sample_tx: bool,
     #[arg(
         long,
+        default_value_t = false,
+        help = "If true, skip signing on the validators, instead, creating certificates directly using validator secrets"
+    )]
+    pub skip_signing: bool,
+    #[arg(
+        long,
         default_value = "baseline",
         ignore_case = true,
         help = "Which component to benchmark"

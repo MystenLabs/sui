@@ -19,6 +19,7 @@ async fn main() {
         args.component,
         args.checkpoint_size,
         args.print_sample_tx,
+        args.skip_signing,
     )
     .await;
 
