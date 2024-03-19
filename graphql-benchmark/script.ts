@@ -6,7 +6,7 @@ import { graphql, readFragment } from '@mysten/sui.js/graphql/schemas/2024-01';
 
 import { benchmark_connection_query } from './benchmark';
 import { CoinConnectionData, CoinsQuery, PageInfoFragment } from './coins';
-import { EventsQuery } from './events';
+import { EventsQuery } from './events/events';
 
 const queries = {
 	getCoins: CoinsQuery,

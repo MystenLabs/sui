@@ -1,0 +1,5 @@
+{
+    "eventPackages": ["0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1", "0x2", "0x3"],
+    "eventModules": ["coin_flip", "display", "validator"],
+    "eventTypes": ["Outcome", "DisplayCreated", "StakingRequestEvent"]
+}

@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { GraphQLQueryOptions } from '@mysten/graphql-transport';
-import { graphql, ResultOf, VariablesOf } from '@mysten/sui.js/dist/cjs/graphql/schemas/2024-01';
-import { GraphQLDocument, SuiGraphQLClient } from '@mysten/sui.js/graphql';
-
 export interface PageInfo {
 	hasNextPage: boolean;
 	hasPreviousPage: boolean;
@@ -65,33 +61,31 @@ export class PaginationV2 {
 	}
 }
 
-// TODO doc comments once stabilized
+
 /// Caller is responsible for providing a `testFn` that returns the `PageInfo` for the benchmark to
 /// paginate through.
-export async function benchmark_connection_query<Q extends Record<string, GraphQLDocument>>(
-	client: SuiGraphQLClient<Q>,
+export async function benchmark_connection_query(
 	benchmarkParams: BenchmarkParams,
 	testFn: (
-		client: SuiGraphQLClient<Q>,
 		cursor: PaginationParams,
 	) => Promise<{ pageInfo: PageInfo | undefined; variables: any }>,
 ): Promise<number[]> {
 	let { paginateForwards, limit, numPages } = benchmarkParams;
 
-	let cursors: Array<string> = [];
+	const cursors: Array<string> = [];
 	let hasNextPage = true;
 	let durations: number[] = [];
 
 	let pagination = new PaginationV2(paginateForwards, limit);
-	let initialVariables;
+	let queryParams;
 
 	for (let i = 0; i < numPages && hasNextPage; i++) {
 		let start = performance.now();
-		let { pageInfo: result, variables } = await testFn(client, pagination.getParams());
+		let { pageInfo: result, variables } = await testFn(pagination.getParams());
 		let duration = performance.now() - start;
 		durations.push(duration);
 		if (i == 0) {
-			initialVariables = variables;
+			queryParams = variables;
 		}
 
 		// TODO: this is a bit awkward because we can't tell if we timed out ...
@@ -112,15 +106,8 @@ export async function benchmark_connection_query<Q extends Record<string, GraphQ
 	// sleep for 1 second
 	await new Promise((r) => setTimeout(r, 1000));
 
-	report(initialVariables, cursors, metrics(durations));
+	report(queryParams, cursors, metrics(durations));
 	return durations;
-}
-
-interface PaginationVariables {
-	before?: string;
-	after?: string;
-	first?: number;
-	last?: number;
 }
 
 type Metrics = {
@@ -148,41 +135,27 @@ export function metrics(durations: number[]): Metrics {
 	};
 }
 
+type Report = {
+	params: any;
+	cursors: string[];
+	status: 'COMPLETED' | 'TIMED OUT';
+	metrics?: Metrics;
+};
+
 export function report<T>(params: T, cursors: string[], metrics: Metrics) {
-	let reportObject;
+	// Set defaults and shared data
+	let reportObject: Report = {
+		status: 'COMPLETED',
+		params,
+		cursors,
+	};
 
 	if (metrics.min > 5000) {
-		reportObject = {
-			status: 'TIMED OUT',
-			params,
-			cursors,
-		};
+		reportObject.status = 'TIMED OUT';
 	} else {
-		reportObject = {
-			status: 'COMPLETED',
-			params,
-			cursors,
-			metrics,
-		};
+		reportObject.metrics = metrics;
 	}
 
 	const jsonReport = JSON.stringify(reportObject, null, 2);
 	console.log(jsonReport);
 }
-
-/*
-todo: can consider something like this:
-export async function benchmark_connection_query<T extends Record<string, GraphQLDocument>, M extends (...args: any[]) => any>(
-    client: SuiGraphQLClient<T>,
-    paginateForwards: boolean,
-    testFn: (client: SuiGraphQLClient<T>, cursor: string | null) => Promise<PageInfo>,
-    metricsFn: M,
-    pages: number = 10,
-    runParallel: boolean = false
-): Promise<ReturnType<M>> {
-    // ...
-}
-*/
-
-// todo how to handle pagination? can we simplify this more broadly as just another set of params to
-// provide?
