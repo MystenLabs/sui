@@ -20,12 +20,3 @@ error[E01002]: unexpected token
   │                  │    
   │                  To match this '<'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/missing_angle_brace_close.move:3:22
-  │
-3 │         let x = t<u64;
-  │                      ^
-  │                      │
-  │                      Unexpected ';'
-  │                      Expected ','
-

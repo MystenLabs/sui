@@ -12,12 +12,3 @@ error[E01002]: unexpected token
 4 │     fun foo() {}
   │     ^ Expected ']'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/attribute_no_closing_bracket.move:4:5
-  │
-4 │     fun foo() {}
-  │     ^^^
-  │     │
-  │     Unexpected 'fun'
-  │     Expected ','
-

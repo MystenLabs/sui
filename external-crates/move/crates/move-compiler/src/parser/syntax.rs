@@ -342,7 +342,11 @@ where
                     if context.tokens.peek() == end_token {
                         break;
                     }
-                    // expect a commma - consume it or advance to the next time or end of the list
+                    // expect a commma - if not at stop set, consume it or advance to the next time
+                    // or end of the list
+                    if context.at_stop_set() {
+                        break;
+                    }
                     if let Err(diag) = consume_token(context.tokens, Tok::Comma) {
                         let at_stop_set =
                             skip_comma_list_item(context, start_token, end_token, *diag);
@@ -878,7 +882,8 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
                 context,
                 Tok::LParen,
                 Tok::RParen,
-                &TokenSet::from(&[Tok::Identifier]),
+                // another hack for `#[syntax(for)]` attribute
+                &TokenSet::from(&[Tok::Identifier, Tok::For]),
                 parse_attribute,
                 "attribute",
             );
@@ -910,7 +915,8 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             context,
             Tok::LBracket,
             Tok::RBracket,
-            &TokenSet::from(&[Tok::Identifier]),
+            // hack for `#[syntax(for)]` attribute (similar to the one in `parse_attribute` above)
+            &TokenSet::from(&[Tok::Identifier, Tok::For]),
             parse_attribute,
             "attribute",
         );
@@ -2924,6 +2930,22 @@ fn parse_field_annot(context: &mut Context) -> Result<(Field, Type), Box<Diagnos
 //      PosField = <DocComments> <Type>
 fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
     context.tokens.match_doc_comments();
+    // check for named field syntax to generate a more meaningful error
+    if (context.tokens.at(Tok::Identifier) || context.tokens.at(Tok::RestrictedIdentifier))
+        && context.tokens.lookahead()? == Tok::Colon
+    {
+        let start_loc = context.tokens.start_loc();
+        // advance to (presumably) the actual type
+        context.tokens.advance()?;
+        context.tokens.advance()?;
+        let end_loc = context.tokens.previous_end_loc();
+        let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+        let msg =
+            "Invalid named field declaration in a struct that can contain only positional fields";
+        context
+            .env
+            .add_diag(diag!(Declarations::InvalidStruct, (loc, msg),));
+    }
     parse_type(context)
 }
 
