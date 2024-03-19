@@ -10,9 +10,7 @@ module sui::sui_tests {
   use sui::test_utils::destroy;
   use sui::test_utils::assert_eq;
 
-  const SENDER: address = @0x0;
   const SUI_DECIMALS: u8 = 9;
-  const SUI_TOTAL_SUPPLY: u64 = 10_000_000_000_000_000_000;
 
   #[test]
   fun sui_tests_new_metadata_for_testing() {
