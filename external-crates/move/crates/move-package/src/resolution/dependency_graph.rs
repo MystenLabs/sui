@@ -13,6 +13,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use toml_edit::{ArrayOfTables, Document, Item, Table};
 
 use crate::{
     lock_file::{schema, LockFile},
@@ -1220,10 +1221,32 @@ impl DependencyGraph {
             self.deps_digest.clone(),
         )?;
         let mut writer = BufWriter::new(&*lock);
+        let mut doc = Document::new(); // TODO: parse doc from existing toml
 
         self.write_dependencies_to_lock(self.root_package_id, &mut writer)?;
+        // TODO: pass mut doc to dependencies
+
+        let move_package_array = doc
+            .entry("move")
+            .or_insert_with(|| Item::Table(Table::new()))
+            .as_table_mut()
+            .unwrap()
+            .entry("package")
+            .or_insert_with(|| Item::ArrayOfTables(ArrayOfTables::new()))
+            .as_array_of_tables_mut()
+            .unwrap();
 
         for (id, pkg) in &self.package_table {
+            use toml_edit::value;
+            println!("processing {}", id);
+
+            let mut package = Table::new();
+            package["name"] = value(id.as_str());
+            package["source"] = value(PackageTOML(pkg).to_string());
+            if let Some(version) = &pkg.version {
+                package["version"] = value(version.to_string());
+            }
+
             writeln!(writer, "\n[[move.package]]")?;
 
             writeln!(writer, "name = {}", str_escape(id.as_str())?)?;
@@ -1233,7 +1256,13 @@ impl DependencyGraph {
             }
 
             self.write_dependencies_to_lock(*id, &mut writer)?;
+            // TODO: pass mut doc to dependencies
+
+            move_package_array.push(package);
         }
+
+        println!("move_package_array: {}", move_package_array);
+        println!("doc: {}", doc);
 
         writer.flush()?;
         std::mem::drop(writer);
