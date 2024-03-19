@@ -1486,7 +1486,7 @@ impl From<ActiveJwk> for SuiActiveJwk {
                 kty: active_jwk.jwk.kty.clone(),
                 e: active_jwk.jwk.e.clone(),
                 n: active_jwk.jwk.n.clone(),
-                alg: active_jwk.jwk.alg.clone(),
+                alg: "RS256".to_string(),
             },
             epoch: active_jwk.epoch,
         }

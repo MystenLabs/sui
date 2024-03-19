@@ -1979,7 +1979,6 @@ impl AuthorityPerEpochStore {
             kty: String::new(),
             e: String::new(),
             n: String::new(),
-            alg: String::new(),
         };
 
         let start = (round, (empty_jwk_id.clone(), empty_jwk.clone()));

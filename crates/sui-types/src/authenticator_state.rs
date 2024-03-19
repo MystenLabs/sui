@@ -83,10 +83,8 @@ fn jwk_ord(a: &ActiveJwk, b: &ActiveJwk) -> std::cmp::Ordering {
         string_bytes_ord(&a.jwk.kty, &b.jwk.kty)
     } else if a.jwk.e != b.jwk.e {
         string_bytes_ord(&a.jwk.e, &b.jwk.e)
-    } else if a.jwk.n != b.jwk.n {
-        string_bytes_ord(&a.jwk.n, &b.jwk.n)
     } else {
-        string_bytes_ord(&a.jwk.alg, &b.jwk.alg)
+        string_bytes_ord(&a.jwk.n, &b.jwk.n)
     }
 }
 

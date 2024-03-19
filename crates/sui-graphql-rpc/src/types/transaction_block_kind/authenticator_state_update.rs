@@ -123,11 +123,6 @@ impl ActiveJwk {
         &self.native.jwk.n
     }
 
-    /// The JWK algorithm parameter, (RFC 7517, Section 4.4).
-    async fn alg(&self) -> &str {
-        &self.native.jwk.alg
-    }
-
     /// The most recent epoch in which the JWK was validated.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(

@@ -82,6 +82,9 @@ pub async fn perform_zk_login_test_tx(
         .await
         .unwrap_or("129390038577185583942388216820280642146".to_string());
     println!("User salt: {user_salt}");
+    println!("Parsed max_epoch: {max_epoch}");
+    println!("Parsed jwt_randomness: {jwt_randomness}");
+    println!("Parsed kp_bigint: {kp_bigint}");
     let reader = get_proof(
         parsed_token,
         max_epoch,
@@ -95,7 +98,7 @@ pub async fn perform_zk_login_test_tx(
     println!("ZkLogin inputs:");
     println!("{:?}", serde_json::to_string(&reader).unwrap());
 
-    let (sub, aud) = parse_and_validate_jwt(parsed_token)?;
+    let (sub, aud, _iss) = parse_and_validate_jwt(parsed_token)?;
     let address_seed = gen_address_seed(&user_salt, "sub", &sub, &aud)?;
     let zk_login_inputs = ZkLoginInputs::from_reader(reader, &address_seed)?;
 

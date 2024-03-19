@@ -48,7 +48,7 @@ pub struct ConsensusCommitPrologueV2 {
 static MAX_TOTAL_JWK_SIZE: usize = 4096;
 
 pub fn check_total_jwk_size(id: &JwkId, jwk: &JWK) -> bool {
-    id.iss.len() + id.kid.len() + jwk.kty.len() + jwk.alg.len() + jwk.e.len() + jwk.n.len()
+    id.iss.len() + id.kid.len() + jwk.kty.len() + jwk.e.len() + jwk.n.len()
         <= MAX_TOTAL_JWK_SIZE
 }
 

@@ -223,7 +223,7 @@ pub enum KeyToolCommand {
         network: String,
         #[clap(long, default_value = "true")]
         fixed: bool, // if true, use a fixed kp generated from [0; 32] seed.
-        #[clap(long, default_value = "true")]
+        #[clap(long, default_value = "false")]
         test_multisig: bool, // if true, use a multisig address with zklogin and a traditional kp.
         #[clap(long, default_value = "false")]
         sign_with_sk: bool, // if true, execute tx with the traditional sig (in the multisig), otherwise with the zklogin sig.
@@ -997,7 +997,24 @@ impl KeyToolCommand {
                     "$YOUR_AUTH_CODE",
                     "39b955a118f2f21110939bf3dff1de90",
                 )?;
-                println!("Visit URL (Google): {url}");
+                let url_9 = get_oidc_url(
+                    OIDCProvider::Microsoft,
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "2e3e87cb-bf24-4399-ab98-48343d457124",
+                    "https://www.sui.io/",
+                    &jwt_randomness,
+                )?;
+
+                let url_10 = get_oidc_url(
+                    OIDCProvider::AwsTenant(("us-east-1".to_string(), "us-east-1_LPSLCkC3A".to_string())),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "19j2ltpq2arpl2f7t01qrg6256",
+                    "https://sui.io/",
+                    &jwt_randomness,
+                )?;
+              println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
                 println!("Visit URL (Kakao): {url_4}");
@@ -1005,7 +1022,8 @@ impl KeyToolCommand {
                 println!("Visit URL (Apple): {url_6}");
                 println!("Visit URL (Slack): {url_7}");
                 println!("Token exchange URL (Slack): {url_8}");
-
+                println!("Token exchange URL (Microsoft): {url_9}");
+                println!("Token exchange URL (AWS): {url_10}");
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 
                 let parsed_token = read_cli_line()?;
