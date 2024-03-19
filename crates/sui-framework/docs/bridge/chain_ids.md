@@ -1,7 +1,7 @@
 
-<a name="0xb_chain_ids"></a>
-
-# Module `0xb::chain_ids`
+---
+title: Module `0xb::chain_ids`
+---
 
 
 
@@ -22,7 +22,7 @@
 -  [Function `get_route`](#0xb_chain_ids_get_route)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 </code></pre>
 
 
@@ -392,7 +392,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>&gt;
 </code></pre>
 
 
@@ -401,8 +401,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a>&gt; {
-    <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a>&gt; {
+    <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a> },
 
@@ -443,7 +443,7 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_is_valid_route">is_valid_route</a>(source: u8, destination: u8): bool {
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
-    <b>return</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)
+    <b>return</b> <a href="../move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)
 }
 </code></pre>
 
@@ -468,7 +468,7 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_get_route">get_route</a>(source: u8, destination: u8): <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> {
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
-    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route), <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
+    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route), <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
     route
 }
 </code></pre>

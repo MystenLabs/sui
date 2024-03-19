@@ -629,6 +629,14 @@ mod checked {
                             assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::BridgeStateCreate(_) => {
+                            panic!(
+                                "EndOfEpochTransactionKind::BridgeStateCreate should not exist in v2"
+                            );
+                        }
+                        EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
+                            panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v2");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
