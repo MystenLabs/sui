@@ -48,7 +48,6 @@
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#0x3_sui_system_load_inner_maybe_upgrade)
--  [Function `validator_stake_amount`](#0x3_sui_system_validator_stake_amount)
 -  [Function `validator_voting_power`](#0x3_sui_system_validator_voting_power)
 
 
@@ -1374,31 +1373,6 @@
     <b>let</b> inner = <a href="../../dependencies/sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
     <b>assert</b>!(<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_sui_system_validator_stake_amount"></a>
-
-## Function `validator_stake_amount`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
-    <b>let</b> self = <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
-    <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_validator_stake_amount">sui_system_state_inner::validator_stake_amount</a>(self, validator_addr)
 }
 </code></pre>
 

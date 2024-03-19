@@ -611,6 +611,7 @@ module sui_system::sui_system {
         sui_system_state_inner::epoch_start_timestamp_ms(self)
     }
 
+    #[test_only]
     /// Returns the total amount staked with `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
