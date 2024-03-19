@@ -116,7 +116,7 @@ contract BridgeMessageTest is BridgeBaseTest {
 
         bytes4 initV2CallData = bytes4(keccak256(bytes("initializeV2()")));
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -145,7 +145,7 @@ contract BridgeMessageTest is BridgeBaseTest {
 
         bytes4 newMockFunc1CallData = bytes4(keccak256(bytes("newMockFunction(bool)")));
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -174,7 +174,7 @@ contract BridgeMessageTest is BridgeBaseTest {
 
         bytes4 newMockFunc2CallData = bytes4(keccak256(bytes("newMockFunction(bool,uint8)")));
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -201,7 +201,7 @@ contract BridgeMessageTest is BridgeBaseTest {
         bytes memory emptyCalldataPayload =
             hex"0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000";
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,

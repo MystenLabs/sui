@@ -48,6 +48,9 @@ contract BridgeBaseTest is Test {
     BridgeVault public vault;
     BridgeLimiter public limiter;
     BridgeConfig public config;
+    address[] public supportedTokens;
+    uint8[] public supportedChains;
+    uint256[] public tokenPrices;
 
     function setUpBridgeTest() public {
         vm.createSelectFork(
@@ -75,9 +78,11 @@ contract BridgeBaseTest is Test {
         _supportedTokens[1] = wETH;
         _supportedTokens[2] = USDC;
         _supportedTokens[3] = USDT;
-        uint8[] memory supportedChains = new uint8[](1);
-        supportedChains[0] = 0;
-        config = new BridgeConfig(chainID, _supportedTokens, supportedChains);
+        uint8[] memory _supportedChains = new uint8[](1);
+        _supportedChains[0] = 0;
+        config = new BridgeConfig(chainID, _supportedTokens, _supportedChains);
+        supportedTokens = _supportedTokens;
+        supportedChains = _supportedChains;
 
         address[] memory _committee = new address[](5);
         uint16[] memory _stake = new uint16[](5);
@@ -140,15 +145,16 @@ contract BridgeBaseTest is Test {
 
         committee.initialize(address(config), _committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
-        uint256[] memory tokenPrices = new uint256[](4);
-        tokenPrices[0] = SUI_PRICE;
-        tokenPrices[1] = BTC_PRICE;
-        tokenPrices[2] = ETH_PRICE;
-        tokenPrices[3] = USDC_PRICE;
+        uint256[] memory _tokenPrices = new uint256[](4);
+        _tokenPrices[0] = SUI_PRICE;
+        _tokenPrices[1] = BTC_PRICE;
+        _tokenPrices[2] = ETH_PRICE;
+        _tokenPrices[3] = USDC_PRICE;
+        tokenPrices = _tokenPrices;
         limiter = new BridgeLimiter();
         uint64[] memory chainLimits = new uint64[](1);
         chainLimits[0] = totalLimit;
-        limiter.initialize(address(committee), tokenPrices, supportedChains, chainLimits);
+        limiter.initialize(address(committee), _tokenPrices, _supportedChains, chainLimits);
         bridge = new SuiBridge();
         bridge.initialize(address(committee), address(vault), address(limiter), wETH);
         vault.transferOwnership(address(bridge));

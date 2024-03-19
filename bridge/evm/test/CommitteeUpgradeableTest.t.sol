@@ -209,7 +209,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
 
         bytes32 messageHash = keccak256(encodedMessage);
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -244,7 +244,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
 
         bytes32 messageHash = keccak256(encodedMessage);
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -280,7 +280,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
 
         bytes32 messageHash = keccak256(encodedMessage);
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -317,7 +317,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
 
         bytes32 messageHash = keccak256(encodedMessage);
 
-        // Create transfer message
+        // Create upgrade message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.UPGRADE,
             version: 1,
@@ -334,7 +334,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
 
         bridge.upgradeWithSignatures(signatures, message);
 
-        MockSuiBridgeV2 newBridgeV2 = MockSuiBridgeV2(address(bridge));
+        MockSuiBridgeV2(address(bridge));
         assertEq(Upgrades.getImplementationAddress(address(bridge)), address(bridgeV2));
     }
 
