@@ -813,7 +813,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         assertEq(recipientAddress.balance, aBalance + 0.001 ether);
     }
 
-    // An e2e emergency op regression test covering message ser/de and signature verification
+    // An e2e emergency op regression test covering message ser/de
     function testEmergencyOpRegressionTest() public {
         address[] memory _committee = new address[](4);
         uint16[] memory _stake = new uint16[](4);
@@ -853,7 +853,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         bridge.initialize(address(committee), address(vault), address(limiter), wETH);
 
         bytes memory payload = hex"00";
-        // Create transfer message
+        // Create emergency op message
         BridgeMessage.Message memory message = BridgeMessage.Message({
             messageType: BridgeMessage.EMERGENCY_OP,
             version: 1,
@@ -866,17 +866,108 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
             hex"5355495f4252494447455f4d455353414745020100000000000000370300";
 
         assertEq(encodedMessage, expectedEncodedMessage);
+    }
 
-        bytes[] memory signatures = new bytes[](2);
-        // TODO: generate signatures
+    // An e2e emergency op regression test covering message ser/de and signature verification
+    function testEmergencyOpRegressionTestWithSigVerification() public {
+        address[] memory _committee = new address[](4);
+        uint16[] memory _stake = new uint16[](4);
+        uint8 chainID = 11;
+        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        _stake[0] = 2500;
+        _stake[1] = 2500;
+        _stake[2] = 2500;
+        _stake[3] = 2500;
+        config = new BridgeConfig(chainID, supportedTokens, supportedChains);
+        committee = new BridgeCommittee();
+        committee.initialize(address(config), _committee, _stake, minStakeRequired);
+        vault = new BridgeVault(wETH);
 
-        // signatures[0] =
-        //     hex"e1cf11b380855ff1d4a451ebc2fd68477cf701b7d4ec88da3082709fe95201a5061b4b60cf13815a80ba9dfead23e220506aa74c4a863ba045d95715b4cc6b6e00";
-        // signatures[1] =
-        //     hex"8ba9ec92c2d5a44ecc123182f689b901a93921fd35f581354fea20b25a0ded6d055b96a64bdda77dd5a62b93d29abe93640aa3c1a136348093cd7a2418c6bfa301";
+        uint64[] memory totalLimits = new uint64[](1);
+        totalLimits[0] = 1000000;
 
-        // bridge.executeEmergencyOpWithSignatures(signatures, message);
-        // assertTrue(bridge.paused());
+        skip(2 days);
+        limiter = new BridgeLimiter();
+        limiter.initialize(
+            address(committee), tokenPrices, supportedChains, totalLimits
+        );
+        bridge = new SuiBridge();
+        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+
+        assertFalse(bridge.paused());
+
+        // pause
+        bytes memory payload = hex"00";
+        BridgeMessage.Message memory message = BridgeMessage.Message({
+            messageType: BridgeMessage.EMERGENCY_OP,
+            version: 1,
+            nonce: 0,
+            chainID: chainID,
+            payload: payload
+        });
+        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory expectedEncodedMessage =
+            hex"5355495f4252494447455f4d455353414745020100000000000000000b00";
+
+        assertEq(encodedMessage, expectedEncodedMessage);
+
+        bytes[] memory signatures = new bytes[](1);
+
+        signatures[0] =
+            hex"859db4dff22e43821b9b451e88bc7489aec3381d3e4fb5d8cbf025a84d34964a2bd556e0a86e13cb5b2d0fa52f08d02e4b62b9e6d9e07d8f8451d4c19430806d01";
+
+        bridge.executeEmergencyOpWithSignatures(signatures, message);
+        assertTrue(bridge.paused());
+
+        // unpause
+        payload = hex"01";
+        message = BridgeMessage.Message({
+            messageType: BridgeMessage.EMERGENCY_OP,
+            version: 1,
+            nonce: 1,
+            chainID: chainID,
+            payload: payload
+        });
+        encodedMessage = BridgeMessage.encodeMessage(message);
+        expectedEncodedMessage =
+            hex"5355495f4252494447455f4d455353414745020100000000000000010b01";
+
+        assertEq(encodedMessage, expectedEncodedMessage);
+
+        bytes[] memory signatures2 = new bytes[](3);
+
+        signatures2[0] =
+            hex"de5ca964c5aa1aa323cc480cd6de46eae980a1670a5fe8e12e31f724d0bcec6516e54b516737bb6ed6ccad775370c14d46f2e10100e9d16851d2050bf2349c6401";
+        signatures2[1] =
+            hex"fe8006e2013eaa7b8af0e5ac9f2890c2b2bd375d343684b2604ac6acd4142ccf5c9ec1914bce53a005232ef880bf0f597eed319d41d80e92d035c8314e1198ff00";
+        signatures2[2] =
+            hex"f5749ac37e11f22da0622082c9e63a91dc7b5c59cfdaa86438d9f6a53bbacf6b763126f1a20a826d7dff73252cf2fd68da67b9caec4d3c24a07fbd566a7a6bec00";
+
+        bridge.executeEmergencyOpWithSignatures(signatures2, message);
+        assertFalse(bridge.paused());
+
+        // reusing the sig from nonce 0 will revert
+        payload = hex"00";
+        message = BridgeMessage.Message({
+            messageType: BridgeMessage.EMERGENCY_OP,
+            version: 1,
+            nonce: 0,
+            chainID: chainID,
+            payload: payload
+        });
+
+        signatures = new bytes[](1);
+
+        signatures[0] =
+            hex"859db4dff22e43821b9b451e88bc7489aec3381d3e4fb5d8cbf025a84d34964a2bd556e0a86e13cb5b2d0fa52f08d02e4b62b9e6d9e07d8f8451d4c19430806d01";
+
+        vm.expectRevert(bytes("MessageVerifier: Invalid nonce"));
+        bridge.executeEmergencyOpWithSignatures(signatures, message);
+
+        assertFalse(bridge.paused());
     }
 
     // An e2e upgrade regression test covering message ser/de and signature verification
