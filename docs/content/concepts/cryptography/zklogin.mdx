@@ -463,7 +463,7 @@ ZKEY=<path_to_zkLogin.zkey> PROVER_PORT=<PROVER_PORT> docker compose up
 
 A few important things to note:
 
-- The backend service (mysten/zklogin:prover-stable) is compute-heavy. We recommend using at least 16 cores and 16GB RAM. Using weaker instances will likely lead to timeout errors with the message "Call to rapidsnark service took longer than 15s". Note that the environment variable `PROVER_TIMEOUT` can be adjusted to set a different timeout value, e.g., `PROVER_TIMEOUT=30` for a timeout of 30 seconds.
+- The backend service (mysten/zklogin:prover-stable) is compute-heavy. Use at least the minimum recommended 16 cores and 16GB RAM. Using weaker instances can lead to timeout errors with the message "Call to rapidsnark service took longer than 15s". You can adjust the environment variable `PROVER_TIMEOUT` to set a different timeout value, for example, `PROVER_TIMEOUT=30` for a timeout of 30 seconds.
 
 - If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
 
