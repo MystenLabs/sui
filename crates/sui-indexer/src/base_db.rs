@@ -5,9 +5,11 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use diesel::migration::MigrationSource;
-use diesel::{r2d2::ConnectionManager, PgConnection, RunQueryDsl};
+use diesel::{r2d2::ConnectionManager, PgConnection, RunQueryDsl, Connection};
+use diesel::r2d2::R2D2Connection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
+use std::any::Any;
 
 use crate::errors::IndexerError;
 
@@ -75,8 +77,10 @@ pub struct PgConnectionConfig {
     pub read_only: bool,
 }
 
-impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for PgConnectionConfig {
-    fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
+
+
+impl PgConnectionConfig {
+    fn pg_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
         use diesel::sql_query;
 
         sql_query(format!(
@@ -93,6 +97,23 @@ impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for Pg
         }
 
         Ok(())
+    }
+}
+
+impl<T: R2D2Connection> diesel::r2d2::CustomizeConnection<T, diesel::r2d2::Error> for PgConnectionConfig {
+
+    fn on_acquire(&self, conn: &mut T) -> std::result::Result<(), diesel::r2d2::Error> {
+        #[cfg(feature = "postgres-feature")]
+        {
+            // let pg_conn = unsafe { &mut *(&conn as *const _ as *mut diesel::PgConnection) };
+            // self.pg_acquire(pg_conn)
+            Ok(())
+        }
+        #[cfg(not(feature = "postgres-feature"))]
+        {
+            // Handle cases where the "postgres-feature" is not enabled
+            Ok(())
+        }
     }
 }
 
@@ -124,54 +145,4 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
             e
         ))
     })
-}
-
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-
-/// Resets the database by reverting all migrations and reapplying them.
-///
-/// If `drop_all` is set to `true`, the function will drop all tables in the database before
-/// resetting the migrations. This option is destructive and will result in the loss of all
-/// data in the tables. Use with caution, especially in production environments.
-pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(), anyhow::Error> {
-    info!("Resetting database ...");
-    if drop_all {
-        drop_all_tables(conn)
-            .map_err(|e| anyhow!("Encountering error when dropping all tables {e}"))?;
-    } else {
-        conn.revert_all_migrations(MIGRATIONS)
-            .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
-    }
-    conn.run_migrations(&MIGRATIONS.migrations().unwrap())
-        .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
-    info!("Reset database complete.");
-    Ok(())
-}
-
-fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Error> {
-    info!("Dropping all tables in the database");
-    let table_names: Vec<String> = diesel::dsl::sql::<diesel::sql_types::Text>(
-        "
-        SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-    ",
-    )
-    .load(conn)?;
-
-    for table_name in table_names {
-        let drop_table_query = format!("DROP TABLE IF EXISTS {} CASCADE", table_name);
-        diesel::sql_query(drop_table_query).execute(conn)?;
-    }
-
-    // Recreate the __diesel_schema_migrations table
-    diesel::sql_query(
-        "
-        CREATE TABLE __diesel_schema_migrations (
-            version VARCHAR(50) PRIMARY KEY,
-            run_on TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-    ",
-    )
-    .execute(conn)?;
-    info!("Dropped all tables in the database");
-    Ok(())
 }

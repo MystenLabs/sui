@@ -16,8 +16,14 @@ chrono.workspace = true
 serde_with.workspace = true
 clap.workspace = true
 tap.workspace = true
-diesel.workspace = true
-diesel-derive-enum.workspace = true
+diesel = { features = [
+    "chrono",
+    "r2d2",
+    "serde_json",
+    "64-column-tables",
+    "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
+], optional = true}
+diesel-derive-enum = { optional = true }
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
@@ -45,7 +51,7 @@ sui-protocol-config.workspace = true
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
 sui-transaction-builder.workspace = true
-
+downcast = "0.11.0"
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 move-binary-format.workspace = true
@@ -55,6 +61,9 @@ cached.workspace = true
 
 [features]
 pg_integration = []
+default = ["postgres-feature"]
+postgres-feature = ["diesel/postgres", "diesel/postgres_backend", "diesel-derive-enum/postgres"]
+mysql-feature = ["diesel/mysql", "diesel/mysql_backend", "diesel-derive-enum/mysql"]
 
 [dev-dependencies]
 sui-keys.workspace = true

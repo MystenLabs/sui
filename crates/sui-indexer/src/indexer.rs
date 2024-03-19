@@ -4,6 +4,7 @@
 use std::env;
 
 use anyhow::Result;
+use diesel::r2d2::R2D2Connection;
 use prometheus::Registry;
 use tracing::info;
 
@@ -25,16 +26,16 @@ const DOWNLOAD_QUEUE_SIZE: usize = 1000;
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start_writer<S: IndexerStore + Sync + Send + Clone + 'static>(
+    pub async fn start_writer<S: IndexerStore + Sync + Send + Clone + 'static, T: R2D2Connection + 'static>(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config(config, store, metrics, snapshot_config).await
+        Indexer::start_writer_with_config::<S, T>(config, store, metrics, snapshot_config).await
     }
 
-    pub async fn start_writer_with_config<S: IndexerStore + Sync + Send + Clone + 'static>(
+    pub async fn start_writer_with_config<S: IndexerStore + Sync + Send + Clone + 'static, T: R2D2Connection + 'static>(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
@@ -80,7 +81,7 @@ impl Indexer {
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, metrics).await?;
+        let checkpoint_handler = new_handlers::<S, T>(store, metrics).await?;
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,
@@ -92,7 +93,7 @@ impl Indexer {
         Ok(())
     }
 
-    pub async fn start_reader(
+    pub async fn start_reader<T: R2D2Connection + Send + 'static>(
         config: &IndexerConfig,
         registry: &Registry,
         db_url: String,
@@ -101,7 +102,7 @@ impl Indexer {
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let indexer_reader = IndexerReader::new(db_url)?;
+        let indexer_reader = IndexerReader::<T>::new(db_url)?;
         let handle = build_json_rpc_server(registry, indexer_reader, config, None)
             .await
             .expect("Json rpc server should not run into errors upon start.");
@@ -112,8 +113,8 @@ impl Indexer {
         Ok(())
     }
 
-    pub async fn start_analytical_worker(
-        store: PgIndexerAnalyticalStore,
+    pub async fn start_analytical_worker<T: R2D2Connection>(
+        store: PgIndexerAnalyticalStore<T>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         info!(

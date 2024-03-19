@@ -7,8 +7,8 @@ use crate::{
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
 use std::{collections::BTreeMap, time::Duration};
-use sui_indexer::db::PgConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
+use sui_indexer::base_db::PgConnectionPoolConfig;
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -17,18 +17,19 @@ use sui_types::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
 };
+use crate::data::pg::PgConnection;
 
 pub(crate) struct PgManager {
-    pub inner: IndexerReader,
+    pub inner: IndexerReader<diesel::PgConnection>,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader) -> Self {
+    pub(crate) fn new(inner: IndexerReader<diesel::PgConnection>) -> Self {
         Self { inner }
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
+    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader<PgConnection>, Error> {
         Self::reader_with_config(
             db_url,
             DEFAULT_SERVER_DB_POOL_SIZE,
@@ -40,7 +41,7 @@ impl PgManager {
         db_url: impl Into<String>,
         pool_size: u32,
         timeout_ms: u64,
-    ) -> Result<IndexerReader, Error> {
+    ) -> Result<IndexerReader<PgConnection>, Error> {
         let mut config = PgConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));

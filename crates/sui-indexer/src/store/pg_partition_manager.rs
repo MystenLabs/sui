@@ -5,12 +5,14 @@ use diesel::sql_types::{BigInt, VarChar};
 use diesel::{QueryableByName, RunQueryDsl};
 use std::collections::BTreeMap;
 use std::time::Duration;
+use diesel::r2d2::R2D2Connection;
 use tracing::{error, info};
+use downcast::Any;
 
-use crate::db::PgConnectionPool;
+use crate::db::{ConnectionPool};
 use crate::handlers::EpochToCommit;
 use crate::models::epoch::StoredEpochInfo;
-use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
+use crate::store::diesel_macro::*;
 use crate::IndexerError;
 
 const GET_PARTITION_SQL: &str = r"
@@ -25,9 +27,16 @@ WHERE parent.relkind = 'p'
 GROUP BY table_name;
 ";
 
-#[derive(Clone)]
-pub struct PgPartitionManager {
-    cp: PgConnectionPool,
+pub struct PgPartitionManager<T: R2D2Connection + Send + 'static> {
+    cp: ConnectionPool<T>,
+}
+
+impl<T: R2D2Connection> Clone for PgPartitionManager<T> {
+    fn clone(&self) -> PgPartitionManager<T> {
+        Self {
+            cp: self.cp.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -53,8 +62,8 @@ impl EpochPartitionData {
     }
 }
 
-impl PgPartitionManager {
-    pub fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
+impl<T: R2D2Connection> PgPartitionManager<T> {
+    pub fn new(cp: ConnectionPool<T>) -> Result<Self, IndexerError> {
         let manager = Self { cp };
         let tables = manager.get_table_partitions()?;
         info!(
@@ -78,7 +87,7 @@ impl PgPartitionManager {
             read_only_blocking!(&self.cp, |conn| diesel::RunQueryDsl::load(
                 diesel::sql_query(GET_PARTITION_SQL),
                 conn
-            ))?
+            ), false)?
             .into_iter()
             .map(|table: PartitionedTable| (table.table_name, table.last_partition as u64))
             .collect(),

@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, RpcModule};
 
 use cached::{proc_macro::cached, SizedCache};
+use diesel::r2d2::R2D2Connection;
 use sui_json_rpc::{governance_api::ValidatorExchangeRates, SuiRpcModule};
 use sui_json_rpc_api::GovernanceReadApiServer;
 use sui_json_rpc_types::{
@@ -23,12 +24,12 @@ use sui_types::{
 };
 
 #[derive(Clone)]
-pub struct GovernanceReadApi {
-    inner: IndexerReader,
+pub struct GovernanceReadApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
 }
 
-impl GovernanceReadApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self { inner }
     }
 
@@ -193,14 +194,14 @@ impl GovernanceReadApi {
 
 /// Cached exchange rates for validators for the given epoch, the cache size is 1, it will be cleared when the epoch changes.
 /// rates are in descending order by epoch.
-#[cached(
-    type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
-    create = "{ SizedCache::with_size(1) }",
-    convert = "{ system_state_summary.epoch }",
-    result = true
-)]
-async fn exchange_rates(
-    state: &GovernanceReadApi,
+// #[cached(
+//     type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
+//     create = "{ SizedCache::with_size(1) }",
+//     convert = "{ system_state_summary.epoch }",
+//     result = true
+// )]
+async fn exchange_rates<T: R2D2Connection>(
+    state: &GovernanceReadApi<T>,
     system_state_summary: SuiSystemStateSummary,
 ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
     // Get validator rate tables
@@ -296,7 +297,7 @@ fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<SuiAddress, f64> {
 }
 
 #[async_trait]
-impl GovernanceReadApiServer for GovernanceReadApi {
+impl<T: R2D2Connection + 'static> GovernanceReadApiServer for GovernanceReadApi<T> {
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
@@ -335,7 +336,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 }
 
-impl SuiRpcModule for GovernanceReadApi {
+impl<T: R2D2Connection> SuiRpcModule for GovernanceReadApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

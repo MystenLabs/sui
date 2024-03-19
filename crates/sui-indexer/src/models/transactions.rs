@@ -17,23 +17,24 @@ use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
 
 use crate::errors::IndexerError;
+use crate::models::events::StoredEvent;
 use crate::schema::transactions;
-use crate::types::IndexedObjectChange;
+use crate::types::{IndexedEvent, IndexedObjectChange};
 use crate::types::IndexedTransaction;
 use crate::types::IndexerResult;
 
 #[derive(Clone, Debug, Queryable, Insertable, QueryableByName)]
 #[diesel(table_name = transactions)]
-pub struct StoredTransaction {
+pub struct StoredTransaction<T> {
     pub tx_sequence_number: i64,
     pub transaction_digest: Vec<u8>,
     pub raw_transaction: Vec<u8>,
     pub raw_effects: Vec<u8>,
     pub checkpoint_sequence_number: i64,
     pub timestamp_ms: i64,
-    pub object_changes: Vec<Option<Vec<u8>>>,
-    pub balance_changes: Vec<Option<Vec<u8>>>,
-    pub events: Vec<Option<Vec<u8>>>,
+    pub object_changes: T,
+    pub balance_changes: T,
+    pub events: T,
     pub transaction_kind: i16,
     pub success_command_count: i16,
 }
@@ -69,7 +70,38 @@ pub struct StoredTransactionSuccessCommandCount {
     pub timestamp_ms: i64,
 }
 
-impl From<&IndexedTransaction> for StoredTransaction {
+impl From<&IndexedTransaction> for StoredTransaction<serde_json::Value> {
+    fn from(tx: &IndexedTransaction) -> Self {
+        StoredTransaction {
+            tx_sequence_number: tx.tx_sequence_number as i64,
+            transaction_digest: tx.tx_digest.into_inner().to_vec(),
+            raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
+            raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
+            checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
+            object_changes: serde_json::Value::Array(tx
+            .object_changes
+            .into_iter()
+            .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
+            .collect()),
+            balance_changes: serde_json::Value::Array(tx
+                .balance_change
+                .into_iter()
+                .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
+                .collect()),
+            events: serde_json::Value::Array(tx
+                .events
+                .into_iter()
+                .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
+                .collect()),
+            timestamp_ms: tx.timestamp_ms as i64,
+            transaction_kind: tx.transaction_kind.clone() as i16,
+            success_command_count: tx.successful_tx_num as i16,
+        }
+    }
+}
+
+#[cfg(feature = "postgres-feature")]
+impl From<&IndexedTransaction> for StoredTransaction<Vec<Option<Vec<u8>>>> {
     fn from(tx: &IndexedTransaction) -> Self {
         StoredTransaction {
             tx_sequence_number: tx.tx_sequence_number as i64,
@@ -99,7 +131,8 @@ impl From<&IndexedTransaction> for StoredTransaction {
     }
 }
 
-impl StoredTransaction {
+
+impl<T> StoredTransaction<T> {
     pub fn try_into_sui_transaction_block_response(
         self,
         options: &SuiTransactionBlockResponseOptions,

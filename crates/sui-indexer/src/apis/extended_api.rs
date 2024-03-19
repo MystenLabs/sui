@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use diesel::r2d2::R2D2Connection;
 use crate::indexer_reader::IndexerReader;
 use jsonrpsee::{core::RpcResult, RpcModule};
 use sui_json_rpc::SuiRpcModule;
@@ -12,18 +13,18 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::sui_serde::BigInt;
 
-pub(crate) struct ExtendedApi {
-    inner: IndexerReader,
+pub(crate) struct ExtendedApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
 }
 
-impl ExtendedApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection> ExtendedApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait::async_trait]
-impl ExtendedApiServer for ExtendedApi {
+impl<T: R2D2Connection + 'static> ExtendedApiServer for ExtendedApi<T> {
     async fn get_epochs(
         &self,
         cursor: Option<BigInt<u64>>,
@@ -163,7 +164,7 @@ impl ExtendedApiServer for ExtendedApi {
     }
 }
 
-impl SuiRpcModule for ExtendedApi {
+impl<T: R2D2Connection> SuiRpcModule for ExtendedApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

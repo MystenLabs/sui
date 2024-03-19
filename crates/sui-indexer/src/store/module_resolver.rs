@@ -6,6 +6,9 @@ use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
 use std::sync::{Arc, Mutex};
+use diesel::r2d2::R2D2Connection;
+use crate::db::PooledConnection;
+use downcast::Any;
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::ModuleId;
@@ -15,27 +18,27 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::move_package::MovePackage;
 use sui_types::object::Object;
 
-use crate::db::PgConnectionPool;
+use crate::db::{ConnectionPool};
 use crate::errors::{Context, IndexerError};
 use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::metrics::IndexerMetrics;
 use crate::models::packages::StoredPackage;
 use crate::schema::{objects, packages};
-use crate::store::diesel_macro::read_only_blocking;
+use crate::store::diesel_macro::*;
 use crate::types::IndexedPackage;
 
 /// A package resolver that reads packages from the database.
-pub struct IndexerStorePackageModuleResolver {
-    cp: PgConnectionPool,
+pub struct IndexerStorePackageModuleResolver<T: R2D2Connection + Send + 'static> {
+    cp: ConnectionPool<T>,
 }
 
-impl IndexerStorePackageModuleResolver {
-    pub fn new(cp: PgConnectionPool) -> Self {
+impl<T: R2D2Connection + 'static> IndexerStorePackageModuleResolver<T> {
+    pub fn new(cp: ConnectionPool<T>) -> Self {
         Self { cp }
     }
 }
 
-impl ModuleResolver for IndexerStorePackageModuleResolver {
+impl<T: R2D2Connection + 'static> ModuleResolver for IndexerStorePackageModuleResolver<T> {
     type Error = IndexerError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -48,7 +51,9 @@ impl ModuleResolver for IndexerStorePackageModuleResolver {
             packages::dsl::packages
                 .filter(packages::dsl::package_id.eq(package_id))
                 .first::<StoredPackage>(conn)
-        })
+        },
+        false
+        )
         .context("Error reading module.")?;
 
         let move_package =
@@ -67,7 +72,7 @@ impl ModuleResolver for IndexerStorePackageModuleResolver {
 }
 
 #[async_trait]
-impl PackageStore for IndexerStorePackageModuleResolver {
+impl<T: R2D2Connection + 'static> PackageStore for IndexerStorePackageModuleResolver<T> {
     async fn version(&self, id: AccountAddress) -> Result<SequenceNumber, PackageResolverError> {
         let version =
             self.get_package_version_from_db(id)
@@ -89,7 +94,7 @@ impl PackageStore for IndexerStorePackageModuleResolver {
     }
 }
 
-impl IndexerStorePackageModuleResolver {
+impl<T: R2D2Connection> IndexerStorePackageModuleResolver<T> {
     fn get_package_version_from_db(
         &self,
         id: AccountAddress,
@@ -99,7 +104,7 @@ impl IndexerStorePackageModuleResolver {
                 .select(objects::dsl::object_version)
                 .filter(objects::dsl::object_id.eq(id.to_vec()));
             query.get_result::<i64>(conn).optional()
-        })?
+        }, false)?
         else {
             return Err(IndexerError::PostgresReadError(format!(
                 "Package version not found in DB: {:?}",
@@ -116,7 +121,7 @@ impl IndexerStorePackageModuleResolver {
                 .select(objects::dsl::serialized_object)
                 .filter(objects::dsl::object_id.eq(id.to_vec()));
             query.get_result::<Vec<u8>>(conn).optional()
-        })?
+        }, false)?
         else {
             return Err(IndexerError::PostgresReadError(format!(
                 "Package not found in DB: {:?}",
@@ -130,15 +135,15 @@ impl IndexerStorePackageModuleResolver {
     }
 }
 
-pub struct InterimPackageResolver {
-    package_db_resolver: IndexerStorePackageModuleResolver,
+pub struct InterimPackageResolver<T: R2D2Connection + 'static> {
+    package_db_resolver: IndexerStorePackageModuleResolver<T>,
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
     metrics: IndexerMetrics,
 }
 
-impl InterimPackageResolver {
+impl<T: R2D2Connection + 'static> InterimPackageResolver<T> {
     pub fn new(
-        package_db_resolver: IndexerStorePackageModuleResolver,
+        package_db_resolver: IndexerStorePackageModuleResolver<T>,
         package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
         new_package_objects: &[(IndexedPackage, Object)],
         metrics: IndexerMetrics,
@@ -156,7 +161,7 @@ impl InterimPackageResolver {
 }
 
 #[async_trait]
-impl PackageStore for InterimPackageResolver {
+impl<T: R2D2Connection + 'static> PackageStore for InterimPackageResolver<T> {
     async fn version(&self, addr: AccountAddress) -> Result<SequenceNumber, PackageResolverError> {
         let package_id = ObjectID::from(addr);
         let maybe_version = {

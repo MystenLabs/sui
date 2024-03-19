@@ -4,6 +4,7 @@
 use crate::indexer_reader::IndexerReader;
 use crate::IndexerError;
 use async_trait::async_trait;
+use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionEmptyError;
 use jsonrpsee::types::SubscriptionResult;
@@ -25,13 +26,13 @@ use sui_types::event::EventID;
 use sui_types::object::ObjectRead;
 use sui_types::TypeTag;
 
-pub(crate) struct IndexerApi {
-    inner: IndexerReader,
+pub(crate) struct IndexerApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
     name_service_config: NameServiceConfig,
 }
 
-impl IndexerApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection + 'static> IndexerApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self {
             inner,
             // TODO allow configuring for other networks
@@ -121,7 +122,7 @@ impl IndexerApi {
 }
 
 #[async_trait]
-impl IndexerApiServer for IndexerApi {
+impl<T: R2D2Connection + 'static> IndexerApiServer for IndexerApi<T> {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
@@ -354,7 +355,7 @@ impl IndexerApiServer for IndexerApi {
     }
 }
 
-impl SuiRpcModule for IndexerApi {
+impl<T: R2D2Connection> SuiRpcModule for IndexerApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

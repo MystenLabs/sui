@@ -180,6 +180,7 @@ pub struct IndexedEvent {
 }
 
 impl IndexedEvent {
+
     pub fn from_event(
         tx_sequence_number: u64,
         event_sequence_number: u64,

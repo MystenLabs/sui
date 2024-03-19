@@ -9,7 +9,7 @@ mod ingestion_tests {
     use std::net::SocketAddr;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_indexer::db::get_pg_pool_connection;
+    use sui_indexer::db::get_pool_connection;
     use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::transactions::StoredTransaction;
@@ -36,11 +36,11 @@ mod ingestion_tests {
     const DEFAULT_DB_URL: &str = "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
 
     /// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
-    async fn set_up(
+    async fn set_up<T>(
         sim: Arc<Simulacrum>,
     ) -> (
         JoinHandle<()>,
-        PgIndexerStore,
+        PgIndexerStore<T>,
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let server_url: SocketAddr = format!("127.0.0.1:{}", DEFAULT_SERVER_PORT)
@@ -70,8 +70,8 @@ mod ingestion_tests {
     }
 
     /// Wait for the indexer to catch up to the given checkpoint sequence number.
-    async fn wait_for_checkpoint(
-        pg_store: &PgIndexerStore,
+    async fn wait_for_checkpoint<T>(
+        pg_store: &PgIndexerStore<T>,
         checkpoint_sequence_number: u64,
     ) -> Result<(), IndexerError> {
         tokio::time::timeout(Duration::from_secs(10), async {

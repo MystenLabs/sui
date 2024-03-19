@@ -4,15 +4,17 @@
 use std::time::Duration;
 use tap::tap::TapFallible;
 use tracing::{error, info};
+use downcast::Any;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
 use diesel::dsl::count;
 use diesel::{ExpressionMethods, OptionalExtension};
 use diesel::{QueryDsl, RunQueryDsl};
+use diesel::r2d2::R2D2Connection;
 use sui_types::base_types::ObjectID;
 
-use crate::db::PgConnectionPool;
+use crate::db::{ConnectionPool};
 use crate::errors::{Context, IndexerError};
 use crate::models::address_metrics::StoredAddressMetrics;
 use crate::models::checkpoints::StoredCheckpoint;
@@ -29,44 +31,51 @@ use crate::schema::{
     active_addresses, address_metrics, addresses, checkpoints, epoch_peak_tps, move_call_metrics,
     move_calls, transactions, tx_count_metrics,
 };
-use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
+use crate::store::diesel_macro::*;
 use crate::types::IndexerResult;
 
 use super::IndexerAnalyticalStore;
 
-#[derive(Clone)]
-pub struct PgIndexerAnalyticalStore {
-    blocking_cp: PgConnectionPool,
+pub struct PgIndexerAnalyticalStore<T: R2D2Connection + 'static> {
+    blocking_cp: ConnectionPool<T>,
 }
 
-impl PgIndexerAnalyticalStore {
-    pub fn new(blocking_cp: PgConnectionPool) -> Self {
+impl<T: R2D2Connection> Clone for PgIndexerAnalyticalStore<T> {
+    fn clone(&self) -> PgIndexerAnalyticalStore<T> {
+        Self {
+            blocking_cp: self.blocking_cp.clone()
+        }
+    }
+}
+
+impl<T: R2D2Connection + 'static> PgIndexerAnalyticalStore<T> {
+    pub fn new(blocking_cp: ConnectionPool<T>) -> Self {
         Self { blocking_cp }
     }
 }
 
 #[async_trait]
-impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
-    async fn get_latest_stored_checkpoint(&self) -> IndexerResult<Option<StoredCheckpoint>> {
-        let latest_cp = read_only_blocking!(&self.blocking_cp, |conn| {
-            checkpoints::dsl::checkpoints
-                .order(checkpoints::sequence_number.desc())
-                .first::<StoredCheckpoint>(conn)
-                .optional()
-        })
-        .context("Failed reading latest checkpoint from PostgresDB")?;
-        Ok(latest_cp)
-    }
-
+impl<T: R2D2Connection> IndexerAnalyticalStore for PgIndexerAnalyticalStore<T> {
     async fn get_latest_stored_transaction(&self) -> IndexerResult<Option<StoredTransaction>> {
         let latest_tx = read_only_blocking!(&self.blocking_cp, |conn| {
             transactions::dsl::transactions
                 .order(transactions::tx_sequence_number.desc())
                 .first::<StoredTransaction>(conn)
                 .optional()
-        })
+        }, false)
         .context("Failed reading latest transaction from PostgresDB")?;
         Ok(latest_tx)
+    }
+
+    async fn get_latest_stored_checkpoint(&self) -> IndexerResult<Option<StoredCheckpoint>> {
+        let latest_cp = read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::dsl::checkpoints
+                .order(checkpoints::sequence_number.desc())
+                .first::<StoredCheckpoint>(conn)
+                .optional()
+        }, false)
+        .context("Failed reading latest checkpoint from PostgresDB")?;
+        Ok(latest_cp)
     }
 
     async fn get_checkpoints_in_range(
@@ -80,7 +89,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .filter(checkpoints::sequence_number.lt(end_checkpoint))
                 .order(checkpoints::sequence_number.asc())
                 .load::<StoredCheckpoint>(conn)
-        })
+        }, false)
         .context("Failed reading checkpoints from PostgresDB")?;
         Ok(cps)
     }
@@ -100,7 +109,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                     transactions::dsl::timestamp_ms,
                 ))
                 .load::<StoredTransactionTimestamp>(conn)
-        })
+        }, false)
         .context("Failed reading transaction timestamps from PostgresDB")?;
         Ok(tx_timestamps)
     }
@@ -120,7 +129,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                     transactions::dsl::checkpoint_sequence_number,
                 ))
                 .load::<StoredTransactionCheckpoint>(conn)
-        })
+        }, false)
         .context("Failed reading transaction checkpoints from PostgresDB")?;
         Ok(tx_checkpoints)
     }
@@ -142,7 +151,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                     transactions::dsl::timestamp_ms,
                 ))
                 .load::<StoredTransactionSuccessCommandCount>(conn)
-        })
+        }, false)
         .context("Failed reading transaction success command counts from PostgresDB")?;
         Ok(tx_success_cmd_counts)
     }
@@ -152,7 +161,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .filter(transactions::dsl::tx_sequence_number.eq(tx_sequence_number))
                 .first::<StoredTransaction>(conn)
                 .optional()
-        })
+        }, false)
         .context("Failed reading transaction from PostgresDB")?;
         Ok(tx)
     }
@@ -163,7 +172,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .filter(checkpoints::dsl::sequence_number.eq(sequence_number))
                 .first::<StoredCheckpoint>(conn)
                 .optional()
-        })
+        }, false)
         .context("Failed reading checkpoint from PostgresDB")?;
         Ok(cp)
     }
@@ -174,7 +183,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .order(tx_count_metrics::dsl::checkpoint_sequence_number.desc())
                 .first::<StoredTxCountMetrics>(conn)
                 .optional()
-        })
+        }, false)
         .context("Failed reading latest tx count metrics from PostgresDB")?;
         Ok(latest_tx_count)
     }
@@ -185,7 +194,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .order(epoch_peak_tps::dsl::epoch.desc())
                 .first::<StoredEpochPeakTps>(conn)
                 .optional()
-        })
+        }, false)
         .context("Failed reading latest epoch peak TPS from PostgresDB")?;
         Ok(latest_network_metrics)
     }
@@ -217,13 +226,13 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             read_only_blocking!(&self.blocking_cp, |conn| diesel::RunQueryDsl::get_result(
                 diesel::sql_query(epoch_peak_tps_query),
                 conn
-            ))
+            ), false)
             .context("Failed reading epoch peak TPS from PostgresDB")?;
         let tps_30d: Tps =
             read_only_blocking!(&self.blocking_cp, |conn| diesel::RunQueryDsl::get_result(
                 diesel::sql_query(peak_tps_30d_query),
                 conn
-            ))
+            ), false)
             .context("Failed reading 30d peak TPS from PostgresDB")?;
 
         let epoch_peak_tps = StoredEpochPeakTps {
@@ -252,7 +261,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .select((active_addresses::dsl::last_appearance_tx,))
                 .first::<TxSeq>(conn)
                 .optional()
-        })
+        }, false)
         .context("Failed to read address metrics last processed tx sequence.")?;
         Ok(last_processed_tx_seq)
     }
@@ -313,13 +322,13 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .filter(addresses::first_appearance_time.le(cp_timestamp_ms))
                 .count()
                 .get_result::<i64>(conn)
-        })?;
+        }, false)?;
         let active_addr_count = read_only_blocking!(&self.blocking_cp, |conn| {
             active_addresses::dsl::active_addresses
                 .filter(active_addresses::first_appearance_time.le(cp_timestamp_ms))
                 .count()
                 .get_result::<i64>(conn)
-        })?;
+        }, false)?;
         let time_one_day_ago = cp_timestamp_ms - 1000 * 60 * 60 * 24;
         let daily_active_addresses = read_only_blocking!(&self.blocking_cp, |conn| {
             active_addresses::dsl::active_addresses
@@ -327,7 +336,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .filter(active_addresses::last_appearance_time.gt(time_one_day_ago))
                 .select(count(active_addresses::address))
                 .first(conn)
-        })?;
+        }, false)?;
         let address_metrics_to_commit = StoredAddressMetrics {
             checkpoint: checkpoint.sequence_number,
             epoch: checkpoint.epoch,
@@ -350,6 +359,17 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
+    async fn get_latest_move_call_metrics(&self) -> IndexerResult<Option<StoredMoveCallMetrics>> {
+        let latest_move_call_metrics = read_only_blocking!(&self.blocking_cp, |conn| {
+            move_call_metrics::dsl::move_call_metrics
+                .order(move_call_metrics::epoch.desc())
+                .first::<QueriedMoveCallMetrics>(conn)
+                .optional()
+        }, false)
+        .unwrap_or_default();
+        Ok(latest_move_call_metrics.map(|m| m.into()))
+    }
+
     async fn get_latest_move_call_tx_seq(&self) -> IndexerResult<Option<TxSeq>> {
         let last_processed_tx_seq = read_only_blocking!(&self.blocking_cp, |conn| {
             move_calls::dsl::move_calls
@@ -357,20 +377,9 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 .select((move_calls::dsl::transaction_sequence_number,))
                 .first::<TxSeq>(conn)
                 .optional()
-        })
+        }, false)
         .unwrap_or_default();
         Ok(last_processed_tx_seq)
-    }
-
-    async fn get_latest_move_call_metrics(&self) -> IndexerResult<Option<StoredMoveCallMetrics>> {
-        let latest_move_call_metrics = read_only_blocking!(&self.blocking_cp, |conn| {
-            move_call_metrics::dsl::move_call_metrics
-                .order(move_call_metrics::epoch.desc())
-                .first::<QueriedMoveCallMetrics>(conn)
-                .optional()
-        })
-        .unwrap_or_default();
-        Ok(latest_move_call_metrics.map(|m| m.into()))
     }
 
     fn persist_move_calls_in_tx_range(
@@ -401,19 +410,19 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         calculate_tasks.push(tokio::task::spawn_blocking(move || {
             read_only_blocking!(&blocking_cp_3d, |conn| {
                 diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
-            })
+            }, false)
         }));
         let blocking_cp_7d = self.blocking_cp.clone();
         calculate_tasks.push(tokio::task::spawn_blocking(move || {
             read_only_blocking!(&blocking_cp_7d, |conn| {
                 diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
-            })
+            }, false)
         }));
         let blocking_cp_30d = self.blocking_cp.clone();
         calculate_tasks.push(tokio::task::spawn_blocking(move || {
             read_only_blocking!(&blocking_cp_30d, |conn| {
                 diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
-            })
+            }, false)
         }));
         let chained = futures::future::join_all(calculate_tasks)
             .await

@@ -25,6 +25,8 @@ use tokio::sync::watch;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
+use std::marker::PhantomData;
+use diesel::r2d2::R2D2Connection;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -37,12 +39,12 @@ use tracing::{error, info, warn};
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
+use crate::db::ConnectionPool;
 
 use crate::errors::IndexerError;
 use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
-use crate::db::PgConnectionPool;
 use crate::store::module_resolver::{IndexerStorePackageModuleResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
@@ -58,12 +60,13 @@ use super::TransactionObjectChangesToCommit;
 
 const CHECKPOINT_QUEUE_SIZE: usize = 1000;
 
-pub async fn new_handlers<S>(
+pub async fn new_handlers<S, T>(
     state: S,
     metrics: IndexerMetrics,
-) -> Result<CheckpointHandler<S>, IndexerError>
+) -> Result<CheckpointHandler<S, T>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection
 {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -93,24 +96,27 @@ where
         metrics,
         indexed_checkpoint_sender,
         package_buffer: IndexingPackageBuffer::start(package_tx),
+        _phantom: Default::default(),
     };
 
     Ok(checkpoint_handler)
 }
 
-pub struct CheckpointHandler<S> {
+pub struct CheckpointHandler<S, T> {
     state: S,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
     // buffers for packages that are being indexed but not committed to DB,
     // they will be periodically GCed to avoid OOM.
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
+    _phantom: PhantomData<T>,
 }
 
 #[async_trait]
-impl<S> Handler for CheckpointHandler<S>
+impl<S, T> Handler for CheckpointHandler<S, T>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection + 'static
 {
     fn name(&self) -> &str {
         "checkpoint-handler"
@@ -216,9 +222,10 @@ where
     }
 }
 
-impl<S> CheckpointHandler<S>
+impl<S, T> CheckpointHandler<S, T>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection + 'static
 {
     async fn index_epoch(
         state: Arc<S>,
@@ -750,9 +757,9 @@ where
             .collect()
     }
 
-    fn pg_blocking_cp(&self) -> Result<PgConnectionPool, IndexerError> {
+    fn pg_blocking_cp(&self) -> Result<ConnectionPool<T>, IndexerError> {
         let state_as_any = self.state.as_any();
-        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore>() {
+        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore<T>>() {
             return Ok(pg_state.blocking_cp());
         }
         Err(IndexerError::UncategorizedError(anyhow::anyhow!(

@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use diesel::r2d2::R2D2Connection;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
 use prometheus::Registry;
@@ -25,7 +26,7 @@ use crate::indexer_reader::IndexerReader;
 use errors::IndexerError;
 
 pub mod apis;
-pub mod db;
+pub mod base_db;
 pub mod errors;
 pub mod framework;
 mod handlers;
@@ -38,6 +39,7 @@ pub mod schema;
 pub mod store;
 pub mod test_utils;
 pub mod types;
+pub mod db;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -129,9 +131,9 @@ impl Default for IndexerConfig {
     }
 }
 
-pub async fn build_json_rpc_server(
+pub async fn build_json_rpc_server<T: R2D2Connection>(
     prometheus_registry: &Registry,
-    reader: IndexerReader,
+    reader: IndexerReader<T>,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {

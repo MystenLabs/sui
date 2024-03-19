@@ -7,10 +7,11 @@ use tokio::task::JoinHandle;
 
 use std::env;
 use std::net::SocketAddr;
+use diesel::r2d2::R2D2Connection;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
-use crate::db::{new_pg_connection_pool, reset_database};
+use crate::db::{new_connection_pool};
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
 use crate::processors::objects_snapshot_processor::SnapshotLagConfig;
@@ -36,20 +37,20 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer(
+pub async fn start_test_indexer<T: R2D2Connection + Send>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
+) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
     start_test_indexer_impl(db_url, rpc_url, reader_writer_config, None).await
 }
 
-pub async fn start_test_indexer_impl(
+pub async fn start_test_indexer_impl<T: R2D2Connection>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
+) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     info!("Setting DB_POOL_SIZE to 10");
@@ -85,7 +86,7 @@ pub async fn start_test_indexer_impl(
         let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
 
         // Open in default mode
-        let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+        let blocking_pool = new_connection_pool::<T>(&default_db_url, Some(5)).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -100,7 +101,7 @@ pub async fn start_test_indexer_impl(
         parsed_url = replace_db_name(&parsed_url, &new_database).0;
     }
 
-    let blocking_pool = new_pg_connection_pool(&parsed_url, Some(5)).unwrap();
+    let blocking_pool = new_connection_pool::<T>(&parsed_url, Some(5)).unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
@@ -114,16 +115,16 @@ pub async fn start_test_indexer_impl(
             config.rpc_server_worker = true;
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
-            tokio::spawn(async move { Indexer::start_reader(&config, &registry, db_url).await })
+            tokio::spawn(async move { Indexer::start_reader::<T>(&config, &registry, db_url).await })
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
-            if config.reset_db {
-                reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
-            }
+            // if config.reset_db {
+            //     reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
+            // }
             let store_clone = store.clone();
 
             tokio::spawn(async move {
-                Indexer::start_writer_with_config(
+                Indexer::start_writer_with_config::<PgIndexerStore<T>, T>(
                     &config,
                     store_clone,
                     indexer_metrics,
@@ -147,13 +148,13 @@ fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
     )
 }
 
-pub async fn force_delete_database(db_url: String) {
+pub async fn force_delete_database<T: R2D2Connection + 'static>(db_url: String) {
     // Replace the database name with the default `postgres`, which should be the last string after `/`
     // This is necessary because you can't drop a database while being connected to it.
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
 
-    let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+    let blocking_pool = new_connection_pool::<T>(&default_db_url, Some(5)).unwrap();
     blocking_pool
         .get()
         .unwrap()

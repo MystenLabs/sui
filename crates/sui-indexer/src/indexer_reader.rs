@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    db::{PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection},
     errors::IndexerError,
     models::{
         address_metrics::StoredAddressMetrics,
@@ -23,6 +22,7 @@ use crate::{
     },
     types::{IndexerResult, OwnerType},
 };
+use downcast::Any;
 use anyhow::{anyhow, Result};
 use cached::proc_macro::cached;
 use cached::SizedCache;
@@ -39,6 +39,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
+use diesel::r2d2::{ManageConnection, Pool, R2D2Connection};
 use sui_json_rpc_types::DisplayFieldsResponse;
 use sui_json_rpc_types::{
     AddressMetrics, CheckpointId, EpochInfo, EventFilter, MoveCallMetrics, MoveFunctionName,
@@ -62,19 +63,33 @@ use sui_types::{
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
 use sui_types::{coin::CoinMetadata, event::EventID};
+use crate::base_db::{PgConnectionConfig, PgConnectionPoolConfig};
+use crate::db::PooledConnection;
+use crate::store::diesel_macro::*;
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
 pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
-#[derive(Clone)]
-pub struct IndexerReader {
-    pool: crate::db::PgConnectionPool,
+pub struct IndexerReader<T: R2D2Connection + Send + 'static> {
+    pool: crate::db::ConnectionPool<T>,
     package_cache: PackageCache,
 }
 
+impl<T> Clone for IndexerReader<T>
+    where
+        T: R2D2Connection,
+{
+    fn clone(&self) -> IndexerReader<T> {
+        IndexerReader {
+            pool: self.pool.clone(),
+            package_cache: self.package_cache.clone()
+        }
+    }
+}
+
 // Impl for common initialization and utilities
-impl IndexerReader {
+impl<U: R2D2Connection + 'static> IndexerReader<U> {
     pub fn new<T: Into<String>>(db_url: T) -> Result<Self> {
         let config = PgConnectionPoolConfig::default();
         Self::new_with_config(db_url, config)
@@ -84,7 +99,7 @@ impl IndexerReader {
         db_url: T,
         config: PgConnectionPoolConfig,
     ) -> Result<Self> {
-        let manager = ConnectionManager::<PgConnection>::new(db_url);
+        let manager = ConnectionManager::<U>::new(db_url);
 
         let connection_config = PgConnectionConfig {
             statement_timeout: config.statement_timeout,
@@ -104,7 +119,7 @@ impl IndexerReader {
         })
     }
 
-    fn get_connection(&self) -> Result<PgPoolConnection, IndexerError> {
+    fn get_connection(&self) -> Result<PooledConnection<U>, IndexerError> {
         self.pool.get().map_err(|e| {
             IndexerError::PgPoolConnectionError(format!(
                 "Failed to get connection from PG connection pool with error: {:?}",
@@ -117,31 +132,22 @@ impl IndexerReader {
     where
         F: FnOnce(&mut PgConnection) -> Result<T, E>,
         E: From<diesel::result::Error> + std::error::Error,
+        T: Send + 'static,
     {
         blocking_call_is_ok_or_panic();
 
-        let mut connection = self.get_connection()?;
-        connection
-            .build_transaction()
-            .read_only()
-            .run(query)
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+        read_only_blocking!(&self.pool, query, false)
     }
 
     pub fn run_query_repeatable<T, E, F>(&self, query: F) -> Result<T, IndexerError>
     where
         F: FnOnce(&mut PgConnection) -> Result<T, E>,
         E: From<diesel::result::Error> + std::error::Error,
+        T: Send + 'static,
     {
         blocking_call_is_ok_or_panic();
 
-        let mut connection = self.get_connection()?;
-        connection
-            .build_transaction()
-            .read_only()
-            .repeatable_read()
-            .run(query)
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+        read_only_blocking!(&self.pool, query, true)
     }
 
     pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
@@ -206,7 +212,7 @@ fn blocking_call_is_ok_or_panic() {
 }
 
 // Impl for reading data from the DB
-impl IndexerReader {
+impl<T: R2D2Connection> IndexerReader<T> {
     fn get_object_from_db(
         &self,
         object_id: &ObjectID,
@@ -1742,7 +1748,7 @@ impl PackageCache {
     }
 }
 
-impl move_core_types::resolver::ModuleResolver for IndexerReader {
+impl<T: R2D2Connection> move_core_types::resolver::ModuleResolver for IndexerReader<T> {
     type Error = IndexerError;
 
     fn get_module(
@@ -1757,7 +1763,7 @@ impl move_core_types::resolver::ModuleResolver for IndexerReader {
     }
 }
 
-impl sui_types::storage::ObjectStore for IndexerReader {
+impl<T: R2D2Connection> sui_types::storage::ObjectStore for IndexerReader<T> {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -1776,7 +1782,7 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     }
 }
 
-impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
+impl<T: R2D2Connection> move_bytecode_utils::module_cache::GetModule for IndexerReader<T> {
     type Error = IndexerError;
     type Item = move_binary_format::CompiledModule;
 
@@ -1800,14 +1806,14 @@ impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
     }
 }
 
-#[cached(
-    type = "SizedCache<String, Option<ObjectID>>",
-    create = "{ SizedCache::with_size(10000) }",
-    convert = r#"{ format!("{}{}", package_id, obj_type) }"#,
-    result = true
-)]
-fn get_single_obj_id_from_package_publish(
-    reader: &IndexerReader,
+// #[cached(
+//     type = "SizedCache<String, Option<ObjectID>>",
+//     create = "{ SizedCache::with_size(10000) }",
+//     convert = r#"{ format!("{}{}", package_id, obj_type) }"#,
+//     result = true
+// )]
+fn get_single_obj_id_from_package_publish<U: R2D2Connection>(
+    reader: &IndexerReader<U>,
     package_id: ObjectID,
     obj_type: String,
 ) -> Result<Option<ObjectID>, IndexerError> {
