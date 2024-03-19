@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GraphQLQueryOptions } from '@mysten/graphql-transport';
-import { ResultOf, VariablesOf, graphql } from '@mysten/sui.js/dist/cjs/graphql/schemas/2024-01';
-import { SuiGraphQLClient, GraphQLDocument } from '@mysten/sui.js/graphql';
+import { graphql, ResultOf, VariablesOf } from '@mysten/sui.js/dist/cjs/graphql/schemas/2024-01';
+import { GraphQLDocument, SuiGraphQLClient } from '@mysten/sui.js/graphql';
 
 export interface PageInfo {
 	hasNextPage: boolean;
@@ -13,42 +13,39 @@ export interface PageInfo {
 }
 
 export type BenchmarkParams = {
-	paginateForwards: boolean,
-	limit: number,
-	numPages: number
-}
+	paginateForwards: boolean;
+	limit: number;
+	numPages: number;
+};
 
 export type PaginationParams = {
-	first?: number,
-	after?: string,
-	last?: number,
-	before?: string
-}
+	first?: number;
+	after?: string;
+	last?: number;
+	before?: string;
+};
 
 export class PaginationV2 {
 	paginateForwards: boolean;
 	limit: number;
 	cursor?: string;
 
-	constructor(
-	  paginateForwards: boolean,
-	  limit: number,
-	) {
-	  this.paginateForwards = paginateForwards;
-	  this.limit = limit;
+	constructor(paginateForwards: boolean, limit: number) {
+		this.paginateForwards = paginateForwards;
+		this.limit = limit;
 	}
 
 	getParams(): PaginationParams {
 		if (this.paginateForwards) {
 			return {
 				first: this.limit,
-				after: this.cursor
-			}
+				after: this.cursor,
+			};
 		}
 		return {
 			last: this.limit,
-			before: this.cursor
-		}
+			before: this.cursor,
+		};
 	}
 
 	getCursor(): string | undefined {
@@ -65,10 +62,8 @@ export class PaginationV2 {
 				this.cursor = pageInfo.startCursor!;
 			}
 		}
-
 	}
 }
-
 
 // TODO doc comments once stabilized
 /// Caller is responsible for providing a `testFn` that returns the `PageInfo` for the benchmark to
@@ -76,13 +71,16 @@ export class PaginationV2 {
 export async function benchmark_connection_query<Q extends Record<string, GraphQLDocument>>(
 	client: SuiGraphQLClient<Q>,
 	benchmarkParams: BenchmarkParams,
-	testFn: (client: SuiGraphQLClient<Q>, cursor: PaginationParams) => Promise<{ pageInfo: PageInfo | undefined, variables: any }>,
+	testFn: (
+		client: SuiGraphQLClient<Q>,
+		cursor: PaginationParams,
+	) => Promise<{ pageInfo: PageInfo | undefined; variables: any }>,
 ): Promise<number[]> {
 	let { paginateForwards, limit, numPages } = benchmarkParams;
 
 	let cursors: Array<string> = [];
 	let hasNextPage = true;
-    let durations: number[] = [];
+	let durations: number[] = [];
 
 	let pagination = new PaginationV2(paginateForwards, limit);
 	let initialVariables;
@@ -91,7 +89,7 @@ export async function benchmark_connection_query<Q extends Record<string, GraphQ
 		let start = performance.now();
 		let { pageInfo: result, variables } = await testFn(client, pagination.getParams());
 		let duration = performance.now() - start;
-        durations.push(duration);
+		durations.push(duration);
 		if (i == 0) {
 			initialVariables = variables;
 		}
@@ -112,65 +110,64 @@ export async function benchmark_connection_query<Q extends Record<string, GraphQ
 	}
 
 	// sleep for 1 second
-	await new Promise(r => setTimeout(r, 1000));
+	await new Promise((r) => setTimeout(r, 1000));
 
 	report(initialVariables, cursors, metrics(durations));
 	return durations;
-};
-
+}
 
 interface PaginationVariables {
 	before?: string;
 	after?: string;
 	first?: number;
 	last?: number;
-  }
-
-type Metrics = {
-	min: number,
-	p50: number,
-	p90: number,
-	p95: number,
-	mean: number,
-	max: number
 }
 
+type Metrics = {
+	min: number;
+	p50: number;
+	p90: number;
+	p95: number;
+	mean: number;
+	max: number;
+};
+
 export function metrics(durations: number[]): Metrics {
-    const sorted = durations.sort((a, b) => a - b);
-    const p50 = sorted[Math.floor(durations.length * 0.5)];
-    const p90 = sorted[Math.floor(durations.length * 0.9)];
-    const p95 = sorted[Math.floor(durations.length * 0.95)];
+	const sorted = durations.sort((a, b) => a - b);
+	const p50 = sorted[Math.floor(durations.length * 0.5)];
+	const p90 = sorted[Math.floor(durations.length * 0.9)];
+	const p95 = sorted[Math.floor(durations.length * 0.95)];
 	const sum = sorted.reduce((a, b) => a + b, 0);
-    return {
+	return {
 		min: sorted[0],
-        p50,
-        p90,
-        p95,
+		p50,
+		p90,
+		p95,
 		mean: sum / durations.length,
-        max: sorted[sorted.length - 1]
-    };
+		max: sorted[sorted.length - 1],
+	};
 }
 
 export function report<T>(params: T, cursors: string[], metrics: Metrics) {
-    let reportObject;
+	let reportObject;
 
-    if (metrics.min > 5000) {
-        reportObject = {
-            status: "TIMED OUT",
-            params,
-            cursors
-        };
-    } else {
-        reportObject = {
-            status: "COMPLETED",
-            params,
-            cursors,
-            metrics
-        };
-    }
+	if (metrics.min > 5000) {
+		reportObject = {
+			status: 'TIMED OUT',
+			params,
+			cursors,
+		};
+	} else {
+		reportObject = {
+			status: 'COMPLETED',
+			params,
+			cursors,
+			metrics,
+		};
+	}
 
-    const jsonReport = JSON.stringify(reportObject, null, 2);
-    console.log(jsonReport);
+	const jsonReport = JSON.stringify(reportObject, null, 2);
+	console.log(jsonReport);
 }
 
 /*

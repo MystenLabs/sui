@@ -4,30 +4,30 @@
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
 import { graphql, readFragment } from '@mysten/sui.js/graphql/schemas/2024-01';
 
+import { benchmark_connection_query } from './benchmark';
 import { CoinConnectionData, CoinsQuery, PageInfoFragment } from './coins';
 import { EventsQuery } from './events';
-import { benchmark_connection_query } from './benchmark';
 
 const queries = {
 	getCoins: CoinsQuery,
 	queryEvents: EventsQuery,
 	objectPreviousTxBlock: graphql(`
-	query objectPreviousTxBlock($first: Int $last: Int $before: String $after: String) {
-		objects(first: $first, last: $last, before: $before, after: $after) {
-		pageInfo {
-		  startCursor
-		  endCursor
-		  hasNextPage
-		  hasPreviousPage
+		query objectPreviousTxBlock($first: Int, $last: Int, $before: String, $after: String) {
+			objects(first: $first, last: $last, before: $before, after: $after) {
+				pageInfo {
+					startCursor
+					endCursor
+					hasNextPage
+					hasPreviousPage
+				}
+				nodes {
+					previousTransactionBlock {
+						digest
+					}
+				}
+			}
 		}
-		nodes {
-		  previousTransactionBlock {
-			digest
-		  }
-		}
-	  }
-	}
-`)
+	`),
 };
 
 interface PageInfo {
@@ -42,7 +42,7 @@ async function benchmark(
 	paginateForwards: boolean,
 	testFn: (client: SuiGraphQLClient<typeof queries>, cursor: string | null) => Promise<PageInfo>,
 	pages: number = 10,
-	runParallel: boolean = false
+	runParallel: boolean = false,
 ): Promise<void> {
 	let cursors: Array<string> = [];
 	let hasNextPage = true;
@@ -158,24 +158,27 @@ async function runBenchmarksSequentially(client: SuiGraphQLClient<typeof queries
 
 // runBenchmarksSequentially(client);
 
-
-
 async function yeet(client: SuiGraphQLClient<typeof queries>) {
 	let limit = 50;
 	console.log('object previous tx blocks');
-	await benchmark_connection_query(client, true, async (client, cursor) => {
-		let limit = 50;
-		// todo: i feel like we could have benchmark manage this
-		const response = await client.execute('objectPreviousTxBlock', {
-			variables: {
-				first: limit,
-				after: cursor,
-			},
-		});
-		const data = response.data!;
-		const pageInfo = data.objects.pageInfo;
-		return pageInfo;
-	}, 100).catch(console.error);
+	await benchmark_connection_query(
+		client,
+		true,
+		async (client, cursor) => {
+			let limit = 50;
+			// todo: i feel like we could have benchmark manage this
+			const response = await client.execute('objectPreviousTxBlock', {
+				variables: {
+					first: limit,
+					after: cursor,
+				},
+			});
+			const data = response.data!;
+			const pageInfo = data.objects.pageInfo;
+			return pageInfo;
+		},
+		100,
+	).catch(console.error);
 }
 
 yeet(client);
