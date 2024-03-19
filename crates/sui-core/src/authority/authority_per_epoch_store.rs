@@ -541,18 +541,6 @@ impl DeferralKey {
             },
         )
     }
-
-    fn deferred_from_consensus_round(&self) -> Option<&u64> {
-        match self {
-            Self::ConsensusRound {
-                future_round: _,
-                deferred_from_round,
-            } => Some(deferred_from_round),
-            Self::RandomnessDkg {
-                deferred_from_round: _,
-            } => None,
-        }
-    }
 }
 
 #[tokio::test]
