@@ -37,6 +37,8 @@ pub(crate) struct Broadcaster {
 }
 
 impl Broadcaster {
+    const LAST_BLOCK_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+
     pub(crate) fn new<C: NetworkClient>(
         context: Arc<Context>,
         network_client: Arc<C>,
@@ -82,8 +84,8 @@ impl Broadcaster {
         let mut last_block: Option<VerifiedBlock> = None;
 
         // Retry last block with an interval.
-        const RETRY_INTERVAL: Duration = Duration::from_secs(2);
-        let mut retry_timer = tokio::time::interval(RETRY_INTERVAL);
+        let mut retry_timer = tokio::time::interval(Self::LAST_BLOCK_RETRY_INTERVAL);
+        retry_timer.reset_after(Self::LAST_BLOCK_RETRY_INTERVAL);
         retry_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         // Use a simple exponential-decay RTT estimator to adjust the timeout for each block sent.
@@ -177,7 +179,7 @@ impl Broadcaster {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, time::Duration};
+    use std::{collections::BTreeMap, ops::DerefMut, time::Duration};
 
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -202,7 +204,10 @@ mod test {
         }
 
         fn blocks_sent(&self) -> BTreeMap<AuthorityIndex, Vec<Bytes>> {
-            self.blocks_sent.lock().clone()
+            let mut blocks_sent = self.blocks_sent.lock();
+            let result = std::mem::take(blocks_sent.deref_mut());
+            blocks_sent.clear();
+            result
         }
     }
 
@@ -243,8 +248,28 @@ mod test {
             "No subscriber active to receive the block"
         );
 
-        sleep(Duration::from_secs(1)).await;
+        // block should be broadcasted immediately to all peers.
+        sleep(Duration::from_millis(1)).await;
+        let blocks_sent = network_client.blocks_sent();
+        for (index, _) in context.committee.authorities() {
+            if index == context.own_index {
+                continue;
+            }
+            assert_eq!(blocks_sent.get(&index).unwrap(), &vec![block.serialized()]);
+        }
 
+        // block should not be re-broadcasted ...
+        sleep(Duration::from_millis(1)).await;
+        let blocks_sent = network_client.blocks_sent();
+        for (index, _) in context.committee.authorities() {
+            if index == context.own_index {
+                continue;
+            }
+            assert!(blocks_sent.get(&index).is_none());
+        }
+
+        // ... until LAST_BLOCK_RETRY_INTERVAL
+        sleep(Broadcaster::LAST_BLOCK_RETRY_INTERVAL).await;
         let blocks_sent = network_client.blocks_sent();
         for (index, _) in context.committee.authorities() {
             if index == context.own_index {
