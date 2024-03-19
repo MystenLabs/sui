@@ -263,7 +263,7 @@ mod test {
         }
 
         // block should not be re-broadcasted ...
-        sleep(Duration::from_millis(1)).await;
+        sleep(Broadcaster::LAST_BLOCK_RETRY_INTERVAL / 2).await;
         let blocks_sent = network_client.blocks_sent();
         for (index, _) in context.committee.authorities() {
             if index == context.own_index {
@@ -273,7 +273,7 @@ mod test {
         }
 
         // ... until LAST_BLOCK_RETRY_INTERVAL
-        sleep(Broadcaster::LAST_BLOCK_RETRY_INTERVAL).await;
+        sleep(Broadcaster::LAST_BLOCK_RETRY_INTERVAL / 2).await;
         let blocks_sent = network_client.blocks_sent();
         for (index, _) in context.committee.authorities() {
             if index == context.own_index {

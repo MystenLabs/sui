@@ -369,8 +369,8 @@ mime = "0.3"
 mockall = "0.11.4"
 moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
