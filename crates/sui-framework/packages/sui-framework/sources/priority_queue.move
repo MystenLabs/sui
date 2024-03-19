@@ -3,7 +3,6 @@
 
 /// Priority queue implemented using a max heap.
 module sui::priority_queue {
-    use std::vector;
 
     /// For when heap is empty and there's no data to pop.
     const EPopFromEmptyHeap: u64 = 0;
@@ -24,7 +23,7 @@ module sui::priority_queue {
 
     /// Create a new priority queue from the input entry vectors.
     public fun new<T: drop>(mut entries: vector<Entry<T>>) : PriorityQueue<T> {
-        let len = vector::length(&entries);
+        let len = entries.length();
         let mut i = len / 2;
         // Max heapify from the first node that is a parent (node at len / 2).
         while (i > 0) {
@@ -36,10 +35,10 @@ module sui::priority_queue {
 
     /// Pop the entry with the highest priority value.
     public fun pop_max<T: drop>(pq: &mut PriorityQueue<T>) : (u64, T) {
-        let len = vector::length(&pq.entries);
+        let len = pq.entries.length();
         assert!(len > 0, EPopFromEmptyHeap);
         // Swap the max element with the last element in the entries and remove the max element.
-        let Entry { priority, value } = vector::swap_remove(&mut pq.entries, 0);
+        let Entry { priority, value } = pq.entries.swap_remove(0);
         // Now the max heap property has been violated at the root node, but nowhere else
         // so we call max heapify on the root node.
         max_heapify_recursive(&mut pq.entries, len - 1, 0);
@@ -48,8 +47,8 @@ module sui::priority_queue {
 
     /// Insert a new entry into the queue.
     public fun insert<T: drop>(pq: &mut PriorityQueue<T>, priority: u64, value: T) {
-        vector::push_back(&mut pq.entries, Entry { priority, value});
-        let index = vector::length(&pq.entries) - 1;
+        pq.entries.push_back(Entry { priority, value});
+        let index = pq.entries.length() - 1;
         restore_heap_recursive(&mut pq.entries, index);
     }
 
@@ -58,14 +57,14 @@ module sui::priority_queue {
     }
 
     public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
-        let len = vector::length(&p);
-        assert!(vector::length(&v) == len, 0);
-        let mut res = vector::empty();
+        let len = p.length();
+        assert!(v.length() == len, 0);
+        let mut res = vector[];
         let mut i = 0;
         while (i < len) {
-            let priority = vector::remove(&mut p, 0);
-            let value = vector::remove(&mut v, 0);
-            vector::push_back(&mut res, Entry { priority, value });
+            let priority = p.remove(0);
+            let value = v.remove(0);
+            res.push_back(Entry { priority, value });
             i = i + 1;
         };
         res
@@ -80,8 +79,8 @@ module sui::priority_queue {
 
         // If new elem is greater than its parent, swap them and recursively
         // do the restoration upwards.
-        if (vector::borrow(v, i).priority > vector::borrow(v, parent).priority) {
-            vector::swap(v, i, parent);
+        if (*&v[i].priority > *&v[parent].priority) {
+            v.swap(i, parent);
             restore_heap_recursive(v, parent);
         }
     }
@@ -100,16 +99,16 @@ module sui::priority_queue {
         let right = left + 1;
         let mut max = i;
         // Find the node with highest priority among node `i` and its two children.
-        if (left < len && vector::borrow(v, left).priority> vector::borrow(v, max).priority) {
+        if (left < len && *&v[left].priority > *&v[max].priority) {
             max = left;
         };
-        if (right < len && vector::borrow(v, right).priority > vector::borrow(v, max).priority) {
+        if (right < len && *&v[right].priority > *&v[max].priority) {
             max = right;
         };
         // If the parent node (node `i`) doesn't have the highest priority, we swap the parent with the
         // max priority node.
         if (max != i) {
-            vector::swap(v, max, i);
+            v.swap(max, i);
             // After the swap, we have restored the property at node `i` but now the max heap property
             // may be violated at node `max` since this node now has a new value. So we need to now
             // max heapify the subtree rooted at node `max`.
@@ -120,8 +119,8 @@ module sui::priority_queue {
     public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {
         let mut res = vector[];
         let mut i = 0;
-        while (i < vector::length(&pq.entries)) {
-            vector::push_back(&mut res, vector::borrow(&pq.entries, i).priority);
+        while (i < pq.entries.length()) {
+            res.push_back(pq.entries[i].priority);
             i = i +1;
         };
         res
