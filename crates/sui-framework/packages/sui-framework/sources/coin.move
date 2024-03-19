@@ -14,13 +14,10 @@ module sui::coin {
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
-<<<<<<< HEAD
-    #[test_only]
-    use sui::test_utils::destroy;
-=======
     use sui::deny_list::{Self, DenyList};
     use std::type_name;
->>>>>>> main
+    #[test_only]
+    use sui::test_utils::destroy;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -426,7 +423,17 @@ module sui::coin {
     }
 
     #[test_only]
-<<<<<<< HEAD
+    /// Create a `TreasuryCap` for any `Coin` for testing purposes.
+    public fun create_treasury_cap_for_testing<T>(
+        ctx: &mut TxContext
+    ): TreasuryCap<T> {
+        TreasuryCap {
+            id: object::new(ctx),
+            total_supply: balance::create_supply_for_testing()
+        }
+    }
+
+    #[test_only]
     /// Create a CoinMetadata for testing purposes only
     public fun new_coin_metadata_for_testing<T: drop>(
         witness: T,
@@ -442,17 +449,7 @@ module sui::coin {
         destroy(treasury_cap);
 
         coin_metadata
-=======
-    /// Create a `TreasuryCap` for any `Coin` for testing purposes.
-    public fun create_treasury_cap_for_testing<T>(
-        ctx: &mut TxContext
-    ): TreasuryCap<T> {
-        TreasuryCap {
-            id: object::new(ctx),
-            total_supply: balance::create_supply_for_testing()
-        }
->>>>>>> main
-    }
+    }    
 
     // === Deprecated code ===
 
