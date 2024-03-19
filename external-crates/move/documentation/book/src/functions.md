@@ -9,7 +9,7 @@ Functions are declared with the `fun` keyword followed by the function name, typ
 parameters, a return type, and finally the function body.
 
 ```text
-<visibility>? <entry>? fun <identifier><[type_parameters: constraint],*>([identifier: type],*): <return_type> <acquires [identifier],*> <function_body>
+<visibility>? <entry>? fun <identifier><[type_parameters: constraint],*>([identifier: type],*): <return_type> <function_body>
 ```
 
 For example

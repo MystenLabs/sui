@@ -35,6 +35,7 @@
 
 ## Advanced Concepts
 
+- [Method Syntax](method-syntax.md)
 - [Index Syntax Methods](index-syntax.md)
 
 ## Reference
