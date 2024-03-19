@@ -172,7 +172,7 @@ export class TransactionBlock {
 		}
 	}
 	setExpiration(expiration?: Input<typeof TransactionExpiration> | null) {
-		this.#blockData.expiration = parse(TransactionExpiration, expiration) ?? null;
+		this.#blockData.expiration = expiration ? parse(TransactionExpiration, expiration) : null;
 	}
 	setGasPrice(price: number | bigint) {
 		this.#blockData.gasConfig.price = String(price);
