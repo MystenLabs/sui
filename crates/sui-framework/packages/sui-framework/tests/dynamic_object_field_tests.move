@@ -69,7 +69,7 @@ module sui::dynamic_object_field_tests {
         assert!(!exists_(&id, b""), 0);
         assert!(!exists_(&id, false), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -154,7 +154,7 @@ module sui::dynamic_object_field_tests {
         let mut id = ts::new_object(&mut scenario);
         add(&mut id, 0, new(&mut scenario));
         let Fake { id } = remove<u64, Fake>(&mut id, 0);
-        object::delete(id);
+        id.delete();
         abort 42
     }
 
@@ -168,7 +168,7 @@ module sui::dynamic_object_field_tests {
         assert!(exists_<u64>(&id, 0), 0);
         assert!(!exists_<u8>(&id, 0), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -183,7 +183,7 @@ module sui::dynamic_object_field_tests {
         assert!(!exists_with_type<u8, Counter>(&id, 0), 0);
         assert!(!exists_with_type<u8, Fake>(&id, 0), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 
     // should be able to do delete a UID even though it has a dynamic field
@@ -195,7 +195,7 @@ module sui::dynamic_object_field_tests {
         add(&mut id, 0, new(&mut scenario));
         assert!(exists_<u64>(&id, 0), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 
     // transfer an object field from one "parent" to another
@@ -235,7 +235,7 @@ module sui::dynamic_object_field_tests {
 
     fun destroy(counter: Counter): u64 {
         let Counter { id, count } = counter;
-        object::delete(id);
+        id.delete();
         count
     }
 }

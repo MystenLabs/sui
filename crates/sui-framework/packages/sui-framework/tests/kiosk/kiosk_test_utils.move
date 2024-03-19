@@ -72,7 +72,7 @@ module sui::kiosk_test_utils {
     public fun return_assets(mut assets: vector<Asset>) {
         while (vector::length(&assets) > 0) {
             let Asset { id } = vector::pop_back(&mut assets);
-            object::delete(id)
+            id.delete()
         };
 
         vector::destroy_empty(assets)

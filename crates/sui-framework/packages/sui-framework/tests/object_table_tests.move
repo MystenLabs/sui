@@ -173,7 +173,7 @@ module sui::object_table_tests {
 
     fun destroy(counter: Counter): u64 {
         let Counter { id, count } = counter;
-        object::delete(id);
+        id.delete();
         count
     }
 }

@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::bag_tests {
-    use sui::bag::{Self, add, contains_with_type, borrow, borrow_mut, remove};
+    use sui::bag::Self;
     use sui::test_scenario as ts;
 
     #[test]
@@ -12,28 +12,28 @@ module sui::bag_tests {
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
         // add fields
-        add(&mut bag, b"hello", 0);
-        add(&mut bag, 1, 1u8);
+        bag.add(b"hello", 0);
+        bag.add(1, 1u8);
         // check they exist
-        assert!(contains_with_type<vector<u8>, u64>(&bag, b"hello"), 0);
-        assert!(contains_with_type<u64, u8>(&bag, 1), 0);
+        assert!(bag.contains_with_type<vector<u8>, u64>(b"hello"), 0);
+        assert!(bag.contains_with_type<u64, u8>(1), 0);
         // check the values
-        assert!(*borrow(&bag, b"hello") == 0, 0);
-        assert!(*borrow(&bag, 1) == 1u8, 0);
+        assert!(bag[b"hello"] == 0, 0);
+        assert!(bag[1] == 1u8, 0);
         // mutate them
-        *borrow_mut(&mut bag, b"hello") = *borrow(&bag, b"hello") * 2;
-        *borrow_mut(&mut bag, 1) = *borrow(&bag, 1) * 2u8;
+        *(&mut bag[b"hello"]) = bag[b"hello"] * 2;
+        *(&mut bag[1]) = bag[1] * 2u8;
         // check the new value
-        assert!(*borrow(&bag, b"hello") == 0, 0);
-        assert!(*borrow(&bag, 1) == 2u8, 0);
+        assert!(bag[b"hello"] == 0, 0);
+        assert!(bag[1] == 2u8, 0);
         // remove the value and check it
-        assert!(remove(&mut bag, b"hello") == 0, 0);
-        assert!(remove(&mut bag, 1) == 2u8, 0);
+        assert!(bag.remove(b"hello") == 0, 0);
+        assert!(bag.remove(1) == 2u8, 0);
         // verify that they are not there
-        assert!(!contains_with_type<vector<u8>, u64>(&bag, b"hello"), 0);
-        assert!(!contains_with_type<u64, u8>(&bag, 1), 0);
+        assert!(!bag.contains_with_type<vector<u8>, u64>(b"hello"), 0);
+        assert!(!bag.contains_with_type<u64, u8>(1), 0);
         ts::end(scenario);
-        bag::destroy_empty(bag);
+        bag.destroy_empty();
     }
 
     #[test]
@@ -42,8 +42,8 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, b"hello", 0u8);
-        add(&mut bag, b"hello", 1u8);
+        bag.add(b"hello", 0u8);
+        bag.add(b"hello", 1u8);
         abort 42
     }
 
@@ -53,8 +53,8 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, b"hello", 0u128);
-        add(&mut bag, b"hello", 1u8);
+        bag.add(b"hello", 0u128);
+        bag.add(b"hello", 1u8);
         abort 42
     }
 
@@ -64,7 +64,7 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let bag = bag::new(ts::ctx(&mut scenario));
-        borrow<u64, u64>(&bag, 0);
+        (&bag[0] : &u64);
         abort 42
     }
 
@@ -74,8 +74,8 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, 0, 0);
-        borrow<u64, u8>(&bag, 0);
+        bag.add(0u64, 0u64);
+        (&bag[0]: &u8);
         abort 42
     }
 
@@ -85,7 +85,7 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        borrow_mut<u64, u64>(&mut bag, 0);
+        (&mut bag[0]: &mut u64);
         abort 42
     }
 
@@ -95,8 +95,8 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, 0, 0);
-        borrow_mut<u64, u8>(&mut bag, 0);
+        bag.add(0u64, 0u64);
+        (&mut bag[0]: &mut u8);
         abort 42
     }
 
@@ -106,7 +106,7 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        remove<u64, u64>(&mut bag, 0);
+        bag.remove<u64, u64>(0);
         abort 42
     }
 
@@ -116,8 +116,8 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, 0, 0);
-        remove<u64, u8>(&mut bag, 0);
+        bag.add(0, 0);
+        bag.remove<u64, u8>(0);
         abort 42
     }
 
@@ -127,8 +127,8 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, 0, 0);
-        bag::destroy_empty(bag);
+        bag.add(0, 0);
+        bag.destroy_empty();
         ts::end(scenario);
     }
 
@@ -137,13 +137,13 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        assert!(!contains_with_type<u64, u64>(&bag, 0), 0);
-        add(&mut bag, 0, 0);
-        assert!(contains_with_type<u64, u64>(&bag, 0), 0);
-        assert!(!contains_with_type<u64, u64>(&bag, 1), 0);
+        assert!(!bag.contains_with_type<u64, u64>(0), 0);
+        bag.add(0, 0);
+        assert!(bag.contains_with_type<u64, u64>(0), 0);
+        assert!(!bag.contains_with_type<u64, u64>(1), 0);
         ts::end(scenario);
-        bag::remove<u64, u64>(&mut bag, 0);
-        bag::destroy_empty(bag);
+        bag.remove<u64, u64>(0);
+        bag.destroy_empty();
     }
 
     #[test]
@@ -151,17 +151,17 @@ module sui::bag_tests {
         let sender = @0x0;
         let mut scenario = ts::begin(sender);
         let mut bag = bag::new(ts::ctx(&mut scenario));
-        assert!(bag::is_empty(&bag), 0);
-        assert!(bag::length(&bag) == 0, 0);
-        add(&mut bag, 0, 0);
-        assert!(!bag::is_empty(&bag), 0);
-        assert!(bag::length(&bag) == 1, 0);
-        add(&mut bag, 1, 0);
-        assert!(!bag::is_empty(&bag), 0);
-        assert!(bag::length(&bag) == 2, 0);
-        bag::remove<u64, u64>(&mut bag, 0);
-        bag::remove<u64, u64>(&mut bag, 1);
+        assert!(bag.is_empty(), 0);
+        assert!(bag.length() == 0, 0);
+        bag.add(0, 0);
+        assert!(!bag.is_empty(), 0);
+        assert!(bag.length() == 1, 0);
+        bag.add(1, 0);
+        assert!(!bag.is_empty(), 0);
+        assert!(bag.length() == 2, 0);
+        bag.remove<u64, u64>(0);
+        bag.remove<u64, u64>(1);
         ts::end(scenario);
-        bag::destroy_empty(bag);
+        bag.destroy_empty();
     }
 }

@@ -350,7 +350,7 @@ module sui::test_scenario_tests {
             let obj1 = ts::take_shared<Object>(&scenario);
             assert!(obj1.value == 10, EValueMismatch);
             let Object { id, value: _ } = obj1;
-            object::delete(id);
+            id.delete();
         };
         ts::end(scenario);
     }

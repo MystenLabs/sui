@@ -17,8 +17,8 @@ module sui::tx_context_tests {
         // new_id should always produce fresh ID's
         assert!(&id1 != &id2, 1);
         assert!(tx_context::get_ids_created(&ctx) == 2, 2);
-        object::delete(id1);
-        object::delete(id2);
+        id1.delete();
+        id2.delete();
     }
 
 }

@@ -4,7 +4,6 @@
 #[test_only]
 module sui::dynamic_field_tests {
     use sui::dynamic_field::{add, exists_with_type, borrow, borrow_mut, remove};
-    use sui::object;
     use sui::test_scenario as ts;
 
     #[test]
@@ -41,7 +40,7 @@ module sui::dynamic_field_tests {
         assert!(!exists_with_type<vector<u8>, u64>(&id, b""), 0);
         assert!(!exists_with_type<bool, u64>(&id, false), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -139,7 +138,7 @@ module sui::dynamic_field_tests {
         assert!(exists_with_type<u64, u64>(&id, 0), 0);
         assert!(!exists_with_type<u64, u8>(&id, 0), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 
     // should be able to do delete a UID even though it has a dynamic field
@@ -151,6 +150,6 @@ module sui::dynamic_field_tests {
         add(&mut id, 0, 0);
         assert!(exists_with_type<u64, u64>(&id, 0), 0);
         ts::end(scenario);
-        object::delete(id);
+        id.delete();
     }
 }
