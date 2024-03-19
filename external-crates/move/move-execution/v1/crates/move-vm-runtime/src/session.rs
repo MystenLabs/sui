@@ -17,8 +17,8 @@ use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
-    trace::CallTrace,
     runtime_value::MoveTypeLayout,
+    trace::CallTrace,
 };
 use move_vm_types::{
     data_store::DataStore,
