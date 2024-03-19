@@ -461,13 +461,13 @@ ZKEY=<path_to_zkLogin.zkey> PROVER_PORT=<PROVER_PORT> docker compose up
    - `/ping`: To test if the service is up. Running `curl http://localhost:PROVER_PORT/ping` should return `pong`.
    - `/v1`: The request and response are the same as the Mysten Labs maintained service.
 
-A few things to note:
+A few important things to note:
+
+- The backend service (mysten/zklogin:prover-stable) is compute-heavy. Use at least the minimum recommended 16 cores and 16GB RAM. Using weaker instances can lead to timeout errors with the message "Call to rapidsnark service took longer than 15s". You can adjust the environment variable `PROVER_TIMEOUT` to set a different timeout value, for example, `PROVER_TIMEOUT=30` for a timeout of 30 seconds.
 
 - If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
 
 - Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
-
-- If you are seeing the error message "Call to rapidsnark service took longer than 15s", consider increasing the timeout by setting the environment variable `PROVER_TIMEOUT` to a higher value. For example, `PROVER_TIMEOUT=30`.
 
 ## Assemble the zkLogin signature and submit the transaction
 
