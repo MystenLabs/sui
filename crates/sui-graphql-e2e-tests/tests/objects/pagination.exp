@@ -40,19 +40,19 @@ Response: {
       "objects": {
         "edges": [
           {
-            "cursor": "IAqzgiWhucjUZMr9G7qMXRC+l6S+sar0LHW/MHB7BbDQAQAAAAAAAAA="
+            "cursor": "IEe51KywcDhCiURelsdR/SdlRqJs2rezRXDkjfnPdWXWAQAAAAAAAAA="
           },
           {
-            "cursor": "IHUvlTz7hMiq0uXjiMGQsbUsQS5RrxMpc+lMZoVWEkznAQAAAAAAAAA="
+            "cursor": "ILuc1bYxajuGByZy08ErWhE8gGmvW4mONjtt4Glc+CUBAQAAAAAAAAA="
           },
           {
-            "cursor": "IJPn8kjHbQVRO3/lcNe/qhsVkqlT52MRYgR4USjegpLtAQAAAAAAAAA="
+            "cursor": "INN8UUE7H1QOsDok0UOy+pGBL48TazzLTcOlmPukQK3WAQAAAAAAAAA="
           },
           {
-            "cursor": "ILozemDJ6xajYHPJj+b1GmRttgWPAZovyCtynoyf/vMmAQAAAAAAAAA="
+            "cursor": "INadb+Yvkw1ZfXaqqBwofiLvJlLJKCX7eGcGqOJHwNuGAQAAAAAAAAA="
           },
           {
-            "cursor": "INcdjvGjqp6atJmaek9/SQr5o+zM8Dz5eDUBxGc5IxclAQAAAAAAAAA="
+            "cursor": "IP201HLa1gWWDAsw6OM4iPplcwhwuUeDMQ0Hpp27ZhkiAQAAAAAAAAA="
           }
         ]
       }
@@ -67,10 +67,10 @@ Response: {
       "objects": {
         "edges": [
           {
-            "cursor": "IAqzgiWhucjUZMr9G7qMXRC+l6S+sar0LHW/MHB7BbDQAQAAAAAAAAA="
+            "cursor": "IEe51KywcDhCiURelsdR/SdlRqJs2rezRXDkjfnPdWXWAQAAAAAAAAA="
           },
           {
-            "cursor": "IHUvlTz7hMiq0uXjiMGQsbUsQS5RrxMpc+lMZoVWEkznAQAAAAAAAAA="
+            "cursor": "ILuc1bYxajuGByZy08ErWhE8gGmvW4mONjtt4Glc+CUBAQAAAAAAAAA="
           }
         ]
       }
@@ -83,14 +83,7 @@ Response: {
   "data": {
     "address": {
       "objects": {
-        "edges": [
-          {
-            "cursor": "IHUvlTz7hMiq0uXjiMGQsbUsQS5RrxMpc+lMZoVWEkznAQAAAAAAAAA="
-          },
-          {
-            "cursor": "IJPn8kjHbQVRO3/lcNe/qhsVkqlT52MRYgR4USjegpLtAQAAAAAAAAA="
-          }
-        ]
+        "edges": []
       }
     }
   }
@@ -103,10 +96,10 @@ Response: {
       "objects": {
         "edges": [
           {
-            "cursor": "ILozemDJ6xajYHPJj+b1GmRttgWPAZovyCtynoyf/vMmAQAAAAAAAAA="
+            "cursor": "INN8UUE7H1QOsDok0UOy+pGBL48TazzLTcOlmPukQK3WAQAAAAAAAAA="
           },
           {
-            "cursor": "INcdjvGjqp6atJmaek9/SQr5o+zM8Dz5eDUBxGc5IxclAQAAAAAAAAA="
+            "cursor": "INadb+Yvkw1ZfXaqqBwofiLvJlLJKCX7eGcGqOJHwNuGAQAAAAAAAAA="
           }
         ]
       }
@@ -121,7 +114,10 @@ Response: {
       "objects": {
         "edges": [
           {
-            "cursor": "IAqzgiWhucjUZMr9G7qMXRC+l6S+sar0LHW/MHB7BbDQAQAAAAAAAAA="
+            "cursor": "ILuc1bYxajuGByZy08ErWhE8gGmvW4mONjtt4Glc+CUBAQAAAAAAAAA="
+          },
+          {
+            "cursor": "INN8UUE7H1QOsDok0UOy+pGBL48TazzLTcOlmPukQK3WAQAAAAAAAAA="
           }
         ]
       }
@@ -136,10 +132,10 @@ Response: {
       "objects": {
         "edges": [
           {
-            "cursor": "ILozemDJ6xajYHPJj+b1GmRttgWPAZovyCtynoyf/vMmAQAAAAAAAAA="
+            "cursor": "INadb+Yvkw1ZfXaqqBwofiLvJlLJKCX7eGcGqOJHwNuGAQAAAAAAAAA="
           },
           {
-            "cursor": "INcdjvGjqp6atJmaek9/SQr5o+zM8Dz5eDUBxGc5IxclAQAAAAAAAAA="
+            "cursor": "IP201HLa1gWWDAsw6OM4iPplcwhwuUeDMQ0Hpp27ZhkiAQAAAAAAAAA="
           }
         ]
       }

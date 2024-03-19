@@ -3,6 +3,9 @@
 
 # Module `0x2::coin`
 
+Defines the <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">Coin</a></code> type - platform wide representation of fungible
+tokens and coins. <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">Coin</a></code> can be described as a secure wrapper around
+<code>Balance</code> type.
 
 
 -  [Resource `Coin`](#0x2_coin_Coin)
@@ -68,6 +71,7 @@
 
 ## Resource `Coin`
 
+A coin of type <code>T</code> worth <code>value</code>. Transferable and storable
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; <b>has</b> store, key
@@ -101,6 +105,8 @@
 
 ## Resource `CoinMetadata`
 
+Each Coin type T created through <code>create_currency</code> function will have a
+unique instance of CoinMetadata<T> that stores the metadata for this coin type.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt; <b>has</b> store, key
@@ -123,31 +129,34 @@
 <code>decimals: u8</code>
 </dt>
 <dd>
-
+ Number of decimal places the coin uses.
+ A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
+ E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
+ This is metadata for display usage only.
 </dd>
 <dt>
 <code>name: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
-
+ Name for the token
 </dd>
 <dt>
 <code>symbol: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
-
+ Symbol for the token
 </dd>
 <dt>
 <code>description: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
-
+ Description of the token
 </dd>
 <dt>
 <code>icon_url: <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;</code>
 </dt>
 <dd>
-
+ URL for the token logo
 </dd>
 </dl>
 
@@ -158,6 +167,8 @@
 
 ## Resource `RegulatedCoinMetadata`
 
+Similar to CoinMetadata, but created only for regulated coins that use the DenyList.
+This object is always immutable.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; <b>has</b> key
@@ -180,13 +191,13 @@
 <code>coin_metadata_object: <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
-
+ The ID of the coin's CoinMetadata object.
 </dd>
 <dt>
 <code>deny_cap_object: <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
-
+ The ID of the coin's DenyCap object.
 </dd>
 </dl>
 
@@ -197,6 +208,8 @@
 
 ## Resource `TreasuryCap`
 
+Capability allowing the bearer to mint and burn
+coins of type <code>T</code>. Transferable
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt; <b>has</b> store, key
@@ -230,6 +243,8 @@
 
 ## Resource `DenyCap`
 
+Capability allowing the bearer to freeze addresses, preventing those addresses from
+interacting with the coin as an input to a transaction.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt; <b>has</b> store, key
@@ -287,6 +302,7 @@
 
 <a name="0x2_coin_ENotEnough"></a>
 
+Trying to split a coin more times than its balance allows.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_ENotEnough">ENotEnough</a>: u64 = 2;
@@ -296,6 +312,7 @@
 
 <a name="0x2_coin_DENY_LIST_COIN_INDEX"></a>
 
+The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>: u64 = 0;
@@ -305,6 +322,7 @@
 
 <a name="0x2_coin_EBadWitness"></a>
 
+A type passed to create_supply is not a one-time witness.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_EBadWitness">EBadWitness</a>: u64 = 0;
@@ -314,6 +332,7 @@
 
 <a name="0x2_coin_EInvalidArg"></a>
 
+Invalid arguments are passed to a function.
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>: u64 = 1;
@@ -325,6 +344,7 @@
 
 ## Function `total_supply`
 
+Return the total number of <code>T</code>'s in circulation.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_total_supply">total_supply</a>&lt;T&gt;(cap: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): u64
@@ -349,6 +369,10 @@
 
 ## Function `treasury_into_supply`
 
+Unwrap <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a></code> getting the <code>Supply</code>.
+
+Operation is irreversible. Supply cannot be converted into a <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a></code> due
+to different security guarantees (TreasuryCap can be created only once for a type)
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_treasury_into_supply">treasury_into_supply</a>&lt;T&gt;(treasury: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
@@ -375,6 +399,7 @@
 
 ## Function `supply_immut`
 
+Get immutable reference to the treasury's <code>Supply</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_supply_immut">supply_immut</a>&lt;T&gt;(treasury: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
@@ -399,6 +424,7 @@
 
 ## Function `supply_mut`
 
+Get mutable reference to the treasury's <code>Supply</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_supply_mut">supply_mut</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
@@ -423,6 +449,7 @@
 
 ## Function `value`
 
+Public getter for the coin's value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_value">value</a>&lt;T&gt;(self: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): u64
@@ -447,6 +474,7 @@
 
 ## Function `balance`
 
+Get immutable reference to the balance of a coin.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/coin.md#0x2_coin">coin</a>: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): &<a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -471,6 +499,7 @@
 
 ## Function `balance_mut`
 
+Get a mutable reference to the balance of a coin.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_balance_mut">balance_mut</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/coin.md#0x2_coin">coin</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -495,6 +524,7 @@
 
 ## Function `from_balance`
 
+Wrap a balance into a Coin to make it transferable.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_from_balance">from_balance</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>: <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
@@ -519,6 +549,7 @@
 
 ## Function `into_balance`
 
+Destruct a Coin wrapper and keep the balance.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_into_balance">into_balance</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/coin.md#0x2_coin">coin</a>: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -545,6 +576,8 @@
 
 ## Function `take`
 
+Take a <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">Coin</a></code> worth of <code>value</code> from <code>Balance</code>.
+Aborts if <code>value &gt; <a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>.value</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_take">take</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, value: u64, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
@@ -574,6 +607,7 @@
 
 ## Function `put`
 
+Put a <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code> to the <code>Balance&lt;T&gt;</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_put">put</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/balance.md#0x2_balance">balance</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/coin.md#0x2_coin">coin</a>: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
@@ -598,6 +632,8 @@
 
 ## Function `join`
 
+Consume the coin <code>c</code> and add its value to <code>self</code>.
+Aborts if <code>c.value + self.value &gt; U64_MAX</code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, c: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
@@ -624,6 +660,8 @@
 
 ## Function `split`
 
+Split coin <code>self</code> to two coins, one with balance <code>split_amount</code>,
+and the remaining balance is left is <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
@@ -650,6 +688,8 @@
 
 ## Function `divide_into_n`
 
+Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. The remainder is left in
+<code>self</code>. Return newly created coins.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
@@ -686,6 +726,8 @@
 
 ## Function `zero`
 
+Make any Coin with a zero value. Useful for placeholding
+bids/payments or preemptively making empty balances.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
@@ -710,6 +752,7 @@
 
 ## Function `destroy_zero`
 
+Destroy a coin with value zero
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_destroy_zero">destroy_zero</a>&lt;T&gt;(c: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
@@ -736,6 +779,9 @@
 
 ## Function `create_currency`
 
+Create a new currency type <code>T</code> as and return the <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a></code> for
+<code>T</code> to the caller. Can only be called with a <code>one-time-witness</code>
+type, ensuring that there's only one <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a></code> per <code>T</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
@@ -784,6 +830,9 @@
 
 ## Function `create_regulated_currency`
 
+This creates a new currency, via <code>create_currency</code>, but with an extra capability that
+allows for specific addresses to have their coins frozen. Those addresses cannot interact
+with the coin as input objects.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../../dependencies/sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
@@ -833,6 +882,8 @@
 
 ## Function `mint`
 
+Create a coin worth <code>value</code> and increase the total supply
+in <code>cap</code> accordingly.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_mint">mint</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, value: u64, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
@@ -862,6 +913,9 @@
 
 ## Function `mint_balance`
 
+Mint some amount of T as a <code>Balance</code> and increase the total
+supply in <code>cap</code> accordingly.
+Aborts if <code>value</code> + <code>cap.total_supply</code> >= U64_MAX
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_mint_balance">mint_balance</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, value: u64): <a href="../../dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
@@ -888,6 +942,8 @@
 
 ## Function `burn`
 
+Destroy the coin <code>c</code> and decrease the total supply in <code>cap</code>
+accordingly.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, c: <a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): u64
@@ -914,6 +970,8 @@
 
 ## Function `deny_list_add`
 
+Adds the given address to the deny list, preventing it
+from interacting with the specified coin type as an input to a transaction.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -950,6 +1008,8 @@
 
 ## Function `deny_list_remove`
 
+Removes an address from the deny list.
+Aborts with <code>ENotFrozen</code> if the address is not already in the list.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -986,6 +1046,8 @@
 
 ## Function `deny_list_contains`
 
+Returns true iff the given address is denied for the given coin type. It will
+return false if given a non-coin type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(freezer: &<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
@@ -1022,6 +1084,7 @@
 
 ## Function `mint_and_transfer`
 
+Mint <code>amount</code> of <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_Coin">Coin</a></code> and send it to <code>recipient</code>. Invokes <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_mint">mint</a>()</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -1048,6 +1111,7 @@
 
 ## Function `update_name`
 
+Update name of the coin in <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, name: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>)
@@ -1074,6 +1138,7 @@
 
 ## Function `update_symbol`
 
+Update the symbol of the coin in <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(_treasury: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
@@ -1100,6 +1165,7 @@
 
 ## Function `update_description`
 
+Update the description of the coin in <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(_treasury: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, description: <a href="../../dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>)
@@ -1126,6 +1192,7 @@
 
 ## Function `update_icon_url`
 
+Update the url of the coin in <code><a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(_treasury: &<a href="../../dependencies/sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../../dependencies/sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, <a href="../../dependencies/sui-framework/url.md#0x2_url">url</a>: <a href="../../dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)

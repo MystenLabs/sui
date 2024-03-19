@@ -23,9 +23,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages_checkpoint::{
-    EndOfEpochData, VerifiedCheckpoint, VerifiedCheckpointContents,
-};
+use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::object::Object;
@@ -175,22 +173,10 @@ impl SingleValidator {
         store: InMemoryObjectStore,
         transaction: Transaction,
     ) -> TransactionEffects {
-        let tx_digest = transaction.digest();
         let input_objects = transaction.transaction_data().input_objects().unwrap();
-        let objects = if transaction
-            .data()
-            .intent_message()
-            .value
-            .is_end_of_epoch_tx()
-        {
-            store
-                .read_objects_for_synchronous_execution(&input_objects)
-                .unwrap()
-        } else {
-            store
-                .read_objects_for_execution(&*self.epoch_store, tx_digest, &input_objects)
-                .unwrap()
-        };
+        let objects = store
+            .read_objects_for_execution(&*self.epoch_store, &transaction.key(), &input_objects)
+            .unwrap();
 
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
             VerifiedTransaction::new_unchecked(transaction),
@@ -233,7 +219,6 @@ impl SingleValidator {
 
     pub(crate) async fn build_checkpoints(
         &self,
-        in_memory_store: InMemoryObjectStore,
         transactions: Vec<Transaction>,
         mut all_effects: BTreeMap<TransactionDigest, TransactionEffects>,
         checkpoint_size: usize,
@@ -253,32 +238,10 @@ impl SingleValidator {
                 checkpoints.push((checkpoint, full_contents));
             }
         }
-        let gas_cost_summary = builder.epoch_rolling_gas_cost_summary();
-        let epoch_tx = VerifiedTransaction::new_change_epoch(
-            1,
-            self.epoch_store.protocol_version(),
-            gas_cost_summary.storage_cost,
-            gas_cost_summary.computation_cost,
-            gas_cost_summary.storage_rebate,
-            gas_cost_summary.non_refundable_storage_fee,
-            0,
-            vec![],
-        );
-        let epoch_effects = self
-            .execute_transaction_in_memory(in_memory_store, epoch_tx.clone().into_inner())
-            .await;
-        builder.push_transaction(epoch_tx, epoch_effects);
-        let (checkpoint, _, full_contents) = builder.build_end_of_epoch(
-            self,
-            0,
-            1,
-            EndOfEpochData {
-                next_epoch_committee: self.get_committee().voting_rights.clone(),
-                next_epoch_protocol_version: self.get_epoch_store().protocol_version(),
-                epoch_commitments: vec![],
-            },
-        );
-        checkpoints.push((checkpoint, full_contents));
+        if builder.size() > 0 {
+            let (checkpoint, _, full_contents) = builder.build(self, 0);
+            checkpoints.push((checkpoint, full_contents));
+        }
         checkpoints
     }
 

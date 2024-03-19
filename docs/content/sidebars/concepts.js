@@ -86,7 +86,7 @@ const concepts = [
 					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
-						label: 'Packages',
+						label: 'Package Upgrades',
 						link: {
 							type: 'doc',
 							id: 'concepts/sui-move-concepts/packages',

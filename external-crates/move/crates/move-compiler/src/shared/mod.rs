@@ -410,8 +410,13 @@ impl CompilationEnv {
     }
 
     /// Should only be called after compilation is finished
+    pub fn take_final_diags(&mut self) -> Diagnostics {
+        std::mem::take(&mut self.diags)
+    }
+
+    /// Should only be called after compilation is finished
     pub fn take_final_warning_diags(&mut self) -> Diagnostics {
-        let final_diags = std::mem::take(&mut self.diags);
+        let final_diags = self.take_final_diags();
         debug_assert!(final_diags
             .max_severity()
             .map(|s| s == Severity::Warning)
@@ -462,12 +467,7 @@ impl CompilationEnv {
         attr_name: FilterPrefix,
         filters: Vec<WarningFilter>,
     ) -> anyhow::Result<()> {
-        let prev = self.known_filters.insert(attr_name, BTreeMap::new());
-        anyhow::ensure!(
-            prev.is_none(),
-            "A known filter attr for '{attr_name:?}' already exists"
-        );
-        let filter_attr = self.known_filters.get_mut(&attr_name).unwrap();
+        let filter_attr = self.known_filters.entry(attr_name).or_default();
         for filter in filters {
             let (prefix, n) = match filter {
                 WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
@@ -905,3 +905,38 @@ impl IndexedPhysicalPackagePath {
         })
     }
 }
+
+//**************************************************************************************************
+// Format a comma list correctly for error reporting and other messages.
+//**************************************************************************************************
+
+macro_rules! format_oxford_list {
+    ($sep:expr, $format_str:expr, $e:expr) => {{
+        let entries = $e;
+        match entries.len() {
+            0 => String::new(),
+            1 => format!($format_str, entries[0]),
+            2 => format!(
+                "{} {} {}",
+                format!($format_str, entries[0]),
+                $sep,
+                format!($format_str, entries[1])
+            ),
+            _ => {
+                let entries = entries
+                    .iter()
+                    .map(|entry| format!($format_str, entry))
+                    .collect::<Vec<_>>();
+                if let Some((last, init)) = entries.split_last() {
+                    let mut result = init.join(", ");
+                    result.push_str(&format!(", {} {}", $sep, last));
+                    result
+                } else {
+                    String::new()
+                }
+            }
+        }
+    }};
+}
+
+pub(crate) use format_oxford_list;

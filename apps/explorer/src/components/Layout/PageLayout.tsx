@@ -82,7 +82,7 @@ function ImageLink({ type }: { type: RedirectExplorer }) {
 			>
 				<Image src={src} srcSet={srcSet} />
 			</ButtonOrLink>
-			<div className="absolute bottom-10 left-1/2 right-0 flex -translate-x-1/2 sm:w-80">
+			<div className="absolute bottom-10 left-1/2 right-0 flex -translate-x-1/2 whitespace-nowrap">
 				<ButtonOrLink
 					className="flex w-full items-center justify-center gap-2 rounded-3xl bg-sui-dark px-3 py-2"
 					onClick={() => {
@@ -146,7 +146,7 @@ export function RedirectHeader() {
 
 	return (
 		<section
-			className="mb-20 flex flex-col items-center justify-center gap-5 px-5 py-12 text-center"
+			className="flex flex-col items-center justify-center gap-5 px-5 py-12 text-center sm:mb-20"
 			style={{
 				background: 'linear-gradient(159deg, #FAF8D2 50.65%, #F7DFD5 86.82%)',
 			}}

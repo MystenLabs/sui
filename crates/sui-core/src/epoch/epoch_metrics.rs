@@ -79,6 +79,22 @@ pub struct EpochMetrics {
 
     /// The number of shares held by this node after the random beacon DKG protocol completed.
     pub epoch_random_beacon_dkg_num_shares: IntGauge,
+
+    /// The amount of time taken from epoch start to completion of random beacon DKG protocol,
+    /// for the most recent epoch.
+    pub epoch_random_beacon_dkg_epoch_start_completion_time_ms: IntGauge,
+
+    /// The amount of time taken to complete random beacon DKG protocol from the time it was
+    /// started (which may be a bit after the epcoh began), for the most recent epoch.
+    pub epoch_random_beacon_dkg_completion_time_ms: IntGauge,
+
+    /// The amount of time taken to start first phase of the random beacon DKG protocol,
+    /// at which point the node has submitted a DKG Message, for the most recent epoch.
+    pub epoch_random_beacon_dkg_message_time_ms: IntGauge,
+
+    /// The amount of time taken to complete first phase of the random beacon DKG protocol,
+    /// at which point the node has submitted a DKG Confirmation, for the most recent epoch.
+    pub epoch_random_beacon_dkg_confirmation_time_ms: IntGauge,
 }
 
 impl EpochMetrics {
@@ -164,6 +180,30 @@ impl EpochMetrics {
             epoch_random_beacon_dkg_num_shares: register_int_gauge_with_registry!(
                 "epoch_random_beacon_dkg_num_shares",
                 "The number of shares held by this node after the random beacon DKG protocol completed",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_epoch_start_completion_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_epoch_start_completion_time_ms",
+                "The amount of time taken from epoch start to completion of random beacon DKG protocol, for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_completion_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_completion_time_ms",
+                "The amount of time taken to complete random beacon DKG protocol from the time it was started (which may be a bit after the epoch began), for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_message_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_message_time_ms",
+                "The amount of time taken to start first phase of the random beacon DKG protocol, at which point the node has submitted a DKG Message, for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_confirmation_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_confirmation_time_ms",
+                "The amount of time taken to complete first phase of the random beacon DKG protocol, at which point the node has submitted a DKG Confirmation, for the most recent epoch",
                 registry
             )
             .unwrap(),

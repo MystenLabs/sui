@@ -358,7 +358,7 @@ fn maybe_unmark_infinite_loop_starts(
 
         C::Jump { .. }
         | C::JumpIf { .. }
-        | C::Assign(_, _)
+        | C::Assign(_, _, _)
         | C::Mutate(_, _)
         | C::IgnoreAndPop { .. } => (),
         C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),

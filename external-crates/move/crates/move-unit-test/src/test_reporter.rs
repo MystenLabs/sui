@@ -283,10 +283,12 @@ impl TestFailure {
         base_message: String,
         vm_error: &Option<VMError>,
     ) -> String {
-        let report_diagnostics = if control::SHOULD_COLORIZE.should_colorize() {
-            diagnostics::report_diagnostics_to_color_buffer
-        } else {
-            diagnostics::report_diagnostics_to_buffer
+        let report_diagnostics = |files, diags| {
+            diagnostics::report_diagnostics_to_buffer(
+                files,
+                diags,
+                control::SHOULD_COLORIZE.should_colorize(),
+            )
         };
 
         let vm_error = match vm_error {

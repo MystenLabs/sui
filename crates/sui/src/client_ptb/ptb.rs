@@ -356,12 +356,12 @@ pub fn ptb_description() -> clap::Command {
         .long_help(
             "Transfer objects to the specified address.\
             \n\nExamples:\
-            \n --transfer-objects @address [obj1, obj2, obj3]\
+            \n --transfer-objects [obj1, obj2, obj3] @address 
             \n --split-coins gas [1000, 5000, 75000]\
             \n --assign new_coins # bound new_coins to result of split-coins to use next\
-            \n --transfer-objects @to_address [new_coins.0, new_coins.1, new_coins.2]"
+            \n --transfer-objects [new_coins.0, new_coins.1, new_coins.2] @to_address"
         )
-        .value_names(["TO", "[OBJECTS]"]))
+        .value_names(["[OBJECTS]", "TO"]))
         .arg(arg!(
             --"publish" <MOVE_PACKAGE_PATH>
             "Publish the Move package. It takes as input the folder where the package exists."

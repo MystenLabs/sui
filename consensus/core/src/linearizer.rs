@@ -88,6 +88,7 @@ impl Linearizer {
             // Grab latest commit state from dag state
             let dag_state = self.dag_state.read();
             let last_commit_index = dag_state.last_commit_index();
+            let last_commit_digest = dag_state.last_commit_digest();
             let mut last_committed_rounds = dag_state.last_committed_rounds();
             drop(dag_state);
 
@@ -102,8 +103,9 @@ impl Linearizer {
             sub_dag.sort();
 
             // Buffer commit in dag state for persistence later.
-            let commit = TrustedCommit::new_trusted(Commit::new(
+            let commit = Commit::new(
                 sub_dag.commit_index,
+                last_commit_digest,
                 sub_dag.leader,
                 sub_dag
                     .blocks
@@ -114,7 +116,11 @@ impl Linearizer {
                         block_ref
                     })
                     .collect(),
-            ));
+            );
+            let serialized = commit
+                .serialize()
+                .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
+            let commit = TrustedCommit::new_trusted(commit, serialized);
             self.dag_state.write().add_commit(commit.clone());
             committed_sub_dags.push(sub_dag);
         }
@@ -134,7 +140,7 @@ impl Linearizer {
 mod tests {
     use super::*;
     use crate::{
-        commit::{CommitAPI as _, DEFAULT_WAVE_LENGTH},
+        commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
         context::Context,
         leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
@@ -246,6 +252,7 @@ mod tests {
         let mut last_commit_index = 1;
         let first_commit_data = TrustedCommit::new_for_test(
             last_commit_index,
+            CommitDigest::MIN,
             first_leader.reference(),
             blocks.clone(),
         );
@@ -296,6 +303,7 @@ mod tests {
         let second_leader = leaders[1].clone();
         let expected_second_commit = TrustedCommit::new_for_test(
             last_commit_index,
+            CommitDigest::MIN,
             second_leader.reference(),
             blocks.clone(),
         );

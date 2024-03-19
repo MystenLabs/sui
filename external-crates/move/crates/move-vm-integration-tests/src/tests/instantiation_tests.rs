@@ -719,7 +719,7 @@ fn vec_pack_gen_deep_it(
         for _ in 0..STRUCT_TY_PARAMS {
             ty_args.push(big_ty.clone());
         }
-        big_ty = StructInstantiation(StructHandleIndex(0), ty_args);
+        big_ty = StructInstantiation(Box::new((StructHandleIndex(0), ty_args)));
     }
 
     //
@@ -876,7 +876,7 @@ fn deep_gen_call_it(
         for _ in 0..STRUCT_TY_PARAMS {
             ty_args.push(big_ty.clone());
         }
-        big_ty = StructInstantiation(StructHandleIndex(0), ty_args);
+        big_ty = StructInstantiation(Box::new((StructHandleIndex(0), ty_args)));
     }
 
     //
@@ -1011,7 +1011,7 @@ fn deep_rec_gen_call(
         for _ in 0..STRUCT_TY_PARAMS {
             ty_args.push(big_ty.clone());
         }
-        big_ty = StructInstantiation(StructHandleIndex(0), ty_args);
+        big_ty = StructInstantiation(Box::new((StructHandleIndex(0), ty_args)));
     }
 
     //

@@ -1,0 +1,8 @@
+[package]
+name = "MoveStdlib"
+
+[addresses]
+std = "_"
+
+[dev-addresses]
+std = "0x1"

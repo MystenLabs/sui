@@ -18,6 +18,6 @@ packages:
   - '!sdk/typescript/bcs'
   - '!sdk/typescript/zklogin'
   - '!sdk/enoki/react'
-  - '!sdk/move-binary-format-wasm/pkg'
-  - '!sdk/move-binary-format/pkg'
+  - '!sdk/move-bytecode-template/pkg'
+  - '!sdk/move-bytecode-template/pkg'
   - '!sdk/typescript/graphql'

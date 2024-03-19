@@ -18,6 +18,7 @@ use sui_types::{
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, UserInputError};
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
 };
@@ -269,13 +270,8 @@ async fn test_upgrade_package_happy_path() {
         .unwrap()
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let normalized_modules = package
-        .move_package()
-        .normalize(
-            config.move_binary_format_version(),
-            config.no_extraneous_module_bytes(),
-        )
-        .unwrap();
+    let binary_config = to_binary_config(&config);
+    let normalized_modules = package.move_package().normalize(&binary_config).unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .functions

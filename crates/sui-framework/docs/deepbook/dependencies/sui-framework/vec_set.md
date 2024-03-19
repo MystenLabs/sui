@@ -30,6 +30,11 @@
 
 ## Struct `VecSet`
 
+A set data structure backed by a vector. The set is guaranteed not to
+contain duplicate keys. All operations are O(N) in the size of the set
+- the intention of this data structure is only to provide the convenience
+of programming against a set API. Sets that need sorted iteration rather
+than insertion order iteration should be handwritten.
 
 
 <pre><code><b>struct</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K: <b>copy</b>, drop&gt; <b>has</b> <b>copy</b>, drop, store
@@ -60,6 +65,7 @@
 
 <a name="0x2_vec_set_EKeyAlreadyExists"></a>
 
+This key already exists in the map
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>: u64 = 0;
@@ -69,6 +75,7 @@
 
 <a name="0x2_vec_set_EKeyDoesNotExist"></a>
 
+This key does not exist in the map
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
@@ -80,6 +87,7 @@
 
 ## Function `empty`
 
+Create an empty <code><a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b>, drop&gt;(): <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
@@ -104,6 +112,7 @@
 
 ## Function `singleton`
 
+Create a singleton <code><a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> that only contains one element.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b>, drop&gt;(key: K): <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
@@ -128,6 +137,8 @@
 
 ## Function `insert`
 
+Insert a <code>key</code> into self.
+Aborts if <code>key</code> is already present in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_insert">insert</a>&lt;K: <b>copy</b>, drop&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: K)
@@ -153,6 +164,7 @@
 
 ## Function `remove`
 
+Remove the entry <code>key</code> from self. Aborts if <code>key</code> is not present in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_remove">remove</a>&lt;K: <b>copy</b>, drop&gt;(self: &<b>mut</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K)
@@ -178,6 +190,7 @@
 
 ## Function `contains`
 
+Return true if <code>self</code> contains an entry for <code>key</code>, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_contains">contains</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): bool
@@ -202,6 +215,7 @@
 
 ## Function `size`
 
+Return the number of entries in <code>self</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): u64
@@ -226,6 +240,7 @@
 
 ## Function `is_empty`
 
+Return true if <code>self</code> has 0 elements, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): bool
@@ -250,6 +265,8 @@
 
 ## Function `into_keys`
 
+Unpack <code>self</code> into vectors of keys.
+The output keys are stored in insertion order, *not* sorted.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b>, drop&gt;(self: <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
@@ -275,6 +292,9 @@
 
 ## Function `keys`
 
+Borrow the <code>contents</code> of the <code><a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> to access content by index
+without unpacking. The contents are stored in insertion order,
+*not* sorted.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): &<a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
@@ -299,6 +319,8 @@
 
 ## Function `get_idx_opt`
 
+Find the index of <code>key</code> in <code>self</code>. Return <code>None</code> if <code>key</code> is not in <code>self</code>.
+Note that keys are stored in insertion order, *not* sorted.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../../dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
@@ -331,6 +353,8 @@
 
 ## Function `get_idx`
 
+Find the index of <code>key</code> in <code>self</code>. Aborts if <code>key</code> is not in <code>self</code>.
+Note that map entries are stored in insertion order, *not* sorted.
 
 
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): u64

@@ -6,6 +6,14 @@ use crate::{file_format::Bytecode, file_format_common::*};
 use proptest::prelude::*;
 
 #[test]
+fn size_canary() {
+    use crate::file_format::SignatureToken;
+    use std::mem::size_of;
+    assert_eq!(size_of::<SignatureToken>(), 16);
+    assert_eq!(size_of::<Bytecode>(), 16);
+}
+
+#[test]
 fn binary_len() {
     let mut binary_data = BinaryData::new();
     for _ in 0..100 {

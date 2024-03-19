@@ -184,6 +184,18 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                             };
                         AttributeValue::Value(value_node_id, val)
                     }
+                    EA::AttributeValue_::Address(a) => {
+                        let val = move_ir_types::location::sp(v.loc, EA::Value_::Address(*a));
+                        let val = if let Some((val, _)) =
+                            ExpTranslator::new(self).translate_value(&val)
+                        {
+                            val
+                        } else {
+                            // Error reported
+                            Value::Bool(false)
+                        };
+                        AttributeValue::Value(value_node_id, val)
+                    }
                     EA::AttributeValue_::Module(mident) => {
                         let addr_bytes = self.parent.resolve_address(
                             &self.parent.to_loc(&mident.loc),

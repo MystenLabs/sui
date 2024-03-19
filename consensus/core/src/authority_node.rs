@@ -140,13 +140,8 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
-        let commit_observer = CommitObserver::new(
-            context.clone(),
-            commit_consumer.sender,
-            commit_consumer.last_processed_index,
-            dag_state.clone(),
-            store.clone(),
-        );
+        let commit_observer =
+            CommitObserver::new(context.clone(), commit_consumer, dag_state.clone(), store);
 
         let core = Core::new(
             context.clone(),
@@ -156,7 +151,6 @@ where
             core_signals,
             protocol_keypair,
             dag_state.clone(),
-            store,
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -179,7 +173,9 @@ where
             synchronizer: synchronizer.clone(),
             dag_state,
         });
-        network_manager.install_service(network_keypair, network_service);
+        network_manager
+            .install_service(network_keypair, network_service)
+            .await;
 
         Self {
             context,
@@ -201,7 +197,7 @@ where
 
         self.network_manager.stop().await;
         self.broadcaster.stop();
-        self.core_thread_handle.stop();
+        self.core_thread_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         self.synchronizer.stop().await;
 
@@ -445,9 +441,7 @@ mod tests {
         let network_keypair = keypairs[own_index].0.copy();
 
         let (sender, _receiver) = unbounded_channel();
-        let commit_consumer = CommitConsumer::new(
-            sender, 0, // last_processed_index
-        );
+        let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
             own_index,
@@ -539,9 +533,7 @@ mod tests {
             let network_keypair = keypairs[index].0.copy();
 
             let (sender, receiver) = unbounded_channel();
-            let commit_consumer = CommitConsumer::new(
-                sender, 0, // last_processed_index
-            );
+            let commit_consumer = CommitConsumer::new(sender, 0, 0);
             output_receivers.push(receiver);
 
             let authority = ConsensusAuthority::start(

@@ -10,7 +10,7 @@ expression: "results.join(\"\\n\")"
 ├──────────────────┼─────────────────┤
 │ split-coins      │ @0x5 [1000u64]  │
 │ assign           │ result          │
-│ transfer-objects │ @0x6 [result.0] │
+│ transfer-objects │ [result.0] @0x6 │
 ├──────────────────┼─────────────────┤
 │ gas-budget       │ 100000          │
 ╰──────────────────┴─────────────────╯

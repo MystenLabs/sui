@@ -3,6 +3,7 @@
 
 import type { AstPath, Doc, ParserOptions } from 'prettier';
 import * as prettier from 'prettier';
+import { SyntaxNode } from 'web-tree-sitter'
 
 const { hardline, indent, join, line, softline, group, ifBreak } = prettier.doc.builders;
 
@@ -71,11 +72,13 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
             //     f2: u64,
             // }
             return [
+                node.child(0).type === 'public' ? 'public ' : '',
                 'struct ',
                 path.call(print, 'namedChildren', 0),
                 path.call(print, 'namedChildren', 1),
                 path.call(print, 'namedChildren', 2),
                 path.call(print, 'namedChildren', 3),
+                path.call(print, 'namedChildren', 4),
             ]
         case 'native_struct_definition':
             // same formatting as "regular" struct but (of course) without fields
@@ -91,17 +94,14 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
                 ' has ',
                 join(', ', path.map(print, 'namedChildren'))
             ];
-        case 'type_parameters':
-            const tparams = Symbol('tparams');
+        case 'postfix_ability_decls':
             return [
-                '<',
-                group([
-                    indent(softline),
-                    indent(join([',', line], path.map(print, 'namedChildren'))),
-                ], {id: tparams}),
-                ifBreak([',', softline], '', {groupId: tparams}),
-                '>',
+                ' has ',
+                join(', ', path.map(print, 'namedChildren')),
+                ';',
             ];
+        case 'type_parameters':
+            return breakable_comma_separated_list(path, node, '<', '>', print);
         case 'type_parameter':
             let abilities = [];
             for (let i = 1; i < node.namedChildren.length; i++) {
@@ -112,7 +112,9 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
                 node.namedChildren.length > 1 ? ': ' : '' ,
                 join(' + ', abilities),
             ];
-        case 'struct_def_fields':
+        case 'datatype_fields':
+            return path.call(print, 'firstNamedChild');
+        case 'named_fields':
             return node.namedChildren.length == 0
                 ? ' {}'
                 : [
@@ -129,7 +131,27 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
                 ': ',
                 path.call(print, 'namedChildren', 1),
             ];
+        case 'positional_fields':
+            return breakable_comma_separated_list(path, node, '(', ')', print);
         default:
             return node.text;
     }
+}
+
+function breakable_comma_separated_list(path: AstPath,
+                                        node: SyntaxNode,
+                                        start: string,
+                                        end: string,
+                                        print: printFn) {
+
+    const items = Symbol('items');
+    return [
+        start,
+        group([
+            indent(softline),
+            indent(join([',', line], path.map(print, 'namedChildren'))),
+        ], {id: items}),
+        ifBreak([',', softline], '', {groupId: items}),
+        end,
+    ];
 }
