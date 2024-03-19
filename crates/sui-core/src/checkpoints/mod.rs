@@ -1764,7 +1764,7 @@ pub trait CheckpointServiceNotify {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
-    fn notify_checkpoint(&self) -> SuiResult;
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpointV2) -> SuiResult;
 }
 
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
@@ -1850,7 +1850,7 @@ impl CheckpointService {
         let mut batch = epoch_store.db_batch_for_test();
         epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
         batch.write()?;
-        self.notify_checkpoint()?;
+        self.notify_checkpoint(&checkpoint)?;
         Ok(())
     }
 }
@@ -1898,7 +1898,11 @@ impl CheckpointServiceNotify for CheckpointService {
         Ok(())
     }
 
-    fn notify_checkpoint(&self) -> SuiResult {
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpointV2) -> SuiResult {
+        debug!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Notifying builder about checkpoint",
+        );
         self.notify_builder.notify_one();
         Ok(())
     }
@@ -1915,7 +1919,7 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
         Ok(())
     }
 
-    fn notify_checkpoint(&self) -> SuiResult {
+    fn notify_checkpoint(&self, _: &PendingCheckpointV2) -> SuiResult {
         Ok(())
     }
 }
