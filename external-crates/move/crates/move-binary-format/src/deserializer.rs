@@ -13,7 +13,11 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,
     vm_status::StatusCode,
 };
-use std::{collections::HashSet, convert::TryInto, io::{Cursor, Read}};
+use std::{
+    collections::HashSet,
+    convert::TryInto,
+    io::{Cursor, Read},
+};
 
 impl CompiledScript {
     /// Deserializes a &[u8] slice into a `CompiledScript` instance.
@@ -41,10 +45,7 @@ impl CompiledScript {
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_config(
-            binary,
-            &BinaryConfig::with_extraneous_bytes_check(false),
-        )
+        Self::deserialize_with_config(binary, &BinaryConfig::with_extraneous_bytes_check(false))
     }
 
     /// Deserialize a &[u8] slice into a `CompiledModule` instance with settings
@@ -561,15 +562,16 @@ fn build_common_tables(
         macro_rules! check_table_size {
             ($vec:expr, $max:expr) => {
                 if $vec.len() > $max as usize {
-                    return Err(PartialVMError::new(StatusCode::MALFORMED)
-                        .with_message(format!(
+                    return Err(
+                        PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
                             "Exceeded size ({} > {})  in {:?}",
                             $vec.len(),
                             $max,
                             table.kind,
-                    )));
+                        )),
+                    );
                 }
-            }
+            };
         }
 
         match table.kind {
@@ -665,22 +667,23 @@ fn build_module_tables(
         function_defs: function_defs_max,
         field_handles: field_handles_max,
         field_instantiations: field_instantiations_max,
-        friend_decls:  friend_decls_max,
+        friend_decls: friend_decls_max,
     } = &binary.binary_config.table_config;
     for table in tables {
         // minimize code that checks limits bu a local macro that know the context
         macro_rules! check_table_size {
             ($vec:expr, $max:expr) => {
                 if $vec.len() > $max as usize {
-                    return Err(PartialVMError::new(StatusCode::MALFORMED)
-                        .with_message(format!(
+                    return Err(
+                        PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
                             "Exceeded size ({} > {})  in {:?}",
                             $vec.len(),
                             $max,
                             table.kind,
-                    )));
+                        )),
+                    );
                 }
-            }
+            };
         }
 
         match table.kind {
@@ -1067,7 +1070,9 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 } => {
                     ty_args.push(tok);
                     if ty_args.len() >= arity {
-                        T::Saturated(SignatureToken::StructInstantiation(Box::new((sh_idx, ty_args))))
+                        T::Saturated(SignatureToken::StructInstantiation(Box::new((
+                            sh_idx, ty_args,
+                        ))))
                     } else {
                         T::StructInst {
                             sh_idx,
@@ -1889,8 +1894,7 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         // check magic
         let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
         if let Ok(count) = cursor.read(&mut magic) {
-            if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC
-            {
+            if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC {
                 return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
             }
         } else {
@@ -1905,21 +1909,20 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
                     .with_message("Bad binary header".to_string()));
             }
         };
-        if version == 0 || version > u32::min(binary_config.max_binary_format_version, VERSION_MAX) {
+        if version == 0 || version > u32::min(binary_config.max_binary_format_version, VERSION_MAX)
+        {
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
         }
 
-        let mut versioned_cursor = VersionedCursor {
-            version,
-            cursor,
-        };
+        let mut versioned_cursor = VersionedCursor { version, cursor };
         // load table info
         let table_count = load_table_count(&mut versioned_cursor)?;
         let mut tables: Vec<Table> = Vec::new();
         read_tables(&mut versioned_cursor, table_count, &mut tables)?;
         let table_size = check_tables(&mut tables, binary_len)?;
         if table_size as u64 + versioned_cursor.position() > binary_len as u64 {
-            return Err(PartialVMError::new(StatusCode::MALFORMED).with_message("Table size too big".to_string()))
+            return Err(PartialVMError::new(StatusCode::MALFORMED)
+                .with_message("Table size too big".to_string()));
         }
 
         // save "start offset" for table content (data)
@@ -1935,15 +1938,14 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         // end of binary
         let binary_end_offset = versioned_cursor.position() as usize;
         Ok(Self {
-                binary_config,
-                binary,
-                version,
-                tables,
-                module_idx,
-                data_offset,
-                binary_end_offset,
-            },
-        )
+            binary_config,
+            binary,
+            version,
+            tables,
+            module_idx,
+            data_offset,
+            binary_end_offset,
+        })
     }
 
     fn version(&self) -> u32 {
@@ -2006,10 +2008,7 @@ impl<'a> VersionedCursor<'a> {
 
     #[cfg(test)]
     fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
-        Self {
-            version,
-            cursor,
-        }
+        Self { version, cursor }
     }
 }
 

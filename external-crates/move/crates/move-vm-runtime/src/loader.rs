@@ -36,7 +36,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
     fmt::Debug,
     hash::Hash,
     sync::Arc,
@@ -650,12 +650,10 @@ impl<'a> ModuleLoader<'a> {
     ) -> VMResult<(ModuleId, Arc<CompiledModule>)> {
         let (storage_id, module) =
             loader.verify_module(&runtime_id, data_store, allow_loading_failure)?;
-        self.stack.push(
-            StackEntry {
-                module: ModuleEntry::new(module.clone()),
-                deps: module.immediate_dependencies(),
-            }
-        );
+        self.stack.push(StackEntry {
+            module: ModuleEntry::new(module.clone()),
+            deps: module.immediate_dependencies(),
+        });
         Ok((storage_id, module))
     }
 
@@ -670,13 +668,9 @@ impl<'a> ModuleLoader<'a> {
                 let imm_deps = entry.module.module.immediate_dependencies();
                 let module_deps = imm_deps
                     .iter()
-                    .map(|module_id| {
-                        self.verified_modules.get(module_id).unwrap().as_ref()
-                    });
-                dependencies::verify_module(
-                    entry.module.module.as_ref(),
-                    module_deps,
-                ).map_err(expect_no_verification_errors)
+                    .map(|module_id| self.verified_modules.get(module_id).unwrap().as_ref());
+                dependencies::verify_module(entry.module.module.as_ref(), module_deps)
+                    .map_err(expect_no_verification_errors)
             }
         }
     }
@@ -689,7 +683,7 @@ impl<'a> ModuleLoader<'a> {
                 if !entry.module.checked_for_cycles {
                     if !self.visiting.insert(entry.module.module.self_id()) {
                         return Err(PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY)
-                            .finish(Location::Undefined))
+                            .finish(Location::Undefined));
                     }
                     entry.module.checked_for_cycles = true;
                 }
@@ -704,7 +698,8 @@ impl<'a> ModuleLoader<'a> {
         if let Some(entry) = self.stack.pop() {
             let module_id = entry.module.module.self_id();
             self.visiting.remove(&module_id);
-            self.verified_modules.insert(module_id, entry.module.module.clone());
+            self.verified_modules
+                .insert(module_id, entry.module.module.clone());
         }
     }
 }
@@ -1070,17 +1065,14 @@ impl Loader {
 
         // for bytes obtained from the data store, they should always deserialize and verify.
         // It is an invariant violation if they don't.
-        let module = CompiledModule::deserialize_with_config(
-            &bytes,
-            &self.vm_config.binary_config,
-        )
-        .map_err(|err| {
-            let msg = format!("Deserialization error: {:?}", err);
-            PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-                .with_message(msg)
-                .finish(Location::Module(storage_id.clone()))
-        })
-        .map_err(expect_no_verification_errors)?;
+        let module = CompiledModule::deserialize_with_config(&bytes, &self.vm_config.binary_config)
+            .map_err(|err| {
+                let msg = format!("Deserialization error: {:?}", err);
+                PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
+                    .with_message(msg)
+                    .finish(Location::Module(storage_id.clone()))
+            })
+            .map_err(expect_no_verification_errors)?;
 
         fail::fail_point!("verifier-failpoint-2", |_| { Ok(module.clone()) });
 
@@ -1147,13 +1139,12 @@ impl Loader {
         // make a stack for dependencies traversal (DAG traversal)
         let mut module_loader = ModuleLoader::new(visiting);
         // load and verify the module, and push it on the stack for dependencies traversal
-        let (storage_id, module) =
-            module_loader.verify_and_push(
-                runtime_id.clone(),
-                self,
-                data_store,
-                allow_module_loading_failure,
-            )?;
+        let (storage_id, module) = module_loader.verify_and_push(
+            runtime_id.clone(),
+            self,
+            data_store,
+            allow_module_loading_failure,
+        )?;
 
         loop {
             // get the entry at the top of the stack
@@ -1169,14 +1160,20 @@ impl Loader {
             let self_id = entry.module.module.self_id();
             let cache_key = (data_store.link_context(), self_id.clone());
             if !bundle_verified.contains_key(&self_id)
-                && !self.module_cache.read().verified_dependencies.contains(&cache_key)
+                && !self
+                    .module_cache
+                    .read()
+                    .verified_dependencies
+                    .contains(&cache_key)
             {
                 // if there are still dependencies to traverse, we load the next one on the
                 // stack and continue the loop. Otherwise we are done with dependencies
                 // and we verify linking
                 if !entry.deps.is_empty() {
                     let dep_id = entry.deps.pop().unwrap();
-                    module_loader.verify_and_push(dep_id, self, data_store, false /* allow_loading_failure */)?;
+                    module_loader.verify_and_push(
+                        dep_id, self, data_store, false, /* allow_loading_failure */
+                    )?;
                     // loop with dep at the top of the stack
                     continue;
                 }
@@ -1459,7 +1456,8 @@ impl<'a> Resolver<'a> {
     ) -> PartialVMResult<Type> {
         let loaded_module = &*self.binary.loaded;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
-        let instantiation = loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
+        let instantiation =
+            loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
 
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
@@ -1745,7 +1743,7 @@ impl LoadedModule {
             )?;
             function_instantiations.push(FunctionInstantiation {
                 handle,
-                instantiation_idx
+                instantiation_idx,
             });
         }
 
@@ -1815,14 +1813,14 @@ impl LoadedModule {
         self.single_signature_token_map.get(&idx).unwrap()
     }
 
-    fn instantiation_signature_at(&self, idx: SignatureIndex) -> Result<&Vec<Type>, PartialVMError> {
-        self
-            .instantiation_signatures
-            .get(&idx)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Instantiation signature not found".to_string())
-            })
+    fn instantiation_signature_at(
+        &self,
+        idx: SignatureIndex,
+    ) -> Result<&Vec<Type>, PartialVMError> {
+        self.instantiation_signatures.get(&idx).ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Instantiation signature not found".to_string())
+        })
     }
 }
 
@@ -2189,8 +2187,10 @@ impl Loader {
             )?)),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?))
-            },
+                TypeTag::Struct(Box::new(
+                    self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+                ))
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2302,8 +2302,10 @@ impl Loader {
             )?),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?)
-            },
+                R::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2399,8 +2401,10 @@ impl Loader {
             ),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                A::MoveTypeLayout::Struct(self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?)
-            },
+                A::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

@@ -403,7 +403,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
                 *idx,
                 type_params.iter().map(|ty| substitute(ty, tys)).collect(),
             )))
-        },
+        }
         Reference(ty) => Reference(Box::new(substitute(ty, tys))),
         MutableReference(ty) => MutableReference(Box::new(substitute(ty, tys))),
         TypeParameter(idx) => {
@@ -491,7 +491,7 @@ pub(crate) fn get_type_actuals_from_reference(
             StructInstantiation(struct_inst) => {
                 let (_, tys) = &**struct_inst;
                 Some(tys.clone())
-            },
+            }
             Struct(_) => Some(vec![]),
             _ => None,
         },

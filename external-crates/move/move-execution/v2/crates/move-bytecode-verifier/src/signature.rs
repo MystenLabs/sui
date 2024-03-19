@@ -363,7 +363,7 @@ impl<'a> SignatureChecker<'a> {
             StructInstantiation(struct_inst) => {
                 let (_, type_arguments) = &**struct_inst;
                 self.check_signature_tokens(type_arguments)
-            },
+            }
         }
     }
 

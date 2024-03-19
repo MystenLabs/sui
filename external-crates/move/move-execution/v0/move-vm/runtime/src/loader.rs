@@ -1817,10 +1817,7 @@ impl LoadedModule {
             for ty in &module.signature_at(f_inst.type_parameters).0 {
                 instantiation.push(cache.make_type(module_view, ty)?);
             }
-            field_instantiations.push(FieldInstantiation {
-                offset,
-                owner,
-            });
+            field_instantiations.push(FieldInstantiation { offset, owner });
         }
 
         Ok(Self {
@@ -2472,8 +2469,10 @@ impl Loader {
             )?)),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?))
-            },
+                TypeTag::Struct(Box::new(
+                    self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+                ))
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2574,18 +2573,21 @@ impl Loader {
             Type::U256 => R::MoveTypeLayout::U256,
             Type::Address => R::MoveTypeLayout::Address,
             Type::Signer => R::MoveTypeLayout::Signer,
-            Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
-                ty,
+            Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(
+                self.type_to_type_layout_impl(ty, count, depth + 1)?,
+            )),
+            Type::Struct(gidx) => R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(
+                *gidx,
+                &[],
                 count,
-                depth + 1,
-            )?)),
-            Type::Struct(gidx) => {
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
-            }
+                depth,
+            )?),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?)
-            },
+                R::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2681,8 +2683,10 @@ impl Loader {
             ),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                A::MoveTypeLayout::Struct(self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?)
-            },
+                A::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

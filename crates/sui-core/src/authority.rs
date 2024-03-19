@@ -57,9 +57,9 @@ pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
-use once_cell::sync::OnceCell;
 use mamoru_sui_sniffer::SuiSniffer;
 use move_core_types::trace::CallTrace;
+use once_cell::sync::OnceCell;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
@@ -1307,12 +1307,9 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (mut inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
-            &execution_guard,
-            certificate,
-            input_objects,
-            epoch_store,
-        ) {
+        let (mut inner_temporary_store, effects, execution_error_opt) = match self
+            .prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
+        {
             Err(e) => {
                 info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
@@ -1464,7 +1461,10 @@ impl AuthorityState {
 
             let ctx = {
                 let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
-                    TemporaryPackageStore::new(&inner_temporary_store, self.execution_cache.clone()),
+                    TemporaryPackageStore::new(
+                        &inner_temporary_store,
+                        self.execution_cache.clone(),
+                    ),
                 ));
 
                 // We can't pass `layout_resolver` to a future, so using a plain function to prepare the context.

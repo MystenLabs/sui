@@ -940,10 +940,9 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
 
                     StructInstantiation(struct_inst) => {
                         let (_, inner_toks) = &**struct_inst;
-                        self
-                            .stack
+                        self.stack
                             .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev())
-                    },
+                    }
 
                     Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Struct(_)
                     | TypeParameter(_) => (),
@@ -1107,7 +1106,9 @@ impl SignatureToken {
     pub fn debug_set_sh_idx(&mut self, sh_idx: StructHandleIndex) {
         match self {
             SignatureToken::Struct(ref mut wrapped) => *wrapped = sh_idx,
-            SignatureToken::StructInstantiation(ref mut struct_inst) => Box::as_mut(struct_inst).0 = sh_idx,
+            SignatureToken::StructInstantiation(ref mut struct_inst) => {
+                Box::as_mut(struct_inst).0 = sh_idx
+            }
             SignatureToken::Reference(ref mut token)
             | SignatureToken::MutableReference(ref mut token) => token.debug_set_sh_idx(sh_idx),
             other => panic!(

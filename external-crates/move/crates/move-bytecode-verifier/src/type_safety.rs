@@ -976,7 +976,7 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
                     .map(|ty| instantiate(ty, subst))
                     .collect(),
             )))
-        },
+        }
         Reference(ty) => Reference(Box::new(instantiate(ty, subst))),
         MutableReference(ty) => MutableReference(Box::new(instantiate(ty, subst))),
         TypeParameter(idx) => {

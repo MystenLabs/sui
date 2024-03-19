@@ -36,7 +36,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
     fmt::Debug,
     hash::Hash,
     sync::Arc,
@@ -918,17 +918,14 @@ impl Loader {
 
         // for bytes obtained from the data store, they should always deserialize and verify.
         // It is an invariant violation if they don't.
-        let module = CompiledModule::deserialize_with_config(
-            &bytes,
-            &self.vm_config.binary_config,
-        )
-        .map_err(|err| {
-            let msg = format!("Deserialization error: {:?}", err);
-            PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-                .with_message(msg)
-                .finish(Location::Module(storage_id.clone()))
-        })
-        .map_err(expect_no_verification_errors)?;
+        let module = CompiledModule::deserialize_with_config(&bytes, &self.vm_config.binary_config)
+            .map_err(|err| {
+                let msg = format!("Deserialization error: {:?}", err);
+                PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
+                    .with_message(msg)
+                    .finish(Location::Module(storage_id.clone()))
+            })
+            .map_err(expect_no_verification_errors)?;
 
         fail::fail_point!("verifier-failpoint-2", |_| { Ok(module.clone()) });
 
@@ -1305,7 +1302,8 @@ impl<'a> Resolver<'a> {
     ) -> PartialVMResult<Type> {
         let loaded_module = &*self.binary.loaded;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
-        let instantiation = loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
+        let instantiation =
+            loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
 
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
@@ -1591,7 +1589,7 @@ impl LoadedModule {
             )?;
             function_instantiations.push(FunctionInstantiation {
                 handle,
-                instantiation_idx
+                instantiation_idx,
             });
         }
 
@@ -1661,14 +1659,14 @@ impl LoadedModule {
         self.single_signature_token_map.get(&idx).unwrap()
     }
 
-    fn instantiation_signature_at(&self, idx: SignatureIndex) -> Result<&Vec<Type>, PartialVMError> {
-        self
-            .instantiation_signatures
-            .get(&idx)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Instantiation signature not found".to_string())
-            })
+    fn instantiation_signature_at(
+        &self,
+        idx: SignatureIndex,
+    ) -> Result<&Vec<Type>, PartialVMError> {
+        self.instantiation_signatures.get(&idx).ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Instantiation signature not found".to_string())
+        })
     }
 }
 
@@ -2031,8 +2029,10 @@ impl Loader {
             )?)),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?))
-            },
+                TypeTag::Struct(Box::new(
+                    self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+                ))
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2144,8 +2144,10 @@ impl Loader {
             )?),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?)
-            },
+                R::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2241,8 +2243,10 @@ impl Loader {
             ),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                A::MoveTypeLayout::Struct(self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?)
-            },
+                A::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

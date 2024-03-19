@@ -5,11 +5,11 @@ use std::{collections::HashMap, mem::size_of_val, sync::Arc};
 use chrono::{DateTime, Utc};
 use fastcrypto::encoding::{Base58, Encoding, Hex};
 use itertools::Itertools;
+use mamoru_sniffer::core::BlockchainData;
 use mamoru_sniffer::{
     core::{BlockchainDataBuilder, StructValue, Value, ValueData},
     Sniffer, SnifferConfig,
 };
-use mamoru_sniffer::core::BlockchainData;
 use mamoru_sui_types::{
     CallTrace, CallTraceArg, CallTraceTypeArg, CreatedObject, DeletedObject, Event as MamoruEvent,
     MutatedObject, ObjectOwner, ObjectOwnerKind, ProgrammableTransactionCommand,
@@ -19,24 +19,24 @@ use mamoru_sui_types::{
     SuiCtx, Transaction, UnwrappedObject, UnwrappedThenDeletedObject, WrappedObject,
 };
 use tokio::time::Instant;
-use tracing::{info, Level, span, warn};
+use tracing::{info, span, warn, Level};
 
 pub use error::*;
 use move_core_types::{
     annotated_value::{MoveStruct, MoveValue},
     trace::{CallTrace as MoveCallTrace, CallType as MoveCallType},
 };
+use sui_types::base_types::ObjectRef;
+use sui_types::inner_temporary_store::InnerTemporaryStore;
+use sui_types::object::{Data, Owner};
+use sui_types::storage::ObjectStore;
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     event::Event,
     executable_transaction::VerifiedExecutableTransaction,
     transaction::{Command, ProgrammableTransaction, TransactionDataAPI, TransactionKind},
 };
-use sui_types::base_types::ObjectRef;
-use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::object::{Data, Owner};
-use sui_types::storage::ObjectStore;
-use sui_types::type_resolver::LayoutResolver;
 
 mod error;
 
@@ -61,7 +61,7 @@ impl SuiSniffer {
         time: DateTime<Utc>,
         emit_debug_info: bool,
         layout_resolver: &mut dyn LayoutResolver,
-    ) -> Result<BlockchainData<SuiCtx>, SuiSnifferError>  {
+    ) -> Result<BlockchainData<SuiCtx>, SuiSnifferError> {
         if emit_debug_info {
             emit_debug_stats(&call_traces);
         }
