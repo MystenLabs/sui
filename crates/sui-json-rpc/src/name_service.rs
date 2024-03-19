@@ -90,6 +90,22 @@ impl Domain {
     pub fn depth(&self) -> u8 {
         self.labels.len() as u8
     }
+
+    pub fn format(&self, separator: char, is_new_format: bool) -> String {
+        let mut labels = self.labels.clone();
+        let sep = separator.to_string();
+        labels.reverse();
+
+        // SAFETY: This is a safe operation because we only allow a
+        // domain's label vector size to be >= 2 (see `Domain::from_str`)
+        if is_new_format {
+            let _tld = labels.pop();
+            let sld = labels.pop().unwrap();
+            return format!("{}@{}", labels.join(&sep), sld);
+        };
+
+        labels.join(&sep)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -263,14 +279,9 @@ fn validate_label(label: &str) -> Result<&str, NameServiceError> {
 
 impl fmt::Display for Domain {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let len = self.labels.len();
-        for (i, label) in self.labels.iter().rev().enumerate() {
-            f.write_str(label)?;
+        let output = self.format(ACCEPTED_SEPARATORS[0], false);
+        let _ = f.write_str(&output);
 
-            if i != len - 1 {
-                f.write_str(".")?;
-            }
-        }
         Ok(())
     }
 }
