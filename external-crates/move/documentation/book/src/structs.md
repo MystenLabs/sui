@@ -13,7 +13,7 @@ or dropped and also to be stored in storage or to define storage schemas.
 
 ## Defining Structs
 
-Structs must be defined inside a module:
+Structs must be defined inside a module, and the struct's fields can either be named or positional:
 
 ```move
 module a::m {
@@ -21,6 +21,10 @@ module a::m {
     public struct Bar {}
     public struct Baz { foo: Foo, }
     //                          ^ note: it is fine to have a trailing comma
+
+    public struct PosFoo(u64, bool)
+    public struct PosBar()
+    public struct PosBaz(Foo)
 }
 ```
 
@@ -33,6 +37,9 @@ public struct Foo { x: Foo }
 public struct A { b: B }
 public struct B { a: A }
 //                   ^ ERROR! recursive definition
+
+public struct D(D)
+//              ^ ERROR! recursive definition
 ```
 
 ### Visibility
@@ -52,10 +59,31 @@ a storage schema), structs can be granted [abilities](./abilities.md) by annotat
 `has <ability>`:
 
 ```move
-address 0x2 {
-module m {
-    struct Foo has copy, drop { x: u64, y: bool }
+module a::m {
+    public struct Foo has copy, drop { x: u64, y: bool }
 }
+```
+
+The ability declaration can occur either before or after the struct's
+fields. However, only one or the other can be used, and not both. If declared after
+the struct's field, the ability declaration must be terminated with a semicolon:
+
+```move
+module a::m {
+    public PreNamedAbilities has copy, drop { x: u64, y: bool }
+    public struct PostNamedAbilities { x: u64, y: bool } has copy, drop;
+    public struct PostNamedAbilitiesInvalid { x: u64, y: bool } has copy, drop
+    //                                                                        ^ ERROR! missing semicolon
+
+    public struct NamedInvalidAbilities has copy { x: u64, y: bool } has drop;
+    //                                                               ^ ERROR! duplicate ability declaration
+
+    public PrePositionalAbilities has copy, drop (u64, bool)
+    public struct PostPositionalAbilities (u64, bool) has copy, drop;
+    public struct PostPositionalAbilitiesInvalid (u64, bool) has copy, drop
+    //                                                                     ^ ERROR! missing semicolon
+    public struct InvalidAbilities has copy (u64, bool) has drop;
+    //                                                  ^ ERROR! duplicate ability declaration
 }
 ```
 
@@ -71,6 +99,7 @@ contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` t
 public struct Foo {}
 public struct BAR {}
 public struct B_a_z_4_2 {}
+public struct P_o_s_Foo()
 ```
 
 This naming restriction of starting with `A` to `Z` is in place to give room for future language
@@ -81,22 +110,33 @@ features. It may or may not be removed later.
 ### Creating Structs
 
 Values of a struct type can be created (or "packed") by indicating the struct name, followed by
-value for each field:
+value for each field. 
+
+For a struct with named fields, the order of the fields does not matter, but
+the field name needs to be provided. For a struct with positional
+fields, the order of the fields must match the order of the fields in the struct
+definition, and instead of using `{}` to create the struct, `()` are used.
 
 ```move
 module a::m {
     public struct Foo has drop { x: u64, y: bool }
     public struct Baz has drop { foo: Foo }
+    public struct Positional(u64, bool) has drop;
 
     fun example() {
         let foo = Foo { x: 0, y: false };
         let baz = Baz { foo: foo };
+        // Note: positional struct values are created using parentheses and
+        // based on position instead of name.
+        let pos = Positional(0, false);
+        let pos_invalid = Positional(false, 0);
+        //                           ^ ERROR! Fields are out of order and the types don't match.
     }
 }
 ```
 
-If you initialize a struct field with a local variable whose name is the same as the field, you can
-use the following shorthand:
+For structs with named fields, you can use the following shorthand if you have
+a local variable with the same name as the field:
 
 ```move
 let baz = Baz { foo: foo };
@@ -104,17 +144,19 @@ let baz = Baz { foo: foo };
 let baz = Baz { foo };
 ```
 
-This is called sometimes called "field name punning".
+This is sometimes called "field name punning".
 
 ### Destroying Structs via Pattern Matching
 
-Struct values can be destroyed by binding or assigning them patterns.
+Struct values can be destroyed by binding or assigning them in patterns using
+similar syntax to constructing them.
 
 ```move
 module a::m {
     public struct Foo { x: u64, y: bool }
-    public struct Bar { foo: Foo }
+    public struct Bar(Foo)
     public struct Baz {}
+    public struct Qux()
 
     fun example_destroy_foo() {
         let foo = Foo { x: 3, y: false };
@@ -162,9 +204,9 @@ module a::m {
     }
 
     fun example_destroy_bar() {
-        let bar = Bar { foo: Foo { x: 3, y: false } };
-        let Bar { foo: Foo { x, y } } = bar;
-        //             ^ nested pattern
+        let bar = Bar(Foo { x: 3, y: false });
+        let Bar(Foo { x, y }) = bar;
+        //            ^ nested pattern
 
         // two new bindings
         //   x: u64 = 3
@@ -175,8 +217,40 @@ module a::m {
         let baz = Baz {};
         let Baz {} = baz;
     }
+
+    fun example_destroy_qux() {
+        let qux = Qux();
+        let Qux() = qux;
+    }
 }
 ```
+
+### Accessing Struct Fields
+
+Fields of a struct can be accessed using the dot operator `.`. 
+
+For structs with named fields, the fields can be accessed by their name:
+
+```move
+public struct Foo { x: u64, y: bool }
+let foo = Foo { x: 3, y: true };
+let x = foo.x;  // x == 3
+let y = foo.y;  // y == true
+```
+
+For positional structs, fields can be accessed by their position in the struct definition:
+
+```move
+public struct PosFoo(u64, bool)
+let pos_foo = PosFoo(3, true);
+let x = pos_foo.0;  // x == 3
+let y = pos_foo.1;  // y == true
+```
+
+Accessing struct fields without borrowing or copying them is subject to the
+field's ability constraints. For more details see the sections on [borrowing
+structs and fields](#borrowing-structs-and-fields) and [reading and writing
+fields](#reading-and-writing-fields) for more information.
 
 ### Borrowing Structs and Fields
 
@@ -197,9 +271,9 @@ It is possible to borrow inner fields of nested structs:
 
 ```move
 let foo = Foo { x: 3, y: true };
-let bar = Bar { foo };
+let bar = Bar(foo);
 
-let x_ref = &bar.foo.x;
+let x_ref = &bar.0.x;
 ```
 
 You can also borrow a field via a reference to a struct:
@@ -217,15 +291,15 @@ If you need to read and copy a field's value, you can then dereference the borro
 
 ```move
 let foo = Foo { x: 3, y: true };
-let bar = Bar { foo: copy foo };
+let bar = Bar(copy foo);
 let x: u64 = *&foo.x;
 let y: bool = *&foo.y;
-let foo2: Foo = *&bar.foo;
+let foo2: Foo = *&bar.0;
 ```
 
 More canonically, the dot operator can be used to read fields of a struct without any borrowing. As
 is true with [dereferencing](./references.md#reading-and-writing-through-references), the field type
-must have the `copy` [ability](./abilities.mdcopy).
+must have the `copy` [ability](./abilities.md).
 
 ```move
 let foo = Foo { x: 3, y: true };
@@ -236,8 +310,8 @@ let y = foo.y;  // y == true
 Dot operators can be chained to access nested fields:
 
 ```move
-let baz = Baz { foo: Foo { x: 3, y: true } };
-let x = baz.foo.x; // x = 3;
+let bar = Bar(Foo { x: 3, y: true });
+let x = baz.0.x; // x = 3;
 ```
 
 However, this is not permitted for fields that contain non-primitive types, such a vector or another
@@ -245,9 +319,9 @@ struct:
 
 ```move
 let foo = Foo { x: 3, y: true };
-let bar = Bar { foo };
-let foo2: Foo = *&bar.foo;
-let foo3: Foo = bar.foo; // error! must add an explicit copy with *&
+let bar = Bar(foo);
+let foo2: Foo = *&bar.0;
+let foo3: Foo = bar.0; // error! must add an explicit copy with *&
 ```
 
 We can mutably borrow a field to a struct to assign it a new value:
@@ -256,9 +330,9 @@ We can mutably borrow a field to a struct to assign it a new value:
 let mut foo = Foo { x: 3, y: true };
 *&mut foo.x = 42;     // foo = Foo { x: 42, y: true }
 *&mut foo.y = !foo.y; // foo = Foo { x: 42, y: false }
-let mut bar = Bar { foo };             // bar = Bar { foo: Foo { x: 42, y: false } }
-*&mut bar.foo.x = 52;                   // bar = Bar { foo: Foo { x: 52, y: false } }
-*&mut bar.foo = Foo { x: 62, y: true }; // bar = Bar { foo: Foo { x: 62, y: true } }
+let mut bar = Bar(foo);               // bar = Bar(Foo { x: 42, y: false })
+*&mut bar.0.x = 52;                   // bar = Bar(Foo { x: 52, y: false })
+*&mut bar.0 = Foo { x: 62, y: true }; // bar = Bar(Foo { x: 62, y: true })
 ```
 
 Similar to dereferencing, we can instead directly use the dot operator to modify a field. And in
@@ -268,9 +342,9 @@ both cases, the field type must have the `drop` [ability](./abilities.md).
 let mut foo = Foo { x: 3, y: true };
 foo.x = 42;     // foo = Foo { x: 42, y: true }
 foo.y = !foo.y; // foo = Foo { x: 42, y: false }
-let mut bar = Bar { foo };        // bar = Bar { foo: Foo { x: 42, y: false } }
-bar.foo.x = 52;                   // bar = Bar { foo: Foo { x: 52, y: false } }
-bar.foo = Foo { x: 62, y: true }; // bar = Bar { foo: Foo { x: 62, y: true } }
+let mut bar = Bar(foo);         // bar = Bar(Foo { x: 42, y: false })
+bar.0.x = 52;                   // bar = Bar(Foo { x: 52, y: false })
+bar.0 = Foo { x: 62, y: true }; // bar = Bar(Foo { x: 62, y: true })
 ```
 
 The dot syntax for assignment also works via a reference to a struct:
