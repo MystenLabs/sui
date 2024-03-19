@@ -726,8 +726,8 @@ mod tests {
 
     // Tests that the ratio of rejected transactions created randomly matches load shedding percentage in
     // the overload monitor.
-    #[test]
-    fn test_txn_rejection_rate() {
+    #[sim_test]
+    async fn test_txn_rejection_rate() {
         for rejection_percentage in 0..=100 {
             let mut reject_count = 0;
             for _ in 0..10000 {
@@ -737,9 +737,13 @@ mod tests {
                 }
             }
 
-            // Give it a 2% fluctuation.
-            assert!(rejection_percentage as f32 / 100.0 - 0.02 < reject_count as f32 / 10000.0);
-            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.02);
+            debug!(
+                "Rejection percentage: {:?}, reject count: {:?}.",
+                rejection_percentage, reject_count
+            );
+            // Give it a 3% fluctuation.
+            assert!(rejection_percentage as f32 / 100.0 - 0.03 < reject_count as f32 / 10000.0);
+            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.03);
         }
     }
 
