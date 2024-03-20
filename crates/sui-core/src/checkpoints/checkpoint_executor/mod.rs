@@ -196,6 +196,10 @@ impl CheckpointExecutor {
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
+            // Note: when we arrive here with highest_executed == the final checkpoint of the epoch,
+            // we are in an edge case where highest_executed does not actually correspond to the watermark.
+            // The watermark is only bumped past the epoch final checkpoint after execution of the change
+            // epoch tx, and state accumulation.
             if self
                 .check_epoch_last_checkpoint(epoch_store.clone(), &highest_executed)
                 .await
