@@ -330,7 +330,7 @@ impl Core {
         self.context
             .metrics
             .node_metrics
-            .block_proposed_total
+            .block_proposed
             .with_label_values(&[&force.to_string()])
             .inc();
 
