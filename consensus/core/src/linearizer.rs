@@ -144,7 +144,7 @@ mod tests {
         context::Context,
         leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
-        test_dag::{build_dag, get_all_leader_blocks},
+        test_dag::build_dag,
     };
 
     #[test]
@@ -162,8 +162,7 @@ mod tests {
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
         build_dag(context.clone(), dag_state.clone(), None, num_rounds);
-        let leaders = get_all_leader_blocks(
-            dag_state.clone(),
+        let leaders = dag_state.read().get_all_uncommitted_leader_blocks(
             leader_schedule,
             num_rounds,
             DEFAULT_WAVE_LENGTH,
@@ -230,8 +229,7 @@ mod tests {
             leader_round_wave_1,
         ));
 
-        let leaders = get_all_leader_blocks(
-            dag_state.clone(),
+        let leaders = dag_state.read().get_all_uncommitted_leader_blocks(
             leader_schedule.clone(),
             leader_round_wave_1,
             wave_length,
@@ -287,8 +285,7 @@ mod tests {
             leader_round_wave_2,
         );
 
-        let leaders = get_all_leader_blocks(
-            dag_state.clone(),
+        let leaders = dag_state.read().get_all_uncommitted_leader_blocks(
             leader_schedule,
             leader_round_wave_2,
             wave_length,

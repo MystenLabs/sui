@@ -12,12 +12,15 @@ use std::{
 use consensus_config::AuthorityIndex;
 use tracing::error;
 
-use crate::block::GENESIS_ROUND;
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
+#[cfg(test)]
+use crate::leader_schedule::LeaderSchedule;
 use crate::{
-    block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    block::{
+        genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock, GENESIS_ROUND,
+    },
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRef, TrustedCommit},
     context::Context,
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
 };
 
@@ -613,18 +616,44 @@ impl DagState {
     fn evict_round(commit_round: Round, cached_rounds: Round) -> Round {
         commit_round.saturating_sub(cached_rounds)
     }
+
+    // Leader blocks start from round 1 as we do not consider any blocks from genesis
+    // roudn as a leader block.
+    // TODO: confirm pipelined & multi-leader cases work properly
+    #[cfg(test)]
+    pub(crate) fn get_all_uncommitted_leader_blocks(
+        &self,
+        leader_schedule: LeaderSchedule,
+        num_rounds: u32,
+        wave_length: u32,
+        pipelined: bool,
+        num_leaders: u32,
+    ) -> Vec<VerifiedBlock> {
+        let mut blocks = Vec::new();
+        for round in 1..=num_rounds {
+            for leader_offset in 0..num_leaders {
+                if pipelined || round % wave_length == 0 {
+                    let slot = Slot::new(round, leader_schedule.elect_leader(round, leader_offset));
+                    let uncommitted_blocks = self.get_uncommitted_blocks_at_slot(slot);
+                    blocks.extend(uncommitted_blocks);
+                }
+            }
+        }
+        blocks
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use parking_lot::RwLock;
     use std::vec;
 
+    use parking_lot::RwLock;
+
     use super::*;
-    use crate::test_dag::build_dag;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
+        test_dag::build_dag,
     };
 
     #[test]

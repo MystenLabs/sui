@@ -12,9 +12,8 @@ use std::ops::Range;
 use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
 
-use crate::block::Slot;
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::{BlockRef, Round, Slot, VerifiedBlock},
     commit::{CommitIndex, TrustedCommit},
     error::ConsensusResult,
 };

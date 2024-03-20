@@ -7,13 +7,13 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::commit::CommitAPI;
-use crate::error::{ConsensusError, ConsensusResult};
 use crate::CommitConsumer;
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
     commit::{load_committed_subdag_from_store, CommitIndex, CommittedSubDag},
     context::Context,
     dag_state::DagState,
+    error::{ConsensusError, ConsensusResult},
     linearizer::Linearizer,
     storage::Store,
 };
@@ -177,7 +177,7 @@ mod tests {
         dag_state::DagState,
         leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
-        test_dag::{build_dag, get_all_leader_blocks},
+        test_dag::build_dag,
     };
 
     #[test]
@@ -209,8 +209,7 @@ mod tests {
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
         build_dag(context.clone(), dag_state.clone(), None, num_rounds);
-        let leaders = get_all_leader_blocks(
-            dag_state.clone(),
+        let leaders = dag_state.read().get_all_uncommitted_leader_blocks(
             leader_schedule,
             num_rounds,
             DEFAULT_WAVE_LENGTH,
@@ -299,8 +298,7 @@ mod tests {
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
         build_dag(context.clone(), dag_state.clone(), None, num_rounds);
-        let leaders = get_all_leader_blocks(
-            dag_state.clone(),
+        let leaders = dag_state.read().get_all_uncommitted_leader_blocks(
             leader_schedule,
             num_rounds,
             DEFAULT_WAVE_LENGTH,
@@ -436,8 +434,7 @@ mod tests {
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
         build_dag(context.clone(), dag_state.clone(), None, num_rounds);
-        let leaders = get_all_leader_blocks(
-            dag_state.clone(),
+        let leaders = dag_state.read().get_all_uncommitted_leader_blocks(
             leader_schedule,
             num_rounds,
             DEFAULT_WAVE_LENGTH,
