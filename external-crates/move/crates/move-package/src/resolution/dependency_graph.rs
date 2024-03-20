@@ -1301,84 +1301,99 @@ impl DependencyGraph {
 
         //////////////// END /////////////////////
 
+        let mut my_writer = String::new();
+
         let mut dependencies = Array::new();
         let mut dev_dependencies = Array::new();
 
-        // Iterate over dependencies with mode "Always"
-        if let Some((
-            Dependency {
-                mode: DependencyMode::Always,
-                ..
-            },
-            _,
-        )) = deps.peek()
-        {
-            writeln!(writer, "\ndependencies = [")?;
-            while let Some((
-                dep @ Dependency {
-                    mode: DependencyMode::Always,
-                    ..
-                },
-                pkg,
-            )) = deps.peek()
-            {
-                writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
-                // {
-                // name = name
-                // digest = digest
-                // addr_subst = subst
-                // }
-                let table_string = format!("{}", DependencyTOML(*pkg, dep));
-                let table_value = table_string.parse::<Value>().expect("fail"); // TODO better
-                dependencies.push(table_value);
-                deps.next();
-            }
-            writeln!(writer, "]")?;
-        }
-
-        // Iterate over dependencies with mode "DevOnly"
         /*
+
+
+            // Iterate over dependencies with mode "Always"
             if let Some((
                 Dependency {
-                    mode: DependencyMode::DevOnly,
+                    mode: DependencyMode::Always,
                     ..
                 },
                 _,
             )) = deps.peek()
             {
-                writeln!(writer, "\ndev-dependencies = [")?;
+                writeln!(writer, "\ndependencies = [")?;
                 while let Some((
                     dep @ Dependency {
-                        mode: DependencyMode::DevOnly,
+                        mode: DependencyMode::Always,
                         ..
                     },
                     pkg,
                 )) = deps.peek()
                 {
                     writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
+                    // {
+                    // name = name
+                    // digest = digest
+                    // addr_subst = subst
+                    // }
+                    let table_string = format!("{}", DependencyTOML(*pkg, dep));
+                    let table_value = table_string.parse::<Value>().expect("fail"); // TODO better
+                    dependencies.push(table_value);
                     deps.next();
                 }
                 writeln!(writer, "]")?;
-        }
-        */
+            }
 
-        //////////////// END /////////////////////
-
-        macro_rules! write_deps {
-            ($mode: pat, $label: literal) => {
-                if let Some((Dependency { mode: $mode, .. }, _)) = deps.peek() {
-                    writeln!(writer, "\n{} = [", $label)?;
-                    while let Some((dep @ Dependency { mode: $mode, .. }, pkg)) = deps.peek() {
+            // Iterate over dependencies with mode "DevOnly"
+            /*
+                if let Some((
+                    Dependency {
+                        mode: DependencyMode::DevOnly,
+                        ..
+                    },
+                    _,
+                )) = deps.peek()
+                {
+                    writeln!(writer, "\ndev-dependencies = [")?;
+                    while let Some((
+                        dep @ Dependency {
+                            mode: DependencyMode::DevOnly,
+                            ..
+                        },
+                        pkg,
+                    )) = deps.peek()
+                    {
                         writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
                         deps.next();
                     }
                     writeln!(writer, "]")?;
+            }
+            */
+
+            //////////////// END /////////////////////
+        */
+        use std::fmt::Write;
+        macro_rules! write_deps {
+            ($mode: pat, $label: literal) => {
+                if let Some((Dependency { mode: $mode, .. }, _)) = deps.peek() {
+                    writeln!(writer, "\n{} = [", $label)?;
+                    writeln!(my_writer, "[")?;
+                    while let Some((dep @ Dependency { mode: $mode, .. }, pkg)) = deps.peek() {
+                        writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
+                        writeln!(my_writer, "  {},", DependencyTOML(*pkg, dep))?;
+                        deps.next();
+                    }
+                    writeln!(writer, "]")?;
+                    write!(my_writer, "]")?;
                 }
             };
         }
 
         write_deps!(DependencyMode::Always, "dependencies");
         write_deps!(DependencyMode::DevOnly, "dev-dependencies");
+
+        println!("content: -->{}<--", my_writer);
+        if !my_writer.is_empty() {
+            let formatted_array_table_value = my_writer.parse::<Value>().expect("x");
+            println!("XXX {}", formatted_array_table_value);
+        }
 
         Ok((dependencies, dev_dependencies))
     }
