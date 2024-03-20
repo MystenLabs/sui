@@ -124,7 +124,7 @@ where
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        let (core_signals, signals_receivers) = CoreSignals::new();
+        let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
         let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();

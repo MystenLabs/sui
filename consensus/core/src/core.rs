@@ -11,14 +11,14 @@ use consensus_config::ProtocolKeyPair;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
-use tracing::warn;
+use tracing::{debug, info, warn};
 
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
 use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock,
+        Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
@@ -131,7 +131,14 @@ impl Core {
         self.add_accepted_blocks(last_quorum);
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
-        self.try_propose(true).unwrap();
+        if self.try_propose(true).unwrap().is_none() {
+            assert!(self.last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
+
+            // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
+            self.signals
+                .new_block(self.last_proposed_block.clone())
+                .unwrap();
+        }
 
         self
     }
@@ -197,11 +204,7 @@ impl Core {
     // the minimum round delay has passed.
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
         if let Some(block) = self.try_new_block(force) {
-            // When there is only one authority in committee, it is unnecessary to broadcast
-            // the block which will fail anyway without subscribers to the signal.
-            if self.context.committee.size() > 1 {
-                self.signals.new_block(block.clone())?;
-            }
+            self.signals.new_block(block.clone())?;
             // The new block may help commit.
             self.try_commit()?;
             return Ok(Some(block));
@@ -296,7 +299,7 @@ impl Core {
             .into_iter()
             .for_each(TransactionGuard::acknowledge);
 
-        tracing::info!("Created block {}", verified_block);
+        info!("Created block {}", verified_block);
 
         Some(verified_block)
     }
@@ -454,13 +457,14 @@ impl Core {
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
+    context: Arc<Context>,
 }
 
 impl CoreSignals {
     // TODO: move to Parameters.
     const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
 
-    pub fn new() -> (Self, CoreSignalsReceivers) {
+    pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
         let (tx_block_broadcast, _rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
@@ -468,6 +472,7 @@ impl CoreSignals {
         let me = Self {
             tx_block_broadcast: tx_block_broadcast.clone(),
             new_round_sender,
+            context,
         };
 
         let receivers = CoreSignalsReceivers {
@@ -481,9 +486,15 @@ impl CoreSignals {
     /// Sends a signal to all the waiters that a new block has been produced. The method will return
     /// true if block has reached even one subscriber, false otherwise.
     pub fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
-        if let Err(err) = self.tx_block_broadcast.send(block) {
-            warn!("Couldn't broadcast the block to any receiver: {err}");
-            return Err(ConsensusError::Shutdown);
+        // When there is only one authority in committee, it is unnecessary to broadcast
+        // the block which will fail anyway without subscribers to the signal.
+        if self.context.committee.size() > 1 {
+            if let Err(err) = self.tx_block_broadcast.send(block) {
+                warn!("Couldn't broadcast the block to any receiver: {err}");
+                return Err(ConsensusError::Shutdown);
+            }
+        } else {
+            debug!("Did not broadcast block {block:?} to receivers as committee size is <= 1");
         }
         Ok(())
     }
@@ -588,7 +599,7 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
 
         // Now spin up core
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
@@ -698,7 +709,7 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
 
         // Now spin up core
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
@@ -769,7 +780,7 @@ mod test {
         );
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
@@ -870,7 +881,7 @@ mod test {
         );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
@@ -1175,7 +1186,7 @@ mod test {
             );
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-            let (signals, signal_receivers) = CoreSignals::new();
+            let (signals, signal_receivers) = CoreSignals::new(context.clone());
             // Need at least one subscriber to the block broadcast channel.
             let block_receiver = signal_receivers.block_broadcast_receiver();
 
