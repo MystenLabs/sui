@@ -130,6 +130,8 @@ module a::n {
 `entry` functions may have restrictions on their parameters and return types. Although, these
 restrictions are specific to each individual deployment of Move.
 
+[The documentation for `entry` functions on Sui can be found here.](https://docs.sui.io/concepts/sui-move-concepts/entry-functions).
+
 ### Name
 
 Function names can start with letters `a` to `z`. After the first character, function names can

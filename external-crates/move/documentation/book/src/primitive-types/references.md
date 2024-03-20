@@ -206,10 +206,11 @@ references before writes.
 ### References Cannot Be Stored
 
 References and tuples are the _only_ types that cannot be stored as a field value of structs, which
-also means that they cannot exist in storage. All references created during program execution will
-be destroyed when a Move program terminates; they are entirely ephemeral. This invariant is also
-true for values of types without the `store` [ability](../abilities.md), but note that references
-and tuples go a step further by never being allowed in structs in the first place.
+also means that they cannot exist in storage or [objects](../abilities/object.md). All references
+created during program execution will be destroyed when a Move program terminates; they are entirely
+ephemeral. This invariant is also true for values of types without the `store`
+[ability](../abilities.md), but note that references and tuples go a step further by never being
+allowed in structs in the first place.
 
 This is another difference between Move and Rust, which allows references to be stored inside of
 structs.

@@ -54,9 +54,10 @@ In the future, we plan on adding to declare structs as `public(package)` or as i
 ### Abilities
 
 As mentioned above: by default, a struct declaration is linear and ephemeral. So to allow the value
-to be used with certain operations (that copy it, drop it, store it in global storage, or use it as
-a storage schema), structs can be granted [abilities](./abilities.md) by annotating them with
-`has <ability>`:
+to be used with certain operations (that copy it, drop it, store it in an
+[object](./abilities/object.md), or use it as a storage schema to define an
+[object](./abilities/object.md)), structs can be granted [abilities](./abilities.md) by annotating
+them with `has <ability>`:
 
 ```move
 module a::m {
@@ -474,4 +475,5 @@ module a::m {
 ## Storage
 
 Structs can be used to define storage schemas, but the details are different per deployment of Move.
-See the documentation for the [`key` ability](./abilities.md#key) for more details.
+See the documentation for the [`key` ability](./abilities.md#key) and
+[Sui objects](./abilities/object.md) for more details.
