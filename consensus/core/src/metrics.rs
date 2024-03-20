@@ -77,7 +77,7 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 
 pub(crate) struct NodeMetrics {
     pub block_commit_latency: Histogram,
-    pub block_proposed_total: IntCounterVec,
+    pub block_proposed: IntCounterVec,
     pub block_size: Histogram,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
@@ -86,7 +86,7 @@ pub(crate) struct NodeMetrics {
     pub core_lock_enqueued: IntCounter,
     pub dag_state_store_read_count: IntCounterVec,
     pub dag_state_store_write_count: IntCounter,
-    pub decided_leaders_total: IntCounterVec,
+    pub committed_leaders_total: IntCounterVec,
     pub fetch_blocks_scheduler_inflight: IntGauge,
     pub fetched_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
@@ -110,15 +110,13 @@ impl NodeMetrics {
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
                 registry,
-            )
-                .unwrap(),
-            block_proposed_total: register_int_counter_vec_with_registry!(
+            ).unwrap(),
+            block_proposed: register_int_counter_vec_with_registry!(
                 "block_proposed",
                 "Total number of block proposals. If force is true then this block has been created forcefully via a leader timeout event.",
                 &["force"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             block_size: register_histogram_with_registry!(
                 "block_size",
                 "The size (in bytes) of proposed blocks",
@@ -130,53 +128,45 @@ impl NodeMetrics {
                 "Total time in ms spent waiting, when a received block has timestamp in future.",
                 &["authority"],
                 registry,
-            )
-            .unwrap(),
+            ).unwrap(),
             blocks_per_commit_count: register_histogram_with_registry!(
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
                 "broadcaster_rtt_estimate_ms",
                 "Estimated RTT latency per peer authority, for block sending in Broadcaster",
                 &["peer"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             core_lock_dequeued: register_int_counter_with_registry!(
                 "core_lock_dequeued",
                 "Number of dequeued core requests",
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             core_lock_enqueued: register_int_counter_with_registry!(
                 "core_lock_enqueued",
                 "Number of enqueued core requests",
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             dag_state_store_read_count: register_int_counter_vec_with_registry!(
                 "dag_state_store_read_count",
                 "Number of times DagState needs to read from store per operation type",
                 &["type"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             dag_state_store_write_count: register_int_counter_with_registry!(
                 "dag_state_store_write_count",
                 "Number of times DagState needs to write to store",
                 registry,
-            )
-                .unwrap(),
-            decided_leaders_total: register_int_counter_vec_with_registry!(
+            ).unwrap(),
+            committed_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
                 "Total number of (direct or indirect) committed leaders per authority",
                 &["authority", "commit_type"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             fetch_blocks_scheduler_inflight: register_int_gauge_with_registry!(
                 "fetch_blocks_scheduler_inflight",
                 "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
@@ -194,8 +184,7 @@ impl NodeMetrics {
                 "Number of invalid blocks per peer authority",
                 &["authority", "source"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             last_committed_leader_round: register_int_gauge_with_registry!(
                 "last_committed_leader_round",
                 "The last round where a leader was committed to store and sent to commit consumer.",
@@ -210,8 +199,7 @@ impl NodeMetrics {
                 "leader_timeout_total",
                 "Total number of leader timeouts",
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             missing_blocks_total: register_int_gauge_with_registry!(
                 "missing_blocks_total",
                 "Total number of missing blocks",
@@ -221,8 +209,7 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
-            )
-            .unwrap(),
+            ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(
                 "scope_processing_time",
                 "The processing time of a specific code scope",
@@ -234,8 +221,7 @@ impl NodeMetrics {
                 "sub_dags_per_commit_count",
                 "The number of subdags per commit.",
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             suspended_blocks: register_int_counter_vec_with_registry!(
                 "suspended_blocks",
                 "The number of suspended blocks. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
@@ -258,8 +244,7 @@ impl NodeMetrics {
                 "Total node uptime",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
+            ).unwrap(),
         }
     }
 }
