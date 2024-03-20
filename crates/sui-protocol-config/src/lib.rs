@@ -950,6 +950,10 @@ pub struct ProtocolConfig {
     /// random beacon protocol.
     random_beacon_reduction_lower_bound: Option<u32>,
 
+    /// Consensus Round after which DKG should be aborted and randomness disabled for
+    /// the epoch, if it hasn't already completed.
+    random_beacon_dkg_timeout_round: Option<u32>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1600,6 +1604,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_lower_bound: None,
 
+            random_beacon_dkg_timeout_round: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1847,6 +1853,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.random_beacon = true;
                         cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(200);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
