@@ -2130,7 +2130,7 @@ impl AuthorityPerEpochStore {
                     if id == &congested_object_id {
                         (SequenceNumber::CONGESTED, SequenceNumber::MIN, false) // This has to be inmutable. Otherwise, we may use old version of data to override newer version. When constructing new version of object in execution.
                     } else {
-                        (version, version, *mutable)
+                        (SequenceNumber::READ_AVOID, SequenceNumber::MIN, false)
                     }
                 } else {
                     max_object_cost =
@@ -2155,6 +2155,10 @@ impl AuthorityPerEpochStore {
 
         let next_version =
             SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
+        assert!(
+            next_version <= SequenceNumber::MAX,
+            "next_version must be less than MAX"
+        );
 
         // Update the next version for the shared objects.
         assigned_versions

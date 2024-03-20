@@ -422,7 +422,7 @@ impl TransactionEffectsV2 {
                         Some((id, UnchangedSharedKind::ReadDeleted(version)))
                     }
                 }
-                SharedInput::Congested(id) => {
+                SharedInput::Congested((id, _)) => {
                     debug_assert!(!changed_objects.contains_key(&id));
                     Some((
                         id,

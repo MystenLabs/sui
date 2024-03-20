@@ -1008,6 +1008,7 @@ impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
+    pub const READ_AVOID: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
