@@ -6,7 +6,7 @@ runs:
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: "1.70"
+        toolchain: "1.75"
         override: true
         components: rustfmt, clippy
     - run: echo "${HOME}/cargo/bin" | tee -a $GITHUB_PATH
