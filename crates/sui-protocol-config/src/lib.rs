@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 40;
+const MAX_PROTOCOL_VERSION: u64 = 41;
 
 // Record history of protocol version allocations here:
 //
@@ -113,6 +113,7 @@ const MAX_PROTOCOL_VERSION: u64 = 40;
 // Version 39: Allow skipped epochs for randomness updates.
 //             Extra version to fix `test_upgrade_compatibility` simtest.
 // Version 40:
+// Version 41: Migrate sui framework and related code to Move 2024
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -1968,6 +1969,7 @@ impl ProtocolConfig {
                     // It is important that we keep this protocol version blank due to an issue with random.move.
                 }
                 40 => {}
+                41 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
