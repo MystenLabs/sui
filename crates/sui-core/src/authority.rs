@@ -437,6 +437,12 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            execution_load_input_objects_latency: register_histogram_with_registry!(
+                "authority_state_execution_load_input_objects_latency",
+                "Latency of loading input objects for execution",
+                LOW_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             commit_certificate_latency: register_histogram_with_registry!(
                 "authority_state_commit_certificate_latency",
                 "Latency of committing certificate execution results",
@@ -1457,7 +1463,7 @@ impl AuthorityState {
             });
 
         if let Some(sniffer) = &self.sniffer {
-            let observe_timer = Instant::now();
+            let observe_timer = tokio::time::Instant::now();
 
             let ctx = {
                 let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
