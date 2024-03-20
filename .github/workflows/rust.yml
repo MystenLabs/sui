@@ -45,7 +45,7 @@ jobs:
       SUI_SKIP_SIMTESTS: 1
     timeout-minutes: 45
     runs-on: [self-hosted]
-    needs: fmt
+    needs: rustfmt
     #needs: clippy
     steps:
       - uses: actions/checkout@v3
