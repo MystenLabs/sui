@@ -879,6 +879,11 @@ fn check_visibility_modifiers(
         for (_, _, friend_decl) in friends {
             let loc = friend_decl.loc;
             let diag = if edition == Edition::E2024_MIGRATION {
+                for aloc in &friend_decl.attr_locs {
+                    context
+                        .env()
+                        .add_diag(diag!(Migration::RemoveFriend, (*aloc, friend_msg)));
+                }
                 diag!(Migration::RemoveFriend, (loc, friend_msg))
             } else {
                 diag!(Editions::DeprecatedFeature, (loc, friend_msg))
@@ -2615,8 +2620,19 @@ fn friend_(context: &mut Context, pfriend_decl: P::FriendDecl) -> Option<(Module
         friend: pfriend,
     } = pfriend_decl;
     let mident = context.name_access_chain_to_module_ident(pfriend)?;
+    let attr_locs = pattributes
+        .iter()
+        .map(|sp!(loc, _)| *loc)
+        .collect::<Vec<_>>();
     let attributes = flatten_attributes(context, AttributePosition::Friend, pattributes);
-    Some((mident, E::Friend { attributes, loc }))
+    Some((
+        mident,
+        E::Friend {
+            attributes,
+            attr_locs,
+            loc,
+        },
+    ))
 }
 
 //**************************************************************************************************

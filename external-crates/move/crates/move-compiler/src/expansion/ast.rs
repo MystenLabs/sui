@@ -138,6 +138,7 @@ pub struct ModuleDefinition {
 #[derive(Debug, Clone)]
 pub struct Friend {
     pub attributes: Attributes,
+    pub attr_locs: Vec<Loc>,
     pub loc: Loc,
 }
 

@@ -1,5 +1,6 @@
 module a::m {
 
+    #[test_only]
     friend a::n;
 
     struct S { f: u64 }

@@ -1,23 +1,24 @@
 --- tests/move_2024/migration/all_migrations.move
 +++ tests/move_2024/migration/all_migrations.move
-@@ -3,1 +3,1 @@
+@@ -3,2 +3,2 @@
+-    #[test_only]
 -    friend a::n;
++    /* #[test_only] */
 +    /* friend a::n; */
-@@ -5,1 +5,1 @@
+@@ -6 +6 @@
 -    struct S { f: u64 }
 +    public struct S { f: u64 }
-@@ -7,1 +7,1 @@
+@@ -8 +8 @@
 -    struct LongerName {
 +    public struct LongerName {
-@@ -12,1 +12,1 @@
+@@ -13 +13 @@
 -    struct Positional(u64, u64, u64)
 +    public struct Positional(u64, u64, u64)
-@@ -14,1 +14,1 @@
+@@ -15,2 +15,2 @@
 -    fun t0(x: u64, s: S): u64 {
-+    fun t0(mut x: u64, s: S): u64 {
-@@ -15,1 +15,1 @@
 -        let S { f: fin } = s;
++    fun t0(mut x: u64, s: S): u64 {
 +        let S { f: mut fin } = s;
-@@ -21,1 +21,1 @@
+@@ -22 +22 @@
 -    public(friend) fun t1() {}
 +    public(package) fun t1() {}

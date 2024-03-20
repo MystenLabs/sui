@@ -97,14 +97,14 @@ enum MigrationChange {
     AddPublic,
     Backquote(String),
     AddGlobalQual,
-    RemoveFriend(/* start */ usize),
-    MakePubPackage(/* start */ usize),
+    RemoveFriend,
+    MakePubPackage,
 }
 
 // All of the migration changes
 pub struct Migration {
     mapped_files: MappedFiles,
-    changes: BTreeMap<FileId, BTreeMap<usize, Vec<(usize, MigrationChange)>>>,
+    changes: BTreeMap<FileId, Vec<(ByteSpan, MigrationChange)>>,
 }
 
 /// A mapping from file ids to file contents along with the mapping of filehash to fileID.
@@ -114,6 +114,7 @@ pub struct MappedFiles {
 }
 
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
+#[allow(dead_code)]
 pub struct FileLineColSpan {
     file_id: FileId,
     start: LineColLocation,
@@ -124,6 +125,19 @@ pub struct FileLineColSpan {
 pub struct LineColLocation {
     pub line: usize,
     pub column: usize,
+    pub byte: usize,
+}
+
+/// A file, and the line:column start, and line:column end that corresponds to a `Loc`
+pub struct FileByteSpan {
+    file_id: FileId,
+    byte_span: ByteSpan,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ByteSpan {
+    start: usize,
+    end: usize,
 }
 
 impl MappedFiles {
@@ -156,22 +170,35 @@ impl MappedFiles {
         self.file_mapping.insert(fhash, id);
     }
 
+    #[allow(dead_code)]
     pub fn location(&self, loc: Loc) -> FileLineColSpan {
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;
         let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
-        let star_loc = self.files.location(file_id, start_loc).unwrap();
-        let end_loc = self.files.location(file_id, end_loc).unwrap();
+        let start_file_loc = self.files.location(file_id, start_loc).unwrap();
+        let end_file_loc = self.files.location(file_id, end_loc).unwrap();
         FileLineColSpan {
             file_id,
             start: LineColLocation {
-                line: star_loc.line_number,
-                column: star_loc.column_number - 1,
+                line: start_file_loc.line_number,
+                column: start_file_loc.column_number - 1,
+                byte: start_loc,
             },
             end: LineColLocation {
-                line: end_loc.line_number,
-                column: end_loc.column_number - 1,
+                line: end_file_loc.line_number,
+                column: end_file_loc.column_number - 1,
+                byte: end_loc,
             },
+        }
+    }
+
+    pub fn byte_location(&self, loc: Loc) -> FileByteSpan {
+        let start = loc.start() as usize;
+        let end = loc.end() as usize;
+        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
+        FileByteSpan {
+            byte_span: ByteSpan { start, end },
+            file_id,
         }
     }
 }
@@ -854,15 +881,15 @@ impl Migration {
             mapped_files,
         };
 
-        let mut migration_errors = Diagnostics::new();
+        let migration_errors = Diagnostics::new();
         for diag in diags {
-            mig.add_diagnostic(&mut migration_errors, diag);
+            mig.add_diagnostic(diag);
         }
 
         (mig, migration_errors)
     }
 
-    fn add_diagnostic(&mut self, migration_errors: &mut Diagnostics, diag: Diagnostic) {
+    fn add_diagnostic(&mut self, diag: Diagnostic) {
         const CAT: u8 = Category::Migration as u8;
         const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
@@ -871,133 +898,100 @@ impl Migration {
         const REMOVE_FRIEND: u8 = codes::Migration::RemoveFriend as u8;
         const MAKE_PUB_PACKAGE: u8 = codes::Migration::MakePubPackage as u8;
 
-        let FileLineColSpan {
-            file_id,
-            start:
-                LineColLocation {
-                    line: start_line,
-                    column: start_col,
-                },
-            end:
-                LineColLocation {
-                    line: end_line,
-                    column: end_col,
-                },
-        } = self.find_file_location(&diag);
+        let FileByteSpan { file_id, byte_span } = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
-        let line_change_entry = file_change_entry.entry(start_line).or_default();
-        match (diag.info().category(), diag.info().code()) {
-            (CAT, NEEDS_MUT) => line_change_entry.push((start_col, MigrationChange::AddMut)),
-            (CAT, NEEDS_PUBLIC) => line_change_entry.push((start_col, MigrationChange::AddPublic)),
+        let change = match (diag.info().category(), diag.info().code()) {
+            (CAT, NEEDS_MUT) => MigrationChange::AddMut,
+            (CAT, NEEDS_PUBLIC) => MigrationChange::AddPublic,
             (CAT, NEEDS_BACKTICKS) => {
                 let old_name = diag.primary_msg().to_string();
-                line_change_entry.push((start_col, MigrationChange::Backquote(old_name)))
+                MigrationChange::Backquote(old_name)
             }
-            (CAT, NEEDS_GLOBAL_QUAL) => {
-                line_change_entry.push((start_col, MigrationChange::AddGlobalQual))
-            }
-            (CAT, REMOVE_FRIEND) => {
-                if start_line == end_line {
-                    // we order `end_col` then `start_col` since `render_line` will reverse iterate
-                    line_change_entry.push((end_col, MigrationChange::RemoveFriend(start_col)))
-                } else {
-                    let loc = diag.primary_label.0;
-                    let msg = "Unable to migrate. Cannot remove 'friend' that spans multiple lines";
-                    migration_errors.add(diag!(Uncategorized::UnableToMigrate, (loc, msg)))
-                }
-            }
-            (CAT, MAKE_PUB_PACKAGE) => {
-                if start_line == end_line {
-                    // we order `end_col` then `start_col` since `render_line` will reverse iterate
-                    line_change_entry.push((end_col, MigrationChange::MakePubPackage(start_col)))
-                } else {
-                    let loc = diag.primary_label.0;
-                    let msg = "Unable to migrate 'public(friend)' that spans multiple lines";
-                    migration_errors.add(diag!(Uncategorized::UnableToMigrate, (loc, msg)))
-                }
-            }
+            (CAT, NEEDS_GLOBAL_QUAL) => MigrationChange::AddGlobalQual,
+            (CAT, REMOVE_FRIEND) => MigrationChange::RemoveFriend,
+            (CAT, MAKE_PUB_PACKAGE) => MigrationChange::MakePubPackage,
             _ => unreachable!(),
-        }
+        };
+        file_change_entry.push((byte_span, change));
     }
 
-    fn find_file_location(&mut self, diag: &Diagnostic) -> FileLineColSpan {
+    fn find_file_location(&mut self, diag: &Diagnostic) -> FileByteSpan {
         let (loc, _msg) = &diag.primary_label;
-        self.mapped_files.location(*loc)
+        self.mapped_files.byte_location(*loc)
     }
 
-    fn get_line(&self, file_id: FileId, line_index: usize) -> String {
-        let line_range = self
-            .mapped_files
-            .files
-            .line_range(file_id, line_index)
-            .unwrap();
-        self.mapped_files.files.source(file_id).unwrap()[line_range].to_string()
+    fn get_file_contents(&self, file_id: FileId) -> String {
+        self.mapped_files.files.source(file_id).unwrap().to_string()
     }
 
-    fn render_line(
-        line_text: String,
-        migration_set: BTreeMap<usize, BTreeSet<MigrationChange>>,
-    ) -> String {
-        let mut line_prefix: &str = &line_text[..];
+    fn render_changes(source: String, changes: &mut [(ByteSpan, MigrationChange)]) -> String {
+        changes.sort_by(|(loc0, _), (loc1, _)| loc0.start.partial_cmp(&loc1.start).unwrap());
         let mut output = "".to_string();
-        for (col, changes) in migration_set.iter().rev() {
-            let rest = &line_prefix[*col..];
-            for change in changes {
-                match change {
-                    MigrationChange::AddMut => {
-                        output = format!("mut {}{}", rest, output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::AddPublic => {
-                        output = format!("public {}{}", rest, output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::Backquote(old_name) => {
-                        output = format!("`{}`{}{}", old_name, &rest[old_name.len()..], output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::AddGlobalQual => {
-                        output = format!("::{}{}", rest, output);
-                        line_prefix = &line_prefix[..*col];
-                    }
-                    MigrationChange::RemoveFriend(start) => {
-                        output = format!("/* {} */{}{}", &line_prefix[*start..*col], rest, output);
-                        line_prefix = &line_prefix[..*start];
-                    }
-                    MigrationChange::MakePubPackage(start) => {
-                        output = format!("public(package){}{}", rest, output);
-                        line_prefix = &line_prefix[..*start];
-                    }
+
+        let mut source_prefix = &source[..];
+        let mut last_seen = source_prefix.len();
+        for (loc, change) in changes.iter().rev() {
+            assert!(loc.end <= last_seen, "Found overlapping migrations.");
+            match change {
+                MigrationChange::AddMut => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("mut {}{}", rest, output);
+                }
+                MigrationChange::AddPublic => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("public {}{}", rest, output);
+                }
+                MigrationChange::Backquote(old_name) => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!("`{}`{}{}", old_name, rest, output);
+                }
+                MigrationChange::AddGlobalQual => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("::{}{}", rest, output);
+                }
+                MigrationChange::RemoveFriend => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!(
+                        "/* {} */{}{}",
+                        &source_prefix[loc.start..loc.end],
+                        rest,
+                        output
+                    );
+                }
+                MigrationChange::MakePubPackage => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!("public(package){}{}", rest, output);
                 }
             }
+            source_prefix = &source_prefix[..loc.start];
+            last_seen = loc.start;
         }
-        output = format!("{}{}", line_prefix, output);
+        output = format!("{}{}", source_prefix, output);
+
         output
     }
 
     pub fn render_output(&mut self) -> String {
-        let mut changes = std::mem::take(&mut self.changes);
-
         let mut output = vec![];
-        let mut names = changes
+        let mut names = self
+            .changes
             .keys()
             .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
             .collect::<Vec<_>>();
         names.sort_by_key(|(_, name)| *name);
         for (file_id, name) in names {
-            let file_changes = changes.get_mut(&file_id).unwrap();
-            output.push(format!("--- {}\n+++ {}\n", name, name));
-            for (line_number, line_changes) in file_changes.iter() {
-                let migration_set = Self::unique_changes(line_changes);
-                let line = self.get_line(file_id, *line_number - 1).to_string();
-                output.push(format!("@@ -{line_number},1 +{line_number},1 @@\n"));
-                output.push(format!("-{}", line));
-                let new_line = Self::render_line(line.to_string(), migration_set);
-                output.push(format!("+{}", new_line));
-            }
+            let original = self.get_file_contents(file_id);
+            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            Self::ensure_unique_changes(file_changes);
+            let migrated = Self::render_changes(original.clone(), file_changes);
+            let diff = similar::TextDiff::from_lines(&original, &migrated);
+            output.push(
+                diff.unified_diff()
+                    .context_radius(0)
+                    .header(&name, &name)
+                    .to_string(),
+            );
         }
-
-        let _ = std::mem::replace(&mut self.changes, changes);
 
         output.join("")
     }
@@ -1014,46 +1008,30 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, self.mapped_files.files.get(*id).unwrap()))
+            .map(|id| (*id, *self.mapped_files.files.get(*id).unwrap().name()))
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, file)| file.name());
-        for (file_id, file) in names {
+        names.sort_by_key(|(_, name)| *name);
+        for (file_id, name) in names {
+            let original = self.get_file_contents(file_id);
             let file_changes = self.changes.get_mut(&file_id).unwrap();
-            let name = file.name();
+            Self::ensure_unique_changes(file_changes);
+            let migrated = Self::render_changes(original.clone(), file_changes);
             let path = PathBuf::from(name.to_string());
-            let mut output = vec![];
-            for (ndx, line) in file.source().lines().enumerate() {
-                if let Some(line_changes) = file_changes.get(&(ndx + 1)) {
-                    let migration_set = Self::unique_changes(line_changes);
-                    output.push(Self::render_line(line.to_string(), migration_set))
-                } else {
-                    output.push(line.to_string());
-                }
-            }
             writeln!(w, "Updating {:#?} . . .", path)?;
-            // let out_writer = std::fs::write(path, contents)
-            let mut buf: Vec<u8> = Vec::new();
-            for line in output {
-                writeln!(&mut buf, "{}", line)?;
-            }
-            std::fs::write(path, buf)?;
+            Self::ensure_unique_changes(file_changes);
+            std::fs::write(path, migrated)?;
         }
         Ok(())
     }
 
-    // Processes a vector of changes for a single line, returning a BTreeMap of unique ones
-    // per-column. The map iterates in sorted order, so this also sorts them.
-    fn unique_changes(
-        change_list: &[(usize, MigrationChange)],
-    ) -> BTreeMap<usize, BTreeSet<MigrationChange>> {
-        let mut migration_set: BTreeMap<usize, BTreeSet<MigrationChange>> = BTreeMap::new();
-        for (col, change) in change_list {
-            migration_set
-                .entry(*col)
-                .or_default()
-                .insert(change.clone());
+    fn ensure_unique_changes(changes: &mut Vec<(ByteSpan, MigrationChange)>) {
+        let file_changes = std::mem::take(changes);
+        let mut set_changes = BTreeSet::new();
+        for change in file_changes {
+            set_changes.insert(change);
         }
-        migration_set
+        let out_changes = set_changes.into_iter().collect::<Vec<_>>();
+        let _ = std::mem::replace(changes, out_changes);
     }
 }
 
