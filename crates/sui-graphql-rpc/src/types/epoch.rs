@@ -33,7 +33,7 @@ pub(crate) struct Epoch {
 /// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
 /// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
-pub(crate) struct EpochKey {
+struct EpochKey {
     pub epoch_id: u64,
     pub checkpoint_viewed_at: Option<u64>,
 }
@@ -105,7 +105,7 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default(), None)
+            None => Checkpoint::query(ctx, CheckpointId::default(), None)
                 .await
                 .extend()?
                 .map_or(self.stored.first_checkpoint_id as u64, |c| {
