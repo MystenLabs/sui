@@ -18,18 +18,55 @@ The following changes will be made.
 
 --- sources/mod_friend.move
 +++ sources/mod_friend.move
-@@ -3,2 +3,2 @@
--    friend // why
--    A::n;
-+    /* friend // why
-+    A::n; */
+@@ -2,2 +2,2 @@
+-    #[test_only]
+-    friend A::b;
++    /* #[test_only] */
++    /* friend A::b; */
+@@ -5 +5 @@
+-    friend A::c;
++    /* friend A::c; */
+@@ -7 +7 @@
+-    #[ext(
++    /* #[ext(
+@@ -10,2 +10,2 @@
+-    ]
+-    friend A::d;
++    ] */
++    /* friend A::d; */
+@@ -13 +13 @@
+-    #[ext(
++    /* #[ext(
+@@ -18,2 +18,2 @@
+-    ]
+-    friend A::e;
++    ] */
++    /* friend A::e; */
 --- sources/mod_pub_friend.move
 +++ sources/mod_pub_friend.move
-@@ -2,3 +2 @@
--    public( // why folks, why
+@@ -2 +2 @@
+-    public(friend) fun t1() {}
++    public(package) fun t1() {}
+@@ -4,2 +4 @@
+-    public(
+-        friend) fun t2() {}
++    public(package) fun t2() {}
+@@ -7,3 +6 @@
+-    public(
 -        friend
--    ) fun t() {}
-+    public(package) fun t() {}
+-        ) fun t3() {}
++    public(package) fun t3() {}
+@@ -11,3 +8 @@
+-    public(
+-        friend /* deleted */
+-    ) fun t4() {}
++    public(package) fun t4() {}
+@@ -15,4 +10 @@
+-    /* stays */ public(
+-        /* deleted */
+-        friend
+-        /*deleted */) /* stays */ fun t5() {} // stays
++    /* stays */ public(package) /* stays */ fun t5() {} // stays
 
 
 ============================================================
