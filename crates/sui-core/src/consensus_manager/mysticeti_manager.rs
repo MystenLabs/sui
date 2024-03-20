@@ -113,7 +113,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             .find(|(_, a)| a.protocol_key == own_protocol_key)
             .expect("Own authority should be among the consensus authorities!");
 
-        let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
+        let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
         // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
         // is the one we want to go with.
