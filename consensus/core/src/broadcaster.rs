@@ -207,7 +207,7 @@ mod test {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let network_client = Arc::new(FakeNetworkClient::new());
-        let (core_signals, signals_receiver) = CoreSignals::new();
+        let (core_signals, signals_receiver) = CoreSignals::new(context.clone());
         let _broadcaster =
             Broadcaster::new(context.clone(), network_client.clone(), &signals_receiver);
 
