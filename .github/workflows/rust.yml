@@ -45,7 +45,8 @@ jobs:
       SUI_SKIP_SIMTESTS: 1
     timeout-minutes: 45
     runs-on: [self-hosted]
-    needs: clippy
+    needs: fmt
+    #needs: clippy
     steps:
       - uses: actions/checkout@v3
       - uses: arduino/setup-protoc@v1
