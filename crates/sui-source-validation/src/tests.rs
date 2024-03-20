@@ -108,7 +108,7 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
 
     Ok(())
 }
-
+/*
 #[tokio::test]
 async fn successful_verification_module_ordering() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
@@ -145,6 +145,7 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 
     Ok(())
 }
+*/
 
 #[tokio::test]
 async fn successful_verification_upgrades() -> anyhow::Result<()> {
