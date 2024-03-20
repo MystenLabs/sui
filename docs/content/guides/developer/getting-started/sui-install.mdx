@@ -16,31 +16,13 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey
 - Microsoft Windows - Windows 10 and 11
 
-## Quick install using Homebrew or Chocolatey {#install-homebrew}
+## Install using Homebrew {#install-homebrew}
 
-Use one of the following commands for [Homebrew](https://brew.sh/) (MacOS, Linux, or Windows Subsystem for Linux) or [Chocolatey](https://chocolatey.org/) (Windows) to install Sui.
-
-<Tabs groupId="operating-systems">
-
-<TabItem label="Homebrew" value="mac">
+If you use [Homebrew](https://brew.sh/), you can install Sui with the following command:
 
 ```bash
 brew install sui
 ```
-
-</TabItem>
-
-<TabItem label="Chocolatey" value="win">
-
-```shell
-choco install sui
-```
-
-Find more [versions of Sui for Windows](https://community.chocolatey.org/packages/sui) on the Chocolatey community website.
-
-</TabItem>
-
-</Tabs>
 
 ## Install from binaries {#install-binaries}
 
@@ -137,10 +119,12 @@ sudo apt-get update
 ```
 
 #### All Linux prerequisites
- 
+
 Reference the relevant sections that follow to install each prerequisite individually, or run the following to install them all at once:
 
-{@include: ../../../snippets/linux-deps.mdx}
+```bash
+sudo apt-get install curl git-all cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+```
 
 #### cURL {#curl}
 
@@ -261,7 +245,9 @@ If you used the commands in the [Install using Homebrew](#install-homebrew) sect
 
 With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
 
-{@include: ../../../snippets/macos-deps.mdx}
+```bash
+brew install curl cmake libpq git
+```
 
 
 #### cURL {#curl-1}

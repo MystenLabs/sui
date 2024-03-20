@@ -81,13 +81,10 @@ fn add_member_to_workspace(path: &Path) -> Result<()> {
         .as_array_mut()
         .unwrap()
         .push_formatted(toml_edit::Value::String(toml_edit::Formatted::new(
-            Path::new("crates/")
-                .join(
-                    path.file_name()
-                        .expect("getting the project name from the given path"),
-                )
+            path.file_name()
+                .expect("getting the project name from the given path")
                 .to_str()
-                .expect("converting the path to a str")
+                .unwrap()
                 .to_string(),
         )));
     fs::write(workspace_toml_path, toml.to_string())
@@ -114,14 +111,12 @@ fn create_rust_service(path: &Path) -> Result<()> {
     let cargo_toml = PROJECT_DIR.get_file(cargo_toml_path).unwrap();
     let main_rs = PROJECT_DIR.get_file("src/main.rs").unwrap();
     let main_body = main_rs.contents();
-    let cargo_body = std::str::from_utf8(cargo_toml.contents())?;
-    let mut toml_content = cargo_body.parse::<toml_edit::Document>()?;
-    toml_content["package"]["name"] = toml_edit::value(path.file_name().unwrap().to_str().unwrap());
+    let cargo_body = cargo_toml.contents();
     create_dir_all(path.join("src"))?;
     let mut main_file = File::create(path.join("src/main.rs"))?;
     main_file.write_all(main_body)?;
     let mut cargo_file = File::create(path.join("Cargo.toml"))?;
-    cargo_file.write_all(toml_content.to_string().as_bytes())?;
+    cargo_file.write_all(cargo_body)?;
 
     // add the project as a member of the cargo workspace
     if is_sui_service {

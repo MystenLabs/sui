@@ -24,7 +24,6 @@ module deepbook::clob_v2 {
 
     friend deepbook::order_query;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    const EIncorrectPoolOwner: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
     const EInvalidOrderId: u64 = 3;
     const EUnauthorizedCancel: u64 = 4;
@@ -315,11 +314,10 @@ module deepbook::clob_v2 {
 
     /// Function to withdraw fees created from a pool
     public fun withdraw_fees<BaseAsset, QuoteAsset>(
-        pool_owner_cap: &PoolOwnerCap,
+        _pool_owner_cap: &PoolOwnerCap,
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         ctx: &mut TxContext,
     ): Coin<QuoteAsset> {
-        assert!(pool_owner_cap.owner == object::uid_to_address(&pool.id), EIncorrectPoolOwner);
         let quantity = quote_asset_trading_fees_value(pool);
         let to_withdraw = balance::split(&mut pool.quote_asset_trading_fees, quantity);
         coin::from_balance(to_withdraw, ctx)
@@ -426,8 +424,11 @@ module deepbook::clob_v2 {
 
         // Creates the capability to mark a pool owner.
         let id = object::new(ctx);
-        let owner = object::uid_to_address(&pool_uid);
-        let pool_owner_cap = PoolOwnerCap { id, owner };
+        let owner = object::uid_to_address(&id);
+        let pool_owner_cap = PoolOwnerCap {
+            id,
+            owner
+        };
 
         event::emit(PoolCreated {
             pool_id,

@@ -32,10 +32,7 @@ ResolvedGraph {
         silence_warnings: false,
         warnings_are_errors: false,
         additional_named_addresses: {},
-        lint_flag: LintFlag {
-            no_lint: false,
-            lint: false,
-        },
+        no_lint: false,
     },
     package_table: {
         "®´∑œ": Package {

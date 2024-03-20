@@ -8,21 +8,21 @@ module 0x8675309::M {
     }
 
     fun t0(cond: bool, s: &mut S, other: &S) {
-        let f;
+        let mut f;
         if (cond) f = &s.f else f = &other.f;
         freeze(s);
         *f;
     }
 
     fun t1(cond: bool, s: &mut S) {
-        let f;
+        let mut f;
         if (cond) f = &s.f else f = &s.g;
         freeze(s);
         *f;
     }
 
     fun t2(cond: bool, s: &mut S, other: &S) {
-        let x;
+        let mut x;
         if (cond) x = freeze(s) else x = other;
         freeze(s);
         *x;

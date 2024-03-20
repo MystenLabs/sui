@@ -100,7 +100,12 @@ function HiddenNftsPage() {
 										className="no-underline relative truncate"
 									>
 										<ErrorBoundary>
-											<NFTDisplayCard objectId={objectId} size="xs" orientation="horizontal" />
+											<NFTDisplayCard
+												objectId={objectId}
+												size="xs"
+												showLabel
+												orientation="horizontal"
+											/>
 										</ErrorBoundary>
 									</Link>
 									<div className="h-8 w-8">

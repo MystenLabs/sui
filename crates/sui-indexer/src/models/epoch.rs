@@ -33,7 +33,7 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
 }
 
-#[derive(Queryable, Selectable, Clone)]
+#[derive(Queryable, Selectable)]
 #[diesel(table_name = epochs)]
 pub struct QueryableEpochInfo {
     pub epoch: i64,

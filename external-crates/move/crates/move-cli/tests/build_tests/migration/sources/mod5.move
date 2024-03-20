@@ -24,6 +24,6 @@ module A::mod5 {
             delete(id);
             i = i + 1;
         };
-        std::vector::destroy_empty(v);
+        vector::destroy_empty(v);
     }
 }

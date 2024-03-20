@@ -2,10 +2,6 @@ module 0x2::m {
     const C: u64 = 0 + 1 + 2;
 }
 
-module a::m {
-    const C: u64 = 0 + 1 + 2;
-}
-
 // check that constants can be used
 module 0x1::A {
     #[test_only]
@@ -34,8 +30,4 @@ module 0x1::A {
     #[test]
     #[expected_failure(abort_code=0x2::m::C)]
     fun use_explicit_external() { }
-
-    #[test]
-    #[expected_failure(abort_code=a::m::C)]
-    fun use_explicit_external_named() { }
 }

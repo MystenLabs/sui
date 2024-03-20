@@ -1128,7 +1128,7 @@ impl LocalExec {
                 .node_state_dump
                 .relevant_system_packages
                 .iter()
-                .map(|w| (w.id, w.version, w.digest))
+                .map(|w| w.compute_object_reference())
                 .map(|q| (q.0, q.1))
                 .collect()),
         }
@@ -2175,7 +2175,6 @@ async fn create_epoch_store(
         sys_state,
         CheckpointDigest::random(),
         &authority_state.get_object_store(),
-        None,
     )
     .unwrap();
 

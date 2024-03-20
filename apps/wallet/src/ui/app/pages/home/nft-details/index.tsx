@@ -11,17 +11,14 @@ import { LabelValuesContainer } from '_components/LabelValuesContainer';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
 import { useGetNFTMeta, useNFTBasicData, useOwnedNFT } from '_hooks';
-import { useBuyNLargeAsset } from '_src/ui/app/components/buynlarge/useBuyNLargeAsset';
-import { useConfig } from '_src/ui/app/components/buynlarge/useConfig';
 import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-import { Text } from '_src/ui/app/shared/text';
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowRight16, ArrowUpRight12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'clsx';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
 type NftFields = {
 	metadata?: { fields?: { attributes?: { fields?: { keys: string[]; values: string[] } } } };
@@ -42,10 +39,6 @@ function NFTDetailsPage() {
 
 	const isContainedInKiosk = data?.lookup.get(nftId!);
 	const kioskItem = data?.list.find((k) => k.data?.objectId === nftId);
-
-	const navigate = useNavigate();
-	const buyNLargeConfig = useConfig();
-	const { objectType } = useBuyNLargeAsset();
 
 	// Extract either the attributes, or use the top-level NFT fields:
 	const metaFields =
@@ -80,8 +73,6 @@ function NFTDetailsPage() {
 	const isGuardLoading = useUnlockedGuard();
 	const isPending = isNftLoading || isPendingDisplay || isGuardLoading;
 
-	const isBuyNLarge = objectData?.type === objectType;
-
 	return (
 		<div
 			className={cl('flex flex-1 flex-col flex-nowrap gap-5', {
@@ -91,18 +82,11 @@ function NFTDetailsPage() {
 			<Loading loading={isPending}>
 				{objectData ? (
 					<>
-						<PageTitle title={isBuyNLarge ? buyNLargeConfig?.sheetTitle : undefined} back />
+						<PageTitle back />
 						<div className="flex flex-1 flex-col flex-nowrap items-stretch gap-8">
 							<div className="flex flex-col flex-nowrap items-center gap-3 self-center">
-								{isBuyNLarge ? (
-									<div className="text-center">
-										<Text color="steel-darker" weight="medium">
-											{buyNLargeConfig?.sheetDescription}
-										</Text>
-									</div>
-								) : null}
 								<NFTDisplayCard objectId={nftId!} size="xl" borderRadius="xl" playable />
-								{nftId && !isBuyNLarge ? (
+								{nftId ? (
 									<Link
 										color="steelDark"
 										weight="semibold"
@@ -113,116 +97,110 @@ function NFTDetailsPage() {
 									/>
 								) : null}
 							</div>
-							{!isBuyNLarge ? (
-								<>
+							<LabelValuesContainer>
+								{ownerExplorerLink ? (
+									<LabelValueItem
+										label="Owner"
+										value={
+											<Link
+												color="suiDark"
+												weight="medium"
+												size="body"
+												mono
+												href={ownerExplorerLink}
+												text={formatAddress(ownerAddress)}
+												title="View on Sui Explorer"
+											/>
+										}
+									/>
+								) : null}
+								<LabelValueItem
+									label="Object Id"
+									value={
+										nftId ? (
+											<Link
+												color="suiDark"
+												weight="medium"
+												size="body"
+												mono
+												href={objectExplorerLink || ''}
+												text={formatAddress(nftId)}
+												title="View on Sui Explorer"
+											/>
+										) : null
+									}
+								/>
+								<LabelValueItem
+									label="Media Type"
+									value={
+										filePath && fileExtensionType.name && fileExtensionType.type
+											? `${fileExtensionType.name} ${fileExtensionType.type}`
+											: '-'
+									}
+								/>
+							</LabelValuesContainer>
+							<Collapsible defaultOpen title="Details">
+								<LabelValuesContainer>
+									<LabelValueItem label="Name" value={nftDisplayData?.name} />
+									<LabelValueItem
+										label="Description"
+										value={nftDisplayData?.description}
+										multiline
+									/>
+									<LabelValueItem label="Creator" value={nftDisplayData?.creator} parseUrl />
+									<LabelValueItem label="Link" value={nftDisplayData?.link} parseUrl />
+									<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} parseUrl />
+								</LabelValuesContainer>
+							</Collapsible>
+							{metaKeys.length ? (
+								<Collapsible title="Attributes" defaultOpen>
 									<LabelValuesContainer>
-										{ownerExplorerLink ? (
+										{metaKeys.map((aKey, idx) => (
 											<LabelValueItem
-												label="Owner"
+												key={aKey}
+												label={aKey}
 												value={
-													<Link
-														color="suiDark"
-														weight="medium"
-														size="body"
-														mono
-														href={ownerExplorerLink}
-														text={formatAddress(ownerAddress)}
-														title="View on Sui Explorer"
-													/>
+													typeof metaValues[idx] === 'object'
+														? JSON.stringify(metaValues[idx])
+														: metaValues[idx]
 												}
 											/>
-										) : null}
-										<LabelValueItem
-											label="Object Id"
-											value={
-												nftId ? (
-													<Link
-														color="suiDark"
-														weight="medium"
-														size="body"
-														mono
-														href={objectExplorerLink || ''}
-														text={formatAddress(nftId)}
-														title="View on Sui Explorer"
-													/>
-												) : null
-											}
-										/>
-										<LabelValueItem
-											label="Media Type"
-											value={
-												filePath && fileExtensionType.name && fileExtensionType.type
-													? `${fileExtensionType.name} ${fileExtensionType.type}`
-													: '-'
-											}
-										/>
+										))}
 									</LabelValuesContainer>
-									<Collapsible defaultOpen title="Details">
-										<LabelValuesContainer>
-											<LabelValueItem label="Name" value={nftDisplayData?.name} />
-											<LabelValueItem
-												label="Description"
-												value={nftDisplayData?.description}
-												multiline
-											/>
-											<LabelValueItem label="Creator" value={nftDisplayData?.creator} parseUrl />
-											<LabelValueItem label="Link" value={nftDisplayData?.link} parseUrl />
-											<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} parseUrl />
-										</LabelValuesContainer>
-									</Collapsible>
-									{metaKeys.length ? (
-										<Collapsible title="Attributes" defaultOpen>
-											<LabelValuesContainer>
-												{metaKeys.map((aKey, idx) => (
-													<LabelValueItem
-														key={aKey}
-														label={aKey}
-														value={
-															typeof metaValues[idx] === 'object'
-																? JSON.stringify(metaValues[idx])
-																: metaValues[idx]
-														}
-													/>
-												))}
-											</LabelValuesContainer>
-										</Collapsible>
-									) : null}
+								</Collapsible>
+							) : null}
 
-									{isContainedInKiosk && kioskItem?.isLocked ? (
-										<div className="flex flex-col gap-2 mb-3">
-											<Button
-												after={<ArrowUpRight12 />}
-												variant="outline"
-												href="https://docs.sui.io/build/sui-kiosk"
-												text="Learn more about Kiosks"
-											/>
-											<Button
-												after={<ArrowUpRight12 />}
-												variant="outline"
-												href={`https://sui.hyperspace.xyz/wallet/sui/${accountAddress}?tokenAddress=${nftId}`}
-												text="Marketplace"
-											/>
-										</div>
-									) : (
-										<div className="mb-3 flex flex-1 items-end">
-											<Button
-												variant="primary"
-												size="tall"
-												disabled={!isTransferable}
-												to={`/nft-transfer/${nftId}`}
-												title={
-													isTransferable
-														? undefined
-														: "Unable to send. NFT doesn't have public transfer method"
-												}
-												text="Send NFT"
-												after={<ArrowRight16 />}
-											/>
-										</div>
-									)}
-								</>
+							{isContainedInKiosk && kioskItem?.isLocked ? (
+								<div className="flex flex-col gap-2 mb-3">
+									<Button
+										after={<ArrowUpRight12 />}
+										variant="outline"
+										href="https://docs.sui.io/build/sui-kiosk"
+										text="Learn more about Kiosks"
+									/>
+									<Button
+										after={<ArrowUpRight12 />}
+										variant="outline"
+										href={`https://sui.hyperspace.xyz/wallet/sui/${accountAddress}?tokenAddress=${nftId}`}
+										text="Marketplace"
+									/>
+								</div>
 							) : (
-								<Button variant="secondary" onClick={() => navigate(-1)} text="Okay" />
+								<div className="mb-3 flex flex-1 items-end">
+									<Button
+										variant="primary"
+										size="tall"
+										disabled={!isTransferable}
+										to={`/nft-transfer/${nftId}`}
+										title={
+											isTransferable
+												? undefined
+												: "Unable to send. NFT doesn't have public transfer method"
+										}
+										text="Send NFT"
+										after={<ArrowRight16 />}
+									/>
+								</div>
 							)}
 						</div>
 					</>

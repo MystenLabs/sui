@@ -137,7 +137,6 @@ export interface ClickedCollectibleCardProperties {
 	 * The ID of an object on Sui.
 	 */
 	objectId: string;
-	sourceScreen?: string;
 }
 
 export interface ClickedCreateNewAccountProperties {
@@ -178,7 +177,7 @@ export interface ClickedSocialSignInButtonProperties {
 	 *
 	 * | Rule | Value |
 	 * |---|---|
-	 * | Enum Values | Microsoft, Facebook, Google, Twitch, Kakao |
+	 * | Enum Values | Microsoft, Facebook, Google, Twitch |
 	 */
 	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch' | 'Kakao';
 	/**

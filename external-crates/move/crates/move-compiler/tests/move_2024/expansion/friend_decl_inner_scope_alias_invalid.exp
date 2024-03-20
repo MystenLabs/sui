@@ -1,0 +1,6 @@
+error[E03002]: unbound module
+  ┌─ tests/move_2024/expansion/friend_decl_inner_scope_alias_invalid.move:7:12
+  │
+7 │     friend Q;
+  │            ^ Unbound module alias 'Q'
+

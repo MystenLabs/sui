@@ -457,11 +457,9 @@ fn compare_types(
             compare_structs(context, *idx1, *idx2, def_module)
         }
         (
-            SignatureToken::StructInstantiation(struct_inst1),
-            SignatureToken::StructInstantiation(struct_inst2),
+            SignatureToken::StructInstantiation(idx1, inst1),
+            SignatureToken::StructInstantiation(idx2, inst2),
         ) => {
-            let (idx1, inst1) = &**struct_inst1;
-            let (idx2, inst2) = &**struct_inst2;
             compare_structs(context, *idx1, *idx2, def_module)?;
             compare_cross_module_signatures(context, inst1, inst2, def_module)
         }
@@ -484,7 +482,7 @@ fn compare_types(
         | (SignatureToken::Signer, _)
         | (SignatureToken::Vector(_), _)
         | (SignatureToken::Struct(_), _)
-        | (SignatureToken::StructInstantiation(_), _)
+        | (SignatureToken::StructInstantiation(_, _), _)
         | (SignatureToken::Reference(_), _)
         | (SignatureToken::MutableReference(_), _)
         | (SignatureToken::TypeParameter(_), _)

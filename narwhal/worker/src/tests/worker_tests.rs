@@ -6,6 +6,7 @@ use crate::LocalNarwhalClient;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use async_trait::async_trait;
 use bytes::Bytes;
+use config::ChainIdentifier;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -408,6 +409,7 @@ async fn get_network_peers_from_admin_server() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        ChainIdentifier::unknown(),
         latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
@@ -415,6 +417,7 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
+        store.randomness_store.clone(),
         tx_new_certificates,
         rx_feedback,
         rx_consensus_round_updates,
@@ -522,6 +525,7 @@ async fn get_network_peers_from_admin_server() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        ChainIdentifier::unknown(),
         latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),
@@ -529,6 +533,7 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
+        store.randomness_store.clone(),
         tx_new_certificates_2,
         rx_feedback_2,
         rx_consensus_round_updates,

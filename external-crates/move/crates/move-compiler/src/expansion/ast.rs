@@ -6,8 +6,8 @@ use crate::{
     diagnostics::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, Field, FunctionName,
-        ModuleName, QuantKind, StructName, UnaryOp, Var, ENTRY_MODIFIER, MACRO_MODIFIER,
-        NATIVE_MODIFIER,
+        ModuleName, Mutability, QuantKind, StructName, UnaryOp, Var, ENTRY_MODIFIER,
+        MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -70,7 +70,6 @@ pub struct UseFuns {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeValue_ {
     Value(Value),
-    Address(Address),
     Module(ModuleIdent),
     ModuleAccess(ModuleAccess),
 }
@@ -259,13 +258,6 @@ pub type Type = Spanned<Type_>;
 // Expressions
 //**************************************************************************************************
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Mutability {
-    Imm,
-    Mut(Loc), // if the local had a `mut` prefix
-    Either,   // for legacy and temps
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldBindings {
     Named(Fields<LValue>),
@@ -274,7 +266,7 @@ pub enum FieldBindings {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LValue_ {
-    Var(Option<Mutability>, ModuleAccess, Option<Vec<Type>>),
+    Var(Mutability, ModuleAccess, Option<Vec<Type>>),
     Unpack(ModuleAccess, Option<Vec<Type>>, FieldBindings),
 }
 pub type LValue = Spanned<LValue_>;
@@ -943,9 +935,8 @@ impl AstDebug for AttributeValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             AttributeValue_::Value(v) => v.ast_debug(w),
-            AttributeValue_::Module(m) => w.write(&format!("{m}")),
+            AttributeValue_::Module(m) => w.write(&format!("{}", m)),
             AttributeValue_::ModuleAccess(n) => n.ast_debug(w),
-            AttributeValue_::Address(a) => w.write(&format!("{a}")),
         }
     }
 }
@@ -1145,7 +1136,9 @@ impl AstDebug for FunctionSignature {
         type_parameters.ast_debug(w);
         w.write("(");
         w.comma(parameters, |w, (mutability, v, st)| {
-            mutability.ast_debug(w);
+            if mutability.is_some() {
+                w.write("mut ");
+            }
             w.write(&format!("{}: ", v));
             st.ast_debug(w);
         });
@@ -1577,8 +1570,8 @@ impl AstDebug for LValue_ {
         use LValue_ as L;
         match self {
             L::Var(mutability, v, tys_opt) => {
-                if let Some(mutability) = mutability {
-                    mutability.ast_debug(w);
+                if mutability.is_some() {
+                    w.write("mut ");
                 }
                 w.write(&format!("{}", v));
                 if let Some(ss) = tys_opt {
@@ -1665,16 +1658,6 @@ impl AstDebug for FieldBindings {
                 });
                 w.write(")");
             }
-        }
-    }
-}
-
-impl AstDebug for Mutability {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            Mutability::Mut(_) => w.write("mut "),
-            Mutability::Either => w.write("mut? "),
-            Mutability::Imm => (),
         }
     }
 }

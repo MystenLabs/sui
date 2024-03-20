@@ -45,7 +45,6 @@ pub mod epoch_data;
 pub mod event;
 pub mod executable_transaction;
 pub mod execution;
-pub mod execution_config_utils;
 pub mod execution_mode;
 pub mod execution_status;
 pub mod full_checkpoint_content;
@@ -287,8 +286,7 @@ pub fn is_primitive(
         S::Struct(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
             .contains(&resolve_struct(view, *idx)),
 
-        S::StructInstantiation(s) => {
-            let (idx, targs) = &**s;
+        S::StructInstantiation(idx, targs) => {
             let resolved_struct = resolve_struct(view, *idx);
             // option is a primitive
             resolved_struct == RESOLVED_STD_OPTION
@@ -350,7 +348,7 @@ fn is_object_struct(
             .get(*idx as usize)
             .map(|abs| abs.has_key())
             .unwrap_or(false)),
-        S::Struct(_) | S::StructInstantiation(_) => {
+        S::Struct(_) | S::StructInstantiation(_, _) => {
             let abilities = view
                 .abilities(s, function_type_args)
                 .map_err(|vm_err| vm_err.to_string())?;

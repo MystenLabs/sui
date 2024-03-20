@@ -158,7 +158,7 @@ pub enum Type {
     Signer,
     Vector(Box<Type>),
     Struct(CachedStructIndex),
-    StructInstantiation(Box<(CachedStructIndex, Vec<Type>)>),
+    StructInstantiation(CachedStructIndex, Vec<Type>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     TyParam(u16),
@@ -196,13 +196,12 @@ impl Type {
                 Type::MutableReference(Box::new(ty.apply_subst(subst, depth + 1)?))
             }
             Type::Struct(def_idx) => Type::Struct(*def_idx),
-            Type::StructInstantiation(struct_inst) => {
-                let (def_idx, instantiation) = &**struct_inst;
+            Type::StructInstantiation(def_idx, instantiation) => {
                 let mut inst = vec![];
                 for ty in instantiation {
                     inst.push(ty.apply_subst(subst, depth + 1)?)
                 }
-                Type::StructInstantiation(Box::new((*def_idx, inst)))
+                Type::StructInstantiation(*def_idx, inst)
             }
         };
         Ok(res)
@@ -243,12 +242,9 @@ impl Type {
                 Self::LEGACY_BASE_MEMORY_SIZE + ty.size()
             }
             Struct(_) => Self::LEGACY_BASE_MEMORY_SIZE,
-            StructInstantiation(struct_inst) => {
-                let (_, tys) = &**struct_inst;
-                tys
-                    .iter()
-                    .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size())
-            },
+            StructInstantiation(_, tys) => tys
+                .iter()
+                .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size()),
         }
     }
 
@@ -267,7 +263,7 @@ impl Type {
             S::Address => L::Address,
             S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
             // Not yet supported
-            S::Struct(_) | S::StructInstantiation(_) => {
+            S::Struct(_) | S::StructInstantiation(_, _) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Unable to load const type signature".to_string()),

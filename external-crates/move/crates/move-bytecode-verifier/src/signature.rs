@@ -285,8 +285,7 @@ impl<'a> SignatureChecker<'a> {
     ) -> PartialVMResult<()> {
         match ty {
             SignatureToken::Vector(ty) => self.check_phantom_params(ty, false, type_parameters)?,
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (idx, type_arguments) = &**struct_inst;
+            SignatureToken::StructInstantiation(idx, type_arguments) => {
                 let sh = self.resolver.struct_handle_at(*idx);
                 for (i, ty) in type_arguments.iter().enumerate() {
                     self.check_phantom_params(
@@ -360,10 +359,7 @@ impl<'a> SignatureChecker<'a> {
                     .with_message("reference not allowed".to_string()))
             }
             Vector(ty) => self.check_signature_token(ty),
-            StructInstantiation(struct_inst) => {
-                let (_, type_arguments) = &**struct_inst;
-                self.check_signature_tokens(type_arguments)
-            },
+            StructInstantiation(_, type_arguments) => self.check_signature_tokens(type_arguments),
         }
     }
 
@@ -407,8 +403,7 @@ impl<'a> SignatureChecker<'a> {
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
         match s {
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (idx, type_arguments) = &**struct_inst;
+            SignatureToken::StructInstantiation(idx, type_arguments) => {
                 // Check that the instantiation satisfies the `idx` struct's constraints
                 // Cannot be checked completely if we do not know the constraints of type parameters
                 // i.e. it cannot be checked unless we are inside some module member. The only case

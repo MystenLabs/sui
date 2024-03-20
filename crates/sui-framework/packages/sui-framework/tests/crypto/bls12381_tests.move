@@ -205,12 +205,6 @@ module sui::bls12381_tests {
 
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
-    fun test_invalid_scalar_empty() {
-        let _ = bls12381::scalar_from_bytes(&vector[]);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_invalid_scalar_too_short() {
         let _ = bls12381::scalar_from_bytes(&SHORT_SCALAR_BYTES);
     }
@@ -276,9 +270,7 @@ module sui::bls12381_tests {
         let msg2 = b"321";
         let hash1 = bls12381::hash_to_g1(&msg1);
         let hash2 = bls12381::hash_to_g1(&msg2);
-        let hash3 = bls12381::hash_to_g1(&msg1);
         assert!(group_ops::equal(&hash1, &hash2) == false, 0);
-        assert!(group_ops::equal(&hash1, &hash3), 0);
     }
 
     #[test]
@@ -318,12 +310,6 @@ module sui::bls12381_tests {
 
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
-    fun test_invalid_g1_empty() {
-        let _ = bls12381::g1_from_bytes(&vector[]);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_invalid_g1_too_long() {
         let _ = bls12381::g1_from_bytes(&LONG_G1_BYTES);
     }
@@ -336,11 +322,6 @@ module sui::bls12381_tests {
         let _ = bls12381::g1_div(&a, &b);
     }
 
-    #[test]
-    #[expected_failure(abort_code = group_ops::EInvalidInput)]
-    fun test_invalid_g1_empty_msg() {
-        let _ = bls12381::hash_to_g1(&vector[]);
-    }
 
     #[test]
     fun test_g2_ops() {
@@ -381,9 +362,7 @@ module sui::bls12381_tests {
         let msg2 = b"321";
         let hash1 = bls12381::hash_to_g2(&msg1);
         let hash2 = bls12381::hash_to_g2(&msg2);
-        let hash3 = bls12381::hash_to_g2(&msg1);
         assert!(group_ops::equal(&hash1, &hash2) == false, 0);
-        assert!(group_ops::equal(&hash1, &hash3), 0);
     }
 
     #[test]
@@ -417,12 +396,6 @@ module sui::bls12381_tests {
 
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
-    fun test_invalid_g2_empty() {
-        let _ = bls12381::g2_from_bytes(&vector[]);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_invalid_g2_too_short() {
         let _ = bls12381::g2_from_bytes(&SHORT_G2_BYTES);
     }
@@ -439,12 +412,6 @@ module sui::bls12381_tests {
         let a = bls12381::scalar_from_u64(0);
         let b = bls12381::g2_generator();
         let _ = bls12381::g2_div(&a, &b);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = group_ops::EInvalidInput)]
-    fun test_invalid_g2_empty_msg() {
-        let _ = bls12381::hash_to_g2(&vector[]);
     }
 
 
@@ -520,7 +487,7 @@ module sui::bls12381_tests {
         while (i < 20) {
             let base_scalar = bls12381::scalar_from_u64(i);
             let base = bls12381::g1_mul(&base_scalar, &g);
-            let exponent_scalar = bls12381::scalar_from_u64(i + 100);
+            let exponent_scalar = bls12381::scalar_from_u64(i+100);
             let base_exp = bls12381::g1_mul(&exponent_scalar, &base);
             vector::push_back(&mut elements, base);
             vector::push_back(&mut scalars, exponent_scalar);
@@ -574,11 +541,10 @@ module sui::bls12381_tests {
         let g = bls12381::g1_generator();
         let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
         let elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
-        while (i < 34) {
-            // this limit is defined in the protocol config
+        while (i < 34) { // this limit is defined in the protocol config
             let base_scalar = bls12381::scalar_from_u64(i);
             let base = bls12381::g1_mul(&base_scalar, &g);
-            let exponent_scalar = bls12381::scalar_from_u64(i + 100);
+            let exponent_scalar = bls12381::scalar_from_u64(i+100);
             let base_exp = bls12381::g1_mul(&exponent_scalar, &base);
             vector::push_back(&mut elements, base);
             vector::push_back(&mut scalars, exponent_scalar);
@@ -599,7 +565,7 @@ module sui::bls12381_tests {
         while (i < 20) {
             let base_scalar = bls12381::scalar_from_u64(i);
             let base = bls12381::g2_mul(&base_scalar, &g);
-            let exponent_scalar = bls12381::scalar_from_u64(i + 100);
+            let exponent_scalar = bls12381::scalar_from_u64(i+100);
             let base_exp = bls12381::g2_mul(&exponent_scalar, &base);
             vector::push_back(&mut elements, base);
             vector::push_back(&mut scalars, exponent_scalar);
@@ -658,8 +624,6 @@ module sui::bls12381_tests {
         assert_eq(bls12381::pairing(&g1_3, &g2_5), gt_5);
 
         assert_eq(bls12381::pairing(&bls12381::g1_identity(), &bls12381::g2_identity()), bls12381::gt_identity());
-        assert_eq(bls12381::pairing(&bls12381::g1_generator(), &bls12381::g2_identity()), bls12381::gt_identity());
-        assert_eq(bls12381::pairing(&bls12381::g1_identity(), &bls12381::g2_generator()), bls12381::gt_identity());
     }
 
     #[test]
@@ -669,7 +633,7 @@ module sui::bls12381_tests {
         let sig = x"908e345f2e2803cd941ae88c218c96194233c9053fa1bca52124787d3cca141c36429d7652435a820c72992d5eee6317";
 
         let pk = bls12381::g2_from_bytes(&pk);
-        let sig = bls12381::g1_from_bytes(&sig);
+        let sig= bls12381::g1_from_bytes(&sig);
         let hashed_msg = bls12381::hash_to_g1(&msg);
 
         let pairing1 = bls12381::pairing(&sig, &bls12381::g2_generator());
@@ -688,7 +652,7 @@ module sui::bls12381_tests {
         let msg = drand_message(prev_sig, round);
 
         let pk = bls12381::g1_from_bytes(&pk);
-        let sig = bls12381::g2_from_bytes(&sig);
+        let sig= bls12381::g2_from_bytes(&sig);
         let hashed_msg = bls12381::hash_to_g2(&msg);
 
         let pairing1 = bls12381::pairing(&bls12381::g1_generator(), &sig);

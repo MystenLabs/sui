@@ -5,11 +5,6 @@ module test::structs {
 
     }
 
-    public struct Public
-    {
-
-    }
-
     struct Simple
     {
         f
@@ -25,17 +20,6 @@ module test::structs {
     {
         f:   u64,
     }
-
-    struct WithPostfixAbilities
-        {
-        f:   u64,
-      }
-     has
-         key
-     ,
-       drop;
-
-
 
     struct TwoField {f1     :      u64,
         f2
@@ -103,28 +87,4 @@ native struct NativeGenericWithAbilities
          key
      ,
       drop;
-
-    struct PositionalEmpty
-    (
-
-        )
-
-    struct PositionalFields
-    (    Empty,
-    u64
-           )
-
-
-    struct PositionalFieldsWithAbilities
-    (    Empty,
-    u64
-           ) has key, store;
-
-
-    struct PositionalFieldsLong
-    (    PositionalFieldsWithAbilities,
-    PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities
-           )
-
-
 }

@@ -24,7 +24,6 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
-use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
@@ -225,6 +224,16 @@ impl ServerBuilder {
         })
     }
 
+    pub async fn from_yaml_config(
+        path: &str,
+        version: &Version,
+    ) -> Result<(Self, ServerConfig), Error> {
+        let config = ServerConfig::from_yaml(path)?;
+        Self::from_config(&config, version)
+            .await
+            .map(|builder| (builder, config))
+    }
+
     pub async fn from_config(config: &ServerConfig, version: &Version) -> Result<Self, Error> {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
@@ -252,7 +261,7 @@ impl ServerBuilder {
         let state = AppState::new(config.connection.clone(), metrics.clone());
         let mut builder = ServerBuilder::new(state);
 
-        let name_service_config = config.service.name_service.clone();
+        let name_service_config = config.name_service.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
@@ -287,7 +296,6 @@ impl ServerBuilder {
 
         builder = builder
             .context_data(config.service.clone())
-            .context_data(DataLoader::new(db.clone(), tokio::spawn))
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(Resolver::new_with_limits(
@@ -309,7 +317,7 @@ impl ServerBuilder {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout);
+            builder = builder.extension(Timeout::default());
         }
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
@@ -546,7 +554,7 @@ pub mod tests {
                 .context_data(cfg)
                 .context_data(query_id())
                 .context_data(ip_address())
-                .extension(Timeout)
+                .extension(Timeout::default())
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })

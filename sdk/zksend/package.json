@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zksend",
-	"version": "0.3.1",
+	"version": "0.2.2",
 	"description": "TODO: Write Description",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -28,7 +28,8 @@
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
-		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"test": "vitest"
 	},
 	"repository": {
 		"type": "git",

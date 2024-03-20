@@ -9,11 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{
-    diag,
-    diagnostics::Diagnostic,
-    shared::{format_oxford_list, CompilationEnv},
-};
+use crate::{diag, diagnostics::Diagnostic, shared::CompilationEnv};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -45,7 +41,6 @@ pub enum FeatureGate {
     MacroFuns,
     Move2024Migration,
     SyntaxMethods,
-    AutoborrowEq,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -78,14 +73,18 @@ pub fn check_feature_or_error(
 
 pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
     assert!(!edition.supports(feature));
-    let valid_editions = format_oxford_list!("and", "'{}'", valid_editions_for_feature(feature));
+    let valid_editions = valid_editions_for_feature(feature)
+        .into_iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     let mut diag = diag!(
         Editions::FeatureTooNew,
         (
             loc,
             format!(
                 "{} not supported by current edition '{edition}', \
-                only {valid_editions} support this feature",
+                only '{valid_editions}' support this feature",
                 feature.error_prefix(),
             )
         )
@@ -109,9 +108,7 @@ pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
-const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::MacroFuns];
-
-const E2024_BETA_FEATURES: &[FeatureGate] = &[
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::NestedUse,
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
@@ -122,9 +119,9 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Keywords,
     FeatureGate::BlockLabels,
     FeatureGate::Move2024Paths,
+    FeatureGate::MacroFuns,
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
-    FeatureGate::AutoborrowEq,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
@@ -138,10 +135,6 @@ impl Edition {
         edition: symbol!("2024"),
         release: Some(symbol!("alpha")),
     };
-    pub const E2024_BETA: Self = Self {
-        edition: symbol!("2024"),
-        release: Some(symbol!("beta")),
-    };
     pub const E2024_MIGRATION: Self = Self {
         edition: symbol!("2024"),
         release: Some(symbol!("migration")),
@@ -149,13 +142,8 @@ impl Edition {
 
     const SEP: &'static str = ".";
 
-    pub const ALL: &'static [Self] = &[
-        Self::LEGACY,
-        Self::E2024_ALPHA,
-        Self::E2024_BETA,
-        Self::E2024_MIGRATION,
-    ];
-    pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_BETA];
+    pub const ALL: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_MIGRATION];
+    pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
     pub fn supports(&self, feature: FeatureGate) -> bool {
         SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
@@ -165,9 +153,8 @@ impl Edition {
     fn prev(&self) -> Option<Self> {
         match *self {
             Self::LEGACY => None,
-            Self::E2024_ALPHA => Some(Self::E2024_BETA),
-            Self::E2024_BETA => Some(Self::LEGACY),
-            Self::E2024_MIGRATION => Some(Self::E2024_BETA),
+            Self::E2024_ALPHA => Some(Self::LEGACY),
+            Self::E2024_MIGRATION => Some(Self::E2024_ALPHA),
             _ => self.unknown_edition_panic(),
         }
     }
@@ -180,11 +167,6 @@ impl Edition {
             Self::E2024_ALPHA => {
                 let mut features = self.prev().unwrap().features();
                 features.extend(E2024_ALPHA_FEATURES);
-                features
-            }
-            Self::E2024_BETA => {
-                let mut features = self.prev().unwrap().features();
-                features.extend(E2024_BETA_FEATURES);
                 features
             }
             Self::E2024_MIGRATION => {
@@ -203,7 +185,11 @@ impl Edition {
     fn unknown_edition_error(&self) -> anyhow::Error {
         anyhow::anyhow!(
             "Unsupported edition \"{self}\". Current supported editions include: {}",
-            format_oxford_list!("and", "\"{}\"", Self::VALID)
+            Self::VALID
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(", ")
         )
     }
 }
@@ -231,7 +217,6 @@ impl FeatureGate {
             FeatureGate::MacroFuns => "'macro' functions are",
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
-            FeatureGate::AutoborrowEq => "Automatic borrowing is",
         }
     }
 }

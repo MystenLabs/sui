@@ -2,11 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_proc_macros::growing_stack;
-
 use crate::{
     cfgir::cfg::MutForwardCFG,
-    expansion::ast::Mutability,
     hlir::ast::{
         Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value, Value_, Var,
     },
@@ -17,7 +14,7 @@ use crate::{
 /// returns true if anything changed
 pub fn optimize(
     _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
+    _locals: &UniqueMap<Var, SingleType>,
     _constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -33,7 +30,6 @@ pub fn optimize(
     changed
 }
 
-#[growing_stack]
 fn optimize_cmd(sp!(_, cmd_): &mut Command) -> bool {
     use Command_ as C;
     use UnannotatedExp_ as E;

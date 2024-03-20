@@ -8,7 +8,6 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::commit::CommitAPI;
 use crate::error::{ConsensusError, ConsensusResult};
-use crate::CommitConsumer;
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
     commit::{load_committed_subdag_from_store, CommitIndex, CommittedSubDag},
@@ -42,21 +41,22 @@ pub(crate) struct CommitObserver {
 impl CommitObserver {
     pub(crate) fn new(
         context: Arc<Context>,
-        commit_consumer: CommitConsumer,
-        // sender: UnboundedSender<CommittedSubDag>,
-        // last_processed_commit_round: Round,
-        // last_processed_commit_index: CommitIndex,
+        sender: UnboundedSender<CommittedSubDag>,
+        // Last CommitIndex that has been successfully processed by the output channel.
+        // First commit in the replayed sequence will have index last_processed_index + 1.
+        // Set to 0 to replay from the start (as normal sequence starts at index = 1).
+        last_processed_index: CommitIndex,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
         let mut observer = Self {
             context,
             commit_interpreter: Linearizer::new(dag_state.clone()),
-            sender: commit_consumer.sender,
+            sender,
             store,
         };
 
-        observer.recover_and_send_commits(commit_consumer.last_processed_commit_index);
+        observer.send_missing_commits(last_processed_index);
         observer
     }
 
@@ -88,8 +88,7 @@ impl CommitObserver {
         Ok(sent_sub_dags)
     }
 
-    fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
-        // TODO: remove this check, to allow consensus to regenerate commits?
+    fn send_missing_commits(&mut self, last_processed_index: CommitIndex) {
         let last_commit = self
             .store
             .read_last_commit()
@@ -98,34 +97,34 @@ impl CommitObserver {
         if let Some(last_commit) = last_commit {
             let last_commit_index = last_commit.index();
 
-            assert!(last_commit_index >= last_processed_commit_index);
-            if last_commit_index == last_processed_commit_index {
+            assert!(last_commit_index >= last_processed_index);
+            if last_commit_index == last_processed_index {
                 return;
             }
         };
 
-        // We should not send the last processed commit again, so last_processed_commit_index+1
+        // We should not send the last processed commit again, so last_processed_index++
         let unsent_commits = self
             .store
-            .scan_commits((last_processed_commit_index + 1)..CommitIndex::MAX)
+            .scan_commits(last_processed_index + 1)
             .expect("Scanning commits should not fail");
 
-        // Resend all the committed subdags to the consensus output channel
-        // for all the commits above the last processed index.
-        let mut last_sent_commit_index = last_processed_commit_index;
         for commit in unsent_commits {
-            // Commit index must be continuous.
-            assert_eq!(commit.index(), last_sent_commit_index + 1);
-
+            // Resend all the committed subdags to the consensus output channel
+            // for all the commits above the last processed index.
+            assert!(commit.index() > last_processed_index);
             let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
-            self.sender.send(committed_subdag).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to send commit during recovery, probably due to shutdown: {:?}",
-                    e
-                )
-            });
 
-            last_sent_commit_index += 1;
+            // Failures in sender.send() are assumed to be permanent
+            if let Err(err) = self.sender.send(committed_subdag) {
+                tracing::error!(
+                    "Failed to send committed sub-dag, probably due to shutdown: {:?}",
+                    err
+                );
+                // TODO: revisit this to see if we should pass error/shutdown signal
+                // back to core.
+                break;
+            }
         }
     }
 
@@ -171,7 +170,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::{BlockRef, Round},
+        block::BlockRef,
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         dag_state::DagState,
@@ -191,17 +190,13 @@ mod tests {
             mem_store.clone(),
         )));
         let leader_schedule = LeaderSchedule::new(context.clone());
-        let last_processed_commit_round = 0;
-        let last_processed_commit_index = 0;
+        let last_processed_index = 0;
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            sender,
+            last_processed_index,
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -264,14 +259,14 @@ mod tests {
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(last_commit.index(), commits.last().unwrap().commit_index);
-        let all_stored_commits = mem_store.scan_commits(0..CommitIndex::MAX).unwrap();
+        let all_stored_commits = mem_store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), leaders.len());
         let blocks_existence = mem_store.contains_blocks(&expected_stored_refs).unwrap();
         assert!(blocks_existence.iter().all(|exists| *exists));
     }
 
     #[test]
-    fn test_recover_and_send_commits() {
+    fn test_send_missing_commits_from_index() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);
@@ -281,17 +276,13 @@ mod tests {
             mem_store.clone(),
         )));
         let leader_schedule = LeaderSchedule::new(context.clone());
-        let last_processed_commit_round = 0;
-        let last_processed_commit_index = 0;
+        let last_processed_index = 0;
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender.clone(),
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            sender.clone(),
+            last_processed_index,
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -310,9 +301,7 @@ mod tests {
 
         // Commit first batch of leaders (2) and "receive" the subdags as the
         // consumer of the consensus output channel.
-        let expected_last_processed_index: usize = 2;
-        let expected_last_processed_round =
-            expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
+        let expected_last_processed_index = 2;
         let mut commits = observer
             .handle_commit(
                 leaders
@@ -382,11 +371,8 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                expected_last_processed_round as Round,
-                expected_last_processed_index as CommitIndex,
-            ),
+            sender,
+            expected_last_processed_index as CommitIndex,
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -418,17 +404,13 @@ mod tests {
             mem_store.clone(),
         )));
         let leader_schedule = LeaderSchedule::new(context.clone());
-        let last_processed_commit_round = 0;
-        let last_processed_commit_index = 0;
+        let last_processed_index = 0;
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender.clone(),
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            sender.clone(),
+            last_processed_index,
             dag_state.clone(),
             mem_store.clone(),
         );
@@ -447,9 +429,7 @@ mod tests {
 
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
-        let expected_last_processed_index: usize = 3;
-        let expected_last_processed_round =
-            expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
+        let expected_last_processed_index = 3;
         let commits = observer.handle_commit(leaders.clone()).unwrap();
 
         // Check commits sent over consensus output channel is accurate
@@ -477,11 +457,8 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                expected_last_processed_round as Round,
-                expected_last_processed_index as CommitIndex,
-            ),
+            sender,
+            expected_last_processed_index as CommitIndex,
             dag_state.clone(),
             mem_store.clone(),
         );

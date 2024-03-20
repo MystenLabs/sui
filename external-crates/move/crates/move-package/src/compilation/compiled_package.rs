@@ -28,9 +28,8 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     diagnostics::FilesSourceText,
     editions::Flavor,
-    linters,
     shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
-    sui_mode::{self},
+    sui_mode::linters::{known_filters, linter_visitors},
     Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
@@ -481,7 +480,7 @@ impl CompiledPackage {
         let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let lint_level = resolution_graph.build_options.lint_flag.get();
+        let lint = !resolution_graph.build_options.no_lint;
         let sui_mode = resolution_graph
             .build_options
             .default_flavor
@@ -491,15 +490,12 @@ impl CompiledPackage {
             .unwrap()
             .set_flags(flags);
         if sui_mode {
-            let (filter_attr_name, filters) = sui_mode::linters::known_filters();
-            compiler = compiler
-                .add_custom_known_filters(filter_attr_name, filters)
-                .add_visitors(sui_mode::linters::linter_visitors(lint_level))
+            let (filter_attr_name, filters) = known_filters();
+            compiler = compiler.add_custom_known_filters(filter_attr_name, filters);
+            if lint {
+                compiler = compiler.add_visitors(linter_visitors())
+            }
         }
-        let (filter_attr_name, filters) = linters::known_filters();
-        compiler = compiler
-            .add_custom_known_filters(filter_attr_name, filters)
-            .add_visitors(linters::linter_visitors(lint_level));
         Ok(BuildResult {
             root_package_name,
             sources_package_paths,
@@ -803,7 +799,26 @@ pub(crate) fn make_source_and_deps_for_compiler(
     /* sources */ PackagePaths,
     /* deps */ Vec<(PackagePaths, ModuleFormat)>,
 )> {
-    let deps_package_paths = make_deps_for_compiler_internal(deps)?;
+    let deps_package_paths = deps
+        .into_iter()
+        .map(|dep| {
+            let paths = dep
+                .source_paths
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
+            Ok((
+                PackagePaths {
+                    name: Some((dep.name, dep.compiler_config)),
+                    paths,
+                    named_address_map,
+                },
+                dep.module_format,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
     let root_named_addrs = apply_named_address_renaming(
         root.source_package.package.name,
         named_address_mapping_for_compiler(&root.resolved_table),
@@ -822,28 +837,4 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_map: root_named_addrs,
     };
     Ok((source_package_paths, deps_package_paths))
-}
-
-pub(crate) fn make_deps_for_compiler_internal(
-    deps: Vec<DependencyInfo>,
-) -> Result<Vec<(PackagePaths, ModuleFormat)>> {
-    deps.into_iter()
-        .map(|dep| {
-            let paths = dep
-                .source_paths
-                .into_iter()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
-            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
-            Ok((
-                PackagePaths {
-                    name: Some((dep.name, dep.compiler_config)),
-                    paths,
-                    named_address_map,
-                },
-                dep.module_format,
-            ))
-        })
-        .collect::<Result<Vec<_>>>()
 }

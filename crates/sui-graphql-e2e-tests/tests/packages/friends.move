@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 39 --addresses P0=0x0 P1=0x0 --accounts A --simulator
+//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
 
 //# publish --upgradeable --sender A
 
@@ -10,7 +10,10 @@ module P0::m1 { public fun f(): u64 { P0::n::f() } }
 module P0::m2 { public fun f(): u64 { P0::n::f() } }
 
 module P0::n {
-    public(package) fun f(): u64 { 42 }
+    friend P0::m0;
+    friend P0::m1;
+    friend P0::m2;
+    public fun f(): u64 { 42 }
 }
 
 //# create-checkpoint
@@ -179,7 +182,12 @@ module P0::m2 { public fun f(): u64 { P0::n::f() } }
 module P0::m3 { public fun f(): u64 { P0::n::f() } }
 
 module P0::n {
-    public(package) fun f(): u64 { 42 }
+    friend P0::m0;
+    friend P0::m1;
+    friend P0::m2;
+    friend P0::m3;
+
+    public fun f(): u64 { 42 }
 }
 
 //# create-checkpoint

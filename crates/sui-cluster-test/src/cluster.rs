@@ -327,7 +327,7 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
 }
 
-pub fn new_wallet_context_from_cluster(
+pub async fn new_wallet_context_from_cluster(
     cluster: &(dyn Cluster + Sync + Send),
     key_pair: AccountKeyPair,
 ) -> WalletContext {
@@ -360,10 +360,12 @@ pub fn new_wallet_context_from_cluster(
         wallet_config_path
     );
 
-    WalletContext::new(&wallet_config_path, None, None).unwrap_or_else(|e| {
-        panic!(
-            "Failed to init wallet context from path {:?}, error: {e}",
-            wallet_config_path
-        )
-    })
+    WalletContext::new(&wallet_config_path, None, None)
+        .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to init wallet context from path {:?}, error: {e}",
+                wallet_config_path
+            )
+        })
 }

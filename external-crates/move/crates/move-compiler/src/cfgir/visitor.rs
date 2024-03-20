@@ -19,7 +19,6 @@ use crate::{
     shared::CompilationEnv,
 };
 use move_ir_types::location::*;
-use move_proc_macros::growing_stack;
 
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 
@@ -182,7 +181,7 @@ pub trait SimpleAbsIntConstructor: Sized {
                 (v, unassigned)
             })
             .collect::<BTreeMap<_, _>>();
-        for (_, param, _) in &context.signature.parameters {
+        for (param, _) in &context.signature.parameters {
             locals.insert(
                 *param,
                 LocalState::Available(
@@ -245,7 +244,7 @@ pub trait SimpleAbsInt: Sized {
         }
         let sp!(_, cmd_) = cmd;
         match cmd_ {
-            C::Assign(_, ls, e) => {
+            C::Assign(ls, e) => {
                 let values = self.exp(context, state, e);
                 self.lvalues(context, state, ls, values);
             }
@@ -304,7 +303,7 @@ pub trait SimpleAbsInt: Sized {
         let sp!(loc, l_) = l;
         match l_ {
             L::Ignore => (),
-            L::Var { var: v, .. } => {
+            L::Var(v, _) => {
                 let locals = state.locals_mut();
                 locals.insert(*v, LocalState::Available(*loc, value));
             }
@@ -337,7 +336,6 @@ pub trait SimpleAbsInt: Sized {
     ) -> Option<Vec<<Self::State as SimpleDomain>::Value>> {
         None
     }
-    #[growing_stack]
     fn exp(
         &self,
         context: &mut Self::ExecutionContext,

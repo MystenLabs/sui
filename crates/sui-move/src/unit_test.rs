@@ -31,6 +31,9 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
+    /// If `true`, disable linters
+    #[clap(long, global = true)]
+    pub no_lint: bool,
 }
 
 impl Test {

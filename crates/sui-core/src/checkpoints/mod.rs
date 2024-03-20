@@ -33,7 +33,8 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -58,7 +59,7 @@ use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummar
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
-use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
+use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 use tokio::{
     sync::{watch, Notify},
     time::timeout,
@@ -72,7 +73,7 @@ use typed_store::{
 };
 use typed_store_derive::DBMapUtils;
 
-pub type CheckpointHeight = u64;
+pub type CheckpointCommitHeight = u64;
 
 pub struct EpochStats {
     pub checkpoint_count: u64,
@@ -84,7 +85,7 @@ pub struct EpochStats {
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
-    pub checkpoint_height: CheckpointHeight,
+    pub commit_height: CheckpointCommitHeight,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -94,60 +95,10 @@ pub struct PendingCheckpoint {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PendingCheckpointV2 {
-    // This is an enum for future upgradability, though at the moment there is only one variant.
-    V2(PendingCheckpointV2Contents),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PendingCheckpointV2Contents {
-    pub roots: Vec<TransactionKey>,
-    pub details: PendingCheckpointInfo,
-}
-
-impl PendingCheckpointV2 {
-    pub fn as_v2(&self) -> &PendingCheckpointV2Contents {
-        match self {
-            PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn into_v2(self) -> PendingCheckpointV2Contents {
-        match self {
-            PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn expect_v1(self) -> PendingCheckpoint {
-        let v2 = self.into_v2();
-        PendingCheckpoint {
-            roots: v2
-                .roots
-                .into_iter()
-                .map(|root| *root.unwrap_digest())
-                .collect(),
-            details: v2.details,
-        }
-    }
-
-    pub fn roots(&self) -> &Vec<TransactionKey> {
-        &self.as_v2().roots
-    }
-
-    pub fn details(&self) -> &PendingCheckpointInfo {
-        &self.as_v2().details
-    }
-
-    pub fn height(&self) -> CheckpointHeight {
-        self.details().checkpoint_height
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BuilderCheckpointSummary {
     pub summary: CheckpointSummary,
-    // Height at which this checkpoint summary was built. None for genesis checkpoint
-    pub checkpoint_height: Option<CheckpointHeight>,
+    // Commit form which this checkpoint summary was built. None for genesis checkpoint
+    pub commit_height: Option<CheckpointCommitHeight>,
     pub position_in_commit: usize,
 }
 
@@ -844,30 +795,22 @@ impl CheckpointBuilder {
         info!("Shutting down CheckpointBuilder");
     }
 
-    #[instrument(level = "debug", skip_all, fields(?height))]
+    #[instrument(level = "debug", skip_all)]
     async fn make_checkpoint(
         &self,
-        height: CheckpointHeight,
-        pending: PendingCheckpointV2,
+        height: CheckpointCommitHeight,
+        pending: PendingCheckpoint,
     ) -> anyhow::Result<()> {
-        let pending = pending.into_v2();
         self.metrics
             .checkpoint_roots_count
             .inc_by(pending.roots.len() as u64);
-
-        let root_digests = self
-            .epoch_store
-            .notify_read_executed_digests(&pending.roots)
-            .in_monitored_scope("CheckpointNotifyDigests")
-            .await?;
-        let root_effects = self
+        let roots = self
             .effects_store
-            .notify_read_executed_effects(root_digests)
+            .notify_read_executed_effects(pending.roots)
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
-
         let _scope = monitored_scope("CheckpointBuilder");
-        let unsorted = self.complete_checkpoint_effects(root_effects)?;
+        let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = {
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             CausalOrder::causal_sort(unsorted)
@@ -880,7 +823,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all)]
     async fn write_checkpoints(
         &self,
-        height: CheckpointHeight,
+        height: CheckpointCommitHeight,
         new_checkpoint: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
         let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
@@ -1025,8 +968,7 @@ impl CheckpointBuilder {
             .get_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
-        let mut transactions = Vec::with_capacity(all_effects.len());
-        let mut transaction_keys = Vec::with_capacity(all_effects.len());
+        let mut transaction_keys = Vec::new();
         {
             let _guard = monitored_scope("CheckpointBuilder::wait_for_transactions_sequenced");
             debug!(
@@ -1054,7 +996,6 @@ impl CheckpointBuilder {
                         ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
                     ));
                 }
-                transactions.push(transaction);
                 all_effects_and_transaction_sizes.push((effects, size));
             }
 
@@ -1065,7 +1006,7 @@ impl CheckpointBuilder {
 
         let signatures = self
             .epoch_store
-            .user_signatures_for_checkpoint(&transactions, &all_digests)?;
+            .user_signatures_for_checkpoint(&all_digests)?;
         debug!(
             ?last_checkpoint_seq,
             "Received {} checkpoint user signatures from consensus",
@@ -1764,7 +1705,7 @@ pub trait CheckpointServiceNotify {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
-    fn notify_checkpoint(&self) -> SuiResult;
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult;
 }
 
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
@@ -1845,12 +1786,12 @@ impl CheckpointService {
     fn write_and_notify_checkpoint_for_testing(
         &self,
         epoch_store: &AuthorityPerEpochStore,
-        checkpoint: PendingCheckpointV2,
+        checkpoint: PendingCheckpoint,
     ) -> SuiResult {
         let mut batch = epoch_store.db_batch_for_test();
         epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
         batch.write()?;
-        self.notify_checkpoint()?;
+        self.notify_checkpoint(&checkpoint)?;
         Ok(())
     }
 }
@@ -1898,7 +1839,11 @@ impl CheckpointServiceNotify for CheckpointService {
         Ok(())
     }
 
-    fn notify_checkpoint(&self) -> SuiResult {
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult {
+        debug!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Notifying builder about checkpoint",
+        );
         self.notify_builder.notify_one();
         Ok(())
     }
@@ -1915,29 +1860,14 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
         Ok(())
     }
 
-    fn notify_checkpoint(&self) -> SuiResult {
+    fn notify_checkpoint(&self, _: &PendingCheckpoint) -> SuiResult {
         Ok(())
     }
 }
 
 impl PendingCheckpoint {
-    pub fn height(&self) -> CheckpointHeight {
-        self.details.checkpoint_height
-    }
-}
-
-impl PendingCheckpointV2 {}
-
-impl From<PendingCheckpoint> for PendingCheckpointV2 {
-    fn from(value: PendingCheckpoint) -> Self {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-            roots: value
-                .roots
-                .into_iter()
-                .map(TransactionKey::Digest)
-                .collect(),
-            details: value.details,
-        })
+    pub fn height(&self) -> CheckpointCommitHeight {
+        self.details.commit_height
     }
 }
 
@@ -2222,18 +2152,15 @@ mod tests {
         }
     }
 
-    fn p(i: u64, t: Vec<u8>) -> PendingCheckpointV2 {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-            roots: t
-                .into_iter()
-                .map(|t| TransactionKey::Digest(d(t)))
-                .collect(),
+    fn p(i: u64, t: Vec<u8>) -> PendingCheckpoint {
+        PendingCheckpoint {
+            roots: t.into_iter().map(d).collect(),
             details: PendingCheckpointInfo {
                 timestamp_ms: 0,
                 last_of_epoch: false,
-                checkpoint_height: i,
+                commit_height: i,
             },
-        })
+        }
     }
 
     fn d(i: u8) -> TransactionDigest {
@@ -2266,7 +2193,6 @@ mod tests {
         store.insert(digest, effects.clone());
         epoch_store
             .insert_tx_cert_and_effects_signature(
-                &TransactionKey::Digest(digest),
                 &digest,
                 None,
                 Some(&AuthoritySignInfo::new(

@@ -72,7 +72,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace};
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -1144,12 +1144,12 @@ async fn sync_checkpoint_contents_from_archive<S>(
                     )
                     .await
                 {
-                    warn!("State sync from archive failed with error: {:?}", err);
+                    error!("State sync from archive failed with error: {:?}", err);
                 } else {
                     info!("State sync from archive is complete. Checkpoints downloaded = {:?}, Txns downloaded = {:?}", checkpoint_counter.load(Ordering::Relaxed), txn_counter.load(Ordering::Relaxed));
                 }
             } else {
-                warn!("Failed to find an archive reader to complete the state sync request");
+                error!("Failed to find an archive reader to complete the state sync request");
             }
         }
         tokio::time::sleep(Duration::from_secs(5)).await;

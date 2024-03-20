@@ -45,12 +45,11 @@ use std::{
     future::Future,
     io::Write,
     path::Path,
-    sync::Arc,
 };
 use tempfile::NamedTempFile;
 
-pub struct CompiledState {
-    pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+pub struct CompiledState<'a> {
+    pre_compiled_deps: Option<&'a FullyCompiledProgram>,
     pre_compiled_ids: BTreeSet<(AccountAddress, String)>,
     compiled_module_named_address_mapping: BTreeMap<ModuleId, Symbol>,
     pub named_address_mapping: BTreeMap<String, NumericalAddress>,
@@ -60,7 +59,7 @@ pub struct CompiledState {
     temp_files: BTreeMap<String, NamedTempFile>,
 }
 
-impl CompiledState {
+impl<'a> CompiledState<'a> {
     pub fn resolve_named_address(&self, s: &str) -> AccountAddress {
         if let Some(addr) = self
             .named_address_mapping
@@ -115,11 +114,11 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     type Subcommand: Send + Parser;
     type ExtraInitArgs: Send + Parser;
 
-    fn compiled_state(&mut self) -> &mut CompiledState;
+    fn compiled_state(&mut self) -> &mut CompiledState<'a>;
     fn default_syntax(&self) -> SyntaxChoice;
     async fn init(
         default_syntax: SyntaxChoice,
-        option: Option<Arc<FullyCompiledProgram>>,
+        option: Option<&'a FullyCompiledProgram>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         path: &Path,
     ) -> (Self, Option<String>);
@@ -399,14 +398,14 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
     }
 }
 
-impl CompiledState {
+impl<'a> CompiledState<'a> {
     pub fn new(
         named_address_mapping: BTreeMap<String, NumericalAddress>,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<&'a FullyCompiledProgram>,
         default_named_address_mapping: Option<NumericalAddress>,
         compiler_edition: Option<Edition>,
     ) -> Self {
-        let pre_compiled_ids = match pre_compiled_deps.clone() {
+        let pre_compiled_ids = match pre_compiled_deps {
             None => BTreeSet::new(),
             Some(pre_compiled) => pre_compiled
                 .cfgir
@@ -421,7 +420,7 @@ impl CompiledState {
                 .collect(),
         };
         let mut state = Self {
-            pre_compiled_deps: pre_compiled_deps.clone(),
+            pre_compiled_deps,
             pre_compiled_ids,
             modules: BTreeMap::new(),
             compiled_module_named_address_mapping: BTreeMap::new(),
@@ -620,9 +619,11 @@ pub fn compile_source_units(
             return None;
         }
 
-        let ansi_color = read_bool_env_var(move_command_line_common::testing::PRETTY);
-        let error_buffer =
-            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags, ansi_color);
+        let error_buffer = if read_bool_env_var(move_command_line_common::testing::PRETTY) {
+            move_compiler::diagnostics::report_diagnostics_to_color_buffer(files, diags)
+        } else {
+            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags)
+        };
         Some(String::from_utf8(error_buffer).unwrap())
     }
 
@@ -637,7 +638,7 @@ pub fn compile_source_units(
         state.source_files().cloned().collect::<Vec<_>>(),
         named_address_mapping,
     )
-    .set_pre_compiled_lib_opt(state.pre_compiled_deps.clone())
+    .set_pre_compiled_lib_opt(state.pre_compiled_deps)
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
     .set_warning_filter(Some(warning_filter))
     .set_default_config(PackageConfig {
@@ -649,8 +650,8 @@ pub fn compile_source_units(
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
 
     match units_or_diags {
-        Err((_pass, diags)) => {
-            if let Some(pcd) = state.pre_compiled_deps.clone() {
+        Err(diags) => {
+            if let Some(pcd) = state.pre_compiled_deps {
                 for (file_name, text) in &pcd.files {
                     // TODO This is bad. Rethink this when errors are redone
                     if !files.contains_key(file_name) {
@@ -676,7 +677,7 @@ pub fn compile_ir_module(
 
 pub async fn handle_actual_output<'a, Adapter>(
     path: &Path,
-    fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    fully_compiled_program_opt: Option<&'a FullyCompiledProgram>,
 ) -> Result<(String, Adapter), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -745,7 +746,7 @@ where
 
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
-    fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    fully_compiled_program_opt: Option<&'a FullyCompiledProgram>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,

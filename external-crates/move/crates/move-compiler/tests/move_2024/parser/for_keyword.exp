@@ -1,9 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/for_keyword.move:2:9
-  │
-2 │     fun for(_: u64): bool { false }
-  │         ^^^
-  │         │
-  │         Unexpected 'for'
-  │         Expected an identifier
-

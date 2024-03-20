@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    binary_config::BinaryConfig,
     file_format::{basic_test_module, CompiledModule, CompiledScript},
     file_format_common::*,
 };
@@ -271,13 +270,15 @@ fn deserialize_trailing_bytes() {
         // ok with flag false
         CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(false),
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ false,
         )
         .unwrap();
         // error with flag true
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(true),
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
         )
         .unwrap_err()
         .major_status();
@@ -317,13 +318,15 @@ fn no_metadata() {
         // ok with flag false
         CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(false),
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ false,
         )
         .unwrap();
         // error with flag true
         let status_code = CompiledModule::deserialize_with_config(
             bytes,
-            &BinaryConfig::with_extraneous_bytes_check(true),
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
         )
         .unwrap_err()
         .major_status();

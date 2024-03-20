@@ -29,7 +29,7 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub fn new(
+    pub async fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,

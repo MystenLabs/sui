@@ -9,7 +9,6 @@ use crate::{
 };
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
-    binary_config::BinaryConfig,
     binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -24,11 +23,11 @@ use move_binary_format::{
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     metadata::Metadata,
     runtime_value as R,
+    annotated_value as A,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
@@ -430,8 +429,7 @@ impl ModuleCache {
                 let def_idx = self.resolve_struct_by_name(struct_name, &runtime_id)?.0;
                 Type::Struct(def_idx)
             }
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (sh_idx, tys) = &**struct_inst;
+            SignatureToken::StructInstantiation(sh_idx, tys) => {
                 let type_parameters: Vec<_> = tys
                     .iter()
                     .map(|tok| self.make_type(module, tok))
@@ -444,7 +442,7 @@ impl ModuleCache {
                     module.identifier_at(module_handle.name).to_owned(),
                 );
                 let def_idx = self.resolve_struct_by_name(struct_name, &runtime_id)?.0;
-                Type::StructInstantiation(Box::new((def_idx, type_parameters)))
+                Type::StructInstantiation(def_idx, type_parameters)
             }
         };
         Ok(res)
@@ -514,8 +512,7 @@ impl ModuleCache {
                 debug_assert!(struct_formula.terms.is_empty());
                 struct_formula
             }
-            Type::StructInstantiation(struct_inst) => {
-                let (cache_idx, ty_args) = &**struct_inst;
+            Type::StructInstantiation(cache_idx, ty_args) => {
                 let struct_type = self.struct_at(*cache_idx);
                 let ty_arg_map = ty_args
                     .iter()
@@ -1001,7 +998,7 @@ impl Loader {
                     }
                     self.verify_ty_args(struct_type.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Undefined))?;
-                    Type::StructInstantiation(Box::new((idx, type_params)))
+                    Type::StructInstantiation(idx, type_params)
                 }
             }
         })
@@ -1098,11 +1095,9 @@ impl Loader {
         // It is an invariant violation if they don't.
         let module = CompiledModule::deserialize_with_config(
             &bytes,
-            &BinaryConfig::legacy(
-                self.vm_config.max_binary_format_version,
-                self.vm_config()
-                    .check_no_extraneous_bytes_during_deserialization,
-            ),
+            self.vm_config.max_binary_format_version,
+            self.vm_config()
+                .check_no_extraneous_bytes_during_deserialization,
         )
         .map_err(|err| {
             let msg = format!("Deserialization error: {:?}", err);
@@ -1281,8 +1276,7 @@ impl Loader {
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
         // This prevents constructing larger and lager types via struct instantiation.
-        if let Type::StructInstantiation(box_struct_inst) = ty {
-            let (_, struct_inst) = &**box_struct_inst;
+        if let Type::StructInstantiation(_, struct_inst) = ty {
             let mut sum_nodes = 1u64;
             for ty in ty_args.iter().chain(struct_inst.iter()) {
                 sum_nodes = sum_nodes.saturating_add(self.count_type_nodes(ty));
@@ -1383,8 +1377,7 @@ impl Loader {
                 vec![self.abilities(ty)?],
             ),
             Type::Struct(idx) => Ok(self.module_cache.read().struct_at(*idx).abilities),
-            Type::StructInstantiation(struct_inst) => {
-                let (idx, type_args) = &**struct_inst;
+            Type::StructInstantiation(idx, type_args) => {
                 let struct_type = self.module_cache.read().struct_at(*idx);
                 let declared_phantom_parameters = struct_type
                     .type_parameters
@@ -1542,14 +1535,14 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        Ok(Type::StructInstantiation(Box::new((
+        Ok(Type::StructInstantiation(
             struct_inst.def,
             struct_inst
                 .instantiation
                 .iter()
                 .map(|ty| self.subst(ty, ty_args))
                 .collect::<PartialVMResult<_>>()?,
-        ))))
+        ))
     }
 
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
@@ -2470,10 +2463,9 @@ impl Loader {
                 &[],
                 tag_type,
             )?)),
-            Type::StructInstantiation(struct_inst) => {
-                let (gidx, ty_args) = &**struct_inst;
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?))
-            },
+            Type::StructInstantiation(gidx, ty_args) => TypeTag::Struct(Box::new(
+                self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+            )),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2492,8 +2484,7 @@ impl Loader {
                     result += 1;
                     todo.push(ty);
                 }
-                Type::StructInstantiation(struct_inst) => {
-                    let (_, ty_args) = &**struct_inst;
+                Type::StructInstantiation(_, ty_args) => {
                     result += 1;
                     todo.extend(ty_args.iter())
                 }
@@ -2582,10 +2573,9 @@ impl Loader {
             Type::Struct(gidx) => {
                 R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
             }
-            Type::StructInstantiation(struct_inst) => {
-                let (gidx, ty_args) = &**struct_inst;
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?)
-            },
+            Type::StructInstantiation(gidx, ty_args) => R::MoveTypeLayout::Struct(
+                self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+            ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2679,10 +2669,9 @@ impl Loader {
             Type::Struct(gidx) => A::MoveTypeLayout::Struct(
                 self.struct_gidx_to_fully_annotated_layout(*gidx, &[], count, depth)?,
             ),
-            Type::StructInstantiation(struct_inst) => {
-                let (gidx, ty_args) = &**struct_inst;
-                A::MoveTypeLayout::Struct(self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?)
-            },
+            Type::StructInstantiation(gidx, ty_args) => A::MoveTypeLayout::Struct(
+                self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
+            ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

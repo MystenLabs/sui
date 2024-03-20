@@ -563,8 +563,7 @@ impl<'a> BoundsChecker<'a> {
                         }
                     }
                 }
-                StructInstantiation(struct_inst) => {
-                    let (idx, type_params) = &**struct_inst;
+                StructInstantiation(idx, type_params) => {
                     check_bounds_impl(self.view.struct_handles(), *idx)?;
                     if let Some(sh) = self.view.struct_handles().get(idx.into_index()) {
                         if sh.type_parameters.len() != type_params.len() {
@@ -617,7 +616,7 @@ impl<'a> BoundsChecker<'a> {
                 | Reference(_)
                 | MutableReference(_)
                 | Vector(_)
-                | StructInstantiation(_) => (),
+                | StructInstantiation(_, _) => (),
             }
         }
         Ok(())

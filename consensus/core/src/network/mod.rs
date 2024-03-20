@@ -16,9 +16,6 @@ mod anemo_gen {
 }
 
 pub(crate) mod anemo_network;
-pub(crate) mod connection_monitor;
-pub(crate) mod epoch_filter;
-pub(crate) mod metrics;
 
 /// Network client for communicating with peers.
 #[async_trait]
@@ -62,10 +59,10 @@ where
     fn client(&self) -> Arc<Self::Client>;
 
     /// Installs network service.
-    async fn install_service(&mut self, network_keypair: NetworkKeyPair, service: Arc<S>);
+    fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>);
 
     /// Stops the network service.
-    async fn stop(&mut self);
+    async fn stop(&self);
 }
 
 /// Network message types.

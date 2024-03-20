@@ -1,8 +1,8 @@
 # Local Variables and Scope
 
 Local variables in Move are lexically (statically) scoped. New variables are introduced with the
-keyword `let`, which will shadow any previous local with the same name. Locals marked as `mut` are
-mutable and can be updated both directly and via a mutable reference.
+keyword `let`, which will shadow any previous local with the same name. Locals are mutable and can
+be updated both directly and via a mutable reference.
 
 ## Declaring Local Variables
 
@@ -40,25 +40,11 @@ let x;
 let cond = true;
 let i = 0;
 loop {
-    let (res, cond) = foo(i);
-    if (!cond) {
-        x = res;
-        break;
-    };
+    (x, cond) = foo(i);
+    if (!cond) break;
     i = i + 1;
 }
 ```
-
-To modify a local variable _after_ it is assigned, or to borrow it mutably `&mut`, it must be
-declared as `mut`.
-
-```move
-let mut x = 0;
-if (cond) x = x + 1;
-foo(&mut x);
-```
-
-For more details see the section on [assignments](#assignments) below.
 
 ### Variables must be assigned before use
 
@@ -66,19 +52,19 @@ Move's type system prevents a local variable from being used before it has been 
 
 ```move
 let x;
-x + x // ERROR! x is used before being assigned
+x + x // ERROR!
 ```
 
 ```move
 let x;
 if (cond) x = 0;
-x + x // ERROR! x does not have a value in all cases
+x + x // ERROR!
 ```
 
 ```move
 let x;
 while (cond) x = 0;
-x + x // ERROR! x does not have a value in all cases
+x + x // ERROR!
 ```
 
 ### Valid variable names
@@ -114,9 +100,10 @@ let x: T = e; // "Variable x of type T is initialized to expression e"
 Some examples of explicit type annotations:
 
 ```move
-module 0x42::example {
+address 0x42 {
+module example {
 
-    public struct S { f: u64, g: u64 }
+    struct S { f: u64, g: u64 }
 
     fun annotated() {
         let u: u8 = 0;
@@ -126,13 +113,13 @@ module 0x42::example {
         let S { f, g: f2 }: S = S { f: 0, g: 1 };
     }
 }
+}
 ```
 
 Note that the type annotations must always be to the right of the pattern:
 
 ```move
-// ERROR! should be let (x, y): (&u64, &mut u64) = ...
-let (x: &u64, y: &mut u64) = (&0, &mut 1);
+let (x: &u64, y: &mut u64) = (&0, &mut 1); // ERROR! should be let (x, y): ... =
 ```
 
 ### When annotations are necessary
@@ -141,17 +128,16 @@ In some cases, a local type annotation is required if the type system cannot inf
 commonly occurs when the type argument for a generic type cannot be inferred. For example:
 
 ```move
-let _v1 = vector[]; // ERROR!
-//        ^^^^^^^^ Could not infer this type. Try adding an annotation
-let v2: vector<u64> = vector[]; // no error
+let _v1 = vector::empty(); // ERROR!
+//        ^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+let v2: vector<u64> = vector::empty(); // no error
 ```
 
 In a rarer case, the type system might not be able to infer a type for divergent code (where all the
-following code is unreachable). Both [`return`](./functions.md#return-expression) and
-[`abort`](./abort-and-assert.md) are expressions and can have any type. A
-[`loop`](./control-flow/loops.md) has type `()` if it has a `break` (or `T` if has a `break e` where
-`e: T`), but if there is no break out of the `loop`, it could have any type. If these types cannot
-be inferred, a type annotation is required. For example, this code:
+following code is unreachable). Both `return` and [`abort`](./abort-and-assert.md) are expressions
+and can have any type. A [`loop`](./loops.md) has type `()` if it has a `break`, but if there is no
+break out of the `loop`, it could have any type. If these types cannot be inferred, a type
+annotation is required. For example, this code:
 
 ```move
 let a: u8 = return ();
@@ -194,13 +180,6 @@ You cannot declare more than one local with the same name in a single `let`.
 let (x, x) = 0; // ERROR!
 ```
 
-The mutability of the local variables declared can be mixed.
-
-```move
-let (mut x, y) = (0, 1);
-x = 1;
-```
-
 ### Multiple declarations with structs
 
 `let` can also introduce more than one local at a time when destructuring (or matching against) a
@@ -208,7 +187,7 @@ struct. In this form, the `let` creates a set of local variables that are initia
 of the fields from a struct. The syntax looks like this:
 
 ```move
-public struct T { f1: u64, f2: u64 }
+struct T { f1: u64, f2: u64 }
 ```
 
 ```move
@@ -217,38 +196,26 @@ let T { f1: local1, f2: local2 } = T { f1: 1, f2: 2 };
 // local2: u64
 ```
 
-Similarly for positional structs
-
-```move
-public struct P(u64, u64)
-```
-
-and
-
-```move
-let P(local1, local2) = T { f1: 1, f2: 2 };
-// local1: u64
-// local2: u64
-```
-
 Here is a more complicated example:
 
 ```move
-module 0x42::example {
-    public struct X(u64)
-    public struct Y { x1: X, x2: X }
+address 0x42 {
+module example {
+    struct X { f: u64 }
+    struct Y { x1: X, x2: X }
 
     fun new_x(): X {
-        X(1)
+        X { f: 1 }
     }
 
     fun example() {
-        let Y { x1: X(f), x2 } = Y { x1: new_x(), x2: new_x() };
+        let Y { x1: X { f }, x2 } = Y { x1: new_x(), x2: new_x() };
         assert!(f + x2.f == 2, 42);
 
-        let Y { x1: X(f1), x2: X(f2) } = Y { x1: new_x(), x2: new_x() };
+        let Y { x1: X { f: f1 }, x2: X { f: f2 } } = Y { x1: new_x(), x2: new_x() };
         assert!(f1 + f2 == 2, 42);
     }
+}
 }
 ```
 
@@ -256,13 +223,13 @@ Fields of structs can serve double duty, identifying the field to bind _and_ the
 variable. This is sometimes referred to as punning.
 
 ```move
-let Y { x1, x2 } = e;
+let X { f } = e;
 ```
 
 is equivalent to:
 
 ```move
-let Y { x1: x1, x2: x2 } = e;
+let X { f: f } = e;
 ```
 
 As shown with tuples, you cannot declare more than one local with the same name in a single `let`.
@@ -271,26 +238,13 @@ As shown with tuples, you cannot declare more than one local with the same name 
 let Y { x1: x, x2: x } = e; // ERROR!
 ```
 
-And as with tuples, the mutability of the local variables declared can be mixed.
-
-```move
-let Y { x1: mut x1, x2 } = e;
-```
-
-Furthermore, the mutability of annotation can be applied to the punned fields. Giving the equivalent
-example
-
-```move
-let Y { mut x1, x2 } = e;
-```
-
 ### Destructuring against references
 
 In the examples above for structs, the bound value in the let was moved, destroying the struct value
 and binding its fields.
 
 ```move
-public struct T { f1: u64, f2: u64 }
+struct T { f1: u64, f2: u64 }
 ```
 
 ```move
@@ -314,7 +268,7 @@ let T { f1: local1, f2: local2 } = &t;
 And similarly with mutable references:
 
 ```move
-let mut t = T { f1: 1, f2: 2 };
+let t = T { f1: 1, f2: 2 };
 let T { f1: local1, f2: local2 } = &mut t;
 // local1: &mut u64
 // local2: &mut u64
@@ -323,25 +277,27 @@ let T { f1: local1, f2: local2 } = &mut t;
 This behavior can also work with nested structs.
 
 ```move
-module 0x42::example {
-    public struct X(u64)
-    public struct Y { x1: X, x2: X }
+address 0x42 {
+module example {
+    struct X { f: u64 }
+    struct Y { x1: X, x2: X }
 
     fun new_x(): X {
-        X(1)
+        X { f: 1 }
     }
 
     fun example() {
-        let mut y = Y { x1: new_x(), x2: new_x() };
+        let y = Y { x1: new_x(), x2: new_x() };
 
-        let Y { x1: X(f), x2 } = &y;
+        let Y { x1: X { f }, x2 } = &y;
         assert!(*f + x2.f == 2, 42);
 
-        let Y { x1: X(f1), x2: X(f2) } = &mut y;
+        let Y { x1: X { f: f1 }, x2: X { f: f2 } } = &mut y;
         *f1 = *f1 + 1;
         *f2 = *f2 + 1;
         assert!(*f1 + *f2 == 4, 42);
     }
+}
 }
 ```
 
@@ -362,10 +318,10 @@ let (x2, _y, z2) = three();
 assert!(x1 + z1 == x2 + z2, 42);
 ```
 
-This can be necessary at times as the compiler will warn on unused local variables
+This can be necessary at times as the compiler will error on unused local variables
 
 ```move
-let (x1, y, z1) = three(); // WARNING!
+let (x1, y, z1) = three(); // ERROR!
 //       ^ unused local 'y'
 ```
 
@@ -374,7 +330,7 @@ let (x1, y, z1) = three(); // WARNING!
 All of the different structures in `let` can be combined! With that we arrive at this general
 grammar for `let` statements:
 
-> _let-binding_ → **let** _pattern-or-list_ _type-annotation_<sub>_opt_</sub> >
+> _let-binding_ → **let** _pattern-or-list_ _type-annotation_<sub>_opt_</sub>
 > _initializer_<sub>_opt_</sub> > _pattern-or-list_ → _pattern_ | **(** _pattern-list_ **)** >
 > _pattern-list_ → _pattern_ **,**<sub>_opt_</sub> | _pattern_ **,** _pattern-list_ >
 > _type-annotation_ → **:** _type_ _initializer_ → **=** _expression_
@@ -384,7 +340,7 @@ both destructure data (possibly recursively) and introduce the bindings. The pat
 follows:
 
 > _pattern_ → _local-variable_ | _struct-type_ **{** _field-binding-list_ **}** >
-> _field-binding-list_ → _field-binding_ **,**<sub>_opt_</sub> | _field-binding_ **,** >
+> _field-binding-list_ → _field-binding_ **,**<sub>_opt_</sub> | _field-binding_ **,**
 > _field-binding-list_ > _field-binding_ → _field_ | _field_ **:** _pattern_
 
 A few concrete examples with this grammar applied:
@@ -421,7 +377,7 @@ A few concrete examples with this grammar applied:
 
 ### Assignments
 
-After the local is introduced (either by `let` or as a function parameter), a `mut` local can be
+After the local is introduced (either by `let` or as a function parameter), the local can be
 modified via an assignment:
 
 ```move
@@ -439,29 +395,32 @@ Practically, assignments being expressions means that they can be used without a
 expression block with braces (`{`...`}`).
 
 ```move
-let x;
+let x = 0;
 if (cond) x = 1 else x = 2;
 ```
 
-The assignment uses the similar pattern syntax scheme as `let` bindings, but with absence of `mut`:
+The assignment uses the same pattern syntax scheme as `let` bindings:
 
 ```move
-module 0x42::example {
-    public struct X { f: u64 }
+address 0x42 {
+module example {
+    struct X { f: u64 }
 
     fun new_x(): X {
         X { f: 1 }
     }
 
-    // Note: this example will complain about unused variables and assignments.
+    // This example will complain about unused variables and assignments.
     fun example() {
-       let (mut x, mut y, mut f, mut g) = (0, 0, 0, 0);
+       let (x, _, z) = (0, 1, 3);
+       let (x, y, f, g);
 
        (X { f }, X { f: x }) = (new_x(), new_x());
        assert!(f + x == 2, 42);
 
-       (x, y, f, _, g) = (0, 0, 0, 0, 0);
+       (x, y, z, f, _, g) = (0, 0, 0, 0, 0, 0);
     }
+}
 }
 ```
 
@@ -469,18 +428,18 @@ Note that a local variable can only have one type, so the type of the local cann
 assignments.
 
 ```move
-let mut x;
+let x;
 x = 0;
 x = false; // ERROR!
 ```
 
 ### Mutating through a reference
 
-In addition to directly modifying a local with assignment, a `mut` local can be modified via a
-mutable reference `&mut`.
+In addition to directly modifying a local with assignment, a local can be modified via a mutable
+reference `&mut`.
 
 ```move
-let mut x = 0;
+let x = 0;
 let r = &mut x;
 *r = 1;
 assert!(x == 1, 42);
@@ -491,8 +450,8 @@ This is particularly useful if either:
 (1) You want to modify different variables depending on some condition.
 
 ```move
-let mut x = 0;
-let mut y = 1;
+let x = 0;
+let y = 1;
 let r = if (cond) &mut x else &mut y;
 *r = *r + 1;
 ```
@@ -500,14 +459,14 @@ let r = if (cond) &mut x else &mut y;
 (2) You want another function to modify your local value.
 
 ```move
-let mut x = 0;
+let x = 0;
 modify_ref(&mut x);
 ```
 
 This sort of modification is how you modify structs and vectors!
 
 ```move
-let mut v = vector[];
+let v = vector::empty();
 vector::push_back(&mut v, 100);
 assert!(*vector::borrow(&v, 0) == 100, 42);
 ```
@@ -545,7 +504,7 @@ Locals can be mutated in any scope where they are accessible. That mutation surv
 regardless of the scope that performed the mutation.
 
 ```move
-let mut x = 0;
+let x = 0;
 x = x + 1;
 assert!(x == 1, 42);
 {
@@ -577,7 +536,7 @@ Function calls are another common expression of type `()`. Function calls that m
 commonly used as statements.
 
 ```move
-{ let v = vector[]; vector::push_back(&mut v, 1); v }
+{ let v = vector::empty(); vector::push_back(&mut v, 1); v }
 ```
 
 This is not just limited to `()` types---any expression can be used as a statement in a sequence!
@@ -606,26 +565,18 @@ explicitly destroyed within its declaring module.)
 ```
 
 If a final expression is not present in a block---that is, if there is a trailing semicolon `;`,
-there is an implicit [unit `()` value](https://en.wikipedia.org/wiki/Unit_type). Similarly, if the
-expression block is empty, there is an implicit unit `()` value.
-
-Both are equivalent
+there is an implicit [unit `()` value](https://en.wikipedia.org/wiki/Unit_type). Similarly, if the expression block is empty, there is an
+implicit unit `()` value.
 
 ```move
+// Both are equivalent
 { x = x + 1; 1 / x; }
-```
-
-```move
 { x = x + 1; 1 / x; () }
 ```
 
-Similarly both are equivalent
-
 ```move
+// Both are equivalent
 { }
-```
-
-```move
 { () }
 ```
 
@@ -635,7 +586,7 @@ another expression.)
 
 ```move
 let my_vector: vector<vector<u8>> = {
-    let mut v = vector[];
+    let v = vector::empty();
     vector::push_back(&mut v, b"hello");
     vector::push_back(&mut v, b"goodbye");
     v
@@ -673,16 +624,18 @@ accessible. This is important to keep in mind with values of types without the
 function.
 
 ```move
-module 0x42::example {
-    public struct Coin has store { value: u64 }
+address 0x42 {
+    module example {
+        struct Coin has store { value: u64 }
 
-    fun unused_coin(): Coin {
-        let x = Coin { value: 0 }; // ERROR!
-//          ^ This local still contains a value without the `drop` ability
-        x.value = 1;
-        let x = Coin { value: 10 };
-        x
-//      ^ Invalid return
+        fun unused_resource(): Coin {
+            let x = Coin { value: 0 }; // ERROR!
+//              ^ This local still contains a value without the `drop` ability
+            x.value = 1;
+            let x = Coin { value: 10 };
+            x
+//          ^ Invalid return
+        }
     }
 }
 ```
@@ -727,12 +680,10 @@ let y = copy x + 1;
 let z = copy x + 2;
 ```
 
-Any value with the `copy` [ability](./abilities.md) can be copied in this way, and will be copied
-implicitly unless a `move` is specified.
+Any value with the `copy` [ability](./abilities.md) can be copied in this way.
 
 `move` takes the value out of the local variable _without_ copying the data. After a `move` occurs,
-the local variable is unavailable, even if the value's type has the `copy`
-[ability](./abilities.md).
+the local variable is unavailable.
 
 ```move
 let x = 1;
@@ -756,31 +707,25 @@ before it is assigned a value.
 As mentioned above, the Move compiler will infer a `copy` or `move` if one is not indicated. The
 algorithm for doing so is quite simple:
 
-- Any value with the `copy` [ability](./abilities.md) is given a `copy`.
+- Any scalar value with the `copy` [ability](./abilities.md) is given a `copy`.
 - Any reference (both mutable `&mut` and immutable `&`) is given a `copy`.
   - Except under special circumstances where it is made a `move` for predictable borrow checker
-    errors. This will happen once the reference is no longer used.
+    errors.
 - Any other value is given a `move`.
+  - This means that even though other values might be have the `copy` [ability](./abilities.md), it
+    must be done _explicitly_ by the programmer.
+  - This is to prevent accidental copies of large data structures.
 
-Given the structs
-
-```move
-public struct Foo has copy, drop, store { f: u64 }
-public struct Coin has store { value: u64 }
-```
-
-we have the following example
+For example:
 
 ```move
 let s = b"hello";
 let foo = Foo { f: 0 };
 let coin = Coin { value: 0 };
-let coins = vector[Coin { value: 0 }, Coin { value: 0 }];
 
-let s2 = s; // copy
-let foo2 = foo; // copy
+let s2 = s; // move
+let foo2 = foo; // move
 let coin2 = coin; // move
-let coins2 = coin; // move
 
 let x = 0;
 let b = false;

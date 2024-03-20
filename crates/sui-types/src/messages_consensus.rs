@@ -170,7 +170,7 @@ pub enum ConsensusTransactionKind {
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityCapabilities),
     NewJWKFetched(AuthorityName, JwkId, JWK),
-    RandomnessStateUpdate(u64, Vec<u8>), // deprecated
+    RandomnessStateUpdate(u64, Vec<u8>),
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Message`.

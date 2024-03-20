@@ -32,8 +32,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+    SuiObjectResponseQuery, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -260,7 +259,6 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![],
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
@@ -282,12 +280,12 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
          --assign p @{package_id_str}
          --assign s @{shared_id_str}
          # Use the shared object by immutable reference first
-         --move-call "p::test_module::use_immut" s
+         --move-call "p::test_module::use_immut" s 
          # Now use mutably -- we need to update the mutability of the object
          --move-call "p::test_module::use_mut" s
          # Make sure we handle different more complex pure arguments
-         --move-call "p::test_module::use_ascii_string" "'foo bar baz'"
-         --move-call "p::test_module::use_utf8_string" "'foo †††˚˚¬¬'"
+         --move-call "p::test_module::use_ascii_string" "'foo bar baz'" 
+         --move-call "p::test_module::use_utf8_string" "'foo †††˚˚¬¬'" 
          --gas-budget 100000000
         "#
     );
@@ -302,7 +300,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
          --assign p @{package_id_str}
          --assign s @{shared_id_str}
          # Use the shared object by immutable reference first
-         --move-call "p::test_module::use_immut" s
+         --move-call "p::test_module::use_immut" s 
          --move-call "p::test_module::delete_shared_object" s
          --gas-budget 100000000
         "#
@@ -608,7 +606,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args,
         gas: None,
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        gas_price: None,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
     }
@@ -648,7 +645,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args: args.to_vec(),
         gas: Some(gas),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        gas_price: None,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
     }
@@ -675,7 +671,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args: args.to_vec(),
         gas: Some(gas),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        gas_price: None,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
     }
@@ -683,32 +678,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await;
 
     assert!(resp.is_err());
-
-    // Try a transfer with explicitly set gas price.
-    // It should fail due to that gas price is below RGP.
-    let args = vec![
-        SuiJsonValue::new(json!(created_obj))?,
-        SuiJsonValue::new(json!(address2))?,
-    ];
-
-    let resp = SuiClientCommands::Call {
-        package,
-        module: "object_basics".to_string(),
-        function: "transfer".to_string(),
-        type_args: vec![],
-        args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-        gas_price: Some(1),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-    }
-    .execute(context)
-    .await;
-
-    assert!(resp.is_err());
-    let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Gas price 1 under reference gas price"));
 
     // FIXME: uncomment once we figure out what is going on with `resolve_and_type_check`
     // let err_string = format!("{} ", resp.err().unwrap());
@@ -730,42 +699,11 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args: args.to_vec(),
         gas: Some(gas),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-        gas_price: None,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
-
-    // Try a call with customized gas price.
-    let args = vec![
-        SuiJsonValue::new(json!("123"))?,
-        SuiJsonValue::new(json!(address1))?,
-    ];
-
-    let result = SuiClientCommands::Call {
-        package,
-        module: "object_basics".to_string(),
-        function: "create".to_string(),
-        type_args: vec![],
-        args,
-        gas: None,
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        gas_price: Some(12345),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
-    }
-    .execute(context)
-    .await?;
-
-    if let SuiClientCommandResult::Call(txn_response) = result {
-        assert_eq!(
-            txn_response.transaction.unwrap().data.gas_data().price,
-            12345
-        );
-    } else {
-        panic!("Command failed with unexpected result.")
-    };
 
     Ok(())
 }
@@ -907,7 +845,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![],
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
@@ -930,7 +867,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![SuiJsonValue::from_str(&shared_id.to_string()).unwrap()],
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
@@ -1016,7 +952,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![],
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
@@ -1055,7 +990,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
@@ -1144,7 +1078,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![],
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
@@ -1183,7 +1116,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
@@ -1272,7 +1204,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![],
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
@@ -1311,7 +1242,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
@@ -2825,8 +2755,6 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
 #[tokio::test]
 async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
-    const LINTER_MSG: &str =
-        "Total number of linter warnings suppressed: 5 (filtered categories: 3)";
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = vec!["move", "test", "--path", "tests/data/linter"];
     let output = cmd
@@ -2834,15 +2762,9 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .output()
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(out_str.contains(LINTER_MSG));
-    // test no-lint suppresses
-    let args = vec!["move", "test", "--no-lint", "--path", "tests/data/linter"];
-    let output = cmd
-        .args(&args)
-        .output()
-        .expect("failed to run 'sui move test'");
-    let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(!out_str.contains(LINTER_MSG));
+    assert!(
+        out_str.contains("Total number of linter warnings suppressed: 5 (filtered categories: 3)")
+    );
     Ok(())
 }
 

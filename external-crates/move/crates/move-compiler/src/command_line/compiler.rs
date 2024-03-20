@@ -26,7 +26,6 @@ use move_command_line_common::files::{
     find_filenames_vfs, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
-use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use pathdiff::diff_paths;
 use std::{
@@ -34,7 +33,6 @@ use std::{
     fs,
     io::{Read, Write},
     path::PathBuf,
-    sync::Arc,
 };
 use vfs::{
     impls::{memory::MemoryFS, physical::PhysicalFS},
@@ -46,12 +44,12 @@ use vfs::{
 // Definitions
 //**************************************************************************************************
 
-pub struct Compiler {
+pub struct Compiler<'a> {
     maps: NamedAddressMaps,
     targets: Vec<IndexedPhysicalPackagePath>,
     deps: Vec<IndexedPhysicalPackagePath>,
     interface_files_dir_opt: Option<String>,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<&'a FullyCompiledProgram>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
@@ -64,9 +62,9 @@ pub struct Compiler {
     vfs_root: Option<VfsPath>,
 }
 
-pub struct SteppedCompiler<const P: Pass> {
+pub struct SteppedCompiler<'a, const P: Pass> {
     compilation_env: CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<&'a FullyCompiledProgram>,
     program: Option<PassResult>,
 }
 
@@ -113,7 +111,7 @@ pub enum Visitor {
 // Entry points and impls
 //**************************************************************************************************
 
-impl Compiler {
+impl<'a> Compiler<'a> {
     pub fn from_package_paths<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
         targets: Vec<PackagePaths<Paths, NamedAddress>>,
         deps: Vec<PackagePaths<Paths, NamedAddress>>,
@@ -209,7 +207,7 @@ impl Compiler {
         self
     }
 
-    pub fn set_pre_compiled_lib(mut self, pre_compiled_lib: Arc<FullyCompiledProgram>) -> Self {
+    pub fn set_pre_compiled_lib(mut self, pre_compiled_lib: &'a FullyCompiledProgram) -> Self {
         assert!(self.pre_compiled_lib.is_none());
         self.pre_compiled_lib = Some(pre_compiled_lib);
         self
@@ -217,7 +215,7 @@ impl Compiler {
 
     pub fn set_pre_compiled_lib_opt(
         mut self,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<&'a FullyCompiledProgram>,
     ) -> Self {
         assert!(self.pre_compiled_lib.is_none());
         self.pre_compiled_lib = pre_compiled_lib;
@@ -278,7 +276,7 @@ impl Compiler {
         self,
     ) -> anyhow::Result<(
         FilesSourceText,
-        Result<(CommentMap, SteppedCompiler<TARGET>), (Pass, Diagnostics)>,
+        Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
     )> {
         /// Path relativization after parsing is needed as paths are initially canonicalized when
         /// converted to virtual file system paths and would show up as absolute in the test output
@@ -343,17 +341,13 @@ impl Compiler {
         }
 
         let (mut source_text, pprog, comments) =
-            parse_program(&mut compilation_env, maps, targets, deps)?;
+            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps,))?;
 
         source_text
             .iter_mut()
             .for_each(|(_, (path, _))| *path = relativize_path(&vfs_root, *path));
 
-        for (fhash, (fname, contents)) in source_text.iter() {
-            compilation_env.add_source_file(*fhash, *fname, contents.clone())
-        }
-
-        let res: Result<_, (Pass, Diagnostics)> =
+        let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>()
                 .map(|compiler| (comments, compiler));
@@ -364,35 +358,20 @@ impl Compiler {
     pub fn generate_migration_patch(
         mut self,
         root_module: &Symbol,
-    ) -> anyhow::Result<(FilesSourceText, Result<Option<Migration>, Diagnostics>)> {
+    ) -> anyhow::Result<(FilesSourceText, Option<Migration>)> {
         self.package_configs.get_mut(root_module).unwrap().edition = Edition::E2024_MIGRATION;
         let (files, res) = self.run::<PASS_COMPILATION>()?;
-        if let Err((pass, mut diags)) = res {
-            if pass < PASS_CFGIR {
-                // errors occurred that prevented migration, remove any migration diagnostics
-                // Only report blocking errors since those are stopping migration
-                diags.retain(|d| {
-                    !d.is_migration() && d.info().severity() >= Severity::NonblockingError
-                });
-                return Ok((files, Err(diags)));
-            }
-            let res = match generate_migration_diff(&files, &diags) {
-                Some((_, migration_errors)) if !migration_errors.is_empty() => {
-                    diags.extend(migration_errors);
-                    Err(diags)
-                }
-                Some((migration, _)) => Ok(Some(migration)),
-                None => Ok(None),
-            };
-            Ok((files, res))
+        if let Err(diags) = res {
+            let migration = generate_migration_diff(&files, &diags);
+            Ok((files, migration))
         } else {
-            Ok((files, Ok(None)))
+            Ok((files, None))
         }
     }
 
     pub fn check(self) -> anyhow::Result<(FilesSourceText, Result<(), Diagnostics>)> {
         let (files, res) = self.run::<PASS_COMPILATION>()?;
-        Ok((files, res.map(|_| ()).map_err(|(_pass, diags)| diags)))
+        Ok((files, res.map(|_| ())))
     }
 
     pub fn check_and_report(self) -> anyhow::Result<FilesSourceText> {
@@ -410,8 +389,7 @@ impl Compiler {
         let (files, res) = self.run::<PASS_COMPILATION>()?;
         Ok((
             files,
-            res.map(|(_comments, stepped)| stepped.into_compiled_units())
-                .map_err(|(_pass, diags)| diags),
+            res.map(|(_comments, stepped)| stepped.into_compiled_units()),
         ))
     }
 
@@ -423,8 +401,8 @@ impl Compiler {
     }
 }
 
-impl<const P: Pass> SteppedCompiler<P> {
-    fn run_impl<const TARGET: Pass>(self) -> Result<SteppedCompiler<TARGET>, (Pass, Diagnostics)> {
+impl<'a, const P: Pass> SteppedCompiler<'a, P> {
+    fn run_impl<const TARGET: Pass>(self) -> Result<SteppedCompiler<'a, TARGET>, Diagnostics> {
         assert!(P > EMPTY_COMPILER);
         assert!(self.program.is_some());
         assert!(self.program.as_ref().unwrap().equivalent_pass() == P);
@@ -443,7 +421,7 @@ impl<const P: Pass> SteppedCompiler<P> {
         } = self;
         let new_prog = run(
             &mut compilation_env,
-            pre_compiled_lib.clone(),
+            pre_compiled_lib,
             program.unwrap(),
             TARGET,
             |_, _| (),
@@ -463,9 +441,9 @@ impl<const P: Pass> SteppedCompiler<P> {
 
 macro_rules! ast_stepped_compilers {
     ($(($pass:ident, $mod:ident, $result:ident, $at_ast:ident, $new:ident)),*) => {
-        impl<'a> SteppedCompiler<EMPTY_COMPILER> {
+        impl<'a> SteppedCompiler<'a, EMPTY_COMPILER> {
             $(
-                pub fn $at_ast(self, ast: $mod::ast::Program) -> SteppedCompiler<{$pass}> {
+                pub fn $at_ast(self, ast: $mod::ast::Program) -> SteppedCompiler<'a, {$pass}> {
                     let Self {
                         compilation_env,
                         pre_compiled_lib,
@@ -482,10 +460,10 @@ macro_rules! ast_stepped_compilers {
         }
 
         $(
-            impl<'a> SteppedCompiler<{$pass}> {
+            impl<'a> SteppedCompiler<'a, {$pass}> {
                 fn $new(
                     compilation_env: CompilationEnv,
-                    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+                    pre_compiled_lib: Option<&'a FullyCompiledProgram>,
                     ast: $mod::ast::Program,
                 ) -> Self {
                     Self {
@@ -497,11 +475,11 @@ macro_rules! ast_stepped_compilers {
 
                 pub fn run<const TARGET: Pass>(
                     self,
-                ) -> Result<SteppedCompiler<TARGET>, (Pass, Diagnostics)> {
+                ) -> Result<SteppedCompiler<'a, TARGET>, Diagnostics> {
                     self.run_impl()
                 }
 
-                pub fn into_ast(self) -> (SteppedCompiler<EMPTY_COMPILER>, $mod::ast::Program) {
+                pub fn into_ast(self) -> (SteppedCompiler<'a, EMPTY_COMPILER>, $mod::ast::Program) {
                     let Self {
                         compilation_env,
                         pre_compiled_lib,
@@ -519,20 +497,20 @@ macro_rules! ast_stepped_compilers {
                     (next, ast)
                 }
 
-                pub fn check(self) -> Result<(), (Pass, Diagnostics)> {
+                pub fn check(self) -> Result<(), Diagnostics> {
                     self.run::<PASS_COMPILATION>()?;
                     Ok(())
                 }
 
                 pub fn build(
                     self,
-                ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), (Pass, Diagnostics)> {
+                ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
                     let units = self.run::<PASS_COMPILATION>()?.into_compiled_units();
                     Ok(units)
                 }
 
                 pub fn check_and_report(self, files: &FilesSourceText)  {
-                    let errors_result = self.check().map_err(|(_, diags)| diags);
+                    let errors_result = self.check();
                     unwrap_or_report_diagnostics(&files, errors_result);
                 }
 
@@ -540,7 +518,7 @@ macro_rules! ast_stepped_compilers {
                     self,
                     files: &FilesSourceText,
                 ) -> Vec<AnnotatedCompiledUnit> {
-                    let units_result = self.build().map_err(|(_, diags)| diags);
+                    let units_result = self.build();
                     let (units, warnings) = unwrap_or_report_diagnostics(&files, units_result);
                     report_warnings(&files, warnings);
                     units
@@ -565,7 +543,7 @@ ast_stepped_compilers!(
     (PASS_CFGIR, cfgir, CFGIR, at_cfgir, new_at_cfgir)
 );
 
-impl SteppedCompiler<PASS_COMPILATION> {
+impl<'a> SteppedCompiler<'a, PASS_COMPILATION> {
     pub fn into_compiled_units(self) -> (Vec<AnnotatedCompiledUnit>, Diagnostics) {
         let Self {
             compilation_env: _,
@@ -593,7 +571,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
             .run::<PASS_PARSER>()?;
 
     let (_comments, stepped) = match pprog_and_comments_res {
-        Err((_pass, errors)) => return Ok(Err((files, errors))),
+        Err(errors) => return Ok(Err((files, errors))),
         Ok(res) => res,
     };
 
@@ -645,7 +623,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         PASS_COMPILATION,
         save_result,
     ) {
-        Err((_pass, errors)) => Ok(Err((files, errors))),
+        Err(errors) => Ok(Err((files, errors))),
         Ok(_) => Ok(Ok(FullyCompiledProgram {
             files,
             parser: parser.unwrap(),
@@ -877,17 +855,14 @@ fn has_compiled_module_magic_number(path: &VfsPath) -> bool {
 }
 
 pub fn move_check_for_errors(
-    comments_and_compiler_res: Result<
-        (CommentMap, SteppedCompiler<PASS_PARSER>),
-        (Pass, Diagnostics),
-    >,
+    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<'_, PASS_PARSER>), Diagnostics>,
 ) -> Diagnostics {
     fn try_impl(
         comments_and_compiler_res: Result<
-            (CommentMap, SteppedCompiler<PASS_PARSER>),
-            (Pass, Diagnostics),
+            (CommentMap, SteppedCompiler<'_, PASS_PARSER>),
+            Diagnostics,
         >,
-    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), (Pass, Diagnostics)> {
+    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
         let (_, compiler) = comments_and_compiler_res?;
 
         let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
@@ -902,7 +877,7 @@ pub fn move_check_for_errors(
 
     let (units, inner_diags) = match try_impl(comments_and_compiler_res) {
         Ok((units, inner_diags)) => (units, inner_diags),
-        Err((_pass, inner_diags)) => return inner_diags,
+        Err(inner_diags) => return inner_diags,
     };
     let mut diags = compiled_unit::verify_units(&units);
     diags.extend(inner_diags);
@@ -929,23 +904,19 @@ impl PassResult {
 
 fn run(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<&FullyCompiledProgram>,
     cur: PassResult,
     until: Pass,
     result_check: impl FnMut(&PassResult, &CompilationEnv),
-) -> Result<PassResult, (Pass, Diagnostics)> {
-    #[growing_stack]
+) -> Result<PassResult, Diagnostics> {
     fn rec(
         compilation_env: &mut CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<&FullyCompiledProgram>,
         cur: PassResult,
         until: Pass,
         mut result_check: impl FnMut(&PassResult, &CompilationEnv),
-    ) -> Result<PassResult, (Pass, Diagnostics)> {
-        let cur_pass = cur.equivalent_pass();
-        compilation_env
-            .check_diags_at_or_above_severity(Severity::Bug)
-            .map_err(|diags| (cur_pass, diags))?;
+    ) -> Result<PassResult, Diagnostics> {
+        compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
         assert!(
             until <= PASS_COMPILATION,
             "Invalid pass for run_to. Target is greater than maximum pass"
@@ -960,7 +931,7 @@ fn run(
                 let eprog = {
                     let prog = unit_test::filter_test_members::program(compilation_env, prog);
                     let prog = verification_attribute_filter::program(compilation_env, prog);
-                    expansion::translate::program(compilation_env, pre_compiled_lib.clone(), prog)
+                    expansion::translate::program(compilation_env, pre_compiled_lib, prog)
                 };
                 rec(
                     compilation_env,
@@ -971,8 +942,7 @@ fn run(
                 )
             }
             PassResult::Expansion(eprog) => {
-                let nprog =
-                    naming::translate::program(compilation_env, pre_compiled_lib.clone(), eprog);
+                let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
                 rec(
                     compilation_env,
                     pre_compiled_lib,
@@ -982,8 +952,7 @@ fn run(
                 )
             }
             PassResult::Naming(nprog) => {
-                let tprog =
-                    typing::translate::program(compilation_env, pre_compiled_lib.clone(), nprog);
+                let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
                 rec(
                     compilation_env,
                     pre_compiled_lib,
@@ -993,11 +962,8 @@ fn run(
                 )
             }
             PassResult::Typing(tprog) => {
-                compilation_env
-                    .check_diags_at_or_above_severity(Severity::BlockingError)
-                    .map_err(|diags| (cur_pass, diags))?;
-                let hprog =
-                    hlir::translate::program(compilation_env, pre_compiled_lib.clone(), tprog);
+                compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
+                let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
                 rec(
                     compilation_env,
                     pre_compiled_lib,
@@ -1007,8 +973,7 @@ fn run(
                 )
             }
             PassResult::HLIR(hprog) => {
-                let cprog =
-                    cfgir::translate::program(compilation_env, pre_compiled_lib.clone(), hprog);
+                let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
                 rec(
                     compilation_env,
                     pre_compiled_lib,
@@ -1019,18 +984,11 @@ fn run(
             }
             PassResult::CFGIR(cprog) => {
                 // Don't generate bytecode if there are any errors
-                compilation_env
-                    .check_diags_at_or_above_severity(Severity::NonblockingError)
-                    .map_err(|diags| (cur_pass, diags))?;
-                let compiled_units = to_bytecode::translate::program(
-                    compilation_env,
-                    pre_compiled_lib.clone(),
-                    cprog,
-                );
+                compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
+                let compiled_units =
+                    to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
                 // Report any errors from bytecode generation
-                compilation_env
-                    .check_diags_at_or_above_severity(Severity::NonblockingError)
-                    .map_err(|diags| (PASS_COMPILATION, diags))?;
+                compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
                 let warnings = compilation_env.take_final_warning_diags();
                 assert!(until == PASS_COMPILATION);
                 rec(
@@ -1044,7 +1002,13 @@ fn run(
             PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
         }
     }
-    rec(compilation_env, pre_compiled_lib, cur, until, result_check)
+    with_large_stack!(rec(
+        compilation_env,
+        pre_compiled_lib,
+        cur,
+        until,
+        result_check
+    ))
 }
 
 //**************************************************************************************************

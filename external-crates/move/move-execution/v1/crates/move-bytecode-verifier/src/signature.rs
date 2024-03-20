@@ -202,65 +202,14 @@ impl<'a> SignatureChecker<'a> {
 
                 // List out the other options explicitly so there's a compile error if a new
                 // bytecode gets added.
-                Pop
-                | Ret
-                | Branch(_)
-                | BrTrue(_)
-                | BrFalse(_)
-                | LdU8(_)
-                | LdU16(_)
-                | LdU32(_)
-                | LdU64(_)
-                | LdU128(_)
-                | LdU256(_)
-                | LdConst(_)
-                | CastU8
-                | CastU16
-                | CastU32
-                | CastU64
-                | CastU128
-                | CastU256
-                | LdTrue
-                | LdFalse
-                | Call(_)
-                | Pack(_)
-                | Unpack(_)
-                | ReadRef
-                | WriteRef
-                | FreezeRef
-                | Add
-                | Sub
-                | Mul
-                | Mod
-                | Div
-                | BitOr
-                | BitAnd
-                | Xor
-                | Shl
-                | Shr
-                | Or
-                | And
-                | Not
-                | Eq
-                | Neq
-                | Lt
-                | Gt
-                | Le
-                | Ge
-                | CopyLoc(_)
-                | MoveLoc(_)
-                | StLoc(_)
-                | MutBorrowLoc(_)
-                | ImmBorrowLoc(_)
-                | MutBorrowField(_)
-                | ImmBorrowField(_)
-                | MutBorrowGlobalDeprecated(_)
-                | ImmBorrowGlobalDeprecated(_)
-                | ExistsDeprecated(_)
-                | MoveToDeprecated(_)
-                | MoveFromDeprecated(_)
-                | Abort
-                | Nop => Ok(()),
+                Pop | Ret | Branch(_) | BrTrue(_) | BrFalse(_) | LdU8(_) | LdU16(_) | LdU32(_)
+                | LdU64(_) | LdU128(_) | LdU256(_) | LdConst(_) | CastU8 | CastU16 | CastU32
+                | CastU64 | CastU128 | CastU256 | LdTrue | LdFalse | Call(_) | Pack(_)
+                | Unpack(_) | ReadRef | WriteRef | FreezeRef | Add | Sub | Mul | Mod | Div
+                | BitOr | BitAnd | Xor | Shl | Shr | Or | And | Not | Eq | Neq | Lt | Gt | Le
+                | Ge | CopyLoc(_) | MoveLoc(_) | StLoc(_) | MutBorrowLoc(_) | ImmBorrowLoc(_)
+                | MutBorrowField(_) | ImmBorrowField(_) | MutBorrowGlobalDeprecated(_)
+                | ImmBorrowGlobalDeprecated(_) | ExistsDeprecated(_) | MoveToDeprecated(_) | MoveFromDeprecated(_) | Abort | Nop => Ok(()),
             };
             result.map_err(|err| {
                 err.append_message_with_separator(' ', format!("at offset {} ", offset))
@@ -278,8 +227,7 @@ impl<'a> SignatureChecker<'a> {
     ) -> PartialVMResult<()> {
         match ty {
             SignatureToken::Vector(ty) => self.check_phantom_params(ty, false, type_parameters)?,
-            SignatureToken::StructInstantiation(s) => {
-                let (idx, type_arguments) = &**s;
+            SignatureToken::StructInstantiation(idx, type_arguments) => {
                 let sh = self.resolver.struct_handle_at(*idx);
                 for (i, ty) in type_arguments.iter().enumerate() {
                     self.check_phantom_params(
@@ -353,10 +301,7 @@ impl<'a> SignatureChecker<'a> {
                     .with_message("reference not allowed".to_string()))
             }
             Vector(ty) => self.check_signature_token(ty),
-            StructInstantiation(s) => {
-                let (_, type_arguments) = &**s;
-                self.check_signature_tokens(type_arguments)
-            }
+            StructInstantiation(_, type_arguments) => self.check_signature_tokens(type_arguments),
         }
     }
 
@@ -393,8 +338,7 @@ impl<'a> SignatureChecker<'a> {
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
         match s {
-            SignatureToken::StructInstantiation(s) => {
-                let (idx, type_arguments) = &**s;
+            SignatureToken::StructInstantiation(idx, type_arguments) => {
                 // Check that the instantiation satisfies the `idx` struct's constraints
                 // Cannot be checked completely if we do not know the constraints of type parameters
                 // i.e. it cannot be checked unless we are inside some module member. The only case

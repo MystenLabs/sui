@@ -1,0 +1,8 @@
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/parser/positional_struct_fields_simple_construct.move:14:13
+   │
+14 │         let x = Foo(0);
+   │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

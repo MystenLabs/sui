@@ -130,8 +130,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                         .insert(*struct_def_idx);
                 }
             }
-            T::StructInstantiation(struct_inst) => {
-                let (sh_idx, inners) = &**struct_inst;
+            T::StructInstantiation(sh_idx, inners) => {
                 if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
                     neighbors
                         .entry(cur_idx)

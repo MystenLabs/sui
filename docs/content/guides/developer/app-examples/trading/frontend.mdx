@@ -1,0 +1,817 @@
+---
+title: Trading Frontend
+sidebar_label: Frontend
+toc_max_heading_level: 2
+---
+
+:::note Multi-Page Guide
+
+This is the third in a [three-part guide](../trading.mdx) on how to build a trustless atomic swap on Sui.
+
+:::
+
+In this final part of the app example, you build a frontend (UI) that allows end-users to discover trades and interact with listed escrows.
+
+## Prerequisites
+
+{@include: ../../../../snippets/app-examples-trading-source.mdx}
+
+Before getting started, make sure you:
+
+- Understand [the mechanism behind the Escrow smart contract backend](../trading.mdx).
+- Check out [indexing service guide](./indexer-api.mdx) to learn how we index on-chain data and API endpoints exposed to serve data query requests.
+- Install [`pnpm` through this guide](https://pnpm.io/installation) as we will use it as our package manager.
+- Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with Typescript.
+- Check out [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- Check out [React Router](https://reactrouter.com/en/main) as we use it to navigate between different routes in our UI website.
+- `dApp Kit` provides a set of hooks for making query and mutation calls to Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`. Please check out [@tanstack/react-query](https://tanstack.com/query/latest/docs/framework/react/overview) to learn the basic usage for managing, caching, mutating server state.
+- This project is bootstrapped through `pnpm create @mysten/dapp`. Please check out [@mysten/create-dapp](https://sdk.mystenlabs.com/dapp-kit/create-dapp) for how to scaffold a React.js Sui dApp project quickly.
+
+## Overview
+
+The UI design consists of three parts:
+
+- A header containing the button allowing users to connect their wallet and navigate to other pages.
+- A place for users to manage their owned objects to be ready for escrow trading called `Manage Objects`.
+- A place for users to discover, create, and execute trades called `Escrows`.
+
+:::warning
+
+The following code snippets are not the full source code. The snippets are meant to focus on relevant logic important to the functionality of the example and features of Sui.
+
+:::
+
+## Set up providers {#set-up-providers}
+
+Set up and configure several providers at the root of your React.js tree to ensure different libraries including `dApp Kit`, `@tanstack/react-query`, `react-router-dom` work as expected.
+
+```ts title='src/main.tsx'
+import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { Theme } from '@radix-ui/themes';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from 'react-router-dom';
+
+import { router } from '@/routes/index.tsx';
+
+const queryClient = new QueryClient();
+
+const { networkConfig } = createNetworkConfig({
+	localnet: { url: getFullnodeUrl('localnet') },
+	devnet: { url: getFullnodeUrl('devnet') },
+	testnet: { url: getFullnodeUrl('testnet') },
+	mainnet: { url: getFullnodeUrl('mainnet') },
+});
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+	<React.StrictMode>
+		<Theme appearance="light">
+			<QueryClientProvider client={queryClient}>
+				<SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+					<WalletProvider autoConnect>
+						<RouterProvider router={router} />
+					</WalletProvider>
+				</SuiClientProvider>
+			</QueryClientProvider>
+		</Theme>
+	</React.StrictMode>,
+);
+```
+
+## Connect wallet
+
+The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
+
+Place the `ConnectButton` in the header:
+
+```ts title='src/components/Header.tsx'
+import { ConnectButton } from '@mysten/dapp-kit';
+import { Box, Button, Container, Flex, Heading } from '@radix-ui/themes';
+
+export function Header() {
+	return (
+		<Container>
+			<Box className="connect-wallet-wrapper">
+				<ConnectButton />
+			</Box>
+		</Container>
+	);
+}
+```
+
+## Type definitions
+
+All the type definitions are in `src/types/types.ts`.
+
+`ApiLockedObject` and `ApiEscrowObject` represent the `Locked` and `Escrow` indexed data model the indexing and API service return.
+
+`EscrowListingQuery` and `LockedListingQuery` are the query parameters model to provide to the API service to fetch from the endpoints `/escrow` and `/locked` accordingly.
+
+```ts title='src/types/types.ts'
+export type ApiLockedObject = {
+	id?: string;
+	objectId: string;
+	keyId: string;
+	creator?: string;
+	itemId: string;
+	deleted: boolean;
+};
+
+export type ApiEscrowObject = {
+	id: string;
+	objectId: string;
+	sender: string;
+	recipient: string;
+	keyId: string;
+	itemId: string;
+	swapped: boolean;
+	cancelled: boolean;
+};
+
+export type EscrowListingQuery = {
+	escrowId?: string;
+	sender?: string;
+	recipient?: string;
+	cancelled?: string;
+	swapped?: string;
+	limit?: string;
+};
+
+export type LockedListingQuery = {
+	deleted?: string;
+	keyId?: string;
+	limit?: string;
+};
+```
+
+## Execute transaction hook
+
+In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's examine the execute transaction hook.
+
+```ts title='src/hooks/useTransactionExecution.ts'
+import { useSignTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
+import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import toast from 'react-hot-toast';
+
+export function useTransactionExecution() {
+	const client = useSuiClient();
+	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
+
+	const executeTransaction = async (
+		txb: TransactionBlock,
+	): Promise<SuiTransactionBlockResponse | void> => {
+		try {
+			const signature = await signTransactionBlock({
+				transactionBlock: txb,
+			});
+
+			const res = await client.executeTransactionBlock({
+				transactionBlock: signature.transactionBlockBytes,
+				signature: signature.signature,
+				options: {
+					showEffects: true,
+					showObjectChanges: true,
+				},
+			});
+
+			toast.success('Successfully executed transaction!');
+			return res;
+		} catch (e: any) {
+			toast.error(`Failed to execute transaction: ${e.message as string}`);
+		}
+	};
+
+	return executeTransaction;
+}
+```
+
+The hook logic is straightforward. A `TransactionBlock` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+
+Use the `useSuiClient()` hook from `dApp Kit` to retrieve the Sui client instance configured in the [**Set up providers**](#set-up-providers) step. The `useSignTransactionBlock()` function is another hook from `dApp kit` that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeTransactionBlock()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
+
+## Generate demo data
+
+:::info
+
+The full source code of the demo bear smart contract is available at [Trading Contracts Demo directory](https://github.com/MystenLabs/sui/tree/main/examples/trading/contracts/demo)
+
+:::
+
+You need a utility function to create a dummy object representing a real world asset so you can use it to test and demonstrate escrow users flow on the UI directly.
+
+```ts title='src/mutations/demo.ts'
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+import { CONSTANTS } from '@/constants';
+import { useTransactionExecution } from '@/hooks/useTransactionExecution';
+
+// SPDX-License-Identifier: Apache-2.0
+export function useGenerateDemoData() {
+	const account = useCurrentAccount();
+	const executeTransaction = useTransactionExecution();
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async () => {
+			if (!account?.address) throw new Error('You need to connect your wallet!');
+			const txb = new TransactionBlock();
+
+			const bear = txb.moveCall({
+				target: `${CONSTANTS.demoContract.packageId}::demo_bear::new`,
+				arguments: [txb.pure.string(`A happy bear`)],
+			});
+
+			txb.transferObjects([bear], txb.pure.address(account.address));
+
+			return executeTransaction(txb);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ['getOwnedObjects'],
+			});
+		},
+	});
+}
+```
+
+As previously mentioned, the example uses `@tanstack/react-query` to query, cache, and mutate server state. Server state is data only available on remote servers, and the only way to retrieve or update this data is by interacting with these remote servers. In this case, it could be from an API or directly from Sui blockchain RPC.
+
+When you execute a transaction call to mutate data on the Sui blockchain, use the `useMutation()` hook. The `useMutation()` hook accepts several inputs, however, you only need two of them for this example. The first parameter, `mutationFn`, accepts the function to execute the main mutating logic, while the second parameter, `onSuccess`, is a callback that runs when the mutating logic succeeds.
+
+The main mutating logic is fairly straightforward, executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transfer it to the connected wallet account, all within the same `TransactionBlock`. The example reuses the `executeTransaction()` hook from the **Execute Transaction Hook** step to execute the transaction.
+
+Another benefit of wrapping the main mutating logic inside `useMutation()` is that you can access and manipulate the cache storing server state. The example fetches the cache from remote servers by using query call in an appropriate callback. In this case, it is the `onSuccess` callback. When the transaction succeeds, invalidate the cache data at the cache key called `getOwnedObjects`, then `@tanstack/react-query` handles the re-fetching mechanism for the invalidated data automatically. Do this by using `invalidateQueries()` on the `@tanstack/react-query` configured client instance retrieved by `useQueryClient()` hook in the **Setup Providers** step.
+
+Now the logic to create a dummy bear object exists. You just need to attach it into the button in the header.
+
+```ts title='src/components/Header.tsx'
+import { useGenerateDemoData } from '@/mutations/demo';
+
+export function Header() {
+	const { mutate: demoBearMutation, isPending } = useGenerateDemoData();
+	return (
+		<Container>
+			<Box>
+				<Button
+					className="cursor-pointer"
+					disabled={isPending}
+					onClick={() => {
+						demoBearMutation();
+					}}
+				>
+					New Demo Bear
+				</Button>
+			</Box>
+		</Container>
+	);
+}
+```
+
+## Lock/unlock owned-object mutation
+
+Locking and unlocking of owned objects are two crucial on-chain actions in this application and are very likely to be used all over. Hence, it's beneficial to extract their logic into separated mutating functions to enhance reusability and encapsulation.
+
+### Lock owned objects
+
+To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions, use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because our smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
+
+```ts title='src/mutations/locked.ts'
+export function useLockObjectMutation() {
+	const account = useCurrentAccount();
+	const executeTransaction = useTransactionExecution();
+
+	return useMutation({
+		mutationFn: async ({ object }: { object: SuiObjectData }) => {
+			if (!account?.address) throw new Error('You need to connect your wallet!');
+			const txb = new TransactionBlock();
+
+			const [locked, key] = txb.moveCall({
+				target: `${CONSTANTS.escrowContract.packageId}::lock::lock`,
+				arguments: [txb.object(object.objectId)],
+				typeArguments: [object.type!],
+			});
+
+			txb.transferObjects([locked, key], txb.pure.address(account.address));
+
+			return executeTransaction(txb);
+		},
+	});
+}
+```
+
+### Unlock owned objects
+
+To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. The implementation is straightforward, call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
+
+```ts title='src/mutations/locked.ts'
+export function useUnlockMutation() {
+	const account = useCurrentAccount();
+	const executeTransaction = useTransactionExecution();
+	const client = useSuiClient();
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({
+			lockedId,
+			keyId,
+			suiObject,
+		}: {
+			lockedId: string;
+			keyId: string;
+			suiObject: SuiObjectData;
+		}) => {
+			if (!account?.address) throw new Error('You need to connect your wallet!');
+			const key = await client.getObject({
+				id: keyId,
+				options: {
+					showOwner: true,
+				},
+			});
+
+			if (
+				!key.data?.owner ||
+				typeof key.data.owner === 'string' ||
+				!('AddressOwner' in key.data.owner) ||
+				key.data.owner.AddressOwner !== account.address
+			) {
+				toast.error('You are not the owner of the key');
+				return;
+			}
+
+			const txb = new TransactionBlock();
+
+			const item = txb.moveCall({
+				target: `${CONSTANTS.escrowContract.packageId}::lock::unlock`,
+				typeArguments: [suiObject.type!],
+				arguments: [txb.object(lockedId), txb.object(keyId)],
+			});
+
+			txb.transferObjects([item], txb.pure.address(account.address));
+
+			return executeTransaction(txb);
+		},
+		onSuccess: () => {
+			setTimeout(() => {
+				// invalidating the queries after a small latency
+				// because the indexer works in intervals of 1s.
+				// if we invalidate too early, we might not get the latest state.
+				queryClient.invalidateQueries({
+					queryKey: [QueryKey.Locked],
+				});
+			}, 1_000);
+		},
+	});
+}
+```
+
+## Create/accept/cancel escrow mutations
+
+To create, accept, or cancel escrows, it's better to implement mutations for each of these actions to allow reusability and encapsulation.
+
+### Create escrows
+
+To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. The mutation implementation is pretty straightforward. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
+
+```ts title='src/mutations/escrow.ts'
+export function useCreateEscrowMutation() {
+	const currentAccount = useCurrentAccount();
+	const executeTransaction = useTransactionExecution();
+
+	return useMutation({
+		mutationFn: async ({ object, locked }: { object: SuiObjectData; locked: ApiLockedObject }) => {
+			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
+
+			const txb = new TransactionBlock();
+			txb.moveCall({
+				target: `${CONSTANTS.escrowContract.packageId}::shared::create`,
+				arguments: [
+					txb.object(object.objectId!),
+					txb.pure.id(locked.keyId),
+					txb.pure.address(locked.creator!),
+				],
+				typeArguments: [object.type!],
+			});
+
+			return executeTransaction(txb);
+		},
+	});
+}
+```
+
+### Accept escrows
+
+To accept the escrow, create a mutation through the `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus it requires the type parameters of the escrowed and locked objects. Query the objects details by using `multiGetObjects` on Sui client instance. Lastly, execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the the connected wallet account. When the mutation succeeds, invalidate the cache to allow automatic re-fetch of the data.
+
+```ts title='src/mutations/escrow.ts'
+import { ApiEscrowObject, ApiLockedObject } from '@/types/types';
+
+export function useAcceptEscrowMutation() {
+	const currentAccount = useCurrentAccount();
+	const client = useSuiClient();
+	const executeTransaction = useTransactionExecution();
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({
+			escrow,
+			locked,
+		}: {
+			escrow: ApiEscrowObject;
+			locked: ApiLockedObject;
+		}) => {
+			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
+			const txb = new TransactionBlock();
+
+			const escrowObject = await client.multiGetObjects({
+				ids: [escrow.itemId, locked.itemId],
+				options: {
+					showType: true,
+				},
+			});
+
+			const escrowType = escrowObject.find((x) => x.data?.objectId === escrow.itemId)?.data?.type;
+
+			const lockedType = escrowObject.find((x) => x.data?.objectId === locked.itemId)?.data?.type;
+
+			if (!escrowType || !lockedType) {
+				throw new Error('Failed to fetch types.');
+			}
+
+			const item = txb.moveCall({
+				target: `${CONSTANTS.escrowContract.packageId}::shared::swap`,
+				arguments: [
+					txb.object(escrow.objectId),
+					txb.object(escrow.keyId),
+					txb.object(locked.objectId),
+				],
+				typeArguments: [escrowType, lockedType],
+			});
+
+			txb.transferObjects([item], txb.pure.address(currentAccount.address));
+
+			return executeTransaction(txb);
+		},
+
+		onSuccess: () => {
+			setTimeout(() => {
+				queryClient.invalidateQueries({ queryKey: [QueryKey.Escrow] });
+			}, 1_000);
+		},
+	});
+}
+```
+
+### Cancel escrows
+
+To cancel the escrow, create a mutation through the `useCancelEscrowMutation` hook in `src/mutations/escrow.ts`. The cancel function accepts the escrow `ApiEscrowObject` and its on-chain data. The `{PACKAGE_ID}::shared::return_to_sender` Move call is generic, thus it requires the type parameters of the escrowed object. Next, execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
+
+```ts ts title='src/mutations/escrow.ts'
+export function useCancelEscrowMutation() {
+	const currentAccount = useCurrentAccount();
+	const executeTransaction = useTransactionExecution();
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({
+			escrow,
+			suiObject,
+		}: {
+			escrow: ApiEscrowObject;
+			suiObject: SuiObjectData;
+		}) => {
+			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
+			const txb = new TransactionBlock();
+
+			const item = txb.moveCall({
+				target: `${CONSTANTS.escrowContract.packageId}::shared::return_to_sender`,
+				arguments: [txb.object(escrow.objectId)],
+				typeArguments: [suiObject?.type!],
+			});
+
+			txb.transferObjects([item], txb.pure.address(currentAccount?.address!));
+
+			return executeTransaction(txb);
+		},
+
+		onSuccess: () => {
+			setTimeout(() => {
+				queryClient.invalidateQueries({ queryKey: [QueryKey.Escrow] });
+			}, 1_000);
+		},
+	});
+}
+```
+
+## Locked dashboard
+
+The UI has a tab for users to manage their owned objects to be ready for escrow trading. The code of this tab lives in the file `src/routes/LockedDashBoard.tsx`. In this tab, there are two sub-tabs:
+
+- **My Locked Objects** tab to list out all of owned `Locked` objects.
+- **Lock Own Objects** tab to lock owned objects.
+
+### My Locked Objects tab
+
+Let's take a look at the **My Locked Objects** tab by examining `src/components/locked/OwnedLockedList.tsx`. Focus on the logic on how to retrieve this list.
+
+```ts title='src/components/locked/OwnedLockedList.tsx'
+import { useCurrentAccount, useSuiClientInfiniteQuery } from '@mysten/dapp-kit';
+
+import { InfiniteScrollArea } from '@/components/InfiniteScrollArea';
+import { CONSTANTS } from '@/constants';
+
+import { LockedObject } from './LockedObject';
+
+/**
+ * Similar to the `ApiLockedList` but fetches the owned locked objects
+ * but fetches the objects from the on-chain state, instead of relying on the indexer API.
+ */
+export function OwnedLockedList() {
+	const account = useCurrentAccount();
+	const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
+		useSuiClientInfiniteQuery(
+			'getOwnedObjects',
+			{
+				filter: {
+					StructType: CONSTANTS.escrowContract.lockedType,
+				},
+				owner: account?.address!,
+				options: {
+					showContent: true,
+					showOwner: true,
+				},
+			},
+			{
+				enabled: !!account?.address,
+				select: (data) => data.pages.flatMap((page) => page.data),
+			},
+		);
+	return (
+		<>
+			<InfiniteScrollArea
+				loadMore={() => fetchNextPage()}
+				hasNextPage={hasNextPage}
+				loading={isFetchingNextPage || isLoading}
+			>
+				{data?.map((item) => <LockedObject key={item.data?.objectId} object={item.data!} />)}
+			</InfiniteScrollArea>
+		</>
+	);
+}
+```
+
+Fetch the owned `Locked` objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account and the `Locked` object struct type to the call. The struct type is usually identified by the format of `{PACKAGE_ID}::{{MODULE_NAME}}::{{STRUCT_TYPE}}`. The returned data is stored inside the cache at query key `getOwnedObjects`. Recall the previous section where you invalidate the data at this key after the mutation succeeds, the `useSuiClientInfiniteQuery()` hook automatically re-fetches the data, thus you don't have to worry about the out-dated data living in your frontend application.
+
+#### `LockedObject` and `Locked` component
+
+The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using `dApp Kit` `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recalling that in this smart contract, the locked item is put into a dynamic object field.
+
+The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. It also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
+
+```ts title='src/components/locked/LockedObject.tsx'
+/**
+ * Acts as a wrapper between the `Locked` object fetched from API
+ * and the on-chain object state.
+ *
+ * Accepts an `object` of type `::locked::Locked`, fetches the itemID (though the DOF)
+ * and then renders the `Locked` component.
+ *
+ * ItemId is optional because we trust the API to return the correct itemId for each Locked.
+ */
+export function LockedObject({
+	object,
+	itemId,
+	hideControls,
+}: {
+	object: SuiObjectData;
+	itemId?: string;
+	hideControls?: boolean;
+}) {
+	const owner = () => {
+		if (!object.owner || typeof object.owner === 'string' || !('AddressOwner' in object.owner))
+			return undefined;
+		return object.owner.AddressOwner;
+	};
+
+	const getKeyId = (item: SuiObjectData) => {
+		if (!(item.content?.dataType === 'moveObject') || !('key' in item.content.fields)) return '';
+		return item.content.fields.key as string;
+	};
+
+	// Get the itemID for the locked object (We've saved it as a DOF on the SC).
+	const suiObjectId = useSuiClientQuery(
+		'getDynamicFieldObject',
+		{
+			parentId: object.objectId,
+			name: {
+				type: CONSTANTS.escrowContract.lockedObjectDFKey,
+				value: {
+					dummy_field: false,
+				},
+			},
+		},
+		{
+			select: (data) => data.data,
+			enabled: !itemId,
+		},
+	);
+
+	return (
+		<Locked
+			locked={{
+				itemId: itemId || suiObjectId.data?.objectId!,
+				objectId: object.objectId,
+				keyId: getKeyId(object),
+				creator: owner(),
+				deleted: false,
+			}}
+			hideControls={hideControls}
+		/>
+	);
+}
+```
+
+### Lock owned object
+
+You have all the logic you need to implement this UI. Use the same `useSuiClientInfiniteQuery()` hook to query all the owned objects of the connected wallet. Filter out objects that do not exist in the Object Display `display.data.image_url` as you can assume the valid NFTs conform to the Object Display and have an image in the metadata. Lastly, use the lock mutation from `useLockObjectMutation()` hook whenever the user clicks the lock button.
+
+```ts title='src/components/locked/LockOwnedObjects.tsx'
+export function LockOwnedObjects() {
+	const account = useCurrentAccount();
+
+	const { mutate: lockObjectMutation, isPending } = useLockObjectMutation();
+
+	const { data, fetchNextPage, isFetchingNextPage, hasNextPage, refetch } =
+		useSuiClientInfiniteQuery(
+			'getOwnedObjects',
+			{
+				owner: account?.address!,
+				options: {
+					showDisplay: true,
+					showType: true,
+				},
+			},
+			{
+				enabled: !!account,
+				select: (data) =>
+					data.pages
+						.flatMap((page) => page.data)
+						.filter((x) => !!x.data?.display && !!x.data?.display?.data?.image_url),
+			},
+		);
+
+	return (
+		<InfiniteScrollArea
+			loadMore={() => fetchNextPage()}
+			hasNextPage={hasNextPage}
+			loading={isFetchingNextPage}
+		>
+			{data?.map((obj) => (
+				<SuiObjectDisplay object={obj.data!}>
+					<div className="text-right flex items-center justify-between">
+						<p className="text-sm">Lock the item so it can be used for escrows.</p>
+						<Button
+							className="cursor-pointer"
+							disabled={isPending}
+							onClick={() => {
+								lockObjectMutation(
+									{ object: obj.data! },
+									{
+										onSuccess: () => refetch(),
+									},
+								);
+							}}
+						>
+							<LockClosedIcon />
+							Lock Item
+						</Button>
+					</div>
+				</SuiObjectDisplay>
+			))}
+		</InfiniteScrollArea>
+	);
+}
+```
+
+## Escrow dashboard
+
+The UI has a place for users to discover, create, and execute trades. The code of this tab lives in the file `src/routes/EscrowDashboard.tsx`. In this tab, there are three sub-tabs:
+
+- **Requested Escrows** tab to list out all of the escrow requested for locked objects.
+- **Browse Locked Objects** tab to browse locked objects to trade for.
+- **My Pending Requests** tab to browse escrows you have initiated for third-party locked objects.
+
+### Requested escrows
+
+Let's take a look at the **Requested Escrows** tab by examining `src/components/escrows/EscrowList.tsx`. This time, the data is retrieved by using `useInfiniteQuery` directly from `react-query`. Fetch the data by calling the API service that you already implemented in the [Escrow Indexing and API Service Guide](./indexer-api.mdx). Call the `/escrows` endpoint to fetch all the escrows requested to you. The rationale behind using an API service to fetch the data is because the indexed data includes additional information that allows query efficiency and flexibility. You can fetch specific escrows satisfying different configured query clauses rather than limited query features of Sui blockchain RPC endpoints.
+
+```ts title='src/components/escrows/EscrowList.tsx'
+import { constructUrlSearchParams, getNextPageParam } from '@/utils/helpers';
+
+const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } = useInfiniteQuery({
+	initialPageParam: null,
+	queryKey: [QueryKey.Escrow, params, escrowId],
+	queryFn: async ({ pageParam }) => {
+		const data = await fetch(
+			CONSTANTS.apiEndpoint +
+				'escrows' +
+				constructUrlSearchParams({
+					...params,
+					...(pageParam ? { cursor: pageParam as string } : {}),
+					...(escrowId ? { objectId: escrowId } : {}),
+				}),
+		);
+		return data.json();
+	},
+	select: (data) => data.pages.flatMap((page) => page.data),
+	getNextPageParam,
+});
+```
+
+The `Escrow` component renders the details of an escrow by providing `ApiEscrowObject` as a rendering property. There is some data you need to fetch to gather necessary escrow information for display in the UI:
+
+- Query the escrowed item object directly from Sui blockchain by using `useSuiClientQuery('getObject')` as this is the only way to have its Object Display metadata.
+- Fetch the `ApiLockedObject` corresponding to the escrow's key ID from the API service as this is the most efficient way to fetch the locked object in a complex query.
+- Fetch the on-chain `Locked` object corresponding to the returned `ApiLockedObject` to pass it onto `<LockedObject />`.
+
+```ts title='src/components/escrows/Escrow.tsx'
+export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
+	const account = useCurrentAccount();
+	const [isToggled, setIsToggled] = useState(true);
+	const { mutate: acceptEscrowMutation, isPending } = useAcceptEscrowMutation();
+	const { mutate: cancelEscrowMutation, isPending: pendingCancellation } =
+		useCancelEscrowMutation();
+
+	const suiObject = useSuiClientQuery('getObject', {
+		id: escrow?.itemId,
+		options: {
+			showDisplay: true,
+			showType: true,
+		},
+	});
+
+	const lockedData = useQuery({
+		queryKey: [QueryKey.Locked, escrow.keyId],
+		queryFn: async () => {
+			const res = await fetch(`${CONSTANTS.apiEndpoint}locked?keyId=${escrow.keyId}`);
+			return res.json();
+		},
+		select: (data) => data.data[0],
+		enabled: !escrow.cancelled,
+	});
+
+	const { data: suiLockedObject } = useGetLockedObject({
+		lockedId: lockedData.data?.objectId,
+	});
+
+	...
+}
+```
+
+As the last step, reuse the `accept` and `cancel` escrow mutations in corresponding buttons. 
+
+### Browse locked objects
+
+The `src/components/locked/ApiLockedList.tsx` component renders all the on-chain locked objects based on the `LockedListingQuery` property. Call the API service to fetch the `ApiLockedObject` data using the provided query parameters. One caveat around the API service is that the `creator` field of the `ApiLockedObject` could be stale because the `Locked` object has the `store` ability. This means that the object can be transferred freely, hence, the ownership might not be correctly tracked by the API service. That's why you still fetch from the Sui blockchain as an additional step to define the object with latest on-chain information to ensure its data correctness in regards to ownership.
+
+```ts title='src/components/locked/ApiLockedList.tsx'
+const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } = useInfiniteQuery({
+	initialPageParam: null,
+	queryKey: [QueryKey.Locked, params, lockedId],
+	queryFn: async ({ pageParam }) => {
+		const data = await (
+			await fetch(
+				CONSTANTS.apiEndpoint +
+					'locked' +
+					constructUrlSearchParams({
+						deleted: 'false',
+						...(pageParam ? { cursor: pageParam as string } : {}),
+						...(params || {}),
+					}),
+			)
+		).json();
+
+		const objects = await suiClient.multiGetObjects({
+			ids: data.data.map((x: ApiLockedObject) => x.objectId),
+			options: {
+				showOwner: true,
+				showContent: true,
+			},
+		});
+
+		return {
+			suiObjects: objects.map((x) => x.data),
+			api: data,
+		};
+	},
+	select: (data) => data.pages,
+	getNextPageParam,
+	enabled: !lockedId,
+});
+```
+
+### My Pending Requests tab
+
+The **My Pending Requests** tab uses the same `<EscrowList />` component as **Requested Escrows** tab as they're both trying to display the escrows. The only difference is that the former fetches all the escrows with current wallet as recipient, while the latter fetches all the escrows with current wallet as sender.

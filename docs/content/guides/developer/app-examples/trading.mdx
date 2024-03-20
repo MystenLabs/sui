@@ -1,0 +1,29 @@
+---
+title: Trading 
+hide_table_of_contents: true
+---
+
+Escrow refers to a legal concept where a third party holds and regulates payment of the funds required for two parties involved in a given transaction. It helps make transactions more secure by keeping the payment in a secure escrow account that is released only when all of the terms of an agreement are met as overseen by the party acting as the escrow authority.
+
+This guide and example demonstrate an atomic swap on Sui, which is similar to an escrow but does not require a trusted third party. Instead, this example uses a [shared object](../../../concepts/object-ownership/shared.mdx) to act as the escrow between two Sui users wanting to trade. Shared objects are a unique concept to Sui. Any transaction and any signer can modify it, given the changes meet the requirements set forth by the package that defined the type.
+
+:::info
+
+See [Shared versus Owned Objects](../sui-101/shared-owned.mdx) for more information on the differences between object types.
+
+:::
+
+The guide is split into three parts:
+
+1. [Backend](./trading/backend.mdx): The modules that hold the state and perform the swaps.
+1. [Indexing and API Service](./trading/indexer-api.mdx): A service that indexes chain state to discover trades, and an API service to read this data.
+1. [Frontend](./trading/frontend.mdx): Enables users to list objects for sale and to accept trades.
+
+{@include: ../../../snippets/app-examples-trading-source.mdx}
+
+## Prerequisites
+
+Before getting started, make sure you have:
+
+- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
+- [Configured a valid network environment](../../../references/cli/client.mdx#set-current-environment), as you will be deploying the module on Testnet.

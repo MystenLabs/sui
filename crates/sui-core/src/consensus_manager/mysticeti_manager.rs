@@ -4,14 +4,15 @@ use std::{path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use consensus_config::{Committee, Parameters};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
+use consensus_config::{AuthorityIndex, Committee, Parameters};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::{RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_types::{
+    base_types::AuthorityName,
     committee::EpochId,
     crypto::{AuthorityKeyPair, NetworkKeyPair},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
@@ -107,10 +108,16 @@ impl ConsensusManagerTrait for MysticetiManager {
             ..Default::default()
         };
 
-        let (own_index, _) = committee
-            .authorities()
-            .find(|(_, a)| &a.protocol_key == self.keypair.public())
-            .expect("Own authority should be among the consensus authorities!");
+        let name: AuthorityName = self.keypair.public().into();
+
+        let authority_index: AuthorityIndex = committee
+            .to_authority_index(
+                epoch_store
+                    .committee()
+                    .authority_index(&name)
+                    .expect("Should have valid index for own authority") as usize,
+            )
+            .expect("Should have valid index for own authority");
 
         let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
 
@@ -123,14 +130,13 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consumer = CommitConsumer::new(
             commit_sender,
             // TODO(mysticeti): remove dependency on narwhal executor
-            consensus_handler.last_executed_sub_dag_round() as Round,
             consensus_handler.last_executed_sub_dag_index() as CommitIndex,
         );
 
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
         let authority = ConsensusAuthority::start(
-            own_index,
+            authority_index,
             committee.clone(),
             parameters.clone(),
             protocol_config.clone(),

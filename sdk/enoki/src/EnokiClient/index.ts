@@ -107,17 +107,12 @@ export class EnokiClient {
 	createSponsoredTransactionBlock(input: CreateSponsoredTransactionBlockApiInput) {
 		return this.#fetch<CreateSponsoredTransactionBlockApiResponse>('transaction-blocks/sponsor', {
 			method: 'POST',
-			headers: input.jwt
-				? {
-						[ZKLOGIN_HEADER]: input.jwt,
-				  }
-				: {},
+			headers: {
+				[ZKLOGIN_HEADER]: input.jwt,
+			},
 			body: JSON.stringify({
-				sender: input.sender,
 				network: input.network,
 				transactionBlockKindBytes: input.transactionBlockKindBytes,
-				allowedAddresses: input.allowedAddresses,
-				allowedMoveCallTargets: input.allowedMoveCallTargets,
 			}),
 		});
 	}

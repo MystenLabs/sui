@@ -19,10 +19,7 @@ use anyhow::anyhow;
 use comments::*;
 use move_command_line_common::files::{find_move_filenames_vfs, FileHash};
 use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeSet, HashMap};
 use vfs::VfsPath;
 
 /// Parses program's targets and dependencies, both of which are read from different virtual file
@@ -88,14 +85,12 @@ pub(crate) fn parse_program(
         named_address_map,
     } in deps
     {
-        let (defs, dep_comment_map, fhash) =
-            parse_file(&path, compilation_env, &mut files, package)?;
+        let (defs, _, _) = parse_file(&path, compilation_env, &mut files, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
             def,
         }));
-        source_comments.insert(fhash, dep_comment_map);
     }
 
     let pprog = parser::ast::Program {
@@ -152,20 +147,21 @@ fn parse_file(
     path.open_file()?.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);
     let fname = Symbol::from(path.as_str());
-    let source_str = Arc::from(source_buffer);
-    if let Err(ds) = verify_string(file_hash, &source_str) {
+    let buffer = match verify_string(file_hash, &source_buffer) {
+        Err(ds) => {
             compilation_env.add_diags(ds);
-        files.insert(file_hash, (fname, source_str));
+            files.insert(file_hash, (fname, source_buffer));
             return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
         }
-    let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
-    {
+        Ok(()) => &source_buffer,
+    };
+    let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer, package) {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
             compilation_env.add_diags(ds);
             (vec![], MatchedFileCommentMap::new())
         }
     };
-    files.insert(file_hash, (fname, source_str));
+    files.insert(file_hash, (fname, source_buffer));
     Ok((defs, comments, file_hash))
 }

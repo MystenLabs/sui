@@ -1110,7 +1110,7 @@ mod checked {
                         }
                     }
 
-                    Type::StructInstantiation(Box::new((idx, loaded_type_params)))
+                    Type::StructInstantiation(idx, loaded_type_params)
                 }
             }
         })

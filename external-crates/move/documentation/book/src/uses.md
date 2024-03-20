@@ -17,29 +17,29 @@ For example
 
 ```move
 use std::vector;
-use std::option as o;
+use std::vector as V;
 ```
 
 `use std::vector;` introduces an alias `vector` for `std::vector`. This means that anywhere you
 would want to use the module name `std::vector` (assuming this `use` is in scope), you could use
 `vector` instead. `use std::vector;` is equivalent to `use std::vector as vector;`
 
-Similarly `use std::option as o;` would let you use `o` instead of `std::option`
+Similarly `use std::vector as V;` would let you use `V` instead of `std::vector`
 
-```move
+```move=
 use std::vector;
-use std::option as o;
+use std::vector as V;
 
-fun new_vec(): vector<o::Option<u8>> {
-    let mut v = vector[];
-    vector::push_back(&mut v, o::some(0));
-    vector::push_back(&mut v, o::none());
-    v
+fun new_vecs(): (vector<u8>, vector<u8>, vector<u8>) {
+    let v1 = std::vector::empty();
+    let v2 = vector::empty();
+    let v3 = V::empty();
+    (v1, v2, v3)
 }
 ```
 
-If you want to import a specific module member (such as a function or struct). You can use the
-following syntax.
+If you want to import a specific module member (such as a function, struct, or constant). You can
+use the following syntax.
 
 ```move
 use <address>::<module name>::<module member>;
@@ -49,27 +49,25 @@ use <address>::<module name>::<module member> as <member alias>;
 For example
 
 ```move
-use std::vector::push_back;
-use std::option::some as s;
+use std::vector::empty;
+use std::vector::empty as empty_vec;
 ```
 
-This would let you use the function `std::vector::push_back` without full qualification. Similarly
-for `std::option::some` with `s`. Instead you could use `push_back` and `s` respectively. Again,
-`use std::vector::push_back;` is equivalent to `use std::vector::push_back as push_back;`
+This would let you use the function `std::vector::empty` without full qualification. Instead you
+could use `empty` and `empty_vec` respectively. Again, `use std::vector::empty;` is equivalent to
+`use std::vector::empty as empty;`
 
-```move
-use std::vector::push_back;
-use std::option::some as s;
+```move=
+use std::vector::empty;
+use std::vector::empty as empty_vec;
 
-fun new_vec(): vector<std::option::Option<u8>> {
-    let mut v = vector[];
-    vector::push_back(&mut v, s(0));
-    vector::push_back(&mut v, std::option::none());
-    v
+fun new_vecs(): (vector<u8>, vector<u8>, vector<u8>) {
+    let v1 = std::vector::empty();
+    let v2 = empty();
+    let v3 = empty_vec();
+    (v1, v2, v3)
 }
 ```
-
-### Multiple Aliases
 
 If you want to add aliases for multiple module members at once, you can do so with the following
 syntax
@@ -80,70 +78,54 @@ use <address>::<module name>::{<module member>, <module member> as <member alias
 
 For example
 
-```move
-use std::vector::push_back;
-use std::option::{some as s, none as n};
+```move=
+use std::vector::{push_back, length as len, pop_back};
 
-fun new_vec(): vector<std::option::Option<u8>> {
-    let mut v = vector[];
-    push_back(&mut v, s(0));
-    push_back(&mut v, n());
-    v
+fun swap_last_two<T>(v: &mut vector<T>) {
+    assert!(len(v) >= 2, 42);
+    let last = pop_back(v);
+    let second_to_last = pop_back(v);
+    push_back(v, last);
+    push_back(v, second_to_last)
 }
 ```
-
-### Self aliases
 
 If you need to add an alias to the Module itself in addition to module members, you can do that in a
 single `use` using `Self`. `Self` is a member of sorts that refers to the module.
 
 ```move
-use std::option::{Self, some, none};
+use std::vector::{Self, empty};
 ```
 
 For clarity, all of the following are equivalent:
 
 ```move
-use std::option;
-use std::option as option;
-use std::option::Self;
-use std::option::Self as option;
-use std::option::{Self};
-use std::option::{Self as option};
+use std::vector;
+use std::vector as vector;
+use std::vector::Self;
+use std::vector::Self as vector;
+use std::vector::{Self};
+use std::vector::{Self as vector};
 ```
-
-### Multiple Aliases for the Same Definition
 
 If needed, you can have as many aliases for any item as you like
 
-```move
-use std::vector::push_back;
-use std::option::{Option, some, none};
-
-fun new_vec(): vector<Option<u8>> {
-    let mut v = vector[];
-    push_back(&mut v, some(0));
-    push_back(&mut v, none());
-    v
-}
-```
-
-### Nested imports
-
-In Move, you can also import multiple names with the same `use` declaration. This brings all
-provided names into scope:
-
-```move
-use std::{
-    vector::{Self as vec, push_back},
-    string::{String, Self as str}
+```move=
+use std::vector::{
+    Self,
+    Self as V,
+    length,
+    length as len,
 };
 
-fun example(s: &mut String) {
-    let mut v = vec::empty();
-    push_back(&mut v, 0);
-    push_back(&mut v, 10);
-    str::append_utf8(s, v);
+fun pop_twice<T>(v: &mut vector<T>): (T, T) {
+    // all options available given the `use` above
+    assert!(vector::length(v) > 1, 42);
+    assert!(V::length(v) > 1, 42);
+    assert!(length(v) > 1, 42);
+    assert!(len(v) > 1, 42);
+
+    (vector::pop_back(v), vector::pop_back(v))
 }
 ```
 
@@ -151,18 +133,20 @@ fun example(s: &mut String) {
 
 Inside of a `module` all `use` declarations are usable regardless of the order of declaration.
 
-```move
-module a::example {
+```move=
+address 0x42 {
+module example {
     use std::vector;
 
-    fun new_vec(): vector<Option<u8>> {
-        let mut v = vector[];
+    fun example(): vector<u8> {
+        let v = empty();
         vector::push_back(&mut v, 0);
         vector::push_back(&mut v, 10);
         v
     }
 
-    use std::option::{Option, some, none};
+    use std::vector::empty;
+}
 }
 ```
 
@@ -175,90 +159,92 @@ Additionally, the aliases introduced cannot conflict with other module members. 
 
 You can add `use` declarations to the beginning of any expression block
 
-```move
-module a::example {
-    fun new_vec(): vector<Option<u8>> {
-        use std::vector::push_back;
-        use std::option::{Option, some, none};
+```move=
+address 0x42 {
+module example {
 
-        let mut v = vector[];
-        push_back(&mut v, some(0));
-        push_back(&mut v, none());
+    fun example(): vector<u8> {
+        use std::vector::{empty, push_back};
+
+        let v = empty();
+        push_back(&mut v, 0);
+        push_back(&mut v, 10);
         v
     }
+}
 }
 ```
 
 As with `let`, the aliases introduced by `use` in an expression block are removed at the end of that
 block.
 
-```move
-module a::example {
-    fun new_vec(): vector<Option<u8>> {
-        let result = {
-            use std::vector::push_back;
-            use std::option::{Option, some, none};
+```move=
+address 0x42 {
+module example {
 
-            let mut v = vector[];
-            push_back(&mut v, some(0));
-            push_back(&mut v, none());
+    fun example(): vector<u8> {
+        let result = {
+            use std::vector::{empty, push_back};
+            let v = empty();
+            push_back(&mut v, 0);
+            push_back(&mut v, 10);
             v
         };
         result
     }
+
+}
 }
 ```
 
 Attempting to use the alias after the block ends will result in an error
 
-```move
-    fun new_vec(): vector<Option<u8>> {
-        let mut result = {
-            use std::vector::push_back;
-            use std::option::{Option, some, none};
-
-            let mut v = vector[];
-            push_back(&mut v, some(0));
-            v
-        };
-        push_back(&mut result, std::option::none());
-        // ^^^^^^ ERROR! unbound function 'push_back'
-        result
-    }
+```move=
+fun example(): vector<u8> {
+    let result = {
+        use std::vector::{empty, push_back};
+        let v = empty();
+        push_back(&mut v, 0);
+        push_back(&mut v, 10);
+        v
+    };
+    let v2 = empty(); // ERROR!
+//           ^^^^^ unbound function 'empty'
+    result
+}
 ```
 
 Any `use` must be the first item in the block. If the `use` comes after any expression or `let`, it
 will result in a parsing error
 
-```move
+```move=
 {
-    let mut v = vector[];
+    let x = 0;
     use std::vector; // ERROR!
+    let v = vector::empty();
 }
 ```
 
-This allows you to shorten your import blocks in many situations. Note that these imports, as the
-previous ones, are all subject to the naming and uniqueness rules described in the following
-sections.
-
 ## Naming rules
 
-Aliases must follow the same rules as other module members. This means that aliases to structs (and
-constants) must start with `A` to `Z`
+Aliases must follow the same rules as other module members. This means that aliases to structs or
+constants must start with `A` to `Z`
 
-```move
-module a::data {
-    public struct S {}
+```move=
+address 0x42 {
+module data {
+    struct S {}
     const FLAG: bool = false;
-    public fun foo() {}
+    fun foo() {}
 }
-module a::example {
-    use a::data::{
+module example {
+    use 0x42::data::{
         S as s, // ERROR!
         FLAG as fLAG, // ERROR!
         foo as FOO,  // valid
         foo as bar, // valid
     };
+}
 }
 ```
 
@@ -268,30 +254,34 @@ Inside a given scope, all aliases introduced by `use` declarations must be uniqu
 
 For a module, this means aliases introduced by `use` cannot overlap
 
-```move
-module a::example {
-    use std::option::{none as foo, some as foo}; // ERROR!
-    //                                     ^^^ duplicate 'foo'
+```move=
+address 0x42 {
+module example {
 
-    use std::option::none as bar;
+    use std::vector::{empty as foo, length as foo}; // ERROR!
+    //                                        ^^^ duplicate 'foo'
 
-    use std::option::some as bar; // ERROR!
-    //                       ^^^ duplicate 'bar'
+    use std::vector::empty as bar;
 
+    use std::vector::length as bar; // ERROR!
+    //                         ^^^ duplicate 'bar'
+
+}
 }
 ```
 
 And, they cannot overlap with any of the module's other members
 
-```move
-module a::data {
-    public struct S {}
+```move=
+address 0x42 {
+module data {
+    struct S {}
 }
 module example {
-    use a::data::S;
+    use 0x42::data::S;
 
-    public struct S { value: u64 } // ERROR!
-    //            ^ conflicts with alias 'S' above
+    struct S { value: u64 } // ERROR!
+    //     ^ conflicts with alias 'S' above
 }
 }
 ```
@@ -304,58 +294,66 @@ Inside of an expression block, they cannot overlap with each other, but they can
 `use` aliases inside of an expression block can shadow names (module members or aliases) from the
 outer scope. As with shadowing of locals, the shadowing ends at the end of the expression block;
 
-```move
-module a::example {
+```move=
+address 0x42 {
+module example {
 
-    public struct WrappedVector { vec: vector<u64> }
+    struct WrappedVector { vec: vector<u64> }
 
-    public fun empty(): WrappedVector {
+    fun empty(): WrappedVector {
         WrappedVector { vec: std::vector::empty() }
     }
 
-    public fun push_back(v: &mut WrappedVector, value: u64) {
-        std::vector::push_back(&mut v.vec, value);
+    fun example1(): (WrappedVector, WrappedVector) {
+        let vec = {
+            use std::vector::{empty, push_back};
+            // 'empty' now refers to std::vector::empty
+
+            let v = empty();
+            push_back(&mut v, 0);
+            push_back(&mut v, 1);
+            push_back(&mut v, 10);
+            v
+        };
+        // 'empty' now refers to Self::empty
+
+        (empty(), WrappedVector { vec })
     }
 
-    fun example1(): WrappedVector {
-        use std::vector::push_back;
-        // 'push_back' now refers to std::vector::push_back
-        let mut vec = vector[];
+    fun example2(): (WrappedVector, WrappedVector) {
+        use std::vector::{empty, push_back};
+        let w: WrappedVector = {
+            use 0x42::example::empty;
+            empty()
+        };
+        push_back(&mut w.vec, 0);
+        push_back(&mut w.vec, 1);
+        push_back(&mut w.vec, 10);
+
+        let vec = empty();
         push_back(&mut vec, 0);
         push_back(&mut vec, 1);
         push_back(&mut vec, 10);
-        WrappedVector { vec }
-    }
 
-    fun example2(): WrappedVector {
-        let vec = {
-            use std::vector::push_back;
-            // 'push_back' now refers to std::vector::push_back
-
-            let mut v = vector[];
-            push_back(&mut v, 0);
-            push_back(&mut v, 1);
-            v
-        };
-        // 'push_back' now refers to Self::push_back
-        let mut res = WrappedVector { vec };
-        push_back(&mut res, 10);
-        res
+        (w, WrappedVector { vec })
     }
+}
 }
 ```
 
 ## Unused Use or Alias
 
-An unused `use` will result in a warning
+An unused `use` will result in an error
 
-```move
-module a::example {
-    use std::option::{some, none}; // Warning!
-    //                      ^^^^ unused alias 'none'
+```move=
+address 0x42 {
+module example {
+    use std::vector::{empty, push_back}; // ERROR!
+    //                       ^^^^^^^^^ unused alias 'push_back'
 
-    public fun example(): std::option::Option<u8> {
-        some(0)
+    fun example(): vector<u8> {
+        empty()
     }
+}
 }
 ```

@@ -3,13 +3,13 @@
 
 use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
+use crate::randomness_store::{EncG, PkG, RandomnessStore, SingletonKey};
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{
     CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, ConsensusStore,
     ProposerStore,
 };
 use config::{AuthorityIdentifier, WorkerId};
-use fastcrypto::groups;
 use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::nodes::PartyId;
 use std::num::NonZeroUsize;
@@ -26,10 +26,6 @@ use types::{
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
 pub type PayloadToken = u8;
 
-// Types used in deprecated random beacon tables.
-type PkG = groups::bls12381::G2Element;
-type EncG = groups::bls12381::G2Element;
-
 /// All the data stores of the node.
 #[derive(Clone)]
 pub struct NodeStorage {
@@ -39,6 +35,7 @@ pub struct NodeStorage {
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
+    pub randomness_store: RandomnessStore,
 }
 
 impl NodeStorage {
@@ -123,13 +120,11 @@ impl NodeStorage {
             // This can be removed when DBMap supports removing tables.
             _sub_dag_index_map,
             committed_sub_dag_map,
-            // random beacon related tables are deprecated.
-            // These can be removed when DBMap supports removing tables.
-            _processed_messages_map,
-            _used_messages_map,
-            _confirmations_map,
-            _dkg_output_map,
-            _randomness_round_map,
+            processed_messages_map,
+            used_messages_map,
+            confirmations_map,
+            dkg_output_map,
+            randomness_round_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<AuthorityIdentifier, VoteInfo>,
@@ -142,10 +137,10 @@ impl NodeStorage {
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
             Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>,
             Self::PROCESSED_MESSAGES_CF;<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
-            Self::USED_MESSAGES_CF;<u32, dkg::UsedProcessedMessages<PkG, EncG>>,
+            Self::USED_MESSAGES_CF;<SingletonKey, dkg::UsedProcessedMessages<PkG, EncG>>,
             Self::CONFIRMATIONS_CF;<PartyId, dkg::Confirmation<EncG>>,
-            Self::DKG_OUTPUT_CF;<u32, dkg::Output<PkG, EncG>>,
-            Self::RANDOMNESS_ROUND_CF;<u32, RandomnessRound>
+            Self::DKG_OUTPUT_CF;<SingletonKey, dkg::Output<PkG, EncG>>,
+            Self::RANDOMNESS_ROUND_CF;<SingletonKey, RandomnessRound>
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
@@ -167,6 +162,13 @@ impl NodeStorage {
             last_committed_map,
             committed_sub_dag_map,
         ));
+        let randomness_store = RandomnessStore::new(
+            processed_messages_map,
+            used_messages_map,
+            confirmations_map,
+            dkg_output_map,
+            randomness_round_map,
+        );
 
         Self {
             proposer_store,
@@ -175,6 +177,7 @@ impl NodeStorage {
             payload_store,
             batch_store,
             consensus_store,
+            randomness_store,
         }
     }
 }

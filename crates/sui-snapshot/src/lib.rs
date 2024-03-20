@@ -231,7 +231,6 @@ pub async fn setup_db_state(
         new_epoch_start_state,
         *last_checkpoint.digest(),
         &perpetual_db,
-        None,
     )
     .unwrap();
     perpetual_db.set_epoch_start_configuration(&epoch_start_configuration)?;

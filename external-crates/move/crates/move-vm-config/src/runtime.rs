@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
-use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format_common::VERSION_MAX;
 #[cfg(feature = "gas-profiler")]
 use once_cell::sync::Lazy;
@@ -31,8 +30,6 @@ pub struct VMConfig {
     // When this flag is set to true, errors from the VM will be augmented with execution state
     // (stacktrace etc.)
     pub error_execution_state: bool,
-    // configuration for binary deserialization (modules)
-    pub binary_config: BinaryConfig,
 }
 
 impl Default for VMConfig {
@@ -45,7 +42,6 @@ impl Default for VMConfig {
             check_no_extraneous_bytes_during_deserialization: false,
             profiler_config: None,
             error_execution_state: true,
-            binary_config: BinaryConfig::with_extraneous_bytes_check(false),
         }
     }
 }

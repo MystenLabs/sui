@@ -149,8 +149,7 @@ impl<'a> InstantiationLoopChecker<'a> {
                 }
                 Vector(ty) => rec(type_params, ty),
                 Reference(ty) | MutableReference(ty) => rec(type_params, ty),
-                StructInstantiation(s) => {
-                    let (_, tys) = &**s;
+                StructInstantiation(_, tys) => {
                     for ty in tys {
                         rec(type_params, ty);
                     }

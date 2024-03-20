@@ -8,8 +8,6 @@ use crate::parser::ast::{ConstantName, FunctionName};
 use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
 use crate::typing::ast as T;
 
-use move_proc_macros::growing_stack;
-
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
 pub trait TypingVisitor {
@@ -152,7 +150,6 @@ pub trait TypingVisitorContext {
         false
     }
 
-    #[growing_stack]
     fn visit_exp(&mut self, exp: &mut T::Exp) {
         use T::UnannotatedExp_ as E;
         if self.visit_exp_custom(exp) {

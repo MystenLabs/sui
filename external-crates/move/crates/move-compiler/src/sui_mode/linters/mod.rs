@@ -7,7 +7,6 @@ use crate::{
     diagnostics::codes::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
     naming::ast as N,
     typing::visitor::TypingVisitor,
 };
@@ -18,7 +17,6 @@ pub mod collection_equality;
 mod custom_rules;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
-pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
 pub const SUI_PKG_NAME: &str = "sui";
@@ -60,6 +58,9 @@ pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
 
 pub const VEC_SET_MOD_NAME: &str = "vec_set";
 pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
+
+pub const ALLOW_ATTR_CATEGORY: &str = "lint";
+pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
 pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
@@ -131,12 +132,6 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             LinterDiagCategory::CollectionEquality as u8,
             LINTER_DEFAULT_DIAG_CODE,
             Some(COLLECTION_EQUALITY_FILTER_NAME),
-        ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::PublicRandom as u8,
-            LINTER_DEFAULT_DIAG_CODE,
-            Some(PUBLIC_RANDOM_FILTER_NAME),
         ),
     ];
     if INCLUDE_NEW_RULES {

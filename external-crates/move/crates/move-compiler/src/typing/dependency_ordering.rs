@@ -10,7 +10,6 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
-use move_proc_macros::growing_stack;
 use petgraph::{algo::toposort as petgraph_toposort, graphmap::DiGraphMap};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -352,7 +351,6 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
     }
 }
 
-#[growing_stack]
 fn exp(context: &mut Context, e: &T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {

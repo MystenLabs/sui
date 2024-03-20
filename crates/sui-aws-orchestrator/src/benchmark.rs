@@ -227,7 +227,7 @@ impl<T: BenchmarkType> BenchmarkParametersGenerator<T> {
                 }
             }
             LoadType::Search { max_iterations, .. } => {
-                // Terminate the search.
+                // Terminate the the search.
                 if self.iterations >= *max_iterations {
                     None
 

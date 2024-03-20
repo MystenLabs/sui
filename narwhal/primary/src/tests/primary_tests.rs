@@ -9,7 +9,7 @@ use crate::{
     NUM_SHUTDOWN_RECEIVERS,
 };
 
-use config::{AuthorityIdentifier, Committee, Parameters};
+use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -22,7 +22,7 @@ use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     num::NonZeroUsize,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 use storage::{NodeStorage, VoteDigestStore};
@@ -85,6 +85,7 @@ async fn test_get_network_peers_from_admin_server() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        ChainIdentifier::unknown(),
         test_utils::latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
@@ -92,6 +93,7 @@ async fn test_get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
+        store.randomness_store.clone(),
         tx_new_certificates,
         rx_feedback,
         rx_consensus_round_updates,
@@ -199,6 +201,7 @@ async fn test_get_network_peers_from_admin_server() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        ChainIdentifier::unknown(),
         test_utils::latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),
@@ -206,6 +209,7 @@ async fn test_get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
+        store.randomness_store.clone(),
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         rx_consensus_round_updates,
@@ -289,6 +293,9 @@ async fn test_request_vote_has_missing_parents() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
@@ -316,6 +323,8 @@ async fn test_request_vote_has_missing_parents() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -454,6 +463,9 @@ async fn test_request_vote_accept_missing_parents() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
@@ -481,6 +493,8 @@ async fn test_request_vote_accept_missing_parents() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -645,6 +659,9 @@ async fn test_request_vote_missing_batches() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
@@ -672,6 +689,8 @@ async fn test_request_vote_missing_batches() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -787,6 +806,9 @@ async fn test_request_vote_already_voted() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -815,6 +837,8 @@ async fn test_request_vote_already_voted() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -970,6 +994,9 @@ async fn test_fetch_certificates_v1_handler() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -997,6 +1024,8 @@ async fn test_fetch_certificates_v1_handler() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -1145,6 +1174,9 @@ async fn test_fetch_certificates_v2_handler() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -1172,6 +1204,8 @@ async fn test_fetch_certificates_v2_handler() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -1336,6 +1370,9 @@ async fn test_request_vote_created_at_in_future() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -1363,6 +1400,8 @@ async fn test_request_vote_created_at_in_future() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };

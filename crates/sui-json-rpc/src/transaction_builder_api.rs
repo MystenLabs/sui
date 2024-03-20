@@ -263,7 +263,6 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     rpc_arguments,
                     gas,
                     *gas_budget,
-                    None,
                 )
                 .await?,
         )?)

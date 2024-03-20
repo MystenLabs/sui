@@ -7,7 +7,7 @@ use diesel::{dsl::sql, BoolExpressionMethods, Connection, ExpressionMethods, Run
 use prometheus::Registry;
 use std::path::PathBuf;
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, Worker, WorkerPool,
+    DataIngestionMetrics, FileProgressStore, IndexerExecutor, Worker, WorkerPool,
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -149,7 +149,7 @@ async fn main() -> Result<()> {
             PathBuf::from(checkpoints_dir), /* directory should exist but can be empty */
             remote_storage,                 /* remote_read_endpoint: If set */
             vec![],                         /* aws credentials */
-            ReaderOptions::default(),       /* remote_read_batch_size */
+            100,                            /* remote_read_batch_size */
             exit_receiver,
         )
         .await?;

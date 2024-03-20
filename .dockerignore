@@ -6,4 +6,3 @@ target/
 *.md
 build/
 storage/
-docker/

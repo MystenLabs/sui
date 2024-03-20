@@ -195,22 +195,13 @@ impl<'a> TestAuthorityBuilder<'a> {
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
-        // Force disable random beacon for tests using this builder, because it doesn't set up the
-        // RandomnessManager.
-        let _guard = if let Some(mut config) = self.protocol_config {
-            config.set_random_beacon_for_testing(false);
-            ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone())
-        } else {
-            ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-                config.set_random_beacon_for_testing(false);
-                config
-            })
-        };
+        let _guard = self
+            .protocol_config
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
             &genesis.objects(),
-            None,
         )
         .unwrap();
         let expensive_safety_checks = match self.expensive_safety_checks {

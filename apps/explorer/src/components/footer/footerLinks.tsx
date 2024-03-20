@@ -15,14 +15,15 @@ function FooterIcon({ children }: { children: ReactNode }) {
 }
 
 export const footerLinks = [
-	{ title: 'Blog', href: 'https://mystenlabs.com/blog' },
+	{ title: 'FAQ', href: 'https://docs.mystenlabs.com/explorer/faq' },
+	{ title: 'Blog', href: 'https://medium.com/mysten-labs' },
 	{
 		title: 'Whitepaper',
 		href: 'https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf',
 	},
 	{
 		title: 'Docs',
-		href: 'https://docs.mystenlabs.com',
+		href: 'https://docs.mystenlabs.com/explorer',
 	},
 	{
 		title: 'GitHub',

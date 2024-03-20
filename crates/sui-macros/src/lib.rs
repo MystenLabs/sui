@@ -71,17 +71,8 @@ fn get_async_fp_result(result: Box<dyn std::any::Any + Send + 'static>) -> BoxFu
 
 fn get_fp_if_result(result: Box<dyn std::any::Any + Send + 'static>) -> bool {
     match result.downcast::<bool>() {
-        Ok(b) => *b,
+        Ok(fut) => *fut,
         Err(_) => panic!("failpoint-if must return bool"),
-    }
-}
-
-fn get_fp_some_result<T: Send + 'static>(
-    result: Box<dyn std::any::Any + Send + 'static>,
-) -> Option<T> {
-    match result.downcast::<Option<T>>() {
-        Ok(opt) => *opt,
-        Err(_) => panic!("failpoint-arg must return Option<T>"),
     }
 }
 
@@ -106,15 +97,6 @@ pub fn handle_fail_point_if(identifier: &'static str) -> bool {
         get_fp_if_result(callback())
     } else {
         false
-    }
-}
-
-pub fn handle_fail_point_arg<T: Send + 'static>(identifier: &'static str) -> Option<T> {
-    if let Some(callback) = get_callback(identifier) {
-        tracing::trace!("hit failpoint_arg {}", identifier);
-        get_fp_some_result(callback())
-    } else {
-        None
     }
 }
 
@@ -189,33 +171,6 @@ pub fn register_fail_point_if(
     register_fail_point_impl(identifier, Arc::new(move || Box::new(callback())));
 }
 
-/// Register code to run locally if the fail point is hit, with a value provided
-/// by the test. If the registered callback returns a Some(v), then the `v` is
-/// passed to the callback in the test.
-///
-/// In the test:
-///
-/// ```ignore
-///     register_fail_point_arg("foo", || {
-///         Some(42)
-///     });
-/// ```
-///
-/// In the code:
-///
-/// ```ignore
-///     let mut value = 0;
-///     fail_point_arg!("foo", |arg| {
-///        value = arg;
-///     });
-/// ```
-pub fn register_fail_point_arg<T: Send + 'static>(
-    identifier: &'static str,
-    callback: impl Fn() -> Option<T> + Sync + Send + 'static,
-) {
-    register_fail_point_impl(identifier, Arc::new(move || Box::new(callback())));
-}
-
 pub fn register_fail_points(
     identifiers: &[&'static str],
     callback: impl Fn() + Sync + Send + 'static,
@@ -264,19 +219,6 @@ macro_rules! fail_point_if {
     };
 }
 
-/// Trigger a failpoint that runs a callback at the callsite if it is enabled.
-/// If the registration callback returns Some(v), then the `v` is passed to the callback in the test.
-/// Otherwise the failpoint is skipped
-#[cfg(any(msim, fail_points))]
-#[macro_export]
-macro_rules! fail_point_arg {
-    ($tag: expr, $callback: expr) => {
-        if let Some(arg) = $crate::handle_fail_point_arg($tag) {
-            ($callback)(arg);
-        }
-    };
-}
-
 #[cfg(not(any(msim, fail_points)))]
 #[macro_export]
 macro_rules! fail_point {
@@ -292,12 +234,6 @@ macro_rules! fail_point_async {
 #[cfg(not(any(msim, fail_points)))]
 #[macro_export]
 macro_rules! fail_point_if {
-    ($tag: expr, $callback: expr) => {};
-}
-
-#[cfg(not(any(msim, fail_points)))]
-#[macro_export]
-macro_rules! fail_point_arg {
     ($tag: expr, $callback: expr) => {};
 }
 

@@ -166,13 +166,6 @@ impl TestCluster {
             .collect()
     }
 
-    pub fn all_validator_handles(&self) -> Vec<SuiNodeHandle> {
-        self.swarm
-            .validator_nodes()
-            .map(|n| n.get_node_handle().unwrap())
-            .collect()
-    }
-
     pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
         self.swarm.active_validators().map(|v| v.name()).collect()
     }
@@ -274,11 +267,9 @@ impl TestCluster {
             .fullnode_handle
             .sui_node
             .with(|node| node.subscribe_to_epoch_change());
-        let mut state = Option::None;
-        timeout(timeout_dur, async {
+        timeout(timeout_dur, async move {
             while let Ok(system_state) = epoch_rx.recv().await {
                 info!("received epoch {}", system_state.epoch());
-                state = Some(system_state.clone());
                 match target_epoch {
                     Some(target_epoch) if system_state.epoch() >= target_epoch => {
                         return system_state;
@@ -293,9 +284,6 @@ impl TestCluster {
         })
         .await
         .unwrap_or_else(|_| {
-            if let Some(state) = state {
-                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
-            }
             panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
         })
     }
@@ -992,7 +980,7 @@ impl TestClusterBuilder {
             .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).unwrap();
+        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
 
         TestCluster {
             swarm,

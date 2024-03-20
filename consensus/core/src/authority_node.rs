@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-    vec,
-};
+use std::{sync::Arc, time::Duration, time::Instant, vec};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -126,7 +122,7 @@ where
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let mut network_manager = N::new(context.clone());
+        let network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
@@ -144,8 +140,13 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
-        let commit_observer =
-            CommitObserver::new(context.clone(), commit_consumer, dag_state.clone(), store);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer.sender,
+            commit_consumer.last_processed_index,
+            dag_state.clone(),
+            store.clone(),
+        );
 
         let core = Core::new(
             context.clone(),
@@ -155,6 +156,7 @@ where
             core_signals,
             protocol_keypair,
             dag_state.clone(),
+            store,
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -177,9 +179,7 @@ where
             synchronizer: synchronizer.clone(),
             dag_state,
         });
-        network_manager
-            .install_service(network_keypair, network_service)
-            .await;
+        network_manager.install_service(network_keypair, network_service);
 
         Self {
             context,
@@ -201,7 +201,7 @@ where
 
         self.network_manager.stop().await;
         self.broadcaster.stop();
-        self.core_thread_handle.stop().await;
+        self.core_thread_handle.stop();
         self.leader_timeout_handle.stop().await;
         self.synchronizer.stop().await;
 
@@ -347,7 +347,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeSet, sync::Arc};
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
 
     use async_trait::async_trait;
     use consensus_config::{local_committee_and_keys, Parameters};
@@ -356,19 +357,18 @@ mod tests {
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
+    use tokio::sync::mpsc::unbounded_channel;
+    use tokio::time::sleep;
 
     use super::*;
-    use crate::{
-        authority_node::AuthorityService,
-        block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock},
-        block_verifier::NoopBlockVerifier,
-        context::Context,
-        core_thread::{CoreError, CoreThreadDispatcher},
-        network::NetworkClient,
-        storage::mem_store::MemStore,
-        transaction::NoopTransactionVerifier,
-    };
+    use crate::authority_node::AuthorityService;
+    use crate::block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock};
+    use crate::block_verifier::NoopBlockVerifier;
+    use crate::context::Context;
+    use crate::core_thread::{CoreError, CoreThreadDispatcher};
+    use crate::network::NetworkClient;
+    use crate::storage::mem_store::MemStore;
+    use crate::transaction::NoopTransactionVerifier;
 
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -445,7 +445,9 @@ mod tests {
         let network_keypair = keypairs[own_index].0.copy();
 
         let (sender, _receiver) = unbounded_channel();
-        let commit_consumer = CommitConsumer::new(sender, 0, 0);
+        let commit_consumer = CommitConsumer::new(
+            sender, 0, // last_processed_index
+        );
 
         let authority = ConsensusAuthority::start(
             own_index,
@@ -537,7 +539,9 @@ mod tests {
             let network_keypair = keypairs[index].0.copy();
 
             let (sender, receiver) = unbounded_channel();
-            let commit_consumer = CommitConsumer::new(sender, 0, 0);
+            let commit_consumer = CommitConsumer::new(
+                sender, 0, // last_processed_index
+            );
             output_receivers.push(receiver);
 
             let authority = ConsensusAuthority::start(

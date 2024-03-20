@@ -4,8 +4,7 @@ use crate::object_runtime::ObjectRuntime;
 use crate::NativesCostTable;
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
-    bls12381 as bls, FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul,
-    Pairing,
+    bls12381 as bls, GroupElement, HashToGroupElement, MultiScalarMul, Pairing,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -115,22 +114,14 @@ impl Groups {
     }
 }
 
-fn parse_untrusted<G: ToFromByteArray<S> + FromTrustedByteArray<S>, const S: usize>(
-    e: &[u8],
-) -> FastCryptoResult<G> {
+fn parse<G: ToFromByteArray<S>, const S: usize>(e: &[u8]) -> FastCryptoResult<G> {
     G::from_byte_array(e.try_into().map_err(|_| FastCryptoError::InvalidInput)?)
-}
-
-fn parse_trusted<G: ToFromByteArray<S> + FromTrustedByteArray<S>, const S: usize>(
-    e: &[u8],
-) -> FastCryptoResult<G> {
-    G::from_trusted_byte_array(e.try_into().map_err(|_| FastCryptoError::InvalidInput)?)
 }
 
 // Binary operations with 2 different types.
 fn binary_op_diff<
-    G1: ToFromByteArray<S1> + FromTrustedByteArray<S1>,
-    G2: ToFromByteArray<S2> + FromTrustedByteArray<S2>,
+    G1: ToFromByteArray<S1>,
+    G2: ToFromByteArray<S2>,
     const S1: usize,
     const S2: usize,
 >(
@@ -138,14 +129,14 @@ fn binary_op_diff<
     a1: &[u8],
     a2: &[u8],
 ) -> FastCryptoResult<Vec<u8>> {
-    let e1 = parse_trusted::<G1, S1>(a1)?;
-    let e2 = parse_trusted::<G2, S2>(a2)?;
+    let e1 = parse::<G1, S1>(a1)?;
+    let e2 = parse::<G2, S2>(a2)?;
     let result = op(e1, e2)?;
     Ok(result.to_byte_array().to_vec())
 }
 
 // Binary operations with the same type.
-fn binary_op<G: ToFromByteArray<S> + FromTrustedByteArray<S>, const S: usize>(
+fn binary_op<G: ToFromByteArray<S>, const S: usize>(
     op: impl Fn(G, G) -> FastCryptoResult<G>,
     a1: &[u8],
     a2: &[u8],
@@ -189,15 +180,15 @@ pub fn internal_validate(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381Scalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_scalar_cost);
-            parse_untrusted::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(&bytes).is_ok()
+            parse::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(&bytes).is_ok()
         }
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_g1_cost);
-            parse_untrusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&bytes).is_ok()
+            parse::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&bytes).is_ok()
         }
         Some(Groups::BLS12381G2) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_g2_cost);
-            parse_untrusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&bytes).is_ok()
+            parse::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&bytes).is_ok()
         }
         _ => false,
     };
@@ -567,11 +558,8 @@ fn multi_scalar_mul<G, const SCALAR_SIZE: usize, const POINT_SIZE: usize>(
     points: &Vec<u8>,
 ) -> PartialVMResult<NativeResult>
 where
-    G: GroupElement
-        + ToFromByteArray<POINT_SIZE>
-        + FromTrustedByteArray<POINT_SIZE>
-        + MultiScalarMul,
-    G::ScalarType: ToFromByteArray<SCALAR_SIZE> + FromTrustedByteArray<SCALAR_SIZE>,
+    G: GroupElement + ToFromByteArray<POINT_SIZE> + MultiScalarMul,
+    G::ScalarType: ToFromByteArray<SCALAR_SIZE>,
 {
     if points.is_empty()
         || scalars.is_empty()
@@ -592,7 +580,7 @@ where
     );
     let scalars = scalars
         .chunks(SCALAR_SIZE)
-        .map(parse_trusted::<G::ScalarType, { SCALAR_SIZE }>)
+        .map(parse::<G::ScalarType, { SCALAR_SIZE }>)
         .collect::<Result<Vec<_>, _>>();
 
     native_charge_gas_early_exit_option!(
@@ -601,7 +589,7 @@ where
     );
     let points = points
         .chunks(POINT_SIZE)
-        .map(parse_trusted::<G, { POINT_SIZE }>)
+        .map(parse::<G, { POINT_SIZE }>)
         .collect::<Result<Vec<_>, _>>();
 
     if let (Ok(scalars), Ok(points)) = (scalars, points) {
@@ -727,8 +715,8 @@ pub fn internal_pairing(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_pairing_cost);
-            parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e1).and_then(|e1| {
-                parse_trusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&e2).map(|e2| {
+            parse::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e1).and_then(|e1| {
+                parse::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&e2).map(|e2| {
                     let e3 = e1.pairing(&e2);
                     e3.to_byte_array().to_vec()
                 })

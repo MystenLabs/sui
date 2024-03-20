@@ -7,7 +7,7 @@ module a::m {
         yip = 0;
         x = yes + 1;
         fin = fin + 1;
-        yes = x + fin;
+        yes = x + f;
         yes
     }
 

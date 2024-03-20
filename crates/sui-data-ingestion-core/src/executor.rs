@@ -6,8 +6,8 @@ use crate::progress_store::{
 };
 use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
+use crate::DataIngestionMetrics;
 use crate::Worker;
-use crate::{DataIngestionMetrics, ReaderOptions};
 use anyhow::Result;
 use futures::Future;
 use mysten_metrics::spawn_monitored_task;
@@ -63,7 +63,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         path: PathBuf,
         remote_store_url: Option<String>,
         remote_store_options: Vec<(String, String)>,
-        reader_options: ReaderOptions,
+        remote_read_batch_size: usize,
         mut exit_receiver: oneshot::Receiver<()>,
     ) -> Result<ExecutorProgress> {
         let mut reader_checkpoint_number = self.progress_store.min_watermark()?;
@@ -73,7 +73,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                 reader_checkpoint_number,
                 remote_store_url,
                 remote_store_options,
-                reader_options,
+                remote_read_batch_size,
             );
         spawn_monitored_task!(checkpoint_reader.run());
 
@@ -108,7 +108,6 @@ pub async fn setup_single_workflow<W: Worker + 'static>(
     remote_store_url: String,
     initial_checkpoint_number: CheckpointSequenceNumber,
     concurrency: usize,
-    reader_options: Option<ReaderOptions>,
 ) -> Result<(
     impl Future<Output = Result<ExecutorProgress>>,
     oneshot::Sender<()>,
@@ -124,7 +123,7 @@ pub async fn setup_single_workflow<W: Worker + 'static>(
             tempfile::tempdir()?.into_path(),
             Some(remote_store_url),
             vec![],
-            reader_options.unwrap_or_default(),
+            100,
             exit_receiver,
         ),
         exit_sender,

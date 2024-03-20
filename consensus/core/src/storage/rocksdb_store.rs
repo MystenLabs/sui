@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::VecDeque;
-use std::ops::Range;
 use std::{
-    ops::Bound::{Excluded, Included},
+    ops::Bound::{Included, Unbounded},
     time::Duration,
 };
 
-use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use typed_store::{
     metrics::SamplingInterval,
@@ -17,36 +15,32 @@ use typed_store::{
     Map as _,
 };
 
-use super::{CommitInfo, Store, WriteBatch};
-use crate::block::Slot;
-use crate::commit::{CommitAPI as _, CommitDigest, TrustedCommit};
+use super::Store;
+use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
-    commit::CommitIndex,
+    block::{BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
+    commit::{Commit, CommitIndex},
     error::{ConsensusError, ConsensusResult},
 };
 
 /// Persistent storage with RocksDB.
 pub(crate) struct RocksDBStore {
     /// Stores SignedBlock by refs.
-    blocks: DBMap<(Round, AuthorityIndex, BlockDigest), Bytes>,
+    blocks: DBMap<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to content.
-    commits: DBMap<(CommitIndex, CommitDigest), Bytes>,
-    /// Collects votes on commits.
-    /// TODO: batch multiple votes into a single row.
-    commit_votes: DBMap<(CommitIndex, CommitDigest, BlockRef), ()>,
-    /// Stores the latest values of a few properties.
-    commit_info: DBMap<(CommitIndex, CommitDigest), CommitInfo>,
+    // TODO: Use Bytes for value. Add CommitDigest to key.
+    commits: DBMap<CommitIndex, Commit>,
+    /// Stores the last committed rounds per authority.
+    last_committed_rounds: DBMap<(), Vec<Round>>,
 }
 
 impl RocksDBStore {
     const BLOCKS_CF: &'static str = "blocks";
     const DIGESTS_BY_AUTHORITIES_CF: &'static str = "digests";
     const COMMITS_CF: &'static str = "commits";
-    const COMMIT_VOTES_CF: &'static str = "commit_votes";
-    const COMMIT_INFO_CF: &'static str = "commit_info";
+    const LAST_COMMITTED_ROUNDS_CF: &'static str = "last_committed_rounds";
 
     /// Creates a new instance of RocksDB storage.
     pub(crate) fn new(path: &str) -> Self {
@@ -68,8 +62,7 @@ impl RocksDBStore {
             ),
             (Self::DIGESTS_BY_AUTHORITIES_CF, cf_options.clone()),
             (Self::COMMITS_CF, cf_options.clone()),
-            (Self::COMMIT_VOTES_CF, cf_options.clone()),
-            (Self::COMMIT_INFO_CF, cf_options.clone()),
+            (Self::LAST_COMMITTED_ROUNDS_CF, cf_options.clone()),
         ];
         let rocksdb = open_cf_opts(
             path,
@@ -79,28 +72,31 @@ impl RocksDBStore {
         )
         .expect("Cannot open database");
 
-        let (blocks, digests_by_authorities, commits, commit_votes, commit_info) = reopen!(&rocksdb,
+        let (blocks, digests_by_authorities, commits, last_committed_rounds) = reopen!(&rocksdb,
             Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<(CommitIndex, CommitDigest), Bytes>,
-            Self::COMMIT_VOTES_CF;<(CommitIndex, CommitDigest, BlockRef), ()>,
-            Self::COMMIT_INFO_CF;<(CommitIndex, CommitDigest), CommitInfo>
+            Self::COMMITS_CF;<CommitIndex, Commit>,
+            Self::LAST_COMMITTED_ROUNDS_CF;<(), Vec<Round>>
         );
 
         Self {
             blocks,
             digests_by_authorities,
             commits,
-            commit_votes,
-            commit_info,
+            last_committed_rounds,
         }
     }
 }
 
 impl Store for RocksDBStore {
-    fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()> {
+    fn write(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+        commits: Vec<TrustedCommit>,
+        last_committed_rounds: Vec<Round>,
+    ) -> ConsensusResult<()> {
         let mut batch = self.blocks.batch();
-        for block in write_batch.blocks {
+        for block in blocks {
             let block_ref = block.reference();
             batch
                 .insert_batch(
@@ -117,34 +113,15 @@ impl Store for RocksDBStore {
                     [((block_ref.author, block_ref.round, block_ref.digest), ())],
                 )
                 .map_err(ConsensusError::RocksDBFailure)?;
-            for commit in block.commit_votes() {
-                batch
-                    .insert_batch(
-                        &self.commit_votes,
-                        [((commit.index, commit.digest, block_ref), ())],
-                    )
-                    .map_err(ConsensusError::RocksDBFailure)?;
-            }
         }
-        if let Some(last_commit) = write_batch.commits.last().cloned() {
-            for commit in write_batch.commits {
-                batch
-                    .insert_batch(
-                        &self.commits,
-                        [((commit.index(), commit.digest()), commit.serialized())],
-                    )
-                    .map_err(ConsensusError::RocksDBFailure)?;
-            }
-            let commit_info = CommitInfo {
-                last_committed_rounds: write_batch.last_committed_rounds,
-            };
+        for commit in commits {
             batch
-                .insert_batch(
-                    &self.commit_info,
-                    [((last_commit.index(), last_commit.digest()), commit_info)],
-                )
+                .insert_batch(&self.commits, [(commit.index(), commit.inner())])
                 .map_err(ConsensusError::RocksDBFailure)?;
         }
+        batch
+            .insert_batch(&self.last_committed_rounds, [((), last_committed_rounds)])
+            .map_err(ConsensusError::RocksDBFailure)?;
         batch.write()?;
         Ok(())
     }
@@ -181,18 +158,6 @@ impl Store for RocksDBStore {
         Ok(exist)
     }
 
-    fn contains_block_at_slot(&self, slot: Slot) -> ConsensusResult<bool> {
-        let found = self
-            .digests_by_authorities
-            .safe_range_iter((
-                Included((slot.authority, slot.round, BlockDigest::MIN)),
-                Included((slot.authority, slot.round, BlockDigest::MAX)),
-            ))
-            .next()
-            .is_some();
-        Ok(found)
-    }
-
     fn scan_blocks_by_author(
         &self,
         author: AuthorityIndex,
@@ -217,21 +182,17 @@ impl Store for RocksDBStore {
     }
 
     // The method returns the last `num_of_rounds` rounds blocks by author in round ascending order.
-    // When a `before_round` is defined then the blocks of round `<=before_round` are returned. If not
-    // then the max value for round will be used as cut off.
     fn scan_last_blocks_by_author(
         &self,
         author: AuthorityIndex,
         num_of_rounds: u64,
-        before_round: Option<Round>,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
-        let before_round = before_round.unwrap_or(Round::MAX);
         let mut refs = VecDeque::new();
         for kv in self
             .digests_by_authorities
             .safe_range_iter((
                 Included((author, Round::MIN, BlockDigest::MIN)),
-                Included((author, before_round, BlockDigest::MAX)),
+                Included((author, Round::MAX, BlockDigest::MAX)),
             ))
             .skip_to_last()
             .reverse()
@@ -251,40 +212,30 @@ impl Store for RocksDBStore {
     }
 
     fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>> {
-        let Some(result) = self.commits.safe_iter().skip_to_last().next() else {
+        let Some(commit) = self.commits.safe_iter().skip_to_last().next() else {
             return Ok(None);
         };
-        let ((_index, digest), serialized) = result?;
-        let commit = TrustedCommit::new_trusted(
-            bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedCommit)?,
-            serialized,
-        );
-        assert_eq!(commit.digest(), digest);
-        Ok(Some(commit))
+        let (_, commit) = commit?;
+        Ok(Some(TrustedCommit::new_trusted(commit)))
     }
 
-    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>> {
+    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<TrustedCommit>> {
         let mut commits = vec![];
-        for result in self.commits.safe_range_iter((
-            Included((range.start, CommitDigest::MIN)),
-            Excluded((range.end, CommitDigest::MIN)),
-        )) {
-            let ((_index, digest), serialized) = result?;
-            let commit = TrustedCommit::new_trusted(
-                bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedCommit)?,
-                serialized,
-            );
-            assert_eq!(commit.digest(), digest);
-            commits.push(commit);
+        for commit in self
+            .commits
+            .safe_range_iter((Included(start_commit_index), Unbounded))
+        {
+            let (_, commit) = commit?;
+            commits.push(TrustedCommit::new_trusted(commit));
         }
         Ok(commits)
     }
 
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {
-        let Some(result) = self.commit_info.safe_iter().skip_to_last().next() else {
-            return Ok(None);
+    fn read_last_committed_rounds(&self) -> ConsensusResult<Vec<Round>> {
+        let Some(rounds) = self.last_committed_rounds.safe_iter().next() else {
+            return Ok(vec![]);
         };
-        let (_, commit_info) = result.map_err(ConsensusError::RocksDBFailure)?;
-        Ok(Some(commit_info))
+        let (_, last_committed_rounds) = rounds?;
+        Ok(last_committed_rounds)
     }
 }
