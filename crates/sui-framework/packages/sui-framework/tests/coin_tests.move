@@ -21,8 +21,7 @@ module sui::coin_tests {
     #[test]
     fun coin_tests_metadata() {
         let mut scenario = test_scenario::begin(TEST_ADDR);
-        let test = &mut scenario;
-        let ctx = test_scenario::ctx(test);
+        let ctx = scenario.ctx();
         let witness = COIN_TESTS{};
         let (treasury, mut metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
 
@@ -56,40 +55,38 @@ module sui::coin_tests {
 
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, tx_context::sender(ctx));
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     #[test]
     fun coin_tests_mint() {
         let mut scenario = test_scenario::begin(TEST_ADDR);
-        let test = &mut scenario;
         let witness = COIN_TESTS{};
-        let (mut treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), test_scenario::ctx(test));
+        let (mut treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), scenario.ctx());
 
         let balance = coin::mint_balance<COIN_TESTS>(&mut treasury, 1000);
-        let coin = coin::from_balance(balance, test_scenario::ctx(test));
+        let coin = coin::from_balance(balance, scenario.ctx());
         let value = coin.value();
         assert!(value == 1000, 0);
-        pay::keep(coin, test_scenario::ctx(test));
+        pay::keep(coin, scenario.ctx());
 
-        coin::mint_and_transfer<COIN_TESTS>(&mut treasury, 42, TEST_ADDR, test_scenario::ctx(test));
-        test_scenario::next_epoch(test, TEST_ADDR); // needed or else we won't have a value for `most_recent_id_for_address` coming up next.
-        let coin = test_scenario::take_from_address<Coin<COIN_TESTS>>(test, TEST_ADDR);
+        coin::mint_and_transfer<COIN_TESTS>(&mut treasury, 42, TEST_ADDR, scenario.ctx());
+        scenario.next_epoch(TEST_ADDR); // needed or else we won't have a value for `most_recent_id_for_address` coming up next.
+        let coin = scenario.take_from_address<Coin<COIN_TESTS>>(TEST_ADDR);
         let value = coin.value();
         assert!(value == 42, 0);
-        pay::keep(coin, test_scenario::ctx(test));
+        pay::keep(coin, scenario.ctx());
 
         transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, tx_context::sender(test_scenario::ctx(test)));
-        test_scenario::end(scenario);
+        transfer::public_transfer(treasury, scenario.ctx().sender());
+        scenario.end();
     }
 
     #[test]
     fun deny_list() {
         let mut scenario = test_scenario::begin(@0);
-        let test = &mut scenario;
-        deny_list::create_for_test(test_scenario::ctx(test));
-        test_scenario::next_tx(test, TEST_ADDR);
+        deny_list::create_for_test(scenario.ctx());
+        scenario.next_tx(TEST_ADDR);
 
         let witness = COIN_TESTS {};
         let (treasury, mut deny_cap, metadata) = coin::create_regulated_currency(
@@ -99,40 +96,40 @@ module sui::coin_tests {
             b"coin_name",
             b"description",
             option::some(url::new_unsafe_from_bytes(b"icon_url")),
-            test_scenario::ctx(test),
+            scenario.ctx(),
         );
         transfer::public_freeze_object(metadata);
         transfer::public_freeze_object(treasury);
         {
             // test freezing an address
-            test_scenario::next_tx(test, TEST_ADDR);
-            let mut deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            scenario.next_tx(TEST_ADDR);
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @1, scenario.ctx());
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
-            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @1, scenario.ctx());
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
             test_scenario::return_shared(deny_list);
         };
         {
             // test freezing an address over multiple "transactions"
-            test_scenario::next_tx(test, TEST_ADDR);
-            let mut deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            scenario.next_tx(TEST_ADDR);
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @2, scenario.ctx());
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
             test_scenario::return_shared(deny_list);
 
-            test_scenario::next_tx(test, TEST_ADDR);
-            let mut deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            scenario.next_tx(TEST_ADDR);
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
-            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @2, scenario.ctx());
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     #[test]

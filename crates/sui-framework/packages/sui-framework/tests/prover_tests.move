@@ -27,7 +27,7 @@ module sui::prover_tests {
 
     public fun simple_delete(o: Obj) {
         let Obj { id } = o;
-        sui::object::delete(id);
+        id.delete();
     }
 
     // ====================================================================

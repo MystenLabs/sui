@@ -4,13 +4,13 @@
 #[test_only]
 module sui::bag_tests {
     use sui::bag::Self;
-    use sui::test_scenario as ts;
+    use sui::test_scenario;
 
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         // add fields
         bag.add(b"hello", 0);
         bag.add(1, 1u8);
@@ -32,7 +32,7 @@ module sui::bag_tests {
         // verify that they are not there
         assert!(!bag.contains_with_type<vector<u8>, u64>(b"hello"), 0);
         assert!(!bag.contains_with_type<u64, u8>(1), 0);
-        ts::end(scenario);
+        scenario.end();
         bag.destroy_empty();
     }
 
@@ -40,8 +40,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.add(b"hello", 0u8);
         bag.add(b"hello", 1u8);
         abort 42
@@ -51,8 +51,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate_mismatched_type() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.add(b"hello", 0u128);
         bag.add(b"hello", 1u8);
         abort 42
@@ -62,8 +62,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let bag = bag::new(scenario.ctx());
         (&bag[0] : &u64);
         abort 42
     }
@@ -72,8 +72,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun borrow_wrong_type() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.add(0u64, 0u64);
         (&bag[0]: &u8);
         abort 42
@@ -83,8 +83,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         (&mut bag[0]: &mut u64);
         abort 42
     }
@@ -93,8 +93,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun borrow_mut_wrong_type() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.add(0u64, 0u64);
         (&mut bag[0]: &mut u8);
         abort 42
@@ -104,8 +104,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.remove<u64, u64>(0);
         abort 42
     }
@@ -114,8 +114,8 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun remove_wrong_type() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.add(0, 0);
         bag.remove<u64, u8>(0);
         abort 42
@@ -125,23 +125,23 @@ module sui::bag_tests {
     #[expected_failure(abort_code = sui::bag::EBagNotEmpty)]
     fun destroy_non_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         bag.add(0, 0);
         bag.destroy_empty();
-        ts::end(scenario);
+        scenario.end();
     }
 
     #[test]
     fun sanity_check_contains() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         assert!(!bag.contains_with_type<u64, u64>(0), 0);
         bag.add(0, 0);
         assert!(bag.contains_with_type<u64, u64>(0), 0);
         assert!(!bag.contains_with_type<u64, u64>(1), 0);
-        ts::end(scenario);
+        scenario.end();
         bag.remove<u64, u64>(0);
         bag.destroy_empty();
     }
@@ -149,8 +149,8 @@ module sui::bag_tests {
     #[test]
     fun sanity_check_size() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut bag = bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = bag::new(scenario.ctx());
         assert!(bag.is_empty(), 0);
         assert!(bag.length() == 0, 0);
         bag.add(0, 0);
@@ -161,7 +161,7 @@ module sui::bag_tests {
         assert!(bag.length() == 2, 0);
         bag.remove<u64, u64>(0);
         bag.remove<u64, u64>(1);
-        ts::end(scenario);
+        scenario.end();
         bag.destroy_empty();
     }
 }

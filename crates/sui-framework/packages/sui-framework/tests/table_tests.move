@@ -4,13 +4,13 @@
 #[test_only]
 module sui::table_tests {
     use sui::table::{Self, add, contains, borrow, borrow_mut, remove};
-    use sui::test_scenario as ts;
+    use sui::test_scenario;
 
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new(scenario.ctx());
         // add fields
         add(&mut table, b"hello", 0);
         add(&mut table, b"goodbye", 1);
@@ -32,7 +32,7 @@ module sui::table_tests {
         // verify that they are not there
         assert!(!contains(&table, b"hello"), 0);
         assert!(!contains(&table, b"goodbye"), 0);
-        ts::end(scenario);
+        scenario.end();
         table::destroy_empty(table);
     }
 
@@ -40,8 +40,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new(scenario.ctx());
         add(&mut table, b"hello", 0);
         add(&mut table, b"hello", 1);
         abort 42
@@ -51,8 +51,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let table = table::new<u64, u64>(scenario.ctx());
         borrow(&table, 0);
         abort 42
     }
@@ -61,8 +61,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new<u64, u64>(scenario.ctx());
         borrow_mut(&mut table, 0);
         abort 42
     }
@@ -71,8 +71,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new<u64, u64>(scenario.ctx());
         remove(&mut table, 0);
         abort 42
     }
@@ -81,42 +81,42 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::table::ETableNotEmpty)]
     fun destroy_non_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new<u64, u64>(scenario.ctx());
         add(&mut table, 0, 0);
         table::destroy_empty(table);
-        ts::end(scenario);
+        scenario.end();
     }
 
     #[test]
     fun sanity_check_contains() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new<u64, u64>(scenario.ctx());
         assert!(!contains(&table, 0), 0);
         add(&mut table, 0, 0);
         assert!(contains<u64, u64>(&table, 0), 0);
         assert!(!contains<u64, u64>(&table, 1), 0);
-        ts::end(scenario);
+        scenario.end();
         table::drop(table);
     }
 
     #[test]
     fun sanity_check_drop() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new<u64, u64>(scenario.ctx());
         add(&mut table, 0, 0);
         assert!(table::length(&table) == 1, 0);
-        ts::end(scenario);
+        scenario.end();
         table::drop(table);
     }
 
     #[test]
     fun sanity_check_size() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = table::new<u64, u64>(scenario.ctx());
         assert!(table::is_empty(&table), 0);
         assert!(table::length(&table) == 0, 0);
         add(&mut table, 0, 0);
@@ -125,7 +125,7 @@ module sui::table_tests {
         add(&mut table, 1, 0);
         assert!(!table::is_empty(&table), 0);
         assert!(table::length(&table) == 2, 0);
-        ts::end(scenario);
+        scenario.end();
         table::drop(table);
     }
 }
