@@ -17,6 +17,8 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, transaction::*};
 
+use crate::authority_client::tonic::IntoRequest;
+use sui_network::tonic::metadata::KeyAndValueRef;
 use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
@@ -29,12 +31,14 @@ pub trait AuthorityAPI {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
+        metadata: Option<tonic::metadata::MetadataMap>,
     ) -> Result<HandleTransactionResponse, SuiError>;
 
     /// Execute a certificate.
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        metadata: Option<tonic::metadata::MetadataMap>,
     ) -> Result<HandleCertificateResponseV2, SuiError>;
 
     /// Handle Object information requests for this account.
@@ -103,9 +107,13 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
+        metadata: Option<tonic::metadata::MetadataMap>,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        let mut request = transaction.into_request();
+        insert_metadata(&mut request, metadata);
+
         self.client()
-            .transaction(transaction)
+            .transaction(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
@@ -115,10 +123,14 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        metadata: Option<tonic::metadata::MetadataMap>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
+        let mut request = certificate.into_request();
+        insert_metadata(&mut request, metadata);
+
         let response = self
             .client()
-            .handle_certificate_v2(certificate.clone())
+            .handle_certificate_v2(request)
             .await
             .map(tonic::Response::into_inner);
 
@@ -215,4 +227,22 @@ pub fn make_authority_clients_with_timeout_config(
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);
     make_network_authority_clients_with_network_config(committee, &network_config)
+}
+
+fn insert_metadata<T>(
+    request: &mut tonic::Request<T>,
+    metadata: Option<tonic::metadata::MetadataMap>,
+) {
+    if let Some(metadata) = metadata {
+        metadata
+            .iter()
+            .for_each(|key_and_value| match key_and_value {
+                KeyAndValueRef::Ascii(key, value) => {
+                    request.metadata_mut().insert(key, value.clone());
+                }
+                KeyAndValueRef::Binary(key, value) => {
+                    request.metadata_mut().insert_bin(key, value.clone());
+                }
+            });
+    }
 }

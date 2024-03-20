@@ -6,7 +6,11 @@ use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::net::SocketAddr;
 use std::ops::Deref;
+use std::str::FromStr;
+use sui_network::tonic;
+use sui_network::tonic::metadata::MetadataValue;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
@@ -394,9 +398,10 @@ async fn do_transaction_test_impl(
         .unwrap();
 
     post_sign_mutations(&mut transfer_transaction);
+    let request_metadata = make_request_metadata();
 
     let err = client
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(transfer_transaction.clone(), Some(request_metadata.clone()))
         .await
         .unwrap_err();
     err_check(&err);
@@ -423,10 +428,17 @@ async fn do_transaction_test_impl(
 
         let ct = CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
 
-        let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+        let request_metadata = make_request_metadata();
+        let err = client
+            .handle_certificate_v2(ct.clone(), Some(request_metadata.clone()))
+            .await
+            .unwrap_err();
         err_check(&err);
         epoch_store.clear_signature_cache();
-        let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+        let err = client
+            .handle_certificate_v2(ct.clone(), Some(request_metadata))
+            .await
+            .unwrap_err();
         err_check(&err);
     }
 }
@@ -493,9 +505,10 @@ async fn zklogin_test_cached_proof_wrong_key() {
         _server,
         client,
     ) = setup_zklogin_network(|_| {}).await;
+    let request_metadata = make_request_metadata();
 
     assert!(client
-        .handle_transaction(transfer_transaction)
+        .handle_transaction(transfer_transaction, Some(request_metadata.clone()))
         .await
         .is_ok());
 
@@ -547,7 +560,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
 
     // This tx should fail, but passes because we skip the ephemeral sig check when hitting the zklogin check!
     assert!(client
-        .handle_transaction(transfer_transaction2)
+        .handle_transaction(transfer_transaction2, Some(request_metadata))
         .await
         .is_err());
 
@@ -584,11 +597,12 @@ async fn do_zklogin_transaction_test(
         _server,
         client,
     ) = setup_zklogin_network(pre_sign_mutations).await;
+    let request_metadata = make_request_metadata();
 
     post_sign_mutations(&mut transfer_transaction);
 
     assert!(client
-        .handle_transaction(transfer_transaction)
+        .handle_transaction(transfer_transaction, Some(request_metadata))
         .await
         .is_err());
 
@@ -758,6 +772,15 @@ async fn init_zklogin_transfer(
     ));
     tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0] = authenticator;
     tx
+}
+
+fn make_request_metadata() -> tonic::metadata::MetadataMap {
+    let client_addr = SocketAddr::new([127, 0, 0, 1].into(), 0);
+    let mut metadata = tonic::metadata::MetadataMap::new();
+    let value =
+        MetadataValue::from_str(client_addr.to_string().as_str()).expect("Invalid metadata value");
+    metadata.insert("x-forwarded-for", value);
+    metadata
 }
 
 #[tokio::test]
@@ -940,8 +963,11 @@ async fn execute_transaction_assert_err(
     let client = NetworkAuthorityClient::connect(server_handle.address())
         .await
         .unwrap();
+    let request_metadata = make_request_metadata();
 
-    let err = client.handle_transaction(txn.clone()).await;
+    let err = client
+        .handle_transaction(txn.clone(), Some(request_metadata))
+        .await;
 
     assert!(dbg!(err).is_err());
 
@@ -998,7 +1024,9 @@ async fn test_oversized_txn() {
         .await
         .unwrap();
 
-    let res = client.handle_transaction(txn).await;
+    let res = client
+        .handle_transaction(txn, Some(make_request_metadata()))
+        .await;
     // The txn should be rejected due to its size.
     assert!(res
         .err()
@@ -1052,9 +1080,10 @@ async fn test_very_large_certificate() {
     let client = NetworkAuthorityClient::connect(server_handle.address())
         .await
         .unwrap();
+    let request_metadata = make_request_metadata();
 
     let auth_sig = client
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(transfer_transaction.clone(), Some(request_metadata.clone()))
         .await
         .unwrap()
         .status
@@ -1084,7 +1113,9 @@ async fn test_very_large_certificate() {
         quorum_signature,
     );
 
-    let res = client.handle_certificate_v2(cert).await;
+    let res = client
+        .handle_certificate_v2(cert, Some(request_metadata))
+        .await;
     assert!(res.is_err());
     let err = res.err().unwrap();
     // The resulting error should be a RpcError with a message length too large.
@@ -1158,8 +1189,12 @@ async fn test_handle_certificate_errors() {
         &committee_1,
     )
     .unwrap();
+    let request_metadata = make_request_metadata();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(request_metadata.clone()))
+        .await
+        .unwrap_err();
     assert_matches!(
         err,
         SuiError::WrongEpoch {
@@ -1171,7 +1206,7 @@ async fn test_handle_certificate_errors() {
     // Test handle certificate with invalid user input
     let signed_transaction = VerifiedSignedTransaction::new(
         epoch_store.epoch(),
-        VerifiedTransaction::new_unchecked(transfer_transaction.clone()),
+        VerifiedTransaction::new_unchecked(transfer_transaction.clone().clone()),
         authority_state.name,
         &*authority_state.secret,
     );
@@ -1188,7 +1223,10 @@ async fn test_handle_certificate_errors() {
     )
     .unwrap();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(request_metadata.clone()))
+        .await
+        .unwrap_err();
 
     assert_matches!(
         err,
@@ -1205,7 +1243,10 @@ async fn test_handle_certificate_errors() {
     )
     .unwrap();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(request_metadata.clone()))
+        .await
+        .unwrap_err();
 
     assert_matches!(
         err,
@@ -1223,7 +1264,10 @@ async fn test_handle_certificate_errors() {
         &committee,
     )
     .unwrap();
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(request_metadata.clone()))
+        .await
+        .unwrap_err();
 
     assert_matches!(
         err,
@@ -1245,7 +1289,10 @@ async fn test_handle_certificate_errors() {
     )
     .unwrap();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(request_metadata))
+        .await
+        .unwrap_err();
 
     assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
 }

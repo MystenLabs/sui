@@ -224,7 +224,8 @@ impl JsonRpcServerBuilder {
     ) -> Result<ServerHandle, Error> {
         let app = self.to_router(server_type)?;
 
-        let server = axum::Server::bind(&listen_address).serve(app.into_make_service());
+        let server = axum::Server::bind(&listen_address)
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
         let addr = server.local_addr();
         let handle = tokio::spawn(async move { server.await.unwrap() });

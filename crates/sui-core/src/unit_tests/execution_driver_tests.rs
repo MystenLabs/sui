@@ -25,6 +25,7 @@ use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 use sui_types::error::SuiError;
 
 use std::collections::BTreeSet;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -448,13 +449,19 @@ async fn test_execution_with_dependencies() {
         .unwrap();
 }
 
+fn make_socket_addr() -> std::net::SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0)
+}
+
 async fn try_sign_on_first_three_authorities(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
     txn: &Transaction,
 ) -> SuiResult<VerifiedCertificate> {
     for client in authority_clients.iter().take(3) {
-        client.handle_transaction(txn.clone()).await?;
+        client
+            .handle_transaction(txn.clone(), Some(make_socket_addr()))
+            .await?;
     }
     extract_cert(authority_clients, committee, txn.digest())
         .await
@@ -510,7 +517,7 @@ async fn test_per_object_overload() {
 
     // Signing and executing this transaction on the last authority should succeed.
     authority_clients[3]
-        .handle_transaction(create_counter_txn.clone())
+        .handle_transaction(create_counter_txn.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
@@ -636,7 +643,7 @@ async fn test_txn_age_overload() {
 
     // Signing and executing this transaction on the last authority should succeed.
     authority_clients[3]
-        .handle_transaction(create_counter_txn.clone())
+        .handle_transaction(create_counter_txn.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;

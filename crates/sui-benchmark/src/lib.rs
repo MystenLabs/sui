@@ -405,7 +405,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let mut futures = FuturesUnordered::new();
         for (name, client) in self.clients.iter() {
-            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
+            let fut = client
+                .handle_transaction(tx.clone(), None)
+                .map(|r| (r, *name));
             futures.push(fut);
         }
         auth_agg
@@ -519,7 +521,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let name = *name;
             futures.push(async move {
                 client
-                    .handle_certificate_v2(certificate)
+                    .handle_certificate_v2(certificate, None)
                     .map(move |r| (r, name))
                     .await
             });
