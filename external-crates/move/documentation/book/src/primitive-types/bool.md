@@ -22,12 +22,12 @@ Literals for `bool` are either `true` or `false`.
 
 `bool` values are used in several of Move's control-flow constructs:
 
-- [`if (bool) { ... }`](./control-flow/conditionals.md)
-- [`while (bool) { .. }`](./control-flow/loops.md)
-- [`assert!(bool, u64)`](./abort-and-assert.md)
+- [`if (bool) { ... }`](../control-flow/conditionals.md)
+- [`while (bool) { .. }`](../control-flow/loops.md)
+- [`assert!(bool, u64)`](../abort-and-assert.md)
 
 ## Ownership
 
 As with the other scalar values built-in to the language, boolean values are implicitly copyable,
 meaning they can be copied without an explicit instruction such as
-[`copy`](./variables.md#move-and-copy).
+[`copy`](../variables.md#move-and-copy).

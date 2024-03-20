@@ -169,11 +169,12 @@ let z = x; // ERROR! x has been moved
 (y, z)
 ```
 
-For more details see the sections on [type abilities](./abilities.md) and [generics](./generics.md).
+For more details see the sections on [type abilities](../abilities.md) and
+[generics](../generics.md).
 
 ## Ownership
 
 As mentioned [above](#destroying-and-copying-vectors), `vector` values can be copied only if the
 elements can be copied. In that case, the copy can be done via a
-[`copy`](./variables.md#move-and-copy) or a
+[`copy`](../variables.md#move-and-copy) or a
 [dereference `*`](./references.md#reading-and-writing-through-references).

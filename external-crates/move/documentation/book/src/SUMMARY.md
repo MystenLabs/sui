@@ -6,17 +6,15 @@
 
 - [Modules](modules.md)
 
-# Primitive Types
-
-- [Integers](integers.md)
-- [Bool](bool.md)
-- [Address](address.md)
-- [Vector](vector.md)
-- [References](references.md)
-- [Tuples and Unit](tuples.md)
-
 # Basic Concepts
 
+- [Primitive Types](primitive-types/intro.md)
+  - [Integers](primitive-types/integers.md)
+  - [Bool](primitive-types/bool.md)
+  - [Address](primitive-types/address.md)
+  - [Vector](primitive-types/vector.md)
+  - [References](primitive-types/references.md)
+  - [Tuples and Unit](primitive-types/tuples.md)
 - [Local Variables and Scopes](variables.md)
 - [Equality](equality.md)
 - [Abort and Assert](abort-and-assert.md)
@@ -30,13 +28,16 @@
 - [Generics](generics.md)
 - [Type Abilities](abilities.md)
 - [Uses and Aliases](uses.md)
-- [Packages](packages.md)
-- [Unit Tests](unit-testing.md)
 
 # Advanced Concepts
 
 - [Method Syntax](method-syntax.md)
 - [Index Syntax Methods](index-syntax.md)
+
+# Tooling
+
+- [Packages](packages.md)
+- [Unit Tests](unit-testing.md)
 
 # Reference
 

@@ -190,7 +190,7 @@ fun zero(): u64 { 0 }
 
 Here `: u64` indicates that the function's return type is `u64`.
 
-Using [tuples](./tuples.md), a function can return multiple values:
+Using [tuples](./primitive-types/tuples.md), a function can return multiple values:
 
 ```move
 fun one_two_three(): (u64, u64, u64) { (0, 1, 2) }
@@ -205,9 +205,9 @@ fun just_unit() { () }
 fun just_unit() { }
 ```
 
-As mentioned in the [tuples section](./tuples.md), these tuple "values" are virtual and do not exist
-at runtime. So for a function that returns unit `()`, it will not be returning any value at all
-during execution.
+As mentioned in the [tuples section](./primitive-types/tuples.md), these tuple "values" are virtual
+and do not exist at runtime. So for a function that returns unit `()`, it will not be returning any
+value at all during execution.
 
 ### Function body
 

@@ -31,7 +31,7 @@ The four abilities are:
 The `copy` ability allows values of types with that ability to be copied. It gates the ability to
 copy values out of local variables with the [`copy`](./variables.md#move-and-copy) operator and to
 copy values via references with
-[dereference `*e`](./references.md#reading-and-writing-through-references).
+[dereference `*e`](./primitive-types/references.md#reading-and-writing-through-references).
 
 If a value has `copy`, all values contained inside of that value have `copy`.
 
@@ -45,7 +45,7 @@ ability gates the ability to ignore values in a multitude of locations, includin
 - not using the value in a [sequence via `;`](./variables.md#expression-blocks)
 - overwriting values in variables in [assignments](./variables.md#assignments)
 - overwriting values via references when
-  [writing `*e1 = e2`](./references.md#reading-and-writing-through-references).
+  [writing `*e1 = e2`](./primitive-types/references.md#reading-and-writing-through-references).
 
 If a value has `drop`, all values contained inside of that value have `drop`.
 
@@ -81,8 +81,8 @@ All primitive, builtin types have `copy`, `drop`, and `store`
   - This refers to copying and dropping the reference itself, not what they refer to.
   - References cannot appear in global storage, hence they do not have `store`.
 
-None of the primitive types have `key`, meaning none of them can be used directly with the
-[global storage operations](./global-storage-operators.md).
+Note that none of the primitive types have `key`, meaning none of them can be used directly with
+storage operations.
 
 ## Annotating Structs
 

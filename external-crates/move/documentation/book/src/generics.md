@@ -4,10 +4,10 @@ Generics can be used to define functions and structs over different input data t
 feature is sometimes referred to as _parametric polymorphism_. In Move, we will often use the term
 generics interchangeably with type parameters and type arguments.
 
-Generics are commonly used in library code, such as in [vector](./vector.md), to declare code that
-works over any possible instantiation (that satisfies the specified constraints). In other
-frameworks, generic code can sometimes be used to interact with storage in many different ways that
-all still share the same implementation.
+Generics are commonly used in library code, such as in [vector](./primitive-types/vector.md), to
+declare code that works over any possible instantiation (that satisfies the specified constraints).
+In other frameworks, generic code can sometimes be used to interact with storage in many different
+ways that all still share the same implementation.
 
 ## Declaring Type Parameters
 
@@ -417,7 +417,7 @@ fun foo(): (NoAbilities, NoAbilities) {
 ```
 
 For more information, see the abilities section on
-[conditional abilities and generic types](./abilities.html#conditional-abilities-and-generic-types).
+[conditional abilities and generic types](./abilities.md#conditional-abilities-and-generic-types).
 
 ## Limitations on Recursions
 
