@@ -745,6 +745,15 @@ impl ConsensusAdapter {
                         .with_label_values(&[tx_type])
                         .inc();
                     retries += 1;
+                    if matches!(
+                        transaction.kind,
+                        ConsensusTransactionKind::EndOfPublish(_)
+                            | ConsensusTransactionKind::CapabilityNotification(_)
+                            | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                            | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+                    ) {
+                        tracing::error!("Temporary failure submitting transaction {transaction_key:?} to own narwhal worker, waiting 10s: {e:?}");
+                    }
                     time::sleep(Duration::from_secs(10)).await;
                 }
 
