@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --simulator --accounts C
+//# init --protocol-version 39 --simulator --accounts C
 
 //# run-graphql
 {

@@ -17,7 +17,7 @@
 // 11 | epoch          |        11 |     2
 // 12 | epoch          |        12 |     3
 
-//# init --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {
