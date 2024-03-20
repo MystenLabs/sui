@@ -1833,7 +1833,7 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
                         Path operations include 'move', 'copy', '&', '&mut', and field references",
                     );
                     context.env.add_diag(diag);
-                    N::ExpDotted_::Exp(ne)
+                    N::ExpDotted_::Exp(Box::new(sp(ne.loc, N::Exp_::UnresolvedError)))
                 }
                 _ => N::ExpDotted_::Exp(ne),
             }

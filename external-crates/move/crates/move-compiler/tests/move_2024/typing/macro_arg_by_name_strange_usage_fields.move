@@ -5,8 +5,9 @@ module a::m {
     // some usages of the expression won't do what they would do if they werent used as a value
     // In other words, we don't re-interpret the expression as a pth
     macro fun foo<$T>($s: $T) {
-        &$s.f;
-        &mut $s.f;
+        let mut s = $s;
+        &s.f;
+        &mut s.f;
     }
 
     fun t() {

@@ -1,19 +1,9 @@
-error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:4:9
-  │
-4 │         $x.foo()
-  │         ^^ Macro parameters are not allowed to appear in paths
-  │
-  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
-  = Macro parameters are always treated as value expressions, and are not modified by path operations.
-    Path operations include 'move', 'copy', '&', '&mut', and field references
-
 error[E04023]: invalid method call
-  ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:4:9
+  ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:5:9
   │
-4 │         $x.foo()
-  │         ^^^^^^^^
-  │         │  │
-  │         │  No local 'use fun' alias was found for 'a::m::X.foo', and no function 'foo' was found in the defining module 'a::m'
+5 │         x.foo()
+  │         ^^^^^^^
+  │         │ │
+  │         │ No local 'use fun' alias was found for 'a::m::X.foo', and no function 'foo' was found in the defining module 'a::m'
   │         Invalid method call. No known method 'foo' on type 'a::m::X'
 

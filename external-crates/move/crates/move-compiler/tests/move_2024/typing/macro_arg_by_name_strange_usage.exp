@@ -1,31 +1,11 @@
-error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/typing/macro_arg_by_name_strange_usage.move:8:10
-  │
-8 │         &$x;
-  │          ^^ Macro parameters are not allowed to appear in paths
-  │
-  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
-  = Macro parameters are always treated as value expressions, and are not modified by path operations.
-    Path operations include 'move', 'copy', '&', '&mut', and field references
-
-error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/typing/macro_arg_by_name_strange_usage.move:9:14
-  │
-9 │         &mut $x;
-  │              ^^ Macro parameters are not allowed to appear in paths
-  │
-  = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let x = $x;'
-  = Macro parameters are always treated as value expressions, and are not modified by path operations.
-    Path operations include 'move', 'copy', '&', '&mut', and field references
-
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macro_arg_by_name_strange_usage.move:17:14
+   ┌─ tests/move_2024/typing/macro_arg_by_name_strange_usage.move:18:14
    │
  2 │     public struct X() has drop;
    │                   - To satisfy the constraint, the 'copy' ability would need to be added here
  3 │     public struct S { f: X } has drop;
    │                          - The type 'a::m::X' does not have the ability 'copy'
    ·
-17 │         foo!(s.f); // TODO improve this error message
+18 │         foo!(s.f); // TODO improve this error message
    │              ^^^ Invalid implicit copy of field 'f' without the 'copy' ability
 
