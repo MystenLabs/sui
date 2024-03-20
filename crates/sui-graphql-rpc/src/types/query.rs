@@ -368,14 +368,16 @@ impl Query {
         domain: Domain,
     ) -> Result<Option<Address>> {
         Ok(
-            NameService::resolve_to_record(ctx, &domain, /* checkpoint_viewed_at */ None)
-                .await
-                .extend()?
-                .and_then(|r| r.target_address)
-                .map(|a| Address {
-                    address: a.into(),
-                    checkpoint_viewed_at: None,
-                }),
+            SuinsRegistration::resolve_to_record(
+                ctx, &domain, /* checkpoint_viewed_at */ None,
+            )
+            .await
+            .extend()?
+            .and_then(|r| r.target_address)
+            .map(|a| Address {
+                address: a.into(),
+                checkpoint_viewed_at: None,
+            }),
         )
     }
 

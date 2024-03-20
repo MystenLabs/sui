@@ -30,7 +30,7 @@ use crate::{
 use async_graphql::{connection::Connection, *};
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models_v2::objects::StoredHistoryObject;
 use sui_json_rpc::name_service::{
     Domain as NativeDomain, NameRecord, NameServiceConfig, NameServiceError,
 };
