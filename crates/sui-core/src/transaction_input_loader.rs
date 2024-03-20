@@ -246,10 +246,10 @@ impl TransactionInputLoader {
                 (None, InputObjectKind::SharedMoveObject { id, .. }) => {
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
-                    if version == SequenceNumber::CONGESTED {
+                    if version == SequenceNumber::CONGESTED || version == SequenceNumber::READ_AVOID {
                         ObjectReadResult {
                             input_object_kind: *input,
-                            object: ObjectReadResultKind::CongestedSharedObject()
+                            object: ObjectReadResultKind::CongestedSharedObject(version)
                         }
                     } else if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
                         ObjectReadResult {
