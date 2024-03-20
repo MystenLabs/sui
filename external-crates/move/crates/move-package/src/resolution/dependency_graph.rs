@@ -254,10 +254,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 DependencyMode::Always,
                 root_manifest.dependencies.clone(),
             )?;
-        let dep_lock_files = dep_graphs
-            .values()
-            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
-            .collect::<Result<Vec<LockFile>>>()?;
+
         let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
             .collect_graphs(
                 parent,
@@ -268,10 +265,27 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.dev_dependencies.clone(),
             )?;
 
+        for (pkg, info) in &dev_dep_graphs {
+            if dep_graphs.contains_key(&pkg) {
+                bail!(
+                    "Can't have dev-dependency package and regular package with same name '{}'",
+                    pkg
+                );
+            }
+            dep_graphs.insert(*pkg, info.clone());
+        }
+        dep_names.extend(dev_dep_names);
+
+        let dep_lock_files = dep_graphs
+            .values()
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            .collect::<Result<Vec<LockFile>>>()?;
+
         let dev_dep_lock_files = dev_dep_graphs
             .values()
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
+
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
         let (manifest_digest, deps_digest) = match digest_and_lock_contents {
             Some((old_manifest_digest, old_deps_digest, Some(lock_string)))
@@ -291,9 +305,6 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             }
             _ => (new_manifest_digest, new_deps_digest),
         };
-
-        dep_graphs.extend(dev_dep_graphs);
-        dep_names.extend(dev_dep_names);
 
         let mut combined_graph = DependencyGraph {
             root_path,

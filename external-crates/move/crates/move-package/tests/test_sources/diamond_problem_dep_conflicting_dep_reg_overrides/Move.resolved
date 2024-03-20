@@ -1,3 +1,1 @@
-Conflicting "regular" and "dev" overrides found in Root:
-C = { local = "deps_only/C-v1" }
-C = { local = "deps_only/C-v2" }
+Can't have dev-dependency package and regular package with same name 'C'
