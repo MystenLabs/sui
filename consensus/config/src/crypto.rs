@@ -62,12 +62,12 @@ impl Clone for NetworkKeyPair {
 
 /// Protocol key is used for signing blocks and verifying block signatures.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ProtocolPublicKey(bls12381::min_sig::BLS12381PublicKey);
-pub struct ProtocolKeyPair(bls12381::min_sig::BLS12381KeyPair);
-pub struct ProtocolKeySignature(bls12381::min_sig::BLS12381Signature);
+pub struct ProtocolPublicKey(ed25519::Ed25519PublicKey);
+pub struct ProtocolKeyPair(ed25519::Ed25519KeyPair);
+pub struct ProtocolKeySignature(ed25519::Ed25519Signature);
 
 impl ProtocolPublicKey {
-    pub fn new(key: bls12381::min_sig::BLS12381PublicKey) -> Self {
+    pub fn new(key: ed25519::Ed25519PublicKey) -> Self {
         Self(key)
     }
 
@@ -85,12 +85,12 @@ impl ProtocolPublicKey {
 }
 
 impl ProtocolKeyPair {
-    pub fn new(keypair: bls12381::min_sig::BLS12381KeyPair) -> Self {
+    pub fn new(keypair: ed25519::Ed25519KeyPair) -> Self {
         Self(keypair)
     }
 
     pub fn generate<R: rand::Rng + fastcrypto::traits::AllowedRng>(rng: &mut R) -> Self {
-        Self(bls12381::min_sig::BLS12381KeyPair::generate(rng))
+        Self(ed25519::Ed25519KeyPair::generate(rng))
     }
 
     pub fn public(&self) -> ProtocolPublicKey {
@@ -110,13 +110,45 @@ impl Clone for ProtocolKeyPair {
 
 impl ProtocolKeySignature {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
-        Ok(Self(bls12381::min_sig::BLS12381Signature::from_bytes(
-            bytes,
-        )?))
+        Ok(Self(ed25519::Ed25519Signature::from_bytes(bytes)?))
     }
 
     pub fn to_bytes(&self) -> &[u8] {
         self.0.as_bytes()
+    }
+}
+
+/// Authority key represents the identity of an authority. It is only used for identity sanity
+/// checks and not used for verification.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct AuthorityPublicKey(bls12381::min_sig::BLS12381PublicKey);
+pub struct AuthorityKeyPair(bls12381::min_sig::BLS12381KeyPair);
+
+impl AuthorityPublicKey {
+    pub fn new(key: bls12381::min_sig::BLS12381PublicKey) -> Self {
+        Self(key)
+    }
+
+    pub fn inner(&self) -> &bls12381::min_sig::BLS12381PublicKey {
+        &self.0
+    }
+
+    pub fn to_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl AuthorityKeyPair {
+    pub fn new(keypair: bls12381::min_sig::BLS12381KeyPair) -> Self {
+        Self(keypair)
+    }
+
+    pub fn generate<R: rand::Rng + fastcrypto::traits::AllowedRng>(rng: &mut R) -> Self {
+        Self(bls12381::min_sig::BLS12381KeyPair::generate(rng))
+    }
+
+    pub fn public(&self) -> AuthorityPublicKey {
+        AuthorityPublicKey(self.0.public().clone())
     }
 }
 

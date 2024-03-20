@@ -9,7 +9,7 @@ use std::{
 use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
 
-use crate::{NetworkPublicKey, ProtocolPublicKey};
+use crate::{AuthorityPublicKey, NetworkPublicKey, ProtocolPublicKey};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -137,6 +137,8 @@ pub struct Authority {
     pub address: Multiaddr,
     /// The authority's hostname, for metrics and logging.
     pub hostname: String,
+    /// The authority's identity key.
+    pub authority_key: AuthorityPublicKey,
     /// The authority's public key for verifying blocks.
     pub protocol_key: ProtocolPublicKey,
     /// The authority's ed25519 public key for TSL and as the network identity.

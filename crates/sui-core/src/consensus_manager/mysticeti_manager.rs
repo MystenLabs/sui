@@ -6,7 +6,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
-use fastcrypto::{bls12381, ed25519};
+use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
@@ -45,8 +45,10 @@ pub struct MysticetiManager {
 }
 
 impl MysticetiManager {
+    /// NOTE: Mysticeti protocol key uses Ed25519 instead of BLS.
+    /// But for security, the protocol keypair must be different from the network keypair.
     pub fn new(
-        protocol_keypair: bls12381::min_sig::BLS12381KeyPair,
+        protocol_keypair: ed25519::Ed25519KeyPair,
         network_keypair: ed25519::Ed25519KeyPair,
         storage_base_path: PathBuf,
         metrics: ConsensusManagerMetrics,
