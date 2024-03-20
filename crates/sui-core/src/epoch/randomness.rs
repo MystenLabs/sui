@@ -9,10 +9,11 @@ use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_tbls::{dkg, nodes};
 use narwhal_types::Round;
+use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
 use std::time::Instant;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
@@ -280,13 +281,13 @@ impl RandomnessManager {
 
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
     pub fn start_dkg(&self) -> SuiResult {
-        self.inner.lock().unwrap().start_dkg()
+        self.inner.lock().start_dkg()
     }
 
     /// Processes all received messages and advances the randomness DKG state machine when possible,
     /// sending out a dkg::Confirmation and generating final output.
     pub fn advance_dkg(&self, batch: &mut DBBatch, round: Round) -> SuiResult {
-        self.inner.lock().unwrap().advance_dkg(batch, round)
+        self.inner.lock().advance_dkg(batch, round)
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
@@ -296,10 +297,7 @@ impl RandomnessManager {
         authority: &AuthorityName,
         msg: dkg::Message<PkG, EncG>,
     ) -> SuiResult {
-        self.inner
-            .lock()
-            .unwrap()
-            .add_message(batch, authority, msg)
+        self.inner.lock().add_message(batch, authority, msg)
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
@@ -309,24 +307,20 @@ impl RandomnessManager {
         authority: &AuthorityName,
         conf: dkg::Confirmation<EncG>,
     ) -> SuiResult {
-        self.inner
-            .lock()
-            .unwrap()
-            .add_confirmation(batch, authority, conf)
+        self.inner.lock().add_confirmation(batch, authority, conf)
     }
 
     /// Reserves the next available round number for randomness generation. Once the given
     /// batch is written, `generate_randomness` must be called to start the process. On restart,
     /// any reserved rounds for which the batch was written will automatically be resumed.
     pub fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
-        self.inner.lock().unwrap().reserve_next_randomness(batch)
+        self.inner.lock().reserve_next_randomness(batch)
     }
 
     /// Starts the process of generating the given RandomnessRound.
     pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
         self.inner
             .lock()
-            .unwrap()
             .generate_randomness(epoch, randomness_round)
     }
 
@@ -334,22 +328,18 @@ impl RandomnessManager {
     /// committed in a checkpoint. This completes the process of generating randomness for the
     /// round.
     pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
-        self.inner
-            .lock()
-            .unwrap()
-            .notify_randomness_in_checkpoint(round)
+        self.inner.lock().notify_randomness_in_checkpoint(round)
     }
 
     /// Returns true if DKG is over for this epoch, whether due to success or failure.
     pub fn is_dkg_closed(&self) -> bool {
-        self.inner.lock().unwrap().dkg_output.initialized()
+        self.inner.lock().dkg_output.initialized()
     }
 
     /// Returns true if DKG has completed successfully.
     pub fn is_dkg_successful(&self) -> bool {
         self.inner
             .lock()
-            .unwrap()
             .dkg_output
             .get()
             .and_then(|opt| opt.as_ref())
