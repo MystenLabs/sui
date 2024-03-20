@@ -33,8 +33,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         tokens: &'lexer mut Lexer<'input>,
         package_name: Option<Symbol>,
     ) -> Self {
-        let mut stop_set = TokenSet::new();
-        stop_set.add(Tok::EOF);
+        let stop_set = TokenSet::from([Tok::EOF]);
         Self {
             package_name,
             env,
@@ -49,15 +48,22 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     }
 
     /// Advances tokens until reaching an element of the stop set, recording diagnostics along the
-    /// way (including the first optional one passed as an argument.
+    /// way (including the first optional one passed as an argument).
     fn advance_until_at_stop_set(&mut self, diag_opt: Option<Diagnostic>) {
         if let Some(diag) = diag_opt {
             self.env.add_diag(diag);
         }
-        while !(self.at_stop_set()) {
-            if let Some(err) = self.tokens.advance().err() {
+        while !self.at_stop_set() {
+            if let Err(err) = self.tokens.advance() {
                 self.env.add_diag(*err);
             }
+        }
+    }
+
+    /// Advances token and records a resulting diagnostic (if any).
+    fn advance(&mut self) {
+        if let Err(diag) = self.tokens.advance() {
+            self.env.add_diag(*diag);
         }
     }
 }
@@ -265,12 +271,6 @@ fn adjust_token(tokens: &mut Lexer, end_token: Tok) {
     }
 }
 
-fn advance_record_diag(context: &mut Context) {
-    if let Err(diag) = context.tokens.advance() {
-        context.env.add_diag(*diag);
-    }
-}
-
 // Parse a comma-separated list of items, including the specified starting and
 // ending tokens.
 fn parse_comma_list<F, R>(
@@ -287,22 +287,21 @@ where
     let start_loc = context.tokens.start_loc();
     let at_start_token = context.tokens.at(start_token);
     if let Err(diag) = consume_token(context.tokens, start_token) {
-        if at_start_token {
-            // advance token past the starting one but something went wrong, still there is a chance
-            // parse the rest of the list
-            let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
-            if at_stop_set {
-                // nothing else to do
-                return vec![];
-            }
-            if context.tokens.at(end_token) {
-                // at the end of the list - consume end token and keep parsing at the outer level
-                advance_record_diag(context);
-                return vec![];
-            }
-        } else {
+        if !at_start_token {
             // not even starting token is present - parser has nothing much to do
             context.env.add_diag(*diag);
+            return vec![];
+        }
+        // advance token past the starting one but something went wrong, still there is a chance
+        // parse the rest of the list
+        let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
+        if at_stop_set {
+            // nothing else to do
+            return vec![];
+        }
+        if context.tokens.at(end_token) {
+            // at the end of the list - consume end token and keep parsing at the outer level
+            context.advance();
             return vec![];
         }
     }
@@ -398,7 +397,7 @@ fn skip_comma_list_item(
     diag: Diagnostic,
 ) -> bool {
     context.env.add_diag(diag);
-    let mut start_tokens = 0;
+    let mut start_tokens: i32 = 0;
     let mut stop_parsing = false;
     loop {
         if context.at_stop_set() {
@@ -406,14 +405,15 @@ fn skip_comma_list_item(
             break;
         }
         if context.tokens.at(Tok::Comma) {
-            advance_record_diag(context);
+            context.advance();
             if start_tokens == 0 {
                 break;
             }
+            continue;
         };
         if context.tokens.at(start_token) {
             start_tokens += 1;
-            advance_record_diag(context);
+            context.advance();
             continue;
         };
         if context.tokens.at(end_token) {
@@ -421,7 +421,7 @@ fn skip_comma_list_item(
                 break;
             }
             start_tokens -= 1;
-            advance_record_diag(context);
+            context.advance();
             continue;
         };
         if end_token == Tok::Greater && context.tokens.at(Tok::GreaterGreater) {
@@ -431,10 +431,10 @@ fn skip_comma_list_item(
                 break;
             }
             start_tokens -= 2;
-            advance_record_diag(context);
+            context.advance();
             continue;
         }
-        if let Some(err) = context.tokens.advance().err() {
+        if let Err(err) = context.tokens.advance() {
             context.env.add_diag(*err);
         }
     }
@@ -883,7 +883,7 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
                 Tok::LParen,
                 Tok::RParen,
                 // another hack for `#[syntax(for)]` attribute
-                &TokenSet::from(&[Tok::Identifier, Tok::For]),
+                &TokenSet::from([Tok::Identifier, Tok::For]),
                 parse_attribute,
                 "attribute",
             );
@@ -916,7 +916,7 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             Tok::LBracket,
             Tok::RBracket,
             // hack for `#[syntax(for)]` attribute (similar to the one in `parse_attribute` above)
-            &TokenSet::from(&[Tok::Identifier, Tok::For]),
+            &TokenSet::from([Tok::Identifier, Tok::For]),
             parse_attribute,
             "attribute",
         );
@@ -1267,18 +1267,15 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                     // If the sequence ends with an expression that is not
                     // followed by a semicolon, split out that expression
                     // from the rest of the SequenceItems.
-                    match item.value {
-                        SequenceItem_::Seq(e) => {
-                            eopt = Some(Spanned {
-                                loc: item.loc,
-                                value: e.value,
-                            });
-                        }
-                        _ => {
-                            context
-                                .env
-                                .add_diag(*unexpected_token_error(context.tokens, "';'"));
-                        }
+                    if let SequenceItem_::Seq(e) = item.value {
+                        eopt = Some(Spanned {
+                            loc: item.loc,
+                            value: e.value,
+                        });
+                    } else {
+                        context
+                            .env
+                            .add_diag(*unexpected_token_error(context.tokens, "';'"));
                     }
                     break;
                 }
@@ -1300,7 +1297,32 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
             }
         }
     }
-    context.tokens.advance()?; // consume the RBrace
+    // We have reached the stop set but did not find closing of the sequence (RBrace) and we need to
+    // decide what to do. These are the two most likely possible scenarios:
+    //
+    // module 0x42::M {
+    //   fun t() {
+    //     let x = 0;
+    //     use 0x1::M::foo;
+    //     foo(x)
+    //   }
+    // }
+    //
+    // module 0x42::M {
+    //   fun t() {
+    //     let x = 0;
+    //
+    //   struct S {}
+    // }
+    //
+    // In the first case we encounter stop set's `use` as incorrect inner definition, in the second
+    // case, we encounter `struct` as a legit top-level definition after incomplete function
+    // above. We cannot magically know which is which, though, at the point of reaching stop set,
+    // but still need to make a decision on what to do, which at this point is to close the current
+    // sequence and proceed with parsing top-level definition (assume the second scenario).
+    if !context.at_stop_set() {
+        context.advance(); // consume the RBrace
+    }
     Ok((uses, seq, last_semicolon_loc, Box::new(eopt)))
 }
 
@@ -1316,14 +1338,14 @@ fn skip_sequence(context: &mut Context, diag: Diagnostic) -> bool {
             break;
         }
         if context.tokens.at(Tok::Semicolon) {
-            advance_record_diag(context);
+            context.advance();
             if left_braces == 0 {
                 break;
             }
         };
         if context.tokens.at(Tok::LBrace) {
             left_braces += 1;
-            advance_record_diag(context);
+            context.advance();
             continue;
         };
         if context.tokens.at(Tok::RBrace) {
@@ -1331,7 +1353,7 @@ fn skip_sequence(context: &mut Context, diag: Diagnostic) -> bool {
                 break;
             }
             left_braces -= 1;
-            advance_record_diag(context);
+            context.advance();
             continue;
         };
         if let Some(err) = context.tokens.advance().err() {
@@ -3540,7 +3562,8 @@ fn parse_module(
     Ok((def, next_mod_attributes))
 }
 
-/// Skips tokens until next definition to be parsed (or EOF) is encountered
+/// Skips tokens until next definition to be parsed (or EOF) is encountered. Returns `true` if no
+/// more parsing should be done (i.e., is possible) after this.
 fn next_def_fast_forward(context: &mut Context, prev_token_loc: Loc) -> bool {
     let mut stop_parsing = false;
     let next_tok = skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);

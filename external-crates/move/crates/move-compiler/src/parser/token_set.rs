@@ -3,6 +3,8 @@
 
 use crate::parser::lexer::{Tok, TOK_COUNT};
 
+use move_symbol_pool::Symbol;
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
@@ -10,8 +12,8 @@ use super::ast::{ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER};
 
 #[derive(Clone, Debug)]
 pub struct TokenSet {
-    tokens: Vec<u8>,
-    identifiers: HashMap<String, u8>,
+    tokens: [u8; TOK_COUNT],
+    identifiers: HashMap<Symbol, u8>,
 }
 
 //**************************************************************************************************
@@ -28,7 +30,7 @@ const MODULE_MEMBER_TOKENS: [Tok; 7] = [
     Tok::Invariant,
 ];
 
-const MEMBER_VISIBILITY_TOKENS: [Tok; 1] = [Tok::Public];
+const MEMBER_VISIBILITY_TOKENS: &[Tok] = &[Tok::Public];
 
 const MEMBER_MODIFIER_TOKENS: [Tok; 1] = [Tok::Native];
 
@@ -109,7 +111,7 @@ pub static TYPE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&TYPE_ST
 #[allow(dead_code)]
 impl TokenSet {
     pub fn new() -> Self {
-        let tokens = vec![0; TOK_COUNT];
+        let tokens = [0; TOK_COUNT];
         let identifiers = HashMap::new();
         TokenSet {
             tokens,
@@ -128,13 +130,13 @@ impl TokenSet {
     }
 
     pub fn add_identifier(&mut self, identifier: &str) {
-        *self.identifiers.entry(identifier.to_string()).or_default() += 1;
+        *self.identifiers.entry(identifier.into()).or_default() += 1;
     }
 
-    pub fn remove_identifier(&mut self, identifier: &str) {
-        if let Some(entry) = self.identifiers.get_mut(identifier) {
+    pub fn remove_identifier(&mut self, identifier: impl AsRef<str>) {
+        if let Some(entry) = self.identifiers.get_mut(&identifier.as_ref().into()) {
             if *entry < 2 {
-                self.identifiers.remove(identifier);
+                self.identifiers.remove(&identifier.as_ref().into());
             } else {
                 *entry -= 1;
             }
@@ -153,18 +155,25 @@ impl TokenSet {
         }
     }
 
-    pub fn contains(&self, tok: Tok, tok_contents: &str) -> bool {
+    pub fn contains(&self, tok: Tok, tok_contents: impl AsRef<str>) -> bool {
         self.tokens[tok as usize] > 0
-            || (matches!(tok, Tok::Identifier) && self.identifiers.contains_key(tok_contents))
+            || (tok == Tok::Identifier
+                || tok == Tok::RestrictedIdentifier
+                || tok == Tok::SyntaxIdentifier)
+                && self.identifiers.contains_key(&tok_contents.as_ref().into())
     }
 
-    pub fn contains_any(&self, toks: &[Tok], tok_contents: &str) -> bool {
-        toks.iter().any(|tok| self.contains(*tok, tok_contents))
+    pub fn contains_any(&self, toks: &[Tok], tok_contents: impl AsRef<str>) -> bool {
+        toks.iter()
+            .any(|tok| self.contains(*tok, tok_contents.as_ref()))
     }
 
     pub fn union(&mut self, other: &TokenSet) {
         for (target, n) in self.tokens.iter_mut().zip(other.tokens.iter()) {
             *target += n;
+        }
+        for (identifier, n) in other.identifiers.iter() {
+            *self.identifiers.entry(*identifier).or_default() += n;
         }
     }
 
@@ -174,6 +183,14 @@ impl TokenSet {
                 *target -= n;
             } else {
                 *target = 0
+            }
+        }
+        for (identifier, n) in other.identifiers.iter() {
+            let entry = self.identifiers.entry(*identifier).or_default();
+            if *entry >= *n {
+                *entry -= n;
+            } else {
+                *entry = 0
             }
         }
     }

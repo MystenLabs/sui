@@ -183,7 +183,7 @@ impl fmt::Display for Tok {
 }
 
 pub struct Lexer<'input> {
-    text: &'input str,
+    pub text: &'input str,
     file_hash: FileHash,
     edition: Edition,
     doc_comments: FileCommentMap,
