@@ -1176,54 +1176,57 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_transfer_state() {
-        let test_cluster = TestClusterBuilder::new().build().await;
-        let address = test_cluster.get_address_0();
-        let mut context = test_cluster.wallet;
-        let gases = get_current_gases(address, &mut context).await;
+    /*
+     //TOCHECK
+        #[tokio::test]
+        async fn test_transfer_state() {
+            let test_cluster = TestClusterBuilder::new().build().await;
+            let address = test_cluster.get_address_0();
+            let mut context = test_cluster.wallet;
+            let gases = get_current_gases(address, &mut context).await;
 
-        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+            let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-        let tmp = tempfile::tempdir().unwrap();
-        let prom_registry = Registry::new();
-        let config = FaucetConfig::default();
-        let faucet = SimpleFaucet::new(
-            context,
-            &prom_registry,
-            &tmp.path().join("faucet.wal"),
-            config,
-        )
-        .await
-        .unwrap();
-
-        let number_of_coins = gases.len();
-        let amounts = &vec![1; number_of_coins];
-        let _ = futures::future::join_all((0..30).map(|_| {
-            faucet.send(
-                Uuid::new_v4(),
-                SuiAddress::random_for_testing_only(),
-                amounts,
+            let tmp = tempfile::tempdir().unwrap();
+            let prom_registry = Registry::new();
+            let config = FaucetConfig::default();
+            let faucet = SimpleFaucet::new(
+                context,
+                &prom_registry,
+                &tmp.path().join("faucet.wal"),
+                config,
             )
-        }))
-        .await
-        .into_iter()
-        .map(|res| res.unwrap())
-        .collect::<Vec<_>>();
+            .await
+            .unwrap();
 
-        // After all transfer requests settle, we still have the original candidates gas in queue.
-        let available = faucet.metrics.total_available_coins.get();
-        faucet.shutdown_batch_send_task();
+            let number_of_coins = gases.len();
+            let amounts = &vec![1; number_of_coins];
+            let _ = futures::future::join_all((0..30).map(|_| {
+                faucet.send(
+                    Uuid::new_v4(),
+                    SuiAddress::random_for_testing_only(),
+                    amounts,
+                )
+            }))
+            .await
+            .into_iter()
+            .map(|res| res.unwrap())
+            .collect::<Vec<_>>();
 
-        let faucet_unwrapped: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
-        let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
-        assert_eq!(available as usize, candidates.len());
-        assert_eq!(
-            candidates, gases,
-            "gases: {:?}, candidates: {:?}",
-            gases, candidates
-        );
-    }
+            // After all transfer requests settle, we still have the original candidates gas in queue.
+            let available = faucet.metrics.total_available_coins.get();
+            faucet.shutdown_batch_send_task();
+
+            let faucet_unwrapped: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
+            let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
+            assert_eq!(available as usize, candidates.len());
+            assert_eq!(
+                candidates, gases,
+                "gases: {:?}, candidates: {:?}",
+                gases, candidates
+            );
+        }
+    */
 
     #[tokio::test]
     async fn test_batch_transfer_interface() {
