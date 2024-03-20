@@ -2853,7 +2853,7 @@ impl AuthorityPerEpochStore {
 
         if randomness_state_updated {
             if let Some(randomness_manager) = self.randomness_manager.get() {
-                randomness_manager.advance_dkg(batch, commit_round)?;
+                randomness_manager.advance_dkg(batch, commit_round).await?;
             }
         }
 
@@ -3161,9 +3161,7 @@ impl AuthorityPerEpochStore {
                             authority.concise()
                         );
                         match bcs::from_bytes(bytes) {
-                            Ok(message) => {
-                                randomness_manager.add_message(batch, authority, message)?
-                            }
+                            Ok(message) => randomness_manager.add_message(authority, message)?,
                             Err(e) => {
                                 warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
