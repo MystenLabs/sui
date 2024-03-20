@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::package_cache::PackageCache;
+use crate::context_data::package_cache::{PackageCache, TempPackageStore};
 use async_graphql::*;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{annotated_value as A, language_storage::TypeTag};
@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sui_package_resolver::Resolver;
 
 use crate::error::Error;
+use crate::context_data::package_cache::get_package_store_from_ctx;
 
 use super::open_move_type::MoveAbility;
 
@@ -123,12 +124,15 @@ impl MoveType {
 
     /// Structured representation of the "shape" of values that match this type.
     async fn layout(&self, ctx: &Context<'_>) -> Result<MoveTypeLayout> {
-        let resolver: &Resolver<PackageCache> = ctx
-            .data()
-            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-            .extend()?;
+        let package_cache = get_package_store_from_ctx(ctx).extend()?;
+        // let resolver: &Resolver<PackageCache> = ctx
+        //     .data()
+        //     .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+        //     .extend()?;
+        let resolver = Resolver::new(package_cache);
 
-        MoveTypeLayout::try_from(self.layout_impl(resolver).await.extend()?).extend()
+
+        MoveTypeLayout::try_from(self.layout_impl(&resolver).await.extend()?).extend()
     }
 
     /// The abilities this concrete type has.
@@ -159,7 +163,7 @@ impl MoveType {
 
     pub(crate) async fn layout_impl(
         &self,
-        resolver: &Resolver<PackageCache>,
+        resolver: &Resolver<TempPackageStore>,
     ) -> Result<A::MoveTypeLayout, Error> {
         resolver
             .type_layout(self.native.clone())

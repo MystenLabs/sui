@@ -44,6 +44,7 @@ use hyper::Server as HyperServer;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
+use std::sync::Arc;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -276,8 +277,9 @@ impl ServerBuilder {
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore(reader);
+        let package_store = DbPackageStore(reader.clone());
         let package_cache = PackageStoreWithLruCache::new(package_store);
+        let package_cache_clone = PackageStoreWithLruCache::new(DbPackageStore(reader.clone()));
 
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: fail fast if no url, once we enable mutations fully
@@ -304,6 +306,7 @@ impl ServerBuilder {
                 package_cache,
                 config.service.limits.package_resolver_limits(),
             ))
+            .context_data(Arc::new(package_cache_clone))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
             .context_data(metrics.clone())

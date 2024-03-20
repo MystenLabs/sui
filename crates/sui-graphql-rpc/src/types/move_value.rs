@@ -11,7 +11,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::Resolver;
 
-use crate::context_data::package_cache::PackageCache;
+use crate::context_data::package_cache::{get_package_store_from_ctx, PackageCache};
 use crate::{error::Error, types::json::Json, types::move_type::unexpected_signer_error};
 
 use super::{base64::Base64, big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
@@ -82,13 +82,16 @@ pub(crate) struct MoveField {
 impl MoveValue {
     /// Structured contents of a Move value.
     async fn data(&self, ctx: &Context<'_>) -> Result<MoveData> {
-        let resolver: &Resolver<PackageCache> = ctx
-            .data()
-            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-            .extend()?;
+        let package_cache = get_package_store_from_ctx(ctx).extend()?;
+        // let resolver: &Resolver<PackageCache> = ctx
+        //     .data()
+        //     .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+        //     .extend()?;
+        let resolver = Resolver::new(package_cache);
+
 
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.data_impl(self.type_.layout_impl(resolver).await.extend()?)
+        self.data_impl(self.type_.layout_impl(&resolver).await.extend()?)
             .extend()
     }
 
@@ -105,13 +108,15 @@ impl MoveValue {
     /// This form is offered as a less verbose convenience in cases where the layout of the type is
     /// known by the client.
     async fn json(&self, ctx: &Context<'_>) -> Result<Json> {
-        let resolver = ctx
-            .data::<Resolver<PackageCache>>()
-            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-            .extend()?;
+        let package_cache = get_package_store_from_ctx(ctx).extend()?;
+        // let resolver: &Resolver<PackageCache> = ctx
+        //     .data()
+        //     .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+        //     .extend()?;
+        let resolver = Resolver::new(package_cache);
 
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.json_impl(self.type_.layout_impl(resolver).await.extend()?)
+        self.json_impl(self.type_.layout_impl(&resolver).await.extend()?)
             .extend()
     }
 }

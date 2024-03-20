@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use async_graphql::Context;
 use async_trait::async_trait;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use move_core_types::account_address::AccountAddress;
@@ -48,6 +49,28 @@ impl PackageStore for DbPackageStore {
         let package = get_package_from_db(id, &self.0).await?;
         Ok(Arc::new(package))
     }
+}
+
+#[async_trait]
+impl PackageStore for TempPackageStore {
+    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
+        self.package_cache.as_ref().version(id).await
+    }
+
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        self.package_cache.as_ref().fetch(id).await
+    }
+}
+
+pub(crate) fn get_package_store_from_ctx<'a>(ctx: &Context) -> std::result::Result<TempPackageStore, crate::error::Error> {
+    let package_cache: &Arc<PackageCache> = ctx
+        .data()
+        .map_err(|_| crate::error::Error::Internal("Unable to fetch Package Cache.".to_string()))?;
+    Ok(TempPackageStore { package_cache: package_cache.clone() })
+}
+
+pub struct TempPackageStore {
+    pub package_cache: Arc<PackageCache>,
 }
 
 async fn get_package_version_from_db(
