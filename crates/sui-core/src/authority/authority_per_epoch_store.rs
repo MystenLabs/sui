@@ -3059,9 +3059,7 @@ impl AuthorityPerEpochStore {
                     && self.randomness_state_enabled()
                     && certificate.is_randomness_reader()
                 {
-                    // TODO-DNS is it sufficient to just ignore a cert here that we won't ever be
-                    // able to execute this epoch, or are there other data structures that need
-                    // to be cleaned up?
+                    // TODO: Fail these immediately instead of waiting until end of epoch.
                     debug!(
                         "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
                         certificate.digest(),
