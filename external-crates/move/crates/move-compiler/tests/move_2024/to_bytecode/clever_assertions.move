@@ -7,6 +7,12 @@ module 0x42::m {
     #[error]
     const Foo: vector<u8> = b"Foo";
 
+    #[error]
+    const Lol: bool = true;
+
+    #[error]
+    const Nested: vector<vector<u8>> = vector[X, Foo];
+
     fun f() {
         assert!(false, X);
     }
@@ -21,5 +27,21 @@ module 0x42::m {
 
     fun h() {
         assert!(false);
+    }
+
+    fun j() {
+        assert!(Lol);
+    }
+
+    fun i() {
+        assert!(Lol, Lol);
+    }
+
+    fun ii() {
+        assert!(Lol, Nested);
+    }
+
+    fun iii() {
+        abort Nested
     }
 }

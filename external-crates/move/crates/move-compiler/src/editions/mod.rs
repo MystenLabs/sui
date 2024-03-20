@@ -247,7 +247,7 @@ impl FeatureGate {
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
             FeatureGate::AutoborrowEq => "Automatic borrowing is",
-            FeatureGate::CleverAssertions => "Clever assertions are",
+            FeatureGate::CleverAssertions => "Clever `assert!` and `#[error]` are",
         }
     }
 }

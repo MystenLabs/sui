@@ -20,7 +20,7 @@ use crate::{
     shared::{
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
-        program_info::TypingProgramInfo,
+        program_info::{ConstantInfo, TypingProgramInfo},
         unique_map::UniqueMap,
         *,
     },
@@ -42,8 +42,6 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
-
-use self::program_info::ConstantInfo;
 
 //**************************************************************************************************
 // Entry
@@ -2944,38 +2942,45 @@ fn module_call_impl(
 /// If the constant that we are referencing has an `error` attribute, we need to change the type of
 /// the constant to a u64 since this will be compiled into a u64 error code.
 fn annotated_error_const(context: &mut Context, e: &mut T::Exp) {
-    if let sp!(
+    let sp!(
         const_loc,
         T::UnannotatedExp_::Constant(module_ident, constant_name)
     ) = &mut e.exp
-    {
+    else {
+        return;
+    };
+
         let ConstantInfo {
             attributes,
             defined_loc,
             signature,
         } = context.constant_info(module_ident, constant_name);
-        let has_error_annotation =
-            attributes.contains_key_(&known_attributes::ErrorAttribute.into());
-        let u64_type = matches!(
+    let has_error_annotation = attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+    let is_u64_type = matches!(
             signature.value.builtin_name(),
             Some(sp!(_, N::BuiltinTypeName_::U64))
         );
         let ty_loc = e.ty.loc;
         let const_def_loc = *defined_loc;
 
-        if has_error_annotation
-            && context.env.check_feature(
+    if has_error_annotation {
+        context.env.check_feature(
                 context.current_package(),
                 FeatureGate::CleverAssertions,
                 *const_loc,
-            )
+        );
+    }
+
+    if context
+        .env
+        .supports_feature(context.current_package(), FeatureGate::CleverAssertions)
         {
             e.ty = N::Type_::builtin(ty_loc, sp(ty_loc, N::BuiltinTypeName_::U64), vec![]);
         }
 
         // Add help messages
         if !has_error_annotation
-                && !u64_type
+        && !is_u64_type
                     // If they're trying to use a non-u64 constant as an error code and in legacy,
                     // nudge them that this is available in Move 2024.
                     && context.env.check_feature(
@@ -2996,7 +3001,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp) {
                 known_attributes::ErrorAttribute
             );
             let mut err = diag!(
-                TypeSafety::InvalidCallTarget,
+            TypeSafety::InvalidErrorUsage,
                 (*const_loc, msg),
                 (const_def_loc, msg2)
             );
@@ -3008,7 +3013,6 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp) {
             ));
             context.env.add_diag(err);
         }
-    }
 }
 
 fn builtin_call(
@@ -3036,9 +3040,8 @@ fn builtin_call(
             b_ = TB::Assert(is_macro);
             params_ty = vec![Type_::bool(bloc), Type_::u64(bloc)];
             ret_ty = sp(loc, Type_::Unit);
-            match args.get_mut(1) {
-                None => (),
-                Some(exp) => annotated_error_const(context, exp),
+            if let Some(exp) = args.get_mut(1) {
+                annotated_error_const(context, exp)
             }
         }
     };

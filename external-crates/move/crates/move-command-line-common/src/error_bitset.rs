@@ -5,6 +5,13 @@
 const BITSET_VALUE_UNAVAILABLE: u16 = u16::MAX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorBitset {
+    // |<tagbit>|<reserved>|<line number>|<identifier index>|<constant index>|
+    //   1-bit    15-bits       16-bits        16-bits          16-bits
+    pub bits: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ErrorBitsetField {
     Tag,
     #[allow(dead_code)]
@@ -21,10 +28,10 @@ impl ErrorBitsetField {
     const IDENTIFIER_INDEX_MASK: u64 = 0x0000_0000_ffff_0000;
     const CONSTANT_INDEX_MASK: u64 = 0x0000_0000_0000_ffff;
 
-    const TAG_SHIFT: u64 = 63;
-    const RESERVED_AREA_SHIFT: u64 = 48;
-    const LINE_NUMBER_SHIFT: u64 = 32;
-    const IDENTIFIER_INDEX_SHIFT: u64 = 16;
+    const TAG_SHIFT: u64 = Self::RESERVED_AREA_SHIFT + 15;
+    const RESERVED_AREA_SHIFT: u64 = Self::LINE_NUMBER_SHIFT + 16;
+    const LINE_NUMBER_SHIFT: u64 = Self::IDENTIFIER_INDEX_SHIFT + 16;
+    const IDENTIFIER_INDEX_SHIFT: u64 = Self::CONSTANT_INDEX_SHIFT + 16;
     const CONSTANT_INDEX_SHIFT: u64 = 0;
 
     const fn mask(&self) -> u64 {
@@ -52,20 +59,14 @@ impl ErrorBitsetField {
     }
 }
 
-pub struct ErrorBitset {
-    // |<tagbit>|<reserved>|<line number>|<identifier index>|<constant index>|
-    //   1-bit    15-bits       16-bits        16-bits          16-bits
-    pub bits: u64,
-}
-
 impl ErrorBitset {
     pub const fn new(line_number: u16, identifier_index: u16, constant_index: u16) -> Self {
-        use ErrorBitsetField::*;
+        use ErrorBitsetField as E;
         let mut bits = 0u64;
-        bits |= 1u64 << Tag.shift();
-        bits |= (line_number as u64) << LineNumber.shift();
-        bits |= (identifier_index as u64) << Identifier.shift();
-        bits |= (constant_index as u64) << Constant.shift();
+        bits |= 1u64 << E::Tag.shift();
+        bits |= (line_number as u64) << E::LineNumber.shift();
+        bits |= (identifier_index as u64) << E::Identifier.shift();
+        bits |= (constant_index as u64) << E::Constant.shift();
         Self { bits }
     }
 
@@ -81,7 +82,7 @@ impl ErrorBitset {
         ErrorBitsetField::Tag.get_bits(bits) == 1
     }
 
-    const fn sentinal(v: u16) -> Option<u16> {
+    const fn sentinel(v: u16) -> Option<u16> {
         if v == BITSET_VALUE_UNAVAILABLE {
             None
         } else {
@@ -90,15 +91,15 @@ impl ErrorBitset {
     }
 
     pub const fn line_number(&self) -> Option<u16> {
-        Self::sentinal(ErrorBitsetField::LineNumber.get_bits(self.bits))
+        Self::sentinel(ErrorBitsetField::LineNumber.get_bits(self.bits))
     }
 
     pub const fn identifier_index(&self) -> Option<u16> {
-        Self::sentinal(ErrorBitsetField::Identifier.get_bits(self.bits))
+        Self::sentinel(ErrorBitsetField::Identifier.get_bits(self.bits))
     }
 
     pub const fn constant_index(&self) -> Option<u16> {
-        Self::sentinal(ErrorBitsetField::Constant.get_bits(self.bits))
+        Self::sentinel(ErrorBitsetField::Constant.get_bits(self.bits))
     }
 }
 
