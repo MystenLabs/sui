@@ -4,17 +4,15 @@ use std::{path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use consensus_config::{Committee, Parameters};
+use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
-use fastcrypto::traits::KeyPair;
+use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_types::{
-    committee::EpochId,
-    crypto::{AuthorityKeyPair, NetworkKeyPair},
-    sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+    committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
 use tokio::sync::{mpsc::unbounded_channel, Mutex};
 
@@ -33,7 +31,7 @@ use crate::{
 pub mod mysticeti_manager_tests;
 
 pub struct MysticetiManager {
-    keypair: AuthorityKeyPair,
+    protocol_keypair: ProtocolKeyPair,
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     running: Mutex<Running>,
@@ -47,17 +45,19 @@ pub struct MysticetiManager {
 }
 
 impl MysticetiManager {
+    /// NOTE: Mysticeti protocol key uses Ed25519 instead of BLS.
+    /// But for security, the protocol keypair must be different from the network keypair.
     pub fn new(
-        keypair: AuthorityKeyPair,
-        network_keypair: NetworkKeyPair,
+        protocol_keypair: ed25519::Ed25519KeyPair,
+        network_keypair: ed25519::Ed25519KeyPair,
         storage_base_path: PathBuf,
         metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
         Self {
-            keypair,
-            network_keypair,
+            protocol_keypair: ProtocolKeyPair::new(protocol_keypair),
+            network_keypair: NetworkKeyPair::new(network_keypair),
             storage_base_path,
             running: Mutex::new(Running::False),
             metrics,
@@ -107,9 +107,10 @@ impl ConsensusManagerTrait for MysticetiManager {
             ..Default::default()
         };
 
+        let own_protocol_key = self.protocol_keypair.public();
         let (own_index, _) = committee
             .authorities()
-            .find(|(_, a)| &a.protocol_key == self.keypair.public())
+            .find(|(_, a)| a.protocol_key == own_protocol_key)
             .expect("Own authority should be among the consensus authorities!");
 
         let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
@@ -134,8 +135,8 @@ impl ConsensusManagerTrait for MysticetiManager {
             committee.clone(),
             parameters.clone(),
             protocol_config.clone(),
-            self.keypair.copy(),
-            self.network_keypair.copy(),
+            self.protocol_keypair.clone(),
+            self.network_keypair.clone(),
             Arc::new(tx_validator.clone()),
             consumer,
             registry.clone(),

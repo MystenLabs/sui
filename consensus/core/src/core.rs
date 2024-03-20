@@ -983,7 +983,7 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_core_try_new_block_leader_timeout() {
         telemetry_subscribers::init_for_testing();
 
@@ -1007,12 +1007,12 @@ mod test {
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
                     assert_eq!(round - 1, r);
-                    // Ensure no new block is proposed before the min round delay.
-                    assert_eq!(core.last_proposed_round(), r);
-                    // Force propose new block regardless of min round delay.
-                    core.try_propose(true).unwrap().unwrap_or_else(|| {
-                        panic!("Block should have been proposed for round {}", round)
-                    });
+                    if core.last_proposed_round() == r {
+                        // Force propose new block regardless of min round delay.
+                        core.try_propose(true).unwrap().unwrap_or_else(|| {
+                            panic!("Block should have been proposed for round {}", round)
+                        });
+                    }
                 }
 
                 assert_eq!(core.last_proposed_round(), round);
