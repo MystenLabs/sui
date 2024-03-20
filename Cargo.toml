@@ -364,10 +364,13 @@ leb128 = "0.2.5"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
-miette = {version = "7", features = ["fancy"] }
+miette = { version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
-moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
+moka = { version = "0.12", default-features = false, features = [
+  "sync",
+  "atomic64",
+] }
 more-asserts = "0.3.1"
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim" }
 msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim-macros" }
@@ -557,10 +560,10 @@ fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a49
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+anemo = { git = "https://github.com/arun-koshy/anemo.git", rev = "7755820b1cebf540ed26b025fac4789f1e68e475" }
+anemo-build = { git = "https://github.com/arun-koshy/anemo.git", rev = "7755820b1cebf540ed26b025fac4789f1e68e475" }
+anemo-cli = { git = "https://github.com/arun-koshy/anemo.git", rev = "7755820b1cebf540ed26b025fac4789f1e68e475" }
+anemo-tower = { git = "https://github.com/arun-koshy/anemo.git", rev = "7755820b1cebf540ed26b025fac4789f1e68e475" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
