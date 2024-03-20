@@ -165,6 +165,18 @@ impl CheckpointExecutor {
             .checkpoint_store
             .get_highest_executed_checkpoint()
             .unwrap();
+
+        if let Some(highest_executed) = &highest_executed {
+            if epoch_store.epoch() == highest_executed.epoch()
+                && highest_executed.is_last_checkpoint_of_epoch()
+            {
+                // We can arrive at this point if we bump the highest_executed_checkpoint watermark, and then
+                // crash before completing reconfiguration.
+                info!(seq = ?highest_executed.sequence_number, "final checkpoint of epoch has already been executed");
+                return StopReason::EpochComplete;
+            }
+        }
+
         let mut next_to_schedule = highest_executed
             .as_ref()
             .map(|c| c.sequence_number() + 1)
