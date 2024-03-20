@@ -12,6 +12,6 @@ module a::m {
 
     fun t() {
         let s = S { f: X() };
-        foo!(s); // TODO improve this error message
+        foo!(s);
     }
 }
