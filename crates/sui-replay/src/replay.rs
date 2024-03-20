@@ -23,7 +23,7 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map};
+use serde_json::{json, Map, Value};
 use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
@@ -788,6 +788,7 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
+        let mut json_map = Map::new();
         let skip_checks = true;
         if let ProgrammableTransaction(ref pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}",
@@ -795,6 +796,7 @@ impl LocalExec {
                     &FullPTB {
                         ptb: pt.clone(),
                         results: transform_command_results_to_annotated(
+                            &mut json_map,
                             &executor,
                             &self.clone(),
                             executor.dev_inspect_transaction(&self, protocol_config,
@@ -811,18 +813,17 @@ impl LocalExec {
                             *tx_digest,
                             skip_checks
                             ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),)?
-            }))
+            }));
         };
 
         let all_required_objects = self.storage.all_objects();
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
-        let mut json_map = Map::new();
         json_map.insert("effects".to_string(), json!(effects));
         json_map.insert("gas_status".to_string(), json!(gas_status));
         json_map.insert("transaction_info".to_string(), json!(transaction_kind));
-        let combined_json = serde_json::Value::Object(json_map).to_string();
+        let combined_json = Value::Object(json_map).to_string();
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),

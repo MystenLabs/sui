@@ -5,6 +5,8 @@ use crate::displays::Pretty;
 use crate::replay::LocalExec;
 use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::TypeTag;
+use serde::Serialize;
+use serde_json::json;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
@@ -24,6 +26,7 @@ pub struct FullPTB {
     pub results: Vec<ResolvedResults>,
 }
 
+#[derive(Serialize, Clone)]
 pub struct ResolvedResults {
     pub mutable_reference_outputs: Vec<(Argument, MoveValue)>,
     pub return_values: Vec<MoveValue>,
@@ -327,6 +330,7 @@ fn resolve_value(
 }
 
 pub fn transform_command_results_to_annotated(
+    json_map: &mut serde_json::Map<String, serde_json::Value>,
     executor: &Arc<dyn Executor + Send + Sync>,
     store_factory: &LocalExec,
     results: Vec<ExecutionResult>,
@@ -346,5 +350,6 @@ pub fn transform_command_results_to_annotated(
             return_values: return_vals_out,
         });
     }
+    json_map.insert("transaction_results".to_string(), json!(output.clone()));
     Ok(output)
 }

@@ -439,8 +439,6 @@ pub async fn execute_replay_command(
 
                 let input = sandbox_state.output.clone();
 
-                //let compressed = compress_prepend_size(input.as_bytes());
-
                 let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
                 e.write_all(input.as_bytes())?;
                 let compressed = e.finish()?;
