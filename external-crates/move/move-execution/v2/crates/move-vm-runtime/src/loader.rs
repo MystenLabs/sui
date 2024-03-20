@@ -322,7 +322,13 @@ impl ModuleCache {
 
         for (idx, func) in module.function_defs().iter().enumerate() {
             let findex = FunctionDefinitionIndex(idx as TableIndex);
-            let function = Function::new(natives, findex, func, module);
+            let mut function = Function::new(natives, findex, func, module);
+            function.parameter_types = module
+                .signature_at(function.parameters)
+                .0
+                .iter()
+                .map(|tok| self.make_type(module_view, tok))
+                .collect::<PartialVMResult<Vec<_>>>()?;
             self.functions.push(Arc::new(function));
         }
 
@@ -1688,6 +1694,7 @@ pub(crate) struct Function {
     parameters_len: usize,
     locals_len: usize,
     return_len: usize,
+    parameter_types: Vec<Type>,
 }
 
 impl Function {
@@ -1714,6 +1721,7 @@ impl Function {
         };
         let parameters = handle.parameters;
         let parameters_len = module.signature_at(parameters).0.len();
+
         // Native functions do not have a code unit
         let (code, locals_len) = match &def.code {
             Some(code) => (
@@ -1739,6 +1747,7 @@ impl Function {
             parameters_len,
             locals_len,
             return_len,
+            parameter_types: Vec::new(),
         }
     }
 
@@ -1780,12 +1789,20 @@ impl Function {
         self.name.as_str()
     }
 
+    pub(crate) fn name_ident(&self) -> Identifier {
+        self.name.clone()
+    }
+
     pub(crate) fn code(&self) -> &[Bytecode] {
         &self.code
     }
 
     pub(crate) fn type_parameters(&self) -> &[AbilitySet] {
         &self.type_parameters
+    }
+
+    pub(crate) fn parameter_types(&self) -> &[Type] {
+        &self.parameter_types
     }
 
     pub(crate) fn pretty_string(&self) -> String {
