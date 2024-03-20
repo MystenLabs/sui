@@ -8,7 +8,7 @@
 
 # Basic Concepts
 
-- [Primitive Types](primitive-types/intro.md)
+- [Primitive Types](primitive-types.md)
   - [Integers](primitive-types/integers.md)
   - [Bool](primitive-types/bool.md)
   - [Address](primitive-types/address.md)
@@ -18,7 +18,7 @@
 - [Local Variables and Scopes](variables.md)
 - [Equality](equality.md)
 - [Abort and Assert](abort-and-assert.md)
-- [Control Flow](control-flow/intro.md)
+- [Control Flow](control-flow.md)
   - [Conditional Expressions](control-flow/conditionals.md)
   - [Loops](control-flow/loops.md)
   - [Labeled Control FLow](control-flow/labeled-control-flow.md)
