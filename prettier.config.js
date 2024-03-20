@@ -32,5 +32,11 @@ module.exports = {
 				proseWrap: 'always',
 			},
 		},
+		{
+			files: 'external-crates/move/documentation/book/**/*',
+			options: {
+				proseWrap: 'always',
+			},
+		},
 	],
 };

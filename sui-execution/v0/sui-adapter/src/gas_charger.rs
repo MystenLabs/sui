@@ -36,7 +36,7 @@ pub mod checked {
         tx_digest: TransactionDigest,
         gas_model_version: u64,
         gas_coins: Vec<ObjectRef>,
-        // this is the the first gas coin in `gas_coins` and the one that all others will
+        // this is the first gas coin in `gas_coins` and the one that all others will
         // be smashed into. It can be None for system transactions when `gas_coins` is empty.
         smashed_gas_coin: Option<ObjectID>,
         gas_status: SuiGasStatus,

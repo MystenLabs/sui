@@ -12,12 +12,15 @@ use futures::StreamExt;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::sync::Arc;
+use sui_config::node::RunWithRange;
 use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
-use sui_types::transaction::{CertifiedTransaction, SignedTransaction, Transaction};
+use sui_types::transaction::{
+    CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
+};
 use tracing::info;
 
 pub struct BenchmarkContext {
@@ -34,10 +37,10 @@ impl BenchmarkContext {
         checkpoint_size: usize,
         print_sample_tx: bool,
     ) -> Self {
-        // Increase by 2 so that we could generate one extra sample transaction before benchmarking.
-        // as well as reserve 1 account for package publishing.
+        // Reserve 1 account for package publishing.
         let mut num_accounts = workload.num_accounts() + 1;
         if print_sample_tx {
+            // Reserver another one to generate a sample transaction.
             num_accounts += 1;
         }
         let gas_object_num_per_account = workload.gas_object_num_per_account();
@@ -154,6 +157,7 @@ impl BenchmarkContext {
     pub(crate) async fn certify_transactions(
         &self,
         transactions: Vec<Transaction>,
+        skip_signing: bool,
     ) -> Vec<CertifiedTransaction> {
         info!("Creating transaction certificates");
         let tasks: FuturesUnordered<_> = transactions
@@ -162,8 +166,23 @@ impl BenchmarkContext {
                 let validator = self.validator();
                 tokio::spawn(async move {
                     let committee = validator.get_committee();
-                    let validator = validator.get_validator();
-                    let sig = SignedTransaction::sign(0, &tx, &*validator.secret, validator.name);
+                    let validator_state = validator.get_validator();
+                    let sig = if skip_signing {
+                        SignedTransaction::sign(
+                            0,
+                            &tx,
+                            &*validator_state.secret,
+                            validator_state.name,
+                        )
+                    } else {
+                        let verified_tx = VerifiedTransaction::new_unchecked(tx.clone());
+                        validator_state
+                            .handle_transaction(validator.get_epoch_store(), verified_tx)
+                            .await
+                            .unwrap()
+                            .status
+                            .into_signed_for_testing()
+                    };
                     CertifiedTransaction::new(tx.into_data(), vec![sig], committee).unwrap()
                 })
             })
@@ -176,8 +195,9 @@ impl BenchmarkContext {
         &self,
         transactions: Vec<Transaction>,
         print_sample_tx: bool,
+        skip_signing: bool,
     ) {
-        let mut transactions = self.certify_transactions(transactions).await;
+        let mut transactions = self.certify_transactions(transactions, skip_signing).await;
         if print_sample_tx {
             self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
                 .await;
@@ -310,9 +330,10 @@ impl BenchmarkContext {
         info!("Building checkpoints");
         let validator = self.validator();
         let checkpoints = validator
-            .build_checkpoints(in_memory_store, transactions, effects, checkpoint_size)
+            .build_checkpoints(transactions, effects, checkpoint_size)
             .await;
         info!("Built {} checkpoints", checkpoints.len());
+        let last_checkpoint_seq = *checkpoints.last().unwrap().0.sequence_number();
         let (mut checkpoint_executor, checkpoint_sender) = validator.create_checkpoint_executor();
         for (checkpoint, contents) in checkpoints {
             let state = validator.get_validator();
@@ -337,7 +358,10 @@ impl BenchmarkContext {
         let start_time = std::time::Instant::now();
         info!("Starting checkpoint execution. You can now attach a profiler");
         checkpoint_executor
-            .run_epoch(validator.get_epoch_store().clone(), None)
+            .run_epoch(
+                validator.get_epoch_store().clone(),
+                Some(RunWithRange::Checkpoint(last_checkpoint_seq)),
+            )
             .await;
         let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
         info!(

@@ -38,7 +38,7 @@ module a::loops {
     macro fun foo($x: u64, $f: |u64| -> u64): (u64, bool) {
         'a: loop {
             $f($x); // try to capture a
-            let x = $f(break 'a (0, false));
+            let _x = $f(break 'a (0, false));
         }
     }
 
@@ -73,7 +73,7 @@ module a::whiles {
     macro fun foo($x: u64, $f: |u64| -> u64): (u64, bool) {
         'a: while (true) {
             $f($x); // try to capture a
-            let x = $f(break 'a);
+            let _x = $f(break 'a);
         };
         (0, false)
     }
@@ -81,7 +81,7 @@ module a::whiles {
     macro fun bar<$T>($x: vector<u64>, $f: |vector<u64>| -> u64): (u64, bool) {
         'a: while (true) {
             $f($x); // try to capture a
-            let x = vector[$f(break 'a)];
+            let _x = vector[$f(break 'a)];
             foo!(0, |_| { break'a });
         };
         (0, false)

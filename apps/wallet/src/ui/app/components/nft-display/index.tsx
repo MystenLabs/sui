@@ -37,7 +37,7 @@ const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full relative'
 
 export interface NFTDisplayCardProps extends VariantProps<typeof nftDisplayCardStyles> {
 	objectId: string;
-	showLabel?: boolean;
+	hideLabel?: boolean;
 	size: NftImageProps['size'];
 	borderRadius?: NftImageProps['borderRadius'];
 	playable?: boolean;
@@ -46,7 +46,7 @@ export interface NFTDisplayCardProps extends VariantProps<typeof nftDisplayCardS
 
 export function NFTDisplayCard({
 	objectId,
-	showLabel,
+	hideLabel,
 	size,
 	wideView,
 	animateHover,
@@ -106,7 +106,7 @@ export function NFTDisplayCard({
 
 				{orientation === 'horizontal' ? (
 					<div className="flex-1 text-steel-dark overflow-hidden max-w-full ml-2">{nftName}</div>
-				) : !isOwnerToken ? (
+				) : !isOwnerToken && !hideLabel ? (
 					<div className="w-10/12 absolute bottom-2 bg-white/90 rounded-lg left-1/2 -translate-x-1/2 flex items-center justify-center opacity-0 group-hover:opacity-100">
 						<div className="mt-0.5 px-2 py-1 overflow-hidden">
 							<Text variant="subtitleSmall" weight="semibold" mono color="steel-darker" truncate>

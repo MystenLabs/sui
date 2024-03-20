@@ -25,7 +25,7 @@ criterion = "0.3.4"
 criterion-cpu-time = "0.1.0"
 crossbeam = "0.8"
 crossbeam-channel = "0.5.0"
-crossterm = "0.21"
+crossterm = "0.25.0"
 curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 datatest-stable = "0.1.1"
 derivative = "2.2.0"
@@ -101,7 +101,7 @@ toml_edit =  { version = "0.14.3", features = ["easy"] }
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 treeline = "0.1.0"
-tui = "0.17.0"
+tui = "0.19.0"
 uint = "0.9.4"
 url = "2.2.2"
 variant_count = "1.1.0"

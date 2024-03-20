@@ -63,7 +63,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
-use sui_types::crypto::get_authority_key_pair;
+use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages_checkpoint::{
@@ -73,7 +73,6 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
@@ -95,6 +94,7 @@ use sui_types::{
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tempfile::NamedTempFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -113,6 +113,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
@@ -125,8 +126,8 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
-pub struct SuiTestAdapter<'a> {
-    pub(crate) compiled_state: CompiledState<'a>,
+pub struct SuiTestAdapter {
+    pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
     package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
     accounts: BTreeMap<String, TestAccount>,
@@ -168,14 +169,14 @@ struct TxnSummary {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
+impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
     type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
 
-    fn compiled_state(&mut self) -> &mut CompiledState<'a> {
+    fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
     }
 
@@ -190,7 +191,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     }
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<&'a FullyCompiledProgram>,
+        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -628,7 +629,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_epoch = self.get_latest_epoch_id()?;
                 let tx = VerifiedTransaction::new_randomness_state_update(
                     latest_epoch,
-                    randomness_round,
+                    RandomnessRound(randomness_round),
                     random_bytes,
                     SequenceNumber::from_u64(randomness_initial_version),
                 );
@@ -1121,7 +1122,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
-impl<'a> SuiTestAdapter<'a> {
+impl<'a> SuiTestAdapter {
     pub fn is_simulator(&self) -> bool {
         self.is_simulator
     }
@@ -1783,7 +1784,7 @@ impl<'a> SuiTestAdapter<'a> {
     }
 }
 
-impl<'a> GetModule for &'a SuiTestAdapter<'_> {
+impl<'a> GetModule for &'a SuiTestAdapter {
     type Error = anyhow::Error;
 
     type Item = &'a CompiledModule;
@@ -2195,7 +2196,7 @@ async fn update_named_address_mapping(
     }
 }
 
-impl ObjectStore for SuiTestAdapter<'_> {
+impl ObjectStore for SuiTestAdapter {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -2212,7 +2213,7 @@ impl ObjectStore for SuiTestAdapter<'_> {
     }
 }
 
-impl ReadStore for SuiTestAdapter<'_> {
+impl ReadStore for SuiTestAdapter {
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,

@@ -3,12 +3,15 @@
 
 use std::{
     fmt::{self, Display, Formatter},
+    hash::{Hash, Hasher},
     ops::Deref,
     sync::Arc,
 };
 
-use consensus_config::AuthorityIndex;
+use bytes::Bytes;
+use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
+use fastcrypto::hash::{Digest, HashFunction as _};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -52,19 +55,32 @@ pub(crate) enum Commit {
 
 impl Commit {
     /// Create a new commit.
-    pub(crate) fn new(index: CommitIndex, leader: BlockRef, blocks: Vec<BlockRef>) -> Self {
+    pub(crate) fn new(
+        index: CommitIndex,
+        previous_digest: CommitDigest,
+        leader: BlockRef,
+        blocks: Vec<BlockRef>,
+    ) -> Self {
         Commit::V1(CommitV1 {
             index,
+            previous_digest,
             leader,
             blocks,
         })
     }
+
+    pub(crate) fn serialize(&self) -> Result<Bytes, bcs::Error> {
+        let bytes = bcs::to_bytes(self)?;
+        Ok(bytes.into())
+    }
 }
 
-/// Accessors for Commit.
+/// Accessors to Commit info.
 #[enum_dispatch]
 pub(crate) trait CommitAPI {
+    fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
+    fn previous_digest(&self) -> CommitDigest;
     fn leader(&self) -> BlockRef;
     fn blocks(&self) -> &[BlockRef];
 }
@@ -76,15 +92,26 @@ pub(crate) struct CommitV1 {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
     index: CommitIndex,
-    /// A reference to the the commit leader.
+    /// Digest of the previous commit.
+    /// Set to CommitDigest::MIN for the first commit after genesis.
+    previous_digest: CommitDigest,
+    /// A reference to the commit leader.
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
     blocks: Vec<BlockRef>,
 }
 
 impl CommitAPI for CommitV1 {
+    fn round(&self) -> Round {
+        self.leader.round
+    }
+
     fn index(&self) -> CommitIndex {
         self.index
+    }
+
+    fn previous_digest(&self) -> CommitDigest {
+        self.previous_digest
     }
 
     fn leader(&self) -> BlockRef {
@@ -104,29 +131,53 @@ impl CommitAPI for CommitV1 {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TrustedCommit {
     inner: Arc<Commit>,
-    // TODO: store digest and serialized bytes.
+
+    // Cached digest and serialized value, to avoid re-computing these values.
+    digest: CommitDigest,
+    serialized: Bytes,
 }
 
 impl TrustedCommit {
-    pub(crate) fn new_trusted(commit: Commit) -> Self {
+    pub(crate) fn new_trusted(commit: Commit, serialized: Bytes) -> Self {
+        let digest = Self::compute_digest(&serialized);
         Self {
             inner: Arc::new(commit),
+            digest,
+            serialized,
         }
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_test(
         index: CommitIndex,
+        previous_digest: CommitDigest,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
-        Self {
-            inner: Arc::new(Commit::new(index, leader, blocks)),
+        let commit = Commit::new(index, previous_digest, leader, blocks);
+        let serialized = commit.serialize().unwrap();
+        Self::new_trusted(commit, serialized)
+    }
+
+    pub(crate) fn reference(&self) -> CommitRef {
+        CommitRef {
+            index: self.index(),
+            digest: self.digest(),
         }
     }
 
-    pub(crate) fn inner(&self) -> &Commit {
-        &self.inner
+    pub(crate) fn digest(&self) -> CommitDigest {
+        self.digest
+    }
+
+    pub(crate) fn serialized(&self) -> &Bytes {
+        &self.serialized
+    }
+
+    fn compute_digest(serialized: &[u8]) -> CommitDigest {
+        let mut hasher = DefaultHashFunction::new();
+        hasher.update(serialized);
+        CommitDigest(hasher.finalize().into())
     }
 }
 
@@ -137,6 +188,57 @@ impl Deref for TrustedCommit {
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
+}
+
+/// Digest of a consensus commit.
+#[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CommitDigest([u8; consensus_config::DIGEST_LENGTH]);
+
+impl CommitDigest {
+    /// Lexicographic min & max digest.
+    pub const MIN: Self = Self([u8::MIN; consensus_config::DIGEST_LENGTH]);
+    pub const MAX: Self = Self([u8::MAX; consensus_config::DIGEST_LENGTH]);
+}
+
+impl Hash for CommitDigest {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.0[..8]);
+    }
+}
+
+impl From<CommitDigest> for Digest<{ DIGEST_LENGTH }> {
+    fn from(hd: CommitDigest) -> Self {
+        Digest::new(hd.0)
+    }
+}
+
+impl fmt::Display for CommitDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..4)
+                .ok_or(fmt::Error)?
+        )
+    }
+}
+
+impl fmt::Debug for CommitDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
+    }
+}
+
+/// Uniquely identifies a commit with its index and digest.
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CommitRef {
+    pub index: CommitIndex,
+    pub digest: CommitDigest,
 }
 
 /// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
@@ -239,19 +341,25 @@ pub fn load_committed_subdag_from_store(
 pub struct CommitConsumer {
     // A channel to send the committed sub dags through
     pub sender: UnboundedSender<CommittedSubDag>,
-    // The last commit index that the consumer has processed. This is useful for
-    // crash/recovery so mysticeti can replay the commits from `last_processed_index + 1`.
-    pub last_processed_index: CommitIndex,
+    // Leader round of the last commit that the consumer has processed.
+    pub last_processed_commit_round: Round,
+    // Index of the last commit that the consumer has processed. This is useful for
+    // crash/recovery so mysticeti can replay the commits from the next index.
+    // First commit in the replayed sequence will have index last_processed_commit_index + 1.
+    // Set 0 to replay from the start (as generated commit sequence starts at index = 1).
+    pub last_processed_commit_index: CommitIndex,
 }
 
 impl CommitConsumer {
     pub fn new(
         sender: UnboundedSender<CommittedSubDag>,
-        last_processed_index: CommitIndex,
+        last_processed_commit_round: Round,
+        last_processed_commit_index: CommitIndex,
     ) -> Self {
         Self {
             sender,
-            last_processed_index,
+            last_processed_commit_round,
+            last_processed_commit_index,
         }
     }
 }
@@ -331,7 +439,11 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{block::TestBlock, context::Context, storage::mem_store::MemStore};
+    use crate::{
+        block::TestBlock,
+        context::Context,
+        storage::{mem_store::MemStore, WriteBatch},
+    };
 
     #[test]
     fn test_new_subdag_from_commit_data() {
@@ -354,7 +466,8 @@ mod tests {
             })
             .map(|block| (block.reference(), block))
             .unzip();
-        store.write(genesis, vec![], vec![]).unwrap();
+        // TODO: avoid writing genesis blocks?
+        store.write(WriteBatch::default().blocks(genesis)).unwrap();
         blocks.append(&mut genesis_references.clone());
 
         let mut ancestors = genesis_references;
@@ -369,7 +482,9 @@ mod tests {
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );
-                store.write(vec![block.clone()], vec![], vec![]).unwrap();
+                store
+                    .write(WriteBatch::default().blocks(vec![block.clone()]))
+                    .unwrap();
                 new_ancestors.push(block.reference());
                 blocks.push(block.reference());
 
@@ -386,7 +501,12 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
-        let commit = TrustedCommit::new_for_test(commit_index, leader_ref, blocks.clone());
+        let commit = TrustedCommit::new_for_test(
+            commit_index,
+            CommitDigest::MIN,
+            leader_ref,
+            blocks.clone(),
+        );
 
         let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
         assert_eq!(subdag.leader, leader_ref);

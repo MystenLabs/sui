@@ -197,3 +197,127 @@ impl AsRef<[u8]> for ZkLoginAuthenticator {
             .expect("OnceCell invariant violated")
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct AddressSeed([u8; 32]);
+
+impl AddressSeed {
+    pub fn unpadded(&self) -> &[u8] {
+        let mut buf = self.0.as_slice();
+
+        while !buf.is_empty() && buf[0] == 0 {
+            buf = &buf[1..];
+        }
+
+        // If the value is '0' then just return a slice of length 1 of the final byte
+        if buf.is_empty() {
+            &self.0[31..]
+        } else {
+            buf
+        }
+    }
+
+    pub fn padded(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for AddressSeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let big_int = num_bigint::BigUint::from_bytes_be(&self.0);
+        let radix10 = big_int.to_str_radix(10);
+        f.write_str(&radix10)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum AddressSeedParseError {
+    #[error("unable to parse radix10 encoded value `{0}`")]
+    Parse(#[from] num_bigint::ParseBigIntError),
+    #[error("larger than 32 bytes")]
+    TooBig,
+}
+
+impl std::str::FromStr for AddressSeed {
+    type Err = AddressSeedParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let big_int = <num_bigint::BigUint as num_traits::Num>::from_str_radix(s, 10)?;
+        let be_bytes = big_int.to_bytes_be();
+        let len = be_bytes.len();
+        let mut buf = [0; 32];
+
+        if len > 32 {
+            return Err(AddressSeedParseError::TooBig);
+        }
+
+        buf[32 - len..].copy_from_slice(&be_bytes);
+        Ok(Self(buf))
+    }
+}
+
+// AddressSeed's serialized format is as a radix10 encoded string
+impl Serialize for AddressSeed {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AddressSeed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = std::borrow::Cow::<'de, str>::deserialize(deserializer)?;
+        std::str::FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use super::AddressSeed;
+    use num_bigint::BigUint;
+    use proptest::prelude::*;
+
+    #[test]
+    fn unpadded_slice() {
+        let seed = AddressSeed([0; 32]);
+        let zero: [u8; 1] = [0];
+        assert_eq!(seed.unpadded(), zero.as_slice());
+
+        let mut seed = AddressSeed([1; 32]);
+        seed.0[0] = 0;
+        assert_eq!(seed.unpadded(), [1; 31].as_slice());
+    }
+
+    proptest! {
+        #[test]
+        fn dont_crash_on_large_inputs(
+            bytes in proptest::collection::vec(any::<u8>(), 33..1024)
+        ) {
+            let big_int = BigUint::from_bytes_be(&bytes);
+            let radix10 = big_int.to_str_radix(10);
+
+            // doesn't crash
+            let _ = AddressSeed::from_str(&radix10);
+        }
+
+        #[test]
+        fn valid_address_seeds(
+            bytes in proptest::collection::vec(any::<u8>(), 1..=32)
+        ) {
+            let big_int = BigUint::from_bytes_be(&bytes);
+            let radix10 = big_int.to_str_radix(10);
+
+            let seed = AddressSeed::from_str(&radix10).unwrap();
+            assert_eq!(radix10, seed.to_string());
+            // Ensure unpadded doesn't crash
+            seed.unpadded();
+        }
+    }
+}

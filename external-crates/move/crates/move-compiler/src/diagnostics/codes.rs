@@ -163,6 +163,7 @@ codes!(
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
         DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
+        UnableToMigrate: { msg: "unable to migrate", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
@@ -326,7 +327,8 @@ codes!(
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
-        ValueWarning: { msg: "issue with attribute value", severity: Warning }
+        ValueWarning: { msg: "issue with attribute value", severity: Warning },
+        AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },
@@ -339,12 +341,20 @@ codes!(
     Editions: [
         FeatureTooNew: {
             msg: "feature is not supported in specified edition",
-            severity: BlockingError,
+            severity: NonblockingError,
+        },
+        DeprecatedFeature: {
+            msg: "feature is deprecated in specified edition",
+            severity: NonblockingError,
         },
     ],
     Migration: [
-        NeedsPublic: { msg: "move 2024 migration: public struct", severity: BlockingError },
-        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: BlockingError },
+        NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },
+        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: NonblockingError },
+        NeedsRestrictedIdentifier: { msg: "move 2024 migration: restricted identifier", severity: NonblockingError },
+        NeedsGlobalQualification: { msg: "move 2024 migration: global qualification", severity: NonblockingError },
+        RemoveFriend: { msg: "move 2024 migration: remove 'friend'", severity: NonblockingError },
+        MakePubPackage: { msg: "move 2024 migration: make 'public(package)'", severity: NonblockingError },
     ]
 );
 

@@ -13,16 +13,9 @@ import { Callout } from 'nextra/components';
 ## Limitations
 
 - zkSend only supports mainnet at this time.
-- Links must contain gas to claim them. The SDK will automatically determine a gas amount to use,
-  and during claiming we will attempt to refund any unused gas to the address that created the link.
-- Objects within links must be publically transferrable.
+- Objects within links must be publicly transferrable.
 
 ## Create a link
-
-<Callout type="warning">
-	zkSend does not keep a record of created links, and losing access to a link will result in the
-	loss of funds of any assets contained within this link.
-</Callout>
 
 You can start creating your own zkSend link using the `ZkSendLinkBuilder` class. This class
 constructor takes an object with the following options:
@@ -64,8 +57,8 @@ amount, such as merging and splitting coin objects.
 
 #### Adding objects to the link
 
-You can add a publically-transferrable object to the link by calling `link.addClaimableObject()`.
-This method takes the following params:
+You can add a publicly-transferrable object to the link by calling `link.addClaimableObject()`. This
+method takes the following params:
 
 - **`id`** (required) - The ID of the object. This must be owned by the `sender` you configured when
   creating the link.
@@ -115,7 +108,7 @@ takes the following params:
 - **`name`** - The name of your dApp. This will be shown to the user when claiming the link.
 
 When redirecting to the URL, if the user claims with zkLogin, then zkSend will automatically add a
-`zksend_address` query paramter to the URL, containing the Sui address of the user that claimed the
+`zksend_address` query parameter to the URL, containing the Sui address of the user that claimed the
 asset. The [zkSend wallet](./dapp.mdx) will automatically read this query parameter, and consider
 itself connected as a result of a claim redirect.
 
@@ -128,5 +121,90 @@ const link = new ZkSendLinkBuilder({
 		url: 'https://your-dapp.com',
 		name: 'Your dApp',
 	},
+});
+```
+
+## Claiming a link
+
+To claim a link via the SDK you can use the `ZkSendLink` class:
+
+```ts
+import { ZkSendLink } from '@mysten/zksend';
+
+// create a link instance from a URL
+const link = await ZkSendLink.fromUrl('https://zksend.com/claim#$abc...');
+
+// list what claimable assets the link has
+const { nfts, balances } = link.assets;
+
+// claim all the assets from the link
+await link.claimAssets(addressOfClaimer);
+```
+
+## Listing links you have created
+
+To list the links created by a specific address, you can use the `listCreatedLinks` function:
+
+```ts
+import { listCreatedLinks } from '@mysten/zksend';
+
+const { links, hasNextPage, cursor } = await listCreatedLinks({
+	address: addressOfCreator,
+});
+
+// get the claimable assets for this link (will be empty if the link has been claimed)
+const { nfts, balances } = await links[0].assets;
+```
+
+## Regenerating links
+
+If you lose a link you've created, you can re-generate the link (this can only done from the address
+that originally created the link):
+
+```ts
+import { listCreatedLinks } from '@mysten/zksend';
+
+const { links, hasNextPage, cursor } = await listCreatedLinks({
+	address: addressOfCreator,
+});
+
+// url will be the new link url
+const { url, transactionBlock } = await links[0].link.createRegenerateTransaction(
+	addressOfLinkCreator,
+);
+
+// Execute the transaction block to regenerate the link
+await client.signAndExecuteTransactionBlock({
+	transactionBlock,
+	signer: keypair,
+});
+```
+
+## Bulk link creation
+
+To create multiple links in a single transaction block, you can use `ZkSendLinkBuilder.createLinks`:
+
+```ts
+const links = [];
+
+for (let i = 0; i < 10; i++) {
+	const link = new ZkSendLinkBuilder({
+		client,
+		sender: keypair.toSuiAddress(),
+	});
+
+	link.addClaimableMist(100n);
+	links.push(link);
+}
+
+const urls = links.map((link) => link.getLink());
+
+const txb = await ZkSendLinkBuilder.createLinks({
+	links,
+});
+
+await client.signAndExecuteTransactionBlock({
+	transactionBlock: txb,
+	signer: keypair,
 });
 ```

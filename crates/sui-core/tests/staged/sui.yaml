@@ -749,10 +749,13 @@ PublicKey:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginPublicIdentifier
+RandomnessRound:
+  NEWTYPESTRUCT: U64
 RandomnessStateUpdate:
   STRUCT:
     - epoch: U64
-    - randomness_round: U64
+    - randomness_round:
+        TYPENAME: RandomnessRound
     - random_bytes:
         SEQ: U8
     - randomness_obj_initial_shared_version:

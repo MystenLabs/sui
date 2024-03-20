@@ -11,6 +11,7 @@ use lsp_types::{
     HoverProviderCapability, OneOf, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgressOptions,
 };
+use move_compiler::linters::LintLevel;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -116,13 +117,19 @@ fn main() {
                 .expect("could not deserialize client capabilities");
 
         // determine if linting is on or off based on what the editor requested
-        let mut lint = false;
-        if let Some(init_options) = initialize_params.initialization_options {
-            lint = init_options
-                .get("lintOpt")
+        let lint = {
+            let lint_all = initialize_params
+                .initialization_options
+                .as_ref()
+                .and_then(|init_options| init_options.get("lintOpt"))
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
-        }
+            if lint_all {
+                LintLevel::All
+            } else {
+                LintLevel::None
+            }
+        };
 
         symbolicator_runner = symbols::SymbolicatorRunner::new(
             ide_files_root.clone(),
@@ -138,9 +145,12 @@ fn main() {
         // to be available right after the client is initialized.
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
-                if let Ok((Some(new_symbols), _)) =
-                    symbols::get_symbols(ide_files_root.clone(), p.as_path(), lint)
-                {
+                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+                    &mut BTreeMap::new(),
+                    ide_files_root.clone(),
+                    p.as_path(),
+                    lint,
+                ) {
                     let mut old_symbols = symbols.lock().unwrap();
                     (*old_symbols).merge(new_symbols);
                 }

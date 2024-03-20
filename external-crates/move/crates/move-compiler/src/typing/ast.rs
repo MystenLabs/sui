@@ -5,7 +5,9 @@
 use crate::{
     debug_display,
     diagnostics::WarningFilters,
-    expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
+    expansion::ast::{
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
+    },
     ice,
     naming::ast::{
         BlockLabel, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods, Type, TypeName_,
@@ -84,7 +86,11 @@ pub struct Function {
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
+    /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
+    /// test_mode. This is the visibility we will actually emit in the compiled module
+    pub compiled_visibility: Visibility,
     pub entry: Option<Loc>,
     pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
@@ -115,6 +121,7 @@ pub struct Constant {
 pub enum LValue_ {
     Ignore,
     Var {
+        mut_: Option<Mutability>,
         var: Var,
         ty: Box<Type>,
         unused_binding: bool,
@@ -380,6 +387,7 @@ impl AstDebug for (FunctionName, &Function) {
                 index,
                 attributes,
                 visibility,
+                compiled_visibility,
                 entry,
                 macro_,
                 signature,
@@ -388,7 +396,11 @@ impl AstDebug for (FunctionName, &Function) {
         ) = self;
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
+        w.write("(");
         visibility.ast_debug(w);
+        w.write(" as ");
+        compiled_visibility.ast_debug(w);
+        w.write(") ");
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
@@ -768,11 +780,15 @@ impl AstDebug for LValue_ {
         match self {
             L::Ignore => w.write("_"),
             L::Var {
+                mut_,
                 var: v,
                 ty: st,
                 unused_binding,
             } => w.annotate(
                 |w| {
+                    if let Some(mut_) = mut_ {
+                        mut_.ast_debug(w);
+                    }
                     v.ast_debug(w);
                     if *unused_binding {
                         w.write("#unused")

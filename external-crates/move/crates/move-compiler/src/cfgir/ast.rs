@@ -4,7 +4,7 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Friend, ModuleIdent},
+    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
     hlir::ast::{
         BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
         Visibility,
@@ -70,7 +70,7 @@ pub struct Constant {
 pub enum FunctionBody_ {
     Native,
     Defined {
-        locals: UniqueMap<Var, SingleType>,
+        locals: UniqueMap<Var, (Mutability, SingleType)>,
         start: Label,
         block_info: BTreeMap<Label, BlockInfo>,
         blocks: BasicBlocks,
@@ -84,7 +84,11 @@ pub struct Function {
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
+    /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
+    /// test_mode. This is the visibility we will actually emit in the compiled module
+    pub compiled_visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
@@ -160,7 +164,7 @@ fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Comma
     use Command_::*;
     match cmd_ {
         Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-        Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } | Abort(_) | Return { .. } => (),
+        Mutate(_, _) | Assign(_, _, _) | IgnoreAndPop { .. } | Abort(_) | Return { .. } => (),
         Jump { target, .. } => *target = remapping[target],
         JumpIf {
             if_true, if_false, ..
@@ -288,6 +292,7 @@ impl AstDebug for (FunctionName, &Function) {
                 index,
                 attributes,
                 visibility,
+                compiled_visibility,
                 entry,
                 signature,
                 body,
@@ -295,7 +300,11 @@ impl AstDebug for (FunctionName, &Function) {
         ) = self;
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
+        w.write("(");
         visibility.ast_debug(w);
+        w.write(" as ");
+        compiled_visibility.ast_debug(w);
+        w.write(") ");
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
@@ -313,7 +322,8 @@ impl AstDebug for (FunctionName, &Function) {
             } => w.block(|w| {
                 w.write("locals:");
                 w.indent(4, |w| {
-                    w.list(locals, ",", |w, (_, v, st)| {
+                    w.list(locals, ",", |w, (_, v, (mut_, st))| {
+                        mut_.ast_debug(w);
                         w.write(&format!("{}: ", v));
                         st.ast_debug(w);
                         true

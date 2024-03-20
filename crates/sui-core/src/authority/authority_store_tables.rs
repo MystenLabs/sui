@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_store::LockDetailsWrapper;
+use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -26,7 +26,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
-const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
+pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
@@ -54,14 +54,13 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "indirect_move_objects_table_default_config"]
     pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
-    /// This is a map between object references of currently active objects that can be mutated,
-    /// and the transaction that they are lock on for use by this specific authority. Where an object
-    /// lock exists for an object version, but no transaction has been seen using it the lock is set
-    /// to None. The safety of consistent broadcast depend on each honest authority never changing
-    /// the lock once it is set. After a certificate for this object is processed it can be
-    /// forgotten.
+    /// This is a map between object references of currently active objects that can be mutated.
+    ///
+    /// For old epochs, it may also contain the transaction that they are lock on for use by this
+    /// specific validator. The transaction locks themselves are now in AuthorityPerEpochStore.
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
-    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetailsWrapper>>,
+    #[rename = "owned_object_transaction_locks"]
+    pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
@@ -353,18 +352,6 @@ impl AuthorityPerpetualTables {
         Ok(objects)
     }
 
-    pub fn has_object_lock(&self, object: &ObjectKey) -> SuiResult<bool> {
-        Ok(self
-            .owned_object_transaction_locks
-            .safe_iter_with_bounds(
-                Some((object.0, object.1, ObjectDigest::MIN)),
-                Some((object.0, object.1, ObjectDigest::MAX)),
-            )
-            .next()
-            .transpose()?
-            .is_some())
-    }
-
     pub fn set_highest_pruned_checkpoint_without_wb(
         &self,
         checkpoint_number: CheckpointSequenceNumber,
@@ -402,7 +389,7 @@ impl AuthorityPerpetualTables {
         // TODO: Add new tables that get added to the db automatically
         self.objects.unsafe_clear()?;
         self.indirect_move_objects.unsafe_clear()?;
-        self.owned_object_transaction_locks.unsafe_clear()?;
+        self.live_owned_object_markers.unsafe_clear()?;
         self.executed_effects.unsafe_clear()?;
         self.events.unsafe_clear()?;
         self.executed_transactions_to_checkpoint.unsafe_clear()?;

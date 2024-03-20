@@ -52,6 +52,23 @@ pub const KEYWORDS: &[&str] = &[
     ADDRESS, BOOL, VECTOR, SOME, NONE, GAS, U8, U16, U32, U64, U128, U256,
 ];
 
+pub const COMMANDS: &[&str] = &[
+    TRANSFER_OBJECTS,
+    SPLIT_COINS,
+    MERGE_COINS,
+    MAKE_MOVE_VEC,
+    MOVE_CALL,
+    PUBLISH,
+    UPGRADE,
+    ASSIGN,
+    PREVIEW,
+    WARN_SHADOWS,
+    GAS_BUDGET,
+    SUMMARY,
+    GAS_COIN,
+    JSON,
+];
+
 pub fn is_keyword(s: &str) -> bool {
     KEYWORDS.contains(&s)
 }
@@ -96,7 +113,7 @@ pub struct ModuleAccess {
 /// A parsed PTB command consisting of the command and the parsed arguments to the command.
 #[derive(Debug, Clone)]
 pub enum ParsedPTBCommand {
-    TransferObjects(Spanned<Argument>, Spanned<Vec<Spanned<Argument>>>),
+    TransferObjects(Spanned<Vec<Spanned<Argument>>>, Spanned<Argument>),
     SplitCoins(Spanned<Argument>, Spanned<Vec<Spanned<Argument>>>),
     MergeCoins(Spanned<Argument>, Spanned<Vec<Spanned<Argument>>>),
     MakeMoveVec(Spanned<ParsedType>, Spanned<Vec<Spanned<Argument>>>),
@@ -229,10 +246,11 @@ fn delimited_list<T: fmt::Display>(
 impl fmt::Display for ParsedPTBCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParsedPTBCommand::TransferObjects(arg, args) => {
-                write!(f, "{TRANSFER_OBJECTS} {} [", arg.value)?;
+            ParsedPTBCommand::TransferObjects(args, arg) => {
+                write!(f, "{TRANSFER_OBJECTS} [")?;
                 delimited_list(f, ", ", args.value.iter().map(|x| &x.value))?;
-                write!(f, "]")
+                write!(f, "]")?;
+                write!(f, " {}", arg.value)
             }
             ParsedPTBCommand::SplitCoins(arg, args) => {
                 write!(f, "{SPLIT_COINS} {} [", arg.value)?;

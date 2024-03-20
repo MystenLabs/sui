@@ -10,6 +10,8 @@ use prometheus::{
     Registry,
 };
 
+use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
+
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
     1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
@@ -19,15 +21,24 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) channel_metrics: ChannelMetrics,
+    pub(crate) network_metrics: NetworkMetrics,
+    pub(crate) quinn_connection_metrics: QuinnConnectionMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
     let channel_metrics = ChannelMetrics::new(&registry);
+    let network_metrics = NetworkMetrics {
+        inbound: NetworkRouteMetrics::new("inbound", &registry),
+        outbound: NetworkRouteMetrics::new("outbound", &registry),
+    };
+    let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
         node_metrics,
         channel_metrics,
+        network_metrics,
+        quinn_connection_metrics,
     })
 }
 
@@ -232,4 +243,10 @@ impl ChannelMetrics {
             ).unwrap(),
         }
     }
+}
+
+// Fields for network-agnostic metrics can be added here
+pub(crate) struct NetworkMetrics {
+    pub inbound: NetworkRouteMetrics,
+    pub outbound: NetworkRouteMetrics,
 }

@@ -5,8 +5,6 @@ only, and cannot modify the underlying value (or any of its fields). Mutable ref
 modifications via a write through that reference. Move's type system enforces an ownership
 discipline that prevents reference errors.
 
-For more details on the rules of references, see [Structs and Resources](./structs-and-resources.md)
-
 ## Reference Operators
 
 Move provides operators for creating and extending references as well as converting a mutable
@@ -34,10 +32,10 @@ let f_ref2: &u64 = &s_ref.f // also works
 A reference expression with multiple fields works as long as both structs are in the same module:
 
 ```move
-struct A { b: B }
-struct B { c : u64 }
+public struct A { b: B }
+public struct B { c : u64 }
 fun f(a: &A): &u64 {
-  &a.b.c
+    &a.b.c
 }
 ```
 
@@ -46,7 +44,7 @@ Finally, note that references to references are not allowed:
 ```move
 let x = 7;
 let y: &u64 = &x;
-let z: &&u64 = &y; // will not compile
+let z: &&u64 = &y; // ERROR! will not compile
 ```
 
 ## Reading and Writing Through References
@@ -66,10 +64,10 @@ write is a mutation that must occur on the left hand side of an equals.
 
 In order for a reference to be read, the underlying type must have the
 [`copy` ability](./abilities.md) as reading the reference creates a new copy of the value. This rule
-prevents the copying of resource values:
+prevents the copying of assets:
 
 ```move=
-fun copy_resource_via_ref_bad(c: Coin) {
+fun copy_coin_via_ref_bad(c: Coin) {
     let c_ref = &c;
     let counterfeit: Coin = *c_ref; // not allowed!
     pay(c);
@@ -82,9 +80,9 @@ Dually: in order for a reference to be written to, the underlying type must have
 This rule prevents the destruction of resource values:
 
 ```move=
-fun destroy_resource_via_ref_bad(ten_coins: Coin, c: Coin) {
+fun destroy_coin_via_ref_bad(mut ten_coins: Coin, c: Coin) {
     let ref = &mut ten_coins;
-    *ref = c; // not allowed--would destroy 10 coins!
+    *ref = c; // ERROR! not allowed--would destroy 10 coins!
 }
 ```
 
@@ -93,7 +91,7 @@ fun destroy_resource_via_ref_bad(ten_coins: Coin, c: Coin) {
 A mutable reference can be used in a context where an immutable reference is expected:
 
 ```move
-let x = 7;
+let mut x = 7;
 let y: &u64 = &mut x;
 ```
 
@@ -107,8 +105,8 @@ fun takes_immut_returns_immut(x: &u64): &u64 { x }
 fun takes_mut_returns_immut(x: &mut u64): &u64 { x }
 
 fun expression_examples() {
-    let x = 0;
-    let y = 0;
+    let mut x = 0;
+    let mut y = 0;
     takes_immut_returns_immut(&x); // no inference
     takes_immut_returns_immut(&mut x); // inferred freeze(&mut x)
     takes_mut_returns_immut(&mut x); // no inference
@@ -134,23 +132,21 @@ also be used. This terminology is used in error messages to concisely indicate t
 needed where a `&T` was supplied. For example
 
 ```move=
-address 0x42 {
-module example {
+module a::example {
     fun read_and_assign(store: &mut u64, new_value: &u64) {
         *store = *new_value
     }
 
     fun subtype_examples() {
-        let x: &u64 = &0;
-        let y: &mut u64 = &mut 1;
+        let mut x: &u64 = &0;
+        let mut y: &mut u64 = &mut 1;
 
         x = &mut 1; // valid
-        y = &2; // invalid!
+        y = &2; // ERROR! invalid!
 
         read_and_assign(y, x); // valid
-        read_and_assign(x, y); // invalid!
+        read_and_assign(x, y); // ERROR! invalid!
     }
-}
 }
 ```
 
@@ -159,7 +155,7 @@ will yield the following error messages
 ```text
 error:
 
-    ┌── example.move:12:9 ───
+    ┌── example.move:11:9 ───
     │
  12 │         y = &2; // invalid!
     │         ^ Invalid assignment to local 'y'
@@ -167,26 +163,26 @@ error:
  12 │         y = &2; // invalid!
     │             -- The type: '&{integer}'
     ·
-  9 │         let y: &mut u64 = &mut 1;
-    │                -------- Is not a subtype of: '&mut u64'
+  9 │         let mut y: &mut u64 = &mut 1;
+    │                    -------- Is not a subtype of: '&mut u64'
     │
 
 error:
 
-    ┌── example.move:15:9 ───
+    ┌── example.move:14:9 ───
     │
  15 │         read_and_assign(x, y); // invalid!
-    │         ^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x42::example::read_and_assign'. Invalid argument for parameter 'store'
+    │         ^^^^^^^^^^^^^^^^^^^^^ Invalid call of 'a::example::read_and_assign'. Invalid argument for parameter 'store'
     ·
-  8 │         let x: &u64 = &0;
-    │                ---- The type: '&u64'
+  8 │         let mut x: &u64 = &0;
+    │                    ---- The type: '&u64'
     ·
   3 │     fun read_and_assign(store: &mut u64, new_value: &u64) {
     │                                -------- Is not a subtype of: '&mut u64'
     │
 ```
 
-The only other types currently that has subtyping are [tuples](./tuples.md)
+The only other types that currently have subtyping are [tuples](./tuples.md)
 
 ## Ownership
 
@@ -210,26 +206,20 @@ references before writes.
 ### References Cannot Be Stored
 
 References and tuples are the _only_ types that cannot be stored as a field value of structs, which
-also means that they cannot exist in global storage. All references created during program execution
-will be destroyed when a Move program terminates; they are entirely ephemeral. This invariant is
-also true for values of types without the `store` [ability](./abilities.md), but note that
-references and tuples go a step further by never being allowed in structs in the first place.
+also means that they cannot exist in storage. All references created during program execution will
+be destroyed when a Move program terminates; they are entirely ephemeral. This invariant is also
+true for values of types without the `store` [ability](./abilities.md), but note that references and
+tuples go a step further by never being allowed in structs in the first place.
 
 This is another difference between Move and Rust, which allows references to be stored inside of
 structs.
 
-Currently, Move cannot support this because references cannot be
-[serialized](https://en.wikipedia.org/wiki/Serialization), but _every Move value must be
-serializable_. This requirement comes from Move's
-[persistent global storage](./global-storage-structure.md), which needs to serialize values to
-persist them across program executions. Structs can be written to global storage, and thus they must
-be serializable.
-
 One could imagine a fancier, more expressive, type system that would allow references to be stored
-in structs _and_ ban those structs from existing in global storage. We could perhaps allow
-references inside of structs that do not have the `store` [ability](./abilities.md), but that would
-not completely solve the problem: Move has a fairly complex system for tracking static reference
-safety, and this aspect of the type system would also have to be extended to support storing
-references inside of structs. In short, Move's type system (particularly the aspects around
-reference safety) would have to expand to support stored references. But it is something we are
-keeping an eye on as the language evolves.
+in structs. We could allow references inside of structs that do not have the `store`
+[ability](./abilities.md), but the core difficulty is that Move has a fairly complex system for
+tracking static reference safety. This aspect of the type system would also have to be extended to
+support storing references inside of structs. In short, Move's reference safety system would have to
+expand to support stored references, and it is something we are keeping an eye on as the language
+evolves.
+
+<!-- TODO actually document a sketch of the borrow rules -->

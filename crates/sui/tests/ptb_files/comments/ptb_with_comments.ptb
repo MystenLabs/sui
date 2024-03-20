@@ -7,4 +7,4 @@
 # Then assign the result to variable result
 --assign result
 # Now transfer the resulting coin
---transfer-objects @0x006 [result.0]
+--transfer-objects [result.0] @0x006 

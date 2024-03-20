@@ -2,7 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{cfgir::absint::*, hlir::ast::Var, shared::unique_map::UniqueMap};
+use crate::{
+    cfgir::absint::*, expansion::ast::Mutability, hlir::ast::Var, shared::unique_map::UniqueMap,
+};
 use move_ir_types::location::*;
 
 //**************************************************************************************************
@@ -41,20 +43,27 @@ impl LocalState {
 #[derive(Clone, Debug)]
 pub struct LocalStates {
     local_states: UniqueMap<Var, LocalState>,
+    first_assignment: UniqueMap<Var, Loc>,
 }
 
 impl LocalStates {
-    pub fn initial<T>(function_arguments: &[(Var, T)], local_types: &UniqueMap<Var, T>) -> Self {
+    pub fn initial<T>(
+        function_arguments: &[(Mutability, Var, T)],
+        local_types: &UniqueMap<Var, (Mutability, T)>,
+    ) -> Self {
         let mut states = LocalStates {
             local_states: UniqueMap::new(),
+            first_assignment: UniqueMap::new(),
         };
         for (var, _) in local_types.key_cloned_iter() {
             let local_state = LocalState::Unavailable(var.loc(), UnavailableReason::Unassigned);
             states.set_state(var, local_state)
         }
-        for (var, _) in function_arguments {
+        for (_, var, _) in function_arguments {
+            debug_assert!(states.local_states.contains_key(var));
             let local_state = LocalState::Available(var.loc());
-            states.set_state(*var, local_state)
+            states.set_state(*var, local_state);
+            states.maybe_set_first_assignment(*var, var.loc());
         }
         states
     }
@@ -68,6 +77,16 @@ impl LocalStates {
     pub fn set_state(&mut self, local: Var, state: LocalState) {
         self.local_states.remove(&local);
         self.local_states.add(local, state).unwrap();
+    }
+
+    pub fn get_first_assignment(&self, local: &Var) -> Option<Loc> {
+        self.first_assignment.get(local).copied()
+    }
+
+    pub fn maybe_set_first_assignment(&mut self, local: Var, loc: Loc) {
+        if !self.first_assignment.contains_key(&local) {
+            self.first_assignment.add(local, loc).unwrap();
+        }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (Var, &LocalState)> {
@@ -91,8 +110,12 @@ impl LocalStates {
 impl AbstractDomain for LocalStates {
     fn join(&mut self, other: &Self) -> JoinResult {
         use LocalState as L;
+        let Self {
+            local_states,
+            first_assignment,
+        } = other;
         let mut result = JoinResult::Unchanged;
-        for (local, other_state) in other.local_states.key_cloned_iter() {
+        for (local, other_state) in local_states.key_cloned_iter() {
             match (self.get_state(&local), other_state) {
                 // equal so nothing to do
                 (L::Unavailable(_, _), L::Unavailable(_, _))
@@ -122,6 +145,12 @@ impl AbstractDomain for LocalStates {
 
                     self.set_state(local, state)
                 }
+            }
+        }
+        for (v, loc) in first_assignment.key_cloned_iter() {
+            if !self.first_assignment.contains_key(&v) {
+                self.first_assignment.add(v, *loc).unwrap();
+                result = JoinResult::Changed;
             }
         }
 

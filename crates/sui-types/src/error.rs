@@ -254,6 +254,9 @@ pub enum UserInputError {
         address: SuiAddress,
         coin_type: String,
     },
+
+    #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
+    PostRandomCommandRestrictions,
 }
 
 #[derive(

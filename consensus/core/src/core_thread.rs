@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt::Debug, sync::Arc, thread};
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use mysten_metrics::{metered_channel, monitored_scope};
+use mysten_metrics::{metered_channel, monitored_scope, spawn_logged_monitored_task};
 use thiserror::Error;
 use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
 
-use crate::error::{ConsensusError, ConsensusResult};
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
+    error::{ConsensusError, ConsensusResult},
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
@@ -48,14 +48,14 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 
 pub(crate) struct CoreThreadHandle {
     sender: metered_channel::Sender<CoreThreadCommand>,
-    join_handle: thread::JoinHandle<()>,
+    join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl CoreThreadHandle {
-    pub fn stop(self) {
+    pub async fn stop(self) {
         // drop the sender, that will force all the other weak senders to not able to upgrade.
         drop(self.sender);
-        self.join_handle.join().ok();
+        self.join_handle.await.ok();
     }
 }
 
@@ -66,10 +66,10 @@ struct CoreThread {
 }
 
 impl CoreThread {
-    pub fn run(mut self) -> ConsensusResult<()> {
+    pub async fn run(mut self) -> ConsensusResult<()> {
         tracing::debug!("Started core thread");
 
-        while let Some(command) = self.receiver.blocking_recv() {
+        while let Some(command) = self.receiver.recv().await {
             let _scope = monitored_scope("CoreThread::loop");
             self.context.metrics.node_metrics.core_lock_dequeued.inc();
             match command {
@@ -109,16 +109,18 @@ impl ChannelCoreThreadDispatcher {
             receiver,
             context: context.clone(),
         };
-        let join_handle = thread::Builder::new()
-            .name("consensus-core".to_string())
-            .spawn(move || {
-                if let Err(err) = core_thread.run() {
+
+        let join_handle = spawn_logged_monitored_task!(
+            async move {
+                if let Err(err) = core_thread.run().await {
                     if !matches!(err, ConsensusError::Shutdown) {
                         panic!("Fatal error occurred: {err}");
                     }
                 }
-            })
-            .unwrap();
+            },
+            "ConsensusCoreThread"
+        );
+
         // Explicitly using downgraded sender in order to allow sharing the CoreThreadDispatcher but
         // able to shutdown the CoreThread by dropping the original sender.
         let dispatcher = ChannelCoreThreadDispatcher {
@@ -186,6 +188,7 @@ mod test {
         dag_state::DagState,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
+        CommitConsumer,
     };
 
     #[tokio::test]
@@ -207,10 +210,9 @@ mod test {
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
-            sender.clone(),
-            0, // last_processed_index
+            CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
-            store.clone(),
+            store,
         );
         let core = Core::new(
             context.clone(),
@@ -220,7 +222,6 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state,
-            store,
         );
 
         let (core_dispatcher, handle) = ChannelCoreThreadDispatcher::start(core, context);
@@ -234,7 +235,7 @@ mod test {
         assert!(dispatcher_2.add_blocks(vec![]).await.is_ok());
 
         // Now shutdown the dispatcher
-        handle.stop();
+        handle.stop().await;
 
         // Try to send some commands
         assert!(dispatcher_1.add_blocks(vec![]).await.is_err());

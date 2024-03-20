@@ -15,7 +15,7 @@ module sui::sui {
     const ENotSystemAddress: u64 = 1;
 
     #[allow(unused_const)]
-    /// The amount of Mist per Sui token based on the the fact that mist is
+    /// The amount of Mist per Sui token based on the fact that mist is
     /// 10^-9 of a Sui token
     const MIST_PER_SUI: u64 = 1_000_000_000;
 
