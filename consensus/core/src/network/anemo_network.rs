@@ -20,7 +20,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use fastcrypto::traits::KeyPair as _;
 use prometheus::HistogramTimer;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, warn};
@@ -78,7 +77,7 @@ impl AnemoClient {
         };
 
         let authority = self.context.committee.authority(peer);
-        let peer_id = PeerId(authority.network_key.0.into());
+        let peer_id = PeerId(authority.network_key.to_bytes());
         if let Some(peer) = network.peer(peer_id) {
             return Ok(ConsensusRpcClient::new(peer));
         };
@@ -168,7 +167,7 @@ impl<S: NetworkService> AnemoServiceProxy<S> {
             .committee
             .authorities()
             .map(|(index, authority)| {
-                let peer_id = PeerId(authority.network_key.0.into());
+                let peer_id = PeerId(authority.network_key.to_bytes());
                 (peer_id, index)
             })
             .collect();
@@ -296,7 +295,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             .context
             .committee
             .authorities()
-            .map(|(_i, authority)| PeerId(authority.network_key.0.to_bytes()));
+            .map(|(_i, authority)| PeerId(authority.network_key.to_bytes()));
 
         let routes = anemo::Router::new()
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
@@ -377,10 +376,11 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         let addr = own_address
             .to_anemo_address()
             .unwrap_or_else(|op| panic!("{op}: {own_address}"));
+        let private_key_bytes = network_keypair.private_key_bytes();
         let network = loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("consensus")
-                .private_key(network_keypair.copy().private().0.to_bytes())
+                .private_key(private_key_bytes)
                 .config(anemo_config.clone())
                 .outbound_request_layer(outbound_layer.clone())
                 .start(service.clone());
@@ -404,7 +404,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
 
         let mut known_peer_ids = HashMap::new();
         for (_i, authority) in self.context.committee.authorities() {
-            let peer_id = PeerId(authority.network_key.0.to_bytes());
+            let peer_id = PeerId(authority.network_key.to_bytes());
             let peer_address = match authority.address.to_anemo_address() {
                 Ok(addr) => addr,
                 // Validations are performed on addresses so this failure should not happen.
@@ -566,13 +566,13 @@ impl Drop for MetricsResponseHandler {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
-    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
+    use tokio::time::sleep;
 
     use crate::{
         block::BlockRef,
@@ -617,7 +617,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_basics() {
+    async fn anemo_basics() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(
@@ -629,7 +629,7 @@ mod test {
         let client_0 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
         let service_0 = Arc::new(Mutex::new(TestService::new()));
         manager_0
-            .install_service(keys[0].0.copy(), service_0.clone())
+            .install_service(keys[0].0.clone(), service_0.clone())
             .await;
 
         let context_1 = Arc::new(
@@ -641,8 +641,11 @@ mod test {
         let client_1 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
         let service_1 = Arc::new(Mutex::new(TestService::new()));
         manager_1
-            .install_service(keys[1].0.copy(), service_1.clone())
+            .install_service(keys[1].0.clone(), service_1.clone())
             .await;
+
+        // Wait for anemo to initialize.
+        sleep(Duration::from_secs(5)).await;
 
         // Test that servers can receive client RPCs.
         client_0
@@ -676,7 +679,7 @@ mod test {
         let client_4 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_4);
         let service_4 = Arc::new(Mutex::new(TestService::new()));
         manager_4
-            .install_service(keys_4[4].0.copy(), service_4.clone())
+            .install_service(keys_4[4].0.clone(), service_4.clone())
             .await;
 
         // client_4 should not be able to reach service_0 or service_1, because of the

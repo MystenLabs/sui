@@ -351,7 +351,6 @@ mod tests {
 
     use async_trait::async_trait;
     use consensus_config::{local_committee_and_keys, Parameters};
-    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
@@ -441,8 +440,8 @@ mod tests {
         let txn_verifier = NoopTransactionVerifier {};
 
         let own_index = committee.to_authority_index(0).unwrap();
-        let protocol_keypair = keypairs[own_index].1.copy();
-        let network_keypair = keypairs[own_index].0.copy();
+        let protocol_keypair = keypairs[own_index].1.clone();
+        let network_keypair = keypairs[own_index].0.clone();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_consumer = CommitConsumer::new(sender, 0, 0);
@@ -533,8 +532,8 @@ mod tests {
             };
             let txn_verifier = NoopTransactionVerifier {};
 
-            let protocol_keypair = keypairs[index].1.copy();
-            let network_keypair = keypairs[index].0.copy();
+            let protocol_keypair = keypairs[index].1.clone();
+            let network_keypair = keypairs[index].0.clone();
 
             let (sender, receiver) = unbounded_channel();
             let commit_consumer = CommitConsumer::new(sender, 0, 0);

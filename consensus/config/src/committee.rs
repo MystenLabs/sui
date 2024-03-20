@@ -137,10 +137,10 @@ pub struct Authority {
     pub address: Multiaddr,
     /// The authority's hostname, for metrics and logging.
     pub hostname: String,
-    /// The authority's ed25519 publicKey for signing network messages and blocks.
-    pub network_key: NetworkPublicKey,
-    /// The authority's bls public key for random beacon.
+    /// The authority's public key for verifying blocks.
     pub protocol_key: ProtocolPublicKey,
+    /// The authority's ed25519 public key for TSL and as the network identity.
+    pub network_key: NetworkPublicKey,
 }
 
 /// Each authority is uniquely identified by its AuthorityIndex in the Committee.

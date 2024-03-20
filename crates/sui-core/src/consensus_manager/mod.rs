@@ -8,7 +8,7 @@ use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::RegistryService;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
