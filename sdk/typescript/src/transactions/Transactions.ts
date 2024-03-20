@@ -9,8 +9,9 @@ import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { CallArg, Transaction } from './blockData/v2.js';
 import { Argument, TypeTag } from './blockData/v2.js';
+import type { TransactionBlock } from './TransactionBlock.js';
 
-export type { Argument as TransactionArgument };
+export type TransactionArgument = Argument | ((txb: TransactionBlock) => Argument);
 export type { CallArg as TransactionBlockInput };
 
 // Keep in sync with constants in
@@ -66,11 +67,6 @@ export const Transactions = {
 		objects: Input<typeof Argument>[],
 		address: Input<typeof Argument>,
 	): TransactionShape<'TransferObjects'> {
-		// TODO: arguments aren't linked to inputs anymore, so we need to handle this somewhere else
-		// if (address.kind === 'Input' && address.type === 'pure' && typeof address.value !== 'object') {
-		// 	address.value = Inputs.Pure(bcs.Address.serialize(address.value));
-		// }
-
 		return {
 			$kind: 'TransferObjects',
 			TransferObjects: [objects.map((o) => parse(Argument, o)), parse(Argument, address)],
@@ -80,14 +76,6 @@ export const Transactions = {
 		coin: Input<typeof Argument>,
 		amounts: Input<typeof Argument>[],
 	): TransactionShape<'SplitCoins'> {
-		// TODO: arguments aren't linked to inputs anymore, so we need to handle this somewhere else
-		// Handle deprecated usage of `Input.Pure(100)`
-		// amounts.forEach((input) => {
-		// 	if (input.kind === 'Input' && input.type === 'pure' && typeof input.value !== 'object') {
-		// 		input.value = Inputs.Pure(bcs.U64.serialize(input.value));
-		// 	}
-		// });
-
 		return {
 			$kind: 'SplitCoins',
 			SplitCoins: [parse(Argument, coin), amounts.map((o) => parse(Argument, o))],

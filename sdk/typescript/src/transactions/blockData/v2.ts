@@ -14,6 +14,7 @@ import {
 	number,
 	object,
 	optional,
+	record,
 	recursive,
 	string,
 	transform,
@@ -84,6 +85,8 @@ export const Argument = transform(
 		object({ Input: number([integer()]), type: optional(literal('object')) }),
 		object({ Result: number([integer()]) }),
 		object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
+		object({ IntentResult: number([integer()]) }),
+		object({ NestedIntentResult: tuple([number([integer()]), number([integer()])]) }),
 	]),
 	(value) => ({
 		...value,
@@ -95,13 +98,17 @@ export const Argument = transform(
 	| { GasCoin: true }
 	| { Input: number; type?: 'pure' | 'object' }
 	| { Result: number }
-	| { NestedResult: [number, number] },
+	| { NestedResult: [number, number] }
+	| { IntentResult: number }
+	| { NestedIntentResult: [number, number] },
 	// Output
 	| { $kind: 'GasCoin'; GasCoin: true }
 	| { $kind: 'Input'; Input: number; type?: 'pure' }
 	| { $kind: 'Input'; Input: number; type?: 'object' }
 	| { $kind: 'Result'; Result: number }
 	| { $kind: 'NestedResult'; NestedResult: [number, number] }
+	| { $kind: 'IntentResult'; IntentResult: number }
+	| { $kind: 'NestedIntentResult'; NestedIntentResult: [number, number] }
 >;
 
 export type Argument = Output<typeof Argument>;
@@ -160,6 +167,14 @@ const ProgrammableMoveCall = object({
 });
 export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
+export const TransactionIntent = object({
+	name: string(),
+	inputs: record(string(), union([Argument, array(Argument)])),
+	data: record(string(), unknown()),
+});
+
+const TypeTagOption = safeEnum({ None: literal(true), Some: TypeTag });
+
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
 export const Transaction = safeEnum({
 	MoveCall: ProgrammableMoveCall,
@@ -167,11 +182,31 @@ export const Transaction = safeEnum({
 	SplitCoins: tuple([Argument, array(Argument)]),
 	MergeCoins: tuple([Argument, array(Argument)]),
 	Publish: tuple([array(BCSBytes), array(ObjectID)]),
-	MakeMoveVec: tuple([safeEnum({ None: literal(true), Some: TypeTag }), array(Argument)]),
+	MakeMoveVec: tuple([TypeTagOption, array(Argument)]),
 	Upgrade: tuple([array(BCSBytes), array(ObjectID), ObjectID, Argument]),
+	TransactionIntent,
 });
 
-export type Transaction = Output<typeof Transaction>;
+export type Transaction<Arg = Argument> = EnumOutputShape<{
+	MoveCall: {
+		package: string;
+		module: string;
+		function: string;
+		typeArguments: TypeTag[];
+		arguments: Arg[];
+	};
+	TransferObjects: [Arg[], Arg];
+	SplitCoins: [Arg, Arg[]];
+	MergeCoins: [Arg, Arg[]];
+	Publish: [number[][], string[]];
+	MakeMoveVec: [Output<typeof TypeTagOption>, Arg[]];
+	Upgrade: [number[][], string[], string, Arg];
+	TransactionIntent: {
+		name: string;
+		inputs: Record<string, Argument | Argument[]>;
+		data: Record<string, unknown>;
+	};
+}>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
 const ObjectArg = safeEnum({

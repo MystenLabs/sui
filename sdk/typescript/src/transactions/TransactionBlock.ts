@@ -19,7 +19,9 @@ import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
 import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
 
-export type TransactionObjectArgument = Exclude<Argument, { Input: unknown; type?: 'pure' }>;
+export type TransactionObjectArgument =
+	| Exclude<Argument, { Input: unknown; type?: 'pure' }>
+	| ((txb: TransactionBlock) => Exclude<Argument, { Input: unknown; type?: 'pure' }>);
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
@@ -108,6 +110,19 @@ interface BuildOptions {
 	protocolConfig?: ProtocolConfig;
 	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
 	limits?: Limits;
+}
+
+type TransactionBlockFeatures =
+	| 'setGasPrice'
+	| 'setGasBudget'
+	| 'setGasPayment'
+	| 'normalizeInputs'
+	| 'resolveObjectReferences';
+
+interface PrepareFeaturesOptions extends Omit<BuildOptions, 'onlyTransactionKind'> {
+	supportedFeatures?: TransactionBlockFeatures[];
+	supportedIntents?: string[];
+	validate?: boolean;
 }
 
 interface SignOptions extends BuildOptions {
@@ -211,14 +226,14 @@ export class TransactionBlock {
 			enumerable: false,
 			value: createPure((value): Argument => {
 				if (isSerializedBcs(value)) {
-					return this.#input('pure', {
+					return this.#blockData.addInput('pure', {
 						$kind: 'Pure',
 						Pure: Array.from(value.toBytes()),
 					});
 				}
 
 				// TODO: we can also do some deduplication here
-				return this.#input(
+				return this.#blockData.addInput(
 					'pure',
 					is(NormalizedCallArg, value)
 						? parse(NormalizedCallArg, value)
@@ -244,26 +259,15 @@ export class TransactionBlock {
 	}
 
 	/**
-	 * Dynamically create a new input, which is separate from the `input`. This is important
-	 * for generated clients to be able to define unique inputs that are non-overlapping with the
-	 * defined inputs.
-	 *
-	 * For `Uint8Array` type automatically convert the input into a `Pure` CallArg, since this
-	 * is the format required for custom serialization.
-	 *
-	 */
-	#input<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
-		const index = this.#blockData.inputs.length;
-		this.#blockData.inputs.push(arg);
-		return { Input: index, type, $kind: 'Input' as const };
-	}
-
-	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: TransactionObjectInput): TransactionObjectArgument {
+	object(value: TransactionObjectInput): { $kind: 'Input'; Input: number; type?: 'object' } {
+		if (typeof value === 'function') {
+			return this.object(value(this));
+		}
+
 		if (typeof value === 'object' && is(Argument, value)) {
-			return value;
+			return value as { $kind: 'Input'; Input: number; type?: 'object' };
 		}
 
 		const id = getIdFromCallArg(value);
@@ -278,7 +282,7 @@ export class TransactionBlock {
 
 		return inserted
 			? { $kind: 'Input', Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
-			: this.#input(
+			: this.#blockData.addInput(
 					'object',
 					typeof value === 'string'
 						? {
@@ -319,14 +323,20 @@ export class TransactionBlock {
 		return createTransactionResult(index - 1);
 	}
 
-	#normalizeTransactionArgument(
-		arg: TransactionArgument | SerializedBcs<any>,
-	): TransactionArgument {
+	#normalizeTransactionArgument(arg: TransactionArgument | SerializedBcs<any>) {
 		if (isSerializedBcs(arg)) {
 			return this.pure(arg);
 		}
 
-		return arg as TransactionArgument;
+		return this.resolveArgument(arg as TransactionArgument);
+	}
+
+	resolveArgument(arg: TransactionArgument): Argument {
+		if (typeof arg === 'function') {
+			return arg(this);
+		}
+
+		return arg;
 	}
 
 	// Method shorthands:
@@ -337,7 +347,7 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.SplitCoins(
-				typeof coin === 'string' ? this.object(coin) : coin,
+				typeof coin === 'string' ? this.object(coin) : this.resolveArgument(coin),
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
 						? this.pure.u64(amount)
@@ -352,8 +362,8 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.MergeCoins(
-				typeof destination === 'string' ? this.object(destination) : destination,
-				sources.map((src) => (typeof src === 'string' ? this.object(src) : src)),
+				this.object(destination),
+				sources.map((src) => this.object(src)),
 			),
 		);
 	}
@@ -381,7 +391,7 @@ export class TransactionBlock {
 				modules,
 				dependencies,
 				packageId,
-				ticket: typeof ticket === 'string' ? this.object(ticket) : ticket,
+				ticket: this.object(ticket),
 			}),
 		);
 	}
@@ -414,7 +424,7 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.TransferObjects(
-				objects.map((obj) => (typeof obj === 'string' ? this.object(obj) : obj)),
+				objects.map((obj) => this.object(obj)),
 				typeof address === 'string'
 					? this.pure.address(address)
 					: this.#normalizeTransactionArgument(address),
@@ -431,7 +441,7 @@ export class TransactionBlock {
 		return this.add(
 			Transactions.MakeMoveVec({
 				type,
-				objects: objects.map((obj) => (typeof obj === 'string' ? this.object(obj) : obj)),
+				objects: objects.map((obj) => this.object(obj)),
 			}),
 		);
 	}
@@ -450,6 +460,12 @@ export class TransactionBlock {
 	 */
 	serialize() {
 		return JSON.stringify(v1BlockDataFromTransactionBlockState(this.#blockData.snapshot()));
+	}
+
+	async toJSON(options: PrepareFeaturesOptions = {}): Promise<string> {
+		await this.#prepareWithFeatures(options);
+
+		return JSON.stringify(this.#blockData.snapshot());
 	}
 
 	#getConfig(key: keyof typeof LIMITS, { protocolConfig, limits }: BuildOptions) {
@@ -524,9 +540,13 @@ export class TransactionBlock {
 			options.protocolConfig = await options.client.getProtocolConfig();
 		}
 
-		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
-		await plugins.normalizeInputs(this.#blockData);
-		await plugins.resolveObjectReferences(this.#blockData);
+		await this.#prepareWithFeatures({
+			...options,
+			supportedFeatures: options.onlyTransactionKind
+				? ['setGasBudget', 'setGasPayment', 'setGasPrice']
+				: [],
+			validate: true,
+		});
 
 		this.#blockData.inputs.forEach((input, index) => {
 			if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
@@ -537,22 +557,50 @@ export class TransactionBlock {
 				);
 			}
 		});
+	}
 
-		if (!options.onlyTransactionKind) {
+	async #prepareWithFeatures(options: PrepareFeaturesOptions = {}) {
+		const shouldSetGasPrice = !options.supportedFeatures?.includes('setGasPrice');
+		const shouldSetGasBudget = !options.supportedFeatures?.includes('setGasBudget');
+		const needsConfig = shouldSetGasPrice || shouldSetGasBudget;
+
+		if (needsConfig && !options.protocolConfig && !options.limits && options.client) {
+			options.protocolConfig = await options.client.getProtocolConfig();
+		}
+
+		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
+
+		if (!options.supportedFeatures?.includes('normalizeInputs')) {
+			await plugins.normalizeInputs(this.#blockData);
+		}
+
+		if (!options.supportedFeatures?.includes('resolveObjectReferences')) {
+			await plugins.resolveObjectReferences(this.#blockData);
+		}
+
+		if (!options.supportedFeatures?.includes('setGasPrice')) {
 			await plugins.setGasPrice(this.#blockData);
+		}
 
+		if (shouldSetGasBudget) {
 			await plugins.setGasBudget(this.#blockData, {
 				maxTxGas: this.#getConfig('maxTxGas', options),
 				maxTxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
 			});
+		}
 
+		if (shouldSetGasPrice) {
 			await plugins.setGasPayment(this.#blockData, {
 				maxGasObjects: this.#getConfig('maxGasObjects', options),
 			});
 		}
 
-		await plugins.validate(this.#blockData, {
-			maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
-		});
+		await plugins.resolveUnsupportedIntents(this.#blockData, options.supportedIntents ?? []);
+
+		if (options.validate) {
+			await plugins.validate(this.#blockData, {
+				maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
+			});
+		}
 	}
 }

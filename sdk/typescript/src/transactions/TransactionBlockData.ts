@@ -9,7 +9,13 @@ import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { transactionBlockStateFromV1BlockData } from './blockData/v1.js';
 import type { SerializedTransactionDataBuilderV1 } from './blockData/v1.js';
-import type { CallArg, GasData, Transaction, TransactionExpiration } from './blockData/v2.js';
+import type {
+	Argument,
+	CallArg,
+	GasData,
+	Transaction,
+	TransactionExpiration,
+} from './blockData/v2.js';
 import { TransactionBlockState } from './blockData/v2.js';
 import { hashTypedData } from './hash.js';
 
@@ -131,12 +137,17 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		};
 		onlyTransactionKind?: boolean;
 	} = {}) {
-		// TODO validate that inputs are actually resolved
+		// TODO validate that inputs and intents are actually resolved
 		const inputs = this.inputs as Extract<CallArg, { Object: unknown } | { Pure: unknown }>[];
+		const transactions = this.transactions as Extract<
+			Transaction<Exclude<Argument, { IntentResult: unknown } | { NestedIntentResult: unknown }>>,
+			{ Upgrade: unknown }
+		>[];
+
 		const kind = {
 			ProgrammableTransaction: {
 				inputs,
-				transactions: this.transactions,
+				transactions,
 			},
 		};
 
@@ -176,7 +187,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			kind: {
 				ProgrammableTransaction: {
 					inputs,
-					transactions: this.transactions,
+					transactions,
 				},
 			},
 		};
@@ -185,6 +196,93 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			{ V1: transactionData },
 			{ maxSize: maxSizeBytes },
 		).toBytes();
+	}
+
+	addInput<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
+		const index = this.inputs.length;
+		this.inputs.push(arg);
+		return { Input: index, type, $kind: 'Input' as const };
+	}
+
+	mapArguments(fn: (arg: Argument) => Argument) {
+		for (const tx of this.transactions) {
+			switch (tx.$kind) {
+				case 'MoveCall':
+					tx.MoveCall.arguments = tx.MoveCall.arguments.map((arg) => fn(arg));
+					break;
+				case 'TransferObjects':
+					tx.TransferObjects[0] = tx.TransferObjects[0].map((arg) => fn(arg));
+					tx.TransferObjects[1] = fn(tx.TransferObjects[1]);
+					break;
+				case 'SplitCoins':
+					tx.SplitCoins[0] = fn(tx.SplitCoins[0]);
+					tx.SplitCoins[1] = tx.SplitCoins[1].map((arg) => fn(arg));
+					break;
+				case 'MergeCoins':
+					tx.MergeCoins[0] = fn(tx.MergeCoins[0]);
+					tx.MergeCoins[1] = tx.MergeCoins[1].map((arg) => fn(arg));
+					break;
+				case 'MakeMoveVec':
+					tx.MakeMoveVec = [tx.MakeMoveVec[0], tx.MakeMoveVec[1].map((arg) => fn(arg))];
+					break;
+				case 'Upgrade':
+					tx.Upgrade[3] = fn(tx.Upgrade[3]);
+					break;
+				case 'TransactionIntent':
+					const inputs = tx.TransactionIntent.inputs;
+					tx.TransactionIntent.inputs = {};
+
+					for (const [key, value] of Object.entries(inputs)) {
+						tx.TransactionIntent.inputs[key] = Array.isArray(value)
+							? value.map((arg) => fn(arg))
+							: fn(value);
+					}
+
+					break;
+				case 'Publish':
+					break;
+				default:
+					throw new Error(`Unexpected transaction kind: ${(tx as { $kind: unknown }).$kind}`);
+			}
+		}
+	}
+
+	replaceTransaction(index: number, replacement: Transaction | Transaction[]) {
+		if (!Array.isArray(replacement)) {
+			this.transactions[index] = replacement;
+			return;
+		}
+
+		const sizeDiff = replacement.length - 1;
+		this.transactions.splice(index, 1, ...replacement);
+
+		if (sizeDiff !== 0) {
+			this.mapArguments((arg) => {
+				switch (arg.$kind) {
+					case 'IntentResult':
+						if (arg.IntentResult > index) {
+							arg.IntentResult += sizeDiff;
+						}
+						break;
+					case 'Result':
+						if (arg.Result > index) {
+							arg.Result += sizeDiff;
+						}
+						break;
+					case 'NestedIntentResult':
+						if (arg.NestedIntentResult[0] > index) {
+							arg.NestedIntentResult[0] += sizeDiff;
+						}
+						break;
+					case 'NestedResult':
+						if (arg.NestedResult[0] > index) {
+							arg.NestedResult[0] += sizeDiff;
+						}
+						break;
+				}
+				return arg;
+			});
+		}
 	}
 
 	getDigest() {
