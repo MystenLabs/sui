@@ -7,7 +7,6 @@ use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base64, Encoding};
 use move_core_types::account_address::AccountAddress;
 use serde::de::DeserializeOwned;
-use sui_json_rpc::name_service::NameServiceConfig;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
@@ -36,7 +35,7 @@ use super::{
     type_filter::ExactTypeFilter,
 };
 use crate::{
-    config::ServiceConfig, context_data::db_data_provider::PgManager, data::Db, error::Error,
+    config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
     mutation::Mutation,
 };
 
@@ -368,18 +367,18 @@ impl Query {
         ctx: &Context<'_>,
         domain: Domain,
     ) -> Result<Option<Address>> {
-        Ok(SuinsRegistration::resolve_to_record(
-            ctx.data_unchecked::<Db>(),
-            ctx.data_unchecked::<NameServiceConfig>(),
-            &domain,
+        Ok(
+            SuinsRegistration::resolve_to_record(
+                ctx, &domain, /* checkpoint_viewed_at */ None,
+            )
+            .await
+            .extend()?
+            .and_then(|r| r.target_address)
+            .map(|a| Address {
+                address: a.into(),
+                checkpoint_viewed_at: None,
+            }),
         )
-        .await
-        .extend()?
-        .and_then(|r| r.target_address)
-        .map(|a| Address {
-            address: a.into(),
-            checkpoint_viewed_at: None,
-        }))
     }
 
     /// The coin metadata associated with the given coin type.
