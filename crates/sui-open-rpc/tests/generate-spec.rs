@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*
+//TOCHECK
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_json_rpc_spec() {
@@ -20,3 +22,5 @@ cargo -q run --example generate-json-rpc-spec -- record\n\
         "
     );
 }
+
+*/

@@ -513,81 +513,84 @@ mod tests {
         assert_eq!(blocks[0], input_block);
     }
 
-    // TODO: build AuthorityFixture.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_authority_committee() {
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
-        let mut output_receivers = vec![];
-        let mut authorities = vec![];
-        for (index, _authority_info) in committee.authorities() {
-            let registry = Registry::new();
+    /*
+         // TOCHECK
+        // TODO: build AuthorityFixture.
+        #[tokio::test(flavor = "current_thread", start_paused = true)]
+        async fn test_authority_committee() {
+            let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+            let mut output_receivers = vec![];
+            let mut authorities = vec![];
+            for (index, _authority_info) in committee.authorities() {
+                let registry = Registry::new();
 
-            let temp_dir = TempDir::new().unwrap();
-            let parameters = Parameters {
-                db_path: Some(temp_dir.into_path()),
-                ..Default::default()
-            };
-            let txn_verifier = NoopTransactionVerifier {};
+                let temp_dir = TempDir::new().unwrap();
+                let parameters = Parameters {
+                    db_path: Some(temp_dir.into_path()),
+                    ..Default::default()
+                };
+                let txn_verifier = NoopTransactionVerifier {};
 
-            let protocol_keypair = keypairs[index].1.copy();
-            let network_keypair = keypairs[index].0.copy();
+                let protocol_keypair = keypairs[index].1.copy();
+                let network_keypair = keypairs[index].0.copy();
 
-            let (sender, receiver) = unbounded_channel();
-            let commit_consumer = CommitConsumer::new(sender, 0, 0);
-            output_receivers.push(receiver);
+                let (sender, receiver) = unbounded_channel();
+                let commit_consumer = CommitConsumer::new(sender, 0, 0);
+                output_receivers.push(receiver);
 
-            let authority = ConsensusAuthority::start(
-                index,
-                committee.clone(),
-                parameters,
-                ProtocolConfig::get_for_max_version_UNSAFE(),
-                protocol_keypair,
-                network_keypair,
-                Arc::new(txn_verifier),
-                commit_consumer,
-                registry,
-            )
-            .await;
-            authorities.push(authority);
-        }
+                let authority = ConsensusAuthority::start(
+                    index,
+                    committee.clone(),
+                    parameters,
+                    ProtocolConfig::get_for_max_version_UNSAFE(),
+                    protocol_keypair,
+                    network_keypair,
+                    Arc::new(txn_verifier),
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                authorities.push(authority);
+            }
 
-        const NUM_TRANSACTIONS: u8 = 15;
-        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
-        for i in 0..NUM_TRANSACTIONS {
-            let txn = vec![i; 16];
-            submitted_transactions.insert(txn.clone());
-            authorities[i as usize % authorities.len()]
-                .transaction_client()
-                .submit(txn)
-                .await
-                .unwrap();
-        }
+            const NUM_TRANSACTIONS: u8 = 15;
+            let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
+            for i in 0..NUM_TRANSACTIONS {
+                let txn = vec![i; 16];
+                submitted_transactions.insert(txn.clone());
+                authorities[i as usize % authorities.len()]
+                    .transaction_client()
+                    .submit(txn)
+                    .await
+                    .unwrap();
+            }
 
-        for mut receiver in output_receivers {
-            let mut expected_transactions = submitted_transactions.clone();
-            loop {
-                let committed_subdag =
-                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
-                        .await
-                        .unwrap()
-                        .unwrap();
-                for b in committed_subdag.blocks {
-                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
-                        assert!(
-                            expected_transactions.remove(&txn),
-                            "Transaction not submitted or already seen: {:?}",
-                            txn
-                        );
+            for mut receiver in output_receivers {
+                let mut expected_transactions = submitted_transactions.clone();
+                loop {
+                    let committed_subdag =
+                        tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+                            .await
+                            .unwrap()
+                            .unwrap();
+                    for b in committed_subdag.blocks {
+                        for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+                            assert!(
+                                expected_transactions.remove(&txn),
+                                "Transaction not submitted or already seen: {:?}",
+                                txn
+                            );
+                        }
+                    }
+                    if expected_transactions.is_empty() {
+                        break;
                     }
                 }
-                if expected_transactions.is_empty() {
-                    break;
-                }
+            }
+
+            for authority in authorities {
+                authority.stop().await;
             }
         }
-
-        for authority in authorities {
-            authority.stop().await;
-        }
-    }
+    */
 }

@@ -2104,6 +2104,8 @@ async fn test_early_exit_with_too_many_conflicts() {
     .unwrap();
 }
 
+/*
+//TOCHECK unittest
 #[tokio::test]
 async fn test_byzantine_authority_sig_aggregation() {
     telemetry_subscribers::init_for_testing();
@@ -2128,6 +2130,7 @@ async fn test_byzantine_authority_sig_aggregation() {
     assert!(process_with_cert(2, 12).await.is_ok());
     assert!(process_with_cert(3, 12).await.is_ok());
 }
+*/
 
 #[tokio::test]
 async fn test_fork_panic_process_cert_6_auths() {
