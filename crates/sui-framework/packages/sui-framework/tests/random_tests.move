@@ -22,18 +22,14 @@ module sui::random_tests {
 
     #[test]
     fun random_test_basic_flow() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let scenario = test_scenario::begin(@0x0);
 
-        random::create_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, @0x0);
-
-        let mut random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = scenario.take_shared<Random>();
         update_randomness_state_for_testing(
             &mut random_state,
             0,
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario),
+            scenario.ctx(),
         );
 
         let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
@@ -591,95 +587,89 @@ module sui::random_tests {
         let _output = generate_u128_in_range(&mut gen, 511, 500);
 
         test_scenario::return_shared(random_state);
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 
     #[test]
     fun random_tests_update_after_epoch_change() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(@0x0);
+        random::create_for_testing(scenario.ctx());
+        scenario.next_tx(@0x0);
 
-        random::create_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, @0x0);
-
-        let mut random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = scenario.take_shared<Random>();
         update_randomness_state_for_testing(
             &mut random_state,
             0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
         update_randomness_state_for_testing(
             &mut random_state,
             1,
             vector[4, 5, 6, 7],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
 
-        test_scenario::next_epoch(scenario, @0x0);
+        scenario.next_epoch(@0x0);
 
         update_randomness_state_for_testing(
             &mut random_state,
             0,
             vector[8, 9, 10, 11],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
 
         test_scenario::return_shared(random_state);
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 
     #[test]
     #[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
     fun random_tests_duplicate() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(@0x0);
+        random::create_for_testing(scenario.ctx());
+        scenario.next_tx(@0x0);
 
-        random::create_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, @0x0);
-
-        let mut random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = scenario.take_shared<Random>();
         update_randomness_state_for_testing(
             &mut random_state,
             0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
         update_randomness_state_for_testing(
             &mut random_state,
             0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
 
         test_scenario::return_shared(random_state);
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 
     #[test]
     #[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
     fun random_tests_out_of_order() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(@0x0);
+        random::create_for_testing(scenario.ctx());
+        scenario.next_tx(@0x0);
 
-        random::create_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, @0x0);
-
-        let mut random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = scenario.take_shared<Random>();
         update_randomness_state_for_testing(
             &mut random_state,
             0,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
         update_randomness_state_for_testing(
             &mut random_state,
             3,
             vector[0, 1, 2, 3],
-            test_scenario::ctx(scenario),
+            scenario.ctx()
         );
 
         test_scenario::return_shared(random_state);
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 }

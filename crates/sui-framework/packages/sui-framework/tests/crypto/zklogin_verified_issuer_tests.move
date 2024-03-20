@@ -32,18 +32,17 @@ module sui::zklogin_verified_issuer_tests {
 
         assert!(check_zklogin_issuer(address,  address_seed, &iss), 0);
 
-        let mut scenario_val = test_scenario::begin(address);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(address);
         {
-            verify_zklogin_issuer(address_seed, iss, test_scenario::ctx(scenario));
+            verify_zklogin_issuer(address_seed, iss, scenario.ctx());
         };
-        test_scenario::next_tx(scenario, address);
+        scenario.next_tx(address);
         {
-            assert!(test_scenario::has_most_recent_for_sender<VerifiedIssuer>(scenario), 0);
-            delete(test_scenario::take_from_sender<VerifiedIssuer>(scenario));
-            assert!(!test_scenario::has_most_recent_for_sender<VerifiedIssuer>(scenario), 1);
+            assert!(scenario.has_most_recent_for_sender<VerifiedIssuer>(), 0);
+            delete(scenario.take_from_sender<VerifiedIssuer>());
+            assert!(!scenario.has_most_recent_for_sender<VerifiedIssuer>(), 1);
         };
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 
     #[test]
@@ -52,11 +51,10 @@ module sui::zklogin_verified_issuer_tests {
         let other_address = @0x1;
         let iss = utf8(b"https://accounts.google.com");
         let address_seed = 3006596378422062745101035755700472756930796952630484939867684134047976874601u256;
-        let mut scenario_val = test_scenario::begin(other_address);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(other_address);
         {
-            verify_zklogin_issuer(address_seed, iss, test_scenario::ctx(scenario));
+            verify_zklogin_issuer(address_seed, iss, scenario.ctx());
         };
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 }

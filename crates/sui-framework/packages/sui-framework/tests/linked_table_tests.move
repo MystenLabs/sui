@@ -7,14 +7,14 @@ module sui::linked_table_tests {
         Self,
         LinkedTable,
     };
-    use sui::test_scenario as ts;
+    use sui::test_scenario;
     use sui::tx_context::TxContext;
 
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         check_ordering(&table, &vector[]);
         // add fields
         table.push_back(b"hello", 0);
@@ -63,44 +63,44 @@ module sui::linked_table_tests {
         assert!(!table.contains(b"hello"), 0);
         assert!(!table.contains(b"?"), 0);
         assert!(table.is_empty(), 0);
-        ts::end(scenario);
+        scenario.end();
         table.destroy_empty();
     }
 
     #[test]
     fun front_back_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let table = linked_table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let table = linked_table::new<u64, u64>(scenario.ctx());
         assert!(table.front().is_none(), 0);
         assert!(table.back().is_none(), 0);
-        ts::end(scenario);
+        scenario.end();
         table.drop()
     }
 
     #[test]
     fun push_front_singleton() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         check_ordering(&table, &vector[]);
         table.push_front(b"hello", 0);
         assert!(table.contains(b"hello"), 0);
         check_ordering(&table, &vector[b"hello"]);
-        ts::end(scenario);
+        scenario.end();
         table.drop()
     }
 
     #[test]
     fun push_back_singleton() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         check_ordering(&table, &vector[]);
         table.push_back(b"hello", 0);
         assert!(table.contains(b"hello"), 0);
         check_ordering(&table, &vector[b"hello"]);
-        ts::end(scenario);
+        scenario.end();
         table.drop()
     }
 
@@ -108,8 +108,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun push_front_duplicate() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         table.push_front(b"hello", 0);
         table.push_front(b"hello", 0);
         abort 42
@@ -119,8 +119,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun push_back_duplicate() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         table.push_back(b"hello", 0);
         table.push_back(b"hello", 0);
         abort 42
@@ -130,8 +130,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun push_mixed_duplicate() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         table.push_back(b"hello", 0);
         table.push_front(b"hello", 0);
         abort 42
@@ -141,8 +141,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let table = linked_table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let table = linked_table::new<u64, u64>(scenario.ctx());
         &table[0];
         abort 42
     }
@@ -151,8 +151,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new<u64, u64>(scenario.ctx());
         &mut table[0];
         abort 42
     }
@@ -161,8 +161,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new<u64, u64>(scenario.ctx());
         table.remove(0);
         abort 42
     }
@@ -171,8 +171,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = linked_table::ETableIsEmpty)]
     fun pop_front_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new<u64, u64>(scenario.ctx());
         table.pop_front();
         abort 42
     }
@@ -181,8 +181,8 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = linked_table::ETableIsEmpty)]
     fun pop_back_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new<u64, u64>(scenario.ctx());
         table.pop_back();
         abort 42
     }
@@ -191,42 +191,42 @@ module sui::linked_table_tests {
     #[expected_failure(abort_code = linked_table::ETableNotEmpty)]
     fun destroy_non_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         table.push_back(0, 0);
         table.destroy_empty();
-        ts::end(scenario);
+        scenario.end();
     }
 
     #[test]
     fun sanity_check_contains() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         assert!(!table.contains(0), 0);
         table.push_back(0, 0);
         assert!(table.contains<u64, u64>(0), 0);
         assert!(!table.contains<u64, u64>(1), 0);
-        ts::end(scenario);
+        scenario.end();
         table.drop();
     }
 
     #[test]
     fun sanity_check_drop() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         table.push_back(0, 0);
         assert!(table.length() == 1, 0);
-        ts::end(scenario);
+        scenario.end();
         table.drop();
     }
 
     #[test]
     fun sanity_check_size() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = linked_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = linked_table::new(scenario.ctx());
         assert!(table.is_empty(), 0);
         assert!(table.length() == 0, 0);
         table.push_back(0, 0);
@@ -235,15 +235,15 @@ module sui::linked_table_tests {
         table.push_back(1, 0);
         assert!(!table.is_empty(), 0);
         assert!(table.length() == 2, 0);
-        ts::end(scenario);
+        scenario.end();
         table.drop();
     }
 
     #[test]
     fun test_all_orderings() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let ctx = ts::ctx(&mut scenario);
+        let mut scenario = test_scenario::begin(sender);
+        let ctx = scenario.ctx();
         let keys = vector[b"a", b"b", b"c"];
         let values = vector[3, 2, 1];
         let all_bools = vector[
@@ -270,7 +270,7 @@ module sui::linked_table_tests {
             };
             i = i + 1;
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(

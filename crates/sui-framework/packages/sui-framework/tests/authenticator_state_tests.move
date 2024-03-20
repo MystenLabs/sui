@@ -21,8 +21,7 @@ module sui::authenticator_state_tests {
 
     #[test]
     fun authenticator_state_tests_basic() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(@0x0);
 
         authenticator_state::create_for_testing(scenario.ctx());
         scenario.next_tx(@0x0);
@@ -62,13 +61,12 @@ module sui::authenticator_state_tests {
         assert!(&recorded_jwks[0] == &jwk1, 0);
 
         test_scenario::return_shared(auth_state);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun authenticator_state_tests_deduplication() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(@0x0);
 
         authenticator_state::create_for_testing(scenario.ctx());
         scenario.next_tx(@0x0);
@@ -101,13 +99,12 @@ module sui::authenticator_state_tests {
         assert!(&recorded_jwks[2] == &jwk4, 0);
 
         test_scenario::return_shared(auth_state);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun authenticator_state_tests_expiry_edge_cases() {
-        let mut scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(@0x0);
 
         authenticator_state::create_for_testing(scenario.ctx());
         scenario.next_tx(@0x0);
@@ -173,6 +170,6 @@ module sui::authenticator_state_tests {
         assert!(&recorded_jwks[2] == &jwk6, 0);
 
         test_scenario::return_shared(auth_state);
-        scenario_val.end();
+        scenario.end();
     }
 }
