@@ -41,12 +41,10 @@ impl WriteApiServer for WriteApi {
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        let fast_path_options = SuiTransactionBlockResponseOptions::full_content();
         let sui_transaction_response = self
             .fullnode
-            .execute_transaction_block(tx_bytes, signatures, Some(fast_path_options), request_type)
+            .execute_transaction_block(tx_bytes, signatures, options.clone(), request_type)
             .await?;
-
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,
             options: options.unwrap_or_default(),
