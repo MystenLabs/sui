@@ -519,6 +519,13 @@ impl DagState {
     /// After each flush, DagState becomes persisted in storage and it expected to recover
     /// all internal states from storage after restarts.
     pub(crate) fn flush(&mut self) {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["DagState::flush"])
+            .start_timer();
         // Flush buffered data to storage.
         let blocks = std::mem::take(&mut self.blocks_to_write);
         let commits = std::mem::take(&mut self.commits_to_write);

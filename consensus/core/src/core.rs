@@ -126,6 +126,13 @@ impl Core {
     }
 
     fn recover(mut self) -> Self {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::recover"])
+            .start_timer();
         // Recover the last available quorum to correctly advance the threshold clock.
         let last_quorum = self.dag_state.read().last_quorum();
         self.add_accepted_blocks(last_quorum);
@@ -150,6 +157,13 @@ impl Core {
         blocks: Vec<VerifiedBlock>,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_blocks");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::add_blocks"])
+            .start_timer();
 
         // Try to accept them via the block manager
         let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
@@ -216,6 +230,13 @@ impl Core {
     /// or earlier round, then no block is created and None is returned.
     fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::try_new_block"])
+            .start_timer();
 
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
@@ -275,6 +296,11 @@ impl Core {
         let serialized = signed_block
             .serialize()
             .expect("Block serialization failed.");
+        self.context
+            .metrics
+            .node_metrics
+            .block_size
+            .observe(serialized.len() as f64);
         // Unnecessary to verify own blocks.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
 
@@ -301,11 +327,26 @@ impl Core {
 
         info!("Created block {}", verified_block);
 
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposed_total
+            .with_label_values(&[&force.to_string()])
+            .inc();
+
         Some(verified_block)
     }
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG.
     fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::try_commit"])
+            .start_timer();
+
         // TODO: Add optimization to abort early without quorum for a round.
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
