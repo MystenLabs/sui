@@ -1233,9 +1233,13 @@ impl DependencyGraph {
             .as_table_mut()
             .unwrap();
 
-        move_table["dependencies"] = value(deps);
+        if let Some(deps) = deps {
+            move_table["dependencies"] = value(deps);
+        }
 
-        // TODO: pass mut doc to dependencies
+        if let Some(dev_deps) = dev_deps {
+            move_table["dev-dependencies"] = value(dev_deps);
+        }
 
         let move_package_array = doc
             .entry("move")
@@ -1260,15 +1264,21 @@ impl DependencyGraph {
             }
 
             writeln!(writer, "\n[[move.package]]")?;
-
             writeln!(writer, "name = {}", str_escape(id.as_str())?)?;
             writeln!(writer, "source = {}", PackageTOML(pkg))?;
             if let Some(version) = &pkg.version {
                 writeln!(writer, "version = {}", str_escape(version.as_str())?)?;
             }
 
-            self.write_dependencies_to_lock(*id, &mut writer)?;
-            // TODO: pass mut doc to dependencies
+            let (deps, dev_deps) = self.write_dependencies_to_lock(*id, &mut writer)?;
+
+            if let Some(deps) = deps {
+                package["dependencies"] = value(deps);
+            }
+
+            if let Some(dev_deps) = dev_deps {
+                package["dev-dependencies"] = value(dev_deps);
+            }
 
             move_package_array.push(package);
         }
@@ -1286,8 +1296,10 @@ impl DependencyGraph {
     fn write_dependencies_to_lock<W: Write>(
         &self,
         id: PackageIdentifier,
-        writer: &mut W,
-    ) -> Result<(Array, Array)> {
+        unused_writer: &mut W, // TODO FIXME delete
+    ) -> Result<(Option<Value>, Option<Value>)> {
+        use fmt::Write;
+
         let mut deps: Vec<_> = self
             .package_graph
             .edges(id)
@@ -1299,103 +1311,41 @@ impl DependencyGraph {
         deps.sort_by_key(|(dep, pkg)| (dep.mode, *pkg));
         let mut deps = deps.into_iter().peekable();
 
-        //////////////// END /////////////////////
-
-        let mut my_writer = String::new();
-
-        let mut dependencies = Array::new();
-        let mut dev_dependencies = Array::new();
-
-        /*
-
-
-            // Iterate over dependencies with mode "Always"
-            if let Some((
-                Dependency {
-                    mode: DependencyMode::Always,
-                    ..
-                },
-                _,
-            )) = deps.peek()
-            {
-                writeln!(writer, "\ndependencies = [")?;
-                while let Some((
-                    dep @ Dependency {
-                        mode: DependencyMode::Always,
-                        ..
-                    },
-                    pkg,
-                )) = deps.peek()
-                {
-                    writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
-                    // {
-                    // name = name
-                    // digest = digest
-                    // addr_subst = subst
-                    // }
-                    let table_string = format!("{}", DependencyTOML(*pkg, dep));
-                    let table_value = table_string.parse::<Value>().expect("fail"); // TODO better
-                    dependencies.push(table_value);
-                    deps.next();
-                }
-                writeln!(writer, "]")?;
-            }
-
-            // Iterate over dependencies with mode "DevOnly"
-            /*
-                if let Some((
-                    Dependency {
-                        mode: DependencyMode::DevOnly,
-                        ..
-                    },
-                    _,
-                )) = deps.peek()
-                {
-                    writeln!(writer, "\ndev-dependencies = [")?;
-                    while let Some((
-                        dep @ Dependency {
-                            mode: DependencyMode::DevOnly,
-                            ..
-                        },
-                        pkg,
-                    )) = deps.peek()
-                    {
-                        writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
-                        deps.next();
-                    }
-                    writeln!(writer, "]")?;
-            }
-            */
-
-            //////////////// END /////////////////////
-        */
-        use std::fmt::Write;
         macro_rules! write_deps {
-            ($mode: pat, $label: literal) => {
+            ($mode: pat, $label: literal, $writer: expr) => {
                 if let Some((Dependency { mode: $mode, .. }, _)) = deps.peek() {
-                    writeln!(writer, "\n{} = [", $label)?;
-                    writeln!(my_writer, "[")?;
+                    writeln!($writer, "[")?;
                     while let Some((dep @ Dependency { mode: $mode, .. }, pkg)) = deps.peek() {
-                        writeln!(writer, "  {},", DependencyTOML(*pkg, dep))?;
-                        writeln!(my_writer, "  {},", DependencyTOML(*pkg, dep))?;
+                        writeln!($writer, "  {},", DependencyTOML(*pkg, dep))?;
                         deps.next();
                     }
-                    writeln!(writer, "]")?;
-                    write!(my_writer, "]")?;
+                    write!($writer, "]")?;
                 }
             };
         }
 
-        write_deps!(DependencyMode::Always, "dependencies");
-        write_deps!(DependencyMode::DevOnly, "dev-dependencies");
+        let mut dependencies = String::new();
+        write_deps!(DependencyMode::Always, "dependencies", dependencies);
+        let mut dev_dependencies = String::new();
+        write_deps!(
+            DependencyMode::DevOnly,
+            "dev-dependencies",
+            dev_dependencies
+        );
 
-        println!("content: -->{}<--", my_writer);
-        if !my_writer.is_empty() {
-            let formatted_array_table_value = my_writer.parse::<Value>().expect("x");
-            println!("XXX {}", formatted_array_table_value);
+        let mut dependencies_toml = None;
+        if !dependencies.is_empty() {
+            dependencies_toml = Some(dependencies.parse::<Value>().expect("x"));
+            // println!("dep_toml {}", dependencies_toml);
         }
 
-        Ok((dependencies, dev_dependencies))
+        let mut dev_dependencies_toml = None;
+        if !dev_dependencies.is_empty() {
+            dev_dependencies_toml = Some(dependencies.parse::<Value>().expect("x"));
+            // println!("dev_dep_toml {}", dev_dependencies_toml);
+        }
+
+        Ok((dependencies_toml, dev_dependencies_toml))
     }
 
     /// Returns packages in the graph in topological order (a package is ordered before its
