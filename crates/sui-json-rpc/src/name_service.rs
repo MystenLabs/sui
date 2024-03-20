@@ -91,6 +91,7 @@ impl Domain {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub struct NameServiceConfig {
     pub package_address: SuiAddress,
     pub registry_id: ObjectID,
