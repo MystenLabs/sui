@@ -403,8 +403,7 @@ impl ResponseHandler for MetricsCallbackHandler {
 
 impl Drop for MetricsCallbackHandler {
     fn drop(&mut self) {
-        let elapsed = self.start.elapsed().as_millis() as u64;
-        self.metrics.query_latency(elapsed);
+        self.metrics.query_latency(self.start.elapsed());
         self.metrics.request_metrics.inflight_requests.dec();
     }
 }
