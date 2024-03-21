@@ -61,7 +61,7 @@ describe('GraphQL SuiClient compatibility', () => {
 	test('getRpcApiVersion', async () => {
 		const version = await graphQLClient!.getRpcApiVersion();
 
-		expect(version?.match(/^\d+.\d+.\d+$/)).not.toBeNull();
+		expect(version?.match(/^\d+.\d+.\d+-[a-z0-9]{40}$/)).not.toBeNull();
 	});
 
 	test('getCoins', async () => {
