@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
@@ -143,7 +144,7 @@ impl CommitObserver {
                 .metrics
                 .node_metrics
                 .block_commit_latency
-                .observe(latency_ms as f64);
+                .observe(Duration::from_millis(latency_ms).as_secs_f64());
             self.context
                 .metrics
                 .node_metrics

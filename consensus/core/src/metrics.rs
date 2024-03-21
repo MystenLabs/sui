@@ -11,6 +11,11 @@ use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
+const COMMITTED_BLOCKS_BUCKETS: &[f64] = &[
+    1.0, 2.0, 4.0, 8.0, 10.0, 20.0, 40.0, 80.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1000.0, 2000.0,
+    3000.0,
+];
+
 const SCOPE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05,
     0.1, // starts from 1μs, 50μs, 100μs...
@@ -109,6 +114,7 @@ impl NodeMetrics {
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposed: register_int_counter_vec_with_registry!(
@@ -132,6 +138,7 @@ impl NodeMetrics {
             blocks_per_commit_count: register_histogram_with_registry!(
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
+                COMMITTED_BLOCKS_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
