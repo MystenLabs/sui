@@ -76,12 +76,14 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         timeout: Duration,
     ) -> ConsensusResult<BlockStream>;
 
-    /// Fetches serialized `SignedBlock`s from a peer.
     // TODO: add a parameter for maximum total size of blocks returned.
+    /// Fetches serialized `SignedBlock`s from a peer. It also might return additional ancestor blocks
+    /// of the requested blocks according to the provided `highest_accepted_rounds`.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 }
@@ -111,6 +113,7 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>>;
 }
 

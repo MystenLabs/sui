@@ -107,6 +107,9 @@ pub enum ConsensusError {
     #[error("Network error: {0:?}")]
     NetworkError(String),
 
+    #[error("Request timeout: {0:?}")]
+    NetworkRequestTimeout(String),
+
     #[error("Consensus has shut down!")]
     Shutdown,
 }
