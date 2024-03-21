@@ -173,7 +173,7 @@ Create an empty <code><a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">V
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">empty</a>&lt;K: <b>copy</b>, V&gt;(): <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt; {
-    <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>() }
+    <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
 </code></pre>
 
@@ -252,7 +252,7 @@ Pop the most recently inserted entry from the map. Aborts if the map is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_pop">pop</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;): (K, V) {
-    <b>assert</b>!(!<a href="../move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&self.contents), <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>);
+    <b>assert</b>!(!self.contents.<a href="../sui-framework/vec_map.md#0x2_vec_map_is_empty">is_empty</a>(), <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>);
     <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_Entry">Entry</a> { key, value } = self.contents.pop_back();
     (key, value)
 }
@@ -471,7 +471,7 @@ The output keys and values are stored in insertion order, *not* sorted by key.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_into_keys_values">into_keys_values</a>&lt;K: <b>copy</b>, V&gt;(self: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;V&gt;) {
     <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a> { <b>mut</b> contents } = self;
     // reverse the <a href="../move-stdlib/vector.md#0x1_vector">vector</a> so the output keys and values will appear in insertion order
-    <a href="../move-stdlib/vector.md#0x1_vector_reverse">vector::reverse</a>(&<b>mut</b> contents);
+    contents.reverse();
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = contents.length();
     <b>let</b> <b>mut</b> keys = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];

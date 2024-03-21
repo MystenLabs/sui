@@ -100,7 +100,7 @@ Create an empty <code><a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">V
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b> + drop&gt;(): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
-    <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>() }
+    <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
 </code></pre>
 
@@ -125,7 +125,7 @@ Create a singleton <code><a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b> + drop&gt;(key: K): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
-    <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector_singleton">vector::singleton</a>(key) }
+    <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[key] }
 }
 </code></pre>
 

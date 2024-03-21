@@ -239,7 +239,7 @@ Make an <code><a href="../sui-framework/object.md#0x2_object_ID">ID</a></code> f
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../sui-framework/object.md#0x2_object_ID">ID</a> {
-    <a href="../sui-framework/object.md#0x2_object_id_from_address">id_from_address</a>(address::from_bytes(bytes))
+    address::from_bytes(bytes).to_id()
 }
 </code></pre>
 

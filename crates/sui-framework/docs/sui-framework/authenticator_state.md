@@ -359,8 +359,8 @@ Sender is not @0x0 the system address.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_string_bytes_lt">string_bytes_lt</a>(a: &String, b: &String): bool {
-    <b>let</b> a_bytes = <a href="../move-stdlib/string.md#0x1_string_bytes">string::bytes</a>(a);
-    <b>let</b> b_bytes = <a href="../move-stdlib/string.md#0x1_string_bytes">string::bytes</a>(b);
+    <b>let</b> a_bytes = a.bytes();
+    <b>let</b> b_bytes = b.bytes();
 
     <b>if</b> (a_bytes.length() &lt; b_bytes.length()) {
         <b>true</b>
@@ -727,8 +727,8 @@ indicate that the JWK has been validated in the current epoch and should not be 
     <b>while</b> (i &lt; len) {
         <b>let</b> cur = &inner.active_jwks[i];
         <b>let</b> cur_iss = &cur.jwk_id.iss;
-        <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(&prev_issuer)) {
-            <a href="../move-stdlib/option.md#0x1_option_fill">option::fill</a>(&<b>mut</b> prev_issuer, *cur_iss);
+        <b>if</b> (prev_issuer.is_none()) {
+            prev_issuer.fill(*cur_iss);
             issuer_max_epochs.push_back(cur.epoch);
         } <b>else</b> {
             <b>if</b> (cur_iss == prev_issuer.borrow()) {

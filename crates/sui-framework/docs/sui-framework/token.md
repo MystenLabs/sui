@@ -610,7 +610,7 @@ request and join the spent balance with the <code><a href="token.md#0x2_token_To
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_spend">spend</a>&lt;T&gt;(t: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = t;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 
     <a href="token.md#0x2_token_new_request">new_request</a>(
         <a href="token.md#0x2_token_spend_action">spend_action</a>(),
@@ -648,10 +648,10 @@ Convert <code><a href="token.md#0x2_token_Token">Token</a></code> into an open <
 ): (Coin&lt;T&gt;, <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = t;
     <b>let</b> amount = <a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>();
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 
     (
-        <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, ctx),
+        <a href="balance.md#0x2_balance">balance</a>.into_coin(ctx),
         <a href="token.md#0x2_token_new_request">new_request</a>(
             <a href="token.md#0x2_token_to_coin_action">to_coin_action</a>(),
             amount,
@@ -729,7 +729,7 @@ Join two <code><a href="token.md#0x2_token_Token">Token</a></code>s into one, al
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_join">join</a>&lt;T&gt;(<a href="token.md#0x2_token">token</a>: &<b>mut</b> <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, another: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = another;
     <a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_join">join</a>(<a href="balance.md#0x2_balance">balance</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 }
 </code></pre>
 
@@ -818,7 +818,7 @@ Aborts if the <code><a href="token.md#0x2_token_Token">Token</a>.<a href="balanc
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = <a href="token.md#0x2_token">token</a>;
     <b>assert</b>!(<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>() == 0, <a href="token.md#0x2_token_ENotZero">ENotZero</a>);
     <a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_destroy_zero">destroy_zero</a>();
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 }
 </code></pre>
 
@@ -1065,7 +1065,7 @@ to be consumed, decreasing the <code>total_supply</code> of the <code><a href="t
     } = request;
 
     <b>if</b> (spent_balance.is_some()) {
-        <a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(treasury_cap).decrease_supply(spent_balance.destroy_some());
+        treasury_cap.supply_mut().decrease_supply(spent_balance.destroy_some());
     } <b>else</b> {
         spent_balance.destroy_none();
     };
@@ -1470,7 +1470,7 @@ Mint a <code><a href="token.md#0x2_token_Token">Token</a></code> with a given <c
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_mint">mint</a>&lt;T&gt;(
     cap: &<b>mut</b> TreasuryCap&lt;T&gt;, amount: u64, ctx: &<b>mut</b> TxContext
 ): <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt; {
-    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(cap).increase_supply(amount);
+    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = cap.supply_mut().increase_supply(amount);
     <a href="token.md#0x2_token_Token">Token</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), <a href="balance.md#0x2_balance">balance</a> }
 }
 </code></pre>
@@ -1497,8 +1497,8 @@ Burn a <code><a href="token.md#0x2_token_Token">Token</a></code> using the <code
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> TreasuryCap&lt;T&gt;, <a href="token.md#0x2_token">token</a>: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = <a href="token.md#0x2_token">token</a>;
-    <a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(cap).decrease_supply(<a href="balance.md#0x2_balance">balance</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    cap.supply_mut().decrease_supply(<a href="balance.md#0x2_balance">balance</a>);
+    id.delete();
 }
 </code></pre>
 
@@ -1530,7 +1530,7 @@ action is only available to the <code>TreasuryCap</code> owner.
 ): u64 {
     <b>let</b> amount = self.spent_balance.<a href="token.md#0x2_token_value">value</a>();
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = self.spent_balance.<a href="token.md#0x2_token_split">split</a>(amount);
-    <a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(cap).decrease_supply(<a href="balance.md#0x2_balance">balance</a>)
+    cap.supply_mut().decrease_supply(<a href="balance.md#0x2_balance">balance</a>)
 }
 </code></pre>
 

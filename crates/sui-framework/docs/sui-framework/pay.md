@@ -56,7 +56,7 @@ Transfer <code>c</code> to the sender of the current transaction
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_keep">keep</a>&lt;T&gt;(c: Coin&lt;T&gt;, ctx: &TxContext) {
-    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
+    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, ctx.sender())
 }
 </code></pre>
 
@@ -100,7 +100,7 @@ Split coin <code>self</code> into multiple coins, each with balance specified
 in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(<a href="../sui-framework/coin.md#0x2_coin">coin</a>: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -110,11 +110,11 @@ in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(
-    <a href="../sui-framework/coin.md#0x2_coin">coin</a>: &<b>mut</b> Coin&lt;T&gt;, split_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext
+    self: &<b>mut</b> Coin&lt;T&gt;, split_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> (<b>mut</b> i, len) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&split_amounts));
+    <b>let</b> (<b>mut</b> i, len) = (0, split_amounts.length());
     <b>while</b> (i &lt; len) {
-        <a href="../sui-framework/pay.md#0x2_pay_split">split</a>(<a href="../sui-framework/coin.md#0x2_coin">coin</a>, split_amounts[i], ctx);
+        <a href="../sui-framework/pay.md#0x2_pay_split">split</a>(self, split_amounts[i], ctx);
         i = i + 1;
     };
 }
@@ -144,7 +144,7 @@ Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
     c: &<b>mut</b> Coin&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
 ) {
-    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../sui-framework/coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), recipient)
+    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c.<a href="../sui-framework/pay.md#0x2_pay_split">split</a>(amount, ctx), recipient)
 }
 </code></pre>
 
@@ -191,6 +191,7 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
 ## Function `join`
 
 Join <code><a href="../sui-framework/coin.md#0x2_coin">coin</a></code> into <code>self</code>. Re-exports <code><a href="../sui-framework/coin.md#0x2_coin_join">coin::join</a></code> function.
+Deprecated: you should call <code><a href="../sui-framework/coin.md#0x2_coin">coin</a>.<a href="../sui-framework/pay.md#0x2_pay_join">join</a>(other)</code> directly.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin">coin</a>: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)

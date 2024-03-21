@@ -551,13 +551,13 @@ Aborts with <code><a href="group_ops.md#0x2_group_ops_EInputTooLong">EInputTooLo
 
 
 <pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="group_ops.md#0x2_group_ops_set_as_prefix">set_as_prefix</a>(x: u64, big_endian: bool, buffer: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
-    <b>let</b> buffer_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(buffer);
+    <b>let</b> buffer_len = buffer.length();
     <b>assert</b>!(buffer_len &gt; 7, <a href="group_ops.md#0x2_group_ops_EInvalidBufferLength">EInvalidBufferLength</a>);
     <b>let</b> x_as_bytes = <a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&x); // little endian
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; 8) {
         <b>let</b> position = <b>if</b> (big_endian) { buffer_len - i - 1 } <b>else</b> { i };
-        *<a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(buffer, position) = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&x_as_bytes, i);
+        *(&<b>mut</b> buffer[position]) = x_as_bytes[i];
         i = i + 1;
     };
 }

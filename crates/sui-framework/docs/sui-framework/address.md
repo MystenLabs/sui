@@ -174,7 +174,7 @@ Convert <code>a</code> to a hex-encoded ASCII string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a: <b>address</b>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a> {
-    <a href="../sui-framework/hex.md#0x2_hex_encode">hex::encode</a>(a.<a href="../sui-framework/address.md#0x2_address_to_bytes">to_bytes</a>()).<a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>()
+    <a href="../sui-framework/hex.md#0x2_hex_encode">hex::encode</a>(<a href="../sui-framework/address.md#0x2_address_to_bytes">to_bytes</a>(a)).<a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>()
 }
 </code></pre>
 
@@ -199,7 +199,7 @@ Convert <code>a</code> to a hex-encoded string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_to_string">to_string</a>(a: <b>address</b>): <a href="../move-stdlib/string.md#0x1_string_String">string::String</a> {
-    a.<a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>().<a href="../sui-framework/address.md#0x2_address_to_string">to_string</a>()
+    <a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a).<a href="../sui-framework/address.md#0x2_address_to_string">to_string</a>()
 }
 </code></pre>
 

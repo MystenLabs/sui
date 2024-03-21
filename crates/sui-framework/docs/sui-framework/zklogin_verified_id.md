@@ -240,7 +240,7 @@ Delete a VerifiedID
 
 <pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_delete">delete</a>(verified_id: <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a>) {
     <b>let</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a> { id, owner: _, key_claim_name: _, key_claim_value: _, issuer: _, audience: _ } = verified_id;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_delete">delete</a>();
 }
 </code></pre>
 

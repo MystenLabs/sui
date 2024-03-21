@@ -801,13 +801,13 @@ case where there's no items inside and a <code><a href="kiosk.md#0x2_kiosk_Kiosk
     <b>let</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a> { id, profits, owner: _, item_count, allow_extensions: _ } = self;
     <b>let</b> <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> { id: cap_id, `for` } = cap;
 
-    <b>assert</b>!(<a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&id) == `for`, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(id.to_inner() == `for`, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(item_count == 0, <a href="kiosk.md#0x2_kiosk_ENotEmpty">ENotEmpty</a>);
 
-    <a href="object.md#0x2_object_delete">object::delete</a>(cap_id);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    cap_id.delete();
+    id.delete();
 
-    <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(profits, ctx)
+    profits.into_coin(ctx)
 }
 </code></pre>
 
@@ -1171,7 +1171,7 @@ as the price for the listing making sure it's no less than <code>min_amount</cod
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;, payment: Coin&lt;SUI&gt;
 ): (T, TransferRequest&lt;T&gt;) {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price } = purchase_cap;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 
     <b>let</b> id = item_id;
     <b>let</b> paid = payment.value();
@@ -1217,7 +1217,7 @@ allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
     df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>true</b> });
-    <a href="object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 

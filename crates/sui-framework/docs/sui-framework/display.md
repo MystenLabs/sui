@@ -316,7 +316,7 @@ Manually bump the version and emit an event with the updated version's contents.
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_VersionUpdated">VersionUpdated</a>&lt;T&gt; {
         version: <a href="display.md#0x2_display">display</a>.version,
         fields: *&<a href="display.md#0x2_display">display</a>.fields,
-        id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&<a href="display.md#0x2_display">display</a>.id),
+        id: <a href="display.md#0x2_display">display</a>.id.to_inner(),
     })
 }
 </code></pre>
@@ -531,7 +531,7 @@ Internal function to create a new <code><a href="display.md#0x2_display_Display"
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
 
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_DisplayCreated">DisplayCreated</a>&lt;T&gt; {
-        id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&uid)
+        id: uid.to_inner()
     });
 
     <a href="display.md#0x2_display_Display">Display</a> {

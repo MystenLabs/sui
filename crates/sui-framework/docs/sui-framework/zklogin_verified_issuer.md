@@ -157,7 +157,7 @@ Delete a VerifiedIssuer
 
 <pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_delete">delete</a>(verified_issuer: <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_VerifiedIssuer">VerifiedIssuer</a>) {
     <b>let</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_VerifiedIssuer">VerifiedIssuer</a> { id, owner: _, issuer: _ } = verified_issuer;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.<a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_delete">delete</a>();
 }
 </code></pre>
 
@@ -227,7 +227,7 @@ Returns true if <code><b>address</b></code> was created using zklogin with the g
     address_seed: u256,
     issuer: &String,
 ): bool {
-    <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(<b>address</b>, address_seed, std::string::bytes(issuer))
+    <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(<b>address</b>, address_seed, issuer.bytes())
 }
 </code></pre>
 

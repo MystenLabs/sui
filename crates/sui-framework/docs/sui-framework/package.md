@@ -374,7 +374,7 @@ the sender is the publisher.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim_and_keep">claim_and_keep</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext) {
-    sui::transfer::public_transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), sender(ctx))
+    sui::transfer::public_transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), ctx.sender())
 }
 </code></pre>
 
@@ -401,7 +401,7 @@ associated with it.
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_burn_publisher">burn_publisher</a>(self: <a href="package.md#0x2_package_Publisher">Publisher</a>) {
     <b>let</b> <a href="package.md#0x2_package_Publisher">Publisher</a> { id, <a href="package.md#0x2_package">package</a>: _, module_name: _ } = self;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 }
 </code></pre>
 
@@ -867,7 +867,7 @@ Discard the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></co
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
     <b>let</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a> { id, <a href="package.md#0x2_package">package</a>: _, version: _, policy: _ } = cap;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 }
 </code></pre>
 
@@ -905,7 +905,7 @@ for the upgrade to succeed.
     policy: u8,
     digest: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 ): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
-    <b>let</b> id_zero = <a href="object.md#0x2_object_id_from_address">object::id_from_address</a>(@0x0);
+    <b>let</b> id_zero = @0x0.to_id();
     <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a> != id_zero, <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
     <b>assert</b>!(policy &gt;= cap.policy, <a href="package.md#0x2_package_ETooPermissive">ETooPermissive</a>);
 
@@ -949,7 +949,7 @@ the upgrade.
     <b>let</b> <a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, <a href="package.md#0x2_package">package</a> } = receipt;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(cap) == cap_id, <a href="package.md#0x2_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
-    <b>assert</b>!(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&cap.<a href="package.md#0x2_package">package</a>) == @0x0, <a href="package.md#0x2_package_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a>.to_address() == @0x0, <a href="package.md#0x2_package_ENotAuthorized">ENotAuthorized</a>);
 
     cap.<a href="package.md#0x2_package">package</a> = <a href="package.md#0x2_package">package</a>;
     cap.version = cap.version + 1;

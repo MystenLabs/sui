@@ -445,10 +445,10 @@ that key <code>k: K</code>. Note: this is also what happens when the table is em
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_remove">remove</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<b>mut</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;, k: K): V {
     <b>let</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_Node">Node</a>&lt;K, V&gt; { prev, next, value } = field::remove(&<b>mut</b> <a href="../sui-framework/table.md#0x2_table">table</a>.id, k);
     <a href="../sui-framework/table.md#0x2_table">table</a>.size = <a href="../sui-framework/table.md#0x2_table">table</a>.size - 1;
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&prev)) {
+    <b>if</b> (prev.is_some()) {
         field::borrow_mut&lt;K, <a href="../sui-framework/linked_table.md#0x2_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui-framework/table.md#0x2_table">table</a>.id, *prev.<a href="../sui-framework/linked_table.md#0x2_linked_table_borrow">borrow</a>()).next = next
     };
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&next)) {
+    <b>if</b> (next.is_some()) {
         field::borrow_mut&lt;K, <a href="../sui-framework/linked_table.md#0x2_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui-framework/table.md#0x2_table">table</a>.id, *next.<a href="../sui-framework/linked_table.md#0x2_linked_table_borrow">borrow</a>()).prev = prev
     };
     <b>if</b> (<a href="../sui-framework/table.md#0x2_table">table</a>.head.<a href="../sui-framework/linked_table.md#0x2_linked_table_borrow">borrow</a>() == &k) <a href="../sui-framework/table.md#0x2_table">table</a>.head = next;
@@ -479,8 +479,8 @@ Aborts with <code><a href="../sui-framework/linked_table.md#0x2_linked_table_ETa
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_pop_front">pop_front</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<b>mut</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;): (K, V) {
-    <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&<a href="../sui-framework/table.md#0x2_table">table</a>.head), <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableIsEmpty">ETableIsEmpty</a>);
-    <b>let</b> head = *<a href="../move-stdlib/option.md#0x1_option_borrow">option::borrow</a>(&<a href="../sui-framework/table.md#0x2_table">table</a>.head);
+    <b>assert</b>!(<a href="../sui-framework/table.md#0x2_table">table</a>.head.is_some(), <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableIsEmpty">ETableIsEmpty</a>);
+    <b>let</b> head = *<a href="../sui-framework/table.md#0x2_table">table</a>.head.<a href="../sui-framework/linked_table.md#0x2_linked_table_borrow">borrow</a>();
     (head, <a href="../sui-framework/table.md#0x2_table">table</a>.<a href="../sui-framework/linked_table.md#0x2_linked_table_remove">remove</a>(head))
 }
 </code></pre>
@@ -613,7 +613,7 @@ Aborts with <code><a href="../sui-framework/linked_table.md#0x2_linked_table_ETa
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_destroy_empty">destroy_empty</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;) {
     <b>let</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a> { id, size, head: _, tail: _ } = <a href="../sui-framework/table.md#0x2_table">table</a>;
     <b>assert</b>!(size == 0, <a href="../sui-framework/linked_table.md#0x2_linked_table_ETableNotEmpty">ETableNotEmpty</a>);
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 
@@ -640,7 +640,7 @@ Usable only if the value type <code>V</code> has the <code>drop</code> ability
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_drop">drop</a>&lt;K: <b>copy</b> + drop + store, V: drop + store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;) {
     <b>let</b> <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a> { id, size: _, head: _, tail: _ } = <a href="../sui-framework/table.md#0x2_table">table</a>;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 
