@@ -1,0 +1,25 @@
+error[E04026]: invalid 'copy' usage
+  ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:9:18
+  │
+9 │         let _q = copy $n; // disallowed
+  │                  ^^^^ Invalid 'copy'. Expected a variable or path.
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:10:18
+   │
+10 │         let _q = move $n; // disallowed
+   │                  ^^^^ Invalid 'move'. Expected a variable or path.
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:17:9
+   │
+ 3 │     public struct S { x: u64 }
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+17 │         bad_paths!(s, vs, n)
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │         │          │
+   │         │          The value is created but not used. The value does not have the 'drop' ability and must be consumed before the function returns
+   │         │          The type '0x42::m::S' does not have the ability 'drop'
+   │         Invalid return
+
