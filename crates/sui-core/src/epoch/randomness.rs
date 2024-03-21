@@ -170,7 +170,7 @@ impl RandomnessManager {
         let party = match dkg::Party::<PkG, EncG>::new(
             fastcrypto_tbls::ecies::PrivateKey::<bls12381::G2Element>::from(randomness_private_key),
             nodes,
-            t.into(),
+            t,
             fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
