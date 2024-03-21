@@ -178,7 +178,7 @@ access and edit the file to read and append relevant information to it. You
 also must not move the file from the root, as it needs to be at the same level
 as the `Move.toml` manifest in the package.
 
-If you are using source control for your package, make sure the Move.lock file
+If you are using source control for your package, make sure the `Move.lock` file
 is checked in to your repository. This ensures every build of your package is
 an exact replica of the original, and that changes to the build will be
 apparent as changes to the `Move.lock` file.
@@ -211,7 +211,6 @@ failed to resolve, the compiler will not write the `Move.lock` file and the
 build fails. If all dependencies resolve, the `Move.lock` file contains the
 locations (local and remote) of all of the package's transitive dependencies.
 These will be stored in the `Move.lock` file in the following format:
-
 
 ```
 ...
@@ -378,10 +377,9 @@ named_addr = "0xC0FFEE"
 ## Usage and Artifacts
 
 The Move package system comes with a command line option as part of the CLI:
-`move <command> <command_flags>`. Unless a particular path is provided, all
+`sui move <command> <command_flags>`. Unless a particular path is provided, all
 package commands will run in the current working directory. The full list of
-commands and flags for the Move CLI can be found by running `move --help`.
-Some of the most important commands are:
+commands and flags for the Move CLI can be found by running `sui move --help`.
 
 ### Artifacts
 
