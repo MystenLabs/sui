@@ -309,7 +309,7 @@ impl ServerBuilder {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout::default());
+            builder = builder.extension(Timeout);
         }
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
@@ -403,8 +403,7 @@ impl ResponseHandler for MetricsCallbackHandler {
 
 impl Drop for MetricsCallbackHandler {
     fn drop(&mut self) {
-        let elapsed = self.start.elapsed().as_millis() as u64;
-        self.metrics.query_latency(elapsed);
+        self.metrics.query_latency(self.start.elapsed());
         self.metrics.request_metrics.inflight_requests.dec();
     }
 }
@@ -546,7 +545,7 @@ pub mod tests {
                 .context_data(cfg)
                 .context_data(query_id())
                 .context_data(ip_address())
-                .extension(Timeout::default())
+                .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })

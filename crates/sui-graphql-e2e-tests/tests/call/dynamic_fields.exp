@@ -43,7 +43,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveObject"
             }
           },
           {
@@ -57,7 +57,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
+              "__typename": "MoveValue"
             }
           },
           {
@@ -120,7 +120,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveObject"
             }
           },
           {
@@ -134,7 +134,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
+              "__typename": "MoveValue"
             }
           },
           {
@@ -188,11 +188,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "bcs": "AAAAAAAAAAA=",
-              "data": {
-                "Number": "0"
-              },
-              "__typename": "MoveValue"
+              "__typename": "MoveObject"
             }
           },
           {
@@ -206,7 +202,11 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
+              "bcs": "AAAAAAAAAAA=",
+              "data": {
+                "Number": "0"
+              },
+              "__typename": "MoveValue"
             }
           },
           {

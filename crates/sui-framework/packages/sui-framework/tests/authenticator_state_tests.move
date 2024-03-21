@@ -22,13 +22,13 @@ module sui::authenticator_state_tests {
 
     #[test]
     fun authenticator_state_tests_basic() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         authenticator_state::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
+        let mut auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
 
         let jwk1 = create_active_jwk(utf8(b"iss1"), utf8(b"key1"), utf8(b"key1_payload"), 1);
         let jwk2 = create_active_jwk(utf8(b"iss1"), utf8(b"key2"), utf8(b"key2_payload"), 1);
@@ -68,13 +68,13 @@ module sui::authenticator_state_tests {
 
     #[test]
     fun authenticator_state_tests_deduplication() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         authenticator_state::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
+        let mut auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
 
         let jwk1 = create_active_jwk(utf8(b"https://accounts.google.com"), utf8(b"kid2"), utf8(b"k1"), 0);
         update_authenticator_state_for_testing(&mut auth_state, vector[jwk1], test_scenario::ctx(scenario));
@@ -107,13 +107,13 @@ module sui::authenticator_state_tests {
 
     #[test]
     fun authenticator_state_tests_expiry_edge_cases() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         authenticator_state::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
+        let mut auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
 
         // expire on an empty state
         expire_jwks_for_testing(&mut auth_state, 1, test_scenario::ctx(scenario));

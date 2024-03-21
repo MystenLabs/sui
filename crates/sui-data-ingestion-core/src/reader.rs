@@ -24,8 +24,6 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
 
-pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
-
 /// Implements a checkpoint reader that monitors a local directory.
 /// Designed for setups where the indexer daemon is colocated with FN.
 /// This implementation is push-based and utilizes the inotify API.
@@ -33,13 +31,30 @@ pub struct CheckpointReader {
     path: PathBuf,
     remote_store_url: Option<String>,
     remote_store_options: Vec<(String, String)>,
-    remote_read_batch_size: usize,
     current_checkpoint_number: CheckpointSequenceNumber,
     last_pruned_watermark: CheckpointSequenceNumber,
     checkpoint_sender: mpsc::Sender<CheckpointData>,
     processed_receiver: mpsc::Receiver<CheckpointSequenceNumber>,
     remote_fetcher_receiver: Option<mpsc::Receiver<Result<CheckpointData>>>,
     exit_receiver: oneshot::Receiver<()>,
+    options: ReaderOptions,
+}
+
+#[derive(Clone)]
+pub struct ReaderOptions {
+    pub tick_interal_ms: u64,
+    pub timeout_secs: u64,
+    pub batch_size: usize,
+}
+
+impl Default for ReaderOptions {
+    fn default() -> Self {
+        Self {
+            tick_interal_ms: 100,
+            timeout_secs: 5,
+            batch_size: 100,
+        }
+    }
 }
 
 impl CheckpointReader {
@@ -81,15 +96,19 @@ impl CheckpointReader {
     }
 
     fn start_remote_fetcher(&mut self) -> mpsc::Receiver<Result<CheckpointData>> {
-        let batch_size = self.remote_read_batch_size;
+        let batch_size = self.options.batch_size;
         let start_checkpoint = self.current_checkpoint_number;
         let (sender, receiver) = mpsc::channel(batch_size);
         let url = self
             .remote_store_url
             .clone()
             .expect("remote store url must be set");
-        let store = create_remote_store_client(url, self.remote_store_options.clone())
-            .expect("failed to create remote store client");
+        let store = create_remote_store_client(
+            url,
+            self.remote_store_options.clone(),
+            self.options.timeout_secs,
+        )
+        .expect("failed to create remote store client");
 
         spawn_monitored_task!(async move {
             let mut checkpoint_stream = (start_checkpoint..u64::MAX)
@@ -99,6 +118,7 @@ impl CheckpointReader {
 
             while let Some(checkpoint) = checkpoint_stream.next().await {
                 if sender.send(checkpoint).await.is_err() {
+                    info!("remote reader dropped");
                     break;
                 }
             }
@@ -196,7 +216,7 @@ impl CheckpointReader {
         starting_checkpoint_number: CheckpointSequenceNumber,
         remote_store_url: Option<String>,
         remote_store_options: Vec<(String, String)>,
-        remote_read_batch_size: usize,
+        options: ReaderOptions,
     ) -> (
         Self,
         mpsc::Receiver<CheckpointData>,
@@ -214,8 +234,8 @@ impl CheckpointReader {
             last_pruned_watermark: starting_checkpoint_number,
             checkpoint_sender,
             processed_receiver,
-            remote_read_batch_size,
             remote_fetcher_receiver: None,
+            options,
             exit_receiver,
         };
         (reader, checkpoint_recv, processed_sender, exit_sender)
@@ -238,17 +258,13 @@ impl CheckpointReader {
             .watch(&self.path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
 
-        let timeout_ms = std::env::var(ENV_VAR_LOCAL_READ_TIMEOUT_MS)
-            .unwrap_or("1000".to_string())
-            .parse::<u64>()?;
-
         loop {
             tokio::select! {
                 _ = &mut self.exit_receiver => break,
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
                     self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
                 }
-                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
+                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(self.options.tick_interal_ms), inotify_recv.recv())  => {
                     self.sync().await.expect("Failed to read checkpoint files");
                 }
             }

@@ -359,7 +359,8 @@ fn write_signature_token(ctx: &mut Context, t: &SignatureToken) -> String {
         SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => format!("vector<{}>", write_signature_token(ctx, inner)),
         SignatureToken::Struct(idx) => write_struct_handle_type(ctx, *idx),
-        SignatureToken::StructInstantiation(idx, types) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, types) = &**struct_inst;
             let n = write_struct_handle_type(ctx, *idx);
             let tys = types
                 .iter()

@@ -8,7 +8,7 @@ use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::RegistryService;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ impl ConsensusManager {
         let metrics = ConsensusManagerMetrics::new(&registry_service.default_registry());
 
         Self::Mysticeti(MysticetiManager::new(
-            config.protocol_key_pair().copy(),
+            config.worker_key_pair().copy(),
             config.network_key_pair().copy(),
             consensus_config.db_path().to_path_buf(),
             metrics,

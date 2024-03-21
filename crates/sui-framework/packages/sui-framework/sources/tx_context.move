@@ -21,7 +21,7 @@ module sui::tx_context {
     /// Information about the transaction currently being executed.
     /// This cannot be constructed by a transaction--it is a privileged object created by
     /// the VM and passed in to the entrypoint of the transaction as `&mut TxContext`.
-    struct TxContext has drop {
+    public struct TxContext has drop {
         /// The address of the user that signed the current transaction
         sender: address,
         /// Hash of the current transaction
@@ -115,7 +115,7 @@ module sui::tx_context {
     /// Utility for creating 256 unique input hashes.
     /// These hashes are guaranteed to be unique given a unique `hint: u64`
     fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
-        let tx_hash = std::bcs::to_bytes(&hint);
+        let mut tx_hash = std::bcs::to_bytes(&hint);
         while (vector::length(&tx_hash) < TX_HASH_LENGTH) vector::push_back(&mut tx_hash, 0);
         tx_hash
     }

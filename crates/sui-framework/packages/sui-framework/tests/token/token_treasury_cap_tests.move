@@ -14,8 +14,8 @@ module sui::token_treasury_cap_tests {
     /// `TreasuryCap`.
     fun test_treasury_spend_flush() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
-        let treasury_cap = test::get_treasury_cap(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
+        let mut treasury_cap = test::get_treasury_cap(ctx);
 
         let token = token::mint(&mut treasury_cap, 1000, ctx);
         let request = token::spend(token, ctx);
@@ -33,7 +33,7 @@ module sui::token_treasury_cap_tests {
     /// `TreasuryCap`.
     fun test_treasury_resolve_request() {
         let ctx = &mut test::ctx(@0x0);
-        let treasury_cap = test::get_treasury_cap(ctx);
+        let mut treasury_cap = test::get_treasury_cap(ctx);
 
         let token = token::mint(&mut treasury_cap, 1000, ctx);
         let request = token::spend(token, ctx);
@@ -46,7 +46,7 @@ module sui::token_treasury_cap_tests {
     /// Scenario: mint and burn a Token with TreasuryCap.
     fun test_treasury_mint_burn() {
         let ctx = &mut test::ctx(@0x0);
-        let treasury_cap = test::get_treasury_cap(ctx);
+        let mut treasury_cap = test::get_treasury_cap(ctx);
 
         let token = token::mint(&mut treasury_cap, 1000, ctx);
         token::burn(&mut treasury_cap, token);

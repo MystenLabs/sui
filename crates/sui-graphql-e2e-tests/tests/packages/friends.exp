@@ -3,15 +3,15 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-17:
+task 1 'publish'. lines 6-14:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7379600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 19-19:
+task 2 'create-checkpoint'. lines 16-16:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 21-79:
+task 3 'run-graphql'. lines 18-76:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -20,6 +20,11 @@ Response: {
           "effects": {
             "objectChanges": {
               "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
                 {
                   "outputState": {
                     "asMovePackage": null
@@ -98,11 +103,6 @@ Response: {
                       }
                     }
                   }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
                 }
               ]
             }
@@ -113,7 +113,7 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 82-111:
+task 4 'run-graphql'. lines 79-108:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -129,14 +129,14 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "asMovePackage": {
-                      "module": null
-                    }
+                    "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "asMovePackage": null
+                    "asMovePackage": {
+                      "module": null
+                    }
                   }
                 }
               ]
@@ -162,7 +162,7 @@ Response: {
         "effects",
         "objectChanges",
         "nodes",
-        1,
+        2,
         "outputState",
         "asMovePackage",
         "module",
@@ -175,7 +175,7 @@ Response: {
   ]
 }
 
-task 5 'run-graphql'. lines 113-175:
+task 5 'run-graphql'. lines 110-172:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -184,6 +184,11 @@ Response: {
           "effects": {
             "objectChanges": {
               "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
                 {
                   "outputState": {
                     "asMovePackage": null
@@ -264,11 +269,6 @@ Response: {
                       }
                     }
                   }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
-                  }
                 }
               ]
             }
@@ -279,15 +279,15 @@ Response: {
   }
 }
 
-task 6 'upgrade'. lines 177-191:
+task 6 'upgrade'. lines 174-183:
 created: object(6,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 8139600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 7 'create-checkpoint'. lines 193-193:
+task 7 'create-checkpoint'. lines 185-185:
 Checkpoint created: 2
 
-task 8 'run-graphql'. lines 195-228:
+task 8 'run-graphql'. lines 187-220:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -296,6 +296,11 @@ Response: {
           "effects": {
             "objectChanges": {
               "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
                 {
                   "outputState": {
                     "asMovePackage": null
@@ -335,11 +340,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
                   }
                 }
               ]

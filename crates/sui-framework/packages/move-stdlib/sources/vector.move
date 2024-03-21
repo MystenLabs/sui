@@ -48,7 +48,7 @@ module std::vector {
 
     /// Return an vector of size one containing element `e`.
     public fun singleton<Element>(e: Element): vector<Element> {
-        let v = empty();
+        let mut v = empty();
         push_back(&mut v, e);
         v
     }
@@ -58,8 +58,8 @@ module std::vector {
         let len = length(v);
         if (len == 0) return ();
 
-        let front_index = 0;
-        let back_index = len -1;
+        let mut front_index = 0;
+        let mut back_index = len -1;
         while (front_index < back_index) {
             swap(v, front_index, back_index);
             front_index = front_index + 1;
@@ -68,7 +68,7 @@ module std::vector {
     }
 
     /// Pushes all of the elements of the `other` vector into the `lhs` vector.
-    public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
+    public fun append<Element>(lhs: &mut vector<Element>, mut other: vector<Element>) {
         reverse(&mut other);
         while (!is_empty(&other)) push_back(lhs, pop_back(&mut other));
         destroy_empty(other);
@@ -82,7 +82,7 @@ module std::vector {
     /// Return true if `e` is in the vector `v`.
     /// Otherwise, returns false.
     public fun contains<Element>(v: &vector<Element>, e: &Element): bool {
-        let i = 0;
+        let mut i = 0;
         let len = length(v);
         while (i < len) {
             if (borrow(v, i) == e) return true;
@@ -94,7 +94,7 @@ module std::vector {
     /// Return `(true, i)` if `e` is in the vector `v` at index `i`.
     /// Otherwise, returns `(false, 0)`.
     public fun index_of<Element>(v: &vector<Element>, e: &Element): (bool, u64) {
-        let i = 0;
+        let mut i = 0;
         let len = length(v);
         while (i < len) {
             if (borrow(v, i) == e) return (true, i);
@@ -106,8 +106,8 @@ module std::vector {
     /// Remove the `i`th element of the vector `v`, shifting all subsequent elements.
     /// This is O(n) and preserves ordering of elements in the vector.
     /// Aborts if `i` is out of bounds.
-    public fun remove<Element>(v: &mut vector<Element>, i: u64): Element {
-        let len = length(v);
+    public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
+        let mut len = length(v);
         // i out of bounds; abort
         if (i >= len) abort EINDEX_OUT_OF_BOUNDS;
 
@@ -121,7 +121,7 @@ module std::vector {
     /// If `i == length(v)`, this adds `e` to the end of the vector.
     /// This is O(n) and preserves ordering of elements in the vector.
     /// Aborts if `i > length(v)`
-    public fun insert<Element>(v: &mut vector<Element>, e: Element, i: u64) {
+    public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
         let len = length(v);
         // i too big abort
         if (i > len) abort EINDEX_OUT_OF_BOUNDS;

@@ -6,26 +6,26 @@ module deepbook::math {
     const FLOAT_SCALING: u64 = 1_000_000_000;
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
 
-    friend deepbook::clob;
-    friend deepbook::clob_v2;
-    friend deepbook::critbit;
+    /* friend deepbook::clob; */
+    /* friend deepbook::clob_v2; */
+    /* friend deepbook::critbit; */
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUnderflow: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // multiply two floating numbers
-    public(friend) fun unsafe_mul(x: u64, y: u64): u64 {
+    public(package) fun unsafe_mul(x: u64, y: u64): u64 {
         let (_, result) = unsafe_mul_round(x, y);
         result
     }
 
     // multiply two floating numbers
     // also returns whether the result is rounded down
-    public(friend) fun unsafe_mul_round(x: u64, y: u64): (bool, u64) {
+    public(package) fun unsafe_mul_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
         let y = (y as u128);
-        let is_round_down = true;
+        let mut is_round_down = true;
         if ((x * y) % FLOAT_SCALING_U128 == 0) is_round_down = false;
         (is_round_down, ((x * y / FLOAT_SCALING_U128) as u64))
     }
@@ -47,17 +47,17 @@ module deepbook::math {
     }
 
     // divide two floating numbers
-    public(friend) fun unsafe_div(x: u64, y: u64): u64 {
+    public(package) fun unsafe_div(x: u64, y: u64): u64 {
         let (_, result) = unsafe_div_round(x, y);
         result
     }
 
     // divide two floating numbers
     // also returns whether the result is rounded down
-    public(friend) fun unsafe_div_round(x: u64, y: u64): (bool, u64) {
+    public(package) fun unsafe_div_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
         let y = (y as u128);
-        let is_round_down = true;
+        let mut is_round_down = true;
         if ((x * (FLOAT_SCALING as u128) % y) == 0) is_round_down = false;
         (is_round_down, ((x * (FLOAT_SCALING as u128) / y) as u64))
     }
@@ -70,11 +70,11 @@ module deepbook::math {
         (is_round_down, result)
     }
 
-    public(friend) fun count_leading_zeros(x: u128): u8 {
+    public(package) fun count_leading_zeros(mut x: u128): u8 {
         if (x == 0) {
             128
         } else {
-            let n: u8 = 0;
+            let mut n: u8 = 0;
             if (x & 0xFFFFFFFFFFFFFFFF0000000000000000 == 0) {
                 // x's higher 64 is all zero, shift the lower part over
                 x = x << 64;
@@ -116,8 +116,8 @@ module deepbook::math {
     #[test_only] use sui::test_utils::assert_eq;
 
     #[test_only]
-    fun pow(base: u128, exponent: u8): u128 {
-        let res: u128 = 1;
+    fun pow(mut base: u128, mut exponent: u8): u128 {
+        let mut res: u128 = 1;
         while (exponent >= 1) {
             if (exponent % 2 == 0) {
                 base = base * base;
@@ -132,7 +132,7 @@ module deepbook::math {
 
     #[test]
     fun test_count_leading_zeros() {
-        let i: u8 = 0;
+        let mut i: u8 = 0;
         while (i <= 127) {
             assert_eq(count_leading_zeros((pow(2, i) as u128)), 128 - i - 1);
             i = i + 1;
@@ -166,7 +166,7 @@ module deepbook::math {
 
     #[test]
     fun test_mul_round() {
-        let (is_round, result) = unsafe_mul_round(1_000_000_000, 1);
+        let (mut is_round, mut result) = unsafe_mul_round(1_000_000_000, 1);
         assert_eq(is_round, false);
         assert_eq(result, 1);
         (is_round, result) = unsafe_mul_round(9_999_999_999, 1);
@@ -179,7 +179,7 @@ module deepbook::math {
 
     #[test]
     fun test_div() {
-        let (is_round, result) = unsafe_div_round(1, 1_000_000_000);
+        let (mut is_round, mut result) = unsafe_div_round(1, 1_000_000_000);
         assert_eq(is_round, false);
         assert_eq(result, 1);
         (is_round, result) = unsafe_div_round(1, 9_999_999_999);
@@ -192,7 +192,7 @@ module deepbook::math {
 
     #[test]
     fun test_div_round() {
-        let (is_round, result) = unsafe_div_round(1, 1_000_000_000);
+        let (mut is_round, mut result) = unsafe_div_round(1, 1_000_000_000);
         assert_eq(is_round, false);
         assert_eq(result, 1);
         (is_round, result) = unsafe_div_round(1, 9_999_999_999);

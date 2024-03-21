@@ -51,7 +51,7 @@ pub struct ArchivalWorker {
 impl ArchivalWorker {
     pub async fn new(config: ArchivalConfig) -> Result<Self> {
         let remote_store =
-            create_remote_store_client(config.remote_url, config.remote_store_options)?;
+            create_remote_store_client(config.remote_url, config.remote_store_options, 10)?;
         let manifest = Self::read_manifest(&remote_store).await?;
         let state = AccumulatedState {
             epoch: manifest.epoch_num(),

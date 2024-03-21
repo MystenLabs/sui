@@ -784,13 +784,16 @@ impl OpenSignatureBody {
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
             S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(ix, params) => O::Datatype(
-                DatatypeKey::read(*ix, bytecode),
-                params
-                    .iter()
-                    .map(|sig| OpenSignatureBody::read(sig, bytecode))
-                    .collect::<Result<_>>()?,
-            ),
+            S::StructInstantiation(struct_inst) => {
+                let (ix, params) = &**struct_inst;
+                O::Datatype(
+                    DatatypeKey::read(*ix, bytecode),
+                    params
+                        .iter()
+                        .map(|sig| OpenSignatureBody::read(sig, bytecode))
+                        .collect::<Result<_>>()?,
+                )
+            }
         })
     }
 

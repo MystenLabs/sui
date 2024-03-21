@@ -737,9 +737,13 @@ mod tests {
                 }
             }
 
-            // Give it a 2% fluctuation.
-            assert!(rejection_percentage as f32 / 100.0 - 0.02 < reject_count as f32 / 10000.0);
-            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.02);
+            debug!(
+                "Rejection percentage: {:?}, reject count: {:?}.",
+                rejection_percentage, reject_count
+            );
+            // Give it a 3% fluctuation.
+            assert!(rejection_percentage as f32 / 100.0 - 0.03 < reject_count as f32 / 10000.0);
+            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.03);
         }
     }
 

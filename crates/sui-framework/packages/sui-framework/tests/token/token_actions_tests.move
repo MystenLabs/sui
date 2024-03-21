@@ -41,7 +41,7 @@ module sui::token_actions_tests {
     /// confirm request in the policy making sure the balance is updated.
     fun test_spend_action() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
 
         let token = test::mint(1000, ctx);
         let request = token::spend(token, ctx);
@@ -98,7 +98,7 @@ module sui::token_actions_tests {
     /// policy.
     fun test_custom_action() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let custom_action = string::utf8(b"custom");
 
         token::allow(&mut policy, &cap, custom_action, ctx);

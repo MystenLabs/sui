@@ -791,7 +791,8 @@ impl<'a> Context<'a> {
                 let correct_sh_idx = self.struct_handle_index(sident)?;
                 SignatureToken::Struct(correct_sh_idx)
             }
-            SignatureToken::StructInstantiation(orig_sh_idx, inners) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (orig_sh_idx, inners) = *struct_inst;
                 let dep_info = self.dependency(dep)?;
                 let (mident, sname) = dep_info
                     .source_struct_info(orig_sh_idx)
@@ -806,7 +807,7 @@ impl<'a> Context<'a> {
                     .into_iter()
                     .map(|t| self.reindex_signature_token(dep, t))
                     .collect::<Result<_>>()?;
-                SignatureToken::StructInstantiation(correct_sh_idx, correct_inners)
+                SignatureToken::StructInstantiation(Box::new((correct_sh_idx, correct_inners)))
             }
         })
     }

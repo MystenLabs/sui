@@ -1,7 +1,7 @@
 
-<a name="0x2_zklogin_verified_issuer"></a>
-
-# Module `0x2::zklogin_verified_issuer`
+---
+title: Module `0x2::zklogin_verified_issuer`
+---
 
 
 
@@ -15,7 +15,7 @@
 -  [Function `check_zklogin_issuer_internal`](#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/string.md#0x1_string">0x1::string</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/string.md#0x1_string">0x1::string</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -54,7 +54,7 @@ Posession of a VerifiedIssuer proves that the user's address was created using z
  The address this VerifiedID is associated with
 </dd>
 <dt>
-<code>issuer: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
+<code>issuer: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
  The issuer
@@ -121,7 +121,7 @@ Returns the address associated with the given VerifiedIssuer
 Returns the issuer associated with the given VerifiedIssuer
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_issuer">issuer</a>(verified_issuer: &<a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_VerifiedIssuer">zklogin_verified_issuer::VerifiedIssuer</a>): &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_issuer">issuer</a>(verified_issuer: &<a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_VerifiedIssuer">zklogin_verified_issuer::VerifiedIssuer</a>): &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
 </code></pre>
 
 
@@ -175,7 +175,7 @@ with the issuers id transfered to the caller.
 Aborts with <code><a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_EInvalidProof">EInvalidProof</a></code> if the verification fails.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_verify_zklogin_issuer">verify_zklogin_issuer</a>(address_seed: u256, issuer: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_verify_zklogin_issuer">verify_zklogin_issuer</a>(address_seed: u256, issuer: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -213,7 +213,7 @@ Aborts with <code><a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issue
 Returns true if <code><b>address</b></code> was created using zklogin with the given issuer and address seed.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer">check_zklogin_issuer</a>(<b>address</b>: <b>address</b>, address_seed: u256, issuer: &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer">check_zklogin_issuer</a>(<b>address</b>: <b>address</b>, address_seed: u256, issuer: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>): bool
 </code></pre>
 
 
@@ -244,7 +244,7 @@ Returns true if <code><b>address</b></code> was created using zklogin with the g
 Aborts with <code><a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_EInvalidInput">EInvalidInput</a></code> if the <code>iss</code> input is not a valid UTF-8 string.
 
 
-<pre><code><b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(<b>address</b>: <b>address</b>, address_seed: u256, issuer: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool
+<pre><code><b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(<b>address</b>: <b>address</b>, address_seed: u256, issuer: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool
 </code></pre>
 
 
@@ -256,7 +256,7 @@ Aborts with <code><a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issue
 <pre><code><b>native</b> <b>fun</b> <a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_check_zklogin_issuer_internal">check_zklogin_issuer_internal</a>(
     <b>address</b>: <b>address</b>,
     address_seed: u256,
-    issuer: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    issuer: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
 ): bool;
 </code></pre>
 

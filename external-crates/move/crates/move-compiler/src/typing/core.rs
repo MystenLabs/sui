@@ -8,6 +8,7 @@ use crate::{
         codes::{NameResolution, TypeSafety},
         Diagnostic,
     },
+    editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
@@ -1166,16 +1167,23 @@ pub fn make_function_type(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
+    let supports_public_package = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::PublicPackage);
     match finfo.visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
+            let friend_or_package = if supports_public_package {
+                Visibility::PACKAGE
+            } else {
+                Visibility::FRIEND
+            };
             let internal_msg = format!(
-                "This function is internal to its module. Only '{}', '{}', and '{}' functions can \
+                "This function is internal to its module. Only '{}' and '{}' functions can \
                  be called outside of their module",
                 Visibility::PUBLIC,
-                Visibility::FRIEND,
-                Visibility::PACKAGE
+                friend_or_package,
             );
             visibility_error(
                 context,

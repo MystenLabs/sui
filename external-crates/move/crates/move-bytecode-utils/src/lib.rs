@@ -134,7 +134,8 @@ pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> S
         SignatureToken::TypeParameter(i) => format!("T{}", i),
 
         SignatureToken::Struct(idx) => format_signature_token_struct(view, *idx, &[]),
-        SignatureToken::StructInstantiation(idx, ty_args) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, ty_args) = &**struct_inst;
             format_signature_token_struct(view, *idx, ty_args)
         }
     }

@@ -16,7 +16,7 @@ module sui_system::genesis {
     use sui_system::stake_subsidy;
     use std::option::{Option, Self};
 
-    struct GenesisValidatorMetadata has drop, copy {
+    public struct GenesisValidatorMetadata has drop, copy {
         name: vector<u8>,
         description: vector<u8>,
         image_url: vector<u8>,
@@ -39,7 +39,7 @@ module sui_system::genesis {
         worker_address: vector<u8>,
     }
 
-    struct GenesisChainParameters has drop, copy {
+    public struct GenesisChainParameters has drop, copy {
         protocol_version: u64,
         chain_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
@@ -58,12 +58,12 @@ module sui_system::genesis {
         validator_low_stake_grace_period: u64,
     }
 
-    struct TokenDistributionSchedule {
+    public struct TokenDistributionSchedule {
         stake_subsidy_fund_mist: u64,
         allocations: vector<TokenAllocation>,
     }
 
-    struct TokenAllocation {
+    public struct TokenAllocation {
         recipient_address: address,
         amount_mist: u64,
 
@@ -83,7 +83,7 @@ module sui_system::genesis {
     /// all the information we need in the system.
     fun create(
         sui_system_state_id: UID,
-        sui_supply: Balance<SUI>,
+        mut sui_supply: Balance<SUI>,
         genesis_chain_parameters: GenesisChainParameters,
         genesis_validators: vector<GenesisValidatorMetadata>,
         token_distribution_schedule: TokenDistributionSchedule,
@@ -104,9 +104,9 @@ module sui_system::genesis {
         let storage_fund = balance::zero();
 
         // Create all the `Validator` structs
-        let validators = vector::empty();
+        let mut validators = vector::empty();
         let count = vector::length(&genesis_validators);
-        let i = 0;
+        let mut i = 0;
         while (i < count) {
             let GenesisValidatorMetadata {
                 name,
@@ -202,8 +202,8 @@ module sui_system::genesis {
     }
 
     fun allocate_tokens(
-        sui_supply: Balance<SUI>,
-        allocations: vector<TokenAllocation>,
+        mut sui_supply: Balance<SUI>,
+        mut allocations: vector<TokenAllocation>,
         validators: &mut vector<Validator>,
         ctx: &mut TxContext,
     ) {
@@ -243,7 +243,7 @@ module sui_system::genesis {
     fun activate_validators(validators: &mut vector<Validator>) {
         // Activate all genesis validators
         let count = vector::length(validators);
-        let i = 0;
+        let mut i = 0;
         while (i < count) {
             let validator = vector::borrow_mut(validators, i);
             validator::activate(validator, 0);

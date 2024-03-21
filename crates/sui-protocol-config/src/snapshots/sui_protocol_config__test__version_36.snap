@@ -248,6 +248,7 @@ max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
 random_beacon_reduction_lower_bound: 1600
+random_beacon_dkg_timeout_round: 200
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 

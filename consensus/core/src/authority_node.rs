@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration, time::Instant, vec};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+    vec,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -120,9 +124,9 @@ where
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        let (core_signals, signals_receivers) = CoreSignals::new();
+        let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
@@ -343,28 +347,27 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
+    use std::{collections::BTreeSet, sync::Arc};
 
     use async_trait::async_trait;
     use consensus_config::{local_committee_and_keys, Parameters};
-    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::sync::mpsc::unbounded_channel;
-    use tokio::time::sleep;
+    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
 
     use super::*;
-    use crate::authority_node::AuthorityService;
-    use crate::block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock};
-    use crate::block_verifier::NoopBlockVerifier;
-    use crate::context::Context;
-    use crate::core_thread::{CoreError, CoreThreadDispatcher};
-    use crate::network::NetworkClient;
-    use crate::storage::mem_store::MemStore;
-    use crate::transaction::NoopTransactionVerifier;
+    use crate::{
+        authority_node::AuthorityService,
+        block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock},
+        block_verifier::NoopBlockVerifier,
+        context::Context,
+        core_thread::{CoreError, CoreThreadDispatcher},
+        network::NetworkClient,
+        storage::mem_store::MemStore,
+        transaction::NoopTransactionVerifier,
+    };
 
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -437,8 +440,8 @@ mod tests {
         let txn_verifier = NoopTransactionVerifier {};
 
         let own_index = committee.to_authority_index(0).unwrap();
-        let protocol_keypair = keypairs[own_index].1.copy();
-        let network_keypair = keypairs[own_index].0.copy();
+        let protocol_keypair = keypairs[own_index].1.clone();
+        let network_keypair = keypairs[own_index].0.clone();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_consumer = CommitConsumer::new(sender, 0, 0);
@@ -529,8 +532,8 @@ mod tests {
             };
             let txn_verifier = NoopTransactionVerifier {};
 
-            let protocol_keypair = keypairs[index].1.copy();
-            let network_keypair = keypairs[index].0.copy();
+            let protocol_keypair = keypairs[index].1.clone();
+            let network_keypair = keypairs[index].0.clone();
 
             let (sender, receiver) = unbounded_channel();
             let commit_consumer = CommitConsumer::new(sender, 0, 0);

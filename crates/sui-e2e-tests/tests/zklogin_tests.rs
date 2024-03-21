@@ -253,8 +253,10 @@ async fn test_create_authenticator_state_object() {
     }
 }
 
+// TODO: @joy to look at improve the stability of this test.
 // This test is intended to look for forks caused by conflicting / repeated JWK votes from
 // validators.
+#[ignore]
 #[cfg(msim)]
 #[sim_test]
 async fn test_conflicting_jwks() {

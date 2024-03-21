@@ -14,14 +14,14 @@ module sui::package_tests {
     /// OTW for the package_tests module -- it can't actually be a OTW
     /// (name matching module name) because we need to be able to
     /// create an instance of it in a test (outside a module initializer).
-    struct TEST_OTW has drop {}
+    public struct TEST_OTW has drop {}
 
     /// Type to compare against
-    struct CustomType {}
+    public struct CustomType {}
 
     #[test]
     fun test_from_package() {
-        let test = test::begin(@0x1);
+        let mut test = test::begin(@0x1);
         let pub = package::test_claim(TEST_OTW {}, ctx(&mut test));
 
         assert!(package::from_package<CustomType>(&pub), 0);
@@ -34,7 +34,7 @@ module sui::package_tests {
 
     #[test]
     fun test_from_module() {
-        let test = test::begin(@0x1);
+        let mut test = test::begin(@0x1);
         let pub = package::test_claim(TEST_OTW {}, ctx(&mut test));
 
         assert!(package::from_module<CustomType>(&pub), 0);
@@ -48,8 +48,8 @@ module sui::package_tests {
 
     #[test]
     fun test_restrict_upgrade_policy() {
-        let test = test::begin(@0x1);
-        let cap = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut test = test::begin(@0x1);
+        let mut cap = package::test_publish(id(@0x42), ctx(&mut test));
 
         assert!(package::upgrade_policy(&cap) == package::compatible_policy(), 0);
         package::only_additive_upgrades(&mut cap);
@@ -74,9 +74,9 @@ module sui::package_tests {
 
     #[test]
     fun test_upgrade_policy_reflected_in_ticket() {
-        let test = test::begin(@0x1);
-        let cap = package::test_publish(id(@0x42), ctx(&mut test));
-        let policies = vector[
+        let mut test = test::begin(@0x1);
+        let mut cap = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut policies = vector[
             package::dep_only_policy(),
             package::compatible_policy(),
             package::additive_policy(),
@@ -97,8 +97,8 @@ module sui::package_tests {
 
     #[test]
     fun test_full_upgrade_flow() {
-        let test = test::begin(@0x1);
-        let cap = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut test = test::begin(@0x1);
+        let mut cap = package::test_publish(id(@0x42), ctx(&mut test));
         package::only_additive_upgrades(&mut cap);
 
         let version = package::version(&cap);
@@ -120,8 +120,8 @@ module sui::package_tests {
     #[test]
     #[expected_failure(abort_code = sui::package::ETooPermissive)]
     fun test_failure_to_widen_upgrade_policy() {
-        let test = test::begin(@0x1);
-        let cap = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut test = test::begin(@0x1);
+        let mut cap = package::test_publish(id(@0x42), ctx(&mut test));
 
         package::only_dep_upgrades(&mut cap);
         assert!(package::upgrade_policy(&cap) == package::dep_only_policy(), 1);
@@ -133,8 +133,8 @@ module sui::package_tests {
     #[test]
     #[expected_failure(abort_code = sui::package::ETooPermissive)]
     fun test_failure_to_authorize_overly_permissive_upgrade() {
-        let test = test::begin(@0x1);
-        let cap = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut test = test::begin(@0x1);
+        let mut cap = package::test_publish(id(@0x42), ctx(&mut test));
         package::only_dep_upgrades(&mut cap);
 
         let _ticket = package::authorize_upgrade(
@@ -149,8 +149,8 @@ module sui::package_tests {
     #[test]
     #[expected_failure(abort_code = sui::package::EAlreadyAuthorized)]
     fun test_failure_to_authorize_multiple_upgrades() {
-        let test = test::begin(@0x1);
-        let cap = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut test = test::begin(@0x1);
+        let mut cap = package::test_publish(id(@0x42), ctx(&mut test));
 
         let _ticket0 = package::authorize_upgrade(
             &mut cap,
@@ -172,9 +172,9 @@ module sui::package_tests {
     #[test]
     #[expected_failure(abort_code = sui::package::EWrongUpgradeCap)]
     fun test_failure_to_commit_upgrade_to_wrong_cap() {
-        let test = test::begin(@0x1);
-        let cap0 = package::test_publish(id(@0x42), ctx(&mut test));
-        let cap1 = package::test_publish(id(@0x43), ctx(&mut test));
+        let mut test = test::begin(@0x1);
+        let mut cap0 = package::test_publish(id(@0x42), ctx(&mut test));
+        let mut cap1 = package::test_publish(id(@0x43), ctx(&mut test));
 
         let ticket1 = package::authorize_upgrade(
             &mut cap1,

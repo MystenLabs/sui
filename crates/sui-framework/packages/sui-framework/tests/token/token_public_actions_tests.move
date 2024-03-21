@@ -12,7 +12,7 @@ module sui::token_public_actions_tests {
     /// destroy it.
     fun test_public_split_join_zero_destroy() {
         let ctx = &mut test::ctx(@0x0);
-        let token = test::mint(100, ctx);
+        let mut token = test::mint(100, ctx);
 
         let split = token::split(&mut token, 50, ctx);
         let zero = token::zero<TEST>(ctx);
@@ -38,7 +38,7 @@ module sui::token_public_actions_tests {
     /// Scenario: try to split more than in the Token.
     fun test_split_excessive_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let token = test::mint(0, ctx);
+        let mut token = test::mint(0, ctx);
 
         let _t = token::split(&mut token, 100, ctx);
 

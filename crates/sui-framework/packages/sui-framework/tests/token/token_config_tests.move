@@ -9,16 +9,16 @@ module sui::token_config_tests {
     use sui::token;
 
     /// Rule witness to store confuration for
-    struct Rule1 has drop {}
+    public struct Rule1 has drop {}
 
     /// Configuration for the Rule1.
-    struct Config1 has store, drop { value: u64 }
+    public struct Config1 has store, drop { value: u64 }
 
     #[test]
     /// Scenario: create a Config, read it, mutate it, check existence and remove
     fun test_create_and_use_rule_config() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
 
         // add a rule config
@@ -43,7 +43,7 @@ module sui::token_config_tests {
     /// Scenario: try to add config while not being authorized
     fun test_add_config_not_authorized_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, _cap) = test::get_policy(ctx);
+        let (mut policy, _cap) = test::get_policy(ctx);
         let (_policy, cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
 
@@ -56,7 +56,7 @@ module sui::token_config_tests {
     /// Scenario: try to add config while not being authorized
     fun test_remove_config_not_authorized_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let (_policy, wrong_cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
 
@@ -70,7 +70,7 @@ module sui::token_config_tests {
     /// Scenario: try to mutate config while not being authorized
     fun test_mutate_config_not_authorized_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let (_policy, wrong_cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
 
@@ -95,7 +95,7 @@ module sui::token_config_tests {
     /// Scenario: rule tries to access a missing config
     fun test_rule_config_mut_missing_config_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
 
         token::rule_config_mut<TEST, Rule1, Config1>(Rule1 {}, &mut policy, &cap);
 
@@ -106,7 +106,7 @@ module sui::token_config_tests {
     /// Scenario: trying to remove a non existing config
     fun test_remove_rule_config_missing_config_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
 
         token::remove_rule_config<TEST, Rule1, Config1>(&mut policy, &cap, ctx);
 

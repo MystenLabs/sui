@@ -24,7 +24,7 @@ pub struct BlobWorker {
 impl BlobWorker {
     pub fn new(config: BlobTaskConfig) -> Self {
         Self {
-            remote_store: create_remote_store_client(config.url, config.remote_store_options)
+            remote_store: create_remote_store_client(config.url, config.remote_store_options, 10)
                 .expect("failed to create remote store client"),
         }
     }

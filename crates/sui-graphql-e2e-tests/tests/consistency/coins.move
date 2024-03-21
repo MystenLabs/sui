@@ -7,7 +7,7 @@
 // coin2@A | coin2@B | coin2@B | coin2@B | coin2@B | coin2@B
 // coin3@A | coin3@A | coin3@A | coin3@A | coin3@A | coin3@A
 
-//# init --addresses P0=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses P0=0x0 --accounts A B --simulator
 
 //# publish --sender A
 module P0::fake {

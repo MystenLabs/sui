@@ -149,6 +149,7 @@ fn modules(
         for (pub_package_module, loc) in new_friends {
             let friend = Friend {
                 attributes: UniqueMap::new(),
+                attr_locs: vec![],
                 loc,
             };
             all_new_friends

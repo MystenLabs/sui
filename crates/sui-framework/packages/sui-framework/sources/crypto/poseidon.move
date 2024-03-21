@@ -23,7 +23,7 @@ module sui::poseidon {
     /// Each element has to be a BN254 field element in canonical representation so it must be smaller than the BN254
     /// scalar field size which is 21888242871839275222246405745257275088548364400416034343698204186575808495617.
     public fun poseidon_bn254(data: &vector<u256>): u256 {
-        let (i, b, l) = (0, vector[], vector::length(data));
+        let (mut i, mut b, l) = (0, vector[], vector::length(data));
         assert!(l > 0, EEmptyInput);
         while (i < l) {
             let field_element = vector::borrow(data, i);

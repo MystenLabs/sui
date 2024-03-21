@@ -18,10 +18,10 @@ module sui::fixed_commission {
     const EIncorrectAmount: u64 = 0;
 
     /// Custom witness-key which also acts as a key for the policy.
-    struct Rule has drop {}
+    public struct Rule has drop {}
 
     /// Fixed commission on all sales.
-    struct Commission has store, drop { amount: u64 }
+    public struct Commission has store, drop { amount: u64 }
 
     /// Creator action: adds a Rule;
     /// Set a FixedCommission requirement for the TransferPolicy.

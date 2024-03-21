@@ -17,7 +17,10 @@ use tokio::{
 use tracing::{trace, warn};
 
 use crate::{
-    block::VerifiedBlock, context::Context, core::CoreSignalsReceivers, error::ConsensusResult,
+    block::{BlockAPI as _, VerifiedBlock},
+    context::Context,
+    core::CoreSignalsReceivers,
+    error::ConsensusResult,
     network::NetworkClient,
 };
 
@@ -34,6 +37,8 @@ pub(crate) struct Broadcaster {
 }
 
 impl Broadcaster {
+    const LAST_BLOCK_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+
     pub(crate) fn new<C: NetworkClient>(
         context: Arc<Context>,
         network_client: Arc<C>,
@@ -72,6 +77,16 @@ impl Broadcaster {
         peer: AuthorityIndex,
     ) {
         let peer_hostname = context.committee.authority(peer).hostname.clone();
+
+        // Record the last block to be broadcasted, to retry in case no new block is produced for awhile.
+        // Even if the peer has acknowledged the last block, the block might have been dropped afterwards
+        // if the peer crashed.
+        let mut last_block: Option<VerifiedBlock> = None;
+
+        // Retry last block with an interval.
+        let mut retry_timer = tokio::time::interval(Self::LAST_BLOCK_RETRY_INTERVAL);
+        retry_timer.reset_after(Self::LAST_BLOCK_RETRY_INTERVAL);
+        retry_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         // Use a simple exponential-decay RTT estimator to adjust the timeout for each block sent.
         // The estimation logic will be removed once the underlying transport switches to use
@@ -118,13 +133,21 @@ impl Broadcaster {
                             continue;
                         }
                     };
-                    requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
+                    requests.push(send_block(network_client.clone(), peer, rtt_estimate, block.clone()));
+                    if last_block.is_none() || last_block.as_ref().unwrap().round() < block.round() {
+                        last_block = Some(block);
+                    }
                 }
+
                 Some((resp, start, block)) = requests.next() => {
                     match resp {
                         Ok(Ok(_)) => {
                             let now = Instant::now();
                             rtt_estimate = rtt_estimate.mul_f64(RTT_ESTIMATE_DECAY) + (now - start).mul_f64(1.0 - RTT_ESTIMATE_DECAY);
+                            // Avoid immediately retrying a successfully sent block.
+                            // Resetting timer is unnecessary otherwise because there are
+                            // additional inflight requests.
+                            retry_timer.reset_after(Self::LAST_BLOCK_RETRY_INTERVAL);
                         },
                         Err(Elapsed { .. }) => {
                             rtt_estimate = rtt_estimate.mul_f64(TIMEOUT_RTT_INCREMENT_FACTOR);
@@ -135,7 +158,16 @@ impl Broadcaster {
                         },
                     };
                 }
+
+                _ = retry_timer.tick() => {
+                    if requests.is_empty() {
+                        if let Some(block) = last_block.clone() {
+                            requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
+                        }
+                    }
+                }
             };
+
             // Limit RTT estimate to be between 5ms and 5s.
             rtt_estimate = min(rtt_estimate, Duration::from_secs(5));
             rtt_estimate = max(rtt_estimate, Duration::from_millis(5));
@@ -151,7 +183,7 @@ impl Broadcaster {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, time::Duration};
+    use std::{collections::BTreeMap, ops::DerefMut, time::Duration};
 
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -176,7 +208,10 @@ mod test {
         }
 
         fn blocks_sent(&self) -> BTreeMap<AuthorityIndex, Vec<Bytes>> {
-            self.blocks_sent.lock().clone()
+            let mut blocks_sent = self.blocks_sent.lock();
+            let result = std::mem::take(blocks_sent.deref_mut());
+            blocks_sent.clear();
+            result
         }
     }
 
@@ -207,7 +242,7 @@ mod test {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let network_client = Arc::new(FakeNetworkClient::new());
-        let (core_signals, signals_receiver) = CoreSignals::new();
+        let (core_signals, signals_receiver) = CoreSignals::new(context.clone());
         let _broadcaster =
             Broadcaster::new(context.clone(), network_client.clone(), &signals_receiver);
 
@@ -217,8 +252,28 @@ mod test {
             "No subscriber active to receive the block"
         );
 
-        sleep(Duration::from_secs(1)).await;
+        // block should be broadcasted immediately to all peers.
+        sleep(Duration::from_millis(1)).await;
+        let blocks_sent = network_client.blocks_sent();
+        for (index, _) in context.committee.authorities() {
+            if index == context.own_index {
+                continue;
+            }
+            assert_eq!(blocks_sent.get(&index).unwrap(), &vec![block.serialized()]);
+        }
 
+        // block should not be re-broadcasted ...
+        sleep(Broadcaster::LAST_BLOCK_RETRY_INTERVAL / 2).await;
+        let blocks_sent = network_client.blocks_sent();
+        for (index, _) in context.committee.authorities() {
+            if index == context.own_index {
+                continue;
+            }
+            assert!(blocks_sent.get(&index).is_none());
+        }
+
+        // ... until LAST_BLOCK_RETRY_INTERVAL
+        sleep(Broadcaster::LAST_BLOCK_RETRY_INTERVAL / 2).await;
         let blocks_sent = network_client.blocks_sent();
         for (index, _) in context.committee.authorities() {
             if index == context.own_index {

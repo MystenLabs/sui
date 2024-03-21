@@ -21,8 +21,9 @@ use super::LockFile;
 /// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
 /// (the compiler will fail to read lock files at newer versions).
 ///
-/// TODO(amnn): Set to version 1 when stabilised.
-pub const VERSION: u64 = 0;
+/// V0: Base version.
+/// V1: Adds toolchain versioning support.
+pub const VERSION: u64 = 1;
 
 /// Table for storing package info under an environment.
 const ENV_TABLE_NAME: &str = "env";

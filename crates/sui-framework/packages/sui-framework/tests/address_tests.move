@@ -24,10 +24,10 @@ module sui::address_tests {
     #[test]
     #[expected_failure(abort_code = sui::address::EAddressParseError)]
     fun from_bytes_too_few_bytes() {
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
         let uid = object::new(&mut ctx);
 
-        let bytes = object::uid_to_bytes(&uid);
+        let mut bytes = object::uid_to_bytes(&uid);
         vector::pop_back(&mut bytes);
 
         let _ = address::from_bytes(bytes);
@@ -38,10 +38,10 @@ module sui::address_tests {
     #[test]
     #[expected_failure(abort_code = sui::address::EAddressParseError)]
     fun test_from_bytes_too_many_bytes() {
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
         let uid = object::new(&mut ctx);
 
-        let bytes = object::uid_to_bytes(&uid);
+        let mut bytes = object::uid_to_bytes(&uid);
         vector::push_back(&mut bytes, 0x42);
 
         let _ = address::from_bytes(bytes);

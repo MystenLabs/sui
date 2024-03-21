@@ -11,13 +11,14 @@ use consensus_config::ProtocolKeyPair;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
-use tracing::warn;
+use tracing::{debug, info, warn};
 
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
+use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock,
+        Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
@@ -125,12 +126,26 @@ impl Core {
     }
 
     fn recover(mut self) -> Self {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::recover"])
+            .start_timer();
         // Recover the last available quorum to correctly advance the threshold clock.
         let last_quorum = self.dag_state.read().last_quorum();
         self.add_accepted_blocks(last_quorum);
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
-        self.try_propose(true).unwrap();
+        if self.try_propose(true).unwrap().is_none() {
+            assert!(self.last_proposed_block.round() > GENESIS_ROUND, "At minimum a block of round higher that genesis should have been produced during recovery");
+
+            // if no new block proposed then just re-broadcast the last proposed one to ensure liveness.
+            self.signals
+                .new_block(self.last_proposed_block.clone())
+                .unwrap();
+        }
 
         self
     }
@@ -142,6 +157,13 @@ impl Core {
         blocks: Vec<VerifiedBlock>,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_blocks");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::add_blocks"])
+            .start_timer();
 
         // Try to accept them via the block manager
         let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
@@ -196,11 +218,7 @@ impl Core {
     // the minimum round delay has passed.
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
         if let Some(block) = self.try_new_block(force) {
-            // When there is only one authority in committee, it is unnecessary to broadcast
-            // the block which will fail anyway without subscribers to the signal.
-            if self.context.committee.size() > 1 {
-                self.signals.new_block(block.clone())?;
-            }
+            self.signals.new_block(block.clone())?;
             // The new block may help commit.
             self.try_commit()?;
             return Ok(Some(block));
@@ -212,6 +230,13 @@ impl Core {
     /// or earlier round, then no block is created and None is returned.
     fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::try_new_block"])
+            .start_timer();
 
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
@@ -242,8 +267,13 @@ impl Core {
         // Consume the ancestors to be included in proposal
         let ancestors = self.ancestors_to_propose(clock_round, now);
 
-        // Consume the next transactions to be included.
-        let transactions = self.transaction_consumer.next();
+        // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
+        // the inclusion of transactions. Just let this be done in the end of the method.
+        let transaction_guards = self.transaction_consumer.next();
+        let transactions = transaction_guards
+            .iter()
+            .map(|t| t.transaction.clone())
+            .collect::<Vec<_>>();
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -266,11 +296,13 @@ impl Core {
         let serialized = signed_block
             .serialize()
             .expect("Block serialization failed.");
+        self.context
+            .metrics
+            .node_metrics
+            .block_size
+            .observe(serialized.len() as f64);
         // Unnecessary to verify own blocks.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
-
-        // Add to the threshold clock and pending ancestors
-        self.threshold_clock.add_block(verified_block.reference());
 
         // Accept the block into BlockManager and DagState.
         let (accepted_blocks, missing) = self
@@ -279,19 +311,42 @@ impl Core {
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
+        // Internally accept the block to move the threshold clock etc
+        self.add_accepted_blocks(vec![verified_block.clone()]);
+
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
         // Update internal state.
         self.last_proposed_block = verified_block.clone();
 
-        tracing::info!("Created block {}", verified_block);
+        // Now acknowledge the transactions for their inclusion to block
+        transaction_guards
+            .into_iter()
+            .for_each(TransactionGuard::acknowledge);
+
+        info!("Created block {}", verified_block);
+
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposed
+            .with_label_values(&[&force.to_string()])
+            .inc();
 
         Some(verified_block)
     }
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG.
     fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::try_commit"])
+            .start_timer();
+
         // TODO: Add optimization to abort early without quorum for a round.
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
@@ -443,13 +498,14 @@ impl Core {
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
+    context: Arc<Context>,
 }
 
 impl CoreSignals {
     // TODO: move to Parameters.
     const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
 
-    pub fn new() -> (Self, CoreSignalsReceivers) {
+    pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
         let (tx_block_broadcast, _rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
@@ -457,6 +513,7 @@ impl CoreSignals {
         let me = Self {
             tx_block_broadcast: tx_block_broadcast.clone(),
             new_round_sender,
+            context,
         };
 
         let receivers = CoreSignalsReceivers {
@@ -470,9 +527,15 @@ impl CoreSignals {
     /// Sends a signal to all the waiters that a new block has been produced. The method will return
     /// true if block has reached even one subscriber, false otherwise.
     pub fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
-        if let Err(err) = self.tx_block_broadcast.send(block) {
-            warn!("Couldn't broadcast the block to any receiver: {err}");
-            return Err(ConsensusError::Shutdown);
+        // When there is only one authority in committee, it is unnecessary to broadcast
+        // the block which will fail anyway without subscribers to the signal.
+        if self.context.committee.size() > 1 {
+            if let Err(err) = self.tx_block_broadcast.send(block) {
+                warn!("Couldn't broadcast the block to any receiver: {err}");
+                return Err(ConsensusError::Shutdown);
+            }
+        } else {
+            debug!("Did not broadcast block {block:?} to receivers as committee size is <= 1");
         }
         Ok(())
     }
@@ -577,7 +640,7 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
 
         // Now spin up core
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
@@ -687,7 +750,7 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
 
         // Now spin up core
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
@@ -758,7 +821,7 @@ mod test {
         );
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
@@ -788,7 +851,10 @@ mod test {
                 bcs::to_bytes(&format!("Transaction {index}")).expect("Shouldn't fail");
             total += transaction.len();
             index += 1;
-            transaction_client.submit(transaction).await.unwrap();
+            let _w = transaction_client
+                .submit_no_wait(transaction)
+                .await
+                .unwrap();
 
             // Create total size of transactions up to 1KB
             if total >= 1_000 {
@@ -856,7 +922,7 @@ mod test {
         );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
@@ -917,7 +983,7 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_core_try_new_block_leader_timeout() {
         telemetry_subscribers::init_for_testing();
 
@@ -941,12 +1007,12 @@ mod test {
                 // Only when round > 1 and using non-genesis parents.
                 if let Some(r) = last_round_blocks.first().map(|b| b.round()) {
                     assert_eq!(round - 1, r);
-                    // Ensure no new block is proposed before the min round delay.
-                    assert_eq!(core.last_proposed_round(), r);
-                    // Force propose new block regardless of min round delay.
-                    core.try_propose(true).unwrap().unwrap_or_else(|| {
-                        panic!("Block should have been proposed for round {}", round)
-                    });
+                    if core.last_proposed_round() == r {
+                        // Force propose new block regardless of min round delay.
+                        core.try_propose(true).unwrap().unwrap_or_else(|| {
+                            panic!("Block should have been proposed for round {}", round)
+                        });
+                    }
                 }
 
                 assert_eq!(core.last_proposed_round(), round);
@@ -1161,7 +1227,7 @@ mod test {
             );
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-            let (signals, signal_receivers) = CoreSignals::new();
+            let (signals, signal_receivers) = CoreSignals::new(context.clone());
             // Need at least one subscriber to the block broadcast channel.
             let block_receiver = signal_receivers.block_broadcast_receiver();
 

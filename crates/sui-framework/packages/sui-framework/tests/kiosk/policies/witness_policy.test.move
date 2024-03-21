@@ -22,7 +22,7 @@ module sui::witness_policy {
     const ERuleNotFound: u64 = 0;
 
     /// Custom witness-key for the "proof policy".
-    struct Rule<phantom Proof: drop> has drop {}
+    public struct Rule<phantom Proof: drop> has drop {}
 
     /// Creator action: adds the Rule.
     /// Requires a "Proof" witness confirmation on every transfer.
@@ -56,20 +56,20 @@ module sui::witness_policy_tests {
     };
 
     /// Confirmation of an action to use in Policy.
-    struct Proof has drop {}
+    public struct Proof has drop {}
 
     /// Malicious attempt to use a different proof.
-    struct Cheat has drop {}
+    public struct Cheat has drop {}
 
     #[test]
     fun test_default_flow() {
         let ctx = &mut ctx();
-        let (policy, cap) = test::prepare(ctx);
+        let (mut policy, cap) = test::prepare(ctx);
 
         // set the lock policy and require `Proof` on every transfer.
         witness_policy::set<Asset, Proof>(&mut policy, &cap);
 
-        let request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
+        let mut request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
 
         witness_policy::prove(Proof {}, &policy, &mut request);
         policy::confirm_request(&policy, request);
@@ -80,7 +80,7 @@ module sui::witness_policy_tests {
     #[expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
     fun test_no_proof() {
         let ctx = &mut ctx();
-        let (policy, cap) = test::prepare(ctx);
+        let (mut policy, cap) = test::prepare(ctx);
 
         // set the lock policy and require `Proof` on every transfer.
         witness_policy::set<Asset, Proof>(&mut policy, &cap);
@@ -94,12 +94,12 @@ module sui::witness_policy_tests {
     #[expected_failure(abort_code = sui::witness_policy::ERuleNotFound)]
     fun test_wrong_proof() {
         let ctx = &mut ctx();
-        let (policy, cap) = test::prepare(ctx);
+        let (mut policy, cap) = test::prepare(ctx);
 
         // set the lock policy and require `Proof` on every transfer.
         witness_policy::set<Asset, Proof>(&mut policy, &cap);
 
-        let request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
+        let mut request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
 
         witness_policy::prove(Cheat {}, &policy, &mut request);
         policy::confirm_request(&policy, request);

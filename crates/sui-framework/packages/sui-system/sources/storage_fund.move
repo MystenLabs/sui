@@ -5,7 +5,7 @@ module sui_system::storage_fund {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
 
-    friend sui_system::sui_system_state_inner;
+    /* friend sui_system::sui_system_state_inner; */
 
     /// Struct representing the storage fund, containing two `Balance`s:
     /// - `total_object_storage_rebates` has the invariant that it's the sum of `storage_rebate` of
@@ -15,13 +15,13 @@ module sui_system::storage_fund {
     ///    the non-refundable portion taken out and put into `non_refundable_balance`.
     /// - `non_refundable_balance` contains any remaining inflow of the storage fund that should not
     ///    be taken out of the fund.
-    struct StorageFund has store {
+    public struct StorageFund has store {
         total_object_storage_rebates: Balance<SUI>,
         non_refundable_balance: Balance<SUI>,
     }
 
     /// Called by `sui_system` at genesis time.
-    public(friend) fun new(initial_fund: Balance<SUI>) : StorageFund {
+    public(package) fun new(initial_fund: Balance<SUI>) : StorageFund {
         StorageFund {
             // At the beginning there's no object in the storage yet
             total_object_storage_rebates: balance::zero(),
@@ -30,7 +30,7 @@ module sui_system::storage_fund {
     }
 
     /// Called by `sui_system` at epoch change times to process the inflows and outflows of storage fund.
-    public(friend) fun advance_epoch(
+    public(package) fun advance_epoch(
         self: &mut StorageFund,
         storage_charges: Balance<SUI>,
         storage_fund_reinvestment: Balance<SUI>,

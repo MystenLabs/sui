@@ -20,7 +20,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     io::{Result, Write},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -205,7 +205,7 @@ impl TestFailure {
 
     fn get_line_number(
         loc: &Loc,
-        files: &SimpleFiles<Symbol, &str>,
+        files: &SimpleFiles<Symbol, Arc<str>>,
         file_mapping: &HashMap<FileHash, usize>,
     ) -> String {
         Self::get_line_number_internal(loc, files, file_mapping)
@@ -214,7 +214,7 @@ impl TestFailure {
 
     fn get_line_number_internal(
         loc: &Loc,
-        files: &SimpleFiles<Symbol, &str>,
+        files: &SimpleFiles<Symbol, Arc<str>>,
         file_mapping: &HashMap<FileHash, usize>,
     ) -> std::result::Result<String, codespan_reporting::files::Error> {
         let id = file_mapping
@@ -239,7 +239,7 @@ impl TestFailure {
             let mut files = SimpleFiles::new();
             let mut file_mapping = HashMap::new();
             for (fhash, (fname, source)) in &test_plan.files {
-                let id = files.add(*fname, source.as_str());
+                let id = files.add(*fname, source.clone());
                 file_mapping.insert(*fhash, id);
             }
 

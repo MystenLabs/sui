@@ -8,7 +8,7 @@ module sui::tx_context_tests {
 
     #[test]
     fun test_id_generation() {
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
         assert!(tx_context::get_ids_created(&ctx) == 0, 0);
 
         let id1 = object::new(&mut ctx);

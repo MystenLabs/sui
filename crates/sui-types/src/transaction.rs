@@ -854,7 +854,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules, _) | Command::Upgrade(modules, _, _, _) => {
+            Command::Publish(modules, deps) | Command::Upgrade(modules, deps, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -864,6 +864,16 @@ impl Command {
                         value: config.max_modules_in_publish().to_string()
                     }
                 );
+                if let Some(max_package_dependencies) = config.max_package_dependencies_as_option()
+                {
+                    fp_ensure!(
+                        deps.len() < max_package_dependencies as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum package dependencies".to_string(),
+                            value: max_package_dependencies.to_string()
+                        }
+                    );
+                };
             }
         };
         Ok(())
@@ -974,25 +984,22 @@ impl ProgrammableTransaction {
         }
 
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
-        if config.enable_randomness_ptb_restrictions() {
-            // Check if there is a random object in the input objects
-            if let Some(random_index) = inputs.iter().position(|obj| {
-                matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
-            }) {
-                let mut used_random_object = false;
-                let random_index = random_index.try_into().unwrap();
-                for command in commands {
-                    if !used_random_object {
-                        used_random_object = command.is_input_arg_used(random_index);
-                    } else {
-                        fp_ensure!(
-                            matches!(
-                                command,
-                                Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
-                            ),
-                            UserInputError::PostRandomCommandRestrictions
-                        );
-                    }
+        if let Some(random_index) = inputs.iter().position(|obj| {
+            matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+        }) {
+            let mut used_random_object = false;
+            let random_index = random_index.try_into().unwrap();
+            for command in commands {
+                if !used_random_object {
+                    used_random_object = command.is_input_arg_used(random_index);
+                } else {
+                    fp_ensure!(
+                        matches!(
+                            command,
+                            Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
+                        ),
+                        UserInputError::PostRandomCommandRestrictions
+                    );
                 }
             }
         }
