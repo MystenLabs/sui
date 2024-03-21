@@ -50,7 +50,8 @@ sui-types.workspace = true
 tap.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio-util = { workspace = true, features = ["rt"] }
 toml.workspace = true
 tower.workspace = true
 tower-http.workspace = true
