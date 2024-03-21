@@ -146,6 +146,7 @@ impl NetworkClient for TonicClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -160,6 +161,7 @@ impl NetworkClient for TonicClient {
                     }
                 })
                 .collect(),
+            highest_accepted_rounds,
         });
         request.set_timeout(timeout);
         // TODO: remove below after adding authentication.
@@ -170,7 +172,13 @@ impl NetworkClient for TonicClient {
         let mut stream = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?
+            .map_err(|e| {
+                if e.code() == tonic::Code::DeadlineExceeded {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                } else {
+                    ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?
             .into_inner();
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
@@ -194,6 +202,11 @@ impl NetworkClient for TonicClient {
                 }
                 Err(e) => {
                     if blocks.is_empty() {
+                        if e.code() == tonic::Code::DeadlineExceeded {
+                            return Err(ConsensusError::NetworkRequestTimeout(format!(
+                                "fetch_blocks failed mid-stream: {e:?}"
+                            )));
+                        }
                         return Err(ConsensusError::NetworkError(format!(
                             "fetch_blocks failed mid-stream: {e:?}"
                         )));
@@ -392,8 +405,8 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::invalid_argument("Invalid authority index"));
         };
-        let block_refs = request
-            .into_inner()
+        let inner = request.into_inner();
+        let block_refs = inner
             .block_refs
             .into_iter()
             .filter_map(|serialized| match bcs::from_bytes(&serialized) {
@@ -404,9 +417,10 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 }
             })
             .collect();
+        let highest_accepted_rounds = inner.highest_accepted_rounds;
         let blocks = self
             .service
-            .handle_fetch_blocks(peer_index, block_refs)
+            .handle_fetch_blocks(peer_index, block_refs, highest_accepted_rounds)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
@@ -635,11 +649,15 @@ pub(crate) struct SubscribeBlocksResponse {
 pub(crate) struct FetchBlocksRequest {
     #[prost(bytes = "vec", repeated, tag = "1")]
     block_refs: Vec<Vec<u8>>,
+    // The highest accepted round per authority. The vector represents the round for each authority
+    // and its length should be the same as the committee size.
+    #[prost(uint32, repeated, tag = "2")]
+    highest_accepted_rounds: Vec<Round>,
 }
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct FetchBlocksResponse {
-    // Serialized SignedBlock.
+    // The response of the requested blocks as Serialized SignedBlock.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     blocks: Vec<Bytes>,
 }

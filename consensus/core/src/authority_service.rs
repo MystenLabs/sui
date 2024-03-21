@@ -221,7 +221,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
+        const MAX_ADDITIONAL_BLOCKS: usize = 10;
         if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
         }
@@ -242,12 +244,37 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // For now ask dag state directly
         let blocks = self.dag_state.read().get_blocks(&block_refs);
 
-        // Return the serialised blocks
-        let result = blocks
+        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
+        // that ancestor blocks up to 10
+        let all_ancestors = blocks
+            .iter()
+            .flatten()
+            .flat_map(|block| block.ancestors().to_vec())
+            .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+            .take(MAX_ADDITIONAL_BLOCKS)
+            .collect::<Vec<_>>();
+
+        let mut ancestor_blocks = vec![];
+        if !all_ancestors.is_empty() {
+            ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+        }
+
+        // Return the serialised blocks & the ancestor blocks
+        let mut result = blocks
             .into_iter()
             .flatten()
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();
+
+        let result_ancestors = ancestor_blocks
+            .into_iter()
+            .flatten()
+            .map(|block| block.serialized().clone())
+            .collect::<Vec<_>>();
+
+        // Use as a separator empty Bytes. Any blocks after the empty Bytes should be the result ancestors
+        result.push(Bytes::new());
+        result.extend(result_ancestors);
 
         Ok(result)
     }

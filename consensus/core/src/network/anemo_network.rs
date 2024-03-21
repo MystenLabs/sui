@@ -8,6 +8,8 @@ use std::{
     time::Duration,
 };
 
+use anemo::rpc::Status;
+use anemo::types::response::StatusCode;
 use anemo::{types::PeerInfo, PeerId, Response};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
@@ -155,6 +157,7 @@ impl NetworkClient for AnemoClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -169,12 +172,20 @@ impl NetworkClient for AnemoClient {
                     }
                 })
                 .collect(),
+            highest_accepted_rounds,
         };
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
-        Ok(response.into_body().blocks)
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks timeout: {e:?}"))
+                } else {
+                    ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?;
+        let body = response.into_body();
+        Ok(body.blocks)
     }
 
     async fn fetch_commits(
@@ -262,8 +273,8 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer not found",
             )
         })?;
-        let block_refs = request
-            .into_body()
+        let body = request.into_body();
+        let block_refs = body
             .block_refs
             .into_iter()
             .filter_map(|serialized| match bcs::from_bytes(&serialized) {
@@ -274,9 +285,12 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 }
             })
             .collect();
+
+        let highest_accepted_rounds = body.highest_accepted_rounds;
+
         let blocks = self
             .service
-            .handle_fetch_blocks(*index, block_refs)
+            .handle_fetch_blocks(*index, block_refs, highest_accepted_rounds)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -571,6 +585,7 @@ pub(crate) struct SendBlockResponse {}
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct FetchBlocksRequest {
     block_refs: Vec<Vec<u8>>,
+    highest_accepted_rounds: Vec<Round>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

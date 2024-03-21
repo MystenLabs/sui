@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -11,6 +12,7 @@ use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tracing::warn;
 
+use crate::block::{timestamp_utc_ms, BlockTimestampMs};
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
     block_verifier::BlockVerifier,
@@ -21,6 +23,7 @@ use crate::{
 struct SuspendedBlock {
     block: VerifiedBlock,
     missing_ancestors: BTreeSet<BlockRef>,
+    timestamp: BlockTimestampMs,
 }
 
 impl SuspendedBlock {
@@ -28,6 +31,7 @@ impl SuspendedBlock {
         Self {
             block,
             missing_ancestors,
+            timestamp: timestamp_utc_ms(),
         }
     }
 }
@@ -73,7 +77,7 @@ impl BlockManager {
 
     /// Tries to accept the provided blocks assuming that all their causal history exists. The method
     /// returns all the blocks that have been successfully processed in round ascending order, that includes also previously
-    /// suspended blocks that have now been able to get accepted. Method also returns a set with the new missing ancestor blocks.
+    /// suspended blocks that have now been able to get accepted. Method also returns a set with the missing ancestor blocks.
     pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
@@ -83,10 +87,13 @@ impl BlockManager {
         blocks.sort_by_key(|b| b.round());
 
         let mut accepted_blocks = vec![];
-        let missing_blocks_before = self.missing_blocks.clone();
+        let mut missing_blocks = BTreeSet::new();
 
         for block in blocks {
-            if let Some(block) = self.try_accept_one_block(block) {
+            let (block, blocks_to_fetch) = self.try_accept_one_block(block);
+            missing_blocks.extend(&blocks_to_fetch);
+
+            if let Some(block) = block {
                 // Try to unsuspend any children blocks.
                 let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
 
@@ -151,19 +158,10 @@ impl BlockManager {
             }
         }
 
-        // Newly missed blocks
-        // TODO: make sure that the computation here is bounded either in the byzantine or node fall
-        // back scenario.
-        let missing_blocks_after = self
-            .missing_blocks
-            .difference(&missing_blocks_before)
-            .cloned()
-            .collect::<BTreeSet<_>>();
-
         let metrics = &self.context.metrics.node_metrics;
         metrics
             .missing_blocks_total
-            .set(missing_blocks_after.len() as i64);
+            .inc_by(missing_blocks.len() as u64);
         metrics
             .block_manager_suspended_blocks
             .set(self.suspended_blocks.len() as i64);
@@ -175,20 +173,24 @@ impl BlockManager {
             .set(self.missing_blocks.len() as i64);
 
         // Figure out the new missing blocks
-        (accepted_blocks, missing_blocks_after)
+        (accepted_blocks, missing_blocks)
     }
 
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
-    fn try_accept_one_block(&mut self, block: VerifiedBlock) -> Option<VerifiedBlock> {
+    fn try_accept_one_block(
+        &mut self,
+        block: VerifiedBlock,
+    ) -> (Option<VerifiedBlock>, BTreeSet<BlockRef>) {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
+        let mut ancestors_to_fetch = BTreeSet::new();
         let dag_state = self.dag_state.read();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
-            return None;
+            return (None, ancestors_to_fetch);
         }
 
         let ancestors = block.ancestors();
@@ -212,6 +214,7 @@ impl BlockManager {
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
                     self.missing_blocks.insert(*ancestor);
+                    ancestors_to_fetch.insert(*ancestor);
                 }
             }
         }
@@ -235,10 +238,10 @@ impl BlockManager {
                 .inc();
             self.suspended_blocks
                 .insert(block_ref, SuspendedBlock::new(block, missing_ancestors));
-            return None;
+            return (None, ancestors_to_fetch);
         }
 
-        Some(block)
+        (Some(block), ancestors_to_fetch)
     }
 
     /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
@@ -259,19 +262,21 @@ impl BlockManager {
                     // For each dependency try to unsuspend it. If that's successful then we add it to the queue so
                     // we can recursively try to unsuspend its children.
                     if let Some(block) = self.try_unsuspend_block(&r, &block.reference()) {
-                        unsuspended_blocks.push(block.block.clone());
-                        to_process_blocks.push(block.block);
+                        to_process_blocks.push(block.block.clone());
+                        unsuspended_blocks.push(block);
                     }
                 }
             }
         }
+
+        let now = timestamp_utc_ms();
 
         // Report the unsuspended blocks
         for block in &unsuspended_blocks {
             let hostname = self
                 .context
                 .committee
-                .authority(block.author())
+                .authority(block.block.author())
                 .hostname
                 .as_str();
             self.context
@@ -280,9 +285,18 @@ impl BlockManager {
                 .block_unsuspensions
                 .with_label_values(&[hostname])
                 .inc();
+            self.context
+                .metrics
+                .node_metrics
+                .suspended_block_time
+                .with_label_values(&[hostname])
+                .observe(Duration::from_millis(now.saturating_sub(block.timestamp)).as_secs_f64());
         }
 
         unsuspended_blocks
+            .into_iter()
+            .map(|block| block.block)
+            .collect()
     }
 
     /// Attempts to unsuspend a block by checking its ancestors and removing the `accepted_dependency` by its local set.
@@ -395,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn try_accept_block_returns_missing_blocks_once() {
+    fn try_accept_block_returns_missing_blocks() {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -409,11 +423,10 @@ mod tests {
 
         // Take the blocks from round 4 up to 2 (included). Only the first block of each round should return missing
         // ancestors when try to accept
-        for (i, block) in all_blocks
+        for block in all_blocks
             .into_iter()
             .rev()
             .take_while(|block| block.round() >= 2)
-            .enumerate()
         {
             // WHEN
             let (accepted_blocks, missing) = block_manager.try_accept_blocks(vec![block.clone()]);
@@ -421,13 +434,8 @@ mod tests {
             // THEN
             assert!(accepted_blocks.is_empty());
 
-            // Only the first block for each round should return missing blocks. Every other shouldn't
-            if i % 4 == 0 {
-                let block_ancestors = block.ancestors().iter().cloned().collect::<BTreeSet<_>>();
-                assert_eq!(missing, block_ancestors);
-            } else {
-                assert!(missing.is_empty());
-            }
+            let block_ancestors = block.ancestors().iter().cloned().collect::<BTreeSet<_>>();
+            assert_eq!(missing, block_ancestors);
         }
     }
 
