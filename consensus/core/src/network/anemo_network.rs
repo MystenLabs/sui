@@ -22,7 +22,7 @@ use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use prometheus::HistogramTimer;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use super::{
     anemo_gen::{
@@ -146,7 +146,18 @@ impl NetworkClient for AnemoClient {
         let mut client = self
             .get_anemo_client(peer, Self::FETCH_BLOCK_TIMEOUT)
             .await?;
-        let request = FetchBlocksRequest { block_refs };
+        let request = FetchBlocksRequest {
+            block_refs: block_refs
+                .iter()
+                .filter_map(|r| match bcs::to_bytes(r) {
+                    Ok(serialized) => Some(serialized),
+                    Err(e) => {
+                        debug!("Failed to serialize block ref {:?}: {e:?}", r);
+                        None
+                    }
+                })
+                .collect(),
+        };
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(Self::FETCH_BLOCK_TIMEOUT))
             .await
@@ -222,7 +233,18 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer not found",
             )
         })?;
-        let block_refs = request.into_body().block_refs;
+        let block_refs = request
+            .into_body()
+            .block_refs
+            .into_iter()
+            .filter_map(|serialized| match bcs::from_bytes(&serialized) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    debug!("Failed to deserialize block ref {:?}: {e:?}", serialized);
+                    None
+                }
+            })
+            .collect();
         let blocks = self
             .service
             .handle_fetch_blocks(*index, block_refs)

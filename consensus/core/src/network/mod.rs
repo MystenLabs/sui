@@ -15,7 +15,12 @@ mod anemo_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
 }
 
+mod tonic_gen {
+    include!(concat!(env!("OUT_DIR"), "/consensus.Consensus.rs"));
+}
+
 pub(crate) mod anemo_network;
+// pub(crate) mod tonic_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
@@ -69,19 +74,25 @@ where
 }
 
 /// Network message types.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, prost::Message)]
 pub(crate) struct SendBlockRequest {
     // Serialized SignedBlock.
+    #[prost(bytes = "bytes", tag = "1")]
     block: Bytes,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+
+#[derive(Clone, Serialize, Deserialize, prost::Message)]
 pub(crate) struct SendBlockResponse {}
-#[derive(Clone, Debug, Serialize, Deserialize)]
+
+#[derive(Clone, Serialize, Deserialize, prost::Message)]
 pub(crate) struct FetchBlocksRequest {
-    block_refs: Vec<BlockRef>,
+    #[prost(bytes = "vec", repeated, tag = "1")]
+    block_refs: Vec<Vec<u8>>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+
+#[derive(Clone, Serialize, Deserialize, prost::Message)]
 pub(crate) struct FetchBlocksResponse {
     // Serialized SignedBlock.
+    #[prost(bytes = "bytes", repeated, tag = "1")]
     blocks: Vec<Bytes>,
 }
