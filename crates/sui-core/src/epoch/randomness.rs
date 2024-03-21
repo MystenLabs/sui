@@ -3,6 +3,7 @@
 
 use anemo::PeerId;
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::error::FastCryptoError;
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
@@ -148,7 +149,10 @@ impl RandomnessManager {
                 .try_into()
                 .expect("validity threshold should fit in u16"),
             protocol_config.random_beacon_reduction_allowed_delta(),
-            protocol_config.random_beacon_reduction_lower_bound(),
+            protocol_config
+                .random_beacon_reduction_lower_bound()
+                .try_into()
+                .expect("should fit u16"),
         );
         let total_weight = nodes.total_weight();
         let num_nodes = nodes.num_nodes();
@@ -169,7 +173,7 @@ impl RandomnessManager {
         let party = match dkg::Party::<PkG, EncG>::new(
             fastcrypto_tbls::ecies::PrivateKey::<bls12381::G2Element>::from(randomness_private_key),
             nodes,
-            t.into(),
+            t,
             fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
@@ -390,7 +394,21 @@ impl Inner {
         }
         let _ = self.dkg_start_time.set(Instant::now());
 
-        let msg = self.party.create_message(&mut rand::thread_rng());
+        let msg = match self.party.create_message(&mut rand::thread_rng()) {
+            Ok(msg) => msg,
+            Err(FastCryptoError::IgnoredMessage) => {
+                info!(
+                    "random beacon: no DKG Message for party id={} (zero weight)",
+                    self.party.id
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                error!("random beacon: error while creating a DKG Message: {e:?}");
+                return Ok(());
+            }
+        };
+
         info!(
                 "random beacon: created DKG Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
                 msg.sender,
@@ -468,7 +486,6 @@ impl Inner {
                     .get()
                     .expect("checked above that `used_messages` is initialized"),
                 &self.confirmations.values().cloned().collect::<Vec<_>>(),
-                self.party.t() * 2 - 1, // t==f+1, we want 2f+1
                 &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail"),
             ) {
                 Ok(output) => {
