@@ -367,7 +367,7 @@ Sender is not @0x0 the system address.
     } <b>else</b> <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(a_bytes) &gt; <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(b_bytes)) {
         <b>false</b>
     } <b>else</b> {
-        <b>let</b> i = 0;
+        <b>let</b> <b>mut</b> i = 0;
         <b>while</b> (i &lt; <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(a_bytes)) {
             <b>let</b> a_byte = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(a_bytes, i);
             <b>let</b> b_byte = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(b_bytes, i);
@@ -456,7 +456,7 @@ Can only be called by genesis or change_epoch transactions.
         active_jwks: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[],
     };
 
-    <b>let</b> self = <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a> {
+    <b>let</b> <b>mut</b> self = <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_AuthenticatorState">AuthenticatorState</a> {
         id: <a href="../sui-framework/object.md#0x2_object_authenticator_state">object::authenticator_state</a>(),
         version,
     };
@@ -554,7 +554,7 @@ Can only be called by genesis or change_epoch transactions.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_check_sorted">check_sorted</a>(new_active_jwks: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt;) {
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(new_active_jwks) - 1) {
         <b>let</b> a = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(new_active_jwks, i);
         <b>let</b> b = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(new_active_jwks, i + 1);
@@ -600,9 +600,9 @@ indicate that the JWK has been validated in the current epoch and should not be 
 
     <b>let</b> inner = <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self);
 
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> i = 0;
-    <b>let</b> j = 0;
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> j = 0;
     <b>let</b> active_jwks_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&inner.active_jwks);
     <b>let</b> new_active_jwks_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&new_active_jwks);
 
@@ -612,7 +612,7 @@ indicate that the JWK has been validated in the current epoch and should not be 
 
         // when they are equal, push only one, but <b>use</b> the max epoch of the two
         <b>if</b> (<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_active_jwk_equal">active_jwk_equal</a>(old_jwk, new_jwk)) {
-            <b>let</b> jwk = *old_jwk;
+            <b>let</b> <b>mut</b> jwk = *old_jwk;
             jwk.epoch = <a href="../sui-framework/math.md#0x2_math_max">math::max</a>(old_jwk.epoch, new_jwk.epoch);
             <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> res, jwk);
             i = i + 1;
@@ -666,9 +666,9 @@ indicate that the JWK has been validated in the current epoch and should not be 
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_deduplicate">deduplicate</a>(jwks: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; {
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> i = 0;
-    <b>let</b> prev: Option&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_JwkId">JwkId</a>&gt; = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> prev: Option&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_JwkId">JwkId</a>&gt; = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     <b>while</b> (i &lt; <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&jwks)) {
         <b>let</b> jwk = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&jwks, i);
         <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(&prev)) {
@@ -720,9 +720,9 @@ indicate that the JWK has been validated in the current epoch and should not be 
 
     // first we count how many jwks from each issuer are above the min_epoch
     // and store the counts in a <a href="../move-stdlib/vector.md#0x1_vector">vector</a> that parallels the (sorted) active_jwks <a href="../move-stdlib/vector.md#0x1_vector">vector</a>
-    <b>let</b> issuer_max_epochs = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> i = 0;
-    <b>let</b> prev_issuer: Option&lt;String&gt; = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
+    <b>let</b> <b>mut</b> issuer_max_epochs = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> prev_issuer: Option&lt;String&gt; = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
 
     <b>while</b> (i &lt; len) {
         <b>let</b> cur = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&inner.active_jwks, i);
@@ -745,10 +745,10 @@ indicate that the JWK has been validated in the current epoch and should not be 
 
     // Now, filter out any JWKs that are below the min_epoch, unless that issuer <b>has</b> no
     // JWKs &gt;= the min_epoch, in which case we keep all of them.
-    <b>let</b> new_active_jwks: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> prev_issuer: Option&lt;String&gt; = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
-    <b>let</b> i = 0;
-    <b>let</b> j = 0;
+    <b>let</b> <b>mut</b> new_active_jwks: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> prev_issuer: Option&lt;String&gt; = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> j = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> jwk = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&inner.active_jwks, i);
         <b>let</b> cur_iss = &jwk.jwk_id.iss;

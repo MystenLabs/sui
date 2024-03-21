@@ -130,7 +130,7 @@ Create a new Versioned object that contains a initial value of type <code>T</cod
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_create">create</a>&lt;T: store&gt;(init_version: u64, init_value: T, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> {
-    <b>let</b> self = <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> {
+    <b>let</b> <b>mut</b> self = <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         version: init_version,
     };
@@ -298,7 +298,7 @@ Destroy this Versioned container, and return the inner object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_destroy">destroy</a>&lt;T: store&gt;(self: <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>): T {
-    <b>let</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> { id, version } = self;
+    <b>let</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> { <b>mut</b> id, version } = self;
     <b>let</b> ret = <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> id, version);
     <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
     ret

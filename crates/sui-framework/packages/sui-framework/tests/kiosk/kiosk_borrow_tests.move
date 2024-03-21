@@ -15,7 +15,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow() {
         let ctx = &mut utils::ctx();
         let (item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
 
         kiosk::place(&mut kiosk, &cap, item);
         let _item_ref = kiosk::borrow<Asset>(&kiosk, &cap, id);
@@ -59,7 +59,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_mut() {
         let ctx = &mut utils::ctx();
         let (item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
 
         kiosk::place(&mut kiosk, &cap, item);
         let _item_mut = kiosk::borrow_mut<Asset>(&mut kiosk, &cap, id);
@@ -74,7 +74,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_mut_fail_not_owner() {
         let ctx = &mut utils::ctx();
         let (_item, id) = utils::get_asset(ctx);
-        let (kiosk, _cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, _cap) = utils::get_kiosk(ctx);
         let (_kiosk, cap) = utils::get_kiosk(ctx);
         let _item_mut = kiosk::borrow_mut<Asset>(&mut kiosk, &cap, id);
 
@@ -86,7 +86,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_mut_fail_item_not_found() {
         let ctx = &mut utils::ctx();
         let (_item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
         let _item_mut = kiosk::borrow_mut<Asset>(&mut kiosk, &cap, id);
 
         abort 1337
@@ -97,7 +97,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_mut_fail_item_is_listed() {
         let ctx = &mut utils::ctx();
         let (item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
 
         kiosk::place_and_list(&mut kiosk, &cap, item, AMT);
         let _item_mut = kiosk::borrow_mut<Asset>(&mut kiosk, &cap, id);
@@ -111,7 +111,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_val() {
         let ctx = &mut utils::ctx();
         let (item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
 
         kiosk::place(&mut kiosk, &cap, item);
         let (item, potato) = kiosk::borrow_val<Asset>(&mut kiosk, &cap, id);
@@ -129,7 +129,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_val_fail_not_owner() {
         let ctx = &mut utils::ctx();
         let (_item, id) = utils::get_asset(ctx);
-        let (kiosk, _cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, _cap) = utils::get_kiosk(ctx);
         let (_kiosk, cap) = utils::get_kiosk(ctx);
         let (_item, _borrow) = kiosk::borrow_val<Asset>(&mut kiosk, &cap, id);
 
@@ -141,7 +141,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_val_fail_item_not_found() {
         let ctx = &mut utils::ctx();
         let (_item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
         let (_item, _borrow) = kiosk::borrow_val<Asset>(&mut kiosk, &cap, id);
 
         abort 1337
@@ -152,7 +152,7 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_val_fail_item_is_listed() {
         let ctx = &mut utils::ctx();
         let (item, id) = utils::get_asset(ctx);
-        let (kiosk, cap) = utils::get_kiosk(ctx);
+        let (mut kiosk, cap) = utils::get_kiosk(ctx);
 
         kiosk::place_and_list(&mut kiosk, &cap, item, AMT);
         let (_item, _borrow) = kiosk::borrow_val<Asset>(&mut kiosk, &cap, id);
@@ -165,11 +165,11 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_val_fail_wrong_kiosk() {
         let ctx = &mut utils::ctx();
         let (item_1, id_1) = utils::get_asset(ctx);
-        let (kiosk_1, cap_1) = utils::get_kiosk(ctx);
+        let (mut kiosk_1, cap_1) = utils::get_kiosk(ctx);
         kiosk::place(&mut kiosk_1, &cap_1, item_1);
 
         let (item_2, id_2) = utils::get_asset(ctx);
-        let (kiosk_2, cap_2) = utils::get_kiosk(ctx);
+        let (mut kiosk_2, cap_2) = utils::get_kiosk(ctx);
         kiosk::place(&mut kiosk_2, &cap_2, item_2);
 
         let (item, _borrow) = kiosk::borrow_val<Asset>(&mut kiosk_1, &cap_1, id_1);
@@ -185,11 +185,11 @@ module sui::kiosk_borrow_tests {
     fun test_borrow_val_fail_item_mismatch() {
         let ctx = &mut utils::ctx();
         let (item_1, id_1) = utils::get_asset(ctx);
-        let (kiosk_1, cap_1) = utils::get_kiosk(ctx);
+        let (mut kiosk_1, cap_1) = utils::get_kiosk(ctx);
         kiosk::place(&mut kiosk_1, &cap_1, item_1);
 
         let (item_2, id_2) = utils::get_asset(ctx);
-        let (kiosk_2, cap_2) = utils::get_kiosk(ctx);
+        let (mut kiosk_2, cap_2) = utils::get_kiosk(ctx);
         kiosk::place(&mut kiosk_2, &cap_2, item_2);
 
         let (item, _borrow) = kiosk::borrow_val<Asset>(&mut kiosk_1, &cap_1, id_1);

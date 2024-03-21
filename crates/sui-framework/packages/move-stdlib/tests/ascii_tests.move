@@ -11,9 +11,9 @@ module std::ascii_tests {
 
     #[test]
     fun test_ascii_chars() {
-        let i = 0;
+        let mut i = 0;
         let end = 128;
-        let vec = vector::empty();
+        let mut vec = vector::empty();
 
         while (i < end) {
             assert!(ascii::is_valid_char(i), 0);
@@ -29,9 +29,9 @@ module std::ascii_tests {
 
     #[test]
     fun test_ascii_push_chars() {
-        let i = 0;
+        let mut i = 0;
         let end = 128;
-        let str = ascii::string(vector::empty());
+        let mut str = ascii::string(vector::empty());
 
         while (i < end) {
             ascii::push_char(&mut str, ascii::char(i));
@@ -45,9 +45,9 @@ module std::ascii_tests {
 
     #[test]
     fun test_ascii_push_char_pop_char() {
-        let i = 0;
+        let mut i = 0;
         let end = 128;
-        let str = ascii::string(vector::empty());
+        let mut str = ascii::string(vector::empty());
 
         while (i < end) {
             ascii::push_char(&mut str, ascii::char(i));
@@ -67,9 +67,9 @@ module std::ascii_tests {
 
     #[test]
     fun test_printable_chars() {
-        let i = 0x20;
+        let mut i = 0x20;
         let end = 0x7E;
-        let vec = vector::empty();
+        let mut vec = vector::empty();
 
         while (i <= end) {
             assert!(ascii::is_printable_char(i), 0);
@@ -95,7 +95,7 @@ module std::ascii_tests {
 
     #[test]
     fun test_invalid_ascii_characters() {
-        let i = 128u8;
+        let mut i = 128u8;
         let end = 255u8;
         while (i < end) {
             let try_str = ascii::try_string(vector::singleton(i));
@@ -106,7 +106,7 @@ module std::ascii_tests {
 
     #[test]
     fun test_nonvisible_chars() {
-        let i = 0;
+        let mut i = 0;
         let end = 0x09;
         while (i < end) {
             let str = ascii::string(vector::singleton(i));
@@ -114,7 +114,7 @@ module std::ascii_tests {
             i = i + 1;
         };
 
-        let i = 0x0B;
+        let mut i = 0x0B;
         let end = 0x0F;
         while (i <= end) {
             let str = ascii::string(vector::singleton(i));

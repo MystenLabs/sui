@@ -11,7 +11,7 @@ module sui::coin_balance_tests {
 
     #[test]
     fun type_morphing() {
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         let test = &mut scenario;
 
         let balance = balance::zero<SUI>();
@@ -20,14 +20,14 @@ module sui::coin_balance_tests {
 
         balance::destroy_zero(balance);
 
-        let coin = coin::mint_for_testing<SUI>(100, ctx(test));
+        let mut coin = coin::mint_for_testing<SUI>(100, ctx(test));
         let balance_mut = coin::balance_mut(&mut coin);
         let sub_balance = balance::split(balance_mut, 50);
 
         assert!(balance::value(&sub_balance) == 50, 0);
         assert!(coin::value(&coin) == 50, 0);
 
-        let balance = coin::into_balance(coin);
+        let mut balance = coin::into_balance(coin);
         balance::join(&mut balance, sub_balance);
 
         assert!(balance::value(&balance) == 100, 0);

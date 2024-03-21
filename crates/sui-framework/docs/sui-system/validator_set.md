@@ -637,17 +637,17 @@ The epoch value corresponds to the first epoch this change takes place.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_new">new</a>(init_active_validators: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext): <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_new">new</a>(init_active_validators: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext): <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a> {
     <b>let</b> total_stake = <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&init_active_validators);
-    <b>let</b> staking_pool_mappings = <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx);
+    <b>let</b> <b>mut</b> staking_pool_mappings = <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx);
     <b>let</b> num_validators = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&init_active_validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; num_validators) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&init_active_validators, i);
         <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> staking_pool_mappings, staking_pool_id(<a href="validator.md#0x3_validator">validator</a>), sui_address(<a href="validator.md#0x3_validator">validator</a>));
         i = i + 1;
     };
-    <b>let</b> validators = <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a> {
+    <b>let</b> <b>mut</b> validators = <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a> {
         total_stake,
         active_validators: init_active_validators,
         pending_active_validators: <a href="../sui-framework/table_vec.md#0x2_table_vec_empty">table_vec::empty</a>(ctx),
@@ -683,7 +683,7 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> to 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     <a href="validator.md#0x3_validator">validator</a>: Validator,
     ctx: &<b>mut</b> TxContext,
@@ -732,14 +732,14 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> to 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_remove_validator_candidate">request_remove_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_remove_validator_candidate">request_remove_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> validator_address = <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
      <b>assert</b>!(
         <a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address),
         <a href="validator_set.md#0x3_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>
     );
     <b>let</b> wrapper = <a href="../sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
-    <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_wrapper.md#0x3_validator_wrapper_destroy">validator_wrapper::destroy</a>(wrapper);
+    <b>let</b> <b>mut</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_wrapper.md#0x3_validator_wrapper_destroy">validator_wrapper::destroy</a>(wrapper);
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x3_validator">validator</a>), <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
 
     <b>let</b> staking_pool_id = staking_pool_id(&<a href="validator.md#0x3_validator">validator</a>);
@@ -780,7 +780,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &TxContext) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &TxContext) {
     <b>let</b> validator_address = <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>assert</b>!(
         <a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address),
@@ -819,7 +819,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &Validator) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &Validator) {
     // Validator here must be active or pending, and thus must be identified <b>as</b> duplicate exactly once.
     <b>assert</b>!(
         <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(&self.active_validators, <a href="validator.md#0x3_validator">validator</a>) +
@@ -852,12 +852,12 @@ Only an active validator can request to be removed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_remove_validator">request_remove_validator</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_remove_validator">request_remove_validator</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &TxContext,
 ) {
     <b>let</b> validator_address = <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
     <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>);
     <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <b>assert</b>!(
@@ -891,7 +891,7 @@ Aborts in case the staking amount is smaller than MIN_STAKING_THRESHOLD
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_stake">request_add_stake</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_stake">request_add_stake</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
     stake: Balance&lt;SUI&gt;,
@@ -929,7 +929,7 @@ the stake and any rewards corresponding to it will be immediately processed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_withdraw_stake">request_withdraw_stake</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_withdraw_stake">request_withdraw_stake</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     staked_sui: StakedSui,
     ctx: &TxContext,
@@ -967,7 +967,7 @@ the stake and any rewards corresponding to it will be immediately processed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     new_commission_rate: u64,
     ctx: &TxContext,
@@ -1004,7 +1004,7 @@ It does the following things:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     computation_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
@@ -1132,7 +1132,7 @@ It does the following things:
     ctx: &<b>mut</b> TxContext
 ) {
     // Iterate through all the active validators, record their low stake status, and kick them out <b>if</b> the condition is met.
-    <b>let</b> i = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.active_validators);
+    <b>let</b> <b>mut</b> i = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.active_validators);
     <b>while</b> (i &gt; 0) {
         i = i - 1;
         <b>let</b> validator_ref = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.active_validators, i);
@@ -1193,7 +1193,7 @@ Effectutate pending next epoch metadata if they are staged.
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
 ) {
     <b>let</b> num_validators = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.active_validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; num_validators) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, i);
         <a href="validator.md#0x3_validator_effectuate_staged_metadata">validator::effectuate_staged_metadata</a>(<a href="validator.md#0x3_validator">validator</a>);
@@ -1228,8 +1228,8 @@ gas price, weighted by stake.
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_derive_reference_gas_price">derive_reference_gas_price</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
     <b>let</b> vs = &self.active_validators;
     <b>let</b> num_validators = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(vs);
-    <b>let</b> entries = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> entries = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; num_validators) {
         <b>let</b> v = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(vs, i);
         <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(
@@ -1239,10 +1239,10 @@ gas price, weighted by stake.
         i = i + 1;
     };
     // Build a priority queue that will pop entries <b>with</b> gas price from the highest <b>to</b> the lowest.
-    <b>let</b> pq = pq::new(entries);
-    <b>let</b> sum = 0;
+    <b>let</b> <b>mut</b> pq = pq::new(entries);
+    <b>let</b> <b>mut</b> sum = 0;
     <b>let</b> threshold = <a href="voting_power.md#0x3_voting_power_total_voting_power">voting_power::total_voting_power</a>() - <a href="voting_power.md#0x3_voting_power_quorum_threshold">voting_power::quorum_threshold</a>();
-    <b>let</b> result = 0;
+    <b>let</b> <b>mut</b> result = 0;
     <b>while</b> (sum &lt; threshold) {
         <b>let</b> (gas_price, <a href="voting_power.md#0x3_voting_power">voting_power</a>) = pq::pop_max(&<b>mut</b> pq);
         result = gas_price;
@@ -1394,7 +1394,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID
 ) : &Table&lt;u64, PoolTokenExchangeRate&gt; {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> =
@@ -1430,7 +1430,7 @@ Get the total number of validators in the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
     <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.active_validators) - <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.pending_removals) + <a href="../sui-framework/table_vec.md#0x2_table_vec_length">table_vec::length</a>(&self.pending_active_validators)
 }
 </code></pre>
@@ -1455,7 +1455,7 @@ Returns true iff the address exists in active validators.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(
     self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
 ): bool {
@@ -1509,7 +1509,7 @@ only the sui address but this function looks at more metadata.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
     <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators, new_validator) &gt; 0
 }
 </code></pre>
@@ -1535,8 +1535,8 @@ only the sui address but this function looks at more metadata.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): u64 {
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
-    <b>let</b> result = 0;
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> result = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> v = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x3_validator_is_duplicate">validator::is_duplicate</a>(v, <a href="validator.md#0x3_validator">validator</a>)) {
@@ -1594,8 +1594,8 @@ Checks whether <code>new_validator</code> is duplicate with any currently pendin
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &TableVec&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): u64 {
     <b>let</b> len = <a href="../sui-framework/table_vec.md#0x2_table_vec_length">table_vec::length</a>(validators);
-    <b>let</b> i = 0;
-    <b>let</b> result = 0;
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> result = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> v = <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x3_validator_is_duplicate">validator::is_duplicate</a>(v, <a href="validator.md#0x3_validator">validator</a>)) {
@@ -1660,7 +1660,7 @@ If not found, returns (false, 0).
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;u64&gt; {
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> v = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x3_validator_sui_address">validator::sui_address</a>(v) == validator_address) {
@@ -1696,7 +1696,7 @@ If not found, returns (false, 0).
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &TableVec&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;u64&gt; {
     <b>let</b> length = <a href="../sui-framework/table_vec.md#0x2_table_vec_length">table_vec::length</a>(validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> v = <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x3_validator_sui_address">validator::sui_address</a>(v) == validator_address) {
@@ -1731,8 +1731,8 @@ Aborts if any address isn't in the given validator set.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_indices">get_validator_indices</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validator_addresses);
-    <b>let</b> i = 0;
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>while</b> (i &lt; length) {
         <b>let</b> addr = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validator_addresses, i);
         <b>let</b> index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators, addr);
@@ -1763,11 +1763,11 @@ Aborts if any address isn't in the given validator set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut">get_validator_mut</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut">get_validator_mut</a>(
     validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
     validator_address: <b>address</b>,
 ): &<b>mut</b> Validator {
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators, validator_address);
     <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>);
     <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(validators, validator_index)
@@ -1802,12 +1802,12 @@ sender has the ability to modify the <code>Validator</code>.
     validator_address: <b>address</b>,
     include_candidate: bool,
 ): &<b>mut</b> Validator {
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
     <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt)) {
         <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
         <b>return</b> <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index)
     };
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
     // consider both pending validators and the candidate ones
     <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt)) {
         <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
@@ -1838,7 +1838,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     verified_cap: &ValidatorOperationCap,
     include_candidate: bool,
@@ -1866,7 +1866,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">get_validator_mut_with_ctx</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">get_validator_mut_with_ctx</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &TxContext,
 ): &<b>mut</b> Validator {
@@ -1894,7 +1894,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &TxContext,
 ): &<b>mut</b> Validator {
@@ -1926,7 +1926,7 @@ sender has the ability to modify the <code>Validator</code>.
     validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
     validator_address: <b>address</b>,
 ): &Validator {
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators, validator_address);
     <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>);
     <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, validator_index)
@@ -1952,17 +1952,17 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
     which_validator: u8,
 ): &Validator {
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
     <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt) || which_validator == <a href="validator_set.md#0x3_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>) {
         <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
         <b>return</b> <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.active_validators, validator_index)
     };
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
     <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt) || which_validator == <a href="validator_set.md#0x3_validator_set_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>) {
         <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
         <b>return</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_active_validators, validator_index)
@@ -1995,7 +1995,7 @@ sender has the ability to modify the <code>Validator</code>.
     self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
 ): &Validator {
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
     <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>);
     <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.active_validators, validator_index)
@@ -2025,7 +2025,7 @@ sender has the ability to modify the <code>Validator</code>.
     self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
 ): &Validator {
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
+    <b>let</b> <b>mut</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
     <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>);
     <b>let</b> validator_index = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_active_validators, validator_index)
@@ -2054,7 +2054,7 @@ Otherwise, verify the Cap for au either active or pending validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_verify_cap">verify_cap</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_verify_cap">verify_cap</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     cap: &UnverifiedValidatorOperationCap,
     which_validator: u8,
@@ -2126,7 +2126,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_process_validator_departure">process_validator_departure</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
-    <a href="validator.md#0x3_validator">validator</a>: Validator,
+    <b>mut</b> <a href="validator.md#0x3_validator">validator</a>: Validator,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     is_voluntary: bool,
     ctx: &<b>mut</b> TxContext,
@@ -2195,7 +2195,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
     // Remove the reports submitted by this <a href="validator.md#0x3_validator">validator</a>
     <b>let</b> reported_validators = <a href="../sui-framework/vec_map.md#0x2_vec_map_keys">vec_map::keys</a>(validator_report_records);
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&reported_validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> reported_validator_addr = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&reported_validators, i);
         <b>let</b> reporters = <a href="../sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(validator_report_records, reported_validator_addr);
@@ -2234,7 +2234,7 @@ Process the pending new validators. They are activated and inserted into <code>v
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, new_epoch: u64,
 ) {
     <b>while</b> (!<a href="../sui-framework/table_vec.md#0x2_table_vec_is_empty">table_vec::is_empty</a>(&self.pending_active_validators)) {
-        <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../sui-framework/table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> self.pending_active_validators);
+        <b>let</b> <b>mut</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../sui-framework/table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> self.pending_active_validators);
         <a href="validator.md#0x3_validator_activate">validator::activate</a>(&<b>mut</b> <a href="validator.md#0x3_validator">validator</a>, new_epoch);
         <a href="../sui-framework/event.md#0x2_event_emit">event::emit</a>(
             <a href="validator_set.md#0x3_validator_set_ValidatorJoinEvent">ValidatorJoinEvent</a> {
@@ -2270,10 +2270,10 @@ Sort all the pending removal indexes.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(withdraw_list);
-    <b>let</b> i = 1;
+    <b>let</b> <b>mut</b> i = 1;
     <b>while</b> (i &lt; length) {
         <b>let</b> cur = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(withdraw_list, i);
-        <b>let</b> j = i;
+        <b>let</b> <b>mut</b> j = i;
         <b>while</b> (j &gt; 0) {
             j = j - 1;
             <b>if</b> (*<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(withdraw_list, j) &gt; cur) {
@@ -2311,7 +2311,7 @@ Process all active validators' pending stake deposits and withdraws.
     validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, ctx: &TxContext
 ) {
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(validators, i);
         <a href="validator.md#0x3_validator_process_pending_stakes_and_withdraws">validator::process_pending_stakes_and_withdraws</a>(<a href="validator.md#0x3_validator">validator</a>, ctx);
@@ -2341,9 +2341,9 @@ Calculate the total active validator stake.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;): u64 {
-    <b>let</b> stake = 0;
+    <b>let</b> <b>mut</b> stake = 0;
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> v = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, i);
         stake = stake + <a href="validator.md#0x3_validator_total_stake_amount">validator::total_stake_amount</a>(v);
@@ -2375,7 +2375,7 @@ Process the pending stake changes for each validator.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;) {
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(validators, i);
         <a href="validator.md#0x3_validator_adjust_stake_and_gas_price">validator::adjust_stake_and_gas_price</a>(<a href="validator.md#0x3_validator">validator</a>);
@@ -2406,7 +2406,7 @@ as well as storage fund rewards.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_reward_adjustments">compute_reward_adjustments</a>(
-    slashed_validator_indices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
+    <b>mut</b> slashed_validator_indices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
     reward_slashing_rate: u64,
     unadjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
     unadjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
@@ -2416,10 +2416,10 @@ as well as storage fund rewards.
     u64, // sum of storage fund reward adjustments
     VecMap&lt;u64, u64&gt;, // mapping of individual <a href="validator.md#0x3_validator">validator</a>'s storage fund reward adjustment from index -&gt; amount
 ) {
-    <b>let</b> total_staking_reward_adjustment = 0;
-    <b>let</b> individual_staking_reward_adjustments = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-    <b>let</b> total_storage_fund_reward_adjustment = 0;
-    <b>let</b> individual_storage_fund_reward_adjustments = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    <b>let</b> <b>mut</b> total_staking_reward_adjustment = 0;
+    <b>let</b> <b>mut</b> individual_staking_reward_adjustments = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    <b>let</b> <b>mut</b> total_storage_fund_reward_adjustment = 0;
+    <b>let</b> <b>mut</b> individual_storage_fund_reward_adjustments = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 
     <b>while</b> (!<a href="../move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&slashed_validator_indices)) {
         <b>let</b> validator_index = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> slashed_validator_indices);
@@ -2473,9 +2473,9 @@ non-performant validators according to the input threshold.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_slashed_validators">compute_slashed_validators</a>(
     self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
-    validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    <b>mut</b> validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
 ): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; {
-    <b>let</b> slashed_validators = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> slashed_validators = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>while</b> (!<a href="../sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&validator_report_records)) {
         <b>let</b> (validator_address, reporters) = <a href="../sui-framework/vec_map.md#0x2_vec_map_pop">vec_map::pop</a>(&<b>mut</b> validator_report_records);
         <b>assert</b>!(
@@ -2522,11 +2522,11 @@ Returns the unadjusted amounts of staking reward and storage fund reward for eac
     total_staking_reward: u64,
     total_storage_fund_reward: u64,
 ): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
-    <b>let</b> staking_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>let</b> storage_fund_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> staking_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> storage_fund_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
     <b>let</b> storage_fund_reward_per_validator = total_storage_fund_reward / length;
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, i);
         // Integer divisions will truncate the results. Because of this, we expect that at the end
@@ -2577,13 +2577,13 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     individual_storage_fund_reward_adjustments: VecMap&lt;u64, u64&gt;,
 ): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
     <b>let</b> total_unslashed_validator_voting_power = total_voting_power - total_slashed_validator_voting_power;
-    <b>let</b> adjusted_staking_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>let</b> adjusted_storage_fund_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> adjusted_staking_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> adjusted_storage_fund_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
 
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
     <b>let</b> num_unslashed_validators = length - <a href="../sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&individual_staking_reward_adjustments);
 
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, i);
         // Integer divisions will truncate the results. Because of this, we expect that at the end
@@ -2657,17 +2657,17 @@ The staking rewards are shared with the stakers while the storage fund ones are 
 ) {
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
     <b>assert</b>!(length &gt; 0, <a href="validator_set.md#0x3_validator_set_EValidatorSetEmpty">EValidatorSetEmpty</a>);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(validators, i);
         <b>let</b> staking_reward_amount = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(adjusted_staking_reward_amounts, i);
-        <b>let</b> staker_reward = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(staking_rewards, staking_reward_amount);
+        <b>let</b> <b>mut</b> staker_reward = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(staking_rewards, staking_reward_amount);
 
         // Validator takes a cut of the rewards <b>as</b> commission.
         <b>let</b> validator_commission_amount = (staking_reward_amount <b>as</b> u128) * (<a href="validator.md#0x3_validator_commission_rate">validator::commission_rate</a>(<a href="validator.md#0x3_validator">validator</a>) <b>as</b> u128) / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
 
         // The <a href="validator.md#0x3_validator">validator</a> reward = storage_fund_reward + commission.
-        <b>let</b> validator_reward = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> staker_reward, (validator_commission_amount <b>as</b> u64));
+        <b>let</b> <b>mut</b> validator_reward = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> staker_reward, (validator_commission_amount <b>as</b> u64));
 
         // Add storage fund rewards <b>to</b> the <a href="validator.md#0x3_validator">validator</a>'s reward.
         <a href="../sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> validator_reward, <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(storage_fund_reward, *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(adjusted_storage_fund_reward_amounts, i)));
@@ -2718,7 +2718,7 @@ including stakes, rewards, performance, etc.
     slashed_validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;,
 ) {
     <b>let</b> num_validators = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(vs);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; num_validators) {
         <b>let</b> v = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(vs, i);
         <b>let</b> validator_address = <a href="validator.md#0x3_validator_sui_address">validator::sui_address</a>(v);
@@ -2772,8 +2772,8 @@ Sum up the total stake of a given list of validator addresses.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): u64 {
-    <b>let</b> sum = 0;
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> sum = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(addresses);
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(vs, *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(addresses, i));
@@ -2878,10 +2878,10 @@ Returns true if the staking pool identified by <code>staking_pool_id</code> is o
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_active_validator_addresses">active_validator_addresses</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_active_validator_addresses">active_validator_addresses</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; {
     <b>let</b> vs = &self.active_validators;
-    <b>let</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> length = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(vs);
     <b>while</b> (i &lt; length) {
         <b>let</b> validator_address = <a href="validator.md#0x3_validator_sui_address">validator::sui_address</a>(<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(vs, i));

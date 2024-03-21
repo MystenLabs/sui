@@ -16,7 +16,7 @@ module sui::vec_set {
     /// - the intention of this data structure is only to provide the convenience
     /// of programming against a set API. Sets that need sorted iteration rather
     /// than insertion order iteration should be handwritten.
-    struct VecSet<K: copy + drop> has copy, drop, store {
+    public struct VecSet<K: copy + drop> has copy, drop, store {
         contents: vector<K>,
     }
 
@@ -77,7 +77,7 @@ module sui::vec_set {
     /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
     /// Note that keys are stored in insertion order, *not* sorted.
     fun get_idx_opt<K: copy + drop>(self: &VecSet<K>, key: &K): Option<u64> {
-        let i = 0;
+        let mut i = 0;
         let n = size(self);
         while (i < n) {
             if (vector::borrow(&self.contents, i) == key) {

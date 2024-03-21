@@ -73,7 +73,7 @@ scalar field size which is 21888242871839275222246405745257275088548364400416034
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="poseidon.md#0x2_poseidon_poseidon_bn254">poseidon_bn254</a>(data: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u256&gt;): u256 {
-    <b>let</b> (i, b, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(data));
+    <b>let</b> (<b>mut</b> i, <b>mut</b> b, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(data));
     <b>assert</b>!(l &gt; 0, <a href="poseidon.md#0x2_poseidon_EEmptyInput">EEmptyInput</a>);
     <b>while</b> (i &lt; l) {
         <b>let</b> field_element = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(data, i);

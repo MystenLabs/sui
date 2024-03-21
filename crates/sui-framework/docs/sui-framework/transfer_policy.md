@@ -556,8 +556,8 @@ Kiosk trades will not be possible.
     self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;
 ): (ID, u64, ID) {
     <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts } = request;
-    <b>let</b> completed = <a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(receipts);
-    <b>let</b> total = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&completed);
+    <b>let</b> <b>mut</b> completed = <a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(receipts);
+    <b>let</b> <b>mut</b> total = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&completed);
 
     <b>assert</b>!(total == <a href="vec_set.md#0x2_vec_set_size">vec_set::size</a>(&self.rules), <a href="transfer_policy.md#0x2_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
 

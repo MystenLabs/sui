@@ -23,10 +23,10 @@ module sui::royalty_policy {
     const MAX_BPS: u16 = 10_000;
 
     /// The "Rule" witness to authorize the policy.
-    struct Rule has drop {}
+    public struct Rule has drop {}
 
     /// Configuration for the Rule.
-    struct Config has store, drop {
+    public struct Config has store, drop {
         amount_bp: u16
     }
 
@@ -71,13 +71,13 @@ module sui::royalty_policy_tests {
     #[test]
     fun test_default_flow() {
         let ctx = &mut ctx();
-        let (policy, cap) = test::prepare(ctx);
+        let (mut policy, cap) = test::prepare(ctx);
 
         // 1% royalty
         royalty_policy::set(&mut policy, &cap, 100);
 
-        let request = policy::new_request(test::fresh_id(ctx), 100_000, test::fresh_id(ctx));
-        let payment = coin::mint_for_testing<SUI>(2000, ctx);
+        let mut request = policy::new_request(test::fresh_id(ctx), 100_000, test::fresh_id(ctx));
+        let mut payment = coin::mint_for_testing<SUI>(2000, ctx);
 
         royalty_policy::pay(&mut policy, &mut request, &mut payment, ctx);
         policy::confirm_request(&policy, request);
@@ -93,7 +93,7 @@ module sui::royalty_policy_tests {
     #[expected_failure(abort_code = sui::royalty_policy::EIncorrectArgument)]
     fun test_incorrect_config() {
         let ctx = &mut ctx();
-        let (policy, cap) = test::prepare(ctx);
+        let (mut policy, cap) = test::prepare(ctx);
 
         royalty_policy::set(&mut policy, &cap, 11_000);
         test::wrapup(policy, cap, ctx);
@@ -103,14 +103,14 @@ module sui::royalty_policy_tests {
     #[expected_failure(abort_code = sui::royalty_policy::EInsufficientAmount)]
     fun test_insufficient_amount() {
         let ctx = &mut ctx();
-        let (policy, cap) = test::prepare(ctx);
+        let (mut policy, cap) = test::prepare(ctx);
 
         // 1% royalty
         royalty_policy::set(&mut policy, &cap, 100);
 
         // Requires 1_000 MIST, coin has only 999
-        let request = policy::new_request(test::fresh_id(ctx), 100_000, test::fresh_id(ctx));
-        let payment = coin::mint_for_testing<SUI>(999, ctx);
+        let mut request = policy::new_request(test::fresh_id(ctx), 100_000, test::fresh_id(ctx));
+        let mut payment = coin::mint_for_testing<SUI>(999, ctx);
 
         royalty_policy::pay(&mut policy, &mut request, &mut payment, ctx);
         policy::confirm_request(&policy, request);

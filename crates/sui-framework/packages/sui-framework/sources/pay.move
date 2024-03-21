@@ -30,7 +30,7 @@ module sui::pay {
     public entry fun split_vec<T>(
         self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext
     ) {
-        let (i, len) = (0, vector::length(&split_amounts));
+        let (mut i, len) = (0, vector::length(&split_amounts));
         while (i < len) {
             split(self, *vector::borrow(&split_amounts, i), ctx);
             i = i + 1;
@@ -52,8 +52,8 @@ module sui::pay {
     public entry fun divide_and_keep<T>(
         self: &mut Coin<T>, n: u64, ctx: &mut TxContext
     ) {
-        let vec: vector<Coin<T>> = coin::divide_into_n(self, n, ctx);
-        let (i, len) = (0, vector::length(&vec));
+        let mut vec: vector<Coin<T>> = coin::divide_into_n(self, n, ctx);
+        let (mut i, len) = (0, vector::length(&vec));
         while (i < len) {
             transfer::public_transfer(vector::pop_back(&mut vec), tx_context::sender(ctx));
             i = i + 1;
@@ -67,8 +67,8 @@ module sui::pay {
     }
 
     /// Join everything in `coins` with `self`
-    public entry fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
-        let (i, len) = (0, vector::length(&coins));
+    public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
+        let (mut i, len) = (0, vector::length(&coins));
         while (i < len) {
             let coin = vector::pop_back(&mut coins);
             coin::join(self, coin);
@@ -79,10 +79,10 @@ module sui::pay {
     }
 
     /// Join a vector of `Coin` into a single object and transfer it to `receiver`.
-    public entry fun join_vec_and_transfer<T>(coins: vector<Coin<T>>, receiver: address) {
+    public entry fun join_vec_and_transfer<T>(mut coins: vector<Coin<T>>, receiver: address) {
         assert!(vector::length(&coins) > 0, ENoCoins);
 
-        let self = vector::pop_back(&mut coins);
+        let mut self = vector::pop_back(&mut coins);
         join_vec(&mut self, coins);
         transfer::public_transfer(self, receiver)
     }

@@ -60,13 +60,13 @@ module sui::test_scenario {
     /// ... // more txes
     /// test_scenario::end(scenario);
     /// ```
-    struct Scenario {
+    public struct Scenario {
         txn_number: u64,
         ctx: TxContext,
     }
 
     /// The effects of a transaction
-    struct TransactionEffects has drop {
+    public struct TransactionEffects has drop {
         /// The objects created this transaction
         created: vector<ID>,
         /// The objects written/modified this transaction

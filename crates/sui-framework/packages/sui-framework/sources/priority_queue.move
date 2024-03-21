@@ -13,19 +13,19 @@ module sui::priority_queue {
     /// left child and right child of the root, etc. More generally, the children of
     /// entries[i] are at at i * 2 + 1 and i * 2 + 2. The max heap should have the invariant
     /// that the parent node's priority is always higher than its child nodes' priorities.
-    struct PriorityQueue<T: drop> has store, drop {
+    public struct PriorityQueue<T: drop> has store, drop {
         entries: vector<Entry<T>>,
     }
 
-    struct Entry<T: drop> has store, drop {
+    public struct Entry<T: drop> has store, drop {
         priority: u64, // higher value means higher priority and will be popped first
         value: T,
     }
 
     /// Create a new priority queue from the input entry vectors.
-    public fun new<T: drop>(entries: vector<Entry<T>>) : PriorityQueue<T> {
+    public fun new<T: drop>(mut entries: vector<Entry<T>>) : PriorityQueue<T> {
         let len = vector::length(&entries);
-        let i = len / 2;
+        let mut i = len / 2;
         // Max heapify from the first node that is a parent (node at len / 2).
         while (i > 0) {
             i = i - 1;
@@ -57,11 +57,11 @@ module sui::priority_queue {
         Entry { priority, value }
     }
 
-    public fun create_entries<T: drop>(p: vector<u64>, v: vector<T>): vector<Entry<T>> {
+    public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
         let len = vector::length(&p);
         assert!(vector::length(&v) == len, 0);
-        let res = vector::empty();
-        let i = 0;
+        let mut res = vector::empty();
+        let mut i = 0;
         while (i < len) {
             let priority = vector::remove(&mut p, 0);
             let value = vector::remove(&mut v, 0);
@@ -98,7 +98,7 @@ module sui::priority_queue {
         assert!(i < len, 1);
         let left = i * 2 + 1;
         let right = left + 1;
-        let max = i;
+        let mut max = i;
         // Find the node with highest priority among node `i` and its two children.
         if (left < len && vector::borrow(v, left).priority> vector::borrow(v, max).priority) {
             max = left;
@@ -118,8 +118,8 @@ module sui::priority_queue {
     }
 
     public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {
-        let res = vector[];
-        let i = 0;
+        let mut res = vector[];
+        let mut i = 0;
         while (i < vector::length(&pq.entries)) {
             vector::push_back(&mut res, vector::borrow(&pq.entries, i).priority);
             i = i +1;
@@ -129,7 +129,7 @@ module sui::priority_queue {
 
     #[test]
     fun test_pq() {
-        let h = new(create_entries(vector[3,1,4,2,5,2], vector[10, 20, 30, 40, 50, 60]));
+        let mut h = new(create_entries(vector[3,1,4,2,5,2], vector[10, 20, 30, 40, 50, 60]));
         check_pop_max(&mut h, 5, 50);
         check_pop_max(&mut h, 4, 30);
         check_pop_max(&mut h, 3, 10);
@@ -142,7 +142,7 @@ module sui::priority_queue {
         check_pop_max(&mut h, 0, 80);
 
 
-        let h = new(create_entries(vector[5,3,1,2,4], vector[10, 20, 30, 40, 50]));
+        let mut h = new(create_entries(vector[5,3,1,2,4], vector[10, 20, 30, 40, 50]));
         check_pop_max(&mut h, 5, 10);
         check_pop_max(&mut h, 4, 50);
         check_pop_max(&mut h, 3, 20);
@@ -159,7 +159,7 @@ module sui::priority_queue {
         // so we stop max-heapifying there, while the rest of the tree is all messed up because of the shift.
         let priorities = vector[8, 7, 3, 6, 2, 1, 0, 5, 4];
         let values = vector[0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let h = new(create_entries(priorities, values));
+        let mut h = new(create_entries(priorities, values));
         check_pop_max(&mut h, 8, 0);
         check_pop_max(&mut h, 7, 0);
         check_pop_max(&mut h, 6, 0);

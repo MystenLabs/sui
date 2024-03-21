@@ -386,7 +386,7 @@ Returns true if and only if the <code><a href="../sui-framework/object.md#0x2_ob
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_field_info">field_info</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_field_info">field_info</a>&lt;Name: <b>copy</b> + drop + store&gt;(
     <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): (&UID, <b>address</b>) {
@@ -416,7 +416,7 @@ Returns true if and only if the <code><a href="../sui-framework/object.md#0x2_ob
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_field_info_mut">field_info_mut</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_field_info_mut">field_info_mut</a>&lt;Name: <b>copy</b> + drop + store&gt;(
     <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): (&<b>mut</b> UID, <b>address</b>) {
@@ -447,7 +447,7 @@ May abort with <code><a href="../sui-framework/dynamic_field.md#0x2_dynamic_fiel
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(parent: <b>address</b>, k: K): <b>address</b>;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(parent: <b>address</b>, k: K): <b>address</b>;
 </code></pre>
 
 
@@ -469,7 +469,7 @@ May abort with <code><a href="../sui-framework/dynamic_field.md#0x2_dynamic_fiel
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_add_child_object">add_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, child: Child);
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_add_child_object">add_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, child: Child);
 </code></pre>
 
 
@@ -495,7 +495,7 @@ we need two versions to return a reference or a mutable reference
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, id: <b>address</b>): &Child;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, id: <b>address</b>): &Child;
 </code></pre>
 
 
@@ -517,7 +517,7 @@ we need two versions to return a reference or a mutable reference
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID, id: <b>address</b>): &<b>mut</b> Child;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID, id: <b>address</b>): &<b>mut</b> Child;
 </code></pre>
 
 
@@ -542,7 +542,7 @@ and may also abort with <code><a href="../sui-framework/dynamic_field.md#0x2_dyn
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove_child_object">remove_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): Child;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove_child_object">remove_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): Child;
 </code></pre>
 
 
@@ -564,7 +564,7 @@ and may also abort with <code><a href="../sui-framework/dynamic_field.md#0x2_dyn
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(parent: <b>address</b>, id: <b>address</b>): bool;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(parent: <b>address</b>, id: <b>address</b>): bool;
 </code></pre>
 
 
@@ -586,7 +586,7 @@ and may also abort with <code><a href="../sui-framework/dynamic_field.md#0x2_dyn
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): bool;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): bool;
 </code></pre>
 
 

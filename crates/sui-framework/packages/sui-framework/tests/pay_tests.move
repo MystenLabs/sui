@@ -15,10 +15,10 @@ module sui::pay_tests {
 
     #[test]
     fun test_coin_split_n() {
-        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let coin = coin::mint_for_testing<SUI>(10, ctx);
+        let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         pay::divide_and_keep(&mut coin, 3, test_scenario::ctx(scenario));
@@ -46,13 +46,13 @@ module sui::pay_tests {
 
     #[test]
     fun test_coin_split_n_to_vec() {
-        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let coin = coin::mint_for_testing<SUI>(10, ctx);
+        let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
-        let split_coins = coin::divide_into_n(&mut coin, 3, test_scenario::ctx(scenario));
+        let mut split_coins = coin::divide_into_n(&mut coin, 3, test_scenario::ctx(scenario));
 
         assert!(vector::length(&split_coins) == 2, 0);
         let coin1 = vector::pop_back(&mut split_coins);
@@ -70,10 +70,10 @@ module sui::pay_tests {
 
     #[test]
     fun test_split_vec() {
-        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let coin = coin::mint_for_testing<SUI>(10, ctx);
+        let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         let v = vector[1, 4];
@@ -97,10 +97,10 @@ module sui::pay_tests {
 
     #[test]
     fun test_split_and_transfer() {
-        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let coin = coin::mint_for_testing<SUI>(10, ctx);
+        let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         // Send 3 of 10
@@ -119,10 +119,10 @@ module sui::pay_tests {
     #[test]
     #[expected_failure(abort_code = balance::ENotEnough)]
     fun test_split_and_transfer_fail() {
-        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let coin = coin::mint_for_testing<SUI>(10, ctx);
+        let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         // Send 20 of 10 (should fail)
@@ -138,10 +138,10 @@ module sui::pay_tests {
 
     #[test]
     fun test_join_vec_and_transfer() {
-        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
-        let coin = coin::mint_for_testing<SUI>(10, ctx);
+        let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         // divide_into_n with `n = 4` creates a vector of `n-1` = `3` coins containing balance `2`

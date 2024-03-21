@@ -230,8 +230,8 @@ or if an invalid character is encountered.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <b>address</b> {
     <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(bytes) == 64, <a href="../sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a>);
-    <b>let</b> hex_bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> hex_bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; 64) {
         <b>let</b> hi = <a href="../sui-framework/address.md#0x2_address_hex_char_value">hex_char_value</a>(*<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(bytes, i));
         <b>let</b> lo = <a href="../sui-framework/address.md#0x2_address_hex_char_value">hex_char_value</a>(*<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(bytes, i + 1));

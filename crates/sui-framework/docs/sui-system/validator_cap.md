@@ -107,7 +107,7 @@ This is only constructed after successful verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>): &<b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>): &<b>address</b> {
     &cap.authorizer_validator_address
 }
 </code></pre>
@@ -131,7 +131,7 @@ This is only constructed after successful verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a>): &<b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a>): &<b>address</b> {
     &cap.authorizer_validator_address
 }
 </code></pre>
@@ -157,7 +157,7 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ): ID {
@@ -198,7 +198,7 @@ Should only be called by <code><a href="validator_set.md#0x3_validator_set">vali
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_from_unverified">new_from_unverified</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_from_unverified">new_from_unverified</a>(
     cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>,
 ): <a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
     <a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {

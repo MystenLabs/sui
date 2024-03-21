@@ -100,7 +100,7 @@ module sui::kiosk {
     // - `place_internal`
     // - `lock_internal`
     // - `uid_mut_internal`
-    friend sui::kiosk_extension;
+    /* friend sui::kiosk_extension; */
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -133,7 +133,7 @@ module sui::kiosk {
     /// By default gives the functionality to list an item openly - for anyone
     /// to purchase providing the guarantees for creators that every transfer
     /// needs to be approved via the `TransferPolicy`.
-    struct Kiosk has key, store {
+    public struct Kiosk has key, store {
         id: UID,
         /// Balance of the Kiosk - all profits from sales go here.
         profits: Balance<SUI>,
@@ -153,9 +153,9 @@ module sui::kiosk {
 
     /// A Capability granting the bearer a right to `place` and `take` items
     /// from the `Kiosk` as well as to `list` them and `list_with_purchase_cap`.
-    struct KioskOwnerCap has key, store {
+    public struct KioskOwnerCap has key, store {
         id: UID,
-        for: ID
+        `for`: ID
     }
 
     /// A capability which locks an item and gives a permission to
@@ -167,7 +167,7 @@ module sui::kiosk {
     ///
     /// The main application for the `PurchaseCap` is building extensions
     /// on top of the `Kiosk`.
-    struct PurchaseCap<phantom T: key + store> has key, store {
+    public struct PurchaseCap<phantom T: key + store> has key, store {
         id: UID,
         /// ID of the `Kiosk` the cap belongs to.
         kiosk_id: ID,
@@ -181,28 +181,28 @@ module sui::kiosk {
 
     /// Hot potato to ensure an item was returned after being taken using
     /// the `borrow_val` call.
-    struct Borrow { kiosk_id: ID, item_id: ID }
+    public struct Borrow { kiosk_id: ID, item_id: ID }
 
     // === Dynamic Field keys ===
 
     /// Dynamic field key for an item placed into the kiosk.
-    struct Item has store, copy, drop { id: ID }
+    public struct Item has store, copy, drop { id: ID }
 
     /// Dynamic field key for an active offer to purchase the T. If an
     /// item is listed without a `PurchaseCap`, exclusive is set to `false`.
-    struct Listing has store, copy, drop { id: ID, is_exclusive: bool }
+    public struct Listing has store, copy, drop { id: ID, is_exclusive: bool }
 
     /// Dynamic field key which marks that an item is locked in the `Kiosk` and
     /// can't be `take`n. The item then can only be listed / sold via the PurchaseCap.
     /// Lock is released on `purchase`.
-    struct Lock has store, copy, drop { id: ID }
+    public struct Lock has store, copy, drop { id: ID }
 
     // === Events ===
 
     /// Emitted when an item was listed by the safe owner. Can be used
     /// to track available offers anywhere on the network; the event is
     /// type-indexed which allows for searching for offers of a specific `T`
-    struct ItemListed<phantom T: key + store> has copy, drop {
+    public struct ItemListed<phantom T: key + store> has copy, drop {
         kiosk: ID,
         id: ID,
         price: u64
@@ -217,7 +217,7 @@ module sui::kiosk {
     /// in the `ItemListed` event. This is because the `PurchaseCap` only
     /// sets a minimum price for the item, and the actual price is defined
     /// by the trading module / extension.
-    struct ItemPurchased<phantom T: key + store> has copy, drop {
+    public struct ItemPurchased<phantom T: key + store> has copy, drop {
         kiosk: ID,
         id: ID,
         price: u64
@@ -225,7 +225,7 @@ module sui::kiosk {
 
     /// Emitted when an item was delisted by the safe owner. Can be used
     /// to close tracked offers.
-    struct ItemDelisted<phantom T: key + store> has copy, drop {
+    public struct ItemDelisted<phantom T: key + store> has copy, drop {
         kiosk: ID,
         id: ID
     }
@@ -253,7 +253,7 @@ module sui::kiosk {
 
         let cap = KioskOwnerCap {
             id: object::new(ctx),
-            for: object::id(&kiosk)
+            `for`: object::id(&kiosk)
         };
 
         (kiosk, cap)
@@ -266,9 +266,9 @@ module sui::kiosk {
         self: Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext
     ): Coin<SUI> {
         let Kiosk { id, profits, owner: _, item_count, allow_extensions: _ } = self;
-        let KioskOwnerCap { id: cap_id, for } = cap;
+        let KioskOwnerCap { id: cap_id, `for` } = cap;
 
-        assert!(object::uid_to_inner(&id) == for, ENotOwner);
+        assert!(object::uid_to_inner(&id) == `for`, ENotOwner);
         assert!(item_count == 0, ENotEmpty);
 
         object::delete(cap_id);
@@ -473,19 +473,19 @@ module sui::kiosk {
     // === Internal Core ===
 
     /// Internal: "lock" an item disabling the `take` action.
-    public(friend) fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
+    public(package) fun lock_internal<T: key + store>(self: &mut Kiosk, item: T) {
         df::add(&mut self.id, Lock { id: object::id(&item) }, true);
         place_internal(self, item)
     }
 
     /// Internal: "place" an item to the Kiosk and increment the item count.
-    public(friend) fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
+    public(package) fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
         self.item_count = self.item_count + 1;
         dof::add(&mut self.id, Item { id: object::id(&item) }, item)
     }
 
     /// Internal: get a mutable access to the UID.
-    public(friend) fun uid_mut_internal(self: &mut Kiosk): &mut UID {
+    public(package) fun uid_mut_internal(self: &mut Kiosk): &mut UID {
         &mut self.id
     }
 
@@ -521,7 +521,7 @@ module sui::kiosk {
 
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
-        object::id(self) == cap.for
+        object::id(self) == cap.`for`
     }
 
     /// Access the `UID` using the `KioskOwnerCap`.
@@ -586,7 +586,7 @@ module sui::kiosk {
     public fun borrow<T: key + store>(
         self: &Kiosk, cap: &KioskOwnerCap, id: ID
     ): &T {
-        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(object::id(self) == cap.`for`, ENotOwner);
         assert!(has_item(self, id), EItemNotFound);
 
         dof::borrow(&self.id, Item { id })
@@ -636,7 +636,7 @@ module sui::kiosk {
 
     /// Get the `for` field of the `KioskOwnerCap`.
     public fun kiosk_owner_cap_for(cap: &KioskOwnerCap): ID {
-        cap.for
+        cap.`for`
     }
 
     // === PurchaseCap fields access ===

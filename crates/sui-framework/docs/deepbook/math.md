@@ -68,7 +68,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64 {
     <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
     result
 }
@@ -93,10 +93,10 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
     <b>let</b> x = (x <b>as</b> u128);
     <b>let</b> y = (y <b>as</b> u128);
-    <b>let</b> is_round_down = <b>true</b>;
+    <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * y) % <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
     (is_round_down, ((x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64))
 }
@@ -173,7 +173,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64 {
     <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
     result
 }
@@ -198,10 +198,10 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
     <b>let</b> x = (x <b>as</b> u128);
     <b>let</b> y = (y <b>as</b> u128);
-    <b>let</b> is_round_down = <b>true</b>;
+    <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
     (is_round_down, ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64))
 }
@@ -252,11 +252,11 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(x: u128): u8 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(<b>mut</b> x: u128): u8 {
     <b>if</b> (x == 0) {
         128
     } <b>else</b> {
-        <b>let</b> n: u8 = 0;
+        <b>let</b> <b>mut</b> n: u8 = 0;
         <b>if</b> (x & 0xFFFFFFFFFFFFFFFF0000000000000000 == 0) {
             // x's higher 64 is all zero, shift the lower part over
             x = x &lt;&lt; 64;

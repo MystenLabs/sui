@@ -253,8 +253,8 @@ Create a new Display<T> object with a set of fields.
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&fields);
     <b>assert</b>!(len == <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
 
-    <b>let</b> i = 0;
-    <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx);
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx);
     <b>while</b> (i &lt; len) {
         <a href="display.md#0x2_display_add_internal">add_internal</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&fields, i), *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&values, i));
         i = i + 1;
@@ -372,7 +372,7 @@ Sets multiple <code>fields</code> with <code>values</code>.
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&fields);
     <b>assert</b>!(len == <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
 
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
         <a href="display.md#0x2_display_add_internal">add_internal</a>(self, *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&fields, i), *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&values, i));
         i = i + 1;

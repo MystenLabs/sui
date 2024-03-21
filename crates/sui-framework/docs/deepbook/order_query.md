@@ -116,7 +116,7 @@ title: Module `0xdee9::order_query`
     ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
     <b>let</b> bids = <a href="clob_v2.md#0xdee9_clob_v2_bids">clob_v2::bids</a>(pool);
-    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
+    <b>let</b> <b>mut</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
         bids,
         start_tick_level,
         start_order_id,
@@ -175,7 +175,7 @@ title: Module `0xdee9::order_query`
     ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
     <b>let</b> asks = <a href="clob_v2.md#0xdee9_clob_v2_asks">clob_v2::asks</a>(pool);
-    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
+    <b>let</b> <b>mut</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
         asks,
         start_tick_level,
         start_order_id,
@@ -223,7 +223,7 @@ title: Module `0xdee9::order_query`
     // tick level <b>to</b> start from
     start_tick_level: Option&lt;u64&gt;,
     // order id within that tick level <b>to</b> start from
-    start_order_id: Option&lt;u64&gt;,
+    <b>mut</b> start_order_id: Option&lt;u64&gt;,
     // <b>if</b> provided, do not <b>include</b> orders <b>with</b> an expire timestamp less than the provided value (expired order),
     // value is in microseconds
     min_expire_timestamp: Option&lt;u64&gt;,
@@ -233,7 +233,7 @@ title: Module `0xdee9::order_query`
     // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
     ascending: bool,
 ): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Order&gt; {
-    <b>let</b> tick_level_key = <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&start_tick_level)) {
+    <b>let</b> <b>mut</b> tick_level_key = <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&start_tick_level)) {
         <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(start_tick_level)
     } <b>else</b> {
         <b>let</b> (key, _) = <b>if</b> (ascending) {
@@ -244,13 +244,13 @@ title: Module `0xdee9::order_query`
         key
     };
 
-    <b>let</b> orders = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> <b>mut</b> orders = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
 
     <b>while</b> (tick_level_key != 0 && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&orders) &lt; <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a> + 1) {
         <b>let</b> tick_level = <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">critbit::borrow_leaf_by_key</a>(ticks, tick_level_key);
         <b>let</b> open_orders = <a href="clob_v2.md#0xdee9_clob_v2_open_orders">clob_v2::open_orders</a>(tick_level);
 
-        <b>let</b> next_order_key = <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&start_order_id)) {
+        <b>let</b> <b>mut</b> next_order_key = <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&start_order_id)) {
             <b>let</b> key = <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(start_order_id);
             <b>if</b> (!<a href="../sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(open_orders, key)) {
                 <b>let</b> (next_leaf, _) = <b>if</b> (ascending) {

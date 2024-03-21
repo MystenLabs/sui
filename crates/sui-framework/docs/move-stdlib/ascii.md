@@ -181,7 +181,7 @@ characters. Otherwise returns <code>None</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_try_string">try_string</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): Option&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>&gt; {
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bytes);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> possible_byte = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&bytes, i);
         <b>if</b> (!<a href="../move-stdlib/ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(possible_byte)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
@@ -214,7 +214,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_all_characters_printable">all_characters_printable</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): bool {
     <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> byte = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes, i);
         <b>if</b> (!<a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte)) <b>return</b> <b>false</b>;

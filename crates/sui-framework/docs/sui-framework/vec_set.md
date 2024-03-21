@@ -333,7 +333,7 @@ Note that keys are stored in insertion order, *not* sorted.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): Option&lt;u64&gt; {
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> n = <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>(self);
     <b>while</b> (i &lt; n) {
         <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.contents, i) == key) {

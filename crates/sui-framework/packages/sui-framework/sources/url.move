@@ -6,7 +6,7 @@ module sui::url {
     use std::ascii::{Self, String};
 
     /// Standard Uniform Resource Locator (URL) string.
-    struct Url has store, copy, drop {
+    public struct Url has store, copy, drop {
         // TODO: validate URL format
         url: String,
     }

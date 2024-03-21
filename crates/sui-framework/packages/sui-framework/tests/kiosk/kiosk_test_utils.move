@@ -12,8 +12,8 @@ module sui::kiosk_test_utils {
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
 
-    struct OTW has drop {}
-    struct Asset has key, store { id: UID }
+    public struct OTW has drop {}
+    public struct Asset has key, store { id: UID }
 
     /// Prepare: dummy context
     public fun ctx(): TxContext { tx_context::dummy() }
@@ -69,7 +69,7 @@ module sui::kiosk_test_utils {
     }
 
     /// Cleanup: vector<Asset>
-    public fun return_assets(assets: vector<Asset>) {
+    public fun return_assets(mut assets: vector<Asset>) {
         while (vector::length(&assets) > 0) {
             let Asset { id } = vector::pop_back(&mut assets);
             object::delete(id)

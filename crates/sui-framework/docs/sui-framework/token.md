@@ -507,7 +507,7 @@ hence it is safe to use it for authorization.
 
     <b>let</b> cap = <a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        for: <a href="object.md#0x2_object_id">object::id</a>(&policy)
+        `for`: <a href="object.md#0x2_object_id">object::id</a>(&policy)
     };
 
     (policy, cap)
@@ -933,7 +933,7 @@ Aborts if:
 
     <b>let</b> rules = &<a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(*<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(&policy.rules, &name));
     <b>let</b> rules_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(rules);
-    <b>let</b> i = 0;
+    <b>let</b> <b>mut</b> i = 0;
 
     <b>while</b> (i &lt; rules_len) {
         <b>let</b> rule = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(rules, i);
@@ -974,7 +974,7 @@ See <code>confirm_request</code> for the list of abort conditions.
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_confirm_request_mut">confirm_request_mut</a>&lt;T&gt;(
     policy: &<b>mut</b> <a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;,
-    request: <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;,
+    <b>mut</b> request: <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext
 ): (String, u64, <b>address</b>, Option&lt;<b>address</b>&gt;) {
     <b>assert</b>!(<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&policy.rules, &request.name), <a href="token.md#0x2_token_EUnknownAction">EUnknownAction</a>);
@@ -1144,7 +1144,7 @@ the <code><a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a></code> owner.
     config: Config,
     _ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
     df::add(&<b>mut</b> self.id, <a href="token.md#0x2_token_key">key</a>&lt;Rule&gt;(), config)
 }
 </code></pre>
@@ -1214,7 +1214,7 @@ Aborts if:
     _rule: Rule, self: &<b>mut</b> <a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;, cap: &<a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;
 ): &<b>mut</b> Config {
     <b>assert</b>!(<a href="token.md#0x2_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="token.md#0x2_token_ENoConfig">ENoConfig</a>);
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
     df::borrow_mut(&<b>mut</b> self.id, <a href="token.md#0x2_token_key">key</a>&lt;Rule&gt;())
 }
 </code></pre>
@@ -1254,7 +1254,7 @@ Aborts if:
     _ctx: &<b>mut</b> TxContext
 ): Config {
     <b>assert</b>!(<a href="token.md#0x2_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="token.md#0x2_token_ENoConfig">ENoConfig</a>);
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
     df::remove(&<b>mut</b> self.id, <a href="token.md#0x2_token_key">key</a>&lt;Rule&gt;())
 }
 </code></pre>
@@ -1342,7 +1342,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     action: String,
     _ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
     <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.rules, action, <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
 }
 </code></pre>
@@ -1376,7 +1376,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     action: String,
     _ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
     <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.rules, &action);
 }
 </code></pre>
@@ -1409,7 +1409,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     action: String,
     ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
     <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.rules, &action)) {
         <a href="token.md#0x2_token_allow">allow</a>(self, cap, action, ctx);
     };
@@ -1450,7 +1450,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     action: String,
     _ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
 
     <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(
         <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.rules, &action),

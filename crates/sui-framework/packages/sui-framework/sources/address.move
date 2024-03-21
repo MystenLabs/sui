@@ -53,8 +53,8 @@ module sui::address {
     /// or if an invalid character is encountered.
     public fun from_ascii_bytes(bytes: &vector<u8>): address {
         assert!(vector::length(bytes) == 64, EAddressParseError);
-        let hex_bytes = vector[];
-        let i = 0;
+        let mut hex_bytes = vector[];
+        let mut i = 0;
         while (i < 64) {
             let hi = hex_char_value(*vector::borrow(bytes, i));
             let lo = hex_char_value(*vector::borrow(bytes, i + 1));

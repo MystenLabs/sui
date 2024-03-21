@@ -25,14 +25,14 @@ module sui::coin {
     const ENotEnough: u64 = 2;
 
     /// A coin of type `T` worth `value`. Transferable and storable
-    struct Coin<phantom T> has key, store {
+    public struct Coin<phantom T> has key, store {
         id: UID,
         balance: Balance<T>
     }
 
     /// Each Coin type T created through `create_currency` function will have a
     /// unique instance of CoinMetadata<T> that stores the metadata for this coin type.
-    struct CoinMetadata<phantom T> has key, store {
+    public struct CoinMetadata<phantom T> has key, store {
         id: UID,
         /// Number of decimal places the coin uses.
         /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
@@ -51,7 +51,7 @@ module sui::coin {
 
     /// Similar to CoinMetadata, but created only for regulated coins that use the DenyList.
     /// This object is always immutable.
-    struct RegulatedCoinMetadata<phantom T> has key {
+    public struct RegulatedCoinMetadata<phantom T> has key {
         id: UID,
         /// The ID of the coin's CoinMetadata object.
         coin_metadata_object: ID,
@@ -61,14 +61,14 @@ module sui::coin {
 
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferable
-    struct TreasuryCap<phantom T> has key, store {
+    public struct TreasuryCap<phantom T> has key, store {
         id: UID,
         total_supply: Supply<T>
     }
 
     /// Capability allowing the bearer to freeze addresses, preventing those addresses from
     /// interacting with the coin as an input to a transaction.
-    struct DenyCap<phantom T> has key, store {
+    public struct DenyCap<phantom T> has key, store {
         id: UID,
     }
 
@@ -170,8 +170,8 @@ module sui::coin {
         assert!(n > 0, EInvalidArg);
         assert!(n <= value(self), ENotEnough);
 
-        let vec = vector::empty<Coin<T>>();
-        let i = 0;
+        let mut vec = vector::empty<Coin<T>>();
+        let mut i = 0;
         let split_amount = value(self) / n;
         while (i < n - 1) {
             vector::push_back(&mut vec, split(self, split_amount, ctx));
@@ -297,12 +297,12 @@ module sui::coin {
        addr: address,
        _ctx: &mut TxContext
     ) {
-        let type =
+        let `type` =
             ascii::into_bytes(type_name::into_string(type_name::get_with_original_ids<T>()));
         deny_list::add(
             deny_list,
             DENY_LIST_COIN_INDEX,
-            type,
+            `type`,
             addr,
         )
     }
@@ -315,12 +315,12 @@ module sui::coin {
        addr: address,
        _ctx: &mut TxContext
     ) {
-        let type =
+        let `type` =
             ascii::into_bytes(type_name::into_string(type_name::get_with_original_ids<T>()));
         deny_list::remove(
             deny_list,
             DENY_LIST_COIN_INDEX,
-            type,
+            `type`,
             addr,
         )
     }
@@ -334,11 +334,11 @@ module sui::coin {
         let name = type_name::get_with_original_ids<T>();
         if (type_name::is_primitive(&name)) return false;
 
-        let type = ascii::into_bytes(type_name::into_string(name));
+        let `type` = ascii::into_bytes(type_name::into_string(name));
         deny_list::contains(
             freezer,
             DENY_LIST_COIN_INDEX,
-            type,
+            `type`,
             addr,
         )
     }
@@ -440,7 +440,7 @@ module sui::coin {
 
     // deprecated as we have CoinMetadata now
     #[allow(unused_field)]
-    struct CurrencyCreated<phantom T> has copy, drop {
+    public struct CurrencyCreated<phantom T> has copy, drop {
         decimals: u8
     }
 }

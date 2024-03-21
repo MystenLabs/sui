@@ -10,11 +10,11 @@ module 0xA::type_name_tests {
     #[test_only]
     use std::ascii::string;
 
-    struct TestStruct {}
+    public struct TestStruct {}
 
-    struct TestGenerics<phantom T> { }
+    public struct TestGenerics<phantom T> { }
 
-    struct TestMultiGenerics<phantom T1, phantom T2, phantom T3> { }
+    public struct TestMultiGenerics<phantom T1, phantom T2, phantom T3> { }
 
     #[test]
     fun test_primitive_types() {

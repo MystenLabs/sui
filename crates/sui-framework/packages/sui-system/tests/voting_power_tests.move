@@ -14,7 +14,7 @@ module sui_system::voting_power_tests {
     const TOTAL_VOTING_POWER: u64 = 10_000;
 
     fun check(stakes: vector<u64>, voting_power: vector<u64>, ctx: &mut TxContext) {
-        let validators = gtu::create_validators_with_stakes(stakes, ctx);
+        let mut validators = gtu::create_validators_with_stakes(stakes, ctx);
         voting_power::set_voting_power(&mut validators);
         test_utils::assert_eq(get_voting_power(&validators), voting_power);
         test_utils::destroy(validators);
@@ -22,7 +22,7 @@ module sui_system::voting_power_tests {
 
     #[test]
     fun test_small_validator_sets() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         check(vector[1], vector[TOTAL_VOTING_POWER], ctx);
         check(vector[77], vector[TOTAL_VOTING_POWER], ctx);
@@ -47,7 +47,7 @@ module sui_system::voting_power_tests {
 
     #[test]
     fun test_medium_validator_sets() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         // >10 validators. now things get a bit more interesting because we can redistribute stake away from the max validators
         check(vector[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[909, 909, 909, 909, 909, 909, 909, 909, 909, 909, 910], ctx);
@@ -60,7 +60,7 @@ module sui_system::voting_power_tests {
 
     #[test]
     fun test_medium_validator_sets_2() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
 
         // more validators, harder to reach max
@@ -70,8 +70,8 @@ module sui_system::voting_power_tests {
     }
 
     fun get_voting_power(validators: &vector<Validator>): vector<u64> {
-        let result = vector[];
-        let i = 0;
+        let mut result = vector[];
+        let mut i = 0;
         let len = vector::length(validators);
         while (i < len) {
             let voting_power = validator::voting_power(vector::borrow(validators, i));

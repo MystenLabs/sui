@@ -12,7 +12,7 @@ module sui::dynamic_field {
     use std::option::{Self, Option};
     use sui::object::{Self, ID, UID};
 
-    friend sui::dynamic_object_field;
+    /* friend sui::dynamic_object_field; */
 
     /// The object already has a dynamic field with this name (with the value and type specified)
     const EFieldAlreadyExists: u64 = 0;
@@ -27,7 +27,7 @@ module sui::dynamic_field {
     const ESharedObjectOperationNotSupported: u64 = 4;
 
     /// Internal object used for storing the field and value
-    struct Field<Name: copy + drop + store, Value: store> has key {
+    public struct Field<Name: copy + drop + store, Value: store> has key {
         /// Determined by the hash of the object ID, the field name value and it's type,
         /// i.e. hash(parent.id || name || Name)
         id: UID,
@@ -134,7 +134,7 @@ module sui::dynamic_field {
         has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
     }
 
-    public(friend) fun field_info<Name: copy + drop + store>(
+    public(package) fun field_info<Name: copy + drop + store>(
         object: &UID,
         name: Name,
     ): (&UID, address) {
@@ -144,7 +144,7 @@ module sui::dynamic_field {
         (id, object::id_to_address(value))
     }
 
-    public(friend) fun field_info_mut<Name: copy + drop + store>(
+    public(package) fun field_info_mut<Name: copy + drop + store>(
         object: &mut UID,
         name: Name,
     ): (&mut UID, address) {
@@ -155,24 +155,24 @@ module sui::dynamic_field {
     }
 
     /// May abort with `EBCSSerializationFailure`.
-    public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
+    public(package) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
-    public(friend) native fun add_child_object<Child: key>(parent: address, child: Child);
+    public(package) native fun add_child_object<Child: key>(parent: address, child: Child);
 
     /// throws `EFieldDoesNotExist` if a child does not exist with that ID
     /// or throws `EFieldTypeMismatch` if the type does not match,
     /// and may also abort with `EBCSSerializationFailure`
     /// we need two versions to return a reference or a mutable reference
-    public(friend) native fun borrow_child_object<Child: key>(object: &UID, id: address): &Child;
+    public(package) native fun borrow_child_object<Child: key>(object: &UID, id: address): &Child;
 
-    public(friend) native fun borrow_child_object_mut<Child: key>(object: &mut UID, id: address): &mut Child;
+    public(package) native fun borrow_child_object_mut<Child: key>(object: &mut UID, id: address): &mut Child;
 
     /// throws `EFieldDoesNotExist` if a child does not exist with that ID
     /// or throws `EFieldTypeMismatch` if the type does not match,
     /// and may also abort with `EBCSSerializationFailure`.
-    public(friend) native fun remove_child_object<Child: key>(parent: address, id: address): Child;
+    public(package) native fun remove_child_object<Child: key>(parent: address, id: address): Child;
 
-    public(friend) native fun has_child_object(parent: address, id: address): bool;
+    public(package) native fun has_child_object(parent: address, id: address): bool;
 
-    public(friend) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
+    public(package) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
 }

@@ -467,7 +467,7 @@ Destroy a <code><a href="../sui-framework/balance.md#0x2_balance_Supply">Supply<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): u64 {
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a> { value } = self;
     value
 }

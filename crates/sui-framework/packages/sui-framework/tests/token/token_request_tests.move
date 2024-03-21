@@ -10,14 +10,14 @@ module sui::token_request_tests {
     use sui::token;
     use sui::token_test_utils::{Self as test, TEST};
 
-    struct Rule1 has drop {}
-    struct Rule2 has drop {}
+    public struct Rule1 has drop {}
+    public struct Rule2 has drop {}
 
     #[test]
     /// Scenario: allow test action, create request, confirm request
     fun test_request_confirm() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
         token::allow(&mut policy, &cap, action, ctx);
@@ -45,12 +45,12 @@ module sui::token_request_tests {
     /// Rule2 and Rule1
     fun test_request_confirm_excessive_approvals_pass() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
         token::add_rule_for_action<TEST, Rule1>(&mut policy, &cap, action, ctx);
 
-        let request = token::new_request(action, 100, none(), none(), ctx);
+        let mut request = token::new_request(action, 100, none(), none(), ctx);
 
         token::add_approval(Rule1 {}, &mut request, ctx);
         token::add_approval(Rule2 {}, &mut request, ctx);
@@ -76,12 +76,12 @@ module sui::token_request_tests {
     /// Scenario: Policy requires Rule1 but request gets approval from Rule2
     fun test_request_confirm_not_approved_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
         token::add_rule_for_action<TEST, Rule1>(&mut policy, &cap, action, ctx);
 
-        let request = token::new_request(action, 100, none(), none(), ctx);
+        let mut request = token::new_request(action, 100, none(), none(), ctx);
 
         token::add_approval(Rule2 {}, &mut request, ctx);
         token::confirm_request(&policy, request, ctx);
@@ -106,7 +106,7 @@ module sui::token_request_tests {
     /// Scenario: issue a transfer request, try to confirm it with `_mut`
     fun test_request_use_mutable_confirm_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
         let request = token::transfer(token, @0x2, ctx);
 
@@ -120,7 +120,7 @@ module sui::token_request_tests {
     /// Scenario: issue a transfer request with balance, action not allowed
     fun test_request_use_mutable_action_not_allowed_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, _cap) = test::get_policy(ctx);
+        let (mut policy, _cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
         let request = token::spend(token, ctx);
 

@@ -12364,6 +12364,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "move-binary-format",
+ "move-compiler",
  "move-core-types",
  "move-package",
  "once_cell",

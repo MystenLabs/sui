@@ -14,7 +14,7 @@ module sui::object_bag {
     // Attempted to destroy a non-empty bag
     const EBagNotEmpty: u64 = 0;
 
-    struct ObjectBag has key, store {
+    public struct ObjectBag has key, store {
         /// the ID of this bag
         id: UID,
         /// the number of key-value pairs in the bag

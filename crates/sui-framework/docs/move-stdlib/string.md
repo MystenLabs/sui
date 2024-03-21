@@ -339,7 +339,7 @@ boundary.
     <b>let</b> bytes = &s.bytes;
     <b>assert</b>!(at &lt;= <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(bytes) && <a href="../move-stdlib/string.md#0x1_string_internal_is_char_boundary">internal_is_char_boundary</a>(bytes, at), <a href="../move-stdlib/string.md#0x1_string_EINVALID_INDEX">EINVALID_INDEX</a>);
     <b>let</b> l = <a href="../move-stdlib/string.md#0x1_string_length">length</a>(s);
-    <b>let</b> front = <a href="../move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(s, 0, at);
+    <b>let</b> <b>mut</b> front = <a href="../move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(s, 0, at);
     <b>let</b> end = <a href="../move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(s, at, l);
     <a href="../move-stdlib/string.md#0x1_string_append">append</a>(&<b>mut</b> front, o);
     <a href="../move-stdlib/string.md#0x1_string_append">append</a>(&<b>mut</b> front, end);

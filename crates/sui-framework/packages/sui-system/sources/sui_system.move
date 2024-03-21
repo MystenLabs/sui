@@ -62,14 +62,14 @@ module sui_system::sui_system {
     #[test_only] use sui_system::validator_set;
     #[test_only] use sui::vec_set::VecSet;
 
-    friend sui_system::genesis;
+    /* friend sui_system::genesis; */
 
-    #[test_only]
-    friend sui_system::governance_test_utils;
-    #[test_only]
-    friend sui_system::sui_system_tests;
+    /* #[test_only] */
+    /* friend sui_system::governance_test_utils; */
+    /* #[test_only] */
+    /* friend sui_system::sui_system_tests; */
 
-    struct SuiSystemState has key {
+    public struct SuiSystemState has key {
         id: UID,
         version: u64,
     }
@@ -81,7 +81,7 @@ module sui_system::sui_system {
 
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in genesis.
-    public(friend) fun create(
+    public(package) fun create(
         id: UID,
         validators: vector<Validator>,
         storage_fund: Balance<SUI>,
@@ -101,7 +101,7 @@ module sui_system::sui_system {
             ctx,
         );
         let version = sui_system_state_inner::genesis_system_state_version();
-        let self = SuiSystemState {
+        let mut self = SuiSystemState {
             id,
             version,
         };
@@ -745,7 +745,7 @@ module sui_system::sui_system {
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
     #[test_only]
-    public(friend) fun advance_epoch_for_testing(
+    public(package) fun advance_epoch_for_testing(
         wrapper: &mut SuiSystemState,
         new_epoch: u64,
         next_protocol_version: u64,

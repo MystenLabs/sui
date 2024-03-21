@@ -14,17 +14,17 @@ module sui::coin_tests {
     use std::ascii;
     use sui::deny_list;
 
-    struct COIN_TESTS has drop {}
+    public struct COIN_TESTS has drop {}
 
     const TEST_ADDR: address = @0xA11CE;
 
     #[test]
     fun coin_tests_metadata() {
-        let scenario = test_scenario::begin(TEST_ADDR);
+        let mut scenario = test_scenario::begin(TEST_ADDR);
         let test = &mut scenario;
         let ctx = test_scenario::ctx(test);
         let witness = COIN_TESTS{};
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
+        let (treasury, mut metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
 
         let decimals = coin::get_decimals(&metadata);
         let symbol_bytes = ascii::as_bytes(&coin::get_symbol<COIN_TESTS>(&metadata));
@@ -61,10 +61,10 @@ module sui::coin_tests {
 
     #[test]
     fun coin_tests_mint() {
-        let scenario = test_scenario::begin(TEST_ADDR);
+        let mut scenario = test_scenario::begin(TEST_ADDR);
         let test = &mut scenario;
         let witness = COIN_TESTS{};
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), test_scenario::ctx(test));
+        let (mut treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), test_scenario::ctx(test));
 
         let balance = coin::mint_balance<COIN_TESTS>(&mut treasury, 1000);
         let coin = coin::from_balance(balance, test_scenario::ctx(test));
@@ -86,13 +86,13 @@ module sui::coin_tests {
 
     #[test]
     fun deny_list() {
-        let scenario = test_scenario::begin(@0);
+        let mut scenario = test_scenario::begin(@0);
         let test = &mut scenario;
         deny_list::create_for_test(test_scenario::ctx(test));
         test_scenario::next_tx(test, TEST_ADDR);
 
         let witness = COIN_TESTS {};
-        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(
+        let (treasury, mut deny_cap, metadata) = coin::create_regulated_currency(
             witness,
             6,
             b"COIN_TESTS",
@@ -106,7 +106,7 @@ module sui::coin_tests {
         {
             // test freezing an address
             test_scenario::next_tx(test, TEST_ADDR);
-            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            let mut deny_list: deny_list::DenyList = test_scenario::take_shared(test);
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
             coin::deny_list_add(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
@@ -117,7 +117,7 @@ module sui::coin_tests {
         {
             // test freezing an address over multiple "transactions"
             test_scenario::next_tx(test, TEST_ADDR);
-            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            let mut deny_list: deny_list::DenyList = test_scenario::take_shared(test);
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
             coin::deny_list_add(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
@@ -125,7 +125,7 @@ module sui::coin_tests {
             test_scenario::return_shared(deny_list);
 
             test_scenario::next_tx(test, TEST_ADDR);
-            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            let mut deny_list: deny_list::DenyList = test_scenario::take_shared(test);
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
             coin::deny_list_remove(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
             assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);

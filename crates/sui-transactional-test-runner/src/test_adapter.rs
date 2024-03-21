@@ -18,9 +18,9 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
-use move_compiler::editions::Edition;
 use move_compiler::{
-    shared::{NumberFormat, NumericalAddress, PackagePaths},
+    editions::Edition,
+    shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
     Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
@@ -1840,7 +1840,8 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
 });
 
 pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
-    // TODO invoke package system?
+    // TODO invoke package system? Or otherwise pull the versions for these packages as per their
+    // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
     let sui_system_sources = {
         let mut buf = sui_files.to_path_buf();
@@ -1862,9 +1863,13 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
+    let config = PackageConfig {
+        edition: Edition::E2024_BETA,
+        ..Default::default()
+    };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
-            name: None,
+            name: Some(("sui-framework".into(), config)),
             paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
