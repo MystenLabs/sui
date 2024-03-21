@@ -337,11 +337,8 @@ impl ServiceConfig {
 
     pub fn test_defaults() -> Self {
         Self {
-            limits: Limits::default(),
-            disabled_features: BTreeSet::new(),
-            experiments: Experiments::default(),
-            name_service: NameServiceConfig::default(),
             background_tasks: BackgroundTasksConfig::test_defaults(),
+            ..Default::default()
         }
     }
 }

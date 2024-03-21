@@ -58,7 +58,6 @@ pub async fn start_cluster(
     internal_data_source_rpc_port: Option<u16>,
 ) -> Cluster {
     let db_url = graphql_connection_config.db_url.clone();
-    let cancellation_token = CancellationToken::new();
     // Starts validator+fullnode
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
@@ -75,7 +74,7 @@ pub async fn start_cluster(
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
         graphql_connection_config.clone(),
         Some(fn_rpc_url),
-        Some(cancellation_token),
+        /* cancellation_token */ None,
     )
     .await;
 
@@ -248,14 +247,7 @@ async fn wait_for_graphql_checkpoint_catchup(
                 .unwrap()
                 .response_body_json();
 
-            let current_checkpoint = resp
-                .get("data")
-                .unwrap()
-                .get("availableRange")
-                .unwrap()
-                .get("last")
-                .unwrap()
-                .get("sequenceNumber");
+            let current_checkpoint = resp["data"]["availableRange"]["last"].get("sequenceNumber");
 
             // Indexer has not picked up any checkpoints yet
             let Some(current_checkpoint) = current_checkpoint else {

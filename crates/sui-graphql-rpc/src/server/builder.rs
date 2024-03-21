@@ -296,7 +296,7 @@ impl ServerBuilder {
         let state = self.state.clone();
         let (address, schema, db_reader, router) = self.build_components();
 
-        // Start the background task to update a shared `CheckpointViewedAt`
+        // Initialize the checkpoint watermark for the background task to update.
         let checkpoint_watermark = CheckpointWatermark(Arc::new(AtomicU64::new(0)));
 
         let app = router
@@ -562,25 +562,27 @@ pub(crate) async fn update_watermark(
     cancellation_token: CancellationToken,
 ) {
     loop {
-        if cancellation_token.is_cancelled() {
-            info!("Shutdown signal received, terminating watermark update task");
-            return;
-        }
-        let new_checkpoint_viewed_at =
-            match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
-                Ok(checkpoint) => Some(checkpoint),
-                Err(e) => {
-                    error!("{}", e);
-                    metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
-                    None
+        tokio::select! {
+                    _ = cancellation_token.cancelled() => {
+                        info!("Shutdown signal received, terminating watermark update task");
+                        return;
+                    },
+                    _ = tokio::time::sleep(sleep_ms) => {
+                        let new_checkpoint_viewed_at =
+                    match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
+                        Ok(checkpoint) => Some(checkpoint),
+                        Err(e) => {
+                            error!("{}", e);
+                            metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
+                            None
+                        }
+                    };
+
+                if let Some(checkpoint) = new_checkpoint_viewed_at {
+                    checkpoint_viewed_at.0.store(checkpoint, Relaxed);
                 }
-            };
-
-        if let Some(checkpoint) = new_checkpoint_viewed_at {
-            checkpoint_viewed_at.0.store(checkpoint, Relaxed);
+            }
         }
-
-        tokio::time::sleep(sleep_ms).await;
     }
 }
 
