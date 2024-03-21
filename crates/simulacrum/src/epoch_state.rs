@@ -145,6 +145,7 @@ impl EpochState {
             kind,
             signer,
             tx_digest,
+            None,
         ))
     }
 }

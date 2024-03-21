@@ -358,7 +358,7 @@ mod checked {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in objects.iter() {
-            if object.is_mutable() {
+            if object.is_mutable_input() {
                 fp_ensure!(
                     used_objects.insert(object.id().into()),
                     UserInputError::MutableObjectUsedMoreThanOnce {
@@ -397,7 +397,7 @@ mod checked {
                 }
                 // We skip checking a deleted shared object because it no longer exists
                 ObjectReadResultKind::DeletedSharedObject(_, _) => (),
-                ObjectReadResultKind::CongestedSharedObject(_) => (),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_) => (),
             }
         }
 

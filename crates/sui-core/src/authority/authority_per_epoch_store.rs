@@ -84,6 +84,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
@@ -225,6 +226,16 @@ pub struct ExecutionComponents {
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
     pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>>,
     metrics: Arc<ResolverMetrics>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct SharedObjectCongestionInfo {
+    pub congested_shared_object_ids: Vec<ObjectID>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum TransactionCancellationReason {
+    SharedObjectCongestion(SharedObjectCongestionInfo),
 }
 
 pub struct AuthorityPerEpochStore {
@@ -464,6 +475,8 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions: DBMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>,
+
+    pub cancelled_transactions: DBMap<TransactionDigest, TransactionCancellationReason>,
 
     /// This table is no longer used (can be removed when DBMap supports removing tables)
     #[allow(dead_code)]
@@ -1620,12 +1633,14 @@ impl AuthorityPerEpochStore {
         dkg_closed: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         object_total_cost: &mut HashMap<ObjectID, u64>,
-    ) -> (Option<DeferralKey>, Option<ObjectID>) {
+    ) -> (Option<DeferralKey>, Option<Vec<ObjectID>>) {
         // Defer transaction if it uses randomness but DKG has not yet closed.
         if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
             return (Some(DeferralKey::new_for_randomness(commit_round)), None);
         }
 
+        let mut congested_objects = vec![];
+        let mut deferral_key = None;
         match self.protocol_config().per_object_congestion_control_mode() {
             PerObjectCongestionControlMode::None => (None, None),
             PerObjectCongestionControlMode::TotalGasBudget => {
@@ -1635,32 +1650,32 @@ impl AuthorityPerEpochStore {
                             .protocol_config()
                             .max_accumulated_txn_cost_per_object_in_checkpoint()
                     {
-                        if let Some(DeferralKey::ConsensusRound {
-                            future_round: _,
-                            deferred_from_round,
-                        }) = previously_deferred_tx_digests.get(cert.digest())
-                        {
-                            // This transaction has been deferred before.
-                            return (
+                        congested_objects.push(obj.id);
+                        if deferral_key.is_none() {
+                            deferral_key = if let Some(DeferralKey::ConsensusRound {
+                                future_round: _,
+                                deferred_from_round,
+                            }) = previously_deferred_tx_digests.get(cert.digest())
+                            {
+                                // This transaction has been deferred before.
                                 Some(DeferralKey::new_for_consensus_round(
                                     commit_round + 1,
                                     *deferred_from_round,
-                                )),
-                                Some(obj.id),
-                            );
-                        } else {
-                            // This include previously deferred randomness transactions.
-                            return (
+                                ))
+                            } else {
+                                // This include previously deferred randomness transactions.
                                 Some(DeferralKey::new_for_consensus_round(
                                     commit_round + 1,
                                     commit_round,
-                                )),
-                                Some(obj.id),
-                            );
+                                ))
+                            }
                         }
                     }
                 }
-                (None, None)
+                (
+                    deferral_key,
+                    (!congested_objects.is_empty()).then(|| congested_objects),
+                )
             }
         }
     }
@@ -1690,6 +1705,22 @@ impl AuthorityPerEpochStore {
         effects: &TransactionEffects,
         cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult {
+        if let ExecutionStatus::Failure {
+            error:
+                ExecutionFailureStatus::ExecutionCancelledDueToCongestionOnObjects { congested_objects },
+            command: _,
+        } = effects.status()
+        {
+            self.tables()?.cancelled_transactions.insert(
+                &certificate.digest(),
+                &TransactionCancellationReason::SharedObjectCongestion(
+                    SharedObjectCongestionInfo {
+                        congested_shared_object_ids: congested_objects.clone().0,
+                    },
+                ),
+            )?;
+        }
+
         let init_shared_versions: Vec<_> = certificate
             .shared_input_objects()
             .map(SharedInputObject::into_id_and_version)
@@ -2105,7 +2136,7 @@ impl AuthorityPerEpochStore {
         shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
         certificate: &VerifiedExecutableTransaction,
         object_total_cost: &mut HashMap<ObjectID, u64>,
-        congested_object_to_fail_txn: Option<ObjectID>,
+        cancel_txn: bool,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
@@ -2125,25 +2156,12 @@ impl AuthorityPerEpochStore {
             .iter()
             .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
         {
-            let (input_version, input_object_key_version, is_mutable) =
-                if let Some(congested_object_id) = congested_object_to_fail_txn {
-                    if id == &congested_object_id {
-                        (SequenceNumber::CONGESTED, SequenceNumber::MIN, false) // This has to be inmutable. Otherwise, we may use old version of data to override newer version. When constructing new version of object in execution.
-                    } else {
-                        (SequenceNumber::READ_AVOID, SequenceNumber::MIN, false)
-                    }
-                } else {
-                    max_object_cost =
-                        core::cmp::max(*object_total_cost.get(id).unwrap_or(&0), max_object_cost);
-                    (version, version, *mutable)
-                };
-
-            assigned_versions.push((*id, input_version));
-            input_object_keys.push(ObjectKey(*id, input_object_key_version)); // Is this correct?
-            is_mutable_input.push(is_mutable);
+            assigned_versions.push((*id, version));
+            input_object_keys.push(ObjectKey(*id, version));
+            is_mutable_input.push(*mutable);
         }
 
-        if congested_object_to_fail_txn.is_none() {
+        if !cancel_txn {
             max_object_cost += match self.protocol_config().per_object_congestion_control_mode() {
                 PerObjectCongestionControlMode::None => 0,
                 PerObjectCongestionControlMode::TotalGasBudget => certificate.gas_budget(),
@@ -2160,25 +2178,27 @@ impl AuthorityPerEpochStore {
             "next_version must be less than MAX"
         );
 
-        // Update the next version for the shared objects.
-        assigned_versions
-            .iter()
-            .zip(is_mutable_input.into_iter())
-            .filter_map(|((id, _), mutable)| {
-                if mutable {
-                    Some((*id, next_version))
-                } else {
-                    None
-                }
-            })
-            .for_each(|(id, version)| {
-                shared_input_next_versions
-                    .insert(id, version)
-                    .expect("Object must exist in shared_input_next_versions.");
-            });
+        if !cancel_txn {
+            // Update the next version for the shared objects.
+            assigned_versions
+                .iter()
+                .zip(is_mutable_input.into_iter())
+                .filter_map(|((id, _), mutable)| {
+                    if mutable {
+                        Some((*id, next_version))
+                    } else {
+                        None
+                    }
+                })
+                .for_each(|(id, version)| {
+                    shared_input_next_versions
+                        .insert(id, version)
+                        .expect("Object must exist in shared_input_next_versions.");
+                });
+        }
 
         trace!(tx_digest = ?transaction_digest,
-               ?assigned_versions, ?next_version,
+               ?assigned_versions, ?next_version, ?cancel_txn,
                "locking shared objects");
 
         self.finish_assign_shared_object_versions(batch, certificate, assigned_versions)
@@ -3201,13 +3221,14 @@ impl AuthorityPerEpochStore {
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
 
-                let (deferral_key, congested_object) = self.should_defer(
+                let (deferral_key, congested_objects) = self.should_defer(
                     &certificate,
                     commit_round,
                     dkg_closed,
                     previously_deferred_tx_digests,
                     object_total_cost,
                 );
+                let mut cancel_txn = false;
 
                 if let Some(deferral_key) = deferral_key {
                     if self.transaction_deferral_within_limit(&deferral_key) {
@@ -3219,10 +3240,22 @@ impl AuthorityPerEpochStore {
                     } else {
                         debug!(
                             "Max deferring consensus round reached. Failing txn. Congested object: {:?}, txn: {:?}",
-                            congested_object,
+                            congested_objects,
                             certificate.digest()
                         );
-                        assert!(congested_object.is_some(), "When a txn exceeds the deferral limit, it should also have a congested object.");
+                        assert!(congested_objects.is_some(), "When a txn exceeds the deferral limit, it should also have a congested object.");
+                        cancel_txn = true;
+                        batch.insert_batch(
+                            &self.tables()?.cancelled_transactions,
+                            iter::once((
+                                certificate.digest(),
+                                TransactionCancellationReason::SharedObjectCongestion(
+                                    SharedObjectCongestionInfo {
+                                        congested_shared_object_ids: congested_objects.unwrap(),
+                                    },
+                                ),
+                            )),
+                        )?;
                     }
                 }
 
@@ -3245,7 +3278,7 @@ impl AuthorityPerEpochStore {
                         shared_input_next_versions,
                         &certificate,
                         object_total_cost,
-                        congested_object,
+                        cancel_txn,
                     )
                     .await?;
                 }
@@ -3409,7 +3442,7 @@ impl AuthorityPerEpochStore {
                     shared_input_next_versions,
                     system_transaction,
                     object_total_cost,
-                    None,
+                    false,
                 )
                 .await?;
 

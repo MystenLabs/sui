@@ -43,7 +43,7 @@ use std::{
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
-use sui_types::execution_status::ExecutionStatus;
+use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
@@ -89,7 +89,7 @@ use sui_types::effects::{
     InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
@@ -130,7 +130,9 @@ use sui_types::{
 use sui_types::{is_system_package, TypeTag};
 use typed_store::TypedStoreError;
 
-use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, CertTxGuard, SharedObjectCongestionInfo, TransactionCancellationReason,
+};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
@@ -154,6 +156,7 @@ use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
+use typed_store::Map;
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
@@ -1131,7 +1134,13 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
-        let input_objects = self.read_objects(certificate, epoch_store).await?;
+        let cancel_txn_reason = epoch_store
+            .tables()?
+            .cancelled_transactions
+            .get(&tx_digest)?;
+        let input_objects = self
+            .read_objects(certificate, epoch_store, &cancel_txn_reason)
+            .await?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -1145,6 +1154,7 @@ impl AuthorityState {
             input_objects,
             expected_effects_digest,
             epoch_store,
+            cancel_txn_reason,
         )
         .await
         .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
@@ -1154,6 +1164,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        cancel_txn_reason: &Option<TransactionCancellationReason>,
     ) -> SuiResult<InputObjects> {
         let _scope = monitored_scope("Execution::load_input_objects");
         let _metrics_guard = self
@@ -1162,6 +1173,7 @@ impl AuthorityState {
             .start_timer();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
         if certificate.data().transaction_data().is_end_of_epoch_tx() {
+            assert!(cancel_txn_reason.is_none());
             self.input_loader
                 .read_objects_for_synchronous_execution(
                     certificate.digest(),
@@ -1176,6 +1188,7 @@ impl AuthorityState {
                     &certificate.key(),
                     input_objects,
                     epoch_store.epoch(),
+                    cancel_txn_reason,
                 )
                 .await
         }
@@ -1186,7 +1199,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
-        self.read_objects(certificate, epoch_store).await
+        self.read_objects(certificate, epoch_store, &None).await
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -1263,6 +1276,7 @@ impl AuthorityState {
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        cancel_txn_reason: Option<TransactionCancellationReason>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let process_certificate_start_time = tokio::time::Instant::now();
         let digest = *certificate.digest();
@@ -1313,6 +1327,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             epoch_store,
+            cancel_txn_reason,
         ) {
             Err(e) => {
                 info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
@@ -1554,6 +1569,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        cancel_txn_reason: Option<TransactionCancellationReason>,
     ) -> SuiResult<(
         InnerTemporaryStore,
         TransactionEffects,
@@ -1583,6 +1599,22 @@ impl AuthorityState {
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
 
+        let cancel_execution_with_error = if let Some(
+            TransactionCancellationReason::SharedObjectCongestion(SharedObjectCongestionInfo {
+                congested_shared_object_ids,
+            }),
+        ) = cancel_txn_reason
+        {
+            Some(ExecutionError::new(
+                ExecutionErrorKind::ExecutionCancelledDueToCongestionOnObjects {
+                    congested_objects: CongestedObjects(congested_shared_object_ids),
+                },
+                None,
+            ))
+        } else {
+            None
+        };
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
@@ -1605,6 +1637,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 tx_digest,
+                cancel_execution_with_error,
             );
 
         fail_point_if!("cp_execution_nondeterminism", || {
@@ -1635,7 +1668,13 @@ impl AuthorityState {
         let lock: RwLock<EpochId> = RwLock::new(epoch_store.epoch());
         let execution_guard = lock.try_read().unwrap();
 
-        self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
+        self.prepare_certificate(
+            &execution_guard,
+            certificate,
+            input_objects,
+            epoch_store,
+            None,
+        )
     }
 
     pub async fn dry_exec_transaction(
@@ -1755,6 +1794,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction_digest,
+                None,
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -1925,7 +1965,7 @@ impl AuthorityState {
             if transaction.gas().is_empty() {
                 input_objects.push(ObjectReadResult::new(
                     InputObjectKind::ImmOrOwnedMoveObject(gas_objects[0]),
-                    dummy_gas_object.into(),
+                    ObjectReadResultKind::Object(dummy_gas_object),
                 ));
             }
             let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
@@ -4512,8 +4552,13 @@ impl AuthorityState {
             )
             .await?;
 
-        let (temporary_store, effects, _execution_error_opt) =
-            self.prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)?;
+        let (temporary_store, effects, _execution_error_opt) = self.prepare_certificate(
+            &execution_guard,
+            &executable_tx,
+            input_objects,
+            epoch_store,
+            None,
+        )?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");
 

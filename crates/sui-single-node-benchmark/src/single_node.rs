@@ -204,6 +204,7 @@ impl SingleValidator {
             kind,
             signer,
             *executable.digest(),
+            None,
         );
         assert!(effects.status().is_ok());
         effects

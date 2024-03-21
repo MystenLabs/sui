@@ -93,6 +93,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        cancel_execution_with_error: Option<ExecutionError>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -114,6 +115,7 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
+            cancel_execution_with_error,
         )
     }
 
@@ -155,6 +157,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                None,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -172,6 +175,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                None,
             )
         }
     }

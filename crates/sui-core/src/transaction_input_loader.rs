@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::TransactionCancellationReason;
 use crate::execution_cache::ExecutionCacheRead;
 use itertools::izip;
 use once_cell::unsync::OnceCell;
@@ -61,7 +62,10 @@ impl TransactionInputLoader {
                 }
                 InputObjectKind::SharedMoveObject { id, .. } => match self.cache.get_object(id)? {
                     Some(object) => {
-                        input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
+                        input_results[i] = Some(ObjectReadResult::new(
+                            *kind,
+                            ObjectReadResultKind::Object(object),
+                        ))
                     }
                     None => {
                         if let Some((version, digest)) = self
@@ -183,6 +187,7 @@ impl TransactionInputLoader {
         tx_key: &TransactionKey,
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,
+        cancel_txn_reason: &Option<TransactionCancellationReason>,
     ) -> SuiResult<InputObjects> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
@@ -208,7 +213,7 @@ impl TransactionInputLoader {
                     fetches.push((i, input));
                 }
                 InputObjectKind::SharedMoveObject { id, .. } => {
-                    // TODO: we can move this outside of for loop?
+                    // TODO: move this outside of the loop
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             shared_lock_store
@@ -239,19 +244,30 @@ impl TransactionInputLoader {
             fetches.into_iter()
         ) {
             results[index] = Some(match (object, input) {
-                (Some(obj), input_object_kind) => ObjectReadResult {
-                    input_object_kind: *input_object_kind,
-                    object: obj.into(),
+                (Some(obj), InputObjectKind::SharedMoveObject { .. }) => {
+                    if cancel_txn_reason.is_some() {
+                        ObjectReadResult {
+                            input_object_kind: *input,
+                            object: ObjectReadResultKind::CancelledTransactionSharedObject(obj),
+                        }
+                    } else {
+                        ObjectReadResult {
+                            input_object_kind: *input,
+                            object: ObjectReadResultKind::Object(obj),
+                        }
+                    }
+                }
+                (Some(obj), input_object_kind) => {
+                    assert!(!matches!(input_object_kind, InputObjectKind::SharedMoveObject { .. }));
+                    ObjectReadResult {
+                        input_object_kind: *input_object_kind,
+                        object: ObjectReadResultKind::Object(obj),
+                    }
                 },
                 (None, InputObjectKind::SharedMoveObject { id, .. }) => {
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
-                    if version == SequenceNumber::CONGESTED || version == SequenceNumber::READ_AVOID {
-                        ObjectReadResult {
-                            input_object_kind: *input,
-                            object: ObjectReadResultKind::CongestedSharedObject(version)
-                        }
-                    } else if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
+                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
@@ -296,7 +312,10 @@ impl TransactionInputLoader {
                 }
             }
             .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-            results.push(ObjectReadResult::new(*kind, obj.into()));
+            results.push(ObjectReadResult::new(
+                *kind,
+                ObjectReadResultKind::Object(obj),
+            ));
         }
 
         let receiving_results = self.read_receiving_objects(receiving_objects, 0)?;

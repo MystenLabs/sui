@@ -800,7 +800,6 @@ impl ObjectDigest {
     pub const MAX: ObjectDigest = Self::new([u8::MAX; 32]);
     pub const OBJECT_DIGEST_DELETED_BYTE_VAL: u8 = 99;
     pub const OBJECT_DIGEST_WRAPPED_BYTE_VAL: u8 = 88;
-    pub const OBJECT_DIGEST_CONGESTED_BYTE_VAL: u8 = 77;
 
     /// A marker that signifies the object is deleted.
     pub const OBJECT_DIGEST_DELETED: ObjectDigest =
@@ -809,9 +808,6 @@ impl ObjectDigest {
     /// A marker that signifies the object is wrapped into another object.
     pub const OBJECT_DIGEST_WRAPPED: ObjectDigest =
         Self::new([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; 32]);
-
-    pub const OBJECT_DIGEST_CONGESTED: ObjectDigest =
-        Self::new([Self::OBJECT_DIGEST_CONGESTED_BYTE_VAL; 32]);
 
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Digest::new(digest))

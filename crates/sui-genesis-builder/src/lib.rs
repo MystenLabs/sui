@@ -45,7 +45,8 @@ use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSystemStateTrait};
 use sui_types::transaction::{
-    CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
+    CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, ObjectReadResultKind,
+    Transaction,
 };
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
@@ -871,6 +872,7 @@ fn create_genesis_transaction(
                 kind,
                 signer,
                 genesis_digest,
+                None,
             );
         assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -978,7 +980,7 @@ fn process_package(
         .filter_map(|(dependency, object)| {
             Some(ObjectReadResult::new(
                 InputObjectKind::MovePackage(*dependency),
-                object?.clone().into(),
+                ObjectReadResultKind::Object(object?.clone()),
             ))
         })
         .collect();

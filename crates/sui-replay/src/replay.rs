@@ -777,6 +777,7 @@ impl LocalExec {
                 transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
+                None, // TODO: make sure that we can replay failed txn
             )
         } else {
             unreachable!("Transaction was valid so gas status must be valid");

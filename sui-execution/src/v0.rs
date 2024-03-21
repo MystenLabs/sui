@@ -93,12 +93,14 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        cancel_execution_with_error: Option<ExecutionError>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
+        assert!(cancel_execution_with_error.is_none());
         execute_transaction_to_effects::<execution_mode::Normal>(
             store,
             input_objects,

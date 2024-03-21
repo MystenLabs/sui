@@ -57,7 +57,7 @@ mod checked {
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
-        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -80,6 +80,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
+        cancel_execution_with_error: Option<ExecutionError>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -96,7 +97,6 @@ mod checked {
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let contains_deleted_input = input_objects.contains_deleted_objects();
-        let congested_input_object = input_objects.get_congested_object();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -130,7 +130,7 @@ mod checked {
             enable_expensive_checks,
             deny_cert,
             contains_deleted_input,
-            congested_input_object,
+            cancel_execution_with_error,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -263,7 +263,7 @@ mod checked {
         enable_expensive_checks: bool,
         deny_cert: bool,
         contains_deleted_input: bool,
-        congested_input_object: Option<ObjectID>,
+        cancel_execution_with_error: Option<ExecutionError>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -288,16 +288,11 @@ mod checked {
                     ExecutionErrorKind::CertificateDenied,
                     None,
                 ))
+            } else if cancel_execution_with_error.is_some() {
+                Err(cancel_execution_with_error.unwrap())
             } else if contains_deleted_input {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::InputObjectDeleted,
-                    None,
-                ))
-            } else if let Some(congested_input_object) = congested_input_object {
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::ExecutionCancelledDueToCongestionOnObject {
-                        object: congested_input_object,
-                    },
                     None,
                 ))
             } else {
