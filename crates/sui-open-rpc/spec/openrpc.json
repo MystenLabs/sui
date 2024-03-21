@@ -1705,7 +1705,6 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
-                "max_accumulated_txn_cost_per_object_in_checkpoint": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -1722,7 +1721,6 @@
                 "max_checkpoint_size_bytes": {
                   "u64": "31457280"
                 },
-                "max_deferral_rounds_for_congestion_control": null,
                 "max_dependency_depth": {
                   "u64": "100"
                 },
