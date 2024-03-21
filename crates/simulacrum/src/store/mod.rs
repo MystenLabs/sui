@@ -7,6 +7,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::error::UserInputError;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::ObjectReadResult;
+use sui_types::transaction::ObjectReadResultKind;
 use sui_types::transaction::ReceivingObjectReadResult;
 use sui_types::transaction::ReceivingObjects;
 use sui_types::{
@@ -145,7 +146,7 @@ pub trait SimulatorStore:
 
             input_objects.push(ObjectReadResult::new(
                 *kind,
-                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
+                ObjectReadResultKind::Object(obj.ok_or_else(|| kind.object_not_found_error())?),
             ));
         }
 

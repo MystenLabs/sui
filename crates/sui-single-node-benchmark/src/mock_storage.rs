@@ -16,7 +16,9 @@ use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
     PackageObject, ParentSync,
 };
-use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult, TransactionKey};
+use sui_types::transaction::{
+    InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind, TransactionKey,
+};
 
 // TODO: We won't need a special purpose InMemoryObjectStore once the InMemoryCache is ready.
 #[derive(Clone)]
@@ -72,7 +74,7 @@ impl InMemoryObjectStore {
 
             input_objects.push(ObjectReadResult::new(
                 *kind,
-                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
+                ObjectReadResultKind::Object(obj.ok_or_else(|| kind.object_not_found_error())?),
             ));
         }
 

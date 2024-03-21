@@ -74,6 +74,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
+        cancel_execution_with_error: Option<ExecutionError>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -118,6 +119,7 @@ mod checked {
             enable_expensive_checks,
             deny_cert,
             contains_deleted_input,
+            cancel_execution_with_error,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -242,6 +244,7 @@ mod checked {
         enable_expensive_checks: bool,
         deny_cert: bool,
         contains_deleted_input: bool,
+        cancel_execution_with_error: Option<ExecutionError>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -266,6 +269,8 @@ mod checked {
                     ExecutionErrorKind::CertificateDenied,
                     None,
                 ))
+            } else if cancel_execution_with_error.is_some() {
+                Err(cancel_execution_with_error.unwrap())
             } else if contains_deleted_input {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::InputObjectDeleted,

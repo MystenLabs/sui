@@ -40,6 +40,7 @@ pub type DeletedSharedObjects = Vec<DeletedSharedObjectInfo>;
 pub enum SharedInput {
     Existing(ObjectRef),
     Deleted(DeletedSharedObjectInfo),
+    Cancelled(ObjectRef),
 }
 
 impl<T> SuiResolver for T

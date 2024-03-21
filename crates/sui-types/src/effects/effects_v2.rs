@@ -120,6 +120,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     UnchangedSharedKind::ReadDeleted(seqno) => {
                         InputSharedObject::ReadDeleted(*id, *seqno)
                     }
+                    UnchangedSharedKind::Cancelled((version, digest)) => {
+                        InputSharedObject::ReadOnly((*id, *version, *digest))
+                    }
                 },
             ))
             .collect()
@@ -422,6 +425,10 @@ impl TransactionEffectsV2 {
                         Some((id, UnchangedSharedKind::ReadDeleted(version)))
                     }
                 }
+                SharedInput::Cancelled((id, version, digest)) => {
+                    debug_assert!(!changed_objects.contains_key(&id));
+                    Some((id, UnchangedSharedKind::Cancelled((version, digest))))
+                }
             })
             .collect();
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();
@@ -605,4 +612,5 @@ pub enum UnchangedSharedKind {
     MutateDeleted(SequenceNumber),
     /// Deleted shared objects that appear as read-only in the input.
     ReadDeleted(SequenceNumber),
+    Cancelled(VersionDigest),
 }

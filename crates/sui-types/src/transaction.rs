@@ -2749,6 +2749,7 @@ pub enum ObjectReadResultKind {
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
+    CancelledTransactionSharedObject(Object),
 }
 
 impl From<Object> for ObjectReadResultKind {
@@ -2767,6 +2768,14 @@ impl ObjectReadResult {
             panic!("only shared objects can be DeletedSharedObject");
         }
 
+        if let (
+            InputObjectKind::ImmOrOwnedMoveObject(_),
+            ObjectReadResultKind::CancelledTransactionSharedObject(_),
+        ) = (&input_object_kind, &object)
+        {
+            panic!("only shared objects can be CancelledTransactionSharedObject");
+        }
+
         Self {
             input_object_kind,
             object,
@@ -2781,6 +2790,7 @@ impl ObjectReadResult {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
             ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+            ObjectReadResultKind::CancelledTransactionSharedObject(object) => Some(object),
         }
     }
 
@@ -2792,7 +2802,7 @@ impl ObjectReadResult {
         }
     }
 
-    pub fn is_mutable(&self) -> bool {
+    pub fn is_mutable_input(&self) -> bool {
         match (&self.input_object_kind, &self.object) {
             (InputObjectKind::MovePackage(_), _) => false,
             (InputObjectKind::ImmOrOwnedMoveObject(_), ObjectReadResultKind::Object(object)) => {
@@ -2801,6 +2811,10 @@ impl ObjectReadResult {
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
+            ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_),
             ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
         }
@@ -2839,6 +2853,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
             ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_),
+            ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { .. }, _) => None,
         }
     }
@@ -2858,14 +2876,20 @@ impl ObjectReadResult {
                 ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
                     SharedInput::Deleted((id, *seq, mutable, *digest))
                 }
+                ObjectReadResultKind::CancelledTransactionSharedObject(obj) => {
+                    SharedInput::Cancelled(obj.compute_object_reference())
+                }
             }),
         }
     }
 
-    pub fn get_previous_transaction(&self) -> TransactionDigest {
+    pub fn get_previous_transaction(&self) -> Option<TransactionDigest> {
         match &self.object {
-            ObjectReadResultKind::Object(obj) => obj.previous_transaction,
-            ObjectReadResultKind::DeletedSharedObject(_, digest) => *digest,
+            ObjectReadResultKind::Object(obj) => Some(obj.previous_transaction),
+            ObjectReadResultKind::DeletedSharedObject(_, digest) => Some(*digest),
+            ObjectReadResultKind::CancelledTransactionSharedObject(obj) => {
+                Some(obj.previous_transaction)
+            }
         }
     }
 }
@@ -2963,7 +2987,7 @@ impl InputObjects {
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
         self.objects
             .iter()
-            .map(|obj| obj.get_previous_transaction())
+            .filter_map(|obj| obj.get_previous_transaction())
             .collect()
     }
 
@@ -2989,12 +3013,18 @@ impl InputObjects {
                     (
                         InputObjectKind::ImmOrOwnedMoveObject(_),
                         ObjectReadResultKind::DeletedSharedObject(_, _),
-                    ) => {
-                        unreachable!()
-                    }
+                    ) => unreachable!(),
+                    (
+                        InputObjectKind::ImmOrOwnedMoveObject(_),
+                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                    ) => unreachable!(),
                     (
                         InputObjectKind::SharedMoveObject { .. },
                         ObjectReadResultKind::DeletedSharedObject(_, _),
+                    ) => None,
+                    (
+                        InputObjectKind::SharedMoveObject { .. },
+                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
                     ) => None,
                     (
                         InputObjectKind::SharedMoveObject { mutable, .. },
@@ -3024,6 +3054,9 @@ impl InputObjects {
                     object.data.try_as_move().map(MoveObject::version)
                 }
                 ObjectReadResultKind::DeletedSharedObject(v, _) => Some(*v),
+                ObjectReadResultKind::CancelledTransactionSharedObject(object) => {
+                    object.data.try_as_move().map(MoveObject::version)
+                }
             })
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 
