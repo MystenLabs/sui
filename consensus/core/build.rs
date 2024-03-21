@@ -23,7 +23,7 @@ fn build_tonic_services(out_dir: &Path) {
     let codec_path = "tonic::codec::ProstCodec";
 
     let service = tonic_build::manual::Service::builder()
-        .name("Consensus")
+        .name("ConsensusService")
         .package("consensus")
         .comment("Consensus authority interface")
         .method(

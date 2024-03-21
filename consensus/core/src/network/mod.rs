@@ -16,14 +16,14 @@ mod anemo_gen {
 }
 
 mod tonic_gen {
-    include!(concat!(env!("OUT_DIR"), "/consensus.Consensus.rs"));
+    include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
 }
 
 pub(crate) mod anemo_network;
-// pub(crate) mod tonic_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
+pub(crate) mod tonic_network;
 
 /// Network client for communicating with peers.
 #[async_trait]

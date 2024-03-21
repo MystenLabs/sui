@@ -63,7 +63,7 @@ impl AnemoClient {
         self.network.store(Some(Arc::new(network)));
     }
 
-    async fn get_anemo_client(
+    async fn get_client(
         &self,
         peer: AuthorityIndex,
         timeout: Duration,
@@ -125,9 +125,7 @@ impl AnemoClient {
 #[async_trait]
 impl NetworkClient for AnemoClient {
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
-        let mut client = self
-            .get_anemo_client(peer, Self::SEND_BLOCK_TIMEOUT)
-            .await?;
+        let mut client = self.get_client(peer, Self::SEND_BLOCK_TIMEOUT).await?;
         let request = SendBlockRequest {
             block: block.clone(),
         };
@@ -143,9 +141,7 @@ impl NetworkClient for AnemoClient {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self
-            .get_anemo_client(peer, Self::FETCH_BLOCK_TIMEOUT)
-            .await?;
+        let mut client = self.get_client(peer, Self::FETCH_BLOCK_TIMEOUT).await?;
         let request = FetchBlocksRequest {
             block_refs: block_refs
                 .iter()

@@ -238,7 +238,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
 
         // Reject blocks not produced by the peer.
-        if peer != signed_block.author() {
+        if peer != signed_block.author() && peer != AuthorityIndex::UNKNOWN {
             self.context
                 .metrics
                 .node_metrics
