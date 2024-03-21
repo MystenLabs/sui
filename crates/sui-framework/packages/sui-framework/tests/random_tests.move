@@ -22,13 +22,13 @@ module sui::random_tests {
 
     #[test]
     fun random_test_basic_flow() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -36,7 +36,7 @@ module sui::random_tests {
             test_scenario::ctx(scenario),
         );
 
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
         let _o256 = generate_u256(&mut gen);
 
         test_scenario::return_shared(random_state);
@@ -49,15 +49,15 @@ module sui::random_tests {
         let global_random2 = x"2F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1A";
 
         // Create Random
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::end(scenario_val);
 
         // Set random to global_random1
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -70,9 +70,9 @@ module sui::random_tests {
         test_scenario::end(scenario_val);
 
         // Set random again to global_random1
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             1,
@@ -85,9 +85,9 @@ module sui::random_tests {
         test_scenario::end(scenario_val);
 
         // Set random to global_random2
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             2,
@@ -109,13 +109,13 @@ module sui::random_tests {
 
     #[test]
     fun random_tests_regression() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -124,7 +124,7 @@ module sui::random_tests {
         );
 
         // Regression (not critical for security, but still an indication that something is wrong).
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
         let o256 = generate_u256(&mut gen);
         assert!(o256 == 85985798878417437391783029796051418802193098452099584085821130568389745847195, 0);
         let o128 = generate_u128(&mut gen);
@@ -158,13 +158,13 @@ module sui::random_tests {
 
     #[test]
     fun test_bytes() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -172,7 +172,7 @@ module sui::random_tests {
             test_scenario::ctx(scenario),
         );
 
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
 
         // Check the output size & internal generator state
         assert!(vector::is_empty(generator_buffer(&gen)), 0);
@@ -203,7 +203,7 @@ module sui::random_tests {
 
         // Sanity check that the output is not all zeros.
         let output = generate_bytes(&mut gen, 10);
-        let i = 0;
+        let mut i = 0;
         loop {
             // should break before the overflow
             if (*vector::borrow(&output, i) != 0u8) break;
@@ -226,13 +226,13 @@ module sui::random_tests {
 
     #[test]
     fun random_tests_uints() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -241,7 +241,7 @@ module sui::random_tests {
         );
 
         // u256
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
         assert!(vector::is_empty(generator_buffer(&gen)), 0);
         let output1 = generate_u256(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
@@ -255,7 +255,7 @@ module sui::random_tests {
         assert!(generator_counter(&gen) == 4, 0);
         assert!(vector::length(generator_buffer(&gen)) == 31, 0);
         // Check that we indeed generate all bytes as random
-        let i = 0;
+        let mut i = 0;
         while (i < 32) {
             let x = generate_u256(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
@@ -276,7 +276,7 @@ module sui::random_tests {
         let _output4 = generate_u128(&mut gen);
         assert!(generator_counter(&gen) == 2, 0);
         assert!(vector::length(generator_buffer(&gen)) == 15, 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 16) {
             let x = generate_u128(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
@@ -297,7 +297,7 @@ module sui::random_tests {
         let _output4 = generate_u64(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 7, 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 8) {
             let x = generate_u64(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
@@ -318,7 +318,7 @@ module sui::random_tests {
         let _output4 = generate_u32(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 19, 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 4) {
             let x = generate_u32(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
@@ -339,7 +339,7 @@ module sui::random_tests {
         let _output4 = generate_u16(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 25, 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 2) {
             let x = generate_u16(&mut gen);
             let x_bytes = bcs::to_bytes(&x);
@@ -379,7 +379,7 @@ module sui::random_tests {
         let _output4 = generate_u8(&mut gen);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 13, 0);
-        let saw_false = false;
+        let mut saw_false = false;
         loop {
             let x = generate_bool(&mut gen);
             saw_false = saw_false || !x;
@@ -392,13 +392,13 @@ module sui::random_tests {
 
     #[test]
     fun test_shuffle() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -406,11 +406,11 @@ module sui::random_tests {
             test_scenario::ctx(scenario),
         );
 
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
-        let v: vector<u16> = vector[0, 1, 2, 3, 4];
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut v: vector<u16> = vector[0, 1, 2, 3, 4];
         shuffle(&mut gen, &mut v);
         assert!(vector::length(&v) == 5, 0);
-        let i: u16 = 0;
+        let mut i: u16 = 0;
         while (i < 5) {
             assert!(vector::contains(&v, &i), 0);
             i = i + 1;
@@ -426,11 +426,11 @@ module sui::random_tests {
             if ((*vector::borrow(&v, 0) == 2u16)) break;
         };
 
-        let v: vector<u32> = vector[];
+        let mut v: vector<u32> = vector[];
         shuffle(&mut gen, &mut v);
         assert!(vector::length(&v) == 0, 0);
 
-        let v: vector<u32> = vector[321];
+        let mut v: vector<u32> = vector[321];
         shuffle(&mut gen, &mut v);
         assert!(vector::length(&v) == 1, 0);
         assert!(*vector::borrow(&v, 0) == 321u32, 0);
@@ -441,13 +441,13 @@ module sui::random_tests {
 
     #[test]
     fun random_tests_in_range() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -456,7 +456,7 @@ module sui::random_tests {
         );
 
         // generate_u128_in_range
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
         let output1 = generate_u128_in_range(&mut gen, 11, 123454321);
         assert!(generator_counter(&gen) == 1, 0);
         assert!(vector::length(generator_buffer(&gen)) == 8, 0);
@@ -468,7 +468,7 @@ module sui::random_tests {
         assert!((output == 123454321) || (output == 123454321 + 1), 0);
         // test the edge case of u128_in_range (covers also the other in_range functions)
         let _output = generate_u128_in_range(&mut gen, 0, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
-        let i = 0;
+        let mut i = 0;
         while (i < 50) {
             let min = generate_u128(&mut gen);
             let max = min + (generate_u64(&mut gen) as u128);
@@ -489,7 +489,7 @@ module sui::random_tests {
         assert!(output1 != output2, 0);
         let output = generate_u64_in_range(&mut gen, 123454321, 123454321 + 1);
         assert!((output == 123454321) || (output == 123454321 + 1), 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 50) {
             let min = generate_u64(&mut gen);
             let max = min + (generate_u32(&mut gen) as u64);
@@ -510,7 +510,7 @@ module sui::random_tests {
         assert!(output1 != output2, 0);
         let output = generate_u32_in_range(&mut gen, 123454321, 123454321 + 1);
         assert!((output == 123454321) || (output == 123454321 + 1), 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 50) {
             let min = generate_u32(&mut gen);
             let max = min + (generate_u16(&mut gen) as u32);
@@ -531,7 +531,7 @@ module sui::random_tests {
         assert!(output1 != output2, 0);
         let output = generate_u16_in_range(&mut gen, 12345, 12345 + 1);
         assert!((output == 12345) || (output == 12345 + 1), 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 50) {
             let min = generate_u16(&mut gen);
             let max = min + (generate_u8(&mut gen) as u16);
@@ -552,7 +552,7 @@ module sui::random_tests {
         assert!(output1 != output2, 0);
         let output = generate_u8_in_range(&mut gen, 123, 123 + 1);
         assert!((output == 123) || (output == 123 + 1), 0);
-        let i = 0;
+        let mut i = 0;
         while (i < 50) {
             let (min, max) = (generate_u8(&mut gen), generate_u8(&mut gen));
             let (min, max) = if (min < max) (min, max) else (max, min);
@@ -573,13 +573,13 @@ module sui::random_tests {
     #[test]
     #[expected_failure(abort_code = random::EInvalidRange)]
     fun random_tests_invalid_range() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -587,7 +587,7 @@ module sui::random_tests {
             test_scenario::ctx(scenario),
         );
 
-        let gen = new_generator(&random_state, test_scenario::ctx(scenario));
+        let mut gen = new_generator(&random_state, test_scenario::ctx(scenario));
         let _output = generate_u128_in_range(&mut gen, 511, 500);
 
         test_scenario::return_shared(random_state);
@@ -596,13 +596,13 @@ module sui::random_tests {
 
     #[test]
     fun random_tests_update_after_epoch_change() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -632,13 +632,13 @@ module sui::random_tests {
     #[test]
     #[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
     fun random_tests_duplicate() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -659,13 +659,13 @@ module sui::random_tests {
     #[test]
     #[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
     fun random_tests_out_of_order() {
-        let scenario_val = test_scenario::begin(@0x0);
+        let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, @0x0);
 
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,

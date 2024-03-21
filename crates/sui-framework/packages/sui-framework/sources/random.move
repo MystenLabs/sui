@@ -138,7 +138,7 @@ module sui::random {
 
 
     /// Unique randomness generator, derived from the global randomness.
-    struct RandomGenerator has drop {
+    public struct RandomGenerator has drop {
         seed: vector<u8>,
         counter: u16,
         buffer: vector<u8>,
@@ -168,9 +168,9 @@ module sui::random {
 
     /// Generate n random bytes.
     public fun generate_bytes(g: &mut RandomGenerator, num_of_bytes: u16): vector<u8> {
-        let result = vector[];
+        let mut result = vector[];
         // Append RAND_OUTPUT_LEN size buffers directly without going through the generator's buffer.
-        let num_of_blocks = num_of_bytes / RAND_OUTPUT_LEN;
+        let mut num_of_blocks = num_of_bytes / RAND_OUTPUT_LEN;
         while (num_of_blocks > 0) {
             vector::append(&mut result, derive_next_block(g));
             num_of_blocks = num_of_blocks - 1;
@@ -194,8 +194,8 @@ module sui::random {
         if (vector::length(&g.buffer) < (num_of_bytes as u64)) {
             fill_buffer(g);
         };
-        let result: u256 = 0;
-        let i = 0;
+        let mut result: u256 = 0;
+        let mut i = 0;
         while (i < num_of_bytes) {
             let byte = vector::pop_back(&mut g.buffer);
             result = (result << 8) + (byte as u256);
@@ -289,7 +289,7 @@ module sui::random {
         };
         assert!(n <= U16_MAX, EInvalidLength);
         let n = (n as u16);
-        let i: u16 = 0;
+        let mut i: u16 = 0;
         let end = n - 1;
         while (i < end) {
             let j = generate_u16_in_range(g, i, end);
