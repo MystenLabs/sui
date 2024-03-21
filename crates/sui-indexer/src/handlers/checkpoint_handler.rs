@@ -6,7 +6,7 @@ use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::models::display::StoredDisplay;
 use async_trait::async_trait;
 use itertools::Itertools;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
@@ -344,7 +344,7 @@ where
                 db_displays,
             )
         };
-
+        info!(checkpoint_seq, "Indexed one checkpoint.");
         Ok(CheckpointDataToCommit {
             checkpoint,
             transactions: db_transactions,
@@ -544,9 +544,9 @@ where
             })
             .collect();
 
-        let (objects, intermediate_versions) = get_latest_objects(data.output_objects());
+        let (latest_objects, intermediate_versions) = get_latest_objects(data.output_objects());
 
-        let history_objects: Vec<Object> = data
+        let live_objects: Vec<Object> = data
             .transactions
             .iter()
             .flat_map(|tx| {
@@ -564,7 +564,7 @@ where
                         {
                             return None;
                         }
-                        let object = objects.get(&(oref.0)).unwrap_or_else(|| {
+                        let object = latest_objects.get(&(oref.0)).unwrap_or_else(|| {
                             panic!(
                                 "object {:?} not found in CheckpointData (tx_digest: {})",
                                 oref.0,
@@ -577,34 +577,17 @@ where
                     .collect::<Vec<_>>()
             })
             .collect();
-        let changed_objects_futures = history_objects
-            .into_iter()
-            .map(|history_object| {
-                let history_object_clone = history_object.clone();
-                let latest_objects_clone = objects.clone();
-                let package_resolver_clone = package_resolver.clone();
-                async move {
-                    let df_info = try_create_dynamic_field_info(
-                        &history_object_clone,
-                        &latest_objects_clone,
-                        package_resolver_clone,
-                    )
-                    .await;
-                    df_info.map(|info| {
-                        IndexedObject::from_object(checkpoint_seq, history_object_clone, info)
-                    })
-                }
-            })
-            .collect::<Vec<_>>();
-        let changed_objects = futures::future::try_join_all(changed_objects_futures)
-            .await
-            .map_err(|e| {
-                IndexerError::DynamicFieldError(format!(
-                    "Fail to join futures of df_info with {:?}.",
-                    e
-                ))
-            })?;
 
+        let move_struct_layout_map =
+            get_move_struct_layout_map(&live_objects, package_resolver).await?;
+        let changed_objects = live_objects
+            .into_iter()
+            .map(|o| {
+                let df_info =
+                    try_create_dynamic_field_info(&o, &move_struct_layout_map, &latest_objects);
+                df_info.map(|info| IndexedObject::from_object(checkpoint_seq, o, info))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(TransactionObjectChangesToCommit {
             changed_objects,
             deleted_objects: indexed_deleted_objects,
@@ -665,33 +648,16 @@ where
             })
             .collect();
 
-        let changed_objects_futures = history_objects
+        let move_struct_layout_map =
+            get_move_struct_layout_map(&history_objects, package_resolver).await?;
+        let changed_objects = history_objects
             .into_iter()
-            .map(|history_object| {
-                let history_object_clone = history_object.clone();
-                let latest_objects_clone = latest_objects.clone();
-                let package_resolver_clone = package_resolver.clone();
-                async move {
-                    let df_info = try_create_dynamic_field_info(
-                        &history_object,
-                        &latest_objects_clone,
-                        package_resolver_clone,
-                    )
-                    .await;
-                    df_info.map(|info| {
-                        IndexedObject::from_object(checkpoint_seq, history_object_clone, info)
-                    })
-                }
+            .map(|o| {
+                let df_info =
+                    try_create_dynamic_field_info(&o, &move_struct_layout_map, &latest_objects);
+                df_info.map(|info| IndexedObject::from_object(checkpoint_seq, o, info))
             })
-            .collect::<Vec<_>>();
-        let changed_objects = futures::future::try_join_all(changed_objects_futures)
-            .await
-            .map_err(|e| {
-                IndexerError::DynamicFieldError(format!(
-                    "Fail to join futures of df_info with {:?}.",
-                    e
-                ))
-            })?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectChangesToCommit {
             changed_objects,
@@ -761,6 +727,62 @@ where
     }
 }
 
+async fn get_move_struct_layout_map(
+    objects: &[Object],
+    package_resolver: Arc<Resolver<impl PackageStore>>,
+) -> Result<HashMap<StructTag, MoveStructLayout>, IndexerError> {
+    let struct_tags = objects
+        .iter()
+        .filter_map(|o| {
+            let move_object = o.data.try_as_move().cloned();
+            move_object.map(|move_object| {
+                let struct_tag: StructTag = move_object.type_().clone().into();
+                struct_tag
+            })
+        })
+        .collect::<Vec<_>>();
+    let struct_tags = struct_tags.into_iter().unique().collect::<Vec<_>>();
+    info!(
+        "Resolving Move struct layouts for struct tags of size {}.",
+        struct_tags.len()
+    );
+    let move_struct_layout_futures = struct_tags
+        .into_iter()
+        .map(|struct_tag| {
+            let package_resolver_clone = package_resolver.clone();
+            async move {
+                let move_type_layout = package_resolver_clone
+                    .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+                    .await
+                    .map_err(|e| {
+                        IndexerError::DynamicFieldError(format!(
+                            "Fail to resolve struct layout for {:?} with {:?}.",
+                            struct_tag, e
+                        ))
+                    })?;
+                let move_struct_layout = match move_type_layout {
+                    MoveTypeLayout::Struct(s) => Ok(s),
+                    _ => Err(IndexerError::ResolveMoveStructError(
+                        "MoveTypeLayout is not Struct".to_string(),
+                    )),
+                }?;
+                Ok::<
+                    (
+                        move_core_types::language_storage::StructTag,
+                        move_core_types::annotated_value::MoveStructLayout,
+                    ),
+                    IndexerError,
+                >((struct_tag, move_struct_layout))
+            }
+        })
+        .collect::<Vec<_>>();
+    let move_struct_layout_map = futures::future::try_join_all(move_struct_layout_futures)
+        .await?
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+    Ok(move_struct_layout_map)
+}
+
 pub fn get_deleted_objects(effects: &TransactionEffects) -> Vec<ObjectRef> {
     let deleted = effects.deleted().into_iter();
     let wrapped = effects.wrapped().into_iter();
@@ -795,10 +817,10 @@ pub fn get_latest_objects(
     (latest_objects, discarded_versions)
 }
 
-async fn try_create_dynamic_field_info(
+fn try_create_dynamic_field_info(
     o: &Object,
-    written: &HashMap<ObjectID, Object>,
-    package_resolver: Arc<Resolver<impl PackageStore>>,
+    struct_tag_to_move_struct_layout: &HashMap<StructTag, MoveStructLayout>,
+    latest_objects: &HashMap<ObjectID, Object>,
 ) -> IndexerResult<Option<DynamicFieldInfo>> {
     // Skip if not a move object
     let Some(move_object) = o.data.try_as_move().cloned() else {
@@ -810,44 +832,32 @@ async fn try_create_dynamic_field_info(
     }
 
     let struct_tag: StructTag = move_object.type_().clone().into();
-    let move_type_layout = package_resolver
-        .type_layout(TypeTag::Struct(Box::new(struct_tag)))
-        .await
-        .map_err(|e| {
-            IndexerError::ResolveMoveStructError(format!(
-                "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
-                o.id(),
-                o.version(),
-                move_object.type_(),
+    let move_struct_layout = struct_tag_to_move_struct_layout
+        .get(&struct_tag)
+        .cloned()
+        .ok_or_else(|| {
+            IndexerError::DynamicFieldError(format!(
+                "Cannot find struct layout in mapfor {:?}.",
+                struct_tag
             ))
         })?;
-    let move_struct_layout = match move_type_layout {
-        MoveTypeLayout::Struct(s) => Ok(s),
-        _ => Err(IndexerError::ResolveMoveStructError(
-            "MoveTypeLayout is not Struct".to_string(),
-        )),
-    }?;
     let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-
     let (name_value, type_, object_id) =
         DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
-
     let name_type = move_object.type_().try_extract_field_name(&type_)?;
-
     let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
         IndexerError::SerdeError(format!(
             "Failed to serialize dynamic field name {:?}: {e}",
             name_value
         ))
     })?;
-
     let name = DynamicFieldName {
         type_: name_type,
         value: SuiMoveValue::from(name_value).to_json_value(),
     };
     Ok(Some(match type_ {
         DynamicFieldType::DynamicObject => {
-            let object = written
+            let object = latest_objects
                 .get(&object_id)
                 .ok_or(IndexerError::UncategorizedError(anyhow::anyhow!(
                     "Failed to find object_id {:?} when trying to create dynamic field info",
