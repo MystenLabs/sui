@@ -2002,15 +2002,6 @@ impl AuthorityPerEpochStore {
         jwk_aggregator.has_quorum_for_key(&(jwk_id.clone(), jwk.clone()))
     }
 
-    /// Caller is responsible to call consensus_message_processed before this method
-    pub async fn record_owned_object_cert_from_consensus(
-        &self,
-        batch: &mut DBBatch,
-        certificate: &VerifiedExecutableTransaction,
-    ) -> Result<(), SuiError> {
-        self.finish_consensus_certificate_process_with_batch(batch, certificate)
-    }
-
     /// Locks a sequence number for the shared objects of the input transaction. Also updates the
     /// last consensus index, consensus_message_processed and pending_certificates tables.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
@@ -2094,7 +2085,6 @@ impl AuthorityPerEpochStore {
             )?;
         }
 
-        self.finish_consensus_certificate_process_with_batch(write_batch, certificate)?;
         Ok(())
     }
 
@@ -2155,22 +2145,24 @@ impl AuthorityPerEpochStore {
     pub fn finish_consensus_certificate_process_with_batch(
         &self,
         batch: &mut DBBatch,
-        certificate: &VerifiedExecutableTransaction,
+        certificates: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
-        batch.insert_batch(
-            &self.tables()?.pending_execution,
-            [(*certificate.digest(), certificate.clone().serializable())],
-        )?;
-        // User signatures are written in the same batch as consensus certificate processed flag,
-        // which means we won't attempt to insert this twice for the same tx digest
-        debug_assert!(!self
-            .tables()?
-            .user_signatures_for_checkpoints
-            .contains_key(certificate.digest())?);
-        batch.insert_batch(
-            &self.tables()?.user_signatures_for_checkpoints,
-            [(*certificate.digest(), certificate.tx_signatures().to_vec())],
-        )?;
+        for certificate in certificates {
+            batch.insert_batch(
+                &self.tables()?.pending_execution,
+                [(*certificate.digest(), certificate.clone().serializable())],
+            )?;
+            // User signatures are written in the same batch as consensus certificate processed flag,
+            // which means we won't attempt to insert this twice for the same tx digest
+            debug_assert!(!self
+                .tables()?
+                .user_signatures_for_checkpoints
+                .contains_key(certificate.digest())?);
+            batch.insert_batch(
+                &self.tables()?.user_signatures_for_checkpoints,
+                [(*certificate.digest(), certificate.tx_signatures().to_vec())],
+            )?;
+        }
         Ok(())
     }
 
@@ -2537,6 +2529,10 @@ impl AuthorityPerEpochStore {
                 generate_randomness,
             )
             .await?;
+        self.finish_consensus_certificate_process_with_batch(
+            &mut batch,
+            &transactions_to_schedule,
+        )?;
         self.record_consensus_commit_stats(&mut batch, consensus_stats)?;
 
         // Create pending checkpoints if we are still accepting tx.
@@ -3008,8 +3004,7 @@ impl AuthorityPerEpochStore {
                     warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", certificate_author.concise(), certificate.digest());
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
-                // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
-                // is constructed.
+                // Safe because signatures are verified when consensus called into SuiTxValidator::validate_batch.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
                 let certificate = VerifiedExecutableTransaction::new_from_certificate(certificate);
 
@@ -3046,9 +3041,6 @@ impl AuthorityPerEpochStore {
                         &certificate,
                     )
                     .await?;
-                } else {
-                    self.record_owned_object_cert_from_consensus(batch, &certificate)
-                        .await?;
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))
