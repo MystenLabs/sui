@@ -39,9 +39,11 @@ use crate::{
     network::tonic_gen::consensus_service_server::ConsensusServiceServer,
 };
 
-// Implements RPC client for Consensus.
+const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
+
+// Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
-    _context: Arc<Context>,
+    context: Arc<Context>,
     channel_pool: Arc<ChannelPool>,
 }
 
@@ -51,7 +53,7 @@ impl TonicClient {
 
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
-            _context: context.clone(),
+            context: context.clone(),
             channel_pool: Arc::new(ChannelPool::new(context)),
         }
     }
@@ -74,10 +76,15 @@ impl NetworkClient for TonicClient {
             block: block.clone(),
         });
         request.set_timeout(Self::SEND_BLOCK_TIMEOUT);
+        // TODO: remove below after adding authentication.
+        request.metadata_mut().insert(
+            AUTHORITY_INDEX_METADATA_KEY,
+            self.context.own_index.value().to_string().parse().unwrap(),
+        );
         client
             .send_block(request)
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
     }
 
@@ -100,16 +107,24 @@ impl NetworkClient for TonicClient {
                 .collect(),
         });
         request.set_timeout(Self::FETCH_BLOCK_TIMEOUT);
+        // TODO: remove below after adding authentication.
+        request.metadata_mut().insert(
+            AUTHORITY_INDEX_METADATA_KEY,
+            self.context.own_index.value().to_string().parse().unwrap(),
+        );
         let response = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
         Ok(response.into_inner().blocks)
     }
 }
 
+/// Manages a pool of connections to peers to avoid constantly reconnecting,
+/// which can be expensive.
 struct ChannelPool {
     context: Arc<Context>,
+    // Size is limited by known authorities in the committee.
     channels: RwLock<BTreeMap<AuthorityIndex, Channel>>,
 }
 
@@ -143,18 +158,15 @@ impl ChannelPool {
             .connect_timeout(timeout);
         // TODO: tune endpoint options and set TLS config.
 
-        // Cannot use tokio::time::Instant and timeout to limit retries, which can result in
-        // almost no retry with simulated time.
-        let mut retries = 90;
+        let deadline = tokio::time::Instant::now() + timeout;
         let channel = loop {
             match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
-                    warn!("Cannot connect to endpoint at {address}: {e:?}");
-                    retries -= 1;
-                    if retries == 0 {
+                    warn!("Timed out connecting to endpoint at {address}: {e:?}");
+                    if tokio::time::Instant::now() >= deadline {
                         return Err(ConsensusError::NetworkError(format!(
-                            "Cannot connect to endpoint at {address}: {e:?}"
+                            "Timed out connecting to endpoint at {address}: {e:?}"
                         )));
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -163,20 +175,21 @@ impl ChannelPool {
         };
 
         let mut channels = self.channels.write();
+        // There should not be many concurrent attempts at connecting to the same peer.
         let channel = channels.entry(peer).or_insert(channel);
         Ok(channel.clone())
     }
 }
 
-/// Proxies Tonic RPC handlers to TonicService.
+/// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: NetworkService> {
-    // peer_map: BTreeMap<PeerId, AuthorityIndex>,
+    context: Arc<Context>,
     service: Arc<S>,
 }
 
 impl<S: NetworkService> TonicServiceProxy<S> {
-    fn new(service: Arc<S>) -> Self {
-        Self { service }
+    fn new(context: Arc<Context>, service: Arc<S>) -> Self {
+        Self { context, service }
     }
 }
 
@@ -186,9 +199,19 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         &self,
         request: Request<SendBlockRequest>,
     ) -> Result<Response<SendBlockResponse>, tonic::Status> {
+        // TODO: switch to using authenticated peer identity.
+        let Some(peer_index) = request
+            .metadata()
+            .get(AUTHORITY_INDEX_METADATA_KEY)
+            .and_then(|s| s.to_str().ok())
+            .and_then(|s| s.parse().ok())
+            .and_then(|index| self.context.committee.to_authority_index(index))
+        else {
+            return Err(tonic::Status::invalid_argument("Invalid authority index"));
+        };
         let block = request.into_inner().block;
         self.service
-            .handle_send_block(AuthorityIndex::UNKNOWN, block)
+            .handle_send_block(peer_index, block)
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
         Ok(Response::new(SendBlockResponse {}))
@@ -198,6 +221,16 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         &self,
         request: Request<FetchBlocksRequest>,
     ) -> Result<Response<FetchBlocksResponse>, tonic::Status> {
+        // TODO: switch to using authenticated peer identity.
+        let Some(peer_index) = request
+            .metadata()
+            .get(AUTHORITY_INDEX_METADATA_KEY)
+            .and_then(|s| s.to_str().ok())
+            .and_then(|s| s.parse().ok())
+            .and_then(|index| self.context.committee.to_authority_index(index))
+        else {
+            return Err(tonic::Status::invalid_argument("Invalid authority index"));
+        };
         let block_refs = request
             .into_inner()
             .block_refs
@@ -212,7 +245,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .collect();
         let blocks = self
             .service
-            .handle_fetch_blocks(AuthorityIndex::UNKNOWN, block_refs)
+            .handle_fetch_blocks(peer_index, block_refs)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         Ok(Response::new(FetchBlocksResponse { blocks }))
@@ -269,7 +302,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let own_address = to_socket_addr(&own_address).unwrap();
         let (tx, rx) = oneshot::channel::<()>();
         self.shutdown = Some(tx);
-        let service = TonicServiceProxy::new(service);
+        let service = TonicServiceProxy::new(self.context.clone(), service);
 
         let server = Server::builder()
             .add_service(ConsensusServiceServer::new(service))
@@ -305,7 +338,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
 /// a host:port string.
-pub fn to_host_port_str(addr: &Multiaddr) -> Result<String, &'static str> {
+fn to_host_port_str(addr: &Multiaddr) -> Result<String, &'static str> {
     let mut iter = addr.iter();
 
     match (iter.next(), iter.next()) {
@@ -326,14 +359,19 @@ pub fn to_host_port_str(addr: &Multiaddr) -> Result<String, &'static str> {
     }
 }
 
-pub fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
+/// Attempts to convert a multiaddr of the form `/[ip4,ip6]/{}/[udp,tcp]/{port}` into
+/// a SocketAddr value.
+fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
     let mut iter = addr.iter();
 
     match (iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)))
+        | (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Tcp(port))) => {
             Ok(SocketAddr::V4(SocketAddrV4::new(ipaddr, port)))
         }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => {
+
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)))
+        | (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Tcp(port))) => {
             Ok(SocketAddr::V6(SocketAddrV6::new(ipaddr, port, 0, 0)))
         }
 
@@ -344,15 +382,15 @@ pub fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
     }
 }
 
+// TODO: after supporting peer authentication, using rtest to share the test case with anemo_network.rs
 #[cfg(test)]
 mod test {
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
 
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
     use parking_lot::Mutex;
-    use tokio::time::sleep;
 
     use crate::{
         block::BlockRef,
@@ -396,7 +434,7 @@ mod test {
         }
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[tokio::test]
     async fn tonic_basics() {
         let (context, keys) = Context::new_for_test(4);
 
@@ -424,10 +462,9 @@ mod test {
             .install_service(keys[1].0.clone(), service_1.clone())
             .await;
 
-        // Wait for Tonic to initialize.
-        sleep(Duration::from_secs(5)).await;
-
         // Test that servers can receive client RPCs.
+        // If the test uses simulated time, more retries will be necessary to make sure
+        // the server is ready.
         client_0
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
@@ -443,8 +480,8 @@ mod test {
             .await
             .unwrap();
         assert_eq!(service_0.lock().handle_send_block.len(), 1);
-        // assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
+        assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
         assert_eq!(service_1.lock().handle_send_block.len(), 1);
-        // assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
+        assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
     }
 }

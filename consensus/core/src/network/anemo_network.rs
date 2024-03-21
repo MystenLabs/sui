@@ -41,7 +41,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
 };
 
-/// Implements RPC client for Consensus.
+/// Implements Anemo RPC client for Consensus.
 pub(crate) struct AnemoClient {
     context: Arc<Context>,
     network: Arc<ArcSwapOption<anemo::Network>>,
@@ -132,7 +132,7 @@ impl NetworkClient for AnemoClient {
         client
             .send_block(anemo::Request::new(request).with_timeout(Self::SEND_BLOCK_TIMEOUT))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
     }
 
@@ -157,12 +157,12 @@ impl NetworkClient for AnemoClient {
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(Self::FETCH_BLOCK_TIMEOUT))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
         Ok(response.into_body().blocks)
     }
 }
 
-/// Proxies Anemo RPC handlers to AnemoService.
+/// Proxies Anemo requests to NetworkService with actual handler implementation.
 struct AnemoServiceProxy<S: NetworkService> {
     peer_map: BTreeMap<PeerId, AuthorityIndex>,
     service: Arc<S>,
