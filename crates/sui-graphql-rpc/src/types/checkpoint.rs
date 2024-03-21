@@ -473,7 +473,7 @@ impl Loader<SeqNumKey> for Db {
             .collect();
 
         let checkpoints: Vec<StoredCheckpoint> = self
-            .execute_repeatable(move |conn| {
+            .execute(move |conn| {
                 conn.results(move || {
                     dsl::checkpoints
                         .filter(dsl::sequence_number.eq_any(checkpoint_ids.iter().cloned()))
@@ -518,7 +518,7 @@ impl Loader<DigestKey> for Db {
         let digests: BTreeSet<_> = keys.iter().map(|key| key.digest.to_vec()).collect();
 
         let checkpoints: Vec<StoredCheckpoint> = self
-            .execute_repeatable(move |conn| {
+            .execute(move |conn| {
                 conn.results(move || {
                     dsl::checkpoints.filter(dsl::checkpoint_digest.eq_any(digests.iter().cloned()))
                 })
@@ -543,7 +543,7 @@ impl Loader<DigestKey> for Db {
                 };
 
                 // Filter by key's checkpoint viewed at here. Doing this in memory because it should
-                // be quite raree that this query actually filters something, but encoding it in SQL
+                // be quite rare that this query actually filters something, but encoding it in SQL
                 // is complicated.
                 let seq_num = checkpoint.stored.sequence_number as u64;
                 if matches!(key.checkpoint_viewed_at, Some(cp) if cp < seq_num) {
