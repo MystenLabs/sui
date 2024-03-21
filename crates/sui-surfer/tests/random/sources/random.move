@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module move_building_blocks::random {
+module random::random_test {
     use sui::object::UID;
     use sui::object;
     use sui::tx_context::TxContext;
@@ -13,7 +13,7 @@ module move_building_blocks::random {
 
     struct SharedObject has key, store {
         id: UID,
-        value: u64,
+        value: u256,
     }
 
     fun init(ctx: &mut TxContext) {
@@ -24,21 +24,27 @@ module move_building_blocks::random {
         transfer::share_object(object);
     }
 
-    entry fun mutate_shared_object(obj: &mut SharedObject, r: &random::Random, ctx: &mut TxContext) {
+    // Update the shared object using Random.
+    entry fun mutate_with_random(obj: &mut SharedObject, r: &random::Random, ctx: &mut TxContext) {
         let gen = random::new_generator(r, ctx);
-        obj.value = random::generate_u64(&mut gen);
+        obj.value = random::generate_u256(&mut gen);
+        assert!(obj.value > 0, 0);
     }
 
-    entry fun conditional_increment_shared_object(obj: &mut SharedObject) {
+    // Update the shared object without using Random.
+    entry fun mutate_without(obj: &mut SharedObject) {
         if (obj.value < 10000) {
-            obj.value += 1;
+            obj.value = obj.value + 1;
+        } else {
+            obj.value = obj.value - 10;
         }
     }
 
 
     // Test transactions that use Random without a shared object.
-    entry fun generate_random_u64(r: &random::Random, ctx: &mut TxContext): u64 {
+    entry fun generate(r: &random::Random, ctx: &mut TxContext): u64 {
         let gen = random::new_generator(r, ctx);
+        let _b = random::generate_bytes(&mut gen, 10000); // Large number of bytes
         random::generate_u64(&mut gen)
     }
 }

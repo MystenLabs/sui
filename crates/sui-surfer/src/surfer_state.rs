@@ -164,7 +164,7 @@ impl SurferState {
             rgp,
         )
         .unwrap();
-        println!("{:?}", tx_data);
+
         let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
             match self
