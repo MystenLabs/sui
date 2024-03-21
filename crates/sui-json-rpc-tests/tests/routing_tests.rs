@@ -17,10 +17,16 @@ use sui_json_rpc::{JsonRpcServerBuilder, SuiRpcModule};
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
+use sui_types::traffic_control::RemoteFirewallConfig;
 
 #[tokio::test]
 async fn test_rpc_backward_compatibility() {
-    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
+    let mut builder = JsonRpcServerBuilder::new(
+        "1.5",
+        &Registry::new(),
+        None,
+        RemoteFirewallConfig::default(),
+    );
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
@@ -99,7 +105,12 @@ async fn test_rpc_backward_compatibility() {
 async fn test_disable_routing() {
     env::set_var("DISABLE_BACKWARD_COMPATIBILITY", "true");
 
-    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
+    let mut builder = JsonRpcServerBuilder::new(
+        "1.5",
+        &Registry::new(),
+        None,
+        RemoteFirewallConfig::default(),
+    );
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
@@ -134,7 +145,9 @@ async fn test_disable_routing() {
 // TODO(chris): clean up this after March 27th, 2023
 // #[tokio::test]
 // async fn test_rpc_backward_compatibility_batched_request() {
-//     let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
+//     let mut builder = JsonRpcServerBuilder::new(
+//          "1.5", &Registry::new(), None, RemoteFirewallConfig::default()
+//     );
 //     builder.register_module(TestApiModule).unwrap();
 
 //     let port = get_available_port("0.0.0.0");

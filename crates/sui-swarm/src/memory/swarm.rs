@@ -13,6 +13,8 @@ use std::{
     ops,
     path::{Path, PathBuf},
 };
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
+
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::NodeConfig;
 use sui_macros::nondeterministic;
@@ -49,6 +51,8 @@ pub struct SwarmBuilder<R = OsRng> {
     authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
+    fullnode_policy_config: Option<PolicyConfig>,
+    fullnode_fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl SwarmBuilder {
@@ -72,6 +76,8 @@ impl SwarmBuilder {
             authority_overload_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
+            fullnode_policy_config: None,
+            fullnode_fw_config: None,
         }
     }
 }
@@ -97,6 +103,8 @@ impl<R> SwarmBuilder<R> {
             authority_overload_config: self.authority_overload_config,
             data_ingestion_dir: self.data_ingestion_dir,
             fullnode_run_with_range: self.fullnode_run_with_range,
+            fullnode_policy_config: self.fullnode_policy_config,
+            fullnode_fw_config: self.fullnode_fw_config,
         }
     }
 
@@ -239,6 +247,16 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_fullnode_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.fullnode_policy_config = config;
+        self
+    }
+
+    pub fn with_fullnode_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fullnode_fw_config = config;
+        self
+    }
+
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
         if self.genesis_config.is_none() {
             assert!(self.network_config.is_none());
@@ -307,7 +325,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
             .with_config_directory(dir.as_ref().into())
             .with_db_checkpoint_config(self.db_checkpoint_config.clone())
-            .with_run_with_range(self.fullnode_run_with_range);
+            .with_run_with_range(self.fullnode_run_with_range)
+            .with_policy_config(self.fullnode_policy_config)
+            .with_fw_config(self.fullnode_fw_config);
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {
                 ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,

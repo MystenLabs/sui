@@ -23,12 +23,14 @@ use crate::test_utils::{
 };
 use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 use sui_types::error::SuiError;
+use sui_types::traffic_control::RemoteFirewallConfig;
 
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use itertools::Itertools;
 use sui_config::node::AuthorityOverloadConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -38,7 +40,6 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
 use sui_types::object::{Object, Owner};
-use sui_types::traffic_control::PolicyConfig;
 use sui_types::transaction::CertifiedTransaction;
 use sui_types::transaction::{
     Transaction, VerifiedCertificate, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
@@ -761,7 +762,9 @@ async fn test_authority_txn_signing_pushback() {
             authority_state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
-            PolicyConfig::default(),
+            TrafficControllerMetrics::new_for_tests(),
+            None,
+            RemoteFirewallConfig::default(),
         )
         .await,
     );
@@ -894,7 +897,9 @@ async fn test_authority_txn_execution_pushback() {
             authority_state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
-            PolicyConfig::default(),
+            TrafficControllerMetrics::new_for_tests(),
+            None,
+            RemoteFirewallConfig::default(),
         )
         .await,
     );

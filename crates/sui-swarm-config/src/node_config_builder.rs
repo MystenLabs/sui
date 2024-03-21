@@ -242,6 +242,8 @@ pub struct FullnodeConfigBuilder {
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
     run_with_range: Option<RunWithRange>,
+    policy_config: Option<PolicyConfig>,
+    fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -336,6 +338,16 @@ impl FullnodeConfigBuilder {
         if let Some(run_with_range) = run_with_range {
             self.run_with_range = Some(run_with_range);
         }
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fw_config = config;
         self
     }
 
@@ -462,9 +474,8 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
-            // TODO: not run on fullnodes for now
-            policy_config: None,
-            firewall_config: RemoteFirewallConfig::default(),
+            policy_config: self.policy_config,
+            firewall_config: self.fw_config.unwrap_or_default(),
         }
     }
 }
