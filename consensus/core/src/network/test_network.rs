@@ -68,6 +68,7 @@ impl NetworkService for Mutex<TestService> {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        _highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
         self.lock().handle_fetch_blocks.push((peer, block_refs));
         Ok(vec![])

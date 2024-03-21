@@ -398,6 +398,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         .fetch_blocks(
                             target_authority,
                             request_block_refs.to_vec(),
+                            vec![],
                             FETCH_BLOCKS_TIMEOUT,
                         )
                         .await?;
