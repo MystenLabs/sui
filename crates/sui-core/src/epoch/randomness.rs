@@ -481,6 +481,7 @@ impl RandomnessManager {
         }
 
         let party = self.party.clone();
+        // TODO: Could save some CPU by not processing messages if we already have enough to merge.
         self.enqueued_messages.insert(
             msg.sender,
             tokio::task::spawn_blocking(move || {
