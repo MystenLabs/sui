@@ -149,7 +149,10 @@ impl RandomnessManager {
                 .try_into()
                 .expect("validity threshold should fit in u16"),
             protocol_config.random_beacon_reduction_allowed_delta(),
-            protocol_config.random_beacon_reduction_lower_bound() as u16,
+            protocol_config
+                .random_beacon_reduction_lower_bound()
+                .try_into()
+                .expect("should fit u16"),
         );
         let total_weight = nodes.total_weight();
         let num_nodes = nodes.num_nodes();
