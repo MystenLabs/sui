@@ -844,6 +844,10 @@ impl Var_ {
         P::Var::starts_with_underscore_name(self.name)
     }
 
+    pub fn is_syntax_identifier(&self) -> bool {
+        P::Var::is_syntax_identifier_name(self.name)
+    }
+
     pub fn is_valid(&self) -> bool {
         P::Var::is_valid_name(self.name)
     }
