@@ -57,9 +57,8 @@ export type EffectsObject = {
 };
 
 export type EffectsOwner = {
-	ObjectOwner?: string;
+	ObjectOrAddressOwner?: string;
 	Shared?: Shared;
-	AddressOwner?: string;
 };
 
 export type Shared = {
@@ -151,7 +150,13 @@ export type TransactionInfo = {
 
 export type ReplayProgrammableTransactions = {
 	inputs: ReplayInput[];
-	commands: Command[];
+	commands: CommandWithOutput[];
+};
+
+export type CommandWithOutput = {
+	command: Command;
+	MRef: any[];
+	RetVals: any[];
 };
 
 export type Command = {
@@ -171,6 +176,33 @@ export type MoveCall = {
 	function: string;
 	typeArguments: any[];
 	arguments: Argument[];
+};
+
+export type TransactionResults = {
+	MutableReferences: any[];
+	ReturnValues: any[];
+};
+
+export type MutableReference = {
+	Argument: Argument;
+	MoveValue: MoveValue;
+};
+
+export type MoveValue = {
+	numeric?: number;
+	bool?: boolean;
+	vector?: MoveValue[];
+	struct?: MoveStruct;
+};
+
+export type MoveStruct = {
+	type: TypeArgument;
+	fields: Field[];
+};
+
+export type Field = {
+	Identifier: string;
+	MoveValue: MoveValue;
 };
 
 export type Argument = {

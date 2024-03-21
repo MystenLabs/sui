@@ -6,7 +6,7 @@ use crate::replay::LocalExec;
 use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::TypeTag;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
@@ -331,12 +331,23 @@ fn resolve_value(
 
 pub fn transform_command_results_to_annotated(
     json_map: &mut serde_json::Map<String, serde_json::Value>,
+
     executor: &Arc<dyn Executor + Send + Sync>,
     store_factory: &LocalExec,
     results: Vec<ExecutionResult>,
 ) -> anyhow::Result<Vec<ResolvedResults>> {
     let mut output = Vec::new();
-    for (m_refs, return_vals) in results.iter() {
+
+    let outer_value = json_map
+        .get_mut("transaction_info")
+        .expect("could not find transaction info");
+    let commands = outer_value
+        .get_mut("ProgrammableTransaction")
+        .expect("not a ptb")
+        .get_mut("commands")
+        .expect("could not find ptb commands");
+
+    for (i, (m_refs, return_vals)) in results.iter().enumerate() {
         let mut m_refs_out = Vec::new();
         let mut return_vals_out = Vec::new();
         for (arg, bytes, tag) in m_refs {
@@ -346,10 +357,17 @@ pub fn transform_command_results_to_annotated(
             return_vals_out.push(resolve_value(bytes, tag, executor, store_factory)?);
         }
         output.push(ResolvedResults {
-            mutable_reference_outputs: m_refs_out,
-            return_values: return_vals_out,
+            mutable_reference_outputs: m_refs_out.clone(),
+            return_values: return_vals_out.clone(),
         });
+
+        let command_obj = commands[i].clone();
+        let mut map: serde_json::Map<String, Value> = serde_json::Map::new();
+        map.insert("command".to_string(), command_obj);
+        map.insert("mutable_ref_outputs".to_string(), json!(m_refs_out));
+        map.insert("return_values".to_string(), json!(return_vals_out));
+        let o = Value::Object(map);
+        commands[i] = o;
     }
-    json_map.insert("transaction_results".to_string(), json!(output.clone()));
     Ok(output)
 }

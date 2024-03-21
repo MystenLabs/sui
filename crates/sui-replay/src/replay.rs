@@ -789,6 +789,10 @@ impl LocalExec {
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
         let mut json_map = Map::new();
+        json_map.insert("effects".to_string(), json!(effects));
+        json_map.insert("gas_status".to_string(), json!(gas_status));
+        json_map.insert("transaction_info".to_string(), json!(transaction_kind));
+
         let skip_checks = true;
         if let ProgrammableTransaction(ref pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}",
@@ -820,9 +824,6 @@ impl LocalExec {
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
-        json_map.insert("effects".to_string(), json!(effects));
-        json_map.insert("gas_status".to_string(), json!(gas_status));
-        json_map.insert("transaction_info".to_string(), json!(transaction_kind));
         let combined_json = Value::Object(json_map).to_string();
 
         Ok(ExecutionSandboxState {
