@@ -3,5 +3,6 @@
 
 pub mod graphiql_server;
 
+pub(crate) mod background_tasks;
 pub mod builder;
 pub mod version;
