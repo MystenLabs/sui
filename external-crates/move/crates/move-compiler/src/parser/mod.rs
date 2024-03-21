@@ -154,10 +154,10 @@ fn parse_file(
     let fname = Symbol::from(path.as_str());
     let source_str = Arc::from(source_buffer);
     if let Err(ds) = verify_string(file_hash, &source_str) {
-            compilation_env.add_diags(ds);
+        compilation_env.add_diags(ds);
         files.insert(file_hash, (fname, source_str));
-            return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
-        }
+        return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
+    }
     let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
     {
         Ok(defs_and_comments) => defs_and_comments,

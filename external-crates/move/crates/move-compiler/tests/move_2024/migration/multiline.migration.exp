@@ -1,23 +1,11 @@
-error[E00003]: unable to migrate
-  ┌─ tests/move_2024/migration/multiline.move:3:5
-  │  
-3 │ ╭     friend // why
-4 │ │     a::n;
-  │ ╰─────────^ Unable to migrate. Cannot remove 'friend' that spans multiple lines
-
-error[E00003]: unable to migrate
-  ┌─ tests/move_2024/migration/multiline.move:5:5
-  │  
-5 │ ╭     public( // why folks, why
-6 │ │         friend
-7 │ │     ) fun t() {}
-  │ ╰─────^ Unable to migrate 'public(friend)' that spans multiple lines
-
 --- tests/move_2024/migration/multiline.move
 +++ tests/move_2024/migration/multiline.move
-@@ -3,1 +3,1 @@
+@@ -3,5 +3,3 @@
 -    friend // why
-+    friend // why
-@@ -5,1 +5,1 @@
+-    a::n;
 -    public( // why folks, why
-+    public( // why folks, why
+-        friend
+-    ) fun t() {}
++    /* friend // why
++    a::n; */
++    public(package) fun t() {}

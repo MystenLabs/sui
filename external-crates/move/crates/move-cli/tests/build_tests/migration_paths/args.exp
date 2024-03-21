@@ -18,12 +18,12 @@ The following changes will be made.
 
 --- sources/other.move
 +++ sources/other.move
-@@ -4,1 +4,1 @@
+@@ -4 +4 @@
 -    public fun t() { migration::migration::t() }
 +    public fun t() { ::migration::migration::t() }
 --- tests/test0.move
 +++ tests/test0.move
-@@ -6,1 +6,1 @@
+@@ -6 +6 @@
 -    #[expected_failure(abort_code = migration::validate::ErrorCode)]
 +    #[expected_failure(abort_code = ::migration::validate::ErrorCode)]
 
