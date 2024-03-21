@@ -236,7 +236,7 @@ impl Query {
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
         Checkpoint::query(
-            ctx.data_unchecked(),
+            ctx,
             id.unwrap_or_default(),
             /* checkpoint_viewed_at */ None,
         )
