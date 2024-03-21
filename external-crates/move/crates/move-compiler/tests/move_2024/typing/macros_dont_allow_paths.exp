@@ -28,12 +28,6 @@ error[E03006]: unexpected name in this position
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
-error[E04026]: invalid 'copy' usage
-  ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:9:18
-  │
-9 │         let _q = copy $n; // disallowed
-  │                  ^^^^ Invalid 'copy'. Expected a variable or path.
-
 error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:9:23
   │
@@ -43,12 +37,6 @@ error[E03006]: unexpected name in this position
   = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let n = $n;'
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
-
-error[E04027]: invalid 'move' usage
-   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:10:18
-   │
-10 │         let _q = move $n; // disallowed
-   │                  ^^^^ Invalid 'move'. Expected a variable or path.
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:10:23
