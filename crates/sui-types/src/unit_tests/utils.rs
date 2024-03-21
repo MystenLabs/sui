@@ -36,7 +36,7 @@ pub struct TestData {
     pub zklogin_inputs: String,
     pub kp: String,
     pub pk_bigint: String,
-    pub randomness: String,
+    pub salt: String,
     pub address_seed: String,
 }
 

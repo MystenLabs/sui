@@ -3,7 +3,6 @@
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use shared_crypto::intent::{Intent, IntentMessage};
-use std::time::Duration;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -175,8 +174,15 @@ async fn test_multisig_e2e() {
 
 #[sim_test]
 async fn test_multisig_with_zklogin_scenerios() {
-    let test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
-    test_cluster.wait_for_authenticator_state_update().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10000)
+        .with_default_jwks()
+        .build()
+        .await;
+
+    // trigger reconfiguration that advanced epoch to 1.
+    test_cluster.trigger_reconfiguration().await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &test_cluster.wallet;
 
@@ -252,7 +258,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let wrong_eph_sig = Signature::new_secure(&wrong_intent_msg, eph_kp);
     let wrong_zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         wrong_eph_sig,
     ));
     let multisig = GenericSignature::MultiSig(
@@ -273,7 +279,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let eph_sig = Signature::new_secure(&intent_msg, eph_kp_1);
     let zklogin_sig_mismatch = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         eph_sig,
     ));
     let multisig = GenericSignature::MultiSig(
@@ -289,7 +295,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     // 6. a multisig with an inconsistent max_epoch with zk proof itself fails to execute.
     let eph_sig = Signature::new_secure(&intent_msg, eph_kp);
     let zklogin_sig_wrong_zklogin_inputs = GenericSignature::ZkLoginAuthenticator(
-        ZkLoginAuthenticator::new(zklogin_inputs.clone(), 11, eph_sig), // max_epoch set to 9 instead of 10
+        ZkLoginAuthenticator::new(zklogin_inputs.clone(), 1, eph_sig), // max_epoch set to 1 instead of 2
     );
     let multisig = GenericSignature::MultiSig(
         MultiSig::combine(vec![zklogin_sig_wrong_zklogin_inputs], multisig_pk.clone()).unwrap(),
@@ -319,7 +325,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -400,7 +406,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -420,7 +426,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let sig: GenericSignature = Signature::new_secure(&intent_msg, &keys[0]).into();
     let sig_1: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -633,26 +639,25 @@ async fn test_multisig_with_zklogin_scenerios() {
         .contains("Invalid value was given to the function"));
 }
 
-// TODO: @joy to look at improve the stability of this test.
-#[ignore]
 #[sim_test]
 async fn test_expired_epoch_zklogin_in_multisig() {
-    // 17. expired zklogin sig fails to execute. wait till epoch 11, the zklogin input committed to max_epoch 10 fails to execute.
     let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10000)
         .with_default_jwks()
-        .with_epoch_duration_ms(1000)
         .build()
         .await;
-    test_cluster.wait_for_authenticator_state_update().await;
-    test_cluster
-        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(300))
-        .await;
+    // trigger reconfiguration that advanced epoch to 1.
+    test_cluster.trigger_reconfiguration().await;
+    // trigger reconfiguration that advanced epoch to 2.
+    test_cluster.trigger_reconfiguration().await;
+    // trigger reconfiguration that advanced epoch to 3.
+    test_cluster.trigger_reconfiguration().await;
     let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("ZKLogin expired at epoch 10"));
+        .contains("ZKLogin expired at epoch 2"));
 }
 
 #[sim_test]
@@ -680,7 +685,7 @@ async fn test_random_zklogin_in_multisig() {
         let eph_sig = Signature::new_secure(&intent_msg, kp);
         let zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
             inputs.clone(),
-            10,
+            2,
             eph_sig,
         ));
         zklogin_sigs.push(zklogin_sig);
@@ -777,7 +782,7 @@ async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Tra
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
