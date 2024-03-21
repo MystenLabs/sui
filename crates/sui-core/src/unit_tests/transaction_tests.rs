@@ -494,10 +494,9 @@ async fn zklogin_test_cached_proof_wrong_key() {
         client,
     ) = setup_zklogin_network(|_| {}).await;
 
-    assert!(client
-        .handle_transaction(transfer_transaction)
-        .await
-        .is_ok());
+    let res = client.handle_transaction(transfer_transaction).await;
+    info!("tktkres: {:?}", res);
+    assert!(res.is_ok());
 
     /*
     assert_eq!(
@@ -753,7 +752,7 @@ async fn init_zklogin_transfer(
     };
     let authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
         zklogin.clone(),
-        10,
+        2,
         signature,
     ));
     tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0] = authenticator;
@@ -901,7 +900,7 @@ async fn zk_multisig_test() {
         let eph_sig = Signature::new_secure(&intent_message, kp);
         let zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
             inputs.clone(),
-            10,
+            2,
             eph_sig,
         ));
         zklogin_sigs.push(zklogin_sig);
