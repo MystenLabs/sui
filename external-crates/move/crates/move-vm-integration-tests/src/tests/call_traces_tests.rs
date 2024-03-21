@@ -3,10 +3,10 @@ use expect_test::expect;
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::{MoveStruct, MoveValue},
     identifier::Identifier,
     language_storage::ModuleId,
     trace::CallTrace,
-    value::{MoveStruct, MoveValue},
 };
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::InMemoryStorage;
@@ -153,7 +153,7 @@ fn format_traces(call_traces: Vec<CallTrace>) -> String {
                 .args
                 .into_iter()
                 .map(|arg| match &*arg {
-                    MoveValue::Struct(MoveStruct::WithTypes { type_, fields }) => {
+                    MoveValue::Struct(MoveStruct { type_, fields }) => {
                         let ident = type_.name.as_str();
 
                         format!("{} {:?}", ident, fields)
