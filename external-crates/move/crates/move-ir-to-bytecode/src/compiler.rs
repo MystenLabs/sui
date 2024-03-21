@@ -15,7 +15,7 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_command_line_common::error_bitset::ErrorBitset;
+use move_command_line_common::error_bitset::ErrorBitsetBuilder;
 use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
@@ -311,6 +311,17 @@ fn verify_module(module: &ModuleDefinition) -> Result<()> {
     Ok(())
 }
 
+fn constant_name_as_constant_value(
+    context: &mut Context,
+    const_name: &ConstantName,
+) -> Result<Constant> {
+    compile_constant(
+        context,
+        Type::Vector(Box::new(Type::U8)),
+        MoveValue::vector_u8(const_name.to_string().into_bytes()),
+    )
+}
+
 /// Compile a module.
 pub fn compile_module<'a>(
     module: ModuleDefinition,
@@ -363,11 +374,7 @@ pub fn compile_module<'a>(
         // e.g., in the case of something like `const Foo: vector<u8> = b"Foo"` in which case the
         // new index will not be added and the previous index will be used.
         if ir_constant.is_error_constant {
-            let name_constant = compile_constant(
-                &mut context,
-                Type::Vector(Box::new(Type::U8)),
-                MoveValue::vector_u8(constant_name.to_string().into_bytes()),
-            )?;
+            let name_constant = constant_name_as_constant_value(&mut context, &constant_name)?;
             // Will add if not present, and will return the index, or will just return
             // index if already present.
             context.constant_index(name_constant)?;
@@ -1681,22 +1688,22 @@ fn compile_bytecode(
             line_number,
             constant,
         } => {
-            // look up the constant's value
-            let constant_value_index: u16 = match &constant {
-                Some(const_name) => context.named_constant_index(const_name)?.0,
-                None => TableIndex::MAX,
-            };
+            let mut bitset_builder = ErrorBitsetBuilder::new(line_number);
 
-            // All error constant names will be inserted in bulk when adding constants to the
-            // module, so we can just use the index of the constant name here and don't need to add
-            // anything.
-            let constant_name_index: u16 = match constant {
-                Some(const_name) => context.named_constant_index(&const_name)?.0,
-                None => TableIndex::MAX,
-            };
-            let bitset =
-                ErrorBitset::new(line_number, constant_name_index, constant_value_index).bits;
-            Bytecode::LdU64(bitset)
+            if let Some(const_name) = constant {
+                // look up the constant's value
+                let constant_value_index = context.named_constant_index(&const_name)?.0;
+                bitset_builder.with_constant_index(constant_value_index);
+
+                // All error constant names will be inserted in bulk when adding constants to the
+                // module, so we can just use the index of the constant name here and don't need to add
+                // anything.
+                let constant_name_as_value = constant_name_as_constant_value(context, &const_name)?;
+                let constant_name_value_index = context.constant_index(constant_name_as_value)?;
+                bitset_builder.with_identifier_index(constant_name_value_index.0);
+            }
+
+            Bytecode::LdU64(bitset_builder.build().bits)
         }
     };
     push_instr!(loc, ff_instr);

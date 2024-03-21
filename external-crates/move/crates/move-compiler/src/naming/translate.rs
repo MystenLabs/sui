@@ -20,7 +20,6 @@ use crate::{
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
-use move_command_line_common::error_bitset::ErrorBitset;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -1710,18 +1709,13 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                     }
                     // If no abort code is given for the assert, we add in the abort code as the
                     // bitset-line-number if `CleverAssertions` is set.
-                    if nes.value.len() == 1
-                        && is_macro.is_some()
-                        && context.env.check_feature(
+                    if nes.value.len() == 1 && is_macro.is_some() {
+                        context.env.check_feature(
                             context.current_package,
                             FeatureGate::CleverAssertions,
                             bloc,
-                        )
-                    {
-                        let line_no = context.env.file_mapping().location(bloc).start.line;
-                        let bitset = ErrorBitset::new(line_no as u16, u16::MAX, u16::MAX);
-                        let val = NE::Value(sp(bloc, E::Value_::U64(bitset.bits)));
-                        nes.value.push(sp(bloc, val));
+                        );
+                        nes.value.push(sp(bloc, NE::ErrorConstant));
                     }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }
@@ -2298,6 +2292,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)

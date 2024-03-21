@@ -208,6 +208,7 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, Box<Type>),
     Annotate(Box<Exp>, Box<Type>),
 
+    ErrorConstant(Option<ConstantName>),
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
@@ -684,6 +685,12 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
+            E::ErrorConstant(constant) => {
+                w.write("ErrorConstant");
+                if let Some(c) = constant {
+                    w.write(&format!("({})", c))
+                }
+            }
         }
     }
 }

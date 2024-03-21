@@ -21,6 +21,12 @@ enum ErrorBitsetField {
     Constant,
 }
 
+pub struct ErrorBitsetBuilder {
+    line_number: u16,
+    identifier_index: Option<u16>,
+    constant_index: Option<u16>,
+}
+
 impl ErrorBitsetField {
     const TAG_MASK: u64 = 0x8000_0000_0000_0000;
     const RESERVED_AREA_MASK: u64 = 0x7fff_0000_0000_0000;
@@ -59,8 +65,34 @@ impl ErrorBitsetField {
     }
 }
 
+impl ErrorBitsetBuilder {
+    pub fn new(line_number: u16) -> Self {
+        Self {
+            line_number,
+            identifier_index: None,
+            constant_index: None,
+        }
+    }
+
+    pub fn with_identifier_index(&mut self, identifier_index: u16) {
+        self.identifier_index = Some(identifier_index);
+    }
+
+    pub fn with_constant_index(&mut self, constant_index: u16) {
+        self.constant_index = Some(constant_index);
+    }
+
+    pub fn build(self) -> ErrorBitset {
+        ErrorBitset::new(
+            self.line_number,
+            self.identifier_index.unwrap_or(BITSET_VALUE_UNAVAILABLE),
+            self.constant_index.unwrap_or(BITSET_VALUE_UNAVAILABLE),
+        )
+    }
+}
+
 impl ErrorBitset {
-    pub const fn new(line_number: u16, identifier_index: u16, constant_index: u16) -> Self {
+    pub(crate) const fn new(line_number: u16, identifier_index: u16, constant_index: u16) -> Self {
         use ErrorBitsetField as E;
         let mut bits = 0u64;
         bits |= 1u64 << E::Tag.shift();
@@ -105,7 +137,7 @@ impl ErrorBitset {
 
 #[cfg(test)]
 mod tests {
-    use super::ErrorBitset;
+    use super::{ErrorBitset, ErrorBitsetBuilder};
     use proptest::prelude::*;
     use proptest::proptest;
 
@@ -116,6 +148,26 @@ mod tests {
             prop_assert_eq!(error_bitset.line_number(), Some(line_number));
             prop_assert_eq!(error_bitset.identifier_index(), Some(identifier_index));
             prop_assert_eq!(error_bitset.constant_index(), Some(constant_index));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_error_bitset_builder(line_number in 0..u16::MAX, identifier_index in 0..u16::MAX, constant_index in 0..u16::MAX) {
+            let error_bitset = ErrorBitset::new(line_number, identifier_index, constant_index);
+            let mut error_bitset_builder = ErrorBitsetBuilder::new(line_number);
+            error_bitset_builder.with_identifier_index(identifier_index);
+            error_bitset_builder.with_constant_index(constant_index);
+            let error_bitset_built = error_bitset_builder.build();
+            prop_assert_eq!(error_bitset.line_number(), Some(line_number));
+            prop_assert_eq!(error_bitset.identifier_index(), Some(identifier_index));
+            prop_assert_eq!(error_bitset.constant_index(), Some(constant_index));
+
+            prop_assert_eq!(error_bitset_built.line_number(), Some(line_number));
+            prop_assert_eq!(error_bitset_built.identifier_index(), Some(identifier_index));
+            prop_assert_eq!(error_bitset_built.constant_index(), Some(constant_index));
+
+            prop_assert_eq!(error_bitset.bits, error_bitset_built.bits);
         }
     }
 }

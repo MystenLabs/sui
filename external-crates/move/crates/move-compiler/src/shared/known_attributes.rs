@@ -312,12 +312,8 @@ impl ErrorAttribute {
 
     pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
         static ERROR_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-            Lazy::new(|| IntoIterator::into_iter([AttributePosition::Constant]).collect());
+            Lazy::new(|| BTreeSet::from([AttributePosition::Constant]));
         &ERROR_POSITIONS
-    }
-
-    pub fn expected_syntax_cases() -> &'static [&'static str] {
-        &[Self::ERROR]
     }
 }
 

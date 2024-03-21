@@ -1,40 +1,22 @@
-error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/invalid_assertion_const.move:5:9
-  │
-2 │     const X: vector<u8> = b"X";
-  │              ---------- Given: 'vector<u8>'
-  ·
-5 │         abort X;
-  │         ^^^^^^^
-  │         │
-  │         Invalid abort
-  │         Expected: 'u64'
-
-error[E13001]: feature is not supported in specified edition
+error[E04035]: invalid constant usage in error context
   ┌─ tests/move_check/typing/invalid_assertion_const.move:5:15
   │
-5 │         abort X;
-  │               ^ Clever `assert!` and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-  │
-  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/invalid_assertion_const.move:9:9
-  │
 2 │     const X: vector<u8> = b"X";
-  │              ---------- Given: 'vector<u8>'
+  │           - 'X' defined here with no '#[error]' annotation
   ·
-9 │         assert!(false, X);
-  │         ^^^^^^^^^^^^^^^^^
-  │         │
-  │         Invalid call of 'assert'. Invalid argument for parameter '1'
-  │         Expected: 'u64'
+5 │         abort X;
+  │               ^ Invalid error code for abort, expected a u64 or constant declared with '#[error]' annotation
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 
-error[E13001]: feature is not supported in specified edition
+error[E04035]: invalid constant usage in error context
   ┌─ tests/move_check/typing/invalid_assertion_const.move:9:24
   │
+2 │     const X: vector<u8> = b"X";
+  │           - 'X' defined here with no '#[error]' annotation
+  ·
 9 │         assert!(false, X);
-  │                        ^ Clever `assert!` and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │                        ^ Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
   │
-  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 
