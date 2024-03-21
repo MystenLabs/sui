@@ -1674,7 +1674,7 @@ impl AuthorityPerEpochStore {
                 }
                 (
                     deferral_key,
-                    (!congested_objects.is_empty()).then(|| congested_objects),
+                    (!congested_objects.is_empty()).then_some(congested_objects),
                 )
             }
         }
@@ -1712,7 +1712,7 @@ impl AuthorityPerEpochStore {
         } = effects.status()
         {
             self.tables()?.cancelled_transactions.insert(
-                &certificate.digest(),
+                certificate.digest(),
                 &TransactionCancellationReason::SharedObjectCongestion(
                     SharedObjectCongestionInfo {
                         congested_shared_object_ids: congested_objects.clone().0,

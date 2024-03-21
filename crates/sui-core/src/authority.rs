@@ -1137,7 +1137,7 @@ impl AuthorityState {
         let cancel_txn_reason = epoch_store
             .tables()?
             .cancelled_transactions
-            .get(&tx_digest)?;
+            .get(tx_digest)?;
         let input_objects = self
             .read_objects(certificate, epoch_store, &cancel_txn_reason)
             .await?;
