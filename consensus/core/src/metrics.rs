@@ -99,10 +99,12 @@ pub(crate) struct NodeMetrics {
     pub last_decided_leader_round: IntGauge,
     pub leader_timeout_total: IntCounter,
     pub missing_blocks_total: IntGauge,
+    pub missing_blocks_after_fetch_total: IntCounter,
     pub quorum_receive_latency: Histogram,
     pub scope_processing_time: HistogramVec,
     pub sub_dags_per_commit_count: Histogram,
     pub suspended_blocks: IntCounterVec,
+    pub suspended_block_time: HistogramVec,
     pub threshold_clock_round: IntGauge,
     pub unsuspended_blocks: IntCounterVec,
     pub uptime: Histogram,
@@ -212,6 +214,11 @@ impl NodeMetrics {
                 "Total number of missing blocks",
                 registry,
             ).unwrap(),
+            missing_blocks_after_fetch_total: register_int_counter_with_registry!(
+                "missing_blocks_after_fetch_total",
+                "Total number of missing blocks after fetching blocks from peer",
+                registry,
+            ).unwrap(),
             quorum_receive_latency: register_histogram_with_registry!(
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
@@ -232,6 +239,12 @@ impl NodeMetrics {
             suspended_blocks: register_int_counter_vec_with_registry!(
                 "suspended_blocks",
                 "The number of suspended blocks. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            suspended_block_time: register_histogram_vec_with_registry!(
+                "suspended_block_time",
+                "The time for which a block remains suspended",
                 &["authority"],
                 registry,
             ).unwrap(),

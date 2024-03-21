@@ -295,10 +295,16 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
         // will take care of that.
-        let _missing_blocks = core_dispatcher
+        let missing_blocks = core_dispatcher
             .add_blocks(verified_blocks)
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+
+        context
+            .metrics
+            .node_metrics
+            .missing_blocks_after_fetch_total
+            .inc_by(missing_blocks.len() as u64);
 
         Ok(())
     }

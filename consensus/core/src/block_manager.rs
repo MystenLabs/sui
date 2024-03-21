@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -10,6 +11,7 @@ use std::{
 use parking_lot::RwLock;
 use tracing::warn;
 
+use crate::block::{timestamp_utc_ms, BlockTimestampMs};
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
     block_verifier::BlockVerifier,
@@ -20,6 +22,7 @@ use crate::{
 struct SuspendedBlock {
     block: VerifiedBlock,
     missing_ancestors: BTreeSet<BlockRef>,
+    timestamp: BlockTimestampMs,
 }
 
 impl SuspendedBlock {
@@ -27,6 +30,7 @@ impl SuspendedBlock {
         Self {
             block,
             missing_ancestors,
+            timestamp: timestamp_utc_ms(),
         }
     }
 }
@@ -248,19 +252,21 @@ impl BlockManager {
                     // For each dependency try to unsuspend it. If that's successful then we add it to the queue so
                     // we can recursively try to unsuspend its children.
                     if let Some(block) = self.try_unsuspend_block(&r, &block.reference()) {
-                        unsuspended_blocks.push(block.block.clone());
-                        to_process_blocks.push(block.block);
+                        to_process_blocks.push(block.block.clone());
+                        unsuspended_blocks.push(block);
                     }
                 }
             }
         }
+
+        let now = timestamp_utc_ms();
 
         // Report the unsuspended blocks
         for block in &unsuspended_blocks {
             let hostname = self
                 .context
                 .committee
-                .authority(block.author())
+                .authority(block.block.author())
                 .hostname
                 .as_str();
             self.context
@@ -269,9 +275,18 @@ impl BlockManager {
                 .unsuspended_blocks
                 .with_label_values(&[hostname])
                 .inc();
+            self.context
+                .metrics
+                .node_metrics
+                .suspended_block_time
+                .with_label_values(&[hostname])
+                .observe(Duration::from_millis(now.saturating_sub(block.timestamp)).as_secs_f64());
         }
 
         unsuspended_blocks
+            .into_iter()
+            .map(|block| block.block)
+            .collect()
     }
 
     /// Attempts to unsuspend a block by checking its ancestors and removing the `accepted_dependency` by its local set.
