@@ -1938,7 +1938,7 @@ checksum = "23285ad32269793932e830392f2fe2f83e26488fd3ec778883a93c8323735780"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.2",
- "constant_time_eq 0.3.0",
+ "constant_time_eq",
 ]
 
 [[package]]
@@ -1949,21 +1949,7 @@ checksum = "94230421e395b9920d23df13ea5d77a20e1725331f90fbbf6df6040b33f756ae"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.2",
- "constant_time_eq 0.3.0",
-]
-
-[[package]]
-name = "blake3"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42ae2468a89544a466886840aa467a25b766499f4f04bf7d9fcd10ecee9fccef"
-dependencies = [
- "arrayref",
- "arrayvec 0.7.2",
- "cc",
- "cfg-if",
- "constant_time_eq 0.2.4",
- "digest 0.10.6",
+ "constant_time_eq",
 ]
 
 [[package]]
@@ -2090,26 +2076,6 @@ dependencies = [
  "once_cell",
  "regex-automata",
  "serde",
-]
-
-[[package]]
-name = "bulletproofs"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40e698f1df446cc6246afd823afbe2d121134d089c9102c1dd26d1264991ba32"
-dependencies = [
- "byteorder",
- "clear_on_drop",
- "curve25519-dalek-ng",
- "digest 0.9.0",
- "merlin",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "serde",
- "serde_derive",
- "sha3 0.9.1",
- "subtle-ng",
- "thiserror",
 ]
 
 [[package]]
@@ -2447,15 +2413,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2da6da31387c7e4ef160ffab6d5e7f00c42626fe39aea70a7b0f1773f7dd6c1b"
 
 [[package]]
-name = "clear_on_drop"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38508a63f4979f0048febc9966fadbd48e5dab31fd0ec6a3f151bbf4a74f7423"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "clipboard-win"
 version = "4.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2755,12 +2712,6 @@ name = "const-str"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aca749d3d3f5b87a0d6100509879f9cf486ab510803a4a4e1001da1ff61c2bd6"
-
-[[package]]
-name = "constant_time_eq"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3ad85c1f65dc7b37604eb0e89748faf0b9653065f2a8ef69f96a687ec1e9279"
 
 [[package]]
 name = "constant_time_eq"
@@ -3115,7 +3066,6 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.6.4",
- "serde",
  "subtle-ng",
  "zeroize",
 ]
@@ -4391,7 +4341,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=a499d84d07cbe33014531249f6ceeff85664502d#a499d84d07cbe33014531249f6ceeff85664502d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4404,10 +4354,8 @@ dependencies = [
  "bech32",
  "bincode",
  "blake2",
- "blake3",
  "blst",
  "bs58 0.4.0",
- "bulletproofs",
  "cbc",
  "ctr",
  "curve25519-dalek-ng",
@@ -4423,7 +4371,6 @@ dependencies = [
  "hex-literal 0.4.1",
  "hkdf",
  "lazy_static",
- "merlin",
  "num-bigint 0.4.4",
  "once_cell",
  "p256",
@@ -4449,7 +4396,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=a499d84d07cbe33014531249f6ceeff85664502d#a499d84d07cbe33014531249f6ceeff85664502d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4458,7 +4405,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=a499d84d07cbe33014531249f6ceeff85664502d#a499d84d07cbe33014531249f6ceeff85664502d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
 dependencies = [
  "bcs",
  "digest 0.10.6",
@@ -4476,7 +4423,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=a499d84d07cbe33014531249f6ceeff85664502d#a499d84d07cbe33014531249f6ceeff85664502d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -4492,6 +4439,7 @@ dependencies = [
  "fastcrypto",
  "ff 0.13.0",
  "im",
+ "itertools 0.12.0",
  "lazy_static",
  "neptune",
  "num-bigint 0.4.4",
@@ -6396,18 +6344,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "merlin"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
-dependencies = [
- "byteorder",
- "keccak",
- "rand_core 0.6.4",
- "zeroize",
 ]
 
 [[package]]
