@@ -53,7 +53,7 @@ impl IndexerBuilder {
         self
     }
 
-    pub async fn run(self) {
+    pub async fn run(self, metrics: IndexerMetrics) {
         let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
             mysten_metrics::metered_channel::channel(
                 self.checkpoint_buffer_size,
@@ -81,6 +81,7 @@ impl IndexerBuilder {
                 downloaded_checkpoint_data_receiver,
             ),
             self.handlers,
+            metrics,
         )
         .await;
     }

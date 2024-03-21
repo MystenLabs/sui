@@ -101,6 +101,7 @@ pub struct IndexerMetrics {
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
+    pub indexing_batch_size: IntGauge,
     pub indexing_tx_object_changes_latency: Histogram,
     pub indexing_objects_latency: Histogram,
     pub indexing_get_object_in_mem_hit: IntCounter,
@@ -283,6 +284,11 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            indexing_batch_size: register_int_gauge_with_registry!(
+                "indexing_batch_size",
+                "Size of the indexing batch",
+                registry,
+            ).unwrap(),
             indexing_tx_object_changes_latency: register_histogram_with_registry!(
                 "indexing_tx_object_changes_latency",
                 "Time spent in indexing object changes for a transaction",
