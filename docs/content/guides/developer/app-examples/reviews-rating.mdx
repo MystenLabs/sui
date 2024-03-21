@@ -2,7 +2,9 @@
 title: Reviews Rating
 ---
 
-The following documentation goes through an example implementation of a review rating platform for the food service industry on Sui. By leveraging blockchain to allow reviewers to own and monetize their feedback, the on-chain platform ensures transparency and tamper-proof ratings.
+The following documentation goes through an example implementation of a review rating platform for the food service industry on Sui.
+Unlike traditional review rating platforms, that often do not disclose the algorithm used to rate reviews, the on-chain platform uses an algorithm that is published on-chain for everyone to see and verify.
+Furthermore, all submitted reviews are scored and ordered on-chain which is feasible due to the low gas cost of computation on Sui.
 
 ## Personas
 
@@ -20,19 +22,21 @@ sequenceDiagram
 
 ### Service owners
 
-Service owners are entities like restaurants that list their services on the platform. Service owners allocate a specific amount of SUI as a reward pool. Assets from the pool are used to provide rewards for honest reviews. A Proof of Experience (PoE) NFT confirms the reviewer used the service, which they burn to provide a verified review. Service owners can provide their customers with unique identifiers, perhaps using QR codes, to identify individual reviewers.
+Service owners are entities like restaurants that list their services on the platform. Service owners allocate a specific amount of SUI as a reward pool. Assets from the pool are used to provide rewards for high-rated reviews. A Proof of Experience (PoE) NFT confirms the reviewer used the service, which they burn to provide a verified review. Service owners can provide their customers with unique identifiers, perhaps using QR codes, to identify individual reviewers.
 
 ### Reviewers
 
-Reviewers are consumers of services that use the review system. Reviewers provide feedback in the form of comments that detail specific aspects of the service as well as a star rating to inform others. The reviews are rated, with the most effective reviews getting the highest rating. Service owners award the 10 highest rated reviews for their service. 
+Reviewers are consumers of services that use the review system. Reviewers provide feedback in the form of comments that detail specific aspects of the service as well as a star rating to inform others. The reviews are rated, with the most effective reviews getting the highest rating. Service owners award the 10 highest rated reviews for their service. How often the rewards are distributed is up to the service owner; it can be on a regular or rolling basis.
 
 ### Review readers
 
 Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting awarded. 
 
-### Moderator
+### Moderators
 
-The moderator monitors content of the reviews and can delete any reviews that contain inappropriate content.
+Moderators monitor content of the reviews and can delete any reviews that contain inappropriate content.
+Moderators also keep an eye on the number of reviews registered for a service to ensure that they do not exceed the maximum number allowed.
+When the maximum number of reviews is reached, moderators can prune old reviews to make room for a new review.
 
 ## How reviews are rated
 
@@ -86,6 +90,18 @@ All the submitted reviews are stored in `reviews` field, which has `MultiMap<ID>
 
 The `reward_pool` and `reward` fields store the available reward information.  
 
+```move
+struct AdminCap has key, store {
+  id: UID,
+  service_id: ID
+}
+struct Moderator has key {
+  id: UID,
+  service_id: ID,
+}
+```
+`SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` to allow them to perform previleged operations.
+
 ### multimap.move {#multimap}
 
 `MultiMap` is an implementation of the `multimap` data structure (https://en.wikipedia.org/wiki/Multimap), which keeps all the reviews sorted. Using `MultiMap`, all the reviews are ordered by rating, with the highest rated reviews coming first.
@@ -94,7 +110,48 @@ The `reward_pool` and `reward` fields store the available reward information.
 struct MultiMap<K: copy> has copy, drop, store {
   contents: vector<Entry<K>>,
 }
+struct Entry<K: copy> has copy, drop, store {
+  key: K,
+  priority: u64,
+}
 ```
+The `object_id` of a `review` object is used as a `key` and `total_score` is used as `priority` for a new entry.
+
+Note that `vector` is used to store the contents of the `MultiMap`. This is acceptable in our use case because the maximum number of reviews for a service is 1000.
+As reviews are sorted by `total_score` on-chain, it is necessary to keep a manageable number of reviews for a service.
+
+```move
+public fun insert<K: copy>(self: &mut MultiMap<K>, key: K, priority: u64) {
+  assert!(!contains(self, &key), EKeyAlreadyExists);
+  let len = vector::length(&self.contents);
+  if (len == 0) {
+    vector::push_back(&mut self.contents, Entry { key, priority });
+  } else {
+    insert_recursive(&mut self.contents, Entry { key, priority }, 0, len - 1);
+  }
+}
+
+fun insert_recursive<K: copy>(v: &mut vector<Entry<K>>, e: Entry<K>, left: u64, right: u64) {
+  if (left > right) {
+    vector::insert(v, e, left);
+  } else {
+    let mid = (left + right) / 2;
+    let ele = vector::borrow(v, mid);
+    if (e.priority == ele.priority) {
+      vector::insert(v, e, mid);
+    } else if (e.priority > ele.priority) {
+      if (mid == 0) {
+        vector::insert(v, e, left);
+      } else {
+        insert_recursive(v, e, left, mid - 1);
+      }
+    } else {
+      insert_recursive(v, e, mid + 1, right);
+    }
+  }
+}
+```
+`Binary Search` is implemented to insert a new entry in the `MultiMap`. The `insert` function is used to insert a new entry in the `MultiMap` along with `insert_recursive` helper function.
 
 ### review.move
 
