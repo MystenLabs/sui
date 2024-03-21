@@ -101,7 +101,8 @@ module std::bcs_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 453, location = std::bcs)]
+    #[expected_failure]
+    // failes due to VM max value depth
     fun encode_129() {
         bcs::to_bytes(&Box { x: box127(true) });
     }
