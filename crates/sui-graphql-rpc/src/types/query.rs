@@ -37,11 +37,11 @@ use super::{
 };
 use crate::consistency::{consistent_range, CheckpointViewedAt};
 use crate::data::QueryExecutor;
-use crate::{config::ServiceConfig, data::Db, error::Error, mutation::Mutation};
-use crate::types::zklogin_verify_signature::verify_zklogin_signature;
-use crate::types::zklogin_verify_signature::ZkLoginVerifyResult;
 use crate::types::base64::Base64 as GraphQLBase64;
+use crate::types::zklogin_verify_signature::verify_zklogin_signature;
 use crate::types::zklogin_verify_signature::ZkLoginIntentScope;
+use crate::types::zklogin_verify_signature::ZkLoginVerifyResult;
+use crate::{config::ServiceConfig, data::Db, error::Error, mutation::Mutation};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;

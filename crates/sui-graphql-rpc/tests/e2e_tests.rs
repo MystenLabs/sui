@@ -9,7 +9,6 @@ mod tests {
     use serde_json::json;
     use serial_test::serial;
     use simulacrum::Simulacrum;
-    use tracing::info;
     use std::sync::Arc;
     use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
@@ -425,11 +424,8 @@ mod tests {
             .init();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
-            connection_config,
-            None,
-        )
-        .await;
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
 
         // wait for epoch to be indexed, so that current epoch and JWK are populated in db.
         let test_cluster = cluster.validator_fullnode_handle;
@@ -472,7 +468,6 @@ mod tests {
 
         // a valid signature with tx bytes returns success as true.
         let binding = res.response_body().data.clone().into_json().unwrap();
-        info!("tktbinding: {:?}", binding);
         let res = binding.get("verifyZkloginSignature").unwrap();
         assert_eq!(res.get("success").unwrap(), true);
 

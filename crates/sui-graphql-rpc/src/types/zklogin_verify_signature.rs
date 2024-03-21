@@ -116,7 +116,7 @@ pub(crate) async fn verify_zklogin_signature(
             if tx_sender != author.into() {
                 return Err(Error::Client("Tx sender mismatch author".to_string()));
             }
-            let r = match zklogin_sig.verify_authenticator(
+            match zklogin_sig.verify_authenticator(
                 &intent_msg,
                 tx_sender,
                 Some(curr_epoch),
@@ -130,9 +130,7 @@ pub(crate) async fn verify_zklogin_signature(
                     success: false,
                     errors: vec![e.to_string()],
                 }),
-            };
-            tracing::info!("ZkLogin verify result: {:?}", r);
-            r
+            }
         }
         ZkLoginIntentScope::PersonalMessage => {
             let data = PersonalMessage { message: bytes };
