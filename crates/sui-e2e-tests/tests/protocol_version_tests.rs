@@ -125,7 +125,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(20000)
+            .with_epoch_duration_ms(30000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
