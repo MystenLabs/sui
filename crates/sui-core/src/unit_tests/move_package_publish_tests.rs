@@ -221,7 +221,6 @@ async fn test_generate_lock_file() {
         version = 1
         manifest_digest = "1401DE1C3C3FF6D20EB27741A0A7B5D61E34836CB6C90ECC2F2DE97C47B4D0F9"
         deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
-
         dependencies = [
           { name = "Examples" },
           { name = "Sui" },
