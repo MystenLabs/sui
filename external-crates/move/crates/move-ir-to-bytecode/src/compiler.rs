@@ -7,8 +7,8 @@ use anyhow::{bail, format_err, Result};
 use move_binary_format::{
     file_format::{
         Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
-        FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle, Signature,
-        SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
+        ConstantPoolIndex, FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle,
+        Signature, SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
         StructHandleIndex, StructTypeParameter, TableIndex, TypeParameterIndex, TypeSignature,
         Visibility,
     },
@@ -311,15 +311,16 @@ fn verify_module(module: &ModuleDefinition) -> Result<()> {
     Ok(())
 }
 
-fn constant_name_as_constant_value(
+fn constant_name_as_constant_value_index(
     context: &mut Context,
     const_name: &ConstantName,
-) -> Result<Constant> {
-    compile_constant(
+) -> Result<ConstantPoolIndex> {
+    let name_constant = compile_constant(
         context,
         Type::Vector(Box::new(Type::U8)),
         MoveValue::vector_u8(const_name.to_string().into_bytes()),
-    )
+    )?;
+    context.constant_index(name_constant)
 }
 
 /// Compile a module.
@@ -374,10 +375,9 @@ pub fn compile_module<'a>(
         // e.g., in the case of something like `const Foo: vector<u8> = b"Foo"` in which case the
         // new index will not be added and the previous index will be used.
         if ir_constant.is_error_constant {
-            let name_constant = constant_name_as_constant_value(&mut context, &constant_name)?;
             // Will add if not present, and will return the index, or will just return
             // index if already present.
-            context.constant_index(name_constant)?;
+            constant_name_as_constant_value_index(&mut context, &constant_name)?;
         }
     }
 
@@ -1698,8 +1698,8 @@ fn compile_bytecode(
                 // All error constant names will be inserted in bulk when adding constants to the
                 // module, so we can just use the index of the constant name here and don't need to add
                 // anything.
-                let constant_name_as_value = constant_name_as_constant_value(context, &const_name)?;
-                let constant_name_value_index = context.constant_index(constant_name_as_value)?;
+                let constant_name_value_index =
+                    constant_name_as_constant_value_index(context, &const_name)?;
                 bitset_builder.with_identifier_index(constant_name_value_index.0);
             }
 

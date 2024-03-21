@@ -1,26 +1,18 @@
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/clever_assertions.move:11:24
-   │
-11 │         assert!(false, X);
-   │                        ^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-   │
-   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+  ┌─ tests/move_check/typing/clever_assertions.move:4:7
+  │
+4 │     #[error]
+  │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/clever_assertions.move:15:24
-   │
-15 │         assert!(false, Foo);
-   │                        ^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-   │
-   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/clever_assertions.move:19:15
-   │
-19 │         abort X
-   │               ^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
-   │
-   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+  ┌─ tests/move_check/typing/clever_assertions.move:7:7
+  │
+7 │     #[error]
+  │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/clever_assertions.move:23:9

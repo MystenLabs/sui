@@ -2940,7 +2940,6 @@ fn module_call_impl(
 /// the constant to a u64 since this will be compiled into a u64 error code.
 fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_str: &str) {
     let u64_type = Type_::u64(e.ty.loc);
-
     let mut const_name = None;
 
     if let sp!(
@@ -2953,19 +2952,11 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             defined_loc,
             signature: _,
         } = context.constant_info(module_ident, constant_name);
-
         const_name = Some((*defined_loc, *constant_name));
-
         let has_error_annotation =
             attributes.contains_key_(&known_attributes::ErrorAttribute.into());
 
         if has_error_annotation {
-            context.env.check_feature(
-                context.current_package(),
-                FeatureGate::CleverAssertions,
-                *const_loc,
-            );
-
             *e = T::exp(
                 u64_type.clone(),
                 sp(
@@ -3001,7 +2992,6 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             (e.exp.loc, msg),
             (const_loc, const_msg)
         );
-
         err.add_note(
             "Non-u64 constants can only be used as error codes if \
             the '#[error]' attribute is added to them."
