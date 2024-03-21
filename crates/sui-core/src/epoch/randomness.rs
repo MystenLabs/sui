@@ -403,7 +403,7 @@ impl Inner {
             Err(e) => {
                 error!("random beacon: error while creating a DKG Message: {e:?}");
                 return Ok(());
-            },
+            }
         };
 
         info!(
