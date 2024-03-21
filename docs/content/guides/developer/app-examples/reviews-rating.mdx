@@ -106,15 +106,14 @@ struct Review has key, store {
   owner: address,
   service_id: ID,
   content: String,
-  // is
+  // intrinsic score
   len: u64,
-  // es
+  // extrinsic score
   votes: u64,
   time_issued: u64,
-  // vm: proof of experience
+  // proof of experience
   has_poe: bool,
-  // total score
-  ts: u64,
+  total_score: u64,
   overall_rate: u8,
 }
 ```
