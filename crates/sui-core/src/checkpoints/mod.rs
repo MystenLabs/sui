@@ -687,6 +687,7 @@ pub struct CheckpointBuilder {
     tables: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
+    latest_notify: Arc<Mutex<CheckpointCommitHeight>>,
     notify_aggregator: Arc<Notify>,
     effects_store: Arc<dyn EffectsNotifyRead>,
     accumulator: Arc<StateAccumulator>,
@@ -726,6 +727,7 @@ impl CheckpointBuilder {
         tables: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
+        latest_notify: Arc<Mutex<CheckpointCommitHeight>>,
         effects_store: Arc<dyn EffectsNotifyRead>,
         accumulator: Arc<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
@@ -740,6 +742,7 @@ impl CheckpointBuilder {
             tables,
             epoch_store,
             notify,
+            latest_notify,
             effects_store,
             accumulator,
             output,
@@ -766,11 +769,18 @@ impl CheckpointBuilder {
                 .epoch_store
                 .last_built_checkpoint_commit_height()
                 .expect("epoch should not have ended");
-            for (height, pending) in self
+
+            let pending_checkpoints = self
                 .epoch_store
                 .get_pending_checkpoints(last)
-                .expect("unexpected epoch store error")
-            {
+                .expect("unexpected epoch store error");
+
+            // if present, last checkpoint should be >= last notified
+            if let Some(last) = pending_checkpoints.last() {
+                assert!(last.0 >= *self.latest_notify.lock());
+            }
+
+            for (height, pending) in pending_checkpoints {
                 last = Some(height);
                 debug!(
                     checkpoint_commit_height = height,
@@ -1712,6 +1722,7 @@ pub trait CheckpointServiceNotify {
 pub struct CheckpointService {
     tables: Arc<CheckpointStore>,
     notify_builder: Arc<Notify>,
+    latest_notify: Arc<Mutex<CheckpointCommitHeight>>,
     notify_aggregator: Arc<Notify>,
     last_signature_index: Mutex<u64>,
     metrics: Arc<CheckpointMetrics>,
@@ -1734,6 +1745,7 @@ impl CheckpointService {
             "Starting checkpoint service with {max_transactions_per_checkpoint} max_transactions_per_checkpoint and {max_checkpoint_size_bytes} max_checkpoint_size_bytes"
         );
         let notify_builder = Arc::new(Notify::new());
+        let latest_notify = Arc::new(Mutex::new(0));
         let notify_aggregator = Arc::new(Notify::new());
 
         let (exit_snd, exit_rcv) = watch::channel(());
@@ -1743,6 +1755,7 @@ impl CheckpointService {
             checkpoint_store.clone(),
             epoch_store.clone(),
             notify_builder.clone(),
+            latest_notify.clone(),
             effects_store,
             accumulator,
             checkpoint_output,
@@ -1775,6 +1788,7 @@ impl CheckpointService {
         let service = Arc::new(Self {
             tables: checkpoint_store,
             notify_builder,
+            latest_notify,
             notify_aggregator,
             last_signature_index,
             metrics,
@@ -1844,6 +1858,9 @@ impl CheckpointServiceNotify for CheckpointService {
             checkpoint_commit_height = checkpoint.height(),
             "Notifying builder about checkpoint",
         );
+        let latest_notify = &mut *self.latest_notify.lock();
+        assert!(*latest_notify == 0 || *latest_notify < checkpoint.height());
+        *latest_notify = checkpoint.height();
         self.notify_builder.notify_one();
         Ok(())
     }
