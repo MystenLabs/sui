@@ -47,12 +47,12 @@ module sui::groth16 {
 
     /// Returns bytes of the four components of the `PreparedVerifyingKey`.
     public fun pvk_to_bytes(pvk: PreparedVerifyingKey): vector<vector<u8>> {
-        let mut res = vector[];
-        res.push_back(pvk.vk_gamma_abc_g1_bytes);
-        res.push_back(pvk.alpha_g1_beta_g2_bytes);
-        res.push_back(pvk.gamma_g2_neg_pc_bytes);
-        res.push_back(pvk.delta_g2_neg_pc_bytes);
-        res
+        vector[
+            pvk.vk_gamma_abc_g1_bytes,
+            pvk.alpha_g1_beta_g2_bytes,
+            pvk.gamma_g2_neg_pc_bytes,
+            pvk.delta_g2_neg_pc_bytes,
+        ]
     }
 
     /// A `PublicProofInputs` wrapper around its serialized bytes.

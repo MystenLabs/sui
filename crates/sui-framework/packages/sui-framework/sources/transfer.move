@@ -4,7 +4,6 @@
 #[allow(unused_const)]
 module sui::transfer {
 
-    use sui::object::{ID, UID};
 
     /* #[test_only] */
     /* friend sui::test_scenario; */

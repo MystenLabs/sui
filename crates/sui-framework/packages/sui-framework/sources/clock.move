@@ -4,9 +4,7 @@
 /// APIs for accessing time from move calls, via the `Clock`: a unique
 /// shared object that is created at 0x6 during genesis.
 module sui::clock {
-    use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::TxContext;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;

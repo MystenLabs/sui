@@ -33,7 +33,6 @@
 /// }
 /// ```
 module sui::bcs {
-    use std::option::{Self, Option};
     use sui::address;
     use std::bcs;
 

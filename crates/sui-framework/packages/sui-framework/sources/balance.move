@@ -5,7 +5,6 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
-    use sui::tx_context::TxContext;
 
     /* friend sui::sui; */
 
