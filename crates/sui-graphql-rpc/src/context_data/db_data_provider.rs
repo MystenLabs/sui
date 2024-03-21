@@ -64,14 +64,6 @@ impl PgManager {
             .map_err(|e| Error::Internal(format!("{e}")))
     }
 
-    pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
-        Ok(self
-            .inner
-            .spawn_blocking(|this| this.get_consistent_read_range())
-            .await
-            .map(|(start, end)| (start as u64, end as u64))?)
-    }
-
     /// If no epoch was requested or if the epoch requested is in progress,
     /// returns the latest sui system state.
     pub(crate) async fn fetch_sui_system_state(
