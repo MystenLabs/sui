@@ -145,12 +145,16 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
-    use crate::config::{ConnectionConfig, Version};
-    use crate::metrics::Metrics;
-    use crate::server::builder::AppState;
+    use crate::{
+        config::{ConnectionConfig, ServiceConfig, Version},
+        consistency::CheckpointViewedAt,
+        metrics::Metrics,
+        server::builder::AppState,
+    };
     use axum::{body::Body, middleware, routing::get, Router};
     use expect_test::expect;
     use mysten_metrics;
+    use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
 
     fn test_version() -> Version {
@@ -165,14 +169,25 @@ mod tests {
     fn service() -> Router {
         let metrics = metrics();
         let version = test_version();
-        let server_config = ConnectionConfig::ci_integration_test_cfg();
-        let state = AppState::new(server_config.clone(), metrics.clone(), version.clone());
+        let cancellation_token = CancellationToken::new();
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let service_config = ServiceConfig::default();
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+            cancellation_token.clone(),
+            version,
+        );
 
         Router::new()
             .route("/", get(|| async { "Hello, Versioning!" }))
-            .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn_with_state(
-                state.clone(),
+                state.version,
+                check_version_middleware,
+            ))
+            .layer(middleware::from_fn_with_state(
+                state.version,
                 set_version_middleware,
             ))
     }
@@ -198,7 +213,12 @@ mod tests {
 
     #[tokio::test]
     async fn successful() {
-        let version = format!("{RPC_VERSION_YEAR}.{RPC_VERSION_MONTH}");
+        let version = format!(
+            "{}.{}",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            env!("CARGO_PKG_VERSION_MINOR")
+        );
+
         let service = service();
         let response = service
             .oneshot(header_request(&[(&VERSION_HEADER, version.as_bytes())]))
@@ -213,7 +233,11 @@ mod tests {
 
     #[tokio::test]
     async fn case_insensitive() {
-        let version = format!("{RPC_VERSION_YEAR}.{RPC_VERSION_MONTH}");
+        let version = format!(
+            "{}.{}",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            env!("CARGO_PKG_VERSION_MINOR")
+        );
         let service = service();
         let response = service
             .oneshot(header_request(&[(

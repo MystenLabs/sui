@@ -140,7 +140,7 @@ pub(crate) struct AppState {
 pub(crate) struct CheckpointWatermark(pub Arc<AtomicU64>);
 
 impl AppState {
-    fn new(
+    pub(crate) fn new(
         connection: ConnectionConfig,
         service: ServiceConfig,
         metrics: Metrics,
@@ -632,7 +632,7 @@ pub mod tests {
 
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-
+        let version = Version::for_testing();
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
@@ -643,6 +643,7 @@ pub mod tests {
             service_config.clone(),
             metrics.clone(),
             cancellation_token.clone(),
+            version,
         );
         ServerBuilder::new(state)
             .context_data(db)
