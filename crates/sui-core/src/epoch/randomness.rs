@@ -23,7 +23,7 @@ use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use typed_store::rocks::DBBatch;
@@ -59,13 +59,8 @@ const SINGLETON_KEY: u64 = 0;
 //    partial signatures for it.
 pub struct RandomnessManager {
     epoch_store: Weak<AuthorityPerEpochStore>,
-    network_handle: randomness::Handle,
-
-    inner: Mutex<Inner>,
-}
-
-pub struct Inner {
     consensus_adapter: Arc<ConsensusAdapter>,
+    network_handle: randomness::Handle,
     authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
 
     // State for DKG.
@@ -189,8 +184,10 @@ impl RandomnessManager {
         );
 
         // Load existing data from store.
-        let mut inner = Inner {
+        let mut rm = RandomnessManager {
+            epoch_store: epoch_store_weak,
             consensus_adapter,
+            network_handle: network_handle.clone(),
             authority_info,
             dkg_start_time: OnceCell::new(),
             party: Arc::new(party),
@@ -214,15 +211,14 @@ impl RandomnessManager {
                 .metrics
                 .epoch_random_beacon_dkg_num_shares
                 .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
-            inner
-                .dkg_output
+            rm.dkg_output
                 .set(Some(dkg_output.clone()))
                 .expect("setting new OnceCell should succeed");
             network_handle.update_epoch(
                 committee.epoch(),
-                inner.authority_info.clone(),
+                rm.authority_info.clone(),
                 dkg_output,
-                inner.party.t(),
+                rm.party.t(),
             );
         } else {
             info!(
@@ -230,7 +226,7 @@ impl RandomnessManager {
                 committee.epoch()
             );
             // Load intermediate data.
-            inner.processed_messages.extend(
+            rm.processed_messages.extend(
                 tables
                     .dkg_processed_messages
                     .safe_iter()
@@ -241,12 +237,11 @@ impl RandomnessManager {
                 .get(&SINGLETON_KEY)
                 .expect("typed_store should not fail")
             {
-                inner
-                    .used_messages
+                rm.used_messages
                     .set(used_messages.clone())
                     .expect("setting new OnceCell should succeed");
             }
-            inner.confirmations.extend(
+            rm.confirmations.extend(
                 tables
                     .dkg_confirmations
                     .safe_iter()
@@ -258,14 +253,14 @@ impl RandomnessManager {
         // This must be loaded regardless of whether DKG has finished yet, since the
         // RandomnessEventLoop and commit-handling logic in AuthorityPerEpochStore both depend on
         // this state.
-        inner.next_randomness_round = tables
+        rm.next_randomness_round = tables
             .randomness_next_round
             .get(&SINGLETON_KEY)
             .expect("typed_store should not fail")
             .unwrap_or(RandomnessRound(0));
         info!(
             "random beacon: starting from next_randomness_round={}",
-            inner.next_randomness_round.0
+            rm.next_randomness_round.0
         );
         for result in tables.randomness_rounds_pending.safe_iter() {
             let (round, _) = result.expect("typed_store should not fail");
@@ -276,147 +271,11 @@ impl RandomnessManager {
             network_handle.send_partial_signatures(committee.epoch(), round);
         }
 
-        Some(RandomnessManager {
-            epoch_store: epoch_store_weak,
-            network_handle,
-            inner: Mutex::new(inner),
-        })
+        Some(rm)
     }
 
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
-    pub fn start_dkg(&self) -> SuiResult {
-        self.inner
-            .try_lock()
-            .expect("`try_lock` should always succeed, called only from consensus handler thread")
-            .start_dkg(self.epoch_store()?)
-    }
-
-    /// Processes all received messages and advances the randomness DKG state machine when possible,
-    /// sending out a dkg::Confirmation and generating final output.
-    pub async fn advance_dkg(&self, batch: &mut DBBatch, round: Round) -> SuiResult {
-        self.inner
-        .lock().await
-            .advance_dkg(self.epoch_store()?, &self.network_handle, batch, round)
-            .await
-    }
-
-    /// Adds a received dkg::Message to the randomness DKG state machine.
-    pub fn add_message(
-        &self,
-        authority: &AuthorityName,
-        msg: dkg::Message<PkG, EncG>,
-    ) -> SuiResult {
-        self.inner
-            .try_lock()
-            .expect("`try_lock` should always succeed, called only from consensus handler thread")
-            .add_message(authority, msg)
-    }
-
-    /// Adds a received dkg::Confirmation to the randomness DKG state machine.
-    pub fn add_confirmation(
-        &self,
-        batch: &mut DBBatch,
-        authority: &AuthorityName,
-        conf: dkg::Confirmation<EncG>,
-    ) -> SuiResult {
-        self.inner
-            .try_lock()
-            .expect("`try_lock` should always succeed, called only from consensus handler thread")
-            .add_confirmation(self.tables()?, batch, authority, conf)
-    }
-
-    /// Reserves the next available round number for randomness generation. Once the given
-    /// batch is written, `generate_randomness` must be called to start the process. On restart,
-    /// any reserved rounds for which the batch was written will automatically be resumed.
-    pub fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
-        self.inner
-            .try_lock()
-            .expect("`try_lock` should always succeed, called only from consensus handler thread")
-            .reserve_next_randomness(self.tables()?, batch)
-    }
-
-    /// Starts the process of generating the given RandomnessRound.
-    pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
-        self.network_handle
-            .send_partial_signatures(epoch, randomness_round);
-    }
-
-    /// Notifies the randomness manager that randomness for the given round has been durably
-    /// committed in a checkpoint. This completes the process of generating randomness for the
-    /// round.
-    pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
-        self.tables()?.randomness_rounds_pending.remove(&round)?;
-        self.network_handle
-            .complete_round(self.epoch_store()?.committee().epoch(), round);
-        Ok(())
-    }
-
-    /// Returns true if DKG is over for this epoch, whether due to success or failure.
-    pub fn is_dkg_closed(&self) -> bool {
-        self.inner
-            .try_lock()
-            .expect("`try_lock` should always succeed, called only from consensus handler thread")
-            .dkg_output
-            .initialized()
-    }
-
-    /// Returns true if DKG has completed successfully.
-    pub fn is_dkg_successful(&self) -> bool {
-        self.inner
-            .try_lock()
-            .expect("`try_lock` should always succeed, called only from consensus handler thread")
-            .dkg_output
-            .get()
-            .and_then(|opt| opt.as_ref())
-            .is_some()
-    }
-
-    fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
-        self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)
-    }
-
-    fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
-        self.epoch_store()?.tables()
-    }
-
-    fn randomness_dkg_info_from_committee(
-        committee: &Committee,
-    ) -> Vec<(
-        u16,
-        AuthorityName,
-        fastcrypto_tbls::ecies::PublicKey<bls12381::G2Element>,
-        StakeUnit,
-    )> {
-        committee
-            .members()
-            .map(|(name, stake)| {
-                let index: u16 = committee
-                    .authority_index(name)
-                    .expect("lookup of known committee member should succeed")
-                    .try_into()
-                    .expect("authority index should fit in u16");
-                let pk = bls12381::G2Element::from_byte_array(
-                    committee
-                        .public_key(name)
-                        .expect("lookup of known committee member should succeed")
-                        .as_bytes()
-                        .try_into()
-                        .expect("key length should match"),
-                )
-                .expect("should work to convert BLS key to G2Element");
-                (
-                    index,
-                    *name,
-                    fastcrypto_tbls::ecies::PublicKey::from(pk),
-                    *stake,
-                )
-            })
-            .collect()
-    }
-}
-
-impl Inner {
-    pub fn start_dkg(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> SuiResult {
+    pub fn start_dkg(&mut self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // DKG already started (or completed or failed).
             return Ok(());
@@ -431,6 +290,7 @@ impl Inner {
                 msg.encrypted_shares.len(),
             );
 
+        let epoch_store = self.epoch_store()?;
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
         self.consensus_adapter
             .submit(transaction, None, &epoch_store)?;
@@ -448,13 +308,11 @@ impl Inner {
         Ok(())
     }
 
-    pub async fn advance_dkg(
-        &mut self,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        network_handle: &randomness::Handle,
-        batch: &mut DBBatch,
-        round: Round,
-    ) -> SuiResult {
+    /// Processes all received messages and advances the randomness DKG state machine when possible,
+    /// sending out a dkg::Confirmation and generating final output.
+    pub async fn advance_dkg(&mut self, batch: &mut DBBatch, round: Round) -> SuiResult {
+        let epoch_store = self.epoch_store()?;
+
         // Once we have enough Messages, send a Confirmation.
         if !self.dkg_output.initialized() && !self.used_messages.initialized() {
             // Process all enqueued messages.
@@ -546,7 +404,7 @@ impl Inner {
                     self.dkg_output
                         .set(Some(output.clone()))
                         .expect("checked above that `dkg_output` is uninitialized");
-                    network_handle.update_epoch(
+                    self.network_handle.update_epoch(
                         epoch_store.committee().epoch(),
                         self.authority_info.clone(),
                         output.clone(),
@@ -580,6 +438,7 @@ impl Inner {
         Ok(())
     }
 
+    /// Adds a received dkg::Message to the randomness DKG state machine.
     pub fn add_message(
         &mut self,
         authority: &AuthorityName,
@@ -607,7 +466,7 @@ impl Inner {
         let party = self.party.clone();
         self.enqueued_messages.insert(
             msg.sender,
-            tokio::spawn(async move {
+            tokio::task::spawn_blocking(move || {
                 match party.process_message(msg, &mut rand::thread_rng()) {
                     Ok(processed) => Some(processed),
                     Err(err) => {
@@ -620,9 +479,9 @@ impl Inner {
         Ok(())
     }
 
+    /// Adds a received dkg::Confirmation to the randomness DKG state machine.
     pub fn add_confirmation(
         &mut self,
-        tables: Arc<AuthorityEpochTables>,
         batch: &mut DBBatch,
         authority: &AuthorityName,
         conf: dkg::Confirmation<EncG>,
@@ -643,17 +502,18 @@ impl Inner {
         }
         self.confirmations.insert(conf.sender, conf.clone());
         batch.insert_batch(
-            &tables.dkg_confirmations,
+            &self.tables()?.dkg_confirmations,
             std::iter::once((conf.sender, conf)),
         )?;
         Ok(())
     }
 
-    pub fn reserve_next_randomness(
-        &mut self,
-        tables: Arc<AuthorityEpochTables>,
-        batch: &mut DBBatch,
-    ) -> SuiResult<RandomnessRound> {
+    /// Reserves the next available round number for randomness generation. Once the given
+    /// batch is written, `generate_randomness` must be called to start the process. On restart,
+    /// any reserved rounds for which the batch was written will automatically be resumed.
+    pub fn reserve_next_randomness(&mut self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
+        let tables = self.tables()?;
+
         let randomness_round = self.next_randomness_round;
         self.next_randomness_round = self
             .next_randomness_round
@@ -670,6 +530,96 @@ impl Inner {
         )?;
 
         Ok(randomness_round)
+    }
+
+    /// Starts the process of generating the given RandomnessRound.
+    pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
+        self.network_handle
+            .send_partial_signatures(epoch, randomness_round);
+    }
+
+    /// Returns true if DKG is over for this epoch, whether due to success or failure.
+    pub fn is_dkg_closed(&self) -> bool {
+        self.dkg_output.initialized()
+    }
+
+    /// Returns true if DKG has completed successfully.
+    pub fn is_dkg_successful(&self) -> bool {
+        self.dkg_output.get().and_then(|opt| opt.as_ref()).is_some()
+    }
+
+    /// Generates a new RandomnessReporter for reporting observed rounds to this RandomnessManager.
+    pub fn reporter(&self) -> RandomnessReporter {
+        RandomnessReporter {
+            epoch_store: self.epoch_store.clone(),
+            network_handle: self.network_handle.clone(),
+        }
+    }
+
+    fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
+        self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)
+    }
+
+    fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
+        self.epoch_store()?.tables()
+    }
+
+    fn randomness_dkg_info_from_committee(
+        committee: &Committee,
+    ) -> Vec<(
+        u16,
+        AuthorityName,
+        fastcrypto_tbls::ecies::PublicKey<bls12381::G2Element>,
+        StakeUnit,
+    )> {
+        committee
+            .members()
+            .map(|(name, stake)| {
+                let index: u16 = committee
+                    .authority_index(name)
+                    .expect("lookup of known committee member should succeed")
+                    .try_into()
+                    .expect("authority index should fit in u16");
+                let pk = bls12381::G2Element::from_byte_array(
+                    committee
+                        .public_key(name)
+                        .expect("lookup of known committee member should succeed")
+                        .as_bytes()
+                        .try_into()
+                        .expect("key length should match"),
+                )
+                .expect("should work to convert BLS key to G2Element");
+                (
+                    index,
+                    *name,
+                    fastcrypto_tbls::ecies::PublicKey::from(pk),
+                    *stake,
+                )
+            })
+            .collect()
+    }
+}
+
+// Used by other components to notify the randomness system of observed randomness.
+#[derive(Clone)]
+pub struct RandomnessReporter {
+    epoch_store: Weak<AuthorityPerEpochStore>,
+    network_handle: randomness::Handle,
+}
+
+impl RandomnessReporter {
+    /// Notifies the associated randomness manager that randomness for the given round has been
+    /// durably committed in a checkpoint. This completes the process of generating randomness for
+    /// the round.
+    pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
+        let epoch_store = self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)?;
+        epoch_store
+            .tables()?
+            .randomness_rounds_pending
+            .remove(&round)?;
+        self.network_handle
+            .complete_round(epoch_store.committee().epoch(), round);
+        Ok(())
     }
 }
 
@@ -744,7 +694,7 @@ mod tests {
 
         // Generate and distribute Messages.
         let mut dkg_messages = Vec::new();
-        for randomness_manager in &randomness_managers {
+        for randomness_manager in randomness_managers.iter_mut() {
             randomness_manager.start_dkg().unwrap();
 
             let dkg_message = rx_consensus.recv().await.unwrap();
@@ -865,7 +815,7 @@ mod tests {
 
         // Generate and distribute Messages.
         let mut dkg_messages = Vec::new();
-        for randomness_manager in &randomness_managers {
+        for randomness_manager in randomness_managers.iter_mut() {
             randomness_manager.start_dkg().unwrap();
 
             let dkg_message = rx_consensus.recv().await.unwrap();
