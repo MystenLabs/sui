@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
 use super::{
     base64::Base64,
     cursor::{self, Page, Paginated, Target},
@@ -17,6 +19,7 @@ use crate::{
 };
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
+    dataloader::{DataLoader, Loader},
     *,
 };
 use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
@@ -33,6 +36,25 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 pub(crate) struct CheckpointId {
     pub digest: Option<Digest>,
     pub sequence_number: Option<u64>,
+}
+
+/// DataLoader key for fetching a `Checkpoint` by its sequence number, optionally constrained by a
+/// consistency cursor.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct SeqNumKey {
+    pub sequence_number: u64,
+    /// The digest is not used for fetching, but is used as an additional filter, to correctly
+    /// implement a request that sets both a sequence number and a digest.
+    pub digest: Option<Digest>,
+    pub checkpoint_viewed_at: Option<u64>,
+}
+
+/// DataLoader key for fetching a `Checkpoint` by its digest, optionally constrained by a
+/// consistency cursor.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct DigestKey {
+    pub digest: Digest,
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -185,14 +207,51 @@ impl Checkpoint {
     /// both filters are supplied they will both be applied. If none are supplied, the latest
     /// checkpoint is fetched.
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         filter: CheckpointId,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Self>, Error> {
-        use checkpoints::dsl;
+        match filter {
+            CheckpointId {
+                sequence_number: Some(sequence_number),
+                digest,
+            } => {
+                let dl: &DataLoader<Db> = ctx.data_unchecked();
+                dl.load_one(SeqNumKey {
+                    sequence_number,
+                    digest,
+                    checkpoint_viewed_at,
+                })
+                .await
+            }
 
-        let digest = filter.digest.map(|d| d.to_vec());
-        let seq_num = filter.sequence_number.map(|n| n as i64);
+            CheckpointId {
+                sequence_number: None,
+                digest: Some(digest),
+            } => {
+                let dl: &DataLoader<Db> = ctx.data_unchecked();
+                dl.load_one(DigestKey {
+                    digest,
+                    checkpoint_viewed_at,
+                })
+                .await
+            }
+
+            CheckpointId {
+                sequence_number: None,
+                digest: None,
+            } => Checkpoint::query_latest_at(ctx.data_unchecked(), checkpoint_viewed_at).await,
+        }
+    }
+
+    /// Look up the latest `Checkpoint` from the database, optionally filtered by a consistency
+    /// cursor (querying for a consistency cursor in the past looks for the latest checkpoint as of
+    /// that cursor).
+    async fn query_latest_at(
+        db: &Db,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        use checkpoints::dsl;
 
         let (stored, checkpoint_viewed_at): (Option<StoredCheckpoint>, u64) = db
             .execute_repeatable(move |conn| {
@@ -203,19 +262,9 @@ impl Checkpoint {
 
                 let stored = conn
                     .first(move || {
-                        let mut query = dsl::checkpoints
+                        dsl::checkpoints
+                            .filter(dsl::sequence_number.le(checkpoint_viewed_at as i64))
                             .order_by(dsl::sequence_number.desc())
-                            .into_boxed();
-
-                        if let Some(digest) = digest.clone() {
-                            query = query.filter(dsl::checkpoint_digest.eq(digest));
-                        }
-
-                        if let Some(seq_num) = seq_num {
-                            query = query.filter(dsl::sequence_number.eq(seq_num));
-                        }
-
-                        query
                     })
                     .optional()?;
 
@@ -400,5 +449,109 @@ impl Target<Cursor> for StoredCheckpoint {
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<SeqNumKey> for Db {
+    type Value = Checkpoint;
+    type Error = Error;
+
+    async fn load(&self, keys: &[SeqNumKey]) -> Result<HashMap<SeqNumKey, Checkpoint>, Error> {
+        use checkpoints::dsl;
+
+        let checkpoint_ids: BTreeSet<_> = keys
+            .iter()
+            .filter_map(|key| {
+                if let Some(viewed_at) = key.checkpoint_viewed_at {
+                    // Filter out keys querying for checkpoints after their own consistency cursor.
+                    (viewed_at >= key.sequence_number).then_some(key.sequence_number as i64)
+                } else {
+                    Some(key.sequence_number as i64)
+                }
+            })
+            .collect();
+
+        let checkpoints: Vec<StoredCheckpoint> = self
+            .execute(move |conn| {
+                conn.results(move || {
+                    dsl::checkpoints
+                        .filter(dsl::sequence_number.eq_any(checkpoint_ids.iter().cloned()))
+                })
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;
+
+        let checkpoint_id_to_stored: BTreeMap<_, _> = checkpoints
+            .into_iter()
+            .map(|stored| (stored.sequence_number as u64, stored))
+            .collect();
+
+        Ok(keys
+            .iter()
+            .filter_map(|key| {
+                let stored = checkpoint_id_to_stored.get(&key.sequence_number).cloned()?;
+                let checkpoint = Checkpoint {
+                    stored,
+                    checkpoint_viewed_at: key.checkpoint_viewed_at,
+                };
+
+                let digest = &checkpoint.stored.checkpoint_digest;
+                if matches!(key.digest, Some(d) if d.as_slice() != digest) {
+                    None
+                } else {
+                    Some((*key, checkpoint))
+                }
+            })
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<DigestKey> for Db {
+    type Value = Checkpoint;
+    type Error = Error;
+
+    async fn load(&self, keys: &[DigestKey]) -> Result<HashMap<DigestKey, Checkpoint>, Error> {
+        use checkpoints::dsl;
+
+        let digests: BTreeSet<_> = keys.iter().map(|key| key.digest.to_vec()).collect();
+
+        let checkpoints: Vec<StoredCheckpoint> = self
+            .execute(move |conn| {
+                conn.results(move || {
+                    dsl::checkpoints.filter(dsl::checkpoint_digest.eq_any(digests.iter().cloned()))
+                })
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoints: {e}")))?;
+
+        let checkpoint_id_to_stored: BTreeMap<_, _> = checkpoints
+            .into_iter()
+            .map(|stored| (stored.checkpoint_digest.clone(), stored))
+            .collect();
+
+        Ok(keys
+            .iter()
+            .filter_map(|key| {
+                let stored = checkpoint_id_to_stored
+                    .get(key.digest.as_slice())
+                    .cloned()?;
+                let checkpoint = Checkpoint {
+                    stored,
+                    checkpoint_viewed_at: key.checkpoint_viewed_at,
+                };
+
+                // Filter by key's checkpoint viewed at here. Doing this in memory because it should
+                // be quite rare that this query actually filters something, but encoding it in SQL
+                // is complicated.
+                let seq_num = checkpoint.stored.sequence_number as u64;
+                if matches!(key.checkpoint_viewed_at, Some(cp) if cp < seq_num) {
+                    None
+                } else {
+                    Some((*key, checkpoint))
+                }
+            })
+            .collect())
     }
 }
