@@ -4141,8 +4141,18 @@ type ValidatorSet {
 	activeValidators(first: Int, before: String, last: Int, after: String): ValidatorConnection!
 }
 
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature
+verification.
+"""
 enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
 	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
 	PERSONAL_MESSAGE
 }
 

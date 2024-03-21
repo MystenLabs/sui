@@ -22,9 +22,13 @@ use sui_types::transaction::TransactionData;
 use sui_types::{TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS};
 use tracing::warn;
 
+/// An enum that specifies the intent scope to be used to parse the bytes for signature
+/// verification.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ZkLoginIntentScope {
+    /// Indicates that the bytes are to be parsed as transaction data bytes.
     TransactionData,
+    /// Indicates that the bytes are to be parsed as a personal message.
     PersonalMessage,
 }
 
@@ -37,8 +41,8 @@ pub(crate) struct ZkLoginVerifyResult {
     pub errors: Vec<String>,
 }
 
-/// Verifies a zkLogin signature based on the bytes (parsed as either TransactionData
-/// or PersonalMessage based on the intent scope) and its author.
+/// Verifies a zkLogin signature based on the bytes (parsed as either TransactionData or
+/// PersonalMessage based on the intent scope) and its author.
 pub(crate) async fn verify_zklogin_signature(
     ctx: &Context<'_>,
     bytes: Base64,

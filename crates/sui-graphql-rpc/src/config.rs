@@ -94,6 +94,8 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) background_tasks: BackgroundTasksConfig,
+
+    #[serde(default)]
     pub(crate) zklogin: ZkLoginConfig,
 }
 
