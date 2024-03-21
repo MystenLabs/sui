@@ -271,7 +271,12 @@ impl Cluster for LocalNewCluster {
                 None,
             );
 
-            start_graphql_server(graphql_connection_config.clone()).await;
+            start_graphql_server_with_fn_rpc(
+                graphql_connection_config.clone(),
+                Some(fullnode_url.clone()),
+                /* cancellation_token */ None,
+            )
+            .await;
         }
 
         // Let nodes connect to one another
