@@ -1242,7 +1242,11 @@ impl DependencyGraph {
             if let Some(value) = toml.get("dev-dependencies").and_then(|v| v.as_value()) {
                 dev_dependencies = Some(value.clone());
             }
-            packages = toml["move"]["package"].as_array_of_tables().cloned();
+            packages = toml
+                .get("move")
+                .and_then(|m| m.as_table())
+                .and_then(|move_table| move_table.get("package"))
+                .and_then(|v| v.as_array_of_tables().cloned());
         }
 
         use std::io::Seek;
