@@ -1015,26 +1015,20 @@ fn subtype_no_report(
     context: &mut Context,
     pre_lhs: Type,
     pre_rhs: Type,
-) -> Result<Type, core::TypingError> {
+) -> Result<Type, (Type, core::TypingError)> {
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    core::subtype(subst, &lhs, &rhs).map(|(next_subst, ty)| {
-        context.subst = next_subst;
-        ty
-    })
-}
-
-fn subtype_check_no_report(context: &mut Context, pre_lhs: Type, pre_rhs: Type) -> bool {
-    let subst = std::mem::replace(&mut context.subst, Subst::empty());
-    let lhs = core::ready_tvars(&subst, pre_lhs);
-    let rhs = core::ready_tvars(&subst, pre_rhs);
-    let res = core::subtype(subst.clone(), &lhs, &rhs).map(|(next_subst, ty)| {
-        context.subst = next_subst;
-        ty
-    });
-    context.subst = subst;
-    res.is_ok()
+    match core::subtype(subst.clone(), &lhs, &rhs) {
+        Err(e) => {
+            context.subst = subst;
+            Err((rhs, e))
+        }
+        Ok((next_subst, ty)) => {
+            context.subst = next_subst;
+            Ok(ty)
+        }
+    }
 }
 
 fn subtype_impl<T: ToString, F: FnOnce() -> T>(
@@ -1044,21 +1038,11 @@ fn subtype_impl<T: ToString, F: FnOnce() -> T>(
     pre_lhs: Type,
     pre_rhs: Type,
 ) -> Result<Type, Type> {
-    let subst = std::mem::replace(&mut context.subst, Subst::empty());
-    let lhs = core::ready_tvars(&subst, pre_lhs);
-    let rhs = core::ready_tvars(&subst, pre_rhs);
-    match core::subtype(subst.clone(), &lhs, &rhs) {
-        Err(e) => {
-            context.subst = subst;
-            let diag = typing_error(context, /* from_subtype */ true, loc, msg, e);
-            context.env.add_diag(diag);
-            Err(rhs)
-        }
-        Ok((next_subst, ty)) => {
-            context.subst = next_subst;
-            Ok(ty)
-        }
-    }
+    subtype_no_report(context, pre_lhs, pre_rhs).map_err(|(rhs, e)| {
+        let diag = typing_error(context, /* from_subtype */ true, loc, msg, e);
+        context.env.add_diag(diag);
+        rhs
+    })
 }
 
 fn subtype_opt<T: ToString, F: FnOnce() -> T>(
@@ -2992,21 +2976,10 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
         }
     }
 
-    // println!("Error type: ");
-    // e.ty.print_verbose();
-    // u64_type.print_verbose();
-
-    // println!("Subst before: ");
-    // context.subst.print_verbose();
-    // // NB: this will change the substitution and cause issues
-    // let is_u64_type = subtype_no_report(context, e.ty.clone(), u64_type).is_ok();
-    let is_u64_type = subtype_check_no_report(context, e.ty.clone(), u64_type);
-    // println!("Subst after: ");
-    // context.subst.print_verbose();
+    let is_u64_type = subtype_no_report(context, e.ty.clone(), u64_type).is_ok();
 
     // Add help messages
     if !is_u64_type {
-        e.print_verbose();
         let msg = format!(
             "Invalid error code for {abort_or_assert_str}, expected a u64 or constant declared with '#[error]' annotation"
         );
