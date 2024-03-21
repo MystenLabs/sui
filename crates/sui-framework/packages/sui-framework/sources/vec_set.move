@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::vec_set {
-    use std::option::{Self, Option};
-    use std::vector;
 
     /// This key already exists in the map
     const EKeyAlreadyExists: u64 = 0;
@@ -22,12 +20,12 @@ module sui::vec_set {
 
     /// Create an empty `VecSet`
     public fun empty<K: copy + drop>(): VecSet<K> {
-        VecSet { contents: vector::empty() }
+        VecSet { contents: vector[] }
     }
 
     /// Create a singleton `VecSet` that only contains one element.
     public fun singleton<K: copy + drop>(key: K): VecSet<K> {
-        VecSet { contents: vector::singleton(key) }
+        VecSet { contents: vector[key] }
     }
 
     /// Insert a `key` into self.

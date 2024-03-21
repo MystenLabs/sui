@@ -3,10 +3,7 @@
 
 /// This module provides handy functionality for wallets and `sui::Coin` management.
 module sui::pay {
-    use sui::tx_context::{Self, TxContext};
-    use sui::coin::{Self, Coin};
-    use sui::transfer;
-    use std::vector;
+    use sui::coin::Coin;
 
     /// For when empty vector is supplied into join function.
     const ENoCoins: u64 = 0;
@@ -14,7 +11,7 @@ module sui::pay {
     #[allow(lint(self_transfer))]
     /// Transfer `c` to the sender of the current transaction
     public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
-        transfer::public_transfer(c, tx_context::sender(ctx))
+        transfer::public_transfer(c, ctx.sender())
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
@@ -28,11 +25,11 @@ module sui::pay {
     /// Split coin `self` into multiple coins, each with balance specified
     /// in `split_amounts`. Remaining balance is left in `self`.
     public entry fun split_vec<T>(
-        coin: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext
+        self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext
     ) {
-        let (mut i, len) = (0, vector::length(&split_amounts));
+        let (mut i, len) = (0, split_amounts.length());
         while (i < len) {
-            split(coin, split_amounts[i], ctx);
+            split(self, split_amounts[i], ctx);
             i = i + 1;
         };
     }
@@ -42,7 +39,7 @@ module sui::pay {
     public entry fun split_and_transfer<T>(
         c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::public_transfer(coin::split(c, amount, ctx), recipient)
+        transfer::public_transfer(c.split(amount, ctx), recipient)
     }
 
 
@@ -62,6 +59,7 @@ module sui::pay {
     }
 
     /// Join `coin` into `self`. Re-exports `coin::join` function.
+    /// Deprecated: you should call `coin.join(other)` directly.
     public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
         self.join(coin)
     }

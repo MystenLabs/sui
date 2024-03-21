@@ -6,10 +6,7 @@
 /// for the objects to still exist within in storage, which may be important for external tools.
 /// The difference is otherwise not observable from within Move.
 module sui::object_table {
-    use std::option::Option;
-    use sui::object::{Self, ID, UID};
     use sui::dynamic_object_field as ofield;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;

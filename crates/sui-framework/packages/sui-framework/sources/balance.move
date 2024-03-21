@@ -6,6 +6,9 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
 
+    /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
+    public use fun sui::coin::from_balance as Balance.into_coin;
+
     /* friend sui::sui; */
 
     /// For when trying to destroy a non-zero balance.
@@ -147,7 +150,7 @@ module sui::balance_tests {
 
         balance.join(another);
 
-        assert!(balance::value(&balance) == 1000, 0);
+        assert!(balance.value() == 1000, 0);
 
         let balance1 = balance.split(333);
         let balance2 = balance.split(333);

@@ -7,9 +7,6 @@
 /// a transaction, use it and put back in the end. Hot-potato `Borrow` makes
 /// sure the object is returned and was not swapped for another one.
 module sui::borrow {
-    use sui::object::{Self, ID};
-    use std::option::{Self, Option};
-    use sui::tx_context::{Self, TxContext};
 
     /// The `Borrow` does not match the `Referent`.
     const EWrongBorrow: u64 = 0;

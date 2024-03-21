@@ -6,8 +6,6 @@
 /// themselves. This allows for the objects to still exist within in storage, which may be important
 /// for external tools. The difference is otherwise not observable from within Move.
 module sui::dynamic_object_field {
-    use std::option::{Self, Option};
-    use sui::object::{Self, UID, ID};
     use sui::dynamic_field::{
         Self as field,
         add_child_object,

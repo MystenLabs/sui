@@ -5,7 +5,6 @@
 module sui::object {
     use std::bcs;
     use sui::address;
-    use sui::tx_context::TxContext;
 
     /* friend sui::clock; */
     /* friend sui::coin; */
@@ -93,7 +92,7 @@ module sui::object {
 
     /// Make an `ID` from raw bytes.
     public fun id_from_bytes(bytes: vector<u8>): ID {
-        id_from_address(address::from_bytes(bytes))
+        address::from_bytes(bytes).to_id()
     }
 
     /// Make an `ID` from an address.

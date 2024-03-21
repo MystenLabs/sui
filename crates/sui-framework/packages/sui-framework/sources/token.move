@@ -21,16 +21,12 @@
 /// control over the currency which a simple open-loop system can't provide.
 module sui::token {
     use std::string::String;
-    use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
-    use sui::tx_context::TxContext;
-    use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::coin::{Coin, TreasuryCap};
     use sui::balance::{Self, Balance};
-    use sui::object::{Self, ID, UID};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
     use sui::dynamic_field as df;
-    use sui::transfer;
     use sui::event;
 
     /// The action is not allowed (defined) in the policy.
@@ -220,7 +216,7 @@ module sui::token {
         id.delete();
 
         (
-            coin::from_balance(balance, ctx),
+            balance.into_coin(ctx),
             new_request(
                 to_coin_action(),
                 amount,
@@ -419,7 +415,7 @@ module sui::token {
         } = request;
 
         if (spent_balance.is_some()) {
-            coin::supply_mut(treasury_cap).decrease_supply(spent_balance.destroy_some());
+            treasury_cap.supply_mut().decrease_supply(spent_balance.destroy_some());
         } else {
             spent_balance.destroy_none();
         };
@@ -590,14 +586,14 @@ module sui::token {
     public fun mint<T>(
         cap: &mut TreasuryCap<T>, amount: u64, ctx: &mut TxContext
     ): Token<T> {
-        let balance = coin::supply_mut(cap).increase_supply(amount);
+        let balance = cap.supply_mut().increase_supply(amount);
         Token { id: object::new(ctx), balance }
     }
 
     /// Burn a `Token` using the `TreasuryCap`.
     public fun burn<T>(cap: &mut TreasuryCap<T>, token: Token<T>) {
         let Token { id, balance } = token;
-        coin::supply_mut(cap).decrease_supply(balance);
+        cap.supply_mut().decrease_supply(balance);
         id.delete();
     }
 
@@ -610,7 +606,7 @@ module sui::token {
     ): u64 {
         let amount = self.spent_balance.value();
         let balance = self.spent_balance.split(amount);
-        coin::supply_mut(cap).decrease_supply(balance)
+        cap.supply_mut().decrease_supply(balance)
     }
 
     // === Getters: `TokenPolicy` and `Token` ===

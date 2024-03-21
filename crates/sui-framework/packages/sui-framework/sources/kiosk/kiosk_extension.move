@@ -41,7 +41,6 @@
 module sui::kiosk_extension {
     use sui::bag::{Self, Bag};
     use sui::dynamic_field as df;
-    use sui::tx_context::TxContext;
     use sui::transfer_policy::TransferPolicy;
     use sui::kiosk::{Kiosk, KioskOwnerCap};
 

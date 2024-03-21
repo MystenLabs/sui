@@ -22,11 +22,8 @@
 /// policies can be removed at any moment, and the change will affect all instances
 /// of the type at once.
 module sui::transfer_policy {
-    use std::option::Option;
     use std::type_name::{Self, TypeName};
     use sui::package::{Self, Publisher};
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, ID, UID};
     use sui::vec_set::{Self, VecSet};
     use sui::dynamic_field as df;
     use sui::balance::{Self, Balance};
@@ -175,7 +172,7 @@ module sui::transfer_policy {
         id.delete();
         cap_id.delete();
         event::emit(TransferPolicyDestroyed<T> { id: policy_id });
-        coin::from_balance(balance, ctx)
+        balance.into_coin(ctx)
     }
 
     /// Allow a `TransferRequest` for the type `T`. The call is protected

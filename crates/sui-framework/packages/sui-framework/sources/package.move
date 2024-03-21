@@ -5,8 +5,6 @@
 /// - Creating proof-of-publish objects from one-time witnesses
 /// - Administering package upgrades through upgrade policies.
 module sui::package {
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{TxContext, sender};
     use std::ascii::String;
     use std::type_name;
     use sui::types;
@@ -107,7 +105,7 @@ module sui::package {
     /// Since this function can only be called in the module initializer,
     /// the sender is the publisher.
     public fun claim_and_keep<OTW: drop>(otw: OTW, ctx: &mut TxContext) {
-        sui::transfer::public_transfer(claim(otw, ctx), sender(ctx))
+        sui::transfer::public_transfer(claim(otw, ctx), ctx.sender())
     }
 
     /// Destroy a Publisher object effectively removing all privileges

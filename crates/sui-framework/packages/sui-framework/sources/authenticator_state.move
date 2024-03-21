@@ -9,13 +9,8 @@
 // state to the chain for auditability + restore from snapshot purposes.
 module sui::authenticator_state {
     use std::string;
-    use std::option::{Self, Option};
-    use std::vector;
     use sui::dynamic_field;
     use std::string::{String, utf8};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::math;
 
     /// Sender is not @0x0 the system address.
@@ -100,8 +95,8 @@ module sui::authenticator_state {
     // ordering is not necessarily the same as the string ordering, but we just need some
     // canonical that is cheap to compute.
     fun string_bytes_lt(a: &String, b: &String): bool {
-        let a_bytes = string::bytes(a);
-        let b_bytes = string::bytes(b);
+        let a_bytes = a.bytes();
+        let b_bytes = b.bytes();
 
         if (a_bytes.length() < b_bytes.length()) {
             true
@@ -312,8 +307,8 @@ module sui::authenticator_state {
         while (i < len) {
             let cur = &inner.active_jwks[i];
             let cur_iss = &cur.jwk_id.iss;
-            if (option::is_none(&prev_issuer)) {
-                option::fill(&mut prev_issuer, *cur_iss);
+            if (prev_issuer.is_none()) {
+                prev_issuer.fill(*cur_iss);
                 issuer_max_epochs.push_back(cur.epoch);
             } else {
                 if (cur_iss == prev_issuer.borrow()) {

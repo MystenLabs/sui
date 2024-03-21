@@ -17,9 +17,7 @@
 /// assert!(&table1 != &table2, 0);
 /// ```
 module sui::table {
-    use sui::object::{Self, UID};
     use sui::dynamic_field as field;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;

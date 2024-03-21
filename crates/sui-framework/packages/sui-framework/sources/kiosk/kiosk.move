@@ -81,10 +81,7 @@
 ///
 /// See `transfer_policy` module for more details on how they function.
 module sui::kiosk {
-    use std::option::Option;
-    use sui::tx_context::TxContext;
     use sui::dynamic_object_field as dof;
-    use sui::object::{Self, UID, ID};
     use sui::dynamic_field as df;
     use sui::transfer_policy::{
         Self,
@@ -277,7 +274,7 @@ module sui::kiosk {
         cap_id.delete();
         id.delete();
 
-        coin::from_balance(profits, ctx)
+        profits.into_coin(ctx)
     }
 
     /// Change the `owner` field to the transaction sender.

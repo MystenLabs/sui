@@ -4,8 +4,6 @@
 #[allow(unused_const, unused_function)]
 module sui::zklogin_verified_id {
     use std::string::String;
-    use sui::object::UID;
-    use sui::tx_context::TxContext;
 
     const EFunctionDisabled: u64 = 0;
 

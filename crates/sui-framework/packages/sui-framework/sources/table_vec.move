@@ -4,7 +4,6 @@
 /// A basic scalable vector library implemented using `Table`.
 module sui::table_vec {
     use sui::table::{Self, Table};
-    use sui::tx_context::TxContext;
 
     public struct TableVec<phantom Element: store> has store {
         /// The contents of the table vector.

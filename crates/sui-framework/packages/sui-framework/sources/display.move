@@ -12,10 +12,7 @@
 /// More entry functions might be added in the future depending on the use cases.
 module sui::display {
     use sui::package::Publisher;
-    use sui::tx_context::TxContext;
     use sui::vec_map::{Self, VecMap};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
     use sui::event;
     use std::string::String;
 
@@ -194,9 +191,7 @@ module sui::display {
 
 #[test_only]
 module sui::display_tests {
-    use sui::object::UID;
     use sui::test_scenario as test;
-    use sui::transfer;
     use std::string::String;
     use sui::package;
     use sui::display;

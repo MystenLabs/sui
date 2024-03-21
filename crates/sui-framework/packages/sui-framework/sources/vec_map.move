@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::vec_map {
-    use std::option::{Self, Option};
-    use std::vector;
 
     /// This key already exists in the map
     const EKeyAlreadyExists: u64 = 0;
@@ -38,7 +36,7 @@ module sui::vec_map {
 
     /// Create an empty `VecMap`
     public fun empty<K: copy, V>(): VecMap<K,V> {
-        VecMap { contents: vector::empty() }
+        VecMap { contents: vector[] }
     }
 
     /// Insert the entry `key` |-> `value` into `self`.
@@ -57,7 +55,7 @@ module sui::vec_map {
 
     /// Pop the most recently inserted entry from the map. Aborts if the map is empty.
     public fun pop<K: copy, V>(self: &mut VecMap<K,V>): (K, V) {
-        assert!(!vector::is_empty(&self.contents), EMapEmpty);
+        assert!(!self.contents.is_empty(), EMapEmpty);
         let Entry { key, value } = self.contents.pop_back();
         (key, value)
     }
@@ -118,7 +116,7 @@ module sui::vec_map {
     public fun into_keys_values<K: copy, V>(self: VecMap<K, V>): (vector<K>, vector<V>) {
         let VecMap { mut contents } = self;
         // reverse the vector so the output keys and values will appear in insertion order
-        vector::reverse(&mut contents);
+        contents.reverse();
         let mut i = 0;
         let n = contents.length();
         let mut keys = vector[];

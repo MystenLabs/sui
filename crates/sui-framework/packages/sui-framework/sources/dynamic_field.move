@@ -9,8 +9,6 @@
 /// This gives Sui programmers the flexibility to extend objects on-the-fly, and it also serves as a
 /// building block for core collection types
 module sui::dynamic_field {
-    use std::option::{Self, Option};
-    use sui::object::{Self, ID, UID};
 
     /* friend sui::dynamic_object_field; */
 

@@ -4,10 +4,6 @@
 #[allow(unused_const)]
 module sui::zklogin_verified_issuer {
     use std::string::String;
-    use sui::transfer;
-    use sui::object;
-    use sui::object::UID;
-    use sui::tx_context::TxContext;
 
     /// Error if the proof consisting of the inputs provided to the verification function is invalid.
     const EInvalidInput: u64 = 0;
@@ -69,7 +65,7 @@ module sui::zklogin_verified_issuer {
         address_seed: u256,
         issuer: &String,
     ): bool {
-        check_zklogin_issuer_internal(address, address_seed, std::string::bytes(issuer))
+        check_zklogin_issuer_internal(address, address_seed, issuer.bytes())
     }
 
     /// Returns true if `address` was created using zklogin with the given issuer and address seed.

@@ -3,9 +3,6 @@
 
 #[test_only]
 module sui::test_scenario {
-    use std::option::Option;
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::VecMap;
 
     #[allow(unused_const)]

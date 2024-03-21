@@ -4,10 +4,7 @@
 /// Coin<SUI> is the token used to pay for gas in Sui.
 /// It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 module sui::sui {
-    use std::option;
-    use sui::tx_context::TxContext;
     use sui::balance::Balance;
-    use sui::transfer;
     use sui::coin;
 
     const EAlreadyMinted: u64 = 0;
@@ -47,7 +44,7 @@ module sui::sui {
             ctx
         );
         transfer::public_freeze_object(metadata);
-        let mut supply = coin::treasury_into_supply(treasury);
+        let mut supply = treasury.treasury_into_supply();
         let total_sui = supply.increase_supply(TOTAL_SUPPLY_MIST);
         supply.destroy_supply();
         total_sui

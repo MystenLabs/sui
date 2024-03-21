@@ -4,10 +4,7 @@
 /// Similar to `sui::table` but the values are linked together, allowing for ordered insertion and
 /// removal
 module sui::linked_table {
-    use std::option::{Self, Option};
-    use sui::object::{Self, UID};
     use sui::dynamic_field as field;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
@@ -142,10 +139,10 @@ module sui::linked_table {
     public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>, k: K): V {
         let Node<K, V> { prev, next, value } = field::remove(&mut table.id, k);
         table.size = table.size - 1;
-        if (option::is_some(&prev)) {
+        if (prev.is_some()) {
             field::borrow_mut<K, Node<K, V>>(&mut table.id, *prev.borrow()).next = next
         };
-        if (option::is_some(&next)) {
+        if (next.is_some()) {
             field::borrow_mut<K, Node<K, V>>(&mut table.id, *next.borrow()).prev = prev
         };
         if (table.head.borrow() == &k) table.head = next;
@@ -156,8 +153,8 @@ module sui::linked_table {
     /// Removes the front of the table `table: &mut LinkedTable<K, V>` and returns the value.
     /// Aborts with `ETableIsEmpty` if the table is empty
     public fun pop_front<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-        assert!(option::is_some(&table.head), ETableIsEmpty);
-        let head = *option::borrow(&table.head);
+        assert!(table.head.is_some(), ETableIsEmpty);
+        let head = *table.head.borrow();
         (head, table.remove(head))
     }
 

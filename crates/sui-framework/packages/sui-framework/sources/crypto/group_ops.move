@@ -4,7 +4,6 @@
 /// Generic Move and native functions for group operations.
 module sui::group_ops {
 
-    use std::vector;
     use sui::bcs;
 
     /* friend sui::bls12381; */
@@ -107,13 +106,13 @@ module sui::group_ops {
 
     // Helper function for encoding a given u64 number as bytes in a given buffer.
     public(package) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {
-        let buffer_len = vector::length(buffer);
+        let buffer_len = buffer.length();
         assert!(buffer_len > 7, EInvalidBufferLength);
         let x_as_bytes = bcs::to_bytes(&x); // little endian
         let mut i = 0;
         while (i < 8) {
             let position = if (big_endian) { buffer_len - i - 1 } else { i };
-            *vector::borrow_mut(buffer, position) = *vector::borrow(&x_as_bytes, i);
+            *(&mut buffer[position]) = x_as_bytes[i];
             i = i + 1;
         };
     }

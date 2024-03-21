@@ -22,9 +22,7 @@
 /// deleted, even if it has dynamic fields associated with it, but a bag, on the other hand, must be
 /// empty to be destroyed.
 module sui::bag {
-    use sui::object::{Self, UID};
     use sui::dynamic_field as field;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty bag
     const EBagNotEmpty: u64 = 0;
