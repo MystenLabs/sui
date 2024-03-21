@@ -6,11 +6,14 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, monitored_scope};
 use parking_lot::Mutex;
+use rand::prelude::SliceRandom;
 #[cfg(not(test))]
-use rand::{rngs::ThreadRng, seq::SliceRandom};
+use rand::rngs::ThreadRng;
+use rand::thread_rng;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
+use tap::TapFallible;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
@@ -155,12 +158,29 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
                             // We don't block if the corresponding peer task is saturated - but we rather drop the request. That's ok as the periodic
                             // synchronization task will handle any still missing blocks in next run.
-                            let r = self.fetch_block_senders.get(&peer_index).expect("Fatal error, sender should be present").try_send(missing_block_refs).map_err(|err| {
+                            let r = self.fetch_block_senders.get(&peer_index).expect("Fatal error, sender should be present").try_send(missing_block_refs.clone()).map_err(|err| {
                                 match err {
                                     TrySendError::Full(_) => ConsensusError::SynchronizerSaturated(peer_index),
                                     TrySendError::Closed(_) => ConsensusError::Shutdown
                                 }
                             });
+
+                            // pick another peer as well randomly to increase the chances of fetching the blocks in time
+                            let mut all_authorities = self.context.committee.authorities().filter(|(authority_index, _)| *authority_index != peer_index && *authority_index != self.context.own_index).collect::<Vec<_>>();
+                            all_authorities.shuffle(&mut thread_rng());
+
+                            if let Some((authority_index, _authority)) = all_authorities.first() {
+                                let _ = self.fetch_block_senders
+                                .get(authority_index)
+                                .expect("Fatal error, sender should be present")
+                                .try_send(missing_block_refs)
+                                .tap_err(|err|{
+                                    if let TrySendError::Full(refs) = err {
+                                        info!("Second picked authority to fetch blocks is saturated {authority_index}, missing blocks {}", refs.len());
+                                    }
+                                });
+                            }
+
                             result.send(r).ok();
                         }
                     }
