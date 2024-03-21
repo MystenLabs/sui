@@ -171,7 +171,7 @@ impl FromRef<AppState> for Metrics {
 
 impl FromRef<AppState> for Version {
     fn from_ref(app_state: &AppState) -> Version {
-        app_state.version.clone()
+        app_state.version
     }
 }
 
@@ -367,7 +367,7 @@ impl ServerBuilder {
             config.service.clone(),
             metrics.clone(),
             cancellation_token,
-            version.clone(),
+            *version,
         );
         let mut builder = ServerBuilder::new(state);
 

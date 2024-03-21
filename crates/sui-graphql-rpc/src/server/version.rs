@@ -147,7 +147,6 @@ mod tests {
     use super::*;
     use crate::{
         config::{ConnectionConfig, ServiceConfig, Version},
-        consistency::CheckpointViewedAt,
         metrics::Metrics,
         server::builder::AppState,
     };
