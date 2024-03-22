@@ -519,6 +519,8 @@ pub enum Exp_ {
     ExpList(Vec<Exp>),
     // ()
     Unit,
+    // (e)
+    Parens(Box<Exp>),
 
     // a = e
     Assign(Box<Exp>, Box<Exp>),
@@ -1436,6 +1438,11 @@ impl AstDebug for Exp_ {
         use Exp_ as E;
         match self {
             E::Unit => w.write("()"),
+            E::Parens(e) => {
+                w.write("(");
+                e.ast_debug(w);
+                w.write(")");
+            }
             E::Value(v) => v.ast_debug(w),
             E::Move(_, e) => {
                 w.write("move ");

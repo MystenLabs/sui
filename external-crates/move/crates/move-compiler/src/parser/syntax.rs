@@ -1285,7 +1285,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                         "an expression",
                     )?;
                     if es.is_empty() {
-                        e.value
+                        Exp_::Parens(Box::new(e))
                     } else {
                         es.insert(0, e);
                         Exp_::ExpList(es)

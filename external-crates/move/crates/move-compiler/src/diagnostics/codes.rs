@@ -183,6 +183,7 @@ codes!(
             { msg: "invalid identifier escape", severity: NonblockingError },
         InvalidMoveOrCopy: { msg: "invalid 'move' or 'copy'", severity: NonblockingError },
         InvalidLabel: { msg: "invalid expression label", severity: NonblockingError },
+        AmbiguousCast: { msg: "ambiguous 'as'", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [

@@ -46,6 +46,7 @@ pub enum FeatureGate {
     Move2024Migration,
     SyntaxMethods,
     AutoborrowEq,
+    NoParensCast,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -232,6 +233,7 @@ impl FeatureGate {
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
             FeatureGate::AutoborrowEq => "Automatic borrowing is",
+            FeatureGate::NoParensCast => "'as' without parentheses is",
         }
     }
 }
