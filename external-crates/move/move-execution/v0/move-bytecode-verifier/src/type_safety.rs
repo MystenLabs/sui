@@ -832,17 +832,12 @@ fn verify_instr(
 
         Bytecode::VecPack(idx, num) => {
             let element_type = &verifier.resolver.signature_at(*idx).0[0];
-            if let Some(num_to_pop) = NonZeroU64::new(*num) {
-                let is_mismatched = verifier
-                    .stack
-                    .pop_eq_n(num_to_pop)
-                    .map(|t| element_type != &t)
-                    .unwrap_or(true);
-                if is_mismatched {
-                    return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset));
-                }
+            for _ in 0..*num {
+                verifier.stack.pop().unwrap();
             }
-            verifier.push(meter, ST::Vector(Box::new(element_type.clone())))?;
+            verifier
+                .stack
+                .push(ST::Vector(Box::new(element_type.clone())));
         }
 
         Bytecode::VecLen(idx) => {
