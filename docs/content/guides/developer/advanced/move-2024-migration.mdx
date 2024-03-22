@@ -1,6 +1,6 @@
 ---
 title: Migrating to Move 2024
-description: New features are becoming available to Move in 2024. These features are opt-in, so existing code will continue to function as expected. If you want to use these features in code you've already written, however, there are some steps you must take and breaking changes to be aware of to migrate to Move 2024. 
+description: New features are becoming available to Move in 2024. These features are opt-in, so existing code will continue to function as expected. If you want to use these features in code you've already written, however, there are some steps you must take and breaking changes to be aware of to migrate to Move 2024.
 ---
 
 New features for Move are becoming available in 2024, a part of the aptly titled "Move 2024" edition. Many of these changes are enhancements to the source language, affecting the compiler without requiring any changes to the binary representation published on chain.
@@ -23,8 +23,8 @@ To migrate a project to Move 2024 Beta:
 
 1. Delete your existing `Move.lock` file (if one exists) to make sure you're using the newest `sui-framework` version.
 1. Perform one of the following:
-    - Run `sui move migrate` in the root of your Move project. See [Automatic migration](#automatic-migration). 
-    - Alternatively, update your `Move.toml` file's `[package]` entry to include `edition = "2024.beta"`. If you do this, you might receive a number of new errors related to the [breaking changes](#breaking-changes).
+   - Run `sui move migrate` in the root of your Move project. See [Automatic migration](#automatic-migration).
+   - Alternatively, update your `Move.toml` file's `[package]` entry to include `edition = "2024.beta"`. If you do this, you might receive a number of new errors related to the [breaking changes](#breaking-changes).
 
 ## Automatic migration {#automatic-migration}
 
