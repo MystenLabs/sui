@@ -247,7 +247,7 @@ impl Checkpoint {
     /// Look up the latest `Checkpoint` from the database, optionally filtered by a consistency
     /// cursor (querying for a consistency cursor in the past looks for the latest checkpoint as of
     /// that cursor).
-    async fn query_latest_at(
+    pub(crate) async fn query_latest_at(
         db: &Db,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Self>, Error> {

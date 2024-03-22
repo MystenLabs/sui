@@ -66,6 +66,7 @@ pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     /// The following fields are internally used for background tasks
     checkpoint_watermark: CheckpointWatermark,
+    epoch_watermark: EpochWatermark,
     state: AppState,
     db_reader: Db,
 }
@@ -88,6 +89,7 @@ impl Server {
                 update_watermark(
                     &self.db_reader,
                     self.checkpoint_watermark,
+                    self.epoch_watermark,
                     metrics,
                     tokio::time::Duration::from_millis(sleep_ms),
                     cancellation_token,
@@ -137,6 +139,13 @@ pub(crate) struct AppState {
 /// cross-query consistency.
 #[derive(Clone)]
 pub(crate) struct CheckpointWatermark(pub Arc<AtomicU64>);
+
+/// The last known epoch watermark stamped on each GraphQL request.
+#[derive(Clone)]
+pub(crate) struct EpochWatermark(pub Arc<AtomicU64>);
+
+/// The last known epoch that is used as context data for each request.
+pub(crate) struct LastKnownEpoch(u64);
 
 impl AppState {
     fn new(
@@ -298,6 +307,8 @@ impl ServerBuilder {
 
         // Initialize the checkpoint watermark for the background task to update.
         let checkpoint_watermark = CheckpointWatermark(Arc::new(AtomicU64::new(0)));
+        // Initialize the checkpoint watermark for the background task to update.
+        let epoch_watermark = EpochWatermark(Arc::new(AtomicU64::new(0)));
 
         let app = router
             .layer(axum::extract::Extension(schema))
@@ -312,6 +323,7 @@ impl ServerBuilder {
             )
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
             checkpoint_watermark,
+            epoch_watermark,
             state,
             db_reader,
         })
@@ -448,7 +460,8 @@ pub fn export_schema() -> String {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    watermark: axum::Extension<CheckpointWatermark>,
+    checkpoint_watermark: axum::Extension<CheckpointWatermark>,
+    epoch_watermark: axum::Extension<EpochWatermark>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -461,11 +474,12 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let checkpoint_viewed_at = watermark.0 .0.load(Relaxed);
+    let checkpoint_viewed_at = checkpoint_watermark.0 .0.load(Relaxed);
+    let epoch_id = epoch_watermark.0 .0.load(Relaxed);
 
     // This wrapping is done to delineate the watermark from potentially other u64 types.
     req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
-
+    req.data.insert(LastKnownEpoch(epoch_id));
     let result = schema.execute(req).await;
 
     // If there are errors, insert them as an extention so that the Metrics callback handler can
@@ -555,10 +569,12 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-/// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
+/// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark,
+/// and the `epoch` watermark.
 pub(crate) async fn update_watermark(
     db: &Db,
     checkpoint_viewed_at: CheckpointWatermark,
+    epoch: EpochWatermark,
     metrics: Metrics,
     sleep_ms: tokio::time::Duration,
     cancellation_token: CancellationToken,
@@ -570,20 +586,19 @@ pub(crate) async fn update_watermark(
                         return;
                     },
                     _ = tokio::time::sleep(sleep_ms) => {
-                        let new_checkpoint_viewed_at =
-                    match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
-                        Ok(checkpoint) => Some(checkpoint),
-                        Err(e) => {
-                            error!("{}", e);
-                            metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
-                            None
+                        let new_checkpoint= match Checkpoint::query_latest_at(db, None).await {
+                            Ok(checkpoint) => checkpoint,
+                            Err(e) => {
+                                error!("{}", e);
+                                metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
+                                None
+                            }
+                        };
+                        if let Some(checkpoint) = new_checkpoint {
+                            checkpoint_viewed_at.0.store(checkpoint.stored.sequence_number as u64, Relaxed);
+                            epoch.0.store(checkpoint.stored.epoch as u64, Relaxed)
                         }
-                    };
-
-                if let Some(checkpoint) = new_checkpoint_viewed_at {
-                    checkpoint_viewed_at.0.store(checkpoint, Relaxed);
-                }
-            }
+                    }
         }
     }
 }
