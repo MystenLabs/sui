@@ -9,14 +9,14 @@ use crate::{
     naming::ast::Var_,
     parser::ast::BinOp_,
     shared::{program_info::TypingProgramInfo, CompilationEnv},
-    sui_mode::linters::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX},
     typing::{
         ast::{self as T, UnannotatedExp_},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
+
+use super::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX};
 
 const REDUNDANT_BOOLEAN_EXP_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
