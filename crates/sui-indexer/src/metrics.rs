@@ -93,10 +93,6 @@ pub struct IndexerMetrics {
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     pub latest_object_snapshot_sequence_number: IntGauge,
-    // analytical
-    pub latest_move_call_metrics_tx_seq: IntGauge,
-    pub latest_address_metrics_tx_seq: IntGauge,
-    pub latest_network_metrics_cp_seq: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub checkpoint_download_bytes_size: IntGauge,
@@ -244,21 +240,6 @@ impl IndexerMetrics {
             latest_object_snapshot_sequence_number: register_int_gauge_with_registry!(
                 "latest_object_snapshot_sequence_number",
                 "Latest object snapshot sequence number from the Indexer",
-                registry,
-            ).unwrap(),
-            latest_move_call_metrics_tx_seq: register_int_gauge_with_registry!(
-                "latest_move_call_metrics_tx_seq",
-                "Latest move call metrics tx seq",
-                registry,
-            ).unwrap(),
-            latest_address_metrics_tx_seq: register_int_gauge_with_registry!(
-                "latest_address_metrics_tx_seq",
-                "Latest address metrics tx seq",
-                registry,
-            ).unwrap(),
-            latest_network_metrics_cp_seq: register_int_gauge_with_registry!(
-                "latest_network_metrics_cp_seq",
-                "Latest network metrics cp seq",
                 registry,
             ).unwrap(),
             checkpoint_download_bytes_size: register_int_gauge_with_registry!(

@@ -57,18 +57,11 @@ impl Default for SnapshotLagConfig {
     }
 }
 
+// NOTE: "handler"
 impl<S> ObjectsSnapshotProcessor<S>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
-    pub fn new(store: S, metrics: IndexerMetrics) -> ObjectsSnapshotProcessor<S> {
-        Self {
-            store,
-            metrics,
-            config: SnapshotLagConfig::default(),
-        }
-    }
-
     pub fn new_with_config(
         store: S,
         metrics: IndexerMetrics,
