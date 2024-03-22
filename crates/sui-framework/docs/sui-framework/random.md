@@ -423,7 +423,7 @@ Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
     <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(r);
     <b>let</b> seed = hmac_sha3_256(
         &inner.random_bytes,
-        &to_bytes(fresh_object_address(ctx))
+        &ctx.fresh_object_address().to_bytes()
     );
     <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a> { seed, counter: 0, buffer: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
