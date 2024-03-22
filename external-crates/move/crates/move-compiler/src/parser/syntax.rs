@@ -294,8 +294,15 @@ where
         }
         // advance token past the starting one but something went wrong, still there is a chance
         // parse the rest of the list
-        let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
-        if at_stop_set {
+        list_error_advance(
+            context,
+            start_token,
+            end_token,
+            /* separator */ Tok::Comma,
+            /* for list */ true,
+            *diag,
+        );
+        if context.at_stop_set() {
             // nothing else to do
             return vec![];
         }
@@ -338,28 +345,32 @@ where
                 Ok(item) => {
                     v.push(item);
                     adjust_token(context.tokens, end_token);
-                    if context.tokens.peek() == end_token {
+                    if context.tokens.peek() == end_token || context.at_stop_set() {
                         break;
                     }
-                    // expect a commma - if not at stop set, consume it or advance to the next time
-                    // or end of the list
-                    if context.at_stop_set() {
-                        break;
-                    }
+                    // expect a commma - since we are not at stop set, consume it or advance to the
+                    // next time or end of the list
                     if let Err(diag) = consume_token(context.tokens, Tok::Comma) {
-                        let at_stop_set =
-                            skip_comma_list_item(context, start_token, end_token, *diag);
-                        if at_stop_set {
-                            break;
-                        }
+                        list_error_advance(
+                            context,
+                            start_token,
+                            end_token,
+                            /* separator */ Tok::Comma,
+                            /* for list */ true,
+                            *diag,
+                        );
                     }
                     adjust_token(context.tokens, end_token);
                 }
                 Err(diag) => {
-                    let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
-                    if at_stop_set {
-                        break;
-                    }
+                    list_error_advance(
+                        context,
+                        start_token,
+                        end_token,
+                        /* separator */ Tok::Comma,
+                        /* for list */ true,
+                        *diag,
+                    );
                 }
             }
         } else {
@@ -369,10 +380,17 @@ where
                 Syntax::UnexpectedToken,
                 (loc, format!("Expected {}", item_description))
             );
-            let at_stop_set = skip_comma_list_item(context, start_token, end_token, diag);
-            if at_stop_set {
-                break;
-            }
+            list_error_advance(
+                context,
+                start_token,
+                end_token,
+                /* separator */ Tok::Comma,
+                /* for list */ true,
+                diag,
+            );
+        }
+        if context.at_stop_set() {
+            break;
         }
     }
     if consume_token(context.tokens, end_token).is_err() {
@@ -388,57 +406,50 @@ where
     v
 }
 
-/// Attempts to skip tokens until the end of the item in the comma-separated list (which started
-/// with an already consumed starting token) - looks for a matched ending token or after a comma.
-fn skip_comma_list_item(
+/// Attempts to skip tokens until the end of the item in the list with a given separator (which
+/// started with an already consumed starting token) - looks for a matched ending token or a token
+/// appearing after the separator. This helper function is also used to error advance sequences.
+fn list_error_advance(
     context: &mut Context,
     start_token: Tok,
     end_token: Tok,
+    sep_token: Tok,
+    for_list: bool,
     diag: Diagnostic,
-) -> bool {
+) {
     context.env.add_diag(diag);
-    let mut start_tokens: i32 = 0;
-    let mut stop_parsing = false;
+    let mut depth: i32 = 0; // When we find  another start token, we track how deep we are in them
     loop {
+        if for_list {
+            adjust_token(context.tokens, end_token);
+        }
         if context.at_stop_set() {
-            stop_parsing = true;
             break;
         }
-        if context.tokens.at(Tok::Comma) {
-            context.advance();
-            if start_tokens == 0 {
+        if depth == 0 {
+            if context.tokens.at(end_token) {
                 break;
             }
-            continue;
-        };
-        if context.tokens.at(start_token) {
-            start_tokens += 1;
-            context.advance();
-            continue;
-        };
-        if context.tokens.at(end_token) {
-            if start_tokens == 0 {
+            if context.tokens.at(sep_token) {
+                context.advance();
                 break;
             }
-            start_tokens -= 1;
-            context.advance();
-            continue;
-        };
-        if end_token == Tok::Greater && context.tokens.at(Tok::GreaterGreater) {
-            // this is not very pretty but arguably not uglier than adjust_token
-            if start_tokens == 0 || start_tokens == 1 {
-                adjust_token(context.tokens, end_token);
-                break;
-            }
-            start_tokens -= 2;
-            context.advance();
-            continue;
         }
-        if let Err(err) = context.tokens.advance() {
-            context.env.add_diag(*err);
+
+        if context.tokens.at(sep_token) {
+            assert!(depth > 0);
+            context.advance();
+        } else if context.tokens.at(start_token) {
+            depth += 1;
+            context.advance();
+        } else if context.tokens.at(end_token) {
+            assert!(depth > 0);
+            depth -= 1;
+            context.advance();
+        } else {
+            context.advance();
         }
     }
-    stop_parsing
 }
 
 // Parse a list of items, without specified start and end tokens, and the separator determined by
@@ -882,8 +893,7 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
                 context,
                 Tok::LParen,
                 Tok::RParen,
-                // another hack for `#[syntax(for)]` attribute
-                &TokenSet::from([Tok::Identifier, Tok::For]),
+                &ATTR_START_SET,
                 parse_attribute,
                 "attribute",
             );
@@ -915,8 +925,7 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             context,
             Tok::LBracket,
             Tok::RBracket,
-            // hack for `#[syntax(for)]` attribute (similar to the one in `parse_attribute` above)
-            &TokenSet::from([Tok::Identifier, Tok::For]),
+            &ATTR_START_SET,
             parse_attribute,
             "attribute",
         );
@@ -1044,7 +1053,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
-            &TokenSet::from([Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier]),
+            &FIELD_BINDING_START_SET,
             parse_bind,
             "a field binding",
         );
@@ -1054,7 +1063,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LBrace,
             Tok::RBrace,
-            &TokenSet::from([Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier]),
+            &FIELD_BINDING_START_SET,
             parse_bind_field,
             "a field binding",
         );
@@ -1282,22 +1291,33 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 seq.push(item);
                 last_semicolon_loc = Some(current_token_loc(context.tokens));
                 if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
-                    let at_stop_set = skip_sequence(context, *diag);
-                    if at_stop_set {
-                        break;
-                    }
+                    list_error_advance(
+                        context,
+                        Tok::LBrace,
+                        Tok::RBrace,
+                        /* separator */ Tok::Semicolon,
+                        /* for list */ true,
+                        *diag,
+                    );
                 }
             }
             Err(diag) => {
                 context.stop_set.remove(Tok::Semicolon);
-                let at_stop_set = skip_sequence(context, *diag);
-                if at_stop_set {
-                    break;
-                }
+                list_error_advance(
+                    context,
+                    Tok::LBrace,
+                    Tok::RBrace,
+                    /* separator */ Tok::Semicolon,
+                    /* for list */ true,
+                    *diag,
+                );
             }
         }
+        if context.at_stop_set() {
+            break;
+        }
     }
-    // We have reached the stop set but did not find closing of the sequence (RBrace) and we need to
+    // If we reached the stop set but did not find closing of the sequence (RBrace) and we need to
     // decide what to do. These are the two most likely possible scenarios:
     //
     // module 0x42::M {
@@ -1320,47 +1340,10 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     // above. We cannot magically know which is which, though, at the point of reaching stop set,
     // but still need to make a decision on what to do, which at this point is to close the current
     // sequence and proceed with parsing top-level definition (assume the second scenario).
-    if !context.at_stop_set() {
-        context.advance(); // consume the RBrace
+    if !context.at_stop_set() || context.tokens.at(Tok::RBrace) {
+        context.advance(); // consume (the RBrace)
     }
     Ok((uses, seq, last_semicolon_loc, Box::new(eopt)))
-}
-
-/// Attempts to skip tokens until the end of the sequence (which started with an already consumed
-/// left brace) - looks for a matched right brace or a semicolon.
-fn skip_sequence(context: &mut Context, diag: Diagnostic) -> bool {
-    context.env.add_diag(diag);
-    let mut left_braces = 0;
-    let mut stop_parsing = false;
-    loop {
-        if context.at_stop_set() {
-            stop_parsing = true;
-            break;
-        }
-        if context.tokens.at(Tok::Semicolon) {
-            context.advance();
-            if left_braces == 0 {
-                break;
-            }
-        };
-        if context.tokens.at(Tok::LBrace) {
-            left_braces += 1;
-            context.advance();
-            continue;
-        };
-        if context.tokens.at(Tok::RBrace) {
-            if left_braces == 0 {
-                break;
-            }
-            left_braces -= 1;
-            context.advance();
-            continue;
-        };
-        if let Some(err) = context.tokens.advance().err() {
-            context.env.add_diag(*err);
-        }
-    }
-    stop_parsing
 }
 
 //**************************************************************************************************
@@ -2818,7 +2801,14 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
                     Err(diag) => {
                         // error advancing past opening brace - assume sequence (likely first)
                         // parsing problem and try skipping it
-                        skip_sequence(context, *diag);
+                        list_error_advance(
+                            context,
+                            Tok::LBrace,
+                            Tok::RBrace,
+                            /* separator */ Tok::Semicolon,
+                            /* for list */ true,
+                            *diag,
+                        );
                         let _ = match_token(context.tokens, Tok::RBrace);
                         (vec![], vec![], None, Box::new(None))
                     }

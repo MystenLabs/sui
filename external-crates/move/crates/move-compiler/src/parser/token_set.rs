@@ -104,6 +104,17 @@ const TYPE_STARTS: [Tok; 9] = [
 
 pub static TYPE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&TYPE_STARTS));
 
+// including `Tok::For` here is hack for `#[syntax(for)]` attribute (similar to the one in
+// `syntax::parse_attribute`)
+const ATTR_STARTS: [Tok; 2] = [Tok::Identifier, Tok::For];
+
+pub static ATTR_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&ATTR_STARTS));
+
+const FIELD_BINDING_STARTS: [Tok; 3] = [Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier];
+
+pub static FIELD_BINDING_START_SET: Lazy<TokenSet> =
+    Lazy::new(|| TokenSet::from(&FIELD_BINDING_STARTS));
+
 //**************************************************************************************************
 // IMPLS
 //**************************************************************************************************
