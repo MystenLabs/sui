@@ -14,8 +14,11 @@ use crate::{
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
+use self::custom_rules::constant_naming;
+
 pub mod coin_field;
 pub mod collection_equality;
+pub mod custom_rules;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod public_random;
@@ -73,6 +76,8 @@ pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
+pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
+
 pub const INVALID_LOC: Loc = Loc::invalid();
 
 pub enum LinterDiagCategory {
@@ -83,6 +88,7 @@ pub enum LinterDiagCategory {
     FreezeWrapped,
     CollectionEquality,
     PublicRandom,
+    ConstantNaming,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
@@ -139,18 +145,21 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
+    let mut default_linter = vec![
+        share_owned::ShareOwnedVerifier.visitor(),
+        self_transfer::SelfTransferVerifier.visitor(),
+        custom_state_change::CustomStateChangeVerifier.visitor(),
+        coin_field::CoinFieldVisitor.visitor(),
+        freeze_wrapped::FreezeWrappedVisitor.visitor(),
+        collection_equality::CollectionEqualityVisitor.visitor(),
+        public_random::PublicRandomVisitor.visitor(),
+    ];
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default | LintLevel::All => {
-            vec![
-                share_owned::ShareOwnedVerifier.visitor(),
-                self_transfer::SelfTransferVerifier.visitor(),
-                custom_state_change::CustomStateChangeVerifier.visitor(),
-                coin_field::CoinFieldVisitor.visitor(),
-                freeze_wrapped::FreezeWrappedVisitor.visitor(),
-                collection_equality::CollectionEqualityVisitor.visitor(),
-                public_random::PublicRandomVisitor.visitor(),
-            ]
+        LintLevel::Default => default_linter,
+        LintLevel::All => {
+            default_linter.push(constant_naming::ConstantNamingVisitor::visitor());
+            default_linter
         }
     }
 }
