@@ -155,7 +155,10 @@ impl ChannelPool {
         let address = format!("http://{address}");
         let endpoint = Channel::from_shared(address.clone())
             .unwrap()
-            .connect_timeout(timeout);
+            .connect_timeout(timeout)
+            .initial_connection_window_size(64 << 20)
+            .initial_stream_window_size(32 << 20)
+            .buffer_size(64 << 20);
         // TODO: tune endpoint options and set TLS config.
 
         let deadline = tokio::time::Instant::now() + timeout;
@@ -305,6 +308,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let service = TonicServiceProxy::new(self.context.clone(), service);
 
         let server = Server::builder()
+            .initial_connection_window_size(64 << 20)
+            .initial_stream_window_size(32 << 20)
             .add_service(ConsensusServiceServer::new(service))
             .serve_with_shutdown(own_address, async move {
                 match rx.await {
