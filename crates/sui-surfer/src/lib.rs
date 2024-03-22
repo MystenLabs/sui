@@ -48,7 +48,8 @@ pub async fn run<S: SurfStrategy + Default>(
     );
     info!(
         "Started cluster with {} validators and epoch duration of {:?}ms",
-        VALIDATOR_COUNT, epoch_duration.as_millis()
+        VALIDATOR_COUNT,
+        epoch_duration.as_millis()
     );
 
     let seed = rand::thread_rng().gen::<u64>();

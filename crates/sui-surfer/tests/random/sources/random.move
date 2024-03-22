@@ -25,26 +25,24 @@ module random::random_test {
     }
 
     // Update the shared object using Random.
-    entry fun mutate_with_random(obj: &mut SharedObject, r: &random::Random, ctx: &mut TxContext) {
+    entry fun mutate_with_random(obj: &mut SharedObject, r: &random::Random, n: u8, ctx: &mut TxContext) {
         let gen = random::new_generator(r, ctx);
+        let _b = random::generate_bytes(&mut gen, (n as u16));
         obj.value = random::generate_u256(&mut gen);
-        assert!(obj.value > 0, 0);
+        assert!(obj.value > 0, 0); // very low probability
     }
 
     // Update the shared object without using Random.
     entry fun mutate_without(obj: &mut SharedObject) {
-        if (obj.value < 10000) {
-            obj.value = obj.value + 1;
-        } else {
-            obj.value = obj.value - 10;
-        }
+        obj.value = obj.value % 27;
     }
 
 
     // Test transactions that use Random without a shared object.
     entry fun generate(r: &random::Random, ctx: &mut TxContext): u64 {
-        let gen = random::new_generator(r, ctx);
-        let _b = random::generate_bytes(&mut gen, 10000); // Large number of bytes
-        random::generate_u64(&mut gen)
+        let _gen1 = random::new_generator(r, ctx);
+        let _gen2 = random::new_generator(r, ctx);
+        let gen3 = random::new_generator(r, ctx);
+        random::generate_u64(&mut gen3)
     }
 }
