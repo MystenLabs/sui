@@ -384,6 +384,7 @@ where
                     }
                     adjust_token(context.tokens, end_token);
                     // everything worked out so simply continue
+                    continue;
                 }
                 Err(diag) => {
                     list_error_advance(
