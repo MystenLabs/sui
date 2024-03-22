@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 41;
+const MAX_PROTOCOL_VERSION: u64 = 42;
 
 // Record history of protocol version allocations here:
 //
@@ -112,8 +112,9 @@ const MAX_PROTOCOL_VERSION: u64 = 41;
 // Version 38: Introduce limits for binary tables size.
 // Version 39: Allow skipped epochs for randomness updates.
 //             Extra version to fix `test_upgrade_compatibility` simtest.
-// Version 40: Enable group operations native functions in testnet and mainnet.
-// Version 41: Migrate sui framework and related code to Move 2024
+// Version 40:
+// Version 41: Enable group operations native functions in testnet and mainnet.
+// Version 42: Migrate sui framework and related code to Move 2024
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -1968,7 +1969,8 @@ impl ProtocolConfig {
                 39 => {
                     // It is important that we keep this protocol version blank due to an issue with random.move.
                 }
-                40 => {
+                40 => {}
+                41 => {
                     // Enable group ops and all networks
                     cfg.feature_flags.enable_group_ops_native_functions = true;
                     // Next values are arbitrary in a similar way as the other crypto native functions.
@@ -2003,7 +2005,7 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
-                41 => {}
+                42 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
