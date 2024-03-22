@@ -46,8 +46,8 @@ if (condition) true_branch // implied default: else ()
 if (condition) true_branch else ()
 ```
 
-Commonly, `if` expressions are used in conjunction with [expression
-blocks](../variables.md#expression-blocks).
+Commonly, `if` expressions are used in conjunction with
+[expression blocks](../variables.md#expression-blocks).
 
 ```move
 let maximum = if (x > y) x else y;

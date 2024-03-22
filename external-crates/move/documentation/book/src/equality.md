@@ -48,9 +48,9 @@ b"" != 0; // ERROR!
 
 ### Typing with references
 
-When comparing [references](./references.md), the type of the reference (immutable or mutable) does
-not matter. This means that you can compare an immutable `&` reference with a mutable one `&mut` of
-the same underlying type.
+When comparing [references](./primitive-types/references.md), the type of the reference (immutable
+or mutable) does not matter. This means that you can compare an immutable `&` reference with a
+mutable one `&mut` of the same underlying type.
 
 ```move
 let i = &0;

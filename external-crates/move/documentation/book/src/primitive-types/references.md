@@ -63,8 +63,8 @@ write is a mutation that must occur on the left hand side of an equals.
 | `*e1 = e2` | `()` where `e1: &mut T` and `e2: T` | Update the value in `e1` with `e2`. |
 
 In order for a reference to be read, the underlying type must have the
-[`copy` ability](./abilities.md) as reading the reference creates a new copy of the value. This rule
-prevents the copying of assets:
+[`copy` ability](../abilities.md) as reading the reference creates a new copy of the value. This
+rule prevents the copying of assets:
 
 ```move=
 fun copy_coin_via_ref_bad(c: Coin) {
@@ -76,8 +76,8 @@ fun copy_coin_via_ref_bad(c: Coin) {
 ```
 
 Dually: in order for a reference to be written to, the underlying type must have the
-[`drop` ability](./abilities.md) as writing to the reference will discard (or "drop") the old value.
-This rule prevents the destruction of resource values:
+[`drop` ability](../abilities.md) as writing to the reference will discard (or "drop") the old
+value. This rule prevents the destruction of resource values:
 
 ```move=
 fun destroy_coin_via_ref_bad(mut ten_coins: Coin, c: Coin) {
@@ -200,23 +200,24 @@ fun reference_copies(s: &mut S) {
 
 This might be surprising for programmers familiar with Rust's ownership system, which would reject
 the code above. Move's type system is more permissive in its treatment of
-[copies](./variables.md#move-and-copy), but equally strict in ensuring unique ownership of mutable
+[copies](../variables.md#move-and-copy), but equally strict in ensuring unique ownership of mutable
 references before writes.
 
 ### References Cannot Be Stored
 
 References and tuples are the _only_ types that cannot be stored as a field value of structs, which
-also means that they cannot exist in storage. All references created during program execution will
-be destroyed when a Move program terminates; they are entirely ephemeral. This invariant is also
-true for values of types without the `store` [ability](./abilities.md), but note that references and
-tuples go a step further by never being allowed in structs in the first place.
+also means that they cannot exist in storage or [objects](../abilities/object.md). All references
+created during program execution will be destroyed when a Move program terminates; they are entirely
+ephemeral. This also applies to all types without the `store` ability: any value of a non-`store`
+type must be destroyed before the program terminates. [ability](../abilities.md), but note that
+references and tuples go a step further by never being allowed in structs in the first place.
 
 This is another difference between Move and Rust, which allows references to be stored inside of
 structs.
 
 One could imagine a fancier, more expressive, type system that would allow references to be stored
 in structs. We could allow references inside of structs that do not have the `store`
-[ability](./abilities.md), but the core difficulty is that Move has a fairly complex system for
+[ability](../abilities.md), but the core difficulty is that Move has a fairly complex system for
 tracking static reference safety. This aspect of the type system would also have to be extended to
 support storing references inside of structs. In short, Move's reference safety system would have to
 expand to support stored references, and it is something we are keeping an eye on as the language

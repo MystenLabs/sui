@@ -1,9 +1,13 @@
 # Address
 
 `address` is a built-in type in Move that is used to represent locations (sometimes called accounts)
-in storage. An `address` value is a 256-bit (32 byte) identifier. Move uses addresses as a way to
-differentiate packages of [modules](./modules.md), where each package has its own address. Specific
-deployments of Move might also use the `address` value for [storage](./abilities.md#key) operations.
+in storage. An `address` value is a 256-bit (32 byte) identifier. Move uses addresses to
+differentiate packages of [modules](../modules.md), where each package has its own address and
+modules. Specific deployments of Move might also use the `address` value for
+[storage](../abilities.md#key) operations.
+
+> For Sui, `address` is used to represent "accounts", and also objects via strong type wrappers
+> (with `sui::object::UID` and `sui::object::ID`).
 
 Although an `address` is a 256 bit integer under the hood, Move addresses are intentionally
 opaque---they cannot be created from integers, they do not support arithmetic operations, and they

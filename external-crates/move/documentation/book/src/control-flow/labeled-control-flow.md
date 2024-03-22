@@ -9,8 +9,7 @@ To demonstrate this behavior, consider a function that takes nested vectors of n
 `vector<vector<u64>>`) to sum against some threshold, which behaves as follows:
 
 - If the sum of all the numbers are under the threshold, return that sum.
-- If adding a number to the current sum would surpass the threshold,
-  return the current sum.
+- If adding a number to the current sum would surpass the threshold, return the current sum.
 
 We can write this by iterating over the vector of vectors as nested loops and labelling the outer
 one. If any addition in the inner loop would push us over the threshold, we can use `break` with the
@@ -46,10 +45,9 @@ fun sum_until_threshold(input: &vector<vector<u64>>, threshold: u64): u64 {
 }
 ```
 
-These sorts of labels can also be used with a nested loop form, providing precise control in
-larger bodies of code. For example, if we were processing a large table where each entry required
-iteration that might see us continuing the inner or outer loop, we could express that code using
-labels:
+These sorts of labels can also be used with a nested loop form, providing precise control in larger
+bodies of code. For example, if we were processing a large table where each entry required iteration
+that might see us continuing the inner or outer loop, we could express that code using labels:
 
 ```move
 'outer: loop {
