@@ -2,13 +2,13 @@
 title: Migrating to Move 2024
 ---
 
-New features for Move are becoming available in 2024 (Move 2024). Many of these changes are enhancements to the source language, affecting the compiler without requiring any changes to the binary representation published on chain.
+New features for Move are becoming available in 2024, apart of the aptly titled "Move 2024" edition. Many of these changes are enhancements to the source language, affecting the compiler without requiring any changes to the binary representation published on chain.
 
-The primary goal of these changes is to make Move easier to write, and hopefully easier to read. The relatively few breaking changes introduced to the source language are the payment required to better position Move to handle future advancements in blockchain technology.
+The primary goal of these changes is to make Move easier to write, and hopefully easier to read. The relatively few breaking changes introduced to the source language are to better position Move to handle future advancements.
 
-Existing code will continue to compile, even with the addition of these new features. Because these features are opt-in, you can write your packages with the new features, even if your dependencies do not. Opting to take advantage of the new features in your current modules, however, does introduce some breaking changes.
+Existing code will continue to compile, even with the addition of these new features. And because these features are opt-in, you can write your packages with the new features, even if your dependencies do not! Opting to take advantage of the new features in your current modules, however, does introduce some breaking changes.
 
-This document surfaces those breaking changes and shows how to migrate your existing modules to use Move 2024.
+This document highlights some new features to try out and shows how to migrate your existing modules to use Move 2024.
 
 # How to Migrate
 
@@ -20,19 +20,188 @@ To migrate a project to Move 2024 Beta, you have two options:
 
 # Automatic Migration
 
-Move 2024 comes with an automatic migration script, which can be invoked at any time by calling `sui move migrate` in the root of your move project. It will prompt you for which edition you would like. If you select `2024.beta`, it will then invoke the compiler and attempt to automatically update any code to avoid the breaking changes described below (including marking structs as `public`, mutable variables with the `mut` keyword, avoiding restricted keywords, swapping `friend`s for `public(package)` and even updating paths to global paths in many cases).
+Move 2024 comes with an automatic migration script, which can be invoked at any time by calling `sui move migrate` in the root of your move project. It will prompt you for which edition you would like. If you select `2024.beta`, it will then invoke the compiler and attempt to automatically update any code to avoid the breaking changes described below (including marking structs as `public`, mutable variables with the `mut` keyword, avoiding restricted keywords, swapping `friend`s for `public(package)`, and even updating paths to global paths in many cases).
 
-Once this is done, it will show you a diff of all of the changes it will make. If you accept this, it will update your code and your `Move.toml` file automatically, and you will be using Move 2024 Beta.
+Once this is done, it will show you a diff of all of the changes it will make. If you accept this, it will update your code and your `Move.toml` file automatically, and you will be using Move 2024 Beta!
+
+# New Features
+
+Here is a brief overview of some of the new features in Move 2024. For more information, see TODO LINK.
+
+<!-- Should we link to the github issue? Or to the book+reference? -->
+
+We can't wait for you to try them out! Please provide any feedback or report any issues you encounter via GitHub, Discord, or Telegram.
+
+<!-- Do we want to link to these -->
+
+## Method Syntax
+
+Certain functions can now be called as methods using the `.` syntax. For example
+
+```move
+vector::push_back(&mut v, coin::value(&c));
+```
+
+can now be written as
+
+```move
+v.push_back(c.value());
+```
+
+Where the receiver of the method (`v` and `c` in this example) will be automatically borrowed if necessary (as `&mut v` and `&c` respectively).
+
+Any function defined in the same module as the receiver's type can be called as a method if it takes the receiver as its first argument.
+
+For functions defined outside the module, methods can be declared using `public use fun` and `use fun`.
+
+## Index Syntax
+
+With method syntax, certain functions can be annotated as being `#[syntax(index)]` methods. These methods will then be called when using `v[i]` style calls.
+
+For example
+
+```move
+*&mut v[i] = v[j];
+```
+
+will resolve to
+
+```move
+*vector::borrow_mut(&mut v, i) = *vector::borrow(&v, j);
+```
+
+## `public(package)`
+
+`friend` declarations, and the associated `public(friend)` visibility modifiers, have been deprecated. In their place is the `public(package)` visibility modifier, which allows functions to be called only within the same package they are defined in.
+
+## Positional Fields
+
+`struct`s can now be defined with positional fields, which can be accessed by index. For example
+
+```move
+public struct Pair(u64, u64) has copy, drop, store.
+```
+
+and
+
+```move
+public fun sum(p: &Pair): u64 {
+  p.0 + p.1
+}
+```
+
+And as seen in this example, abilities can now be declared after the struct's field list.
+
+## Nested `use` and Standard Library Defaults
+
+`use` aliases can now be nested to allow for more concision
+
+```move
+use sui::{balance, coin::{Self, Coin}};
+```
+
+Additionally, the following `use`s are now automatically indluced in every module:
+
+```move
+use std::vector;
+use std::option::{Self, Option};
+use sui::object::{Self, ID, UID};
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
+```
+
+## Automatic Referencing in Equality
+
+Equality operations, `==` and `!=`, now automatically borrow if one side is a reference and the other is not. For example
+
+```move
+fun check(x: u64, r: &u64): bool {
+  x == r
+}
+```
+
+is equivalent to
+
+```move
+fun check(x: u64, r: &u64): bool {
+  &x == r
+}
+```
+
+This automatic borrowing can occur on either side of `==` and `!=`.
+
+## Loop Labels
+
+When nesting loops, it can be convenient to break to the outer loop.
+
+```move
+let mut i = 0;
+let mut j = 0;
+let mut terminate_loop = false;
+while (i < 10) {
+    while (j < 10) {
+        if (haystack(i, j) == needle) {
+            terminate_loop = true;
+            break;
+        };
+        j = j + 1;
+    };
+    if (terminate_loop) break;
+    i = i + 1;
+}
+```
+
+Now we can directly name the outer loop and break it all at once:
+
+```move
+let mut i = 0;
+let mut j = 0;
+'outer: while (i < 10) {
+    while (j < 10) {
+        if (haystack(i, j) == needle) break'outer;
+        j = j + 1;
+    };
+    i = i + 1;
+}
+```
+
+## `break` with Value
+
+It is now possible to `break` with a value from a `loop`
+
+```move
+let mut i = 0;
+let x: u64 = loop {
+    if (v[i] > 10) break i;
+    i = i + 1;
+};
+```
+
+This can be done also with labels
+
+```move
+let mut i = 0;
+let mut j = 0;
+let item = 'outer: loop {
+    while (j < 10) {
+        let item = haystack(i, j);
+        if (item == needle) break'outer option::some(item);
+        j = j + 1;
+    };
+    i = i + 1;
+    if (i == 10) break option::none();
+};
+```
 
 # Breaking Changes
 
-Breaking changes are, unfortunately, a growing pain in Move 2024. We anticipate these changes will be minimally invasive, however, and have provided a migration script to automate them in nearly every case. In addition, these changes pave the way for more-secure coding practices and new, exciting features that are on the Move 2024 roadmap.
+Breaking changes are, unfortunately, a growing pain in Move 2024. We anticipate these changes will be minimally invasive and have provided a migration script to automate them in nearly every case. In addition, these changes pave the way for new features still to come in Move 2024.
 
 ## Datatype visibility requirements
 
 Currently all structs in Move are, by convention, public: any other module or package may import them and refer to them by type. To make this clearer, Move 2024 requires that all structs be declared with the `public` keyword. For example:
 
-```rust
+```move
 // legacy code
 struct S { x: u64 }
 
@@ -46,27 +215,27 @@ Any non-public struct will produce an error at this time, though the Move team i
 
 Previously, all variables in Move were implicitly mutable. For example:
 
-```rust
+```move
 fun f(s: S, y: u64): u64 {
-  let a = 0;
-  let S { x } = s;
-  a = 1;
-  x = 10;
-  y = 5;
-  x + y
+    let a = 0;
+    let S { x } = s;
+    a = 1;
+    x = 10;
+    y = 5;
+    x + y
 }
 ```
 
 Now, any variable that will be used mutably must be explicitly declared as such:
 
-```rust
+```move
 fun f(s: S, mut y: u64): u64 {
-  let mut a = 0;
-  let S { mut x } = 5;
-  a = 1;
-  x = 10;
-  y = 5;
-  x + y
+    let mut a = 0;
+    let S { mut x } = 5;
+    a = 1;
+    x = 10;
+    y = 5;
+    x + y
 }
 ```
 
@@ -74,11 +243,11 @@ The compiler will now produce an error if a variable is reassigned or borrowed m
 
 ## Removing Friends and `public(friend)`
 
-Friends and the `public(friend)` visibilities were introduced early in Move’s life, predating even the package system. Move introduced the `public(package)` visibility in September 2023, and Move 2024 will deprecate `public(friend)` in favor of it.
+Friends and the `public(friend)` visibilities were introduced early in Move’s life, predating even the package system. As indicated [above](#publicpackage), `public(package)` will deprecate `public(friend)` in Move 2024.
 
 The following declaration will now be an error:
 
-```rust
+```move
 module pkg::m {
     friend pkg::a;
     public(friend) fun f() { ... }
@@ -91,7 +260,7 @@ module pkg::a {
 
 Instead, if you would like your function to only be visible in the package, you would write:
 
-```rust
+```move
 module pkg::m {
     public(package) fun f() { ... }
 }
@@ -104,23 +273,23 @@ module pkg::a {
 
 ## New keywords
 
-Looking toward the future, the Move 2024 beta has elected to add the following keywords to the language: `enum`, `for`, `match`, `mut`and `type`. The compiler will, unfortunately, now produce parsing errors when it finds these in other positions. This is a regrettable but necessary change as the language matures. If you perform automatic migration, the migration tool will rename these as `enum` and so on, rewriting the code to use these escaped forms.
+Looking toward the future, the Move 2024 beta has elected to add the following keywords to the language: `enum`, `for`, `match`, `mut`, and `type`. The compiler will, unfortunately, now produce parsing errors when it finds these in other positions. This is a regrettable but necessary change as the language matures. If you perform automatic migration, the migration tool will rename these as <code>\`enum\`</code> and so on, rewriting the code to use these escaped forms.
 
 ## Revised paths and namespaces
 
 As part of Move 2024, we have revised how paths and namespaces worked compared to legacy Move, toward easing enum aliasing in the future. Consider the following snippet from a test annotation in the `sui_system` library:
 
-```rust
+```move
 use sui_system::sui_system;
 ...
 #[expected_failure(abort_code = sui_system::validator_set::EInvalidCap)]
 ```
 
-Legacy Move would always treat a three-part name as an address, module, and module member. In Move 2024, scoping is respected for imports, so `sui_system` in the attribute resolves to the module, producing a name resolution error overall.
+Legacy Move would always treat a three-part name as an address, module, and module member. In Move 2024, scoping is respected for `use`s, so `sui_system` in the attribute resolves to the module, producing a name resolution error overall.
 
 To avoid cases where this is the intended behavior, Move 2024 has also introduced a prefix operation for global qualification, allowing us to rewrite this annotation as:
 
-```rust
+```move
 use sui_system::sui_system;
 ...
 #[expected_failure(abort_code = ::sui_system::validator_set::EInvalidCap)]
@@ -132,12 +301,6 @@ The migration script will also attempt to remediate naming errors using global q
 # What’s Next
 
 In addition to the breaking changes described above, this beta release of Move 2024 comes with some powerful new features, with more on the horizon.
-
-## New Features
-
-- Move now supports method syntax for type-based method-style calls, as explained in {{tutortial link}}.
-- Move data types can now define custom index syntax, allowing users to write functions such that a custom Matrix element may be accessed as `m[i, j]` in Move. You can learn more about these definitions in {{book link}}.
-- Automatic referencing in equality: you no longer have to write things as explicit references when doing equality checks; Move 2024 will do it for you. The expression `x == &y` may now be written as `x == y` and the compiler will take care of the rest.
 
 ## Follow Along
 
