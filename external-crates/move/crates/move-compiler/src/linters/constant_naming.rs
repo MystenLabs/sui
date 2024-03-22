@@ -54,7 +54,7 @@ impl TypingVisitor for ConstantNamingVisitor {
 fn visit_constant_custom(env: &mut CompilationEnv, name: Symbol, loc: Loc) {
     if !is_valid_name(name.as_str()) {
         let uid_msg = format!(
-            "{} should be named using UPPER_CASE_WITH_UNDERSCORES.",
+            "{} should be named using UPPER_CASE_WITH_UNDERSCORES or PascalCase/UpperCamelCase",
             name.as_str()
         );
 
