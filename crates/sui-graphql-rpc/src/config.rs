@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::functional_group::FunctionalGroup;
 use crate::types::big_int::BigInt;
 use async_graphql::*;
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
-
-use crate::functional_group::FunctionalGroup;
 
 // TODO: calculate proper cost limits
 
@@ -94,6 +94,9 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) background_tasks: BackgroundTasksConfig,
+
+    #[serde(default)]
+    pub(crate) zklogin: ZkLoginConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -175,6 +178,12 @@ pub struct InternalFeatureConfig {
 pub struct TxExecFullNodeConfig {
     #[serde(default)]
     pub(crate) node_rpc_url: Option<String>,
+}
+
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct ZkLoginConfig {
+    pub env: ZkLoginEnv,
 }
 
 /// The enabled features and service limits configured by the server.
@@ -338,6 +347,9 @@ impl ServiceConfig {
     pub fn test_defaults() -> Self {
         Self {
             background_tasks: BackgroundTasksConfig::test_defaults(),
+            zklogin: ZkLoginConfig {
+                env: ZkLoginEnv::Test,
+            },
             ..Default::default()
         }
     }
