@@ -69,11 +69,10 @@ const references = [
 			id: 'references/sui-sdks',
 		},
 		items: [
-			'references/rust-sdk',
 			{
 				type: 'link',
-				label: 'Sui TypeScript SDK',
-				href: 'https://sdk.mystenlabs.com/typescript',
+				label: 'dApp Kit',
+				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
       {
 				type: 'link',
@@ -85,10 +84,11 @@ const references = [
 				label: 'Sui Python SDK',
 				href: 'https://github.com/FrankC01/pysui',
       },
+			'references/rust-sdk',
 			{
 				type: 'link',
-				label: 'dApp Kit',
-				href: 'https://sdk.mystenlabs.com/dapp-kit',
+				label: 'Sui TypeScript SDK',
+				href: 'https://sdk.mystenlabs.com/typescript',
 			},
 		],
 	},
