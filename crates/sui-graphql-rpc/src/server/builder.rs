@@ -356,6 +356,7 @@ impl ServerBuilder {
         let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.service.name_service.clone();
+        let zklogin_config = config.service.zklogin.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
@@ -400,6 +401,7 @@ impl ServerBuilder {
             ))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
+            .context_data(zklogin_config)
             .context_data(metrics.clone())
             .context_data(config.clone());
 

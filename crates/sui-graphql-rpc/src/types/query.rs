@@ -37,6 +37,10 @@ use super::{
 };
 use crate::consistency::{consistent_range, CheckpointViewedAt};
 use crate::data::QueryExecutor;
+use crate::types::base64::Base64 as GraphQLBase64;
+use crate::types::zklogin_verify_signature::verify_zklogin_signature;
+use crate::types::zklogin_verify_signature::ZkLoginIntentScope;
+use crate::types::zklogin_verify_signature::ZkLoginVerifyResult;
 use crate::{config::ServiceConfig, data::Db, error::Error, mutation::Mutation};
 
 pub(crate) struct Query;
@@ -435,6 +439,30 @@ impl Query {
         coin_type: ExactTypeFilter,
     ) -> Result<Option<CoinMetadata>> {
         CoinMetadata::query(ctx.data_unchecked(), coin_type.0)
+            .await
+            .extend()
+    }
+
+    /// Verify a zkLogin signature based on the provided transaction or personal message
+    /// based on current epoch, chain id, and latest JWKs fetched on-chain. If the
+    /// signature is valid, the function returns a `ZkLoginVerifyResult` with success as
+    /// true and an empty list of errors. If the signature is invalid, the function returns
+    /// a `ZkLoginVerifyResult` with success as false with a list of errors.
+    ///
+    /// - `bytes` is either the personal message in raw bytes or transaction data bytes in
+    ///    BCS-encoded and then Base64-encoded.
+    /// - `signature` is a serialized zkLogin signature that is Base64-encoded.
+    /// - `intentScope` is an enum that specifies the intent scope to be used to parse bytes.
+    /// - `author` is the address of the signer of the transaction or personal msg.
+    async fn verify_zklogin_signature(
+        &self,
+        ctx: &Context<'_>,
+        bytes: GraphQLBase64,
+        signature: GraphQLBase64,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> Result<ZkLoginVerifyResult> {
+        verify_zklogin_signature(ctx, bytes, signature, intent_scope, author)
             .await
             .extend()
     }
