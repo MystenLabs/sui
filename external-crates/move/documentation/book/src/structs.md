@@ -65,7 +65,7 @@ module a::m {
 ```
 
 The ability declaration can occur either before or after the struct's fields. However, only one or
-the other can be used, and not both. If declared after the struct's field, the ability declaration
+the other can be used, and not both. If declared after the struct's fields, the ability declaration
 must be terminated with a semicolon:
 
 ```move
