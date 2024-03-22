@@ -15,7 +15,7 @@ use super::object::{self, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner
 use super::owner::OwnerImpl;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
-use super::suins_registration::{SuinsRegistration, SuinsRegistrationDowncastError, DomainFormat};
+use super::suins_registration::{DomainFormat, SuinsRegistration, SuinsRegistrationDowncastError};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use super::{coin::Coin, object::Object};

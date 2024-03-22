@@ -51,7 +51,7 @@ pub(crate) struct Domain(NativeDomain);
 #[graphql(remote = "sui_json_rpc::name_service::DomainFormat")]
 pub enum DomainFormat {
     At,
-    Dot
+    Dot,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

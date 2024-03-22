@@ -14,7 +14,7 @@ use super::object::{
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
-use super::suins_registration::{SuinsRegistration, DomainFormat};
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use crate::consistency::ConsistentNamedCursor;

@@ -14,7 +14,7 @@ use super::move_object::MoveObjectImpl;
 use super::move_value::MoveValue;
 use super::object::{Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
-use super::suins_registration::{SuinsRegistration, DomainFormat};
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use super::{
