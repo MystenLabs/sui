@@ -1,8 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::encoding::{
+    BridgeMessageEncoding, ASSET_PRICE_UPDATE_MESSAGE_VERSION, LIMIT_UPDATE_MESSAGE_VERSION,
+};
+use crate::encoding::{COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION};
 use crate::error::{BridgeError, BridgeResult};
-use crate::types::{BridgeAction, EthLog, EthToSuiBridgeAction};
+use crate::types::{
+    AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction, BridgeActionType,
+    EmergencyAction, EthLog, EthToSuiBridgeAction, LimitUpdateAction,
+};
 use ethers::{
     abi::RawLog,
     contract::{abigen, EthLogDecode},
@@ -130,5 +137,169 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
             token_id: TokenId::try_from(event.token_id)?,
             sui_adjusted_amount: event.sui_adjusted_amount,
         })
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+//                        Eth Message Conversion                      //
+////////////////////////////////////////////////////////////////////////
+
+// TODO: add EvmContractUpgradeAction and tests
+
+impl From<EmergencyAction> for eth_sui_bridge::Message {
+    fn from(action: EmergencyAction) -> Self {
+        eth_sui_bridge::Message {
+            message_type: BridgeActionType::EmergencyButton as u8,
+            version: EMERGENCY_BUTTON_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
+
+impl From<BlocklistCommitteeAction> for eth_bridge_committee::Message {
+    fn from(action: BlocklistCommitteeAction) -> Self {
+        eth_bridge_committee::Message {
+            message_type: BridgeActionType::UpdateCommitteeBlocklist as u8,
+            version: COMMITTEE_BLOCKLIST_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
+
+impl From<LimitUpdateAction> for eth_bridge_limiter::Message {
+    fn from(action: LimitUpdateAction) -> Self {
+        eth_bridge_limiter::Message {
+            message_type: BridgeActionType::LimitUpdate as u8,
+            version: LIMIT_UPDATE_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
+
+impl From<AssetPriceUpdateAction> for eth_bridge_limiter::Message {
+    fn from(action: AssetPriceUpdateAction) -> Self {
+        eth_bridge_limiter::Message {
+            message_type: BridgeActionType::AssetPriceUpdate as u8,
+            version: ASSET_PRICE_UPDATE_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        crypto::BridgeAuthorityPublicKeyBytes,
+        types::{BlocklistType, EmergencyActionType},
+    };
+    use fastcrypto::encoding::{Encoding, Hex};
+    use sui_types::crypto::ToFromBytes;
+
+    #[test]
+    fn test_eth_message_conversion_emergency_action_regression() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+
+        let action = EmergencyAction {
+            nonce: 2,
+            chain_id: BridgeChainId::EthSepolia,
+            action_type: EmergencyActionType::Pause,
+        };
+        let message: eth_sui_bridge::Message = action.into();
+        assert_eq!(
+            message,
+            eth_sui_bridge::Message {
+                message_type: BridgeActionType::EmergencyButton as u8,
+                version: EMERGENCY_BUTTON_MESSAGE_VERSION,
+                nonce: 2,
+                chain_id: BridgeChainId::EthSepolia as u8,
+                payload: vec![0].into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth_message_conversion_update_blocklist_action_regression() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let pub_key_bytes = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4")
+                .unwrap(),
+        )
+        .unwrap();
+        let action = BlocklistCommitteeAction {
+            nonce: 0,
+            chain_id: BridgeChainId::EthSepolia,
+            blocklist_type: BlocklistType::Blocklist,
+            blocklisted_members: vec![pub_key_bytes],
+        };
+        let message: eth_bridge_committee::Message = action.into();
+        assert_eq!(
+            message,
+            eth_bridge_committee::Message {
+                message_type: BridgeActionType::UpdateCommitteeBlocklist as u8,
+                version: COMMITTEE_BLOCKLIST_MESSAGE_VERSION,
+                nonce: 0,
+                chain_id: BridgeChainId::EthSepolia as u8,
+                payload: Hex::decode("000168b43fd906c0b8f024a18c56e06744f7c6157c65")
+                    .unwrap()
+                    .into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth_message_conversion_update_limit_action_regression() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let action = LimitUpdateAction {
+            nonce: 2,
+            chain_id: BridgeChainId::EthSepolia,
+            sending_chain_id: BridgeChainId::SuiTestnet,
+            new_usd_limit: 4200000,
+        };
+        let message: eth_bridge_limiter::Message = action.into();
+        assert_eq!(
+            message,
+            eth_bridge_limiter::Message {
+                message_type: BridgeActionType::LimitUpdate as u8,
+                version: LIMIT_UPDATE_MESSAGE_VERSION,
+                nonce: 2,
+                chain_id: BridgeChainId::EthSepolia as u8,
+                payload: Hex::decode("010000000000401640").unwrap().into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth_message_conversion_update_price_action_regression() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let action = AssetPriceUpdateAction {
+            nonce: 2,
+            chain_id: BridgeChainId::EthSepolia,
+            token_id: TokenId::ETH,
+            new_usd_price: 80000000,
+        };
+        let message: eth_bridge_limiter::Message = action.into();
+        assert_eq!(
+            message,
+            eth_bridge_limiter::Message {
+                message_type: BridgeActionType::AssetPriceUpdate as u8,
+                version: ASSET_PRICE_UPDATE_MESSAGE_VERSION,
+                nonce: 2,
+                chain_id: BridgeChainId::EthSepolia as u8,
+                payload: Hex::decode("020000000004c4b400").unwrap().into(),
+            }
+        );
+        Ok(())
     }
 }
