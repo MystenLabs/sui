@@ -1246,10 +1246,9 @@ impl SuiNode {
                 randomness_handle,
                 config.protocol_key_pair(),
             )
-            .await
-            .map(Arc::new);
-            if let Some(randomness_manager) = &randomness_manager {
-                epoch_store.set_randomness_manager(randomness_manager.clone())?;
+            .await;
+            if let Some(randomness_manager) = randomness_manager {
+                epoch_store.set_randomness_manager(randomness_manager)?;
             }
         }
 
