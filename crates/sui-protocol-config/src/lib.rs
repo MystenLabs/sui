@@ -2142,6 +2142,9 @@ impl ProtocolConfig {
     pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
         self.consensus_max_transactions_in_block_bytes = Some(val);
     }
+    pub fn set_disable_bridge_for_testing(&mut self) {
+        self.feature_flags.bridge = false
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
