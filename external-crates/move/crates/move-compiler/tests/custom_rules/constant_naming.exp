@@ -1,0 +1,8 @@
+warning[Lint W00001]: Constant name should be in all caps, snake case, pascal case or upper camel case.
+   ┌─ tests/custom_rules/constant_naming.move:10:11
+   │
+10 │     const Another_BadName: u64 = 42; // Should trigger a warning
+   │           ^^^^^^^^^^^^^^^ Another_BadName should be named using UPPER_CASE_WITH_UNDERSCORES.
+   │
+   = This warning can be suppressed with '#[allow(lint(constant_naming))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

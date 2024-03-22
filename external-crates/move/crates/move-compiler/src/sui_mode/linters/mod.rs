@@ -14,11 +14,8 @@ use crate::{
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
-use self::custom_rules::constant_naming;
-
 pub mod coin_field;
 pub mod collection_equality;
-pub mod custom_rules;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod public_random;
@@ -145,22 +142,17 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    let mut default_linter = vec![
-        share_owned::ShareOwnedVerifier.visitor(),
-        self_transfer::SelfTransferVerifier.visitor(),
-        custom_state_change::CustomStateChangeVerifier.visitor(),
-        coin_field::CoinFieldVisitor.visitor(),
-        freeze_wrapped::FreezeWrappedVisitor.visitor(),
-        collection_equality::CollectionEqualityVisitor.visitor(),
-        public_random::PublicRandomVisitor.visitor(),
-    ];
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default => default_linter,
-        LintLevel::All => {
-            default_linter.push(constant_naming::ConstantNamingVisitor::visitor());
-            default_linter
-        }
+        LintLevel::Default | LintLevel::All => vec![
+            share_owned::ShareOwnedVerifier.visitor(),
+            self_transfer::SelfTransferVerifier.visitor(),
+            custom_state_change::CustomStateChangeVerifier.visitor(),
+            coin_field::CoinFieldVisitor.visitor(),
+            freeze_wrapped::FreezeWrappedVisitor.visitor(),
+            collection_equality::CollectionEqualityVisitor.visitor(),
+            public_random::PublicRandomVisitor.visitor(),
+        ],
     }
 }
 

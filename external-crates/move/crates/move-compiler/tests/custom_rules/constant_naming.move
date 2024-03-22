@@ -5,8 +5,8 @@ module 0x42::M {
     const MIN_U64: u64 = 10;
 
     // // Incorrectly named constants
-    const Maxcount: u64 = 500; // Should trigger a warning
-    const MinValue: u64 = 1; // Should trigger a warning
-    const Another_badName: u64 = 42; // Should trigger a warning
+    const Maxcount: u64 = 500; // Should not trigger a warning
+    const MinValue: u64 = 1; // Should not trigger a warning
+    const Another_BadName: u64 = 42; // Should trigger a warning
     const YetAnotherName: u64 = 777; // Should not trigger a warning
 }

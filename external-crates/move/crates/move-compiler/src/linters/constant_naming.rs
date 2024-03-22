@@ -7,11 +7,12 @@ use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     shared::{program_info::TypingProgramInfo, CompilationEnv},
-    sui_mode::linters::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX},
     typing::{ast as T, visitor::TypingVisitor},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
+
+use super::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX};
 
 /// Diagnostic information for constant naming violations.
 const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
@@ -71,7 +72,6 @@ fn is_valid_name(name: &str) -> bool {
     {
         return true;
     }
-
     // Check for PascalCase/UpperCamelCase
     // The string must start with an uppercase letter, and only contain alphanumeric characters,
     // with every new word starting with an uppercase letter.
