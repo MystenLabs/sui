@@ -18,8 +18,8 @@ module <address>::<identifier> {
 }
 ```
 
-where `<address>` is a valid [address](./primitive-types/address.md) specifying the
-module's package.
+where `<address>` is a valid [address](./primitive-types/address.md) specifying the module's
+package.
 
 For example:
 

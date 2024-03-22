@@ -207,8 +207,9 @@ fun just_unit() { () }
 fun just_unit() { }
 ```
 
-As mentioned in the [tuples section](./primitive-types/tuples.md), these tuple "values" 
-do not exist as runtime values. This means that a function that returns unit `()` does not return any value during execution.
+As mentioned in the [tuples section](./primitive-types/tuples.md), these tuple "values" do not exist
+as runtime values. This means that a function that returns unit `()` does not return any value
+during execution.
 
 ### Function body
 

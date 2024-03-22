@@ -5,8 +5,9 @@ feature is sometimes referred to as parametric polymorphism. In Move, we will of
 generics interchangeably with _type parameters_ and _type arguments_.
 
 Generics are commonly used in library code, such as in [vector](./primitive-types/vector.md), to
-declare code that works over any possible type (that satisfies the specified constraints).
-This sort of parameterization allows you to reuse the same implementation across multiple types and situations.
+declare code that works over any possible type (that satisfies the specified constraints). This sort
+of parameterization allows you to reuse the same implementation across multiple types and
+situations.
 
 ## Declaring Type Parameters
 
