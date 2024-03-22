@@ -84,9 +84,11 @@ impl BlockManager {
         blocks.sort_by_key(|b| b.round());
 
         let mut accepted_blocks = vec![];
-        let missing_blocks_before = self.missing_blocks.clone();
+        //let missing_blocks_before = self.missing_blocks.clone();
+        let mut missing_blocks = BTreeSet::new();
 
         for block in blocks {
+            let block_ref = block.reference();
             if let Some(block) = self.try_accept_one_block(block) {
                 // Try to unsuspend any children blocks.
                 let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
@@ -149,26 +151,33 @@ impl BlockManager {
                     .accept_blocks(blocks_to_accept.clone());
 
                 accepted_blocks.extend(blocks_to_accept);
+            } else {
+                let suspended_block = self
+                    .suspended_blocks
+                    .get(&block_ref)
+                    .expect("Block should be present");
+                missing_blocks.extend(&suspended_block.missing_ancestors);
             }
         }
 
         // Newly missed blocks
         // TODO: make sure that the computation here is bounded either in the byzantine or node fall
         // back scenario.
+        /*
         let missing_blocks_after = self
             .missing_blocks
             .difference(&missing_blocks_before)
             .cloned()
-            .collect::<BTreeSet<_>>();
+            .collect::<BTreeSet<_>>();*/
 
         self.context
             .metrics
             .node_metrics
             .missing_blocks_total
-            .set(missing_blocks_after.len() as i64);
+            .set(self.missing_blocks.len() as i64);
 
         // Figure out the new missing blocks
-        (accepted_blocks, missing_blocks_after)
+        (accepted_blocks, missing_blocks)
     }
 
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If

@@ -6,14 +6,11 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, monitored_scope};
 use parking_lot::Mutex;
-use rand::prelude::SliceRandom;
 #[cfg(not(test))]
-use rand::rngs::ThreadRng;
-use rand::thread_rng;
-use std::collections::{BTreeMap, BTreeSet};
+use rand::{prelude::SliceRandom, rngs::ThreadRng};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
-use tap::TapFallible;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
@@ -38,6 +35,8 @@ const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
 const FETCH_FROM_PEERS_TIMEOUT: Duration = Duration::from_millis(4_000);
 
 const MAX_FETCH_BLOCKS_PER_REQUEST: usize = 200;
+
+const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 
 enum Command {
     FetchBlocks {
@@ -86,6 +85,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     fetch_blocks_scheduler_task: JoinSet<()>,
     network_client: Arc<C>,
     block_verifier: Arc<V>,
+    blocks_to_fetch: Arc<tokio::sync::Mutex<HashMap<BlockRef, Vec<AuthorityIndex>>>>, // maps the blocks that are pending to fetch and the authority indexes that already assigned to fetch
 }
 
 impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C, V, D> {
@@ -96,6 +96,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         block_verifier: Arc<V>,
     ) -> Arc<SynchronizerHandle> {
         let (commands_sender, commands_receiver) = channel(1_000);
+        let blocks_to_fetch = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
         // Spawn the tasks to fetch the blocks from the others
         let mut fetch_block_senders = BTreeMap::new();
@@ -112,6 +113,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 context.clone(),
                 core_dispatcher.clone(),
                 receiver,
+                blocks_to_fetch.clone(),
             ));
             fetch_block_senders.insert(index, sender);
         }
@@ -126,6 +128,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 fetch_blocks_scheduler_task: JoinSet::new(),
                 network_client,
                 block_verifier,
+                blocks_to_fetch,
             };
             s.run().await;
         });
@@ -151,20 +154,41 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                         Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
                             assert_ne!(peer_index, self.context.own_index, "We should never attempt to fetch blocks from our own node");
 
-                            if missing_block_refs.is_empty() {
+                            let mut blocks_to_fetch = BTreeSet::new();
+
+                            {
+                                let mut blocks_to_fetch_lock = self.blocks_to_fetch.lock().await;
+
+                                for block_ref in missing_block_refs {
+                                    // check that the number of authorities that are already instructed to fetch the block is not
+                                    // higher than the allowed and the `peer_index` has not already been instructed to do that.
+                                    if let Some(authorities) = blocks_to_fetch_lock.get_mut(&block_ref) {
+                                        if authorities.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && !authorities.iter().any(|authority| *authority == peer_index) {
+                                            authorities.push(peer_index);
+                                            blocks_to_fetch.insert(block_ref);
+                                        }
+                                    } else {
+                                        blocks_to_fetch_lock.insert(block_ref, vec![peer_index]);
+                                        blocks_to_fetch.insert(block_ref);
+                                    }
+                                }
+                            }
+
+                            if blocks_to_fetch.is_empty() {
                                 result.send(Ok(())).ok();
                                 continue;
                             }
 
                             // We don't block if the corresponding peer task is saturated - but we rather drop the request. That's ok as the periodic
                             // synchronization task will handle any still missing blocks in next run.
-                            let r = self.fetch_block_senders.get(&peer_index).expect("Fatal error, sender should be present").try_send(missing_block_refs.clone()).map_err(|err| {
+                            let r = self.fetch_block_senders.get(&peer_index).expect("Fatal error, sender should be present").try_send(blocks_to_fetch).map_err(|err| {
                                 match err {
                                     TrySendError::Full(_) => ConsensusError::SynchronizerSaturated(peer_index),
                                     TrySendError::Closed(_) => ConsensusError::Shutdown
                                 }
                             });
 
+                            /*
                             // pick another peer as well randomly to increase the chances of fetching the blocks in time
                             let mut all_authorities = self.context.committee.authorities().filter(|(authority_index, _)| *authority_index != peer_index && *authority_index != self.context.own_index).collect::<Vec<_>>();
                             all_authorities.shuffle(&mut thread_rng());
@@ -179,7 +203,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                         info!("Second picked authority to fetch blocks is saturated {authority_index}, missing blocks {}", refs.len());
                                     }
                                 });
-                            }
+                            }*/
 
                             result.send(r).ok();
                         }
@@ -222,6 +246,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         mut receiver: Receiver<BTreeSet<BlockRef>>,
+        blocks_to_fetch: Arc<tokio::sync::Mutex<HashMap<BlockRef, Vec<AuthorityIndex>>>>,
     ) {
         const MAX_RETRIES: u32 = 5;
 
@@ -245,7 +270,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 block_refs,
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
-                                context.clone()).await {
+                                context.clone(),
+                                blocks_to_fetch.clone()).await {
                                 warn!("Error while processing fetched blocks from peer {peer_index}: {err}");
                             }
                         },
@@ -254,6 +280,20 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, block_refs, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
                                 warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index}.");
+
+                                // now release the blocks for the map of blocks to fetch
+                                let mut blocks_to_fetch = blocks_to_fetch.lock().await;
+                                for block_ref in &block_refs {
+                                    let authorities = blocks_to_fetch.get_mut(block_ref).expect("Block entry should exist");
+
+                                    // keep only the other authorities
+                                    authorities.retain(|authority_index| *authority_index != peer_index);
+
+                                    // if the last one then just clean up
+                                    if authorities.is_empty() {
+                                        blocks_to_fetch.remove(block_ref);
+                                    }
+                                }
                             }
                         }
                     }
@@ -275,6 +315,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         core_dispatcher: Arc<D>,
         block_verifier: Arc<V>,
         context: Arc<Context>,
+        blocks_to_fetch: Arc<tokio::sync::Mutex<HashMap<BlockRef, Vec<AuthorityIndex>>>>,
     ) -> ConsensusResult<()> {
         let mut verified_blocks = Vec::new();
 
@@ -310,6 +351,22 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             }
 
             verified_blocks.push(verified_block);
+        }
+
+        // Now mark all the blocks as fetched from the map
+        let mut blocks_to_fetch = blocks_to_fetch.lock().await;
+        for block in &verified_blocks {
+            let authorities = blocks_to_fetch
+                .get_mut(&block.reference())
+                .expect("Block entry should exist");
+
+            // keep only the other authorities
+            authorities.retain(|authority_index| *authority_index != peer_index);
+
+            // if the last one then just clean up
+            if authorities.is_empty() {
+                blocks_to_fetch.remove(&block.reference());
+            }
         }
 
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
@@ -373,6 +430,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let network_client = self.network_client.clone();
         let block_verifier = self.block_verifier.clone();
         let core_dispatcher = self.core_dispatcher.clone();
+        let blocks_to_fetch = self.blocks_to_fetch.clone();
 
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
@@ -396,7 +454,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     total_fetched += fetched_blocks.len();
                     context.metrics.node_metrics.fetched_blocks.with_label_values(&[&peer.to_string(), "periodic"]).inc_by(fetched_blocks.len() as u64);
 
-                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, requested_block_refs, core_dispatcher.clone(), block_verifier.clone(), context.clone()).await {
+                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, requested_block_refs, core_dispatcher.clone(), block_verifier.clone(), context.clone(), blocks_to_fetch.clone()).await {
                         warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");
                     }
                 }
