@@ -272,7 +272,7 @@ impl Display for SuiTransactionBlockResponse {
         }
 
         if let Some(e) = &self.events {
-            write!(writer, "{}", e)?;
+            writeln!(writer, "{}", e)?;
         }
 
         if let Some(object_changes) = &self.object_changes {
@@ -488,7 +488,7 @@ impl SuiTransactionBlockKind {
             TransactionKind::RandomnessStateUpdate(update) => {
                 Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
                     epoch: update.epoch,
-                    randomness_round: update.randomness_round,
+                    randomness_round: update.randomness_round.0,
                     random_bytes: update.random_bytes,
                 })
             }
@@ -927,10 +927,10 @@ impl Display for SuiTransactionBlockEffects {
         let gas_cost_summary = self.gas_cost_summary();
         builder.push_record(vec![format!(
             "Gas Cost Summary:\n   \
-             Storage Cost: {}\n   \
-             Computation Cost: {}\n   \
-             Storage Rebate: {}\n   \
-             Non-refundable Storage Fee: {}",
+             Storage Cost: {} MIST\n   \
+             Computation Cost: {} MIST\n   \
+             Storage Rebate: {} MIST\n   \
+             Non-refundable Storage Fee: {} MIST",
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,

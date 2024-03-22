@@ -8,7 +8,7 @@
 // This test also demonstrates why we need separate dynamicField and dynamicObjectField APIs.
 // It is possible for a dynamic field and a dynamic object field to share the same name lookup.
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::m {
@@ -17,16 +17,16 @@ module Test::m {
     use sui::object;
     use sui::tx_context::{sender, TxContext};
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: object::UID,
         o: Parent
     }
 
-    struct Parent has key, store {
+    public struct Parent has key, store {
         id: object::UID,
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: object::UID,
     }
 

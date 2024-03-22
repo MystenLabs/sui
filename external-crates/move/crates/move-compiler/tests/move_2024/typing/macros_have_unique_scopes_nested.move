@@ -1,6 +1,6 @@
 module a::m {
     // macros have their own unique scopes
-    macro fun for($start: u64, $stop: u64, $body: |u64|) {
+    macro fun `for`($start: u64, $stop: u64, $body: |u64|) {
         let mut i = $start;
         let stop = $stop;
         while (i < stop) {
@@ -22,7 +22,7 @@ module a::m {
     macro fun new<$T>($len: u64, $f: |u64| -> $T): vector<$T> {
         let len = $len;
         let mut v = vector[];
-        for!(0, len, |i| v.push_back($f(i)));
+        `for`!(0, len, |i| v.push_back($f(i)));
         v
     }
 

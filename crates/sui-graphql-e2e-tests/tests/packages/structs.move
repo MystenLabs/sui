@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses P0=0x0 P1=0x0 --accounts A --simulator
 
 //# run-graphql
 
@@ -52,7 +52,7 @@
 //# publish --upgradeable --sender A
 
 module P0::m {
-    struct S has copy, drop { x: u64 }
+    public struct S has copy, drop { x: u64 }
 }
 
 //# create-checkpoint
@@ -104,9 +104,9 @@ fragment Structs on Object {
 //# upgrade --package P0 --upgrade-capability 2,1 --sender A
 
 module P1::m {
-    struct S has copy, drop { x: u64 }
-    struct T<U: drop> { y: u64, s: S, u: U }
-    struct V { t: T<S> }
+    public struct S has copy, drop { x: u64 }
+    public struct T<U: drop> { y: u64, s: S, u: U }
+    public struct V { t: T<S> }
 }
 
 //# create-checkpoint
@@ -172,7 +172,7 @@ fragment Structs on Object {
 
 //# run-graphql
 
-# But we can still confirm that we can roundtrip the `T` struct from
+# But we can still confirm that we can roundtrip the `T` public struct from
 # its own module, but cannot reach `T` from `S`'s defining module.
 
 fragment ReachT on MoveStruct {

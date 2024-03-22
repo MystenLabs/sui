@@ -4,7 +4,7 @@ use config::{AuthorityIdentifier, Committee, Stake};
 use crypto::{PublicKey, Signature};
 use fastcrypto::traits::KeyPair;
 use indexmap::IndexMap;
-use narwhal_types::{Certificate, Header, HeaderV2, Vote, VoteAPI};
+use narwhal_types::{Certificate, Header, HeaderV1, Vote, VoteAPI};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::collections::BTreeSet;
@@ -25,15 +25,7 @@ async fn test_certificate_signers_are_ordered() {
     // The authority that creates the Header
     let authority = authorities[0];
 
-    let header = HeaderV2::new(
-        authority.id(),
-        1,
-        1,
-        IndexMap::new(),
-        Vec::new(),
-        BTreeSet::new(),
-    )
-    .await;
+    let header = HeaderV1::new(authority.id(), 1, 1, IndexMap::new(), BTreeSet::new()).await;
 
     // WHEN
     let mut votes: Vec<(AuthorityIdentifier, Signature)> = Vec::new();
@@ -44,7 +36,7 @@ async fn test_certificate_signers_are_ordered() {
         sorted_signers.push(authority.keypair().public().clone());
 
         let vote = Vote::new_with_signer(
-            &Header::V2(header.clone()),
+            &Header::V1(header.clone()),
             &authority.id(),
             authority.keypair(),
         );
@@ -58,7 +50,7 @@ async fn test_certificate_signers_are_ordered() {
     let certificate = Certificate::new_unverified(
         &latest_protocol_version(),
         &committee,
-        Header::V2(header),
+        Header::V1(header),
         votes,
     )
     .unwrap();

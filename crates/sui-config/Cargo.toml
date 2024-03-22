@@ -28,7 +28,6 @@ narwhal-config.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

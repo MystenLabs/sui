@@ -4,5 +4,5 @@ warning[W00001]: DEPRECATED. will be removed
 12 │ ╭     spec schema Foo<T> {
 13 │ │         ensures true;
 14 │ │     }
-   │ ╰─────^ Specification blocks are deprecated
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 

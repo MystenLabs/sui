@@ -10,7 +10,7 @@ use crate::{
     },
     diag,
     diagnostics::Diagnostics,
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
     shared::{unique_map::UniqueMap, CompilationEnv},
@@ -19,12 +19,16 @@ use crate::{
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
 };
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Context
@@ -49,7 +53,7 @@ struct Context<'env> {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         modules: &UniqueMap<ModuleIdent, H::ModuleDefinition>,
     ) -> Self {
         let all_modules = modules
@@ -135,7 +139,7 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: H::Program,
 ) -> G::Program {
     let H::Program { modules: hmodules } = prog;
@@ -329,7 +333,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         match command {
             C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
             C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(exp) | C::Assign(_, exp) => dep_exp(set, exp),
+            C::Abort(exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
             C::Mutate(lhs, rhs) => {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
@@ -440,7 +444,7 @@ fn constant_(
     full_loc: Loc,
     attributes: &Attributes,
     signature: H::BaseType,
-    locals: UniqueMap<Var, H::SingleType>,
+    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
     body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;
@@ -449,7 +453,7 @@ fn constant_(
     let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
     context.clear_block_state();
 
-    let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+    let binfo = block_info.iter().map(destructure_tuple);
     let (mut cfg, infinite_loop_starts, errors) = MutForwardCFG::new(start, &mut blocks, binfo);
     assert!(infinite_loop_starts.is_empty(), "{}", ICE_MSG);
     assert!(errors.is_empty(), "{}", ICE_MSG);
@@ -462,6 +466,7 @@ fn constant_(
     };
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
+        package: context.current_package,
         module,
         member: cfgir::MemberName::Constant(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
@@ -564,6 +569,7 @@ fn function(
         index,
         attributes,
         visibility,
+        compiled_visibility,
         entry,
         signature,
         body,
@@ -585,6 +591,7 @@ fn function(
         index,
         attributes,
         visibility,
+        compiled_visibility,
         entry,
         signature,
         body,
@@ -611,13 +618,14 @@ fn function_body(
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
-            let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+            let binfo = block_info.iter().map(destructure_tuple);
 
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
 
             let function_context = super::CFGContext {
+                package: context.current_package,
                 module,
                 member: cfgir::MemberName::Function(name.0),
                 struct_declared_abilities: &context.struct_declared_abilities,
@@ -662,6 +670,7 @@ fn function_body(
 
 type BlockList = Vec<(Label, BasicBlock)>;
 
+#[growing_stack]
 fn block(context: &mut Context, stmts: H::Block) -> BlockList {
     let (start_block, blocks) = block_(context, stmts);
     [(context.new_label(), start_block)]
@@ -670,6 +679,7 @@ fn block(context: &mut Context, stmts: H::Block) -> BlockList {
         .collect()
 }
 
+#[growing_stack]
 fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     let mut current_block: BasicBlock = VecDeque::new();
     let mut blocks = Vec::new();
@@ -734,6 +744,7 @@ fn finalize_blocks(
     (out_label, out_blocks, block_info)
 }
 
+#[growing_stack]
 fn statement(
     context: &mut Context,
     sp!(sloc, stmt): H::Statement,
@@ -896,6 +907,11 @@ fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
     sp(loc, H::Command_::Jump { target, from_user })
 }
 
+// Added to dodge a clippy complaint
+fn destructure_tuple<T, U>((fst, snd): &(T, U)) -> (&T, &U) {
+    (fst, snd)
+}
+
 //**************************************************************************************************
 // Visitors
 //**************************************************************************************************
@@ -936,6 +952,7 @@ fn visit_function(
         warning_filter,
         index: _,
         attributes,
+        compiled_visibility: _,
         visibility,
         entry,
         signature,
@@ -953,6 +970,7 @@ fn visit_function(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
     let function_context = super::CFGContext {
+        package: context.current_package,
         module: mident,
         member: cfgir::MemberName::Function(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,

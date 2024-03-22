@@ -9,9 +9,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
-use move_binary_format::file_format_common::VERSION_MAX;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 
@@ -259,6 +259,7 @@ impl TransactionBuilder {
         call_args: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<TransactionData> {
         let mut builder = ProgrammableTransactionBuilder::new();
         self.single_move_call(
@@ -279,7 +280,11 @@ impl TransactionBuilder {
                 _ => None,
             })
             .collect();
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas_price = if let Some(gas_price) = gas_price {
+            gas_price
+        } else {
+            self.0.get_reference_gas_price().await?
+        };
         let gas = self
             .select_gas(signer, gas, gas_budget, input_objects, gas_price)
             .await?;
@@ -395,7 +400,7 @@ impl TransactionBuilder {
 
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
-        let module = package.deserialize_module(module, VERSION_MAX, true)?;
+        let module = package.deserialize_module(module, &BinaryConfig::standard())?;
         let view = BinaryIndexedView::Module(&module);
         for (arg, expected_type) in json_args_and_tokens {
             args.push(match arg {
@@ -771,7 +776,7 @@ impl TransactionBuilder {
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
-    async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         self.get_object_ref_and_type(object_id)
             .await
             .map(|(oref, _)| oref)

@@ -376,7 +376,8 @@ impl TypeLayoutBuilder {
                 resolver,
                 depth + 1,
             )?),
-            StructInstantiation(shi, type_actuals) => {
+            StructInstantiation(struct_inst) => {
+                let (shi, type_actuals) = &**struct_inst;
                 let actual_layouts = type_actuals
                     .iter()
                     .map(|t| {

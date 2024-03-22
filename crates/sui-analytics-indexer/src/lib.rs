@@ -406,6 +406,12 @@ impl From<OwnerType> for ParquetValue {
     }
 }
 
+impl From<Option<OwnerType>> for ParquetValue {
+    fn from(value: Option<OwnerType>) -> Self {
+        value.map(|v| v.to_string()).into()
+    }
+}
+
 impl From<ObjectStatus> for ParquetValue {
     fn from(value: ObjectStatus) -> Self {
         Self::Str(value.to_string())
@@ -527,6 +533,7 @@ impl Processor {
 pub async fn read_store_for_checkpoint(
     remote_store_config: ObjectStoreConfig,
     file_type: FileType,
+    dir_prefix: Option<Path>,
 ) -> Result<CheckpointSequenceNumber> {
     let remote_object_store = remote_store_config.make()?;
     let remote_store_is_empty = remote_object_store
@@ -536,7 +543,8 @@ pub async fn read_store_for_checkpoint(
         .common_prefixes
         .is_empty();
     info!("Remote store is empty: {remote_store_is_empty}");
-    let prefix = file_type.dir_prefix();
+    let file_type_prefix = file_type.dir_prefix();
+    let prefix = join_paths(dir_prefix, &file_type_prefix);
     let epoch_dirs = find_all_dirs_with_epoch_prefix(&remote_object_store, Some(&prefix)).await?;
     let epoch = epoch_dirs.last_key_value().map(|(k, _v)| *k).unwrap_or(0);
     let epoch_prefix = prefix.child(format!("epoch_{}", epoch));
@@ -874,7 +882,12 @@ pub async fn get_starting_checkpoint_seq_num(
     let checkpoint = if let Some(starting_checkpoint_seq_num) = config.starting_checkpoint_seq_num {
         starting_checkpoint_seq_num
     } else {
-        read_store_for_checkpoint(config.remote_store_config.clone(), file_type).await?
+        read_store_for_checkpoint(
+            config.remote_store_config.clone(),
+            file_type,
+            config.remote_store_path_prefix,
+        )
+        .await?
     };
     Ok(checkpoint)
 }
@@ -894,4 +907,15 @@ pub async fn make_analytics_processor(
         FileType::DynamicField => make_dynamic_field_processor(config, metrics).await,
         FileType::WrappedObject => make_wrapped_object_processor(config, metrics).await,
     }
+}
+
+pub fn join_paths(base: Option<Path>, child: &Path) -> Path {
+    base.map(|p| {
+        let mut out_path = p.clone();
+        for part in child.parts() {
+            out_path = out_path.child(part)
+        }
+        out_path
+    })
+    .unwrap_or(child.clone())
 }

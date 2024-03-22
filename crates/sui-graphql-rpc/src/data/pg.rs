@@ -16,6 +16,7 @@ use sui_indexer::indexer_reader::IndexerReader;
 
 use tracing::error;
 
+#[derive(Clone)]
 pub(crate) struct PgExecutor {
     pub inner: IndexerReader,
     pub limits: Limits,
@@ -189,7 +190,7 @@ mod tests {
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
         db::{get_pg_pool_connection, new_pg_connection_pool, reset_database},
-        models_v2::objects::StoredObject,
+        models::objects::StoredObject,
         schema::objects,
         types::IndexedObject,
     };

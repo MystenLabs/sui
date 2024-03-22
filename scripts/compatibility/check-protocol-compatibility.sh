@@ -8,7 +8,7 @@ if [ -z "$API_USER" ] || [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-NETWORK=$1
+NETWORK="$1"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd $REPO_ROOT
@@ -24,10 +24,10 @@ case "$NETWORK" in
     URL="https://$API_USER:$API_KEY@gateway.mimir.sui.io/prometheus/api/v1/query"
     ;;
   testnet)
-    URL="http://$API_USER:$API_KEY@metrics-gw.testnet.sui.io/prometheus/api/v1/query"
+    URL="http://$API_USER:$API_KEY@metrics-gw-2.testnet.sui.io/prometheus/api/v1/query"
     ;;
   mainnet)
-    URL="https://$API_USER:$API_KEY@metrics-gw.mainnet.sui.io/prometheus/api/v1/query"
+    URL="https://$API_USER:$API_KEY@metrics-gw-2.mainnet.sui.io/prometheus/api/v1/query"
     ;;
 esac
 
@@ -46,24 +46,56 @@ echo "Checking protocol compatibility with $NETWORK ($ORIGIN_COMMIT)"
 
 git fetch -q || exit 1
 
+if [ "$NETWORK" == "mainnet" ]; then
+  # expand $ORIGIN_COMMIT to full sha
+  ORIGIN_COMMIT=$(git rev-parse "$ORIGIN_COMMIT") || exit 1
+
+  # HACK: a commit was released with broken snapshot tests. Substitute the commit with the
+  # tests fixed.
+  if [ "$ORIGIN_COMMIT" == 5fd1242217d68ff726f9eab1fb7b1a1edac3ce48 -o "$ORIGIN_COMMIT" == cdd690331047d8c19eccc784e1d27ba42a0ed428 ]; then
+    ORIGIN_COMMIT="d951895b90014b58cfd7734e3a5a25d7a37ee9b7"
+  fi
+fi
+
+if [ "$NETWORK" == "testnet" ]; then
+  # expand $ORIGIN_COMMIT to full sha
+  ORIGIN_COMMIT=$(git rev-parse "$ORIGIN_COMMIT") || exit 1
+
+  # HACK: a commit was released with broken snapshot tests. Substitute the commit with the
+  # tests fixed.
+  if [ "$ORIGIN_COMMIT" == 10da1ccdde8b12e700a7bc22dddf2992f532bd00 ]; then
+    ORIGIN_COMMIT="bf41cca24aa65b1a94aef25bc916678ca00f3017"
+  fi
+fi
+
 # put code to check if git client is clean into function
 function check_git_clean {
-  message=$1
+  message="$1"
+  path="$2"
   # if any files are edited or staged, exit with error
-  if ! git diff --quiet --exit-code || ! git diff --cached --quiet --exit-code; then
+  if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit-code -- $path; then
     echo "Error: $message"
     exit 1
   fi
 }
 
-check_git_clean "Please commit or stash your changes before running this script"
+check_git_clean "Please commit or stash your changes before running this script" "*"
 
 # check out all files in crates/sui-protocol-config/src/snapshots at origin commit
 echo "Checking out $NETWORK snapshot files"
 git checkout $ORIGIN_COMMIT -- crates/sui-protocol-config/src/snapshots || exit 1
 
-echo "Checking for changes to snapshot files"
-check_git_clean "Detected changes to snapshot files since $ORIGIN_COMMIT - not safe to release"
+if [ "$NETWORK" != "testnet" ] && [ "$NETWORK" != "mainnet" ]; then
+  NETWORK_PATTERN="*__version_*"
+else
+  NETWORK_PATTERN="*__"$(echo "$NETWORK" | awk '{print toupper(substr($0, 1, 1)) substr($0, 2)}')"_version_*"
+fi
+
+echo "Checking for changes to snapshot files matching $NETWORK_PATTERN"
+check_git_clean "Detected changes to snapshot files since $ORIGIN_COMMIT - not safe to release" "$NETWORK_PATTERN"
+
+# remove any snapshot file changes that were ignored
+git reset --hard HEAD
 
 echo "Running snapshot tests..."
 cargo test --package sui-protocol-config snapshot_tests || exit 1

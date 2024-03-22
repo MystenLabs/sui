@@ -14,5 +14,3 @@ reqwest.workspace = true
 serde_json.workspace = true
 sui-graphql-rpc-headers.workspace = true
 thiserror.workspace = true
-
-workspace-hack.workspace = true

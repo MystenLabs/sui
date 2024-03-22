@@ -13,7 +13,7 @@ use sui::dynamic_field::{add, exists_with_type, borrow, borrow_mut, remove};
 use sui::object;
 use sui::tx_context::{sender, TxContext};
 
-struct Obj has key {
+public struct Obj has key {
     id: object::UID,
 }
 

@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::ConnectionConfig;
-use crate::config::Limits;
 use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
+use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::errors::IndexerError;
-pub use sui_indexer::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
-use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
-use sui_indexer::store::PgIndexerStoreV2;
+pub use sui_indexer::processors::objects_snapshot_processor::SnapshotLagConfig;
+use sui_indexer::store::indexer_store::IndexerStore;
+use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::force_delete_database;
 use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::test_utils::start_test_indexer_impl;
@@ -34,7 +34,7 @@ pub const DEFAULT_INTERNAL_DATA_SOURCE_PORT: u16 = 3000;
 
 pub struct ExecutorCluster {
     pub executor_server_handle: JoinHandle<()>,
-    pub indexer_store: PgIndexerStoreV2,
+    pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
@@ -44,7 +44,7 @@ pub struct ExecutorCluster {
 
 pub struct Cluster {
     pub validator_fullnode_handle: TestCluster,
-    pub indexer_store: PgIndexerStoreV2,
+    pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
@@ -158,11 +158,7 @@ pub async fn start_graphql_server_with_fn_rpc(
 ) -> JoinHandle<()> {
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
-        service: ServiceConfig {
-            // Use special limits for testing
-            limits: Limits::default_for_simulator_testing(),
-            ..ServiceConfig::default()
-        },
+        service: ServiceConfig::default(),
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {
@@ -171,7 +167,9 @@ pub async fn start_graphql_server_with_fn_rpc(
 
     // Starts graphql server
     tokio::spawn(async move {
-        start_graphiql_server(&server_config).await.unwrap();
+        start_graphiql_server(&server_config, &Version("test"))
+            .await
+            .unwrap();
     })
 }
 
@@ -206,7 +204,7 @@ async fn wait_for_graphql_server(client: &SimpleClient) {
 }
 
 async fn wait_for_indexer_checkpoint_catchup(
-    indexer_store: &PgIndexerStoreV2,
+    indexer_store: &PgIndexerStore,
     checkpoint: u64,
     base_timeout: Duration,
 ) {

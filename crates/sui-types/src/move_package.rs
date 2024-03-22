@@ -13,6 +13,7 @@ use crate::{
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
 use move_binary_format::access::ModuleAccess;
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
@@ -479,8 +480,7 @@ impl MovePackage {
     pub fn deserialize_module(
         &self,
         module: &Identifier,
-        max_binary_format_version: u32,
-        check_no_bytes_remaining: bool,
+        binary_config: &BinaryConfig,
     ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
@@ -489,13 +489,10 @@ impl MovePackage {
             .ok_or_else(|| SuiError::ModuleNotFound {
                 module_name: module.to_string(),
             })?;
-        CompiledModule::deserialize_with_config(
-            bytes,
-            max_binary_format_version,
-            check_no_bytes_remaining,
-        )
-        .map_err(|error| SuiError::ModuleDeserializationFailure {
-            error: error.to_string(),
+        CompiledModule::deserialize_with_config(bytes, binary_config).map_err(|error| {
+            SuiError::ModuleDeserializationFailure {
+                error: error.to_string(),
+            }
         })
     }
 
@@ -505,14 +502,9 @@ impl MovePackage {
 
     pub fn normalize(
         &self,
-        max_binary_format_version: u32,
-        check_no_bytes_remaining: bool,
+        binary_config: &BinaryConfig,
     ) -> SuiResult<BTreeMap<String, normalized::Module>> {
-        normalize_modules(
-            self.module_map.values(),
-            max_binary_format_version,
-            check_no_bytes_remaining,
-        )
+        normalize_modules(self.module_map.values(), binary_config)
     }
 }
 
@@ -612,22 +604,19 @@ where
 
 pub fn normalize_modules<'a, I>(
     modules: I,
-    max_binary_format_version: u32,
-    check_no_bytes_remaining: bool,
+    binary_config: &BinaryConfig,
 ) -> SuiResult<BTreeMap<String, normalized::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module = CompiledModule::deserialize_with_config(
-            bytecode,
-            max_binary_format_version,
-            check_no_bytes_remaining,
-        )
-        .map_err(|error| SuiError::ModuleDeserializationFailure {
-            error: error.to_string(),
-        })?;
+        let module =
+            CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
+                SuiError::ModuleDeserializationFailure {
+                    error: error.to_string(),
+                }
+            })?;
         let normalized_module = normalized::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }

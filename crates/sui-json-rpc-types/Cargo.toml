@@ -31,7 +31,6 @@ move-bytecode-utils.workspace = true
 mysten-metrics.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

@@ -32,7 +32,6 @@ strum_macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tracing.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 sui-macros.workspace = true

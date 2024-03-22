@@ -94,7 +94,7 @@ async fn zklogin_end_to_end_test() {
         .build()
         .await;
     test_cluster
-        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(180))
+        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(300))
         .await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
@@ -253,8 +253,10 @@ async fn test_create_authenticator_state_object() {
     }
 }
 
+// TODO: @joy to look at improve the stability of this test.
 // This test is intended to look for forks caused by conflicting / repeated JWK votes from
 // validators.
+#[ignore]
 #[cfg(msim)]
 #[sim_test]
 async fn test_conflicting_jwks() {

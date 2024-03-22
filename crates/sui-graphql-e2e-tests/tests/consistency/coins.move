@@ -7,19 +7,18 @@
 // coin2@A | coin2@B | coin2@B | coin2@B | coin2@B | coin2@B
 // coin3@A | coin3@A | coin3@A | coin3@A | coin3@A | coin3@A
 
-//# init --addresses P0=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses P0=0x0 --accounts A B --simulator
 
 //# publish --sender A
 module P0::fake {
-    use std::option;
     use sui::coin;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct FAKE has drop {}
+    public struct FAKE has drop {}
 
     fun init(witness: FAKE, ctx: &mut TxContext){
-        let (treasury_cap, metadata) = coin::create_currency(
+        let (mut treasury_cap, metadata) = coin::create_currency(
             witness,
             2,
             b"FAKE",

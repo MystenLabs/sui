@@ -1,7 +1,7 @@
 
-<a name="0x2_math"></a>
-
-# Module `0x2::math`
+---
+title: Module `0x2::math`
+---
 
 Basic math for nicer programmability
 
@@ -26,7 +26,7 @@ Basic math for nicer programmability
 Return the larger of <code>x</code> and <code>y</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_max">max</a>(x: u64, y: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_max">max</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -35,7 +35,7 @@ Return the larger of <code>x</code> and <code>y</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_max">max</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_max">max</a>(x: u64, y: u64): u64 {
     <b>if</b> (x &gt; y) {
         x
     } <b>else</b> {
@@ -84,7 +84,7 @@ Return the smaller of <code>x</code> and <code>y</code>
 Return the absolute value of x - y
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -93,7 +93,7 @@ Return the absolute value of x - y
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64 {
     <b>if</b> (x &gt; y) {
         x - y
     } <b>else</b> {
@@ -113,7 +113,7 @@ Return the absolute value of x - y
 Return the value of a base raised to a power
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64
 </code></pre>
 
 
@@ -122,7 +122,7 @@ Return the value of a base raised to a power
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64 {
     <b>let</b> res = 1;
     <b>while</b> (exponent &gt;= 1) {
         <b>if</b> (exponent % 2 == 0) {
@@ -173,7 +173,7 @@ math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 ```
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64
 </code></pre>
 
 
@@ -182,7 +182,7 @@ math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64 {
     <b>let</b> bit = 1u128 &lt;&lt; 64;
     <b>let</b> res = 0u128;
     <b>let</b> x = (x <b>as</b> u128);
@@ -236,7 +236,7 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 ```
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128
 </code></pre>
 
 
@@ -245,7 +245,7 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128 {
     <b>let</b> bit = 1u256 &lt;&lt; 128;
     <b>let</b> res = 0u256;
     <b>let</b> x = (x <b>as</b> u256);
@@ -275,7 +275,7 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 Calculate x / y, but round up the result.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -284,7 +284,7 @@ Calculate x / y, but round up the result.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64 {
     <b>if</b> (x % y == 0) {
         x / y
     } <b>else</b> {

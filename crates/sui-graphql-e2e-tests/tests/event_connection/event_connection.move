@@ -9,7 +9,7 @@
 // Verifies correct event when filtered for Test::M1::EventB
 // Verifies error when filtered on sender, package, module and event type with generics and <
 
-//# init --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {
@@ -18,15 +18,15 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct EventA has copy, drop {
+    public struct EventA has copy, drop {
         new_value: u64
     }
 
-    struct EventB<phantom T> has copy, drop {
+    public struct EventB<phantom T> has copy, drop {
         new_value: u64
     }
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
@@ -55,15 +55,15 @@ module Test::M2 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct EventA has copy, drop {
+    public struct EventA has copy, drop {
         new_value: u64
     }
 
-    struct EventB<phantom T> has copy, drop {
+    public struct EventB<phantom T> has copy, drop {
         new_value: u64
     }
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }

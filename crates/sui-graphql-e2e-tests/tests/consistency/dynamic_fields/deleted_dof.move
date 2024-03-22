@@ -9,7 +9,7 @@
 // 5              |               | deleted child
 // 6              |               | mutated parent
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
@@ -18,12 +18,12 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Parent has key, store {
+    public struct Parent has key, store {
         id: UID,
         count: u64
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
         count: u64,
     }

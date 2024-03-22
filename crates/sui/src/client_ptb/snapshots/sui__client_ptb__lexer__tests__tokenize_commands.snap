@@ -1,0 +1,46 @@
+---
+source: crates/sui/src/client_ptb/lexer.rs
+expression: lex(cmds)
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 5,
+        },
+        value: Lexeme(
+            Command,
+            "f00",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 6,
+            end: 15,
+        },
+        value: Lexeme(
+            Command,
+            "Bar_baz",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 16,
+            end: 25,
+        },
+        value: Lexeme(
+            Command,
+            "qux-quy",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 25,
+            end: 25,
+        },
+        value: Lexeme(
+            Eof,
+            "",
+        ),
+    },
+]

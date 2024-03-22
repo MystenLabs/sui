@@ -247,8 +247,8 @@ will verify that all transactions local execution results match the effects on-c
 ### Profile a transaction
 
 Use the `sui client profile-transaction --tx-digest <TRANSACTION-DIGEST>` command to re-execute a transaction locally
-and produce a gas profile. Similarly to the `replay` command, this command fetches the transaction dependencies from the
-full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
+and produce a gas profile. Similar to the `replay` command, this command fetches the transaction dependencies from the
+Full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
 this command records all the Move function invocations and the gas cost breakdown for each invocation.
 
 To enable the profiler, you must either install or build the Sui Client binary locally with the `--features gas-profiler` flag.
@@ -259,7 +259,7 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRA
 
 The command outputs a profile to the current working directory in the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
 You can include the optional flag `--profile-output </PATH/OUTPUT.json>` to write the profile to `/PATH/OUTPUT_{tx_digest}_{unix_timestamp}.json` instead.
-This profile can then be inspected using speedscope.
+Use [speedscope](https://www.speedscope.app/) to inspect the profile.
 
 To install speedscope run
 
@@ -275,7 +275,7 @@ speedscope <PATH/PROFILE-OUTPUT-FILE>
 
 When looking at the profile in speedscope, there are three different views available from the top left menu: **Timer Order**,
 **Left Heavy**, and **Sandwich**. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
-and you can hover your mouse over a bar or click a bar to see the precise amount of gas consumed in MIST (nano-SUI).
+and you can hover your mouse over a bar or click a bar to see the computation units accrued by the function invocation. The transaction's total computation units, along with the storage computation units, are multiplied by the gas price to determine the gas cost of the transaction based on a tier system.
 
 **Time Order** shows the callstack of function invocations from left to right in the order
 of invocation, while **Left Heavy** combines repeated sequences of nested invocations into a single combined call stack. **Left Heavy** 

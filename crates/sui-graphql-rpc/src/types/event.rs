@@ -16,9 +16,9 @@ use crate::data::{self, QueryExecutor};
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, NullableExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
-use sui_indexer::models_v2::{events::StoredEvent, transactions::StoredTransaction};
+use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
 use sui_indexer::schema::{events, transactions, tx_senders};
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
@@ -194,14 +194,20 @@ impl Event {
                         }
 
                         if let Some(digest) = &filter.transaction_digest {
+                            // Since the event filter takes in a single tx_digest, we know that
+                            // there will only be one corresponding transaction. We can use
+                            // single_value() to tell the query planner that we expect only one
+                            // instead of a range of values, which will subsequently speed up query
+                            // execution time.
                             query = query.filter(
-                                events::dsl::tx_sequence_number.eq_any(
+                                events::dsl::tx_sequence_number.nullable().eq(
                                     transactions::dsl::transactions
                                         .select(transactions::dsl::tx_sequence_number)
                                         .filter(
                                             transactions::dsl::transaction_digest
                                                 .eq(digest.to_vec()),
-                                        ),
+                                        )
+                                        .single_value(),
                                 ),
                             )
                         }

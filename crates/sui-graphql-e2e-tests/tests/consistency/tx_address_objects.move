@@ -12,7 +12,7 @@
 // 2  | (3, 3, 3)
 // 3  | (4, 4, 4, 4)
 
-//# init --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {
@@ -20,7 +20,7 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }

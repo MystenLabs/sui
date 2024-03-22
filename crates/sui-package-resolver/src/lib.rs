@@ -4,12 +4,16 @@
 use async_trait::async_trait;
 use lru::LruCache;
 use move_binary_format::file_format::{
-    AbilitySet, FunctionDefinitionIndex, Signature, SignatureIndex, StructTypeParameter, Visibility,
+    AbilitySet, FunctionDefinitionIndex, Signature as MoveSignature, SignatureIndex,
+    StructTypeParameter, Visibility,
 };
 use std::collections::btree_map::Entry;
+use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
+use sui_types::base_types::is_primitive_type_tag;
+use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
 
 use crate::error::Error;
 use move_binary_format::errors::Location;
@@ -152,12 +156,21 @@ pub struct DatatypeRef<'m, 'n> {
 /// A `StructRef` that owns its strings.
 pub type DatatypeKey = DatatypeRef<'static, 'static>;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Reference {
     Immutable,
     Mutable,
 }
 
+/// A function parameter or return signature, with its type parameters instantiated.
+#[derive(Clone, Debug)]
+pub struct Signature {
+    pub ref_: Option<Reference>,
+    pub body: TypeTag,
+}
+
+/// Deserialized representation of a type signature that could appear as a function parameter or
+/// return.
 #[derive(Clone, Debug)]
 pub struct OpenSignature {
     pub ref_: Option<Reference>,
@@ -165,8 +178,6 @@ pub struct OpenSignature {
 }
 
 /// Deserialized representation of a type signature that could appear as a field type for a struct.
-/// Signatures refer to structs at their runtime IDs and can contain references to free type
-/// parameters but will not contain reference types.
 #[derive(Clone, Debug)]
 pub enum OpenSignatureBody {
     Address,
@@ -281,7 +292,7 @@ impl<S: PackageStore> Resolver<S> {
             .as_ref()
             .map_or(usize::MAX, |l| l.max_move_value_depth);
 
-        Ok(context.resolve_layout(&tag, max_depth)?.0)
+        Ok(context.resolve_type_layout(&tag, max_depth)?.0)
     }
 
     /// Return the abilities of a concrete type, based on the abilities in its type definition, and
@@ -306,6 +317,138 @@ impl<S: PackageStore> Resolver<S> {
         // (2). Use that information to calculate the type's abilities.
         context.resolve_abilities(&tag)
     }
+
+    /// Returns the signatures of parameters to function `pkg::module::function` in the package
+    /// store, assuming the function exists.
+    pub async fn function_parameters(
+        &self,
+        pkg: AccountAddress,
+        module: &str,
+        function: &str,
+    ) -> Result<Vec<OpenSignature>> {
+        let mut context = ResolutionContext::new(self.limits.as_ref());
+
+        let package = self.package_store.fetch(pkg).await?;
+        let Some(def) = package.module(module)?.function_def(function)? else {
+            return Err(Error::FunctionNotFound(
+                pkg,
+                module.to_string(),
+                function.to_string(),
+            ));
+        };
+
+        let mut sigs = def.parameters.clone();
+
+        // (1). Fetch all the information from this store that is necessary to resolve types
+        // referenced by this tag.
+        for sig in &sigs {
+            context
+                .add_signature(
+                    sig.body.clone(),
+                    &self.package_store,
+                    package.as_ref(),
+                    /* visit_fields */ false,
+                )
+                .await?;
+        }
+
+        // (2). Use that information to relocate package IDs in the signature.
+        for sig in &mut sigs {
+            context.relocate_signature(&mut sig.body)?;
+        }
+
+        Ok(sigs)
+    }
+
+    /// Attempts to infer the type layouts for pure inputs to the programmable transaction.
+    ///
+    /// The returned vector contains an element for each input to `tx`. Elements corresponding to
+    /// pure inputs that are used as arguments to transaction commands will contain `Some(layout)`.
+    /// Elements for other inputs (non-pure inputs, and unused pure inputs) will be `None`.
+    ///
+    /// Layout resolution can fail if a type/module/package doesn't exist, if layout resolution hits
+    /// a limit, or if a pure input is somehow used in multiple conflicting occasions (with
+    /// different types).
+    pub async fn pure_input_layouts(
+        &self,
+        tx: &ProgrammableTransaction,
+    ) -> Result<Vec<Option<MoveTypeLayout>>> {
+        let mut tags = vec![None; tx.inputs.len()];
+        let mut register_type = |arg: &Argument, tag: &TypeTag| {
+            let &Argument::Input(ix) = arg else {
+                return Ok(());
+            };
+
+            if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
+                return Ok(());
+            }
+
+            let Some(type_) = tags.get_mut(ix as usize) else {
+                return Ok(());
+            };
+
+            if let Some(prev) = type_.replace(tag.clone()) {
+                // SAFETY: We just inserted `tag` in here.
+                let curr = type_.take().unwrap();
+                return Err(Error::InputTypeConflict(ix, prev, curr));
+            };
+
+            Ok(())
+        };
+
+        // (1). Infer type tags for pure inputs from their uses.
+        for cmd in &tx.commands {
+            match cmd {
+                Command::MoveCall(call) => {
+                    let params = self
+                        .function_parameters(
+                            call.package.into(),
+                            call.module.as_str(),
+                            call.function.as_str(),
+                        )
+                        .await?;
+
+                    for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
+                        let sig = open_sig.instantiate(&call.type_arguments)?;
+                        register_type(arg, &sig.body)?;
+                    }
+                }
+
+                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address)?,
+
+                Command::SplitCoins(_, amounts) => {
+                    for amount in amounts {
+                        register_type(amount, &TypeTag::U64)?;
+                    }
+                }
+
+                Command::MakeMoveVec(Some(tag), elems) if is_primitive_type_tag(tag) => {
+                    for elem in elems {
+                        register_type(elem, tag)?;
+                    }
+                }
+
+                _ => { /* nop */ }
+            }
+        }
+
+        // (2). Gather all the unique type tags to convert into layouts. There are relatively few
+        // primitive types so this is worth doing to avoid redundant work.
+        let unique_tags: BTreeSet<_> = tags.iter().filter_map(|t| t.clone()).collect();
+
+        // (3). Convert the type tags into layouts.
+        let mut layouts = BTreeMap::new();
+        for tag in unique_tags {
+            let layout = self.type_layout(tag.clone()).await?;
+            layouts.insert(tag, layout);
+        }
+
+        // (4) Prepare the result vector.
+        Ok(tags
+            .iter()
+            .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
+            .collect())
+    }
 }
 
 impl<T> PackageStoreWithLruCache<T> {
@@ -320,6 +463,7 @@ impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
     async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
         self.inner.version(id).await
     }
+
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         let candidate = {
             // Release the lock after getting the package
@@ -605,6 +749,17 @@ impl OpenSignature {
             },
         })
     }
+
+    /// Return a specific instantiation of this signature, with `type_params` as the actual type
+    /// parameters. This function does not check that the supplied type parameters are valid (meet
+    /// the ability constraints of the struct or function this signature is part of), but will
+    /// produce an error if the signature references a type parameter that is out of bounds.
+    pub fn instantiate(&self, type_params: &[TypeTag]) -> Result<Signature> {
+        Ok(Signature {
+            ref_: self.ref_,
+            body: self.body.instantiate(type_params)?,
+        })
+    }
 }
 
 impl OpenSignatureBody {
@@ -629,13 +784,48 @@ impl OpenSignatureBody {
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
             S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(ix, params) => O::Datatype(
-                DatatypeKey::read(*ix, bytecode),
-                params
+            S::StructInstantiation(struct_inst) => {
+                let (ix, params) = &**struct_inst;
+                O::Datatype(
+                    DatatypeKey::read(*ix, bytecode),
+                    params
+                        .iter()
+                        .map(|sig| OpenSignatureBody::read(sig, bytecode))
+                        .collect::<Result<_>>()?,
+                )
+            }
+        })
+    }
+
+    fn instantiate(&self, type_params: &[TypeTag]) -> Result<TypeTag> {
+        use OpenSignatureBody as O;
+        use TypeTag as T;
+
+        Ok(match self {
+            O::Address => T::Address,
+            O::Bool => T::Bool,
+            O::U8 => T::U8,
+            O::U16 => T::U16,
+            O::U32 => T::U32,
+            O::U64 => T::U64,
+            O::U128 => T::U128,
+            O::U256 => T::U256,
+            O::Vector(s) => T::Vector(Box::new(s.instantiate(type_params)?)),
+
+            O::Datatype(key, dty_params) => T::Struct(Box::new(StructTag {
+                address: key.package,
+                module: ident(&key.module)?,
+                name: ident(&key.name)?,
+                type_params: dty_params
                     .iter()
-                    .map(|sig| OpenSignatureBody::read(sig, bytecode))
+                    .map(|p| p.instantiate(type_params))
                     .collect::<Result<_>>()?,
-            ),
+            })),
+
+            O::TypeParameter(ix) => type_params
+                .get(*ix as usize)
+                .cloned()
+                .ok_or_else(|| Error::TypeParamOOB(*ix, type_params.len()))?,
         })
     }
 }
@@ -766,7 +956,8 @@ impl<'l> ResolutionContext<'l> {
 
                     if visit_fields {
                         for (_, sig) in &def.fields {
-                            self.add_signature(sig.clone(), store, &context).await?;
+                            self.add_signature(sig.clone(), store, &context, visit_fields)
+                                .await?;
                         }
                     }
 
@@ -790,6 +981,7 @@ impl<'l> ResolutionContext<'l> {
         sig: OpenSignatureBody,
         store: &T,
         context: &Package,
+        visit_fields: bool,
     ) -> Result<()> {
         use OpenSignatureBody as O;
 
@@ -828,7 +1020,9 @@ impl<'l> ResolutionContext<'l> {
                             let package = store.fetch(storage_id).await?;
                             let def = package.struct_def(&key.module, &key.name)?;
 
-                            frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
+                            if visit_fields {
+                                frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
+                            }
 
                             check_max_limit!(
                                 TooManyTypeNodes, self.limits;
@@ -858,7 +1052,11 @@ impl<'l> ResolutionContext<'l> {
     ///
     /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
     /// returned alongside the layout (assuming it does not exceed `max_depth`).
-    fn resolve_layout(&self, tag: &TypeTag, max_depth: usize) -> Result<(MoveTypeLayout, usize)> {
+    fn resolve_type_layout(
+        &self,
+        tag: &TypeTag,
+        max_depth: usize,
+    ) -> Result<(MoveTypeLayout, usize)> {
         use MoveTypeLayout as L;
         use TypeTag as T;
 
@@ -881,7 +1079,7 @@ impl<'l> ResolutionContext<'l> {
             T::U256 => (L::U256, 1),
 
             T::Vector(tag) => {
-                let (layout, depth) = self.resolve_layout(tag, max_depth - 1)?;
+                let (layout, depth) = self.resolve_type_layout(tag, max_depth - 1)?;
                 (L::Vector(Box::new(layout)), depth + 1)
             }
 
@@ -914,7 +1112,7 @@ impl<'l> ResolutionContext<'l> {
                     .iter()
                     // Reduce the max depth because we know these type parameters will be nested
                     // wthin this struct.
-                    .map(|tag| self.resolve_layout(tag, max_depth - 1))
+                    .map(|tag| self.resolve_type_layout(tag, max_depth - 1))
                     .collect::<Result<Vec<_>>>()?;
 
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
@@ -934,7 +1132,7 @@ impl<'l> ResolutionContext<'l> {
 
                 for (name, sig) in &def.fields {
                     let (layout, depth) =
-                        self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
+                        self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
 
                     field_depth = field_depth.max(depth);
                     fields.push(MoveFieldLayout {
@@ -956,7 +1154,7 @@ impl<'l> ResolutionContext<'l> {
     ///
     /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
     /// returned alongside the layout (assuming it does not exceed `max_depth`).
-    fn resolve_signature(
+    fn resolve_signature_layout(
         &self,
         sig: &OpenSignatureBody,
         param_layouts: &[(MoveTypeLayout, usize)],
@@ -1001,7 +1199,7 @@ impl<'l> ResolutionContext<'l> {
 
             O::Vector(sig) => {
                 let (layout, depth) =
-                    self.resolve_signature(sig.as_ref(), param_layouts, max_depth - 1)?;
+                    self.resolve_signature_layout(sig.as_ref(), param_layouts, max_depth - 1)?;
 
                 (L::Vector(Box::new(layout)), depth + 1)
             }
@@ -1012,7 +1210,7 @@ impl<'l> ResolutionContext<'l> {
 
                 let param_layouts = params
                     .iter()
-                    .map(|sig| self.resolve_signature(sig, param_layouts, max_depth - 1))
+                    .map(|sig| self.resolve_signature_layout(sig, param_layouts, max_depth - 1))
                     .collect::<Result<Vec<_>>>()?;
 
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
@@ -1031,7 +1229,7 @@ impl<'l> ResolutionContext<'l> {
                 let mut field_depth = 0;
                 for (name, sig) in &def.fields {
                     let (layout, depth) =
-                        self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
+                        self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
 
                     field_depth = field_depth.max(depth);
                     fields.push(MoveFieldLayout {
@@ -1097,6 +1295,35 @@ impl<'l> ResolutionContext<'l> {
             }
         })
     }
+
+    /// Translate the (runtime) package IDs in `sig` to defining IDs using only the information
+    /// contained in this context. Requires that the necessary information was added to the context
+    /// through calls to `add_signature` before being called.
+    fn relocate_signature(&self, sig: &mut OpenSignatureBody) -> Result<()> {
+        use OpenSignatureBody as O;
+
+        match sig {
+            O::Address | O::Bool | O::U8 | O::U16 | O::U32 | O::U64 | O::U128 | O::U256 => {
+                /* nop */
+            }
+
+            O::TypeParameter(_) => { /* nop */ }
+
+            O::Vector(sig) => self.relocate_signature(sig.as_mut())?,
+
+            O::Datatype(key, params) => {
+                // SAFETY: `add_signature` ensures `structs` has an element with this key.
+                let def = &self.structs[key];
+                for param in params {
+                    self.relocate_signature(param)?;
+                }
+
+                key.package = def.defining_id;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<'s> From<&'s StructTag> for DatatypeRef<'s, 's> {
@@ -1117,7 +1344,7 @@ fn ident(s: &str) -> Result<Identifier> {
 /// Read and deserialize a signature index (from function parameter or return types) into a vector
 /// of signatures.
 fn read_signature(idx: SignatureIndex, bytecode: &CompiledModule) -> Result<Vec<OpenSignature>> {
-    let Signature(tokens) = bytecode.signature_at(idx);
+    let MoveSignature(tokens) = bytecode.signature_at(idx);
     let mut sigs = Vec::with_capacity(tokens.len());
 
     for token in tokens {
@@ -1131,8 +1358,11 @@ fn read_signature(idx: SignatureIndex, bytecode: &CompiledModule) -> Result<Vec<
 mod tests {
     use async_trait::async_trait;
     use move_binary_format::file_format::Ability;
+    use move_core_types::ident_str;
     use std::sync::Arc;
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
+    use sui_types::base_types::random_object_ref;
+    use sui_types::transaction::{ObjectArg, ProgrammableMoveCall};
 
     use move_compiler::compiled_unit::NamedCompiledModule;
     use sui_move_build::{BuildConfig, CompiledPackage};
@@ -1496,10 +1726,7 @@ mod tests {
     #[tokio::test]
     async fn test_structs() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
-        let a0 = cache
-            .fetch(AccountAddress::from_str("0xa0").unwrap())
-            .await
-            .unwrap();
+        let a0 = cache.fetch(addr("0xa0")).await.unwrap();
         let m = a0.module("m").unwrap();
 
         assert_eq!(
@@ -1536,10 +1763,7 @@ mod tests {
             (1, build_package("c0"), c0_types()),
         ]);
 
-        let c0 = cache
-            .fetch(AccountAddress::from_str("0xc0").unwrap())
-            .await
-            .unwrap();
+        let c0 = cache.fetch(addr("0xc0")).await.unwrap();
         let m = c0.module("m").unwrap();
 
         assert_eq!(
@@ -1571,6 +1795,70 @@ mod tests {
              c0::m::bar: {bar:#?}\n\
              c0::m::baz: {baz:#?}"
         ));
+    }
+
+    #[tokio::test]
+    async fn test_function_parameters() {
+        let (_, cache) = package_cache([
+            (1, build_package("a0"), a0_types()),
+            (2, build_package("a1"), a1_types()),
+            (1, build_package("b0"), b0_types()),
+            (1, build_package("c0"), c0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+        let c0 = addr("0xc0");
+
+        let foo = resolver.function_parameters(c0, "m", "foo").await.unwrap();
+        let bar = resolver.function_parameters(c0, "m", "bar").await.unwrap();
+        let baz = resolver.function_parameters(c0, "m", "baz").await.unwrap();
+
+        insta::assert_snapshot!(format!(
+            "c0::m::foo: {foo:#?}\n\
+             c0::m::bar: {bar:#?}\n\
+             c0::m::baz: {baz:#?}"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_signature_instantiation() {
+        use OpenSignatureBody as O;
+        use TypeTag as T;
+
+        let sig = O::Datatype(
+            key("0x2::table::Table"),
+            vec![
+                O::TypeParameter(1),
+                O::Vector(Box::new(O::Datatype(
+                    key("0x1::option::Option"),
+                    vec![O::TypeParameter(0)],
+                ))),
+            ],
+        );
+
+        insta::assert_debug_snapshot!(sig.instantiate(&[T::U64, T::Bool]).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_signature_instantiation_error() {
+        use OpenSignatureBody as O;
+        use TypeTag as T;
+
+        let sig = O::Datatype(
+            key("0x2::table::Table"),
+            vec![
+                O::TypeParameter(1),
+                O::Vector(Box::new(O::Datatype(
+                    key("0x1::option::Option"),
+                    vec![O::TypeParameter(99)],
+                ))),
+            ],
+        );
+
+        insta::assert_display_snapshot!(
+            sig.instantiate(&[T::U64, T::Bool]).unwrap_err(),
+            @"Type Parameter 99 out of bounds (2)"
+        );
     }
 
     /// Primitive types should have the expected primitive abilities
@@ -1837,6 +2125,128 @@ mod tests {
         assert!(matches!(err, Error::TypeParamNesting(2, _)));
     }
 
+    #[tokio::test]
+    async fn test_pure_input_layouts() {
+        use CallArg as I;
+        use ObjectArg::ImmOrOwnedObject as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([
+            (1, build_package("std"), std_types()),
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("e0"), e0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+
+        // Helper function to generate a PTB calling 0xe0::m::foo.
+        fn ptb(t: TypeTag, y: CallArg) -> ProgrammableTransaction {
+            ProgrammableTransaction {
+                inputs: vec![
+                    I::Object(O(random_object_ref())),
+                    I::Pure(bcs::to_bytes(&42u64).unwrap()),
+                    I::Object(O(random_object_ref())),
+                    y,
+                    I::Object(O(random_object_ref())),
+                    I::Pure(bcs::to_bytes("hello").unwrap()),
+                    I::Pure(bcs::to_bytes("world").unwrap()),
+                ],
+                commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![t],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                }))],
+            }
+        }
+
+        let ptb_u64 = ptb(T::U64, I::Pure(bcs::to_bytes(&1u64).unwrap()));
+
+        let ptb_opt = ptb(
+            TypeTag::Struct(Box::new(StructTag {
+                address: addr("0x1"),
+                module: ident_str!("option").to_owned(),
+                name: ident_str!("Option").to_owned(),
+                type_params: vec![TypeTag::U64],
+            })),
+            I::Pure(bcs::to_bytes(&[vec![1u64], vec![], vec![3]]).unwrap()),
+        );
+
+        let ptb_obj = ptb(
+            TypeTag::Struct(Box::new(StructTag {
+                address: addr("0xe0"),
+                module: ident_str!("m").to_owned(),
+                name: ident_str!("O").to_owned(),
+                type_params: vec![],
+            })),
+            I::Object(O(random_object_ref())),
+        );
+
+        let inputs_u64 = resolver.pure_input_layouts(&ptb_u64).await.unwrap();
+        let inputs_opt = resolver.pure_input_layouts(&ptb_opt).await.unwrap();
+        let inputs_obj = resolver.pure_input_layouts(&ptb_obj).await.unwrap();
+
+        // Make the output format a little nicer for the snapshot
+        let mut output = "---\n".to_string();
+        for inputs in [inputs_u64, inputs_opt, inputs_obj] {
+            for input in inputs {
+                if let Some(layout) = input {
+                    output += &format!("{layout:#}\n");
+                } else {
+                    output += "???\n";
+                }
+            }
+            output += "---\n";
+        }
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[tokio::test]
+    async fn test_pure_input_layouts_conflicting() {
+        use CallArg as I;
+        use ObjectArg::ImmOrOwnedObject as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([
+            (1, build_package("std"), std_types()),
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("e0"), e0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+
+        let ptb = ProgrammableTransaction {
+            inputs: vec![
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&42u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&43u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes("hello").unwrap()),
+                I::Pure(bcs::to_bytes("world").unwrap()),
+            ],
+            commands: vec![
+                Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![T::U64],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                })),
+                // This command is using the input that was previously used as a U64, but now as a
+                // U32, which will cause an error.
+                Command::MakeMoveVec(Some(T::U32), vec![Argument::Input(3)]),
+            ],
+        };
+
+        insta::assert_display_snapshot!(
+            resolver.pure_input_layouts(&ptb).await.unwrap_err(),
+            @"Conflicting types for input 3: u64 and u32"
+        );
+    }
+
     /***** Test Helpers ***************************************************************************/
 
     type TypeOriginTable = Vec<DatatypeKey>;
@@ -1881,6 +2291,10 @@ mod tests {
         ]
     }
 
+    fn e0_types() -> TypeOriginTable {
+        vec![struct_("0xe0", "m", "O")]
+    }
+
     fn s0_types() -> TypeOriginTable {
         vec![struct_("0x1", "m", "T0")]
     }
@@ -1895,6 +2309,14 @@ mod tests {
 
     fn sui_types() -> TypeOriginTable {
         vec![struct_("0x2", "object", "UID")]
+    }
+
+    fn std_types() -> TypeOriginTable {
+        vec![
+            struct_("0x1", "ascii", "String"),
+            struct_("0x1", "option", "Option"),
+            struct_("0x1", "string", "String"),
+        ]
     }
 
     /// Build an in-memory package cache from locally compiled packages.  Assumes that all packages
@@ -2025,6 +2447,11 @@ mod tests {
 
     fn type_(t: &str) -> TypeTag {
         TypeTag::from_str(t).unwrap()
+    }
+
+    fn key(t: &str) -> DatatypeKey {
+        let tag = StructTag::from_str(t).unwrap();
+        DatatypeRef::from(&tag).as_key()
     }
 
     struct InMemoryPackageStore {

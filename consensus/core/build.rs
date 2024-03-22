@@ -13,7 +13,7 @@ fn main() -> Result<()> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     build_anemo_services(&out_dir);
 
-    println!("cargo:rerun-if-changed=anemo_build.rs");
+    println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())
 }

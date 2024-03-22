@@ -9,15 +9,15 @@ module tto::M1 {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer::{Self, Receiving};
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
-    struct Duo<phantom T: key> has drop {
+    public struct Duo<phantom T: key> has drop {
         r1: Receiving<T>,
         r2: Receiving<T>,
     }
@@ -39,7 +39,7 @@ module tto::M1 {
 
     public fun receive_duo(parent: &mut A, d: Duo<B>): (B, B) {
         let Duo { r1, r2 } = d;
-        let r1 = transfer::receive(&mut parent.id, r1);
+        let mut r1 = transfer::receive(&mut parent.id, r1);
         let r2 = transfer::receive(&mut r1.id, r2);
         (r1, r2)
     }

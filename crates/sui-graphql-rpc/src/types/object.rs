@@ -36,9 +36,7 @@ use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models_v2::objects::{
-    StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
-};
+use sui_indexer::models::objects::{StoredDeletedHistoryObject, StoredHistoryObject, StoredObject};
 use sui_indexer::schema::{objects, objects_history, objects_snapshot};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
@@ -1373,7 +1371,14 @@ where
         View::Consistent
     };
 
-    build_objects_query(view, lhs, rhs, page, move |query| filter.apply(query))
+    build_objects_query(
+        view,
+        lhs,
+        rhs,
+        page,
+        move |query| filter.apply(query),
+        move |newer| newer,
+    )
 }
 
 #[cfg(test)]

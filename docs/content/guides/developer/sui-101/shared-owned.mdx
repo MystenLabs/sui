@@ -20,7 +20,7 @@ For more information on the types of objects that Sui supports, see [Object Owne
 The Escrow example demonstrates the trade-offs between shared objects and owned objects by implementing the same application in both styles. It implements a service that allows two addresses to perform a trustless swap of objects with each other (a "trade") with the service holding their objects in escrow.
 
 ### `Locked<T>` and `Key`
-[Code Sample](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/lock.move)
+[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/lock.move)
 
 Both implementations use a primitive for locking values, which offers the following interface:
 
@@ -37,11 +37,35 @@ The important property that this interface provides is that locked values cannot
 
 ### Owned objects
 
-[Code Sample](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/owned.move)
+[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/owned.move)
 
-The protocol for swapping via escrow implemented using owned objects starts with both parties locking their respective objects. This will be used to prove that the object has not been tampered with after the swap has been agreed. If either party does not want to proceed at this stage, they just unlock their object.
+The protocol for swapping via escrow implemented using owned objects starts with both parties locking their respective objects. 
 
-Assuming both parties are happy to continue, the next step requires a third party to act as custodian.  The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
+```mermaid
+flowchart TD
+    SR[Locked&ltfa:fa-wrench S&gt, fa:fa-key key_s]
+    BR[Locked&ltfa:fa-coins B&gt, fa:fa-key key_b]
+
+    subgraph Seller
+    a2(fa:fa-wrench S)--escrow::lock-->SR
+    end
+
+    subgraph Buyer
+    a1(fa:fa-coins B)--escrow::lock-->BR
+    end
+```
+
+This is used to prove that the object has not been tampered with after the swap has been agreed to. If either party doesn't want to proceed at this stage, they just unlock their object.
+
+Assuming both parties are happy to continue, the next step requires both parties to swap the keys.
+
+```mermaid
+flowchart LR
+    Buyer--fa:fa-key key_b-->Seller
+    Seller--fa:fa-key key_s-->Buyer
+```
+
+A third party acts as custodian. The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
 
 ```move
 public fun create<T: key + store>(
@@ -65,9 +89,49 @@ public fun create<T: key + store>(
 }
 ```
 
+```mermaid
+flowchart TB
+    S["fa:fa-key key_s,
+        Locked&ltfa:fa-wrench S&gt,
+        exchange_key: fa:fa-key key_b,
+        recipient: Buyer
+    "]
+    B["fa:fa-key key_b,
+        Locked&ltfa:fa-coins B&gt,
+        exchange_key: fa:fa-key key_s,
+        recipient: Seller
+    "]
+
+    id1(Escrow&ltfa:fa-coins B&gt)-->Third_Party
+    id2(Escrow&ltfa:fa-wrench S&gt)-->Third_Party
+    subgraph Buyer
+    direction TB
+    B--create-->id1
+    end
+
+    subgraph Seller
+    direction TB
+    S--create-->id2
+    end
+```
+
 The `create` function prepares the `Escrow` request and sends it to the `custodian`.  The object being offered by this party is passed in, locked, with its key, and the object being requested is identified by the ID of the key it was locked with.  While preparing the request, the offered object is unlocked, while remembering the ID of its key.
 
 Although the custodian is trusted to preserve liveness (to complete swaps if it owns both sides of a swap and to return objects if requested), all other correctness properties are maintained in Move: Even though the custodian owns both objects being swapped, the only valid action they are permitted to take is to match them up with their correct counterpart to finish the swap, or to return them:
+
+```mermaid
+flowchart TB
+
+    subgraph Third_Party
+    direction TB
+    id1(fa:fa-wrench S, fa:fa-coins B)
+    id2(Escrow&ltfa:fa-coins B&gt, Escrow&ltfa:fa-wrench S&gt)
+    id2--swap-->id1
+    end
+
+    Third_Party--fa:fa-wrench S-->Buyer
+    Third_Party--fa:fa-coins B-->Seller
+```
 
 
 ```move
@@ -115,9 +179,35 @@ The `swap` function checks that senders and recipients match and that each party
 
 ### Shared objects
 
-[Code Sample](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/shared.move)
+[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/shared.move)
 
-The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they wish to swap. The second party can then view the object that was locked, and if they decide they want to swap with it, they indicate their interest by creating a swap request:
+The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they want to swap. 
+```mermaid
+flowchart TB
+    B["Locked&ltfa:fa-coins B&gt, fa:fa-key key_b"]
+        
+    subgraph Buyer
+    direction TB
+    a1(fa:fa-coins B)--escrow::lock-->B
+    end
+```
+
+The second party can then view the object that was locked, and if they decide they want to swap with it, they indicate their interest by creating a swap request:
+
+```mermaid
+flowchart TB
+    S["fa:fa-wrench S,
+        exchange_key: fa:fa-key key_b,
+        recipient: Buyer
+    "]
+
+    id1(Shared Object)-->id2(Escrow&ltfa:fa-wrench S&gt)
+
+    subgraph Seller
+    direction TB
+    S--create-->id2
+    end
+```
 
 ```move
 public fun create<T: key + store>(
@@ -131,38 +221,58 @@ public fun create<T: key + store>(
         sender: tx_context::sender(ctx),
         recipient,
         exchange_key,
-        escrowed: option::some(escrowed),
+        escrowed,
     };
 
     transfer::public_share_object(escrow);
 }
 ```
 
-This time the swap request is a shared object, and accepts the object being escrowed directly (not locked).  The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
+This time the `create` request accepts the object being escrowed directly (not locked), and creates a shared `Escrow` object.  The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
+
+```mermaid
+flowchart TB
+
+    subgraph Buyer
+    direction TB
+    id1(Escrow&ltfa:fa-wrench S&gt,\n fa:fa-key key_b,\n Locked&ltfa:fa-coins B&gt)
+    id2(fa:fa-wrench S)
+    id1-->swap-->id2
+    end
+
+    swap--fa:fa-coins B-->Seller
+```
+
 
 ```move
 public fun swap<T: key + store, U: key + store>(
-    escrow: &mut Escrow<T>,
+    escrow: Escrow<T>,
     key: Key,
     locked: Locked<U>,
     ctx: &TxContext,
 ): T {
-    assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrReturned);
-    assert!(escrow.recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
-    assert!(escrow.exchange_key == object::id(&key), EMismatchedExchangeObject);
+    let Escrow {
+        id,
+        sender,
+        recipient,
+        exchange_key,
+        escrowed,
+    } = escrow;
 
-    let escrowed1 = option::extract<T>(&mut escrow.escrowed);
-    let escrowed2 = lock::unlock(locked, key);
+    assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+    assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
 
     // Do the actual swap
-    transfer::public_transfer(escrowed2, escrow.sender);
-    escrowed1
+    transfer::public_transfer(lock::unlock(locked, key), sender);
+    object::delete(id);
+
+    escrowed
 }
 ```
 
-Even though the `Escrow` request is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).
+Even though the `Escrow` object is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).
 
-Assuming all checks pass, the object held in `Escrow` is extracted and returned to the first party, leaving the shared request object empty (but still existing).  The locked object offered by the first party is also unlocked and sent to the second party, completing the swap.
+Assuming all checks pass, the object held in `Escrow` is extracted, its wrapper is deleted and it is returned to the first party.  The locked object offered by the first party is also unlocked and sent to the second party, completing the swap.
 
 ### Comparison
 
@@ -170,4 +280,4 @@ This topic explores two ways to implement a swap between two objects.  In both c
 
 In one case, the protocol uses only owned objects but requires a custodian to act as an intermediary. This has the advantage of avoiding the costs and latencies of consensus altogether, but involves more steps and requires trusting a third party for liveness.
 
-In the other case, the object is custodied on chain in a shared object.  This requires consensus, and leaves a shared object on chain at the end of the swap (consuming gas in the form of irretrievable storage rebate), but involves fewer steps, and no third party.
+In the other case, the object is custodied on chain in a shared object.  This requires consensus but involves fewer steps, and no third party.

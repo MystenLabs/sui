@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 36;
+const MAX_PROTOCOL_VERSION: u64 = 40;
 
 // Record history of protocol version allocations here:
 //
@@ -108,6 +108,11 @@ const MAX_PROTOCOL_VERSION: u64 = 36;
 // Version 36: Enable group operations native functions in devnet.
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
+// Version 37: Reject entry functions with mutable Random.
+// Version 38: Introduce limits for binary tables size.
+// Version 39: Allow skipped epochs for randomness updates.
+//             Extra version to fix `test_upgrade_compatibility` simtest.
+// Version 40:
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -327,10 +332,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
 
-    // Enable v2 of Headers for Narwhal
-    #[serde(skip_serializing_if = "is_false")]
-    narwhal_header_v2: bool,
-
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
@@ -382,6 +383,10 @@ struct FeatureFlags {
     // Enable native functions for group operations.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_functions: bool,
+
+    // Reject functions with mutable Random.
+    #[serde(skip_serializing_if = "is_false")]
+    reject_mutable_random_on_entry_functions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -473,6 +478,9 @@ pub struct ProtocolConfig {
     /// Maximum number of modules in a Publish transaction.
     max_modules_in_publish: Option<u32>,
 
+    /// Maximum number of transitive dependencies in a package when publishing.
+    max_package_dependencies: Option<u32>,
+
     /// Maximum number of arguments in a move call or a ProgrammableTransaction's
     /// TransferObjects command.
     max_arguments: Option<u32>,
@@ -492,6 +500,21 @@ pub struct ProtocolConfig {
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
+    /// Configuration controlling binary tables size.
+    binary_module_handles: Option<u16>,
+    binary_struct_handles: Option<u16>,
+    binary_function_handles: Option<u16>,
+    binary_function_instantiations: Option<u16>,
+    binary_signatures: Option<u16>,
+    binary_constant_pool: Option<u16>,
+    binary_identifiers: Option<u16>,
+    binary_address_identifiers: Option<u16>,
+    binary_struct_defs: Option<u16>,
+    binary_struct_def_instantiations: Option<u16>,
+    binary_function_defs: Option<u16>,
+    binary_field_handles: Option<u16>,
+    binary_field_instantiations: Option<u16>,
+    binary_friend_decls: Option<u16>,
 
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
@@ -923,6 +946,14 @@ pub struct ProtocolConfig {
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
 
+    /// Minimum number of shares below which voting weights will not be reduced for the
+    /// random beacon protocol.
+    random_beacon_reduction_lower_bound: Option<u32>,
+
+    /// Consensus Round after which DKG should be aborted and randomness disabled for
+    /// the epoch, if it hasn't already completed.
+    random_beacon_dkg_timeout_round: Option<u32>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1098,17 +1129,8 @@ impl ProtocolConfig {
         self.enable_jwk_consensus_updates()
     }
 
-    pub fn narwhal_header_v2(&self) -> bool {
-        self.feature_flags.narwhal_header_v2
-    }
-
     pub fn random_beacon(&self) -> bool {
-        let ret = self.feature_flags.random_beacon;
-        if ret {
-            // random beacon requires narwhal v2 headers
-            assert!(self.feature_flags.narwhal_header_v2);
-        }
-        ret
+        self.feature_flags.random_beacon
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -1149,6 +1171,10 @@ impl ProtocolConfig {
 
     pub fn enable_group_ops_native_functions(&self) -> bool {
         self.feature_flags.enable_group_ops_native_functions
+    }
+
+    pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
+        self.feature_flags.reject_mutable_random_on_entry_functions
     }
 }
 
@@ -1269,12 +1295,27 @@ impl ProtocolConfig {
             max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
             max_gas_payment_objects: Some(256),
             max_modules_in_publish: Some(128),
+            max_package_dependencies: None,
             max_arguments: Some(512),
             max_type_arguments: Some(16),
             max_type_argument_depth: Some(16),
             max_pure_argument_size: Some(16 * 1024),
             max_programmable_tx_commands: Some(1024),
             move_binary_format_version: Some(6),
+            binary_module_handles: None,
+            binary_struct_handles: None,
+            binary_function_handles: None,
+            binary_function_instantiations: None,
+            binary_signatures: None,
+            binary_constant_pool: None,
+            binary_identifiers: None,
+            binary_address_identifiers: None,
+            binary_struct_defs: None,
+            binary_struct_def_instantiations: None,
+            binary_function_defs: None,
+            binary_field_handles: None,
+            binary_field_instantiations: None,
+            binary_friend_decls: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -1561,6 +1602,10 @@ impl ProtocolConfig {
 
             random_beacon_reduction_allowed_delta: None,
 
+            random_beacon_reduction_lower_bound: None,
+
+            random_beacon_dkg_timeout_round: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1806,8 +1851,9 @@ impl ProtocolConfig {
                     }
                     // Only enable random beacon on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(200);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
@@ -1886,6 +1932,42 @@ impl ProtocolConfig {
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
                     // 6 MB
                 }
+                37 => {
+                    cfg.feature_flags.reject_mutable_random_on_entry_functions = true;
+
+                    // Enable consensus digest in consensus commit prologue in testnet and devnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    }
+                }
+                38 => {
+                    cfg.binary_module_handles = Some(100);
+                    cfg.binary_struct_handles = Some(300);
+                    cfg.binary_function_handles = Some(1500);
+                    cfg.binary_function_instantiations = Some(750);
+                    cfg.binary_signatures = Some(1000);
+                    // constants and identifiers are proportional to the binary size,
+                    // and they vastly depend on the code, so we are leaving them
+                    // reasonably high
+                    cfg.binary_constant_pool = Some(4000);
+                    cfg.binary_identifiers = Some(10000);
+                    cfg.binary_address_identifiers = Some(100);
+                    cfg.binary_struct_defs = Some(200);
+                    cfg.binary_struct_def_instantiations = Some(100);
+                    cfg.binary_function_defs = Some(1000);
+                    cfg.binary_field_handles = Some(500);
+                    cfg.binary_field_instantiations = Some(250);
+                    cfg.binary_friend_decls = Some(100);
+                    // reduce dependencies maximum
+                    cfg.max_package_dependencies = Some(32);
+                    cfg.max_modules_in_publish = Some(64);
+                    // bump execution version
+                    cfg.execution_version = Some(3);
+                }
+                39 => {
+                    // It is important that we keep this protocol version blank due to an issue with random.move.
+                }
+                40 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

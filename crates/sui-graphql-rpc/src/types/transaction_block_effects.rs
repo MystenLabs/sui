@@ -6,7 +6,7 @@ use async_graphql::{
     connection::{Connection, ConnectionNameType, CursorType, Edge, EdgeNameType, EmptyFields},
     *,
 };
-use sui_indexer::models_v2::transactions::StoredTransaction;
+use sui_indexer::models::transactions::StoredTransaction;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     event::Event as NativeEvent,
@@ -372,7 +372,7 @@ impl TransactionBlockEffects {
     /// The epoch this transaction was finalized in.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Epoch::query(
-            ctx.data_unchecked(),
+            ctx,
             Some(self.native().executed_epoch()),
             Some(self.checkpoint_viewed_at),
         )

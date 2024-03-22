@@ -12,14 +12,12 @@ use mysten_metrics::spawn_monitored_task;
 use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::framework::fetcher::CheckpointFetcher;
-use crate::handlers::checkpoint_handler_v2::new_handlers;
+use crate::handlers::checkpoint_handler::new_handlers;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
-use crate::processors_v2::objects_snapshot_processor::{
-    ObjectsSnapshotProcessor, SnapshotLagConfig,
-};
-use crate::processors_v2::processor_orchestrator_v2::ProcessorOrchestratorV2;
-use crate::store::{IndexerStoreV2, PgIndexerAnalyticalStore};
+use crate::processors::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
+use crate::processors::processor_orchestrator::ProcessorOrchestrator;
+use crate::store::{IndexerStore, PgIndexerAnalyticalStore};
 use crate::IndexerConfig;
 
 const DOWNLOAD_QUEUE_SIZE: usize = 1000;
@@ -27,7 +25,7 @@ const DOWNLOAD_QUEUE_SIZE: usize = 1000;
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start_writer<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
+    pub async fn start_writer<S: IndexerStore + Sync + Send + Clone + 'static>(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
@@ -36,7 +34,7 @@ impl Indexer {
         Indexer::start_writer_with_config(config, store, metrics, snapshot_config).await
     }
 
-    pub async fn start_writer_with_config<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
+    pub async fn start_writer_with_config<S: IndexerStore + Sync + Send + Clone + 'static>(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
@@ -122,8 +120,8 @@ impl Indexer {
             "Sui Indexer Analytical Worker (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let mut processor_orchestrator_v2 = ProcessorOrchestratorV2::new(store, metrics);
-        processor_orchestrator_v2.run_forever().await;
+        let mut processor_orchestrator = ProcessorOrchestrator::new(store, metrics);
+        processor_orchestrator.run_forever().await;
         Ok(())
     }
 }

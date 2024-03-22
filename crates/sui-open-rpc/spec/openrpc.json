@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.20.0"
+    "version": "1.22.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "36",
+              "maxSupportedProtocolVersion": "40",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1385,7 +1385,6 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "narwhal_certificate_v2": false,
-                "narwhal_header_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
@@ -1394,6 +1393,7 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "reject_mutable_random_on_entry_functions": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
@@ -1420,6 +1420,20 @@
                 "base_tx_cost_per_byte": {
                   "u64": "0"
                 },
+                "binary_address_identifiers": null,
+                "binary_constant_pool": null,
+                "binary_field_handles": null,
+                "binary_field_instantiations": null,
+                "binary_friend_decls": null,
+                "binary_function_defs": null,
+                "binary_function_handles": null,
+                "binary_function_instantiations": null,
+                "binary_identifiers": null,
+                "binary_module_handles": null,
+                "binary_signatures": null,
+                "binary_struct_def_instantiations": null,
+                "binary_struct_defs": null,
+                "binary_struct_handles": null,
                 "bls12381_bls12381_min_pk_verify_cost_base": {
                   "u64": "52"
                 },
@@ -1780,6 +1794,7 @@
                 "max_num_transferred_move_object_ids_system_tx": {
                   "u64": "32768"
                 },
+                "max_package_dependencies": null,
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
@@ -1879,7 +1894,9 @@
                 },
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
+                "random_beacon_dkg_timeout_round": null,
                 "random_beacon_reduction_allowed_delta": null,
+                "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },

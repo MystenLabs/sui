@@ -7,15 +7,18 @@ mod progress_store;
 mod reader;
 #[cfg(test)]
 mod tests;
+mod util;
 mod worker_pool;
 
 use anyhow::Result;
 use async_trait::async_trait;
-pub use executor::{IndexerExecutor, MAX_CHECKPOINTS_IN_PROGRESS};
+pub use executor::{setup_single_workflow, IndexerExecutor, MAX_CHECKPOINTS_IN_PROGRESS};
 pub use metrics::DataIngestionMetrics;
 pub use progress_store::{FileProgressStore, ProgressStore};
+pub use reader::ReaderOptions;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+pub use util::create_remote_store_client;
 pub use worker_pool::WorkerPool;
 
 #[async_trait]

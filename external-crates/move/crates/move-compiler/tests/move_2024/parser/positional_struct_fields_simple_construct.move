@@ -2,7 +2,7 @@ address 0x42 {
 module M {
     // Valid positional field struct declaration
     public struct Foo(u64) has copy, drop;
-    public struct Bar has copy (u64) 
+    public struct Bar has copy (u64)
     public struct Baz()
     public struct Qux(
         /// A field with a doc comment
@@ -11,7 +11,7 @@ module M {
         u64,)
 
     fun x() {
-        let x = Foo(0);
+        let _x = Foo(0);
         abort 0
     }
 }

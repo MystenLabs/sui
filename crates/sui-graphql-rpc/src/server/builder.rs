@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{
-    ConnectionConfig, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+    ConnectionConfig, Version, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
-
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::move_object::IMoveObject;
@@ -25,6 +24,7 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
+use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
@@ -225,14 +225,7 @@ impl ServerBuilder {
         })
     }
 
-    pub async fn from_yaml_config(path: &str) -> Result<(Self, ServerConfig), Error> {
-        let config = ServerConfig::from_yaml(path)?;
-        Self::from_config(&config)
-            .await
-            .map(|builder| (builder, config))
-    }
-
-    pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
+    pub async fn from_config(config: &ServerConfig, version: &Version) -> Result<Self, Error> {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -248,13 +241,18 @@ impl ServerBuilder {
         let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
         info!("Starting Prometheus HTTP endpoint at {}", prom_addr);
         let registry = registry_service.default_registry();
+        registry
+            .register(mysten_metrics::uptime_metric(
+                "graphql", version.0, "unknown",
+            ))
+            .unwrap();
 
         // METRICS
         let metrics = Metrics::new(&registry);
         let state = AppState::new(config.connection.clone(), metrics.clone());
         let mut builder = ServerBuilder::new(state);
 
-        let name_service_config = config.name_service.clone();
+        let name_service_config = config.service.name_service.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
@@ -289,6 +287,7 @@ impl ServerBuilder {
 
         builder = builder
             .context_data(config.service.clone())
+            .context_data(DataLoader::new(db.clone(), tokio::spawn))
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(Resolver::new_with_limits(
@@ -547,10 +546,10 @@ pub mod tests {
                 .context_data(cfg)
                 .context_data(query_id())
                 .context_data(ip_address())
+                .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout)
                 .build_schema();
 
             schema.execute("{ chainIdentifier }").await

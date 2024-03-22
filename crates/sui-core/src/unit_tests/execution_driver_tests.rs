@@ -423,20 +423,16 @@ async fn test_execution_with_dependencies() {
 
     // Enqueue certs out of dependency order for executions.
     for cert in executed_shared_certs.iter().rev() {
-        authorities[3]
-            .enqueue_certificates_for_execution(
-                vec![cert.clone()],
-                &authorities[3].epoch_store_for_testing(),
-            )
-            .unwrap();
+        authorities[3].enqueue_certificates_for_execution(
+            vec![cert.clone()],
+            &authorities[3].epoch_store_for_testing(),
+        );
     }
     for cert in executed_owned_certs.iter().rev() {
-        authorities[3]
-            .enqueue_certificates_for_execution(
-                vec![cert.clone()],
-                &authorities[3].epoch_store_for_testing(),
-            )
-            .unwrap();
+        authorities[3].enqueue_certificates_for_execution(
+            vec![cert.clone()],
+            &authorities[3].epoch_store_for_testing(),
+        );
     }
 
     // All certs should get executed eventually.
@@ -761,7 +757,7 @@ async fn test_authority_txn_signing_pushback() {
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
 
-    // First, create a transaction to tranfer `gas_object1` to `recipient1`.
+    // First, create a transaction to transfer `gas_object1` to `recipient1`.
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let tx = make_transfer_object_transaction(
         gas_object1.compute_object_reference(),
@@ -852,8 +848,10 @@ async fn test_authority_txn_execution_pushback() {
     let gas_object2 = Object::with_owner_for_testing(sender);
 
     // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
+    // Set check_system_overload_at_signing to false to disable load shedding at signing, this we are testing load shedding at execution.
     // Set check_system_overload_at_execution to true.
     let overload_config = AuthorityOverloadConfig {
+        check_system_overload_at_signing: false,
         check_system_overload_at_execution: true,
         max_load_shedding_percentage: 0,
         ..Default::default()
@@ -888,7 +886,7 @@ async fn test_authority_txn_execution_pushback() {
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
 
-    // Create a transaction to tranfer `gas_object1` to `recipient`.
+    // Create a transaction to transfer `gas_object1` to `recipient`.
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let tx = make_transfer_object_transaction(
         gas_object1.compute_object_reference(),

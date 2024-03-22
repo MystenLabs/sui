@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::file_format::SignatureToken;
+use move_bytecode_utils::resolve_struct;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 
 use crate::base_types::SequenceNumber;
@@ -31,4 +34,12 @@ pub fn get_randomness_state_obj_initial_shared_version(
             } => initial_shared_version,
             _ => unreachable!("Randomness state object must be shared"),
         }))
+}
+
+pub fn is_mutable_random(view: &BinaryIndexedView<'_>, s: &SignatureToken) -> bool {
+    match s {
+        SignatureToken::MutableReference(inner) => is_mutable_random(view, inner),
+        SignatureToken::Struct(idx) => resolve_struct(view, *idx) == RESOLVED_SUI_RANDOMNESS_STATE,
+        _ => false,
+    }
 }

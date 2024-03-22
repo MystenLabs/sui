@@ -25,7 +25,8 @@ use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
 use crate::{
-    AnalyticsIndexerConfig, FileMetadata, MaxCheckpointReader, ParquetSchema, EPOCH_DIR_PREFIX,
+    join_paths, AnalyticsIndexerConfig, FileMetadata, MaxCheckpointReader, ParquetSchema,
+    EPOCH_DIR_PREFIX,
 };
 
 pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
@@ -281,9 +282,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         from: Arc<DynObjectStore>,
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
-        let remote_dest = prefix
-            .map(|p| p.child(path.to_string()))
-            .unwrap_or(path.clone());
+        let remote_dest = join_paths(prefix, &path);
         info!("Syncing file to remote: {:?}", &remote_dest);
         copy_file(&path, &remote_dest, &from, &to).await?;
         fs::remove_file(path_to_filesystem(dir, &path)?)?;

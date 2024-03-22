@@ -1,7 +1,7 @@
 
-<a name="0x2_kiosk_extension"></a>
-
-# Module `0x2::kiosk_extension`
+---
+title: Module `0x2::kiosk_extension`
+---
 
 This module implements the Kiosk Extensions functionality. It allows
 exposing previously protected (only-owner) methods to third-party apps.

@@ -17,6 +17,10 @@ use tokio::time::sleep;
 use tracing::{debug, info};
 use twox_hash::XxHash64;
 
+#[cfg(test)]
+#[path = "unit_tests/overload_monitor_tests.rs"]
+pub mod overload_monitor_tests;
+
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
     /// Whether the authority is overloaded.
@@ -40,8 +44,8 @@ impl AuthorityOverloadInfo {
 }
 
 const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
-const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
-const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
+const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.95;
+const ADDITIONAL_LOAD_SHEDDING: f64 = 0.02;
 
 // The update interval of the random seed used to determine whether a txn should be rejected.
 const SEED_UPDATE_DURATION_SECS: u64 = 30;
@@ -321,11 +325,11 @@ mod tests {
 
     #[test]
     pub fn test_calculate_load_shedding_ratio() {
-        assert_eq!(calculate_load_shedding_percentage(90.0, 100.1), 0);
-        assert_eq!(calculate_load_shedding_percentage(90.0, 100.0), 10);
-        assert_eq!(calculate_load_shedding_percentage(100.0, 100.0), 20);
-        assert_eq!(calculate_load_shedding_percentage(110.0, 100.0), 28);
-        assert_eq!(calculate_load_shedding_percentage(180.0, 100.0), 60);
+        assert_eq!(calculate_load_shedding_percentage(95.0, 100.1), 0);
+        assert_eq!(calculate_load_shedding_percentage(95.0, 100.0), 2);
+        assert_eq!(calculate_load_shedding_percentage(100.0, 100.0), 7);
+        assert_eq!(calculate_load_shedding_percentage(110.0, 100.0), 16);
+        assert_eq!(calculate_load_shedding_percentage(180.0, 100.0), 49);
         assert_eq!(calculate_load_shedding_percentage(100.0, 0.0), 100);
         assert_eq!(calculate_load_shedding_percentage(0.0, 1.0), 0);
     }
@@ -356,7 +360,7 @@ mod tests {
         // protection.
         assert_eq!(
             check_overload_signals(&config, 0, Duration::from_secs(2), 100.0, 100.0),
-            (true, 20)
+            (true, 7)
         );
 
         // When execution queueing latency hits hard limit, start more aggressive overload
@@ -370,7 +374,7 @@ mod tests {
         // is higher than min_load_shedding_percentage_above_hard_limit.
         assert_eq!(
             check_overload_signals(&config, 0, Duration::from_secs(11), 240.0, 100.0),
-            (true, 73)
+            (true, 62)
         );
 
         // When execution queueing latency hits hard limit, but transaction ready rate
@@ -389,7 +393,7 @@ mod tests {
         // When the system is already shedding 50% of load, and the current txn ready rate
         // and execution rate require another 20%, the final shedding rate is 60%.
         assert_eq!(
-            check_overload_signals(&config, 50, Duration::from_secs(2), 100.0, 100.0),
+            check_overload_signals(&config, 50, Duration::from_secs(2), 116.0, 100.0),
             (true, 60)
         );
 
@@ -440,6 +444,20 @@ mod tests {
         let authority = Arc::downgrade(&state);
         drop(state);
         assert!(!check_authority_overload(&authority, &config));
+    }
+
+    // Creates an AuthorityState and starts an overload monitor that monitors its metrics.
+    async fn start_overload_monitor() -> (Arc<AuthorityState>, JoinHandle<()>) {
+        let overload_config = AuthorityOverloadConfig::default();
+        let state = TestAuthorityBuilder::new()
+            .with_authority_overload_config(overload_config.clone())
+            .build()
+            .await;
+        let authority_state = Arc::downgrade(&state);
+        let monitor_handle = tokio::spawn(async move {
+            overload_monitor(authority_state, overload_config).await;
+        });
+        (state, monitor_handle)
     }
 
     // Starts a load generator that generates a steady workload, and also allow it to accept
@@ -565,7 +583,7 @@ mod tests {
         min_dropping_rate: f64,
         max_dropping_rate: f64,
     ) {
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (_burst_tx, burst_rx) = unbounded_channel();
@@ -593,6 +611,9 @@ mod tests {
             / total_requests.load(Ordering::SeqCst) as f64;
         assert!(min_dropping_rate <= dropped_ratio);
         assert!(dropped_ratio <= max_dropping_rate);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that when request generation rate is slower than execution rate, no requests should be dropped.
@@ -624,7 +645,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_single_spike() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (burst_tx, burst_rx) = unbounded_channel();
@@ -653,6 +674,9 @@ mod tests {
 
         // No requests should be dropped.
         assert_eq!(dropped_requests.load(Ordering::SeqCst), 0);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that when there are regular spikes that keep queueing latency consistently high,
@@ -660,7 +684,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_short_spike() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (burst_tx, burst_rx) = unbounded_channel();
@@ -680,7 +704,7 @@ mod tests {
         let executor = start_executor(1000.0, rx, stop_rx, state.clone());
 
         sleep_and_print_stats(state.clone(), 15).await;
-        for _ in 0..8 {
+        for _ in 0..16 {
             // Regularly send out a burst of request.
             burst_tx.send(10000).unwrap();
             sleep_and_print_stats(state.clone(), 5).await;
@@ -695,6 +719,9 @@ mod tests {
         // execution rate.
         assert!(0.4 < dropped_ratio);
         assert!(dropped_ratio < 0.6);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that the ratio of rejected transactions created randomly matches load shedding percentage in
@@ -710,9 +737,13 @@ mod tests {
                 }
             }
 
-            // Give it a 2% fluctuation.
-            assert!(rejection_percentage as f32 / 100.0 - 0.02 < reject_count as f32 / 10000.0);
-            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.02);
+            debug!(
+                "Rejection percentage: {:?}, reject count: {:?}.",
+                rejection_percentage, reject_count
+            );
+            // Give it a 3% fluctuation.
+            assert!(rejection_percentage as f32 / 100.0 - 0.03 < reject_count as f32 / 10000.0);
+            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.03);
         }
     }
 

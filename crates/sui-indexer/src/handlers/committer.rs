@@ -12,7 +12,7 @@ use tracing::{error, info};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::metrics::IndexerMetrics;
-use crate::store::IndexerStoreV2;
+use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 
 use super::{CheckpointDataToCommit, EpochToCommit};
@@ -23,7 +23,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     use futures::StreamExt;
 
@@ -83,7 +83,7 @@ async fn commit_checkpoints<S>(
     metrics: &IndexerMetrics,
     commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     let mut checkpoint_batch = vec![];
     let mut tx_batch = vec![];

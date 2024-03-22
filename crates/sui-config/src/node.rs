@@ -706,7 +706,7 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_max_load_shedding_percentage")]
     pub max_load_shedding_percentage: u32,
 
-    // When in aggressive load shedding mode, the the minimum percentage of
+    // When in aggressive load shedding mode, the minimum percentage of
     // transactions to shed.
     #[serde(default = "default_min_load_shedding_percentage_above_hard_limit")]
     pub min_load_shedding_percentage_above_hard_limit: u32,
@@ -718,7 +718,7 @@ pub struct AuthorityOverloadConfig {
 
     // When set to true, transaction signing may be rejected when the validator
     // is overloaded.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default = "default_check_system_overload_at_signing")]
     pub check_system_overload_at_signing: bool,
 
     // When set to true, transaction execution may be rejected when the validator
@@ -757,6 +757,10 @@ fn default_safe_transaction_ready_rate() -> u32 {
     100
 }
 
+fn default_check_system_overload_at_signing() -> bool {
+    true
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -768,7 +772,7 @@ impl Default for AuthorityOverloadConfig {
             min_load_shedding_percentage_above_hard_limit:
                 default_min_load_shedding_percentage_above_hard_limit(),
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
-            check_system_overload_at_signing: false,
+            check_system_overload_at_signing: true,
             check_system_overload_at_execution: false,
         }
     }

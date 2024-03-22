@@ -10,6 +10,7 @@ const guides = [
 	{
 		type: 'category',
 		label: 'Developer Guides',
+                collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'guides/developer',
@@ -18,6 +19,7 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Getting Started',
+                                collapsed: false,
 				link: {
 					type: 'doc',
 					id: 'guides/developer/getting-started',
@@ -118,7 +120,7 @@ const guides = [
 					},*/
 					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/graphql-migration',
-					//'guides/developer/advanced/custom-indexers',
+					'guides/developer/advanced/custom-indexer',
 				],
 			},
 			{
@@ -129,13 +131,10 @@ const guides = [
 					id: 'guides/developer/app-examples',
 				},
 				items: [
-					'guides/developer/app-examples/e2e-counter',
 					'guides/developer/app-examples/auction',
-					'guides/developer/app-examples/escrow',
-					'guides/developer/app-examples/trusted-swap',
-					'guides/developer/app-examples/tic-tac-toe',
-					'guides/developer/app-examples/recaptcha',
-					'guides/developer/app-examples/turnip-town',
+					'guides/developer/app-examples/blackjack',
+					'guides/developer/app-examples/coin-flip',
+					'guides/developer/app-examples/e2e-counter',
 					{
 						type: 'category',
 						label: 'Oracles',
@@ -148,8 +147,24 @@ const guides = [
 							'guides/developer/app-examples/meta-pricing-oracle',
 						],
 					},
-					'guides/developer/app-examples/coin-flip',
-					'guides/developer/app-examples/blackjack',
+					'guides/developer/app-examples/plinko',
+					'guides/developer/app-examples/recaptcha',
+					'guides/developer/app-examples/tic-tac-toe',
+					{
+						type: 'category',
+						label: 'Trustless Token Swap',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/app-examples/trustless-token-swap',
+						},
+						items: [
+							'guides/developer/app-examples/trustless-token-swap/backend',
+							'guides/developer/app-examples/trustless-token-swap/indexer-api',
+							'guides/developer/app-examples/trustless-token-swap/frontend',
+						],
+					},
+					'guides/developer/app-examples/trusted-swap',
+					'guides/developer/app-examples/turnip-town',
 				],
 			},
 			'guides/developer/starter-templates',

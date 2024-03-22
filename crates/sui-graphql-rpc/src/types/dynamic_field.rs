@@ -4,8 +4,8 @@
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models_v2::objects::StoredHistoryObject;
-use sui_indexer::types::{ObjectStatus, OwnerType};
+use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::types::OwnerType;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
@@ -15,12 +15,12 @@ use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
-use crate::consistency::consistent_range;
+use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
+use crate::filter;
 use crate::raw_query::RawQuery;
-use crate::{filter, query};
 
 pub(crate) struct DynamicField {
     pub super_: MoveObject,
@@ -211,7 +211,7 @@ impl DynamicField {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    dynamic_fields_query(parent, parent_version, lhs as i64, rhs as i64),
+                    dynamic_fields_query(parent, parent_version, lhs as i64, rhs as i64, &page),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -319,85 +319,32 @@ pub fn extract_field_from_move_struct(
 /// [`lhs`, `rhs`] is returned, conditioned on the fact that there is not a more recent version of
 /// the field.
 ///
-/// If `parent_version` is provided, the latest version that is less than or equal to the parent
-/// version is returned, conditioned on the fact that there is not a more recent `WrappedOrDeleted`
-/// version of the field that is greater than the matched child but less than or equal to the parent
-/// version.
+/// If `parent_version` is provided, it is used to bound both the `candidates` and `newer` objects
+/// subqueries. This is because the dynamic fields of a parent at version v are dynamic fields owned
+/// by the parent whose versions are <= v. Unlike object ownership, where owned and owner objects
+/// can have arbitrary `object_version`s, dynamic fields on a parent cannot have a version greater
+/// than its parent.
 fn dynamic_fields_query(
     parent: SuiAddress,
     parent_version: Option<u64>,
     lhs: i64,
     rhs: i64,
+    page: &Page<object::Cursor>,
 ) -> RawQuery {
-    // Construct the filtered inner query - apply the same filtering criteria to both
-    // objects_snapshot and objects_history tables.
-    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
-    snapshot_objs = apply_filter(snapshot_objs, parent, parent_version);
-
-    // Additionally filter objects_history table for results between the available range, or
-    // checkpoint_viewed_at, if provided.
-    let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
-    history_objs = apply_filter(history_objs, parent, parent_version);
-    history_objs = filter!(
-        history_objs,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-
-    // Combine the two queries, and select the most recent version of each object.
-    let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) o"#,
-        snapshot_objs,
-        history_objs
+    build_objects_query(
+        View::Consistent,
+        lhs,
+        rhs,
+        page,
+        move |query| apply_filter(query, parent, parent_version),
+        move |newer| {
+            if let Some(parent_version) = parent_version {
+                filter!(newer, format!("object_version <= {}", parent_version))
+            } else {
+                newer
+            }
+        },
     )
-    .order_by("object_id")
-    .order_by("object_version DESC");
-
-    let mut newer = query!("SELECT object_id, object_version, object_status FROM objects_history");
-    newer = filter!(
-        newer,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-
-    // Even though the `parent_version` is provided, because it serves as an upper bound instead of
-    // a strict equality, it is possible for the dynamic field to have been deleted but still show
-    // up in the results. This is because deleted objects only have `object_id`, `object_status, and
-    // `checkpoint_sequence_number`. We need to additionally left join on any objects that have a
-    // more recent version and where the `object_status` is `WrappedOrDeleted`. However, because we
-    // know the `parent_version`, we know that if a more recent deleted version exists, that it was
-    // deleted while a child of the parent.
-    if let Some(parent_version) = parent_version {
-        newer = filter!(newer, format!("object_version <= {}", parent_version));
-        newer = filter!(
-            newer,
-            format!("object_status = {}", ObjectStatus::WrappedOrDeleted as i16)
-        );
-
-        let query = query!(
-            r#"SELECT candidates.*
-                FROM ({}) candidates
-                LEFT JOIN ({}) newer
-                ON (
-                    candidates.object_id = newer.object_id
-                    AND candidates.object_version < newer.object_version
-                )"#,
-            candidates,
-            newer
-        );
-        return filter!(query, "newer.object_status IS NULL");
-    }
-
-    let query = query!(
-        r#"SELECT candidates.*
-            FROM ({}) candidates
-            LEFT JOIN ({}) newer
-            ON (
-                candidates.object_id = newer.object_id
-                AND candidates.object_version < newer.object_version
-            )"#,
-        candidates,
-        newer
-    );
-    filter!(query, "newer.object_version IS NULL")
 }
 
 fn apply_filter(query: RawQuery, parent: SuiAddress, parent_version: Option<u64>) -> RawQuery {

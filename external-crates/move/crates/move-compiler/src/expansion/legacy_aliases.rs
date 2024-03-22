@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::Diagnostic,
     expansion::{
-        aliases::{AliasMapBuilder, AliasSet},
+        alias_map_builder::AliasMapBuilder,
+        aliases::AliasSet,
         ast::{ModuleIdent, ModuleIdent_},
     },
+    ice,
     parser::ast::ModuleName,
     shared::{unique_map::UniqueMap, *},
 };
@@ -82,17 +85,27 @@ impl AliasMap {
 
     /// Adds all of the new items in the new inner scope as shadowing the outer one.
     /// Gives back the outer scope
-    pub fn add_and_shadow_all(&mut self, shadowing: AliasMapBuilder) -> OldAliasMap {
+    pub fn add_and_shadow_all(
+        &mut self,
+        loc: Loc,
+        shadowing: AliasMapBuilder,
+    ) -> Result<OldAliasMap, Box<Diagnostic>> {
         if shadowing.is_empty() {
-            return OldAliasMap(None);
+            return Ok(OldAliasMap(None));
         }
 
         let outer_scope = OldAliasMap(Some(self.clone()));
-        let AliasMapBuilder {
+        let AliasMapBuilder::Legacy {
             modules: new_modules,
             members: new_members,
             ..
-        } = shadowing;
+        } = shadowing
+        else {
+            return Err(Box::new(ice!((
+                loc,
+                "ICE alias map builder should be legacy for legacy"
+            ))));
+        };
 
         let next_depth = self.current_depth();
         let mut current_scope = AliasSet::new();
@@ -103,17 +116,17 @@ impl AliasMap {
             self.modules.remove(&alias);
             self.modules.add(alias, (Some(next_depth), ident)).unwrap();
         }
-        for (alias, (ident_member, is_implicit)) in new_members {
+        for (alias, ((mident, name, _kind), is_implicit)) in new_members {
             if !is_implicit {
                 current_scope.members.add(alias).unwrap();
             }
             self.members.remove(&alias);
             self.members
-                .add(alias, (Some(next_depth), ident_member))
+                .add(alias, (Some(next_depth), (mident, name)))
                 .unwrap();
         }
         self.unused.push(current_scope);
-        outer_scope
+        Ok(outer_scope)
     }
 
     /// Similar to add_and_shadow but just removes aliases now shadowed by a type parameter

@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish --sender A
 module Test::boars {
     use sui::object::{Self, UID};
-    use std::option::{Self, Option};
     use sui::tx_context::{TxContext, sender};
     use sui::transfer;
     use sui::package;
@@ -18,9 +17,9 @@ module Test::boars {
     const ENotOneTimeWitness: u64 = 0;
 
     /// An OTW to use when creating a Publisher
-    struct BOARS has drop {}
+    public struct BOARS has drop {}
 
-    struct Boar has key, store {
+    public struct Boar has key, store {
         id: UID,
         img_url: String,
         name: String,
@@ -35,11 +34,11 @@ module Test::boars {
         vec: vector<u64>,
     }
 
-    struct Metadata has store {
+    public struct Metadata has store {
         age: u64,
     }
 
-    struct NestedMetadata has store {
+    public struct NestedMetadata has store {
         nested: Metadata
     }
 

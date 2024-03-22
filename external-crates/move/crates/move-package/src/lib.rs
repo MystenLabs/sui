@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::{BufRead, Seek, SeekFrom, Write},
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
@@ -36,6 +36,7 @@ use crate::{
     lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
+use move_compiler::linters::LintLevel;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
@@ -100,9 +101,64 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
+    #[clap(flatten)]
+    pub lint_flag: LintFlag,
+}
+
+#[derive(
+    Parser, Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default,
+)]
+pub struct LintFlag {
     /// If `true`, disable linters
-    #[clap(long, global = true)]
-    pub no_lint: bool,
+    #[clap(
+        name = "no-lint",
+        long = "no-lint",
+        global = true,
+        group = "lint-level"
+    )]
+    no_lint: bool,
+
+    /// If `true`, enables extra linters
+    #[clap(name = "lint", long = "lint", global = true, group = "lint-level")]
+    lint: bool,
+}
+
+impl LintFlag {
+    pub const LEVEL_NONE: Self = Self {
+        no_lint: true,
+        lint: false,
+    };
+    pub const LEVEL_DEFAULT: Self = Self {
+        no_lint: false,
+        lint: false,
+    };
+    pub const LEVEL_ALL: Self = Self {
+        no_lint: false,
+        lint: true,
+    };
+
+    pub fn get(self) -> LintLevel {
+        match self {
+            Self::LEVEL_NONE => LintLevel::None,
+            Self::LEVEL_DEFAULT => LintLevel::Default,
+            Self::LEVEL_ALL => LintLevel::All,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn set(&mut self, level: LintLevel) {
+        *self = level.into();
+    }
+}
+
+impl From<LintLevel> for LintFlag {
+    fn from(level: LintLevel) -> Self {
+        match level {
+            LintLevel::None => Self::LEVEL_NONE,
+            LintLevel::Default => Self::LEVEL_DEFAULT,
+            LintLevel::All => Self::LEVEL_ALL,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -113,8 +169,6 @@ pub struct ModelConfig {
     /// contains this string. This is similar as the `cargo test <string>` idiom.
     pub target_filter: Option<String>,
 }
-
-pub const NEEDS_MIGRATION: &str = "NO_ROOT_CRATE_EDITION";
 
 impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
@@ -127,17 +181,21 @@ impl BuildConfig {
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure. Will trigger migration if the package is missing an edition.
-    pub fn cli_compile_package<W: Write>(
+    pub fn cli_compile_package<W: Write, R: BufRead>(
         self,
         path: &Path,
         writer: &mut W,
+        _reader: &mut R, // Reader here for enabling migration mode
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
         // TODO: When we are ready to release and enable automatic migration, uncomment this.
         // if !build_plan.root_crate_edition_defined() {
-        //     Err(anyhow::format_err!(NEEDS_MIGRATION))
+        //     // We would also like to call build here, but the edition is already computed and
+        //     // the lock + build config have been used for this build already. The user will
+        //     // have to call build a second time -- this is reasonable...
+        //     migration::migrate(build_plan, writer, _reader)?;
         // } else {
         //     build_plan.compile(writer)
         // }
@@ -159,11 +217,14 @@ impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn migrate_package<W: Write, R: BufRead>(
-        self,
+        mut self,
         path: &Path,
         writer: &mut W,
         reader: &mut R,
     ) -> Result<()> {
+        // we set test and dev mode to migrate all the code
+        self.test_mode = true;
+        self.dev_mode = true;
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
@@ -272,7 +333,6 @@ impl BuildConfig {
         };
         let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
         let mut lock = LockFile::from(install_dir, lock_file)?;
-        lock.seek(SeekFrom::Start(0))?;
         update_compiler_toolchain(
             &mut lock,
             compiler_version,

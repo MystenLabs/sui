@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-144:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 13877600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 13862400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 146-148:
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
@@ -58,5 +58,5 @@ Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { a
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
 
 task 13 'programmable'. lines 183-184:
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 14, instruction: 21, function_name: Some("check_") }, 0) in command 0
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 14, instruction: 21, function_name: Some("check_") }, 0) in command 0
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 14, instruction: 20, function_name: Some("check_") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 14, instruction: 20, function_name: Some("check_") }, 0) in command 0

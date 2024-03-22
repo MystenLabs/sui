@@ -87,9 +87,7 @@ async fn transaction_manager_basics() {
     transaction_manager.check_empty_for_testing();
 
     // Enqueue empty vec should not crash.
-    transaction_manager
-        .enqueue(vec![], &state.epoch_store_for_testing())
-        .unwrap();
+    transaction_manager.enqueue(vec![], &state.epoch_store_for_testing());
     // TM should output no transaction.
     assert!(rx_ready_certificates
         .try_recv()
@@ -98,9 +96,7 @@ async fn transaction_manager_basics() {
     // Enqueue a transaction with existing gas object, empty input.
     let transaction = make_transaction(gas_objects[0].clone(), vec![]);
     let tx_start_time = Instant::now();
-    transaction_manager
-        .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
-        .unwrap();
+    transaction_manager.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
     // TM should output the transaction eventually.
     let pending_certificate = rx_ready_certificates.recv().await.unwrap();
 
@@ -127,9 +123,7 @@ async fn transaction_manager_basics() {
         Object::with_id_owner_version_for_testing(ObjectID::random(), 0.into(), owner);
     let transaction = make_transaction(gas_object_new.clone(), vec![]);
     let tx_start_time = Instant::now();
-    transaction_manager
-        .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
-        .unwrap();
+    transaction_manager.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
     // TM should output no transaction yet.
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates
@@ -139,9 +133,7 @@ async fn transaction_manager_basics() {
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // Duplicated enqueue is allowed.
-    transaction_manager
-        .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
-        .unwrap();
+    transaction_manager.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates
         .try_recv()
@@ -166,9 +158,7 @@ async fn transaction_manager_basics() {
     );
 
     // Re-enqueue the same transaction should not result in another output.
-    transaction_manager
-        .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
-        .unwrap();
+    transaction_manager.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates
         .try_recv()
@@ -294,17 +284,15 @@ async fn transaction_manager_object_dependency() {
         )
         .unwrap();
 
-    transaction_manager
-        .enqueue(
-            vec![
-                transaction_read_0.clone(),
-                transaction_read_1.clone(),
-                transaction_default.clone(),
-                transaction_read_2.clone(),
-            ],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![
+            transaction_read_0.clone(),
+            transaction_read_1.clone(),
+            transaction_default.clone(),
+            transaction_read_2.clone(),
+        ],
+        &state.epoch_store_for_testing(),
+    );
 
     // TM should output no transaction yet.
     sleep(Duration::from_secs(1)).await;
@@ -417,9 +405,7 @@ async fn transaction_manager_receiving_notify_commit() {
     for (i, (_, txn)) in object_arguments.iter().enumerate() {
         // TM should output no transaction yet since waiting on receiving object or
         // ImmOrOwnedObject input.
-        transaction_manager
-            .enqueue(vec![txn.clone()], &state.epoch_store_for_testing())
-            .unwrap();
+        transaction_manager.enqueue(vec![txn.clone()], &state.epoch_store_for_testing());
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
         assert_eq!(transaction_manager.inflight_queue_len(), i + 1);
@@ -505,34 +491,28 @@ async fn transaction_manager_receiving_object_ready_notifications() {
     );
 
     // TM should output no transaction yet since waiting on receiving object.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction0.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction0.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // TM should output no transaction yet since waiting on receiving object.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction1.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction1.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
     assert_eq!(transaction_manager.inflight_queue_len(), 2);
 
     // Duplicate enqueue of receiving object is allowed.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction0.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction0.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
     assert_eq!(transaction_manager.inflight_queue_len(), 2);
@@ -610,35 +590,29 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
     );
 
     // TM should output no transaction yet since waiting on receiving object.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction0.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction0.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // TM should output no transaction yet since waiting on receiving object.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction1.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction1.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
     assert_eq!(transaction_manager.inflight_queue_len(), 2);
 
-    // Different transaciton with a duplicate receiving object reference is allowed.
+    // Different transaction with a duplicate receiving object reference is allowed.
     // Both transaction's will be outputted once the receiving object is available.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction01.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction01.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
     assert_eq!(transaction_manager.inflight_queue_len(), 3);
@@ -649,7 +623,7 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
         &state.epoch_store_for_testing(),
     );
 
-    // TM should output both transactions dependening on the receiving object now that the
+    // TM should output both transactions depending on the receiving object now that the
     // transaction's receiving object has become available.
     rx_ready_certificates.recv().await.unwrap();
 
@@ -660,9 +634,7 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
 
     // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
     // This should be immediately available.
-    transaction_manager
-        .enqueue(vec![tx1.clone()], &state.epoch_store_for_testing())
-        .unwrap();
+    transaction_manager.enqueue(vec![tx1.clone()], &state.epoch_store_for_testing());
     sleep(Duration::from_secs(1)).await;
     rx_ready_certificates.recv().await.unwrap();
 
@@ -725,24 +697,18 @@ async fn transaction_manager_receiving_object_ready_if_current_version_greater()
     );
 
     // TM should output no transaction yet since waiting on receiving object.
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction0.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction01.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
-    transaction_manager
-        .enqueue(
-            vec![receive_object_transaction1.clone()],
-            &state.epoch_store_for_testing(),
-        )
-        .unwrap();
+    transaction_manager.enqueue(
+        vec![receive_object_transaction0.clone()],
+        &state.epoch_store_for_testing(),
+    );
+    transaction_manager.enqueue(
+        vec![receive_object_transaction01.clone()],
+        &state.epoch_store_for_testing(),
+    );
+    transaction_manager.enqueue(
+        vec![receive_object_transaction1.clone()],
+        &state.epoch_store_for_testing(),
+    );
     sleep(Duration::from_secs(1)).await;
     rx_ready_certificates.recv().await.unwrap();
     rx_ready_certificates.recv().await.unwrap();

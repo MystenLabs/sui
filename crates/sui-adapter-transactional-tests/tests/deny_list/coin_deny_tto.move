@@ -17,14 +17,14 @@ module test::regulated_coin {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
-    struct REGULATED_COIN has drop {}
+    public struct REGULATED_COIN has drop {}
 
-    struct Wallet has key {
+    public struct Wallet has key {
         id: UID,
     }
 
     fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-        let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
+        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
             otw,
             9,
             b"RC",

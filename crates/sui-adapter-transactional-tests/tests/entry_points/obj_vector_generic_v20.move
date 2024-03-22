@@ -12,17 +12,17 @@ module Test::M {
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
-    struct ObjAny<phantom Any> has key, store {
+    public struct ObjAny<phantom Any> has key, store {
         id: UID,
         value: u64
     }
 
-    struct AnotherObjAny<phantom Any> has key {
+    public struct AnotherObjAny<phantom Any> has key {
         id: UID,
         value: u64
     }
 
-    struct Any {}
+    public struct Any {}
 
     public entry fun mint_any<Any>(v: u64, ctx: &mut TxContext) {
         transfer::public_transfer(
@@ -64,7 +64,7 @@ module Test::M {
         )
     }
 
-    public entry fun obj_vec_destroy_any<Any>(v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun obj_vec_destroy_any<Any>(mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(vector::length(&v) == 1, 0);
         let ObjAny<Any> {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -72,7 +72,7 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun two_obj_vec_destroy_any<Any>(v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun two_obj_vec_destroy_any<Any>(mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(vector::length(&v) == 2, 0);
         let ObjAny<Any> {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -83,7 +83,7 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_any<Any>(o: ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun same_objects_any<Any>(o: ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         let ObjAny<Any> {id, value} = o;
         assert!(value == 42, 0);
         object::delete(id);
@@ -93,14 +93,14 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_ref_any<Any>(o: &ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun same_objects_ref_any<Any>(o: &ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(o.value == 42, 0);
         let ObjAny<Any> {id, value: _} = vector::pop_back(&mut v);
         object::delete(id);
         vector::destroy_empty(v);
     }
 
-    public entry fun child_access_any<Any>(child: ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun child_access_any<Any>(child: ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         let ObjAny<Any> {id, value} = child;
         assert!(value == 42, 0);
         object::delete(id);

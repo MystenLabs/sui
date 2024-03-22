@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 --simulator
+//# init --protocol-version 39 --addresses P0=0x0 --simulator
 
 //# run-graphql
 {
@@ -20,7 +20,7 @@ module P0::m {
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    struct Obj has key {
+    public struct Obj has key {
         id: UID
     }
 

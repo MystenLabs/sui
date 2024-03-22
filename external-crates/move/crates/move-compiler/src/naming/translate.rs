@@ -7,27 +7,33 @@ use crate::{
     diagnostics::{self, codes::*},
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, ModuleIdent, Visibility},
-        translate::is_valid_struct_constant_or_schema_name as is_constant_name,
+        ast::{self as E, AbilitySet, ModuleIdent, Mutability, Visibility},
+        translate::is_valid_struct_or_constant_name as is_constant_name,
     },
     ice,
-    naming::ast::{self as N, BlockLabel, NominalBlockUsage},
+    naming::{
+        ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
+        fake_natives,
+        syntax_methods::resolve_syntax_attributes,
+    },
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet};
-
-use super::{ast::TParamID, fake_natives};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
-enum ResolvedType {
+pub(super) enum ResolvedType {
     Module(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
@@ -35,19 +41,19 @@ enum ResolvedType {
 }
 
 #[derive(Debug, Clone)]
-struct ResolvedModuleType {
+pub(super) struct ResolvedModuleType {
     // original names/locs are provided to preserve loc information if needed
-    original_loc: Loc,
-    original_type_name: Name,
-    module_type: ModuleType,
+    pub original_loc: Loc,
+    pub original_type_name: Name,
+    pub module_type: ModuleType,
 }
 
 #[derive(Debug, Clone)]
-struct ModuleType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    is_positional: bool,
+pub(super) struct ModuleType {
+    pub original_mident: ModuleIdent,
+    pub decl_loc: Loc,
+    pub arity: usize,
+    pub is_positional: bool,
 }
 
 enum ResolvedFunction {
@@ -84,8 +90,8 @@ enum NominalBlockType {
     LambdaLoopCapture,
 }
 
-struct Context<'env> {
-    env: &'env mut CompilationEnv,
+pub(super) struct Context<'env> {
+    pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
@@ -101,13 +107,13 @@ struct Context<'env> {
     /// Indicates if the compiler is currently translating a function (set to true before starting
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
-    current_package: Option<Symbol>,
+    pub current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
@@ -287,7 +293,7 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
+    pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
         use E::ModuleAccess_ as EN;
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
@@ -673,10 +679,10 @@ impl std::fmt::Display for NominalBlockType {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: E::Program,
 ) -> N::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let mut context = Context::new(compilation_env, pre_compiled_lib.clone(), &prog);
     let E::Program { modules: emodules } = prog;
     let modules = modules(&mut context, emodules);
     let mut inner = N::Program_ { modules };
@@ -714,6 +720,7 @@ fn module(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let unscoped = context.save_unscoped();
     let mut use_funs = use_funs(context, euse_funs);
+    let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let structs = estructs.map(|name, s| {
         context.restore_unscoped(unscoped.clone());
@@ -721,7 +728,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, ident, name, f)
+        function(context, &mut syntax_methods, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -748,6 +755,7 @@ fn module(
         attributes,
         is_source_module,
         use_funs,
+        syntax_methods,
         friends,
         structs,
         constants,
@@ -840,7 +848,7 @@ fn explicit_use_fun(
                 Declarations::InvalidUseFun,
                 (
                     loc,
-                    "Invalid 'use fun'. Cannot associate a method a type parameter"
+                    "Invalid 'use fun'. Cannot associate a method with a type parameter"
                 ),
                 (tloc, tmsg)
             ));
@@ -986,6 +994,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 
 fn function(
     context: &mut Context,
+    syntax_methods: &mut N::SyntaxMethods,
     module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
@@ -1036,6 +1045,7 @@ fn function(
         signature,
         body,
     };
+    resolve_syntax_attributes(context, syntax_methods, &module, &name, &f);
     fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
@@ -1059,15 +1069,11 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
         .map(|(mut mut_, param, param_ty)| {
             let is_underscore = param.is_underscore();
             if is_underscore {
-                check_mut_underscore(context, mut_);
-                mut_ = None
+                check_mut_underscore(context, Some(mut_));
+                mut_ = Mutability::Imm;
             };
-            if param.is_syntax_identifier()
-                && context
-                    .env
-                    .supports_feature(context.current_package, FeatureGate::LetMut)
-            {
-                if let Some(mutloc) = mut_ {
+            if param.is_syntax_identifier() {
+                if let Mutability::Mut(mutloc) = mut_ {
                     let msg = format!(
                         "Invalid 'mut' parameter. \
                         '{}' parameters cannot be declared as mutable",
@@ -1076,7 +1082,7 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
                     let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
                     diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
                     context.env.add_diag(diag);
-                    mut_ = None
+                    mut_ = Mutability::Imm;
                 }
             }
             if let Err((param, prev_loc)) = declared.add(param, ()) {
@@ -1369,6 +1375,7 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
 // Exp
 //**************************************************************************************************
 
+#[growing_stack]
 fn sequence(context: &mut Context, (euse_funs, seq): E::Sequence) -> N::Sequence {
     context.new_local_scope();
     let nuse_funs = use_funs(context, euse_funs);
@@ -1377,6 +1384,7 @@ fn sequence(context: &mut Context, (euse_funs, seq): E::Sequence) -> N::Sequence
     (nuse_funs, nseq)
 }
 
+#[growing_stack]
 fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::SequenceItem {
     use E::SequenceItem_ as ES;
     use N::SequenceItem_ as NS;
@@ -1417,6 +1425,7 @@ fn exps(context: &mut Context, es: Vec<E::Exp>) -> Vec<N::Exp> {
     es.into_iter().map(|e| *exp(context, Box::new(e))).collect()
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
     use E::Exp_ as EE;
     use N::Exp_ as NE;
@@ -1630,7 +1639,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
             }
-            Some(d) => NE::ExpDotted(case, d),
+            Some(ndot) => NE::ExpDotted(case, ndot),
         },
 
         EE::Cast(e, t) => NE::Cast(exp(context, e), type_(context, t)),
@@ -1639,7 +1648,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
                 .env
-                .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
+                .check_feature(context.current_package, FeatureGate::PositionalFields, eloc);
             if let Some(mloc) = is_macro {
                 let msg = "Unexpected macro invocation. Structs cannot be invoked as macros";
                 context
@@ -1717,8 +1726,8 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 ResolvedFunction::Module(mf) => {
                     if let Some(mloc) = is_macro {
                         context.env.check_feature(
-                            FeatureGate::MacroFuns,
                             context.current_package,
+                            FeatureGate::MacroFuns,
                             mloc,
                         );
                     }
@@ -1756,8 +1765,8 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
                     context.env.check_feature(
-                        FeatureGate::MacroFuns,
                         context.current_package,
+                        FeatureGate::MacroFuns,
                         eloc,
                     );
                 }
@@ -1821,6 +1830,11 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             }
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::Index(inner, args) => {
+            let args = call_args(context, args);
+            let inner = Box::new(dotted(context, *inner)?);
+            N::ExpDotted_::Index(inner, args)
+        }
     };
     Some(sp(loc, nedot_))
 }
@@ -1959,21 +1973,15 @@ fn lvalue(
     Some(sp(loc, nl_))
 }
 
-fn check_mut_underscore(context: &mut Context, mut_: Option<Loc>) {
+fn check_mut_underscore(context: &mut Context, mut_: Option<Mutability>) {
     // no error if not a mut declaration
-    let Some(mut_) = mut_ else { return };
-    // no error if let-mut is not supported
-    // (we mark all locals as having mut if the feature is off)
-    if !context
-        .env
-        .supports_feature(context.current_package, FeatureGate::LetMut)
-    {
+    let Some(Mutability::Mut(loc)) = mut_ else {
         return;
-    }
+    };
     let msg = "Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern";
     context
         .env
-        .add_diag(diag!(NameResolution::InvalidMut, (mut_, msg)));
+        .add_diag(diag!(NameResolution::InvalidMut, (loc, msg)));
 }
 
 fn bind_list(context: &mut Context, ls: E::LValueList) -> Option<N::LValueList> {
@@ -2194,14 +2202,10 @@ fn remove_unused_bindings_seq(
             N::SequenceItem_::Seq(e) => remove_unused_bindings_exp(context, used, e),
             N::SequenceItem_::Declare(lvalues, _) => {
                 // unused bindings will be reported as unused assignments
-                remove_unused_bindings_lvalues(
-                    context, used, lvalues, /* report unused */ true,
-                )
+                remove_unused_bindings_lvalues(context, used, lvalues)
             }
             N::SequenceItem_::Bind(lvalues, e) => {
-                remove_unused_bindings_lvalues(
-                    context, used, lvalues, /* report unused */ false,
-                );
+                remove_unused_bindings_lvalues(context, used, lvalues);
                 remove_unused_bindings_exp(context, used, e)
             }
         }
@@ -2212,10 +2216,9 @@ fn remove_unused_bindings_lvalues(
     context: &mut Context,
     used: &BTreeSet<N::Var_>,
     sp!(_, lvalues): &mut N::LValueList,
-    report: bool,
 ) {
     for lvalue in lvalues {
-        remove_unused_bindings_lvalue(context, used, lvalue, report)
+        remove_unused_bindings_lvalue(context, used, lvalue)
     }
 }
 
@@ -2223,7 +2226,6 @@ fn remove_unused_bindings_lvalue(
     context: &mut Context,
     used: &BTreeSet<N::Var_>,
     sp!(_, lvalue_): &mut N::LValue,
-    report: bool,
 ) {
     match lvalue_ {
         N::LValue_::Ignore => (),
@@ -2240,14 +2242,12 @@ fn remove_unused_bindings_lvalue(
             ..
         } => {
             debug_assert!(!*unused_binding);
-            if report {
-                report_unused_local(context, var);
-            }
+            report_unused_local(context, var);
             *unused_binding = true;
         }
         N::LValue_::Unpack(_, _, _, lvalues) => {
             for (_, _, (_, lvalue)) in lvalues {
-                remove_unused_bindings_lvalue(context, used, lvalue, report)
+                remove_unused_bindings_lvalue(context, used, lvalue)
             }
         }
     }
@@ -2296,7 +2296,7 @@ fn remove_unused_bindings_exp(
             body,
         }) => {
             for (lvs, _) in parameters {
-                remove_unused_bindings_lvalues(context, used, lvs, /* report unused */ false)
+                remove_unused_bindings_lvalues(context, used, lvs)
             }
             remove_unused_bindings_exp(context, used, body)
         }
@@ -2341,6 +2341,12 @@ fn remove_unused_bindings_exp_dotted(
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
         N::ExpDotted_::Dot(ed, _) => remove_unused_bindings_exp_dotted(context, used, ed),
+        N::ExpDotted_::Index(ed, sp!(_, es)) => {
+            for e in es {
+                remove_unused_bindings_exp(context, used, e);
+            }
+            remove_unused_bindings_exp_dotted(context, used, ed)
+        }
     }
 }
 

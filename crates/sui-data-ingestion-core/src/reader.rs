@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::create_remote_store_client;
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
-use anyhow::anyhow;
 use anyhow::Result;
-use futures::future::try_join_all;
+use futures::StreamExt;
+use mysten_metrics::spawn_monitored_task;
 use notify::RecursiveMode;
 use notify::Watcher;
 use object_store::path::Path;
-use object_store::{parse_url_opts, ObjectStore};
+use object_store::ObjectStore;
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
@@ -16,26 +17,44 @@ use std::time::Duration;
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tap::pipe::Pipe;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tracing::{debug, info};
-use url::Url;
-
-pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
+use tracing::{debug, error, info};
 
 /// Implements a checkpoint reader that monitors a local directory.
 /// Designed for setups where the indexer daemon is colocated with FN.
 /// This implementation is push-based and utilizes the inotify API.
 pub struct CheckpointReader {
     path: PathBuf,
-    remote_store: Option<Box<dyn ObjectStore>>,
-    remote_read_batch_size: usize,
+    remote_store_url: Option<String>,
+    remote_store_options: Vec<(String, String)>,
     current_checkpoint_number: CheckpointSequenceNumber,
     last_pruned_watermark: CheckpointSequenceNumber,
     checkpoint_sender: mpsc::Sender<CheckpointData>,
     processed_receiver: mpsc::Receiver<CheckpointSequenceNumber>,
+    remote_fetcher_receiver: Option<mpsc::Receiver<Result<CheckpointData>>>,
     exit_receiver: oneshot::Receiver<()>,
+    options: ReaderOptions,
+}
+
+#[derive(Clone)]
+pub struct ReaderOptions {
+    pub tick_interal_ms: u64,
+    pub timeout_secs: u64,
+    pub batch_size: usize,
+}
+
+impl Default for ReaderOptions {
+    fn default() -> Self {
+        Self {
+            tick_interal_ms: 100,
+            timeout_secs: 5,
+            batch_size: 100,
+        }
+    }
 }
 
 impl CheckpointReader {
@@ -55,41 +74,80 @@ impl CheckpointReader {
         files.sort();
         debug!("unprocessed local files {:?}", files);
         let mut checkpoints = vec![];
-        for (idx, (sequence_number, filename)) in files.iter().enumerate() {
-            if self.current_checkpoint_number + idx as u64 != *sequence_number {
-                return Err(anyhow!("checkpoint sequence should not have any gaps"));
-            }
+        for (_, filename) in files.iter().take(MAX_CHECKPOINTS_IN_PROGRESS) {
             let checkpoint = Blob::from_bytes::<CheckpointData>(&fs::read(filename)?)?;
             checkpoints.push(checkpoint);
         }
         Ok(checkpoints)
     }
 
-    async fn remote_fetch(&self) -> Result<Vec<CheckpointData>> {
-        let mut checkpoints = vec![];
-        if let Some(ref store) = self.remote_store {
-            let limit = std::cmp::min(
-                self.current_checkpoint_number + self.remote_read_batch_size as u64,
-                self.last_pruned_watermark + MAX_CHECKPOINTS_IN_PROGRESS as u64,
-            );
-            let futures =
-                (self.current_checkpoint_number..limit).map(|checkpoint_number| async move {
-                    let path = Path::from(format!("{}.chk", checkpoint_number));
-                    match store.get(&path).await {
-                        Ok(resp) => resp.bytes().await.map(Some),
-                        Err(err) if err.to_string().contains("404") => Ok(None),
-                        Err(err) => Err(err),
-                    }
-                });
-            for bytes in try_join_all(futures).await? {
-                if bytes.is_none() {
+    fn exceeds_capacity(&self, checkpoint_number: CheckpointSequenceNumber) -> bool {
+        (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark) <= checkpoint_number
+    }
+
+    async fn remote_fetch_checkpoint(
+        store: &dyn ObjectStore,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> Result<CheckpointData> {
+        let path = Path::from(format!("{}.chk", checkpoint_number));
+        let response = store.get(&path).await?;
+        let bytes = response.bytes().await?;
+        Blob::from_bytes::<CheckpointData>(&bytes)
+    }
+
+    fn start_remote_fetcher(&mut self) -> mpsc::Receiver<Result<CheckpointData>> {
+        let batch_size = self.options.batch_size;
+        let start_checkpoint = self.current_checkpoint_number;
+        let (sender, receiver) = mpsc::channel(batch_size);
+        let url = self
+            .remote_store_url
+            .clone()
+            .expect("remote store url must be set");
+        let store = create_remote_store_client(
+            url,
+            self.remote_store_options.clone(),
+            self.options.timeout_secs,
+        )
+        .expect("failed to create remote store client");
+
+        spawn_monitored_task!(async move {
+            let mut checkpoint_stream = (start_checkpoint..u64::MAX)
+                .map(|checkpoint_number| Self::remote_fetch_checkpoint(&store, checkpoint_number))
+                .pipe(futures::stream::iter)
+                .buffered(batch_size);
+
+            while let Some(checkpoint) = checkpoint_stream.next().await {
+                if sender.send(checkpoint).await.is_err() {
+                    info!("remote reader dropped");
                     break;
                 }
-                let checkpoint = Blob::from_bytes::<CheckpointData>(&bytes.unwrap())?;
-                checkpoints.push(checkpoint);
+            }
+        });
+        receiver
+    }
+
+    fn remote_fetch(&mut self) -> Vec<CheckpointData> {
+        let mut checkpoints = vec![];
+        if self.remote_fetcher_receiver.is_none() {
+            self.remote_fetcher_receiver = Some(self.start_remote_fetcher());
+        }
+        while !self.exceeds_capacity(self.current_checkpoint_number + checkpoints.len() as u64) {
+            match self.remote_fetcher_receiver.as_mut().unwrap().try_recv() {
+                Ok(Ok(checkpoint)) => checkpoints.push(checkpoint),
+                Ok(Err(err)) => {
+                    error!("remote reader transient error {:?}", err);
+                    self.remote_fetcher_receiver = None;
+                    break;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    error!("remote reader channel disconnect error");
+                    self.remote_fetcher_receiver = None;
+                    break;
+                }
+                Err(TryRecvError::Empty) => break,
             }
         }
-        Ok(checkpoints)
+        checkpoints
     }
 
     async fn sync(&mut self) -> Result<()> {
@@ -101,8 +159,15 @@ impl CheckpointReader {
         })
         .await?;
 
-        if checkpoints.is_empty() {
-            checkpoints = self.remote_fetch().await?;
+        if self.remote_store_url.is_some()
+            && (checkpoints.is_empty()
+                || checkpoints[0].checkpoint_summary.sequence_number
+                    > self.current_checkpoint_number)
+        {
+            checkpoints = self.remote_fetch();
+        } else {
+            // cancel remote fetcher execution because local reader has made progress
+            self.remote_fetcher_receiver = None;
         }
 
         info!(
@@ -114,9 +179,7 @@ impl CheckpointReader {
                 checkpoint.checkpoint_summary.sequence_number,
                 self.current_checkpoint_number
             );
-            if (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark)
-                <= checkpoint.checkpoint_summary.sequence_number
-            {
+            if self.exceeds_capacity(checkpoint.checkpoint_summary.sequence_number) {
                 break;
             }
             self.checkpoint_sender.send(checkpoint).await?;
@@ -153,7 +216,7 @@ impl CheckpointReader {
         starting_checkpoint_number: CheckpointSequenceNumber,
         remote_store_url: Option<String>,
         remote_store_options: Vec<(String, String)>,
-        remote_read_batch_size: usize,
+        options: ReaderOptions,
     ) -> (
         Self,
         mpsc::Receiver<CheckpointData>,
@@ -163,31 +226,16 @@ impl CheckpointReader {
         let (checkpoint_sender, checkpoint_recv) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let (processed_sender, processed_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let (exit_sender, exit_receiver) = oneshot::channel();
-        let remote_store = remote_store_url.map(|url| {
-            if remote_store_options.is_empty() {
-                let builder = object_store::http::HttpBuilder::new().with_url(url);
-                Box::new(
-                    builder
-                        .build()
-                        .expect("failed to parse remote store config"),
-                )
-            } else {
-                parse_url_opts(
-                    &Url::parse(&url).expect("failed to parse remote store url"),
-                    remote_store_options,
-                )
-                .expect("failed to parse remote store config")
-                .0
-            }
-        });
         let reader = Self {
             path,
-            remote_store,
+            remote_store_url,
+            remote_store_options,
             current_checkpoint_number: starting_checkpoint_number,
             last_pruned_watermark: starting_checkpoint_number,
             checkpoint_sender,
             processed_receiver,
-            remote_read_batch_size,
+            remote_fetcher_receiver: None,
+            options,
             exit_receiver,
         };
         (reader, checkpoint_recv, processed_sender, exit_sender)
@@ -210,19 +258,15 @@ impl CheckpointReader {
             .watch(&self.path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
 
-        let timeout_ms = std::env::var(ENV_VAR_LOCAL_READ_TIMEOUT_MS)
-            .unwrap_or("1000".to_string())
-            .parse::<u64>()?;
-
         loop {
             tokio::select! {
-                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
-                    self.sync().await.expect("Failed to read checkpoint files");
-                }
+                _ = &mut self.exit_receiver => break,
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
                     self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
                 }
-                _ = &mut self.exit_receiver => break,
+                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(self.options.tick_interal_ms), inotify_recv.recv())  => {
+                    self.sync().await.expect("Failed to read checkpoint files");
+                }
             }
         }
         Ok(())

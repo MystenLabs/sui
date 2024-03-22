@@ -1,7 +1,7 @@
 
-<a name="0x2_kiosk"></a>
-
-# Module `0x2::kiosk`
+---
+title: Module `0x2::kiosk`
+---
 
 Kiosk is a primitive for building safe, decentralized and trustless trading
 experiences. It allows storing and trading any types of assets as long as
@@ -158,7 +158,7 @@ See <code><a href="transfer_policy.md#0x2_transfer_policy">transfer_policy</a></
 -  [Function `purchase_cap_min_price`](#0x2_kiosk_purchase_cap_min_price)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
@@ -1232,7 +1232,7 @@ allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0
 Withdraw profits from the Kiosk.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, amount: <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, amount: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1246,8 +1246,8 @@ Withdraw profits from the Kiosk.
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self, cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
 
-    <b>let</b> amount = <b>if</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&amount)) {
-        <b>let</b> amt = <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(amount);
+    <b>let</b> amount = <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&amount)) {
+        <b>let</b> amt = <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(amount);
         <b>assert</b>!(amt &lt;= <a href="balance.md#0x2_balance_value">balance::value</a>(&self.profits), <a href="kiosk.md#0x2_kiosk_ENotEnough">ENotEnough</a>);
         amt
     } <b>else</b> {

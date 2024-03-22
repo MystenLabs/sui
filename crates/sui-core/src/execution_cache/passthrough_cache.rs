@@ -35,39 +35,37 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use tap::TapFallible;
 use tracing::instrument;
 use typed_store::Map;
 
 use super::{
-    implement_passthrough_traits, CheckpointCache, ExecutionCacheMetrics, ExecutionCacheRead,
-    ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
+    implement_passthrough_traits, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics,
+    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper,
+    StateSyncAPI,
 };
 
 pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
-    metrics: Option<ExecutionCacheMetrics>,
+    metrics: Arc<ExecutionCacheMetrics>,
     package_cache: Arc<PackageObjectCache>,
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 }
 
 impl PassthroughCache {
-    pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         Self {
             store,
-            metrics: Some(ExecutionCacheMetrics::new(registry)),
+            metrics,
             package_cache: PackageObjectCache::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
         }
     }
 
-    pub fn new_with_no_metrics(store: Arc<AuthorityStore>) -> Self {
-        Self {
-            store,
-            metrics: None,
-            package_cache: PackageObjectCache::new(),
-            executed_effects_digests_notify_read: NotifyRead::new(),
-        }
+    pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+        let metrics = Arc::new(ExecutionCacheMetrics::new(registry));
+        Self::new(store, metrics)
     }
 
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
@@ -96,6 +94,19 @@ impl PassthroughCache {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
+    }
+
+    fn revert_state_update_impl(&self, digest: &TransactionDigest) -> SuiResult {
+        self.store.revert_state_update(digest)
+    }
+
+    fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard) {
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .tap_err(|e| {
+                tracing::error!(?e, "Failed to clear object per-epoch marker table");
+            })
+            .ok();
     }
 }
 
@@ -163,12 +174,12 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.find_object_lt_or_eq_version(object_id, version)
     }
 
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
-        self.store.get_lock(obj_ref, epoch_id)
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
+        self.store.get_lock(obj_ref, epoch_store)
     }
 
-    fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
-        self.store.get_latest_lock_for_object_id(object_id)
+    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+        self.store.get_latest_live_version_for_object_id(object_id)
     }
 
     fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
@@ -240,10 +251,10 @@ impl ExecutionCacheRead for PassthroughCache {
     fn get_marker_value(
         &self,
         object_id: &ObjectID,
-        version: &SequenceNumber,
+        version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<MarkerValue>> {
-        self.store.get_marker_value(object_id, version, epoch_id)
+        self.store.get_marker_value(object_id, &version, epoch_id)
     }
 
     fn get_latest_marker(
@@ -272,11 +283,9 @@ impl ExecutionCacheWrite for PassthroughCache {
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
 
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .pending_notify_read
-                    .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-            }
+            self.metrics
+                .pending_notify_read
+                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
 
             Ok(())
         }
@@ -285,12 +294,12 @@ impl ExecutionCacheWrite for PassthroughCache {
 
     fn acquire_transaction_locks<'a>(
         &'a self,
-        epoch_id: EpochId,
+        epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
         self.store
-            .acquire_transaction_locks(epoch_id, owned_input_objects, tx_digest)
+            .acquire_transaction_locks(epoch_store, owned_input_objects, transaction)
             .boxed()
     }
 }
@@ -333,6 +342,17 @@ impl AccumulatorStore for PassthroughCache {
         include_wrapped_tombstone: bool,
     ) -> Box<dyn Iterator<Item = crate::authority::authority_store_tables::LiveObject> + '_> {
         self.store.iter_live_object_set(include_wrapped_tombstone)
+    }
+}
+
+impl ExecutionCacheCommit for PassthroughCache {
+    fn commit_transaction_outputs(
+        &self,
+        _epoch: EpochId,
+        _digest: &TransactionDigest,
+    ) -> BoxFuture<'_, SuiResult> {
+        // Nothing needs to be done since they were already committed in write_transaction_outputs
+        async { Ok(()) }.boxed()
     }
 }
 

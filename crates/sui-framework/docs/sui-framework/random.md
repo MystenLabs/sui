@@ -1,7 +1,7 @@
 
-<a name="0x2_random"></a>
-
-# Module `0x2::random`
+---
+title: Module `0x2::random`
+---
 
 
 
@@ -14,11 +14,11 @@
 -  [Function `update_randomness_state`](#0x2_random_update_randomness_state)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
-<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
-<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
-<b>use</b> <a href="versioned.md#0x2_versioned">0x2::versioned</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
+<b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<b>use</b> <a href="../sui-framework/versioned.md#0x2_versioned">0x2::versioned</a>;
 </code></pre>
 
 
@@ -31,7 +31,7 @@ Singleton shared object which stores the global randomness state.
 The actual state is stored in a versioned inner field.
 
 
-<pre><code><b>struct</b> <a href="random.md#0x2_random_Random">Random</a> <b>has</b> key
+<pre><code><b>struct</b> <a href="../sui-framework/random.md#0x2_random_Random">Random</a> <b>has</b> key
 </code></pre>
 
 
@@ -42,13 +42,13 @@ The actual state is stored in a versioned inner field.
 
 <dl>
 <dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
+<code>id: <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>inner: <a href="versioned.md#0x2_versioned_Versioned">versioned::Versioned</a></code>
+<code>inner: <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a></code>
 </dt>
 <dd>
 
@@ -64,7 +64,7 @@ The actual state is stored in a versioned inner field.
 
 
 
-<pre><code><b>struct</b> <a href="random.md#0x2_random_RandomInner">RandomInner</a> <b>has</b> store
+<pre><code><b>struct</b> <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> <b>has</b> store
 </code></pre>
 
 
@@ -93,7 +93,7 @@ The actual state is stored in a versioned inner field.
 
 </dd>
 <dt>
-<code>random_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+<code>random_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
 </dt>
 <dd>
 
@@ -112,7 +112,7 @@ The actual state is stored in a versioned inner field.
 
 
 
-<pre><code><b>const</b> <a href="random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
 </code></pre>
 
 
@@ -121,7 +121,7 @@ The actual state is stored in a versioned inner field.
 
 
 
-<pre><code><b>const</b> <a href="random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
 </code></pre>
 
 
@@ -130,7 +130,7 @@ The actual state is stored in a versioned inner field.
 
 
 
-<pre><code><b>const</b> <a href="random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
 </code></pre>
 
 
@@ -139,7 +139,7 @@ The actual state is stored in a versioned inner field.
 
 
 
-<pre><code><b>const</b> <a href="random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>: u64 = 2;
 </code></pre>
 
 
@@ -153,7 +153,7 @@ the Random object is first created.
 Can only be called by genesis or change_epoch transactions.
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_create">create</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_create">create</a>(ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -162,23 +162,23 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_create">create</a>(ctx: &<b>mut</b> TxContext) {
-    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_create">create</a>(ctx: &<b>mut</b> TxContext) {
+    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
 
-    <b>let</b> version = <a href="random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>;
+    <b>let</b> version = <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>;
 
-    <b>let</b> inner = <a href="random.md#0x2_random_RandomInner">RandomInner</a> {
+    <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
         version,
-        epoch: <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+        epoch: <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
         randomness_round: 0,
-        random_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[],
+        random_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[],
     };
 
-    <b>let</b> self = <a href="random.md#0x2_random_Random">Random</a> {
-        id: <a href="object.md#0x2_object_randomness_state">object::randomness_state</a>(),
-        inner: <a href="versioned.md#0x2_versioned_create">versioned::create</a>(version, inner, ctx),
+    <b>let</b> self = <a href="../sui-framework/random.md#0x2_random_Random">Random</a> {
+        id: <a href="../sui-framework/object.md#0x2_object_randomness_state">object::randomness_state</a>(),
+        inner: <a href="../sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(version, inner, ctx),
     };
-    <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(self);
+    <a href="../sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(self);
 }
 </code></pre>
 
@@ -192,7 +192,7 @@ Can only be called by genesis or change_epoch transactions.
 
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="random.md#0x2_random_Random">random::Random</a>): &<b>mut</b> <a href="random.md#0x2_random_RandomInner">random::RandomInner</a>
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">random::Random</a>): &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomInner">random::RandomInner</a>
 </code></pre>
 
 
@@ -201,15 +201,15 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_load_inner_mut">load_inner_mut</a>(
-    self: &<b>mut</b> <a href="random.md#0x2_random_Random">Random</a>,
-): &<b>mut</b> <a href="random.md#0x2_random_RandomInner">RandomInner</a> {
-    <b>let</b> version = <a href="versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>(
+    self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">Random</a>,
+): &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
+    <b>let</b> version = <a href="../sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
 
-    // Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="object.md#0x2_object">object</a>.
-    <b>assert</b>!(version == <a href="random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<b>mut</b> <a href="random.md#0x2_random_RandomInner">RandomInner</a> = <a href="versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
-    <b>assert</b>!(inner.version == version, <a href="random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
+    // Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
+    <b>let</b> inner: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> = <a href="../sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
+    <b>assert</b>!(inner.version == version, <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
 </code></pre>
@@ -224,7 +224,7 @@ Can only be called by genesis or change_epoch transactions.
 
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_load_inner">load_inner</a>(self: &<a href="random.md#0x2_random_Random">random::Random</a>): &<a href="random.md#0x2_random_RandomInner">random::RandomInner</a>
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(self: &<a href="../sui-framework/random.md#0x2_random_Random">random::Random</a>): &<a href="../sui-framework/random.md#0x2_random_RandomInner">random::RandomInner</a>
 </code></pre>
 
 
@@ -233,15 +233,15 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_load_inner">load_inner</a>(
-    self: &<a href="random.md#0x2_random_Random">Random</a>,
-): &<a href="random.md#0x2_random_RandomInner">RandomInner</a> {
-    <b>let</b> version = <a href="versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(
+    self: &<a href="../sui-framework/random.md#0x2_random_Random">Random</a>,
+): &<a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
+    <b>let</b> version = <a href="../sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
 
-    // Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="object.md#0x2_object">object</a>.
-    <b>assert</b>!(version == <a href="random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<a href="random.md#0x2_random_RandomInner">RandomInner</a> = <a href="versioned.md#0x2_versioned_load_value">versioned::load_value</a>(&self.inner);
-    <b>assert</b>!(inner.version == version, <a href="random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
+    // Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
+    <b>let</b> inner: &<a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> = <a href="../sui-framework/versioned.md#0x2_versioned_load_value">versioned::load_value</a>(&self.inner);
+    <b>assert</b>!(inner.version == version, <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
 </code></pre>
@@ -258,7 +258,7 @@ Record new randomness. Called when executing the RandomnessStateUpdate system
 transaction.
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_update_randomness_state">update_randomness_state</a>(self: &<b>mut</b> <a href="random.md#0x2_random_Random">random::Random</a>, new_round: u64, new_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_update_randomness_state">update_randomness_state</a>(self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">random::Random</a>, new_round: u64, new_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -267,32 +267,34 @@ transaction.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="random.md#0x2_random_update_randomness_state">update_randomness_state</a>(
-    self: &<b>mut</b> <a href="random.md#0x2_random_Random">Random</a>,
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_update_randomness_state">update_randomness_state</a>(
+    self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">Random</a>,
     new_round: u64,
-    new_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    new_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
 
     // Randomness should only be incremented.
-    <b>let</b> epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
-    <b>let</b> inner = <a href="random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self);
+    <b>let</b> epoch = <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
+    <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self);
     <b>if</b> (inner.randomness_round == 0 && inner.epoch == 0 &&
-            <a href="dependencies/move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&inner.random_bytes)) {
+            <a href="../move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&inner.random_bytes)) {
         // First <b>update</b> should be for round zero.
-        <b>assert</b>!(new_round == 0, <a href="random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>);
+        <b>assert</b>!(new_round == 0, <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>);
     } <b>else</b> {
-        // Subsequent updates should increment either epoch or randomness_round.
+        // Subsequent updates should either increase epoch or increment randomness_round.
+        // Note that epoch may increase by more than 1 <b>if</b> an epoch is completed without
+        // randomness ever being generated in that epoch.
         <b>assert</b>!(
-            (epoch == inner.epoch + 1 && new_round == 0) ||
+            (epoch &gt; inner.epoch && new_round == 0) ||
                 (new_round == inner.randomness_round + 1),
-            <a href="random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>
+            <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>
         );
     };
 
-    inner.epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
+    inner.epoch = <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
     inner.randomness_round = new_round;
     inner.random_bytes = new_bytes;
 }

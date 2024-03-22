@@ -653,16 +653,10 @@ fn start_summary_sync(
 ) -> JoinHandle<Result<(), anyhow::Error>> {
     tokio::spawn(async move {
         info!("Starting summary sync");
-        let store = AuthorityStore::open(
-            perpetual_db,
-            &genesis,
-            usize::MAX,
-            false,
-            &Registry::default(),
-        )
-        .await?;
+        let store =
+            AuthorityStore::open_no_genesis(perpetual_db, usize::MAX, false, &Registry::default())?;
         let state_sync_store = RocksDbStore::new(
-            Arc::new(ExecutionCache::new_with_no_metrics(store)),
+            Arc::new(ExecutionCache::new_for_tests(store, &Registry::default())),
             committee_store,
             checkpoint_store.clone(),
         );
@@ -1239,7 +1233,7 @@ pub async fn state_sync_from_archive(
         .map(|c| c.sequence_number)
         .unwrap_or(0);
     let state_sync_store = RocksDbStore::new(
-        Arc::new(ExecutionCache::new_with_no_metrics(store)),
+        Arc::new(ExecutionCache::new_for_tests(store, &Registry::default())),
         committee_store,
         checkpoint_store.clone(),
     );

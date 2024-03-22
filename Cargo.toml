@@ -61,7 +61,10 @@ exclude = [
   "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
   "external-crates/move/move-execution/v1/crates/move-stdlib",
   "external-crates/move/move-execution/v1/crates/move-vm-runtime",
-  "sdk/move-binary-format-wasm",
+  "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
+  "external-crates/move/move-execution/v2/crates/move-stdlib",
+  "external-crates/move/move-execution/v2/crates/move-vm-runtime",
+  "sdk/move-bytecode-template",
 ]
 
 members = [
@@ -161,7 +164,6 @@ members = [
   "crates/typed-store",
   "crates/typed-store-derive",
   "crates/typed-store-error",
-  "crates/workspace-hack",
   "crates/x",
   "narwhal/config",
   "narwhal/crypto",
@@ -184,11 +186,14 @@ members = [
   "sui-execution/v1/sui-adapter",
   "sui-execution/v1/sui-move-natives",
   "sui-execution/v1/sui-verifier",
+  "sui-execution/v2/sui-adapter",
+  "sui-execution/v2/sui-move-natives",
+  "sui-execution/v2/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.20.0"
+version = "1.22.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -292,7 +297,7 @@ criterion = { version = "0.5.0", features = [
 ] }
 crossterm = "0.25.0"
 csv = "1.2.1"
-dashmap = "5.4.0"
+dashmap = "5.5.3"
 # datatest-stable = "0.1.2"
 datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
 derivative = "2.2.0"
@@ -336,7 +341,7 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
+hyper-rustls = { version = "0.24", features = ["webpki-roots", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
@@ -359,11 +364,13 @@ leb128 = "0.2.5"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
+miette = {version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
+moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -465,11 +472,11 @@ tempfile = "3.3.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
-tokio = "1.28.1"
+tokio = "1.36.0"
 tokio-retry = "0.3"
 tokio-rustls = "0.24"
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
-tokio-util = "0.7.4"
+tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
 tonic = { version = "0.10", features = ["transport", "tls"] }
@@ -518,6 +525,8 @@ x509-parser = "0.14.0"
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
+linked-hash-map = "0.5.6"
+shlex = "1.3.0"
 
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
@@ -543,9 +552,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
@@ -638,7 +647,6 @@ transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }
 typed-store-error = { path = "crates/typed-store-error" }
-workspace-hack = "0.1.0"
 x = { path = "crates/x" }
 
 consensus-config = { path = "consensus/config" }
@@ -669,11 +677,3 @@ field_names = "0.2.0"
 semver = "1.0.16"
 spinners = "4.1.0"
 include_dir = "0.7.3"
-
-
-# Using the workspace-hack via this patch directive means that it only applies
-# while building within this workspace. If another workspace imports a crate
-# from here via a git dependency, it will not have the workspace-hack applied
-# to it.
-[patch.crates-io.workspace-hack]
-path = "crates/workspace-hack"

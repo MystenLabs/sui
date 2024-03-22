@@ -10,19 +10,19 @@ module tto::M1 {
     use sui::transfer::{Self, Receiving};
     use std::vector;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
-    struct C has key, store {
+    public struct C has key, store {
         id: UID,
     }
 
-    struct RecvSpoof<phantom T: key> has drop {
+    public struct RecvSpoof<phantom T: key> has drop {
         id: ID,
         version: u64,
     }
@@ -56,7 +56,7 @@ module tto::M1 {
 
     public fun receive_none_a(_v: vector<Receiving<A>>){ }
 
-    public fun receive_all(parent: &mut A, x: vector<Receiving<B>>) {
+    public fun receive_all(parent: &mut A, mut x: vector<Receiving<B>>) {
         while (!vector::is_empty(&x)) {
             let r = vector::pop_back(&mut x);
             let b = transfer::receive(&mut parent.id, r);
