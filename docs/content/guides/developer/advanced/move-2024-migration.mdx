@@ -11,13 +11,20 @@ Existing code will continue to compile, even with the addition of these new feat
 
 This document highlights some new features to try out and shows how to migrate your existing modules to use Move 2024.
 
+:::info
+
+Please, provide any feedback or report any issues you encounter via [GitHub](https://github.com/MystenLabs/sui/issues/new/choose), [Discord](https://discord.gg/Sui), or [Telegram](https://t.me/SuiTokenNetwork).
+
+:::
+
 ## How to migrate
 
-To migrate a project to Move 2024 Beta, you have two options:
+To migrate a project to Move 2024 Beta:
 
 1. Delete your existing `Move.lock` file (if one exists) to make sure you're using the newest `sui-framework` version.
-2. Run `sui move migrate` in the root of your Move project. See [Automatic migration](#automatic-migration). 
-   1. Alternatively, update your `Move.toml` file's `[package]` entry to include `edition = "2024.beta"`. If you do this, you might receive a number of new errors as part of our [breaking changes](#breaking-changes).
+1. Perform one of the following:
+    - Run `sui move migrate` in the root of your Move project. See [Automatic migration](#automatic-migration). 
+    - Alternatively, update your `Move.toml` file's `[package]` entry to include `edition = "2024.beta"`. If you do this, you might receive a number of new errors related to the [breaking changes](#breaking-changes).
 
 ## Automatic migration {#automatic-migration}
 
@@ -295,6 +302,4 @@ The migration script attempts to remediate naming errors using global qualificat
 
 ### Follow along
 
-The beta release of Move 2024 comes with some powerful new features beyond the breaking changes described here. There are also more on the horizon. Join the Sui newsletter to learn about new, exciting features coming to Move this year, including syntactic macros, enums with pattern matching, and other user-defined syntax extensions.
-
-Please, provide any feedback or report any issues you encounter via GitHub, Discord, or Telegram.
+The beta release of Move 2024 comes with some powerful new features beyond the breaking changes described here. There are also more on the horizon. Join the [Sui developer newsletter](https://sui.io/developers#newsletter) to learn about new, exciting features coming to Move this year, including syntactic macros, enums with pattern matching, and other user-defined syntax extensions.
