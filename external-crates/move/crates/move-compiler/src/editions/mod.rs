@@ -126,6 +126,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
     FeatureGate::AutoborrowEq,
+    FeatureGate::NoParensCast,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
