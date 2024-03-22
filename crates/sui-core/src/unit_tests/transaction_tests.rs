@@ -495,7 +495,6 @@ async fn zklogin_test_cached_proof_wrong_key() {
     ) = setup_zklogin_network(|_| {}).await;
 
     let res = client.handle_transaction(transfer_transaction).await;
-    info!("tktkres: {:?}", res);
     assert!(res.is_ok());
 
     /*
