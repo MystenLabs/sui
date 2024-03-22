@@ -92,6 +92,7 @@ static_symbols!(
     "lint",
     "migration",
     "beta",
+    "development",
 );
 
 /// The global, unique cache of strings.
