@@ -50,12 +50,12 @@ module bridge::bridge {
     const TRANSFER_STATUS_CLAIMED: u8 = 2;
     const TRANSFER_STATUS_NOT_FOUND: u8 = 3;
 
-    struct Bridge has key {
+    public struct Bridge has key {
         id: UID,
         inner: Versioned
     }
 
-    struct BridgeInner has store {
+    public struct BridgeInner has store {
         bridge_version: u64,
         message_version: u8,
         chain_id: u8,
@@ -71,7 +71,7 @@ module bridge::bridge {
         paused: bool,
     }
 
-    struct TokenBridgeEvent has copy, drop {
+    public struct TokenBridgeEvent has copy, drop {
         // TODO: do we need message_type here?
         message_type: u8,
         seq_num: u64,
@@ -83,11 +83,11 @@ module bridge::bridge {
         amount: u64
     }
 
-    struct EmergencyOpEvent has copy, drop {
+    public struct EmergencyOpEvent has copy, drop {
         frozen: bool,
     }
 
-    struct BridgeRecord has store, drop {
+    public struct BridgeRecord has store, drop {
         message: BridgeMessage,
         verified_signatures: Option<vector<vector<u8>>>,
         claimed: bool
@@ -112,19 +112,19 @@ module bridge::bridge {
 
     const CURRENT_VERSION: u64 = 1;
 
-    struct TokenTransferApproved has copy, drop {
+    public struct TokenTransferApproved has copy, drop {
         message_key: BridgeMessageKey,
     }
 
-    struct TokenTransferClaimed has copy, drop {
+    public struct TokenTransferClaimed has copy, drop {
         message_key: BridgeMessageKey,
     }
 
-    struct TokenTransferAlreadyApproved has copy, drop {
+    public struct TokenTransferAlreadyApproved has copy, drop {
         message_key: BridgeMessageKey,
     }
 
-    struct TokenTransferAlreadyClaimed has copy, drop {
+    public struct TokenTransferAlreadyClaimed has copy, drop {
         message_key: BridgeMessageKey,
     }
 
@@ -506,10 +506,10 @@ module bridge::bridge {
     #[test]
     #[expected_failure(abort_code = EUnexpectedChainID)]
     fun test_system_msg_incorrect_chain_id() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let blocklist = create_blocklist_message(chain_ids::sui_mainnet(), 0, 0, vector[]);
         execute_system_message(&mut bridge, blocklist, vector[]);
         destroy(bridge);
@@ -518,10 +518,10 @@ module bridge::bridge {
 
     #[test]
     fun test_get_current_seq_num_and_increment() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
 
         let inner = load_inner_mut(&mut bridge);
         assert_eq(get_current_seq_num_and_increment(inner, message_types::committee_blocklist()), 0);
@@ -545,10 +545,10 @@ module bridge::bridge {
 
     #[test]
     fun test_execute_update_bridge_limit() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_mainnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // Assert the starting limit is a different value
@@ -575,10 +575,10 @@ module bridge::bridge {
     #[test]
     #[expected_failure(abort_code = EUnexpectedChainID)]
     fun test_execute_update_bridge_limit_abort_with_unexpected_chain_id() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // shrink to 1 for SUI mainnet -> ETH mainnet
@@ -599,10 +599,10 @@ module bridge::bridge {
 
     #[test]
     fun test_execute_update_asset_price() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // Assert the starting limit is a different value
@@ -628,10 +628,10 @@ module bridge::bridge {
 
     #[test]
     fun test_execute_emergency_op() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
@@ -667,10 +667,10 @@ module bridge::bridge {
     #[test]
     #[expected_failure(abort_code = EBridgeNotPaused)]
     fun test_execute_emergency_op_abort_when_not_frozen() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
@@ -691,10 +691,10 @@ module bridge::bridge {
     #[test]
     #[expected_failure(abort_code = EBridgeAlreadyPaused)]
     fun test_execute_emergency_op_abort_when_already_frozen() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
@@ -729,10 +729,10 @@ module bridge::bridge {
 
     #[test]
     fun test_get_token_transfer_action_status() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_devnet();
-        let bridge = new_for_testing(ctx, chain_id);
+        let mut bridge = new_for_testing(ctx, chain_id);
         let coin = coin::mint_for_testing<ETH>(12345, ctx);
 
         // Test when pending

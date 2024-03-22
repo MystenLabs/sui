@@ -32,8 +32,6 @@ module bridge::committee {
         create_validator_for_testing
     };
 
-    friend bridge::bridge;
-
     const ESignatureBelowThreshold: u64 = 0;
     const EDuplicatedSignature: u64 = 1;
     const EInvalidSignature: u64 = 2;
@@ -47,12 +45,12 @@ module bridge::committee {
 
     const ECDSA_COMPRESSED_PUBKEY_LENGTH: u64 = 33;
 
-    struct BlocklistValidatorEvent has copy, drop {
+    public struct BlocklistValidatorEvent has copy, drop {
         blocklisted: bool,
         public_keys: vector<vector<u8>>,
     }
 
-    struct BridgeCommittee has store {
+    public struct BridgeCommittee has store {
         // commitee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
         // Committee member registrations for the next committee creation.
@@ -63,13 +61,13 @@ module bridge::committee {
         last_committee_update_epoch: u64,
     }
 
-    struct CommitteeUpdateEvent has copy, drop {
+    public struct CommitteeUpdateEvent has copy, drop {
         // commitee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
         stake_participation_percentage: u64
     }
 
-    struct CommitteeMember has copy, drop, store {
+    public struct CommitteeMember has copy, drop, store {
         /// The Sui Address of the validator
         sui_address: address,
         /// The public key bytes of the bridge key
@@ -83,7 +81,7 @@ module bridge::committee {
         blocklisted: bool,
     }
 
-    struct CommitteeMemberRegistration has copy, drop, store {
+    public struct CommitteeMemberRegistration has copy, drop, store {
         /// The Sui Address of the validator
         sui_address: address,
         /// The public key bytes of the bridge key
@@ -93,7 +91,7 @@ module bridge::committee {
         http_rest_url: vector<u8>,
     }
 
-    public(friend) fun create(ctx: &TxContext): BridgeCommittee {
+    public(package) fun create(ctx: &TxContext): BridgeCommittee {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         BridgeCommittee {
             members: vec_map::empty(),
@@ -107,14 +105,14 @@ module bridge::committee {
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
     ) {
-        let (i, signature_counts) = (0, vector::length(&signatures));
-        let seen_pub_key = vec_set::empty<vector<u8>>();
+        let (mut i, signature_counts) = (0, vector::length(&signatures));
+        let mut seen_pub_key = vec_set::empty<vector<u8>>();
         let required_voting_power = message::required_voting_power(&message);
         // add prefix to the message bytes
-        let message_bytes = SUI_MESSAGE_PREFIX;
+        let mut message_bytes = SUI_MESSAGE_PREFIX;
         vector::append(&mut message_bytes, message::serialize_message(message));
 
-        let threshold = 0;
+        let mut threshold = 0;
         while (i < signature_counts) {
             let signature = vector::borrow(&signatures, i);
             let pubkey = ecdsa_k1::secp256k1_ecrecover(signature, &message_bytes, 0);
@@ -133,7 +131,7 @@ module bridge::committee {
         assert!(threshold >= required_voting_power, ESignatureBelowThreshold);
     }
 
-    public(friend) fun register(
+    public(package) fun register(
         self: &mut BridgeCommittee,
         system_state: &mut SuiSystemState,
         bridge_pubkey_bytes: vector<u8>,
@@ -172,15 +170,15 @@ module bridge::committee {
     // This method will try to create the next committee using the registration and system state,
     // if the total stake fails to meet the minimum required percentage, it will skip the update.
     // This is to ensure we don't fail the end of epoch transaction.
-    public(friend) fun try_create_next_committee(
+    public(package) fun try_create_next_committee(
         self: &mut BridgeCommittee,
         active_validator_voting_power: VecMap<address, u64>,
         min_stake_participation_percentage: u64,
         ctx: &TxContext
     ) {
-        let i = 0;
-        let new_members = vec_map::empty();
-        let stake_participation_percentage = 0;
+        let mut i = 0;
+        let mut new_members = vec_map::empty();
+        let mut stake_participation_percentage = 0;
 
         while (i < vec_map::size(&self.member_registrations)) {
             // retrieve registration
@@ -220,16 +218,16 @@ module bridge::committee {
 
     // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
     // TODO: add tests for this function
-    public(friend) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
+    public(package) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
         let blocklisted = message::blocklist_type(&blocklist) != 1;
         let eth_addresses = message::blocklist_validator_addresses(&blocklist);
         let list_len = vector::length(eth_addresses);
-        let list_idx = 0;
-        let member_idx = 0;
-        let pub_keys = vector::empty<vector<u8>>();
+        let mut list_idx = 0;
+        let mut member_idx = 0;
+        let mut pub_keys = vector::empty<vector<u8>>();
         while (list_idx < list_len) {
             let target_address = vector::borrow(eth_addresses, list_idx);
-            let found = false;
+            let mut found = false;
             while (member_idx < vec_map::size(&self.members)) {
                 let (pub_key, member) = vec_map::get_entry_by_idx_mut(&mut self.members, member_idx);
                 let eth_address = crypto::ecdsa_pub_key_to_eth_address(*pub_key);
@@ -250,7 +248,7 @@ module bridge::committee {
         })
     }
 
-    public(friend) fun committee_members(self: &BridgeCommittee): &VecMap<vector<u8>, CommitteeMember> {
+    public(package) fun committee_members(self: &BridgeCommittee): &VecMap<vector<u8>, CommitteeMember> {
         &self.members
     }
 
@@ -337,9 +335,9 @@ module bridge::committee {
 
     #[test]
     fun test_init_committee() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let committee = create(ctx);
+        let mut committee = create(ctx);
 
         let validators = vector[
             create_validator_for_testing(@0xA, 100, ctx),
@@ -349,7 +347,7 @@ module bridge::committee {
         advance_epoch_with_reward_amounts(0, 0, &mut scenario);
         test_scenario::next_tx(&mut scenario, @0x0);
 
-        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
@@ -376,9 +374,9 @@ module bridge::committee {
     #[test]
     #[expected_failure(abort_code = ESenderNotActiveValidator)]
     fun test_init_committee_not_validator() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let committee = create(ctx);
+        let mut committee = create(ctx);
 
         let validators = vector[
             create_validator_for_testing(@0xA, 100, ctx),
@@ -388,7 +386,7 @@ module bridge::committee {
         advance_epoch_with_reward_amounts(0, 0, &mut scenario);
         test_scenario::next_tx(&mut scenario, @0x0);
 
-        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xD, 0));
@@ -400,9 +398,9 @@ module bridge::committee {
 
     #[test]
     fun test_init_committee_validator_become_inactive() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let committee = create(ctx);
+        let mut committee = create(ctx);
 
         let validators = vector[
             create_validator_for_testing(@0xA, 100, ctx),
@@ -415,7 +413,7 @@ module bridge::committee {
         advance_epoch_with_reward_amounts(0, 0, &mut scenario);
         test_scenario::next_tx(&mut scenario, @0x0);
 
-        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration, 3 validators registered, should have 60% voting power in total
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
@@ -430,7 +428,7 @@ module bridge::committee {
         test_scenario::return_shared(system_state);
         advance_epoch_with_reward_amounts(0, 0, &mut scenario);
 
-        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // create committee should not create a committe because of not enough stake.
         let ctx = test_scenario::ctx(&mut scenario);
@@ -446,9 +444,9 @@ module bridge::committee {
 
     #[test]
     fun test_update_committee_registration() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let committee = create(ctx);
+        let mut committee = create(ctx);
 
         let validators = vector[
             create_validator_for_testing(@0xA, 100, ctx),
@@ -458,7 +456,7 @@ module bridge::committee {
         advance_epoch_with_reward_amounts(0, 0, &mut scenario);
         test_scenario::next_tx(&mut scenario, @0x0);
 
-        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
@@ -486,9 +484,9 @@ module bridge::committee {
 
     #[test]
     fun test_init_committee_not_enough_stake() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let committee = create(ctx);
+        let mut committee = create(ctx);
 
         let validators = vector[
             create_validator_for_testing(@0xA, 100, ctx),
@@ -498,7 +496,7 @@ module bridge::committee {
         advance_epoch_with_reward_amounts(0, 0, &mut scenario);
         test_scenario::next_tx(&mut scenario, @0x0);
 
-        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
@@ -526,7 +524,7 @@ module bridge::committee {
     #[test]
     #[expected_failure(abort_code = ESignatureBelowThreshold)]
     fun test_verify_signatures_with_blocked_committee_member() {
-        let committee = setup_test();
+        let mut committee = setup_test();
         let msg = message::deserialize_message_test_only(hex::decode(TEST_MSG));
         // good path, this test should have passed in previous test
         verify_signatures(
@@ -573,7 +571,7 @@ module bridge::committee {
     #[test]
     #[expected_failure(abort_code = EValidatorBlocklistContainsUnknownKey)]
     fun test_execute_blocklist_abort_upon_unknown_validator() {
-        let committee = setup_test();
+        let mut committee = setup_test();
 
         // // val0 and val1 are not blocked yet
         let (validator0, _) = vec_map::get_entry_by_idx(&committee.members, 0);
@@ -600,7 +598,7 @@ module bridge::committee {
 
     #[test]
     fun test_execute_blocklist() {
-        let committee = setup_test();
+        let mut committee = setup_test();
 
         // val0 and val1 are not blocked yet
         let (validator0, member0) = vec_map::get_entry_by_idx(&committee.members, 0);
@@ -651,7 +649,7 @@ module bridge::committee {
 
     #[test_only]
     fun setup_test(): BridgeCommittee {
-        let members = vec_map::empty<vector<u8>, CommitteeMember>();
+        let mut members = vec_map::empty<vector<u8>, CommitteeMember>();
 
         let bridge_pubkey_bytes = hex::decode(VALIDATOR1_PUBKEY);
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {

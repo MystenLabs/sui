@@ -30,8 +30,6 @@ module bridge::limiter {
     #[test_only]
     use bridge::usdt;
 
-    friend bridge::bridge;
-
     const ELimitNotFoundForRoute: u64 = 0;
 
     // TODO: U64::MAX, make this configurable?
@@ -39,7 +37,7 @@ module bridge::limiter {
 
     const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
 
-    struct TransferLimiter has store {
+    public struct TransferLimiter has store {
         transfer_limits: VecMap<BridgeRoute, u64>,
         // token id to USD notional value, 4 DP accuracy, so 10000 => 1USD
         notional_values: VecMap<u8, u64>,
@@ -47,7 +45,7 @@ module bridge::limiter {
         transfer_records: VecMap<BridgeRoute, TransferRecord>,
     }
 
-    struct TransferRecord has store {
+    public struct TransferRecord has store {
         hour_head: u64,
         hour_tail: u64,
         per_hour_amounts: vector<u64>,
@@ -64,13 +62,13 @@ module bridge::limiter {
         }
     }
 
-    struct UpdateRouteLimitEvent has copy, drop {
+    public struct UpdateRouteLimitEvent has copy, drop {
         sending_chain: u8,
         receiving_chain: u8,
         new_limit: u64,
     }
 
-    struct UpdateAssetPriceEvent has copy, drop {
+    public struct UpdateAssetPriceEvent has copy, drop {
         token_id: u8,
         new_price: u64,
     }
@@ -85,7 +83,7 @@ module bridge::limiter {
         *vec_map::get(&self.notional_values, token_id)
     }
 
-    public(friend) fun update_route_limit(self: &mut TransferLimiter, route: &BridgeRoute, new_usd_limit: u64) {
+    public(package) fun update_route_limit(self: &mut TransferLimiter, route: &BridgeRoute, new_usd_limit: u64) {
         let receiving_chain = *chain_ids::route_destination(route);
         if (!vec_map::contains(&self.transfer_limits, route)) {
             vec_map::insert(&mut self.transfer_limits, *route, new_usd_limit);
@@ -100,7 +98,7 @@ module bridge::limiter {
         })
     }
 
-    public(friend) fun update_asset_notional_price(self: &mut TransferLimiter, token_id: u8, new_usd_price: u64) {
+    public(package) fun update_asset_notional_price(self: &mut TransferLimiter, token_id: u8, new_usd_price: u64) {
         if (!vec_map::contains(&self.notional_values, &token_id)) {
             vec_map::insert(&mut self.notional_values, token_id, new_usd_price);
         } else {
@@ -203,7 +201,7 @@ module bridge::limiter {
     // Note limiter only takes effects on the receiving chain, so we only need to
     // specify routes from Ethereum to Sui.
     fun initial_transfer_limits(): VecMap<BridgeRoute, u64> {
-        let transfer_limits = vec_map::empty();
+        let mut transfer_limits = vec_map::empty();
         // 5M limit on Sui -> Ethereum mainnet
         vec_map::insert(
             &mut transfer_limits,
@@ -246,7 +244,7 @@ module bridge::limiter {
     }
 
     fun initial_notional_values(): VecMap<u8, u64> {
-        let notional_values = vec_map::empty();
+        let mut notional_values = vec_map::empty();
         vec_map::insert(&mut notional_values, treasury::token_id<BTC>(), 50_000 * USD_VALUE_MULTIPLIER);
         vec_map::insert(&mut notional_values, treasury::token_id<ETH>(), 3_000 * USD_VALUE_MULTIPLIER);
         vec_map::insert(&mut notional_values, treasury::token_id<USDC>(), 1 * USD_VALUE_MULTIPLIER);
@@ -256,7 +254,7 @@ module bridge::limiter {
 
     #[test]
     fun test_24_hours_windows() {
-        let limiter = TransferLimiter {
+        let mut limiter = TransferLimiter {
             transfer_limits: vec_map::empty(),
             notional_values: vec_map::empty(),
             transfer_records: vec_map::empty(),
@@ -269,9 +267,9 @@ module bridge::limiter {
         // Notional price for ETH is 5 USD
         vec_map::insert(&mut limiter.notional_values, treasury::token_id<ETH>(), 5 * USD_VALUE_MULTIPLIER);
 
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
-        let clock = clock::create_for_testing(ctx);
+        let mut clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
         // transfer 10000 ETH every hour, the totol should be 10000 * 5
@@ -281,18 +279,18 @@ module bridge::limiter {
         assert!(record.total_amount == 10000 * 5 * USD_VALUE_MULTIPLIER, 0);
 
         // transfer 1000 ETH every hour for 50 hours, the 24 hours totol should be 24000 * 10
-        let i = 0;
+        let mut i = 0;
         while (i < 50) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
             assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 1_000 * eth::multiplier()), 0);
             i = i + 1;
         };
         let record = vec_map::get(&limiter.transfer_records, &route);
-        let expected_value = 24000 * 5 * USD_VALUE_MULTIPLIER;
+        let mut expected_value = 24000 * 5 * USD_VALUE_MULTIPLIER;
         assert_eq(record.total_amount, expected_value);
 
         // transfer 1000 * i ETH every hour for 24 hours, the 24 hours totol should be 300 * 1000 * 5
-        let i = 0;
+        let mut i = 0;
         // At this point, every hour in past 24 hour has value $5000.
         // In each iteration, the old $5000 gets replaced with (i * 5000)
         while (i < 24) {
@@ -325,7 +323,7 @@ module bridge::limiter {
 
     #[test]
     fun test_24_hours_windows_multiple_route() {
-        let limiter = TransferLimiter {
+        let mut limiter = TransferLimiter {
             transfer_limits: vec_map::empty(),
             notional_values: vec_map::empty(),
             transfer_records: vec_map::empty(),
@@ -340,9 +338,9 @@ module bridge::limiter {
         // Notional price for ETH is 5 USD
         vec_map::insert(&mut limiter.notional_values, treasury::token_id<ETH>(), 5 * USD_VALUE_MULTIPLIER);
 
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
-        let clock = clock::create_for_testing(ctx);
+        let mut clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
         // Transfer 10000 ETH on route 1
@@ -364,7 +362,7 @@ module bridge::limiter {
 
     #[test]
     fun test_exceed_limit() {
-        let limiter = TransferLimiter {
+        let mut limiter = TransferLimiter {
             transfer_limits: vec_map::empty(),
             notional_values: vec_map::empty(),
             transfer_records: vec_map::empty(),
@@ -376,9 +374,9 @@ module bridge::limiter {
         // Notional price for ETH is 10 USD
         vec_map::insert(&mut limiter.notional_values, treasury::token_id<ETH>(), 10 * USD_VALUE_MULTIPLIER);
 
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
-        let clock = clock::create_for_testing(ctx);
+        let mut clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
         assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 90_000 * eth::multiplier()), 0);
@@ -423,7 +421,7 @@ module bridge::limiter {
 
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
@@ -436,12 +434,12 @@ module bridge::limiter {
     #[test]
     #[expected_failure(abort_code = ELimitNotFoundForRoute)]
     fun test_limiter_does_not_limit_receiving_transfers() {
-        let limiter = new();
+        let mut limiter = new();
 
         let route = chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet());
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
-        let clock = clock::create_for_testing(ctx);
+        let mut clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
         // We don't limit sui -> eth transfers. This aborts with `ELimitNotFoundForRoute`
         check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 1 * eth::multiplier());
@@ -453,7 +451,7 @@ module bridge::limiter {
     #[test]
     fun test_limiter_basic_op() {
         // In this test we use very simple number for easier calculation.
-        let limiter = TransferLimiter {
+        let mut limiter = TransferLimiter {
             transfer_limits: vec_map::empty(),
             notional_values: vec_map::empty(),
             transfer_records: vec_map::empty(),
@@ -467,9 +465,9 @@ module bridge::limiter {
         vec_map::insert(&mut limiter.notional_values, treasury::token_id<USDC>(), 1 * USD_VALUE_MULTIPLIER);
         vec_map::insert(&mut limiter.notional_values, treasury::token_id<USDT>(), 5000);
 
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
-        let clock = clock::create_for_testing(ctx);
+        let mut clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 36082800000); // hour 10023
 
         // hour 0 (10023): $15 * 2.5 = $37.5
@@ -589,10 +587,10 @@ module bridge::limiter {
     #[test]
     fun test_update_route_limit() {
         // default routes, default notion values
-        let limiter = new();
+        let mut limiter = new();
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
@@ -600,7 +598,7 @@ module bridge::limiter {
 
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
             ),
             MAX_TRANSFER_LIMIT,
@@ -610,7 +608,7 @@ module bridge::limiter {
         update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()), 1_000 * USD_VALUE_MULTIPLIER);
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
             ),
             1_000 * USD_VALUE_MULTIPLIER,
@@ -618,7 +616,7 @@ module bridge::limiter {
         // mainnet route does not change
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
@@ -629,7 +627,7 @@ module bridge::limiter {
     #[test]
     fun test_update_asset_price() {
         // default routes, default notion values
-        let limiter = new();
+        let mut limiter = new();
         assert_eq(*vec_map::get(&limiter.notional_values, &treasury::token_id<BTC>()), (50_000 * USD_VALUE_MULTIPLIER));
         assert_eq(*vec_map::get(&limiter.notional_values, &treasury::token_id<ETH>()), (3_000 * USD_VALUE_MULTIPLIER));
         assert_eq(*vec_map::get(&limiter.notional_values, &treasury::token_id<USDC>()), (1 * USD_VALUE_MULTIPLIER));

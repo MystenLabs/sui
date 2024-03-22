@@ -14,7 +14,7 @@ module bridge::crypto {
         let decompressed = ecdsa_k1::decompress_pubkey(&compressed_pub_key);
 
         // Remove first byte
-        let (i, decompressed_64) = (1, vector[]);
+        let (mut i, mut decompressed_64) = (1, vector[]);
         while (i < 65) {
             let value = vector::borrow(&decompressed, i);
             vector::push_back(&mut decompressed_64, *value);
@@ -25,8 +25,8 @@ module bridge::crypto {
         let hash = keccak256(&decompressed_64);
 
         // Take last 20 bytes
-        let address = vector[];
-        let i = 12;
+        let mut address = vector[];
+        let mut i = 12;
         while (i < 32) {
             vector::push_back(&mut address, *vector::borrow(&hash, i));
             i = i + 1;

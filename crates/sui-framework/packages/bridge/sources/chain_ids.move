@@ -17,7 +17,7 @@ module bridge::chain_ids {
 
     const EInvalidBridgeRoute: u64 = 0;
 
-    struct BridgeRoute has copy, drop, store {
+    public struct BridgeRoute has copy, drop, store {
         source: u8,
         destination: u8,
     }

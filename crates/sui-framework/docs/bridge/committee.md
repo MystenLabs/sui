@@ -340,7 +340,7 @@ title: Module `0xb::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_create">create</a>(ctx: &TxContext): <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="committee.md#0xb_committee_create">create</a>(ctx: &TxContext): <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
     <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
         members: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
@@ -374,14 +374,14 @@ title: Module `0xb::committee`
     <a href="message.md#0xb_message">message</a>: BridgeMessage,
     signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ) {
-    <b>let</b> (i, signature_counts) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&signatures));
-    <b>let</b> seen_pub_key = <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
+    <b>let</b> (<b>mut</b> i, signature_counts) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&signatures));
+    <b>let</b> <b>mut</b> seen_pub_key = <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
     <b>let</b> required_voting_power = <a href="message.md#0xb_message_required_voting_power">message::required_voting_power</a>(&<a href="message.md#0xb_message">message</a>);
     // add prefix <b>to</b> the <a href="message.md#0xb_message">message</a> bytes
-    <b>let</b> message_bytes = <a href="committee.md#0xb_committee_SUI_MESSAGE_PREFIX">SUI_MESSAGE_PREFIX</a>;
+    <b>let</b> <b>mut</b> message_bytes = <a href="committee.md#0xb_committee_SUI_MESSAGE_PREFIX">SUI_MESSAGE_PREFIX</a>;
     <a href="../move-stdlib/vector.md#0x1_vector_append">vector::append</a>(&<b>mut</b> message_bytes, <a href="message.md#0xb_message_serialize_message">message::serialize_message</a>(<a href="message.md#0xb_message">message</a>));
 
-    <b>let</b> threshold = 0;
+    <b>let</b> <b>mut</b> threshold = 0;
     <b>while</b> (i &lt; signature_counts) {
         <b>let</b> signature = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&signatures, i);
         <b>let</b> pubkey = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">ecdsa_k1::secp256k1_ecrecover</a>(signature, &message_bytes, 0);
@@ -420,7 +420,7 @@ title: Module `0xb::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_register">register</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="committee.md#0xb_committee_register">register</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
     system_state: &<b>mut</b> SuiSystemState,
     bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
@@ -476,15 +476,15 @@ title: Module `0xb::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
     active_validator_voting_power: VecMap&lt;<b>address</b>, u64&gt;,
     min_stake_participation_percentage: u64,
     ctx: &TxContext
 ) {
-    <b>let</b> i = 0;
-    <b>let</b> new_members = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-    <b>let</b> stake_participation_percentage = 0;
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> <b>mut</b> new_members = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    <b>let</b> <b>mut</b> stake_participation_percentage = 0;
 
     <b>while</b> (i &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.member_registrations)) {
         // retrieve registration
@@ -542,16 +542,16 @@ title: Module `0xb::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_execute_blocklist">execute_blocklist</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, blocklist: Blocklist) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="committee.md#0xb_committee_execute_blocklist">execute_blocklist</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, blocklist: Blocklist) {
     <b>let</b> blocklisted = <a href="message.md#0xb_message_blocklist_type">message::blocklist_type</a>(&blocklist) != 1;
     <b>let</b> eth_addresses = <a href="message.md#0xb_message_blocklist_validator_addresses">message::blocklist_validator_addresses</a>(&blocklist);
     <b>let</b> list_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(eth_addresses);
-    <b>let</b> list_idx = 0;
-    <b>let</b> member_idx = 0;
-    <b>let</b> pub_keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
+    <b>let</b> <b>mut</b> list_idx = 0;
+    <b>let</b> <b>mut</b> member_idx = 0;
+    <b>let</b> <b>mut</b> pub_keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
     <b>while</b> (list_idx &lt; list_len) {
         <b>let</b> target_address = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(eth_addresses, list_idx);
-        <b>let</b> found = <b>false</b>;
+        <b>let</b> <b>mut</b> found = <b>false</b>;
         <b>while</b> (member_idx &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.members)) {
             <b>let</b> (pub_key, member) = <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">vec_map::get_entry_by_idx_mut</a>(&<b>mut</b> self.members, member_idx);
             <b>let</b> eth_address = <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(*pub_key);
@@ -592,7 +592,7 @@ title: Module `0xb::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_committee_members">committee_members</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>): &VecMap&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a>&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="committee.md#0xb_committee_committee_members">committee_members</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>): &VecMap&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a>&gt; {
     &self.members
 }
 </code></pre>
