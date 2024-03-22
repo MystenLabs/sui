@@ -383,6 +383,7 @@ where
                         }
                     }
                     adjust_token(context.tokens, end_token);
+                    // everything worked out so simply continue
                 }
                 Err(diag) => {
                     list_error_advance(
@@ -393,9 +394,6 @@ where
                         /* for list */ true,
                         *diag,
                     );
-                    if context.at_stop_set() {
-                        break;
-                    }
                 }
             }
         } else {
@@ -413,9 +411,9 @@ where
                 /* for list */ true,
                 diag,
             );
-            if context.at_stop_set() {
-                break;
-            }
+        }
+        if context.at_stop_set() {
+            break;
         }
     }
     if consume_token(context.tokens, end_token).is_err() {
@@ -1114,7 +1112,11 @@ fn parse_bind_list(context: &mut Context) -> Result<BindList, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
-            &PARAM_START_SET,
+            if context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+                &MIGRATION_PARAM_START_SET
+            } else {
+                &PARAM_START_SET
+            },
             parse_bind,
             "a variable or structure binding",
         )
@@ -1132,7 +1134,11 @@ fn parse_lambda_bind_list(context: &mut Context) -> Result<LambdaBindings, Box<D
         context,
         Tok::Pipe,
         Tok::Pipe,
-        &PARAM_START_SET,
+        if context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+            &MIGRATION_PARAM_START_SET
+        } else {
+            &PARAM_START_SET
+        },
         |context| {
             let b = parse_bind_list(context)?;
             let ty_opt = if match_token(context.tokens, Tok::Colon)? {
@@ -2707,7 +2713,11 @@ fn parse_function_decl(
         context,
         Tok::LParen,
         Tok::RParen,
-        &PARAM_START_SET,
+        if context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+            &MIGRATION_PARAM_START_SET
+        } else {
+            &PARAM_START_SET
+        },
         parse_parameter,
         "a function parameter",
     );

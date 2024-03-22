@@ -20,6 +20,8 @@ pub struct TokenSet {
 // CONSTANT SETS
 //**************************************************************************************************
 
+const MOVE_2024_KEYWORDS: [Tok; 5] = [Tok::Mut, Tok::Match, Tok::For, Tok::Enum, Tok::Type];
+
 const MODULE_MEMBER_TOKENS: [Tok; 7] = [
     Tok::Fun,
     Tok::Struct,
@@ -57,6 +59,12 @@ const PARAM_STARTS: [Tok; 5] = [
 ];
 
 pub static PARAM_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&PARAM_STARTS));
+
+pub static MIGRATION_PARAM_START_SET: Lazy<TokenSet> = Lazy::new(|| {
+    let mut param_set = TokenSet::from(&PARAM_STARTS);
+    param_set.union(&TokenSet::from(&MOVE_2024_KEYWORDS));
+    param_set
+});
 
 const EXP_STARTS: [Tok; 27] = [
     Tok::NumValue,
