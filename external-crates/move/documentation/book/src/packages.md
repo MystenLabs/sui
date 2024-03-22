@@ -178,14 +178,17 @@ access and edit the file to read and append relevant information to it. You
 also must not move the file from the root, as it needs to be at the same level
 as the `Move.toml` manifest in the package.
 
-If you are using source control for your package, make sure the `Move.lock` file
-is checked in to your repository. This ensures every build of your package is
-an exact replica of the original, and that changes to the build will be
-apparent as changes to the `Move.lock` file.
+If you are using source control for your package, it's recommended practice to
+check in the `Move.lock` file that corresponds with your desired built or
+published package. This ensures that every build of your package is an exact replica
+of the original, and that changes to the build will be apparent as changes to
+the `Move.lock` file.
 
 The `Move.lock` file is a TOML file that currently contains the following
-fields. Note: that other fields may be added to the lock file either in the
-future, or by third-party package package managers as well.
+fields. 
+
+**Note**: other fields may be added to the lock file either in the future, or
+by third-party package package managers as well.
 
 ### The `[move]` Section
 
