@@ -188,11 +188,10 @@ async fn test_auth_state_creation() {
     // Create test cluster without auth state object in genesis
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(23.into())
-        .with_epoch_duration_ms(100)
+        .with_epoch_duration_ms(10000)
         .with_default_jwks()
         .build()
         .await;
-
     // Wait until we are in an epoch that has zklogin enabled, but the auth state object is not
     // created yet.
     test_cluster.wait_for_protocol_version(24.into()).await;
