@@ -69,17 +69,27 @@ const references = [
 			id: 'references/sui-sdks',
 		},
 		items: [
+			'references/rust-sdk',
 			{
 				type: 'link',
 				label: 'Sui TypeScript SDK',
 				href: 'https://sdk.mystenlabs.com/typescript',
 			},
+      {
+				type: 'link',
+				label: 'Sui Go SDK',
+				href: 'https://github.com/block-vision/sui-go-sdk',
+      },
+      {
+				type: 'link',
+				label: 'Sui Python SDK',
+				href: 'https://github.com/FrankC01/pysui',
+      },
 			{
 				type: 'link',
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
-			'references/rust-sdk',
 		],
 	},
 	{
