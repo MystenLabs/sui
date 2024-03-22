@@ -77,6 +77,8 @@ impl SynchronizerHandle {
     }
 }
 
+type BlocksToFetchMap = Arc<tokio::sync::Mutex<HashMap<BlockRef, BTreeSet<AuthorityIndex>>>>; // maps the blocks that are pending to fetch and the authority indexes that already assigned to fetch
+
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
@@ -85,7 +87,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     fetch_blocks_scheduler_task: JoinSet<()>,
     network_client: Arc<C>,
     block_verifier: Arc<V>,
-    blocks_to_fetch: Arc<tokio::sync::Mutex<HashMap<BlockRef, Vec<AuthorityIndex>>>>, // maps the blocks that are pending to fetch and the authority indexes that already assigned to fetch
+    blocks_to_fetch: BlocksToFetchMap,
 }
 
 impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C, V, D> {
@@ -165,8 +167,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                     // check that the number of authorities that are already instructed to fetch the block is not
                                     // higher than the allowed and the `peer_index` has not already been instructed to do that.
                                     if let Some(authorities) = blocks_to_fetch_lock.get_mut(&block_ref) {
-                                        if authorities.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && !authorities.iter().any(|authority| *authority == peer_index) {
-                                            authorities.push(peer_index);
+                                        if authorities.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && !authorities.contains(&peer_index) {
+                                            authorities.insert(peer_index);
                                             blocks_to_fetch.insert(block_ref);
                                             self.context
                                                 .metrics
@@ -175,7 +177,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                                 .with_label_values(&[&hostname]).inc();
                                         }
                                     } else {
-                                        blocks_to_fetch_lock.insert(block_ref, vec![peer_index]);
+                                        blocks_to_fetch_lock.entry(block_ref).or_default().insert(peer_index);
                                         blocks_to_fetch.insert(block_ref);
                                     }
                                 }
@@ -253,7 +255,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         mut receiver: Receiver<BTreeSet<BlockRef>>,
-        blocks_to_fetch: Arc<tokio::sync::Mutex<HashMap<BlockRef, Vec<AuthorityIndex>>>>,
+        blocks_to_fetch: BlocksToFetchMap,
     ) {
         const MAX_RETRIES: u32 = 5;
 
@@ -289,18 +291,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index}.");
 
                                 // now release the blocks for the map of blocks to fetch
-                                let mut blocks_to_fetch = blocks_to_fetch.lock().await;
-                                for block_ref in &block_refs {
-                                    let authorities = blocks_to_fetch.get_mut(block_ref).expect("Block entry should exist");
-
-                                    // keep only the other authorities
-                                    authorities.retain(|authority_index| *authority_index != peer_index);
-
-                                    // if the last one then just clean up
-                                    if authorities.is_empty() {
-                                        blocks_to_fetch.remove(block_ref);
-                                    }
-                                }
+                                Self::release_blocks_to_fetch(blocks_to_fetch.clone(), block_refs, peer_index).await;
                             }
                         }
                     }
@@ -322,7 +313,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         core_dispatcher: Arc<D>,
         block_verifier: Arc<V>,
         context: Arc<Context>,
-        blocks_to_fetch: Arc<tokio::sync::Mutex<HashMap<BlockRef, Vec<AuthorityIndex>>>>,
+        blocks_to_fetch: BlocksToFetchMap,
     ) -> ConsensusResult<()> {
         let mut verified_blocks = Vec::new();
 
@@ -360,21 +351,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             verified_blocks.push(verified_block);
         }
 
-        // Now mark all the blocks as fetched from the map
-        let mut blocks_to_fetch = blocks_to_fetch.lock().await;
-        for block in &verified_blocks {
-            let authorities = blocks_to_fetch
-                .get_mut(&block.reference())
-                .expect("Block entry should exist");
-
-            // keep only the other authorities
-            authorities.retain(|authority_index| *authority_index != peer_index);
-
-            // if the last one then just clean up
-            if authorities.is_empty() {
-                blocks_to_fetch.remove(&block.reference());
-            }
-        }
+        let block_refs = verified_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+        Self::release_blocks_to_fetch(blocks_to_fetch, block_refs, peer_index).await;
 
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
@@ -391,6 +372,26 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .inc_by(missing_blocks.len() as u64);
 
         Ok(())
+    }
+
+    async fn release_blocks_to_fetch(
+        blocks_to_fetch: BlocksToFetchMap,
+        block_refs: BTreeSet<BlockRef>,
+        peer_index: AuthorityIndex,
+    ) {
+        // Now mark all the blocks as fetched from the map
+        let mut blocks_to_fetch = blocks_to_fetch.lock().await;
+        for block_ref in &block_refs {
+            if let Some(authorities) = blocks_to_fetch.get_mut(block_ref) {
+                // keep only the other authorities
+                authorities.remove(&peer_index);
+
+                // if the last one then just clean up
+                if authorities.is_empty() {
+                    blocks_to_fetch.remove(block_ref);
+                }
+            }
+        }
     }
 
     async fn fetch_blocks_request(
