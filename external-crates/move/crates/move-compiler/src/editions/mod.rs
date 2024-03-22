@@ -127,6 +127,8 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::AutoborrowEq,
 ];
 
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
 impl Edition {
@@ -146,6 +148,10 @@ impl Edition {
         edition: symbol!("2024"),
         release: Some(symbol!("migration")),
     };
+    pub const DEVELOPMENT: Self = Self {
+        edition: symbol!("development"),
+        release: None,
+    };
 
     const SEP: &'static str = ".";
 
@@ -154,6 +160,7 @@ impl Edition {
         Self::E2024_ALPHA,
         Self::E2024_BETA,
         Self::E2024_MIGRATION,
+        Self::DEVELOPMENT,
     ];
     pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_BETA];
 
@@ -168,6 +175,7 @@ impl Edition {
             Self::E2024_ALPHA => Some(Self::E2024_BETA),
             Self::E2024_BETA => Some(Self::LEGACY),
             Self::E2024_MIGRATION => Some(Self::E2024_BETA),
+            Self::DEVELOPMENT => Some(Self::E2024_ALPHA),
             _ => self.unknown_edition_panic(),
         }
     }
@@ -190,6 +198,11 @@ impl Edition {
             Self::E2024_MIGRATION => {
                 let mut features = self.prev().unwrap().features();
                 features.extend(E2024_MIGRATION_FEATURES);
+                features
+            }
+            Self::DEVELOPMENT => {
+                let mut features = self.prev().unwrap().features();
+                features.extend(DEVELOPMENT_FEATURES);
                 features
             }
             _ => self.unknown_edition_panic(),
