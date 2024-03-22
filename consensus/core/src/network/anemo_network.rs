@@ -36,7 +36,7 @@ use super::{
     SendBlockRequest, SendBlockResponse,
 };
 use crate::{
-    block::BlockRef,
+    block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
 };
@@ -49,8 +49,6 @@ pub(crate) struct AnemoClient {
 
 impl AnemoClient {
     const GET_CLIENT_INTERVAL: Duration = Duration::from_millis(10);
-    const SEND_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
-    const FETCH_BLOCK_TIMEOUT: Duration = Duration::from_secs(15);
 
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
@@ -124,13 +122,18 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
-    async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
-        let mut client = self.get_client(peer, Self::SEND_BLOCK_TIMEOUT).await?;
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()> {
+        let mut client = self.get_client(peer, timeout).await?;
         let request = SendBlockRequest {
-            block: block.clone(),
+            block: block.serialized().clone(),
         };
         client
-            .send_block(anemo::Request::new(request).with_timeout(Self::SEND_BLOCK_TIMEOUT))
+            .send_block(anemo::Request::new(request).with_timeout(timeout))
             .await
             .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
@@ -140,8 +143,9 @@ impl NetworkClient for AnemoClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self.get_client(peer, Self::FETCH_BLOCK_TIMEOUT).await?;
+        let mut client = self.get_client(peer, timeout).await?;
         let request = FetchBlocksRequest {
             block_refs: block_refs
                 .iter()
@@ -155,7 +159,7 @@ impl NetworkClient for AnemoClient {
                 .collect(),
         };
         let response = client
-            .fetch_blocks(anemo::Request::new(request).with_timeout(Self::FETCH_BLOCK_TIMEOUT))
+            .fetch_blocks(anemo::Request::new(request).with_timeout(timeout))
             .await
             .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
         Ok(response.into_body().blocks)
@@ -291,6 +295,13 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     }
 
     async fn install_service(&mut self, network_keypair: NetworkKeyPair, service: Arc<S>) {
+        self.context
+            .metrics
+            .network_metrics
+            .network_type
+            .with_label_values(&["anemo"])
+            .set(1);
+
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
         // Bind to localhost in unit tests since only local networking is needed.
@@ -467,6 +478,13 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         if let Some(connection_monitor_handle) = self.connection_monitor_handle.take() {
             connection_monitor_handle.stop().await;
         }
+
+        self.context
+            .metrics
+            .network_metrics
+            .network_type
+            .with_label_values(&["anemo"])
+            .set(0);
     }
 }
 
@@ -593,7 +611,7 @@ mod test {
     use tokio::time::sleep;
 
     use crate::{
-        block::BlockRef,
+        block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
         network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
@@ -666,24 +684,37 @@ mod test {
         sleep(Duration::from_secs(5)).await;
 
         // Test that servers can receive client RPCs.
+        let test_block_0 = VerifiedBlock::new_for_test(TestBlock::new(9, 0).build());
         client_0
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
-                &Bytes::from_static(b"msg 0"),
+                &test_block_0,
+                Duration::from_secs(5),
             )
             .await
             .unwrap();
+        let test_block_1 = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
         client_1
             .send_block(
                 context.committee.to_authority_index(0).unwrap(),
-                &Bytes::from_static(b"msg 1"),
+                &test_block_1,
+                Duration::from_secs(5),
             )
             .await
             .unwrap();
+
         assert_eq!(service_0.lock().handle_send_block.len(), 1);
         assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
+        assert_eq!(
+            service_0.lock().handle_send_block[0].1,
+            test_block_1.serialized(),
+        );
         assert_eq!(service_1.lock().handle_send_block.len(), 1);
         assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
+        assert_eq!(
+            service_1.lock().handle_send_block[0].1,
+            test_block_0.serialized(),
+        );
 
         // `Committee` is generated with the same random seed in Context::new_for_test(),
         // so the first 4 authorities are the same.
@@ -702,17 +733,21 @@ mod test {
 
         // client_4 should not be able to reach service_0 or service_1, because of the
         // AllowedPeers filter.
+        let test_block_2 = VerifiedBlock::new_for_test(TestBlock::new(9, 2).build());
         assert!(client_4
             .send_block(
                 context.committee.to_authority_index(0).unwrap(),
-                &Bytes::from_static(b"msg 2"),
+                &test_block_2,
+                Duration::from_secs(5),
             )
             .await
             .is_err());
+        let test_block_3 = VerifiedBlock::new_for_test(TestBlock::new(9, 3).build());
         assert!(client_4
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
-                &Bytes::from_static(b"msg 3"),
+                &test_block_3,
+                Duration::from_secs(5),
             )
             .await
             .is_err());

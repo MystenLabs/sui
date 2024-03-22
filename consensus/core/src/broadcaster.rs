@@ -38,6 +38,7 @@ pub(crate) struct Broadcaster {
 
 impl Broadcaster {
     const LAST_BLOCK_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+    const MIN_SEND_BLOCK_NETWORK_TIMEOUT: Duration = Duration::from_secs(5);
 
     pub(crate) fn new<C: NetworkClient>(
         context: Arc<Context>,
@@ -106,9 +107,12 @@ impl Broadcaster {
         ) -> (Result<ConsensusResult<()>, Elapsed>, Instant, VerifiedBlock) {
             let start = Instant::now();
             let req_timeout = rtt_estimate.mul_f64(TIMEOUT_THRESHOLD_MULTIPLIER);
+            // Use a minimum timeout of 5s so the receiver does not terminate the request too early.
+            let network_timeout =
+                std::cmp::max(req_timeout, Broadcaster::MIN_SEND_BLOCK_NETWORK_TIMEOUT);
             let resp = timeout(
                 req_timeout,
-                network_client.send_block(peer, block.serialized()),
+                network_client.send_block(peer, &block, network_timeout),
             )
             .await;
             if matches!(resp, Ok(Err(_))) {
@@ -220,11 +224,12 @@ mod test {
         async fn send_block(
             &self,
             peer: AuthorityIndex,
-            serialized_block: &Bytes,
+            block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
             let mut blocks_sent = self.blocks_sent.lock();
             let blocks = blocks_sent.entry(peer).or_default();
-            blocks.push(serialized_block.clone());
+            blocks.push(block.serialized().clone());
             Ok(())
         }
 
@@ -232,6 +237,7 @@ mod test {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }

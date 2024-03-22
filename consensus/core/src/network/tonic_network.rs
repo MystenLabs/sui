@@ -33,7 +33,7 @@ use super::{
     SendBlockRequest, SendBlockResponse,
 };
 use crate::{
-    block::BlockRef,
+    block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::tonic_gen::consensus_service_server::ConsensusServiceServer,
@@ -48,9 +48,6 @@ pub(crate) struct TonicClient {
 }
 
 impl TonicClient {
-    const SEND_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
-    const FETCH_BLOCK_TIMEOUT: Duration = Duration::from_secs(15);
-
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context: context.clone(),
@@ -70,12 +67,17 @@ impl TonicClient {
 
 #[async_trait]
 impl NetworkClient for TonicClient {
-    async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
-        let mut client = self.get_client(peer, Self::SEND_BLOCK_TIMEOUT).await?;
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()> {
+        let mut client = self.get_client(peer, timeout).await?;
         let mut request = Request::new(SendBlockRequest {
-            block: block.clone(),
+            block: block.serialized().clone(),
         });
-        request.set_timeout(Self::SEND_BLOCK_TIMEOUT);
+        request.set_timeout(timeout);
         // TODO: remove below after adding authentication.
         request.metadata_mut().insert(
             AUTHORITY_INDEX_METADATA_KEY,
@@ -92,8 +94,9 @@ impl NetworkClient for TonicClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self.get_client(peer, Self::FETCH_BLOCK_TIMEOUT).await?;
+        let mut client = self.get_client(peer, timeout).await?;
         let mut request = Request::new(FetchBlocksRequest {
             block_refs: block_refs
                 .iter()
@@ -106,7 +109,7 @@ impl NetworkClient for TonicClient {
                 })
                 .collect(),
         });
-        request.set_timeout(Self::FETCH_BLOCK_TIMEOUT);
+        request.set_timeout(timeout);
         // TODO: remove below after adding authentication.
         request.metadata_mut().insert(
             AUTHORITY_INDEX_METADATA_KEY,
@@ -291,6 +294,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
     }
 
     async fn install_service(&mut self, _network_keypair: NetworkKeyPair, service: Arc<S>) {
+        self.context
+            .metrics
+            .network_metrics
+            .network_type
+            .with_label_values(&["tonic"])
+            .set(1);
+
         let authority = self.context.committee.authority(self.context.own_index);
         // Bind to localhost in unit tests since only local networking is needed.
         // Bind to the unspecified address to allow the actual address to be assigned,
@@ -338,6 +348,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             let _ = shutdown.send(());
         }
         self.server.join_next().await;
+
+        self.context
+            .metrics
+            .network_metrics
+            .network_type
+            .with_label_values(&["tonic"])
+            .set(0);
     }
 }
 
@@ -390,7 +407,7 @@ fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
 // TODO: after supporting peer authentication, using rtest to share the test case with anemo_network.rs
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -398,7 +415,7 @@ mod test {
     use parking_lot::Mutex;
 
     use crate::{
-        block::BlockRef,
+        block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
         network::{tonic_network::TonicManager, NetworkClient, NetworkManager, NetworkService},
@@ -470,23 +487,36 @@ mod test {
         // Test that servers can receive client RPCs.
         // If the test uses simulated time, more retries will be necessary to make sure
         // the server is ready.
+        let test_block_0 = VerifiedBlock::new_for_test(TestBlock::new(9, 0).build());
         client_0
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
-                &Bytes::from_static(b"msg 0"),
+                &test_block_0,
+                Duration::from_secs(5),
             )
             .await
             .unwrap();
+        let test_block_1 = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
         client_1
             .send_block(
                 context.committee.to_authority_index(0).unwrap(),
-                &Bytes::from_static(b"msg 1"),
+                &test_block_1,
+                Duration::from_secs(5),
             )
             .await
             .unwrap();
+
         assert_eq!(service_0.lock().handle_send_block.len(), 1);
         assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
+        assert_eq!(
+            service_0.lock().handle_send_block[0].1,
+            test_block_1.serialized(),
+        );
         assert_eq!(service_1.lock().handle_send_block.len(), 1);
         assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
+        assert_eq!(
+            service_1.lock().handle_send_block[0].1,
+            test_block_0.serialized(),
+        );
     }
 }

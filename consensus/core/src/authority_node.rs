@@ -461,7 +461,8 @@ mod tests {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
-            _serialized_block: &Bytes,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
             unimplemented!("Unimplemented")
         }
@@ -470,6 +471,7 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }

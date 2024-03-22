@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use serde::{Deserialize, Serialize};
 
-use crate::{block::BlockRef, context::Context, error::ConsensusResult};
+use crate::{
+    block::{BlockRef, VerifiedBlock},
+    context::Context,
+    error::ConsensusResult,
+};
 
 // Anemo generated stubs for RPCs.
 mod anemo_gen {
@@ -26,16 +30,26 @@ pub(crate) mod metrics;
 pub(crate) mod tonic_network;
 
 /// Network client for communicating with peers.
+///
+/// NOTE: the timeout parameters help saving resources at client and potentially server.
+/// But it is up to the server implementation if the timeout is honored.
+/// - To bound server resources, server should implement own timeout for incoming requests.
 #[async_trait]
 pub(crate) trait NetworkClient: Send + Sync + 'static {
     /// Sends a serialized SignedBlock to a peer.
-    async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()>;
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()>;
 
     /// Fetches serialized `SignedBlock`s from a peer.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 }
 
