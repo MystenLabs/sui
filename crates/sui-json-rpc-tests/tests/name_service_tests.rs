@@ -96,18 +96,18 @@ fn test_invalid_inputs() {
 #[test]
 fn output_tests() {
     let mut domain = "test.sui".parse::<Domain>().unwrap();
-    assert!(domain.format('.', false) == "test.sui");
-    assert!(domain.format('.', true) == "@test");
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "@test");
 
     domain = "test.test.sui".parse::<Domain>().unwrap();
-    assert!(domain.format('.', false) == "test.test.sui");
-    assert!(domain.format('.', true) == "test@test");
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "test@test");
 
     domain = "test.test.test.sui".parse::<Domain>().unwrap();
-    assert!(domain.format('.', false) == "test.test.test.sui");
-    assert!(domain.format('.', true) == "test.test@test");
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.test.test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "test.test@test");
 
     domain = "test.test.test.test.sui".parse::<Domain>().unwrap();
-    assert!(domain.format('.', false) == "test.test.test.test.sui");
-    assert!(domain.format('.', true) == "test.test.test@test");
+    assert!(domain.format(name_service::DomainFormat::Dot) == "test.test.test.test.sui");
+    assert!(domain.format(name_service::DomainFormat::At) == "test.test.test@test");
 }
