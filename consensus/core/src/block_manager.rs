@@ -88,8 +88,10 @@ impl BlockManager {
         let mut missing_blocks = BTreeSet::new();
 
         for block in blocks {
-            let block_ref = block.reference();
-            if let Some(block) = self.try_accept_one_block(block) {
+            let (block, blocks_to_fetch) = self.try_accept_one_block(block);
+            missing_blocks.extend(&blocks_to_fetch);
+
+            if let Some(block) = block {
                 // Try to unsuspend any children blocks.
                 let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
 
@@ -151,8 +153,6 @@ impl BlockManager {
                     .accept_blocks(blocks_to_accept.clone());
 
                 accepted_blocks.extend(blocks_to_accept);
-            } else if let Some(suspended_block) = self.suspended_blocks.get(&block_ref) {
-                missing_blocks.extend(&suspended_block.missing_ancestors);
             }
         }
 
@@ -179,14 +179,18 @@ impl BlockManager {
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
-    fn try_accept_one_block(&mut self, block: VerifiedBlock) -> Option<VerifiedBlock> {
+    fn try_accept_one_block(
+        &mut self,
+        block: VerifiedBlock,
+    ) -> (Option<VerifiedBlock>, BTreeSet<BlockRef>) {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
+        let mut ancestors_to_fetch = BTreeSet::new();
         let dag_state = self.dag_state.read();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
-            return None;
+            return (None, ancestors_to_fetch);
         }
 
         let ancestors = block.ancestors();
@@ -210,6 +214,7 @@ impl BlockManager {
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
                     self.missing_blocks.insert(*ancestor);
+                    ancestors_to_fetch.insert(*ancestor);
                 }
             }
         }
@@ -233,10 +238,10 @@ impl BlockManager {
                 .inc();
             self.suspended_blocks
                 .insert(block_ref, SuspendedBlock::new(block, missing_ancestors));
-            return None;
+            return (None, ancestors_to_fetch);
         }
 
-        Some(block)
+        (Some(block), ancestors_to_fetch)
     }
 
     /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
