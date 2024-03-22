@@ -44,7 +44,7 @@ module nfts::num {
         let n = cap.issued_counter;
         cap.issued_counter = n + 1;
         cap.supply = cap.supply + 1;
-        assert!(n <= MAX_SUPPLY, ETooManyNums);
+        assert!(cap.supply <= MAX_SUPPLY, ETooManyNums);
         Num { id: object::new(ctx), n }
     }
 

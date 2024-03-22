@@ -11,7 +11,11 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
-use toml_edit::{Item::Value as EItem, Value as EValue};
+use toml_edit::{
+    ArrayOfTables,
+    Item::{self, Value as EItem},
+    Value as EValue,
+};
 
 use move_compiler::editions::{Edition, Flavor};
 
@@ -193,7 +197,56 @@ pub(crate) fn write_prologue(
     })?;
 
     write!(file, "{}", prologue)?;
+    Ok(())
+}
 
+pub fn update_dependency_graph(
+    file: &mut LockFile,
+    manifest_digest: String,
+    deps_digest: String,
+    dependencies: Option<toml_edit::Value>,
+    dev_dependencies: Option<toml_edit::Value>,
+    packages: Option<ArrayOfTables>,
+) -> Result<()> {
+    use toml_edit::value;
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let move_table = toml
+        .entry("move")
+        .or_insert(Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create move table in Move.lock"))?;
+
+    // Update `manifest_digest` and `deps_digest` in `[move]` table section.
+    move_table["manifest_digest"] = value(manifest_digest);
+    move_table["deps_digest"] = value(deps_digest);
+
+    // Update `dependencies = [ ... ]` in `[move]` table section.
+    if let Some(dependencies) = dependencies {
+        move_table["dependencies"] = Item::Value(dependencies.clone());
+    } else {
+        move_table.remove("dependencies");
+    }
+
+    // Update `dev-dependencies = [ ... ]` in `[move]` table section.
+    if let Some(dev_dependencies) = dev_dependencies {
+        move_table["dev-dependencies"] = Item::Value(dev_dependencies.clone());
+    } else {
+        move_table.remove("dev-dependencies");
+    }
+
+    // Update the [[move.package]] Array of Tables.
+    if let Some(packages) = packages {
+        toml["move"]["package"] = Item::ArrayOfTables(packages.clone());
+    } else if let Some(packages_table) = toml["move"]["package"].as_table_mut() {
+        packages_table.remove("package");
+    }
+
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
     Ok(())
 }
 
@@ -265,7 +318,7 @@ pub fn update_managed_address(
     environment: &str,
     managed_address_update: ManagedAddressUpdate,
 ) -> Result<()> {
-    use toml_edit::{value, Document, Item, Table};
+    use toml_edit::{value, Document, Table};
 
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;

@@ -9,7 +9,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     fmt,
     fs::File,
-    io::{BufWriter, Read, Write},
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -1214,12 +1214,8 @@ impl DependencyGraph {
     /// This operation fails, writing nothing, if the graph contains a cycle, and can fail with an
     /// undefined output if it cannot be represented in a TOML file.
     pub fn write_to_lock(&self, install_dir: PathBuf) -> Result<LockFile> {
-        let lock = LockFile::new(
-            install_dir,
-            self.manifest_digest.clone(),
-            self.deps_digest.clone(),
-        )?;
-        let mut writer = BufWriter::new(&*lock);
+        use fmt::Write;
+        let mut writer = String::new();
 
         self.write_dependencies_to_lock(self.root_package_id, &mut writer)?;
 
@@ -1235,15 +1231,47 @@ impl DependencyGraph {
             self.write_dependencies_to_lock(*id, &mut writer)?;
         }
 
-        writer.flush()?;
-        std::mem::drop(writer);
+        let mut dependencies = None;
+        let mut dev_dependencies = None;
+        let mut packages = None;
+        if !writer.is_empty() {
+            let toml = writer.parse::<toml_edit::Document>()?;
+            if let Some(value) = toml.get("dependencies").and_then(|v| v.as_value()) {
+                dependencies = Some(value.clone());
+            }
+            if let Some(value) = toml.get("dev-dependencies").and_then(|v| v.as_value()) {
+                dev_dependencies = Some(value.clone());
+            }
+            packages = toml
+                .get("move")
+                .and_then(|m| m.as_table())
+                .and_then(|move_table| move_table.get("package"))
+                .and_then(|v| v.as_array_of_tables().cloned());
+        }
 
+        use std::io::Seek;
+        let mut lock = LockFile::new(
+            install_dir,
+            self.manifest_digest.clone(),
+            self.deps_digest.clone(),
+        )?;
+        lock.flush()?;
+        lock.rewind()?;
+
+        schema::update_dependency_graph(
+            &mut lock,
+            self.manifest_digest.clone(),
+            self.deps_digest.clone(),
+            dependencies,
+            dev_dependencies,
+            packages,
+        )?;
         Ok(lock)
     }
 
     /// Helper function to output the dependencies and dev-dependencies of `name` from this
     /// dependency graph, to the lock file under `writer`.
-    fn write_dependencies_to_lock<W: Write>(
+    fn write_dependencies_to_lock<W: fmt::Write>(
         &self,
         id: PackageIdentifier,
         writer: &mut W,

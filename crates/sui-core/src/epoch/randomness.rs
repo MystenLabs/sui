@@ -302,11 +302,11 @@ impl RandomnessManager {
         };
 
         info!(
-                "random beacon: created DKG Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
-                msg.sender,
-                msg.vss_pk.degree(),
-                msg.encrypted_shares.len(),
-            );
+            "random beacon: created DKG Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+            msg.sender,
+            msg.vss_pk.degree(),
+            msg.encrypted_shares.len(),
+        );
 
         let epoch_store = self.epoch_store()?;
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
