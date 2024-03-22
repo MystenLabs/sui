@@ -20,6 +20,7 @@ const-str.workspace = true
 diesel.workspace = true
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto-zkp.workspace = true
 futures.workspace = true
 git-version.workspace = true
 hex.workspace = true
@@ -57,6 +58,7 @@ tower.workspace = true
 tower-http.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+im.workspace = true
 
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true
