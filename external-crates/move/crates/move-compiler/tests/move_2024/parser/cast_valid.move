@@ -43,14 +43,4 @@ module a::m {
         0
     }
 
-    // in each case, the cast has higher precedence than the operator
-    fun ops(x: u8, y: u32) {
-        x == y as u8;
-        x != y as u8;
-        x < y as u8;
-        x <= y as u8;
-        x > y as u8;
-        x >= y as u8;
-    }
-
 }

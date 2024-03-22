@@ -1776,7 +1776,12 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
         let op_end_loc = context.tokens.previous_end_loc();
 
         if op_token == Tok::As {
-            let ty = parse_type(context)?;
+            let ty = {
+                // numeric types don't have type arguments, so don't attempt to parse '<' as a
+                // type arg
+                let tn = parse_name_access_chain(context, || "a type name")?;
+                sp(tn.loc, Type_::Apply(Box::new(tn), vec![]))
+            };
             let start_loc = result.loc.start() as usize;
             let end_loc = context.tokens.previous_end_loc();
             let e_ = Exp_::Cast(Box::new(result), ty);

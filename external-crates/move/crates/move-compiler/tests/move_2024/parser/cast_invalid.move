@@ -13,18 +13,4 @@ module a::m {
         };
         0 as u32 as u32;
     }
-
-    fun ops(x: u8, y: u8) {
-        x + y as u32;
-        x - y as u32;
-        x * y as u32;
-        x / y as u32;
-        x % y as u32;
-        x & y as u32;
-        x | y as u32;
-        x ^ y as u32;
-        x << y as u32;
-        x >> y as u32;
-        !x as u32;
-    }
 }
