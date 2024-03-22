@@ -143,10 +143,8 @@ impl<W: Worker + 'static> WorkerPool<W> {
 
         // Clean up code for graceful termination
 
-        // Call the termination signal for all workers
-        for (_, term_sender) in workers {
-            let _ = term_sender.send(());
-        }
+        // Notify the exit handles of all workers to terminate
+        drop(workers);
 
         // Wait for all workers to finish
         for join_handle in join_handles {
