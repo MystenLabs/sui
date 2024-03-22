@@ -18,7 +18,7 @@ module <address>::<identifier> {
 }
 ```
 
-where `<address>` is a valid [named or literal address](./primitive-types/address.md) specifying the
+where `<address>` is a valid [address](./primitive-types/address.md) specifying the
 module's package.
 
 For example:

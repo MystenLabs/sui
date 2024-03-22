@@ -54,8 +54,8 @@ In the future, we plan on adding to declare structs as `public(package)` or as i
 ### Abilities
 
 As mentioned above: by default, a struct declaration is linear and ephemeral. So to allow the value
-to be used with certain operations (that copy it, drop it, store it in an
-[object](./abilities/object.md), or use it as a storage schema to define an
+to be used in these ways (e.g., copied, dropped, stored in an
+[object](./abilities/object.md), or used to define a storable
 [object](./abilities/object.md)), structs can be granted [abilities](./abilities.md) by annotating
 them with `has <ability>`:
 
@@ -115,7 +115,7 @@ value for each field.
 
 For a struct with named fields, the order of the fields does not matter, but the field name needs to
 be provided. For a struct with positional fields, the order of the fields must match the order of
-the fields in the struct definition, and instead of using `{}` to create the struct, `()` are used.
+the fields in the struct definition, and it must be created using `()` instead of `{}` to enclose the parameters.
 
 ```move
 module a::m {

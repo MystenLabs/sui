@@ -1,6 +1,6 @@
 # Sui Objects
 
-For Sui, `key` is used to signify an object. Objects the only way to store data in Sui--allowing the
+For Sui, `key` is used to signify an *object*. Objects the only way to store data in Sui--allowing the
 data to persist between transactions.
 
 For more details, see the Sui documentation on

@@ -84,7 +84,7 @@ For Sui, `key` is used to signify an [object](./abilities/object.md).
 
 ## Builtin Types
 
-All primitive, builtin types have `copy`, `drop`, and `store`
+All primitive, builtin types have `copy`, `drop`, and `store`.
 
 - `bool`, `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, and `address` all have `copy`, `drop`, and
   `store`.

@@ -132,7 +132,7 @@ Comparison operations do not abort.
 
 ### Equality
 
-Like all types with [`drop`](../abilities.md) in Move, all integer types support the
+Like all types with [`drop`](../abilities.md), all integer types support the
 ["equal"](../equality.md) and ["not equal"](../equality.md) operations. Both arguments need to be of
 the same type. If you need to compare integers of different types, you must [cast](#casting) one of
 them first.
