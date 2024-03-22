@@ -378,6 +378,9 @@ where
                             /* for list */ true,
                             *diag,
                         );
+                        if context.at_stop_set() {
+                            break;
+                        }
                     }
                     adjust_token(context.tokens, end_token);
                 }
@@ -390,6 +393,9 @@ where
                         /* for list */ true,
                         *diag,
                     );
+                    if context.at_stop_set() {
+                        break;
+                    }
                 }
             }
         } else {
@@ -407,9 +413,9 @@ where
                 /* for list */ true,
                 diag,
             );
-        }
-        if context.at_stop_set() {
-            break;
+            if context.at_stop_set() {
+                break;
+            }
         }
     }
     if consume_token(context.tokens, end_token).is_err() {
@@ -1310,6 +1316,9 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                         /* for list */ true,
                         *diag,
                     );
+                    if context.at_stop_set() {
+                        break;
+                    }
                 }
             }
             Err(diag) => {
@@ -1322,10 +1331,10 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                     /* for list */ true,
                     *diag,
                 );
+                if context.at_stop_set() {
+                    break;
+                }
             }
-        }
-        if context.at_stop_set() {
-            break;
         }
     }
     // If we reached the stop set but did not find closing of the sequence (RBrace) and we need to
