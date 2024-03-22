@@ -75,7 +75,7 @@ pub fn get_test_sui_to_eth_bridge_action(
     sui_tx_digest: Option<TransactionDigest>,
     sui_tx_event_index: Option<u16>,
     nonce: Option<u64>,
-    amount: Option<u64>,
+    amount_sui_adjusted: Option<u64>,
     sender_address: Option<SuiAddress>,
     recipient_address: Option<EthAddress>,
     token_id: Option<TokenId>,
@@ -90,7 +90,7 @@ pub fn get_test_sui_to_eth_bridge_action(
             eth_chain_id: BridgeChainId::EthLocalTest,
             eth_address: recipient_address.unwrap_or_else(EthAddress::random),
             token_id: token_id.unwrap_or(TokenId::USDC),
-            amount: amount.unwrap_or(100_000),
+            amount_sui_adjusted: amount_sui_adjusted.unwrap_or(100_000),
         },
     })
 }
@@ -108,7 +108,7 @@ pub fn get_test_eth_to_sui_bridge_action(
             nonce: nonce.unwrap_or_default(),
             sui_chain_id: BridgeChainId::SuiLocalTest,
             token_id: TokenId::USDC,
-            amount: amount.unwrap_or(100_000),
+            sui_adjusted_amount: amount.unwrap_or(100_000),
             sui_address: sui_address.unwrap_or_else(SuiAddress::random_for_testing_only),
             eth_address: EthAddress::random(),
         },
@@ -219,16 +219,16 @@ pub fn get_test_log_and_action(
     tx_hash: TxHash,
     event_index: u16,
 ) -> (Log, BridgeAction) {
-    let token_code = 3u8;
-    let amount = 10000000u64;
+    let token_id = 3u8;
+    let sui_adjusted_amount = 10000000u64;
     let source_address = EthAddress::random();
     let sui_address: SuiAddress = SuiAddress::random_for_testing_only();
     let target_address = Hex::decode(&sui_address.to_string()).unwrap();
     // Note: must use `encode` rather than `encode_packged`
     let encoded = ethers::abi::encode(&[
-        // u8 is encoded as u256 in abi standard
-        ethers::abi::Token::Uint(ethers::types::U256::from(token_code)),
-        ethers::abi::Token::Uint(ethers::types::U256::from(amount)),
+        // u8/u64 is encoded as u256 in abi standard
+        ethers::abi::Token::Uint(ethers::types::U256::from(token_id)),
+        ethers::abi::Token::Uint(ethers::types::U256::from(sui_adjusted_amount)),
         ethers::abi::Token::Address(source_address),
         ethers::abi::Token::Bytes(target_address.clone()),
     ]);
@@ -236,7 +236,7 @@ pub fn get_test_log_and_action(
         address: contract_address,
         topics: vec![
             long_signature(
-                "TokensBridgedToSui",
+                "TokensDeposited",
                 &[
                     ParamType::Uint(8),
                     ParamType::Uint(64),
@@ -268,8 +268,8 @@ pub fn get_test_log_and_action(
             eth_chain_id: BridgeChainId::try_from(topic_1[topic_1.len() - 1]).unwrap(),
             nonce: u64::from_be_bytes(log.topics[2].as_ref()[24..32].try_into().unwrap()),
             sui_chain_id: BridgeChainId::try_from(topic_3[topic_3.len() - 1]).unwrap(),
-            token_id: TokenId::try_from(token_code).unwrap(),
-            amount,
+            token_id: TokenId::try_from(token_id).unwrap(),
+            sui_adjusted_amount,
             sui_address,
             eth_address: source_address,
         },
