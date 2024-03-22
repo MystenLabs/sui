@@ -154,6 +154,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                         Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
                             assert_ne!(peer_index, self.context.own_index, "We should never attempt to fetch blocks from our own node");
 
+                            let hostname = self.context.committee.authority(peer_index).hostname.clone();
+
                             let mut blocks_to_fetch = BTreeSet::new();
 
                             {
@@ -166,6 +168,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                         if authorities.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && !authorities.iter().any(|authority| *authority == peer_index) {
                                             authorities.push(peer_index);
                                             blocks_to_fetch.insert(block_ref);
+                                            self.context
+                                                .metrics
+                                                .node_metrics
+                                                .fetched_blocks_additional_authority
+                                                .with_label_values(&[&hostname]).inc();
                                         }
                                     } else {
                                         blocks_to_fetch_lock.insert(block_ref, vec![peer_index]);

@@ -94,6 +94,7 @@ pub(crate) struct NodeMetrics {
     pub committed_leaders_total: IntCounterVec,
     pub fetch_blocks_scheduler_inflight: IntGauge,
     pub fetched_blocks: IntCounterVec,
+    pub fetched_blocks_additional_authority: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
     pub last_committed_leader_round: IntGauge,
     pub last_decided_leader_round: IntGauge,
@@ -185,6 +186,12 @@ impl NodeMetrics {
                 "fetched_blocks",
                 "Number of fetched blocks per peer authority via the synchronizer.",
                 &["authority", "type"],
+                registry,
+            ).unwrap(),
+            fetched_blocks_additional_authority: register_int_counter_vec_with_registry!(
+                "fetched_blocks_additional_authority",
+                "Number of fetched blocks per peer authority via the synchronizer that were fetched additionally from another one.",
+                &["authority"],
                 registry,
             ).unwrap(),
             // TODO: add a short status label.
