@@ -7,5 +7,7 @@ module a::m {
         cond || x as u8;
         x as u8 && cond;
         x as u8 || cond;
+        (!x as u32);
+        (!x) as u32;
     }
 }
