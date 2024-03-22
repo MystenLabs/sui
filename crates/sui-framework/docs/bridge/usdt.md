@@ -97,7 +97,7 @@ Multiplier of the token, it must be 10^DECIMAL
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="usdt.md#0xb_usdt_create">create</a>(ctx: &<b>mut</b> TxContext): TreasuryCap&lt;<a href="usdt.md#0xb_usdt_USDT">USDT</a>&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="usdt.md#0xb_usdt_create">create</a>(ctx: &<b>mut</b> TxContext): TreasuryCap&lt;<a href="usdt.md#0xb_usdt_USDT">USDT</a>&gt; {
     <b>assert</b>!(<a href="usdt.md#0xb_usdt_MULTIPLIER">MULTIPLIER</a> == pow(10, <a href="usdt.md#0xb_usdt_DECIMAL">DECIMAL</a>), <a href="usdt.md#0xb_usdt_EDecimalMultiplierMismatch">EDecimalMultiplierMismatch</a>);
     <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">coin::create_currency</a>(
         <a href="usdt.md#0xb_usdt_USDT">USDT</a> {},
