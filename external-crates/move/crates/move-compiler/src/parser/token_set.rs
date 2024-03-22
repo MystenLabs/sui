@@ -37,7 +37,7 @@ const MEMBER_MODIFIER_TOKENS: [Tok; 1] = [Tok::Native];
 pub static MODULE_MEMBER_OR_MODULE_START_SET: Lazy<TokenSet> = Lazy::new(|| {
     let mut token_set = TokenSet::new();
     token_set.add_all(&MODULE_MEMBER_TOKENS);
-    token_set.add_all(&MEMBER_VISIBILITY_TOKENS);
+    token_set.add_all(MEMBER_VISIBILITY_TOKENS);
     token_set.add_all(&MEMBER_MODIFIER_TOKENS);
     token_set.add_identifier(MACRO_MODIFIER);
     token_set.add_identifier(ENTRY_MODIFIER);
