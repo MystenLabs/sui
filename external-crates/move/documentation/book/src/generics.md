@@ -5,7 +5,7 @@ feature is sometimes referred to as _parametric polymorphism_. In Move, we will 
 generics interchangeably with type parameters and type arguments.
 
 Generics are commonly used in library code, such as in [vector](./primitive-types/vector.md), to
-declare code that works over any possible instantiation (that satisfies the specified constraints).
+declare code that works over any possible type (that satisfies the specified constraints).
 Generic code can sometimes be used to interact with storage in many different ways that all still
 share the same implementation.
 
