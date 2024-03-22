@@ -93,8 +93,8 @@ module sui::kiosk {
     use sui::sui::SUI;
     use sui::event;
 
-    /// Allows calling `cap.`for`()` to retrieve `for` field from `KioskOwnerCap`.
-    public use fun kiosk_owner_cap_for as KioskOwnerCap.`for`;
+    /// Allows calling `cap.kiosk()` to retrieve `for` field from `KioskOwnerCap`.
+    public use fun kiosk_owner_cap_for as KioskOwnerCap.kiosk;
 
     // Gets access to:
     // - `place_internal`
