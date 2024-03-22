@@ -37,16 +37,6 @@ error[E05001]: ability constraint not satisfied
   │         'drop' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-  ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:8:9
-  │
-8 │         S { c: Coin {} };
-  │         ^^^^^^^^^^^^^^^^
-  │         │
-  │         Cannot ignore values without the 'drop' ability. The value must be used
-  │         The type '0x8675309::M::S<0x8675309::M::Coin>' can have the ability 'drop' but the type argument '0x8675309::M::Coin' does not have the required ability 'drop'
-  │         The type '0x8675309::M::S<0x8675309::M::Coin>' does not have the ability 'drop'
-
-error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:12:9
    │
  3 │     struct R<T: key>  { r: T }
@@ -108,16 +98,6 @@ error[E05001]: ability constraint not satisfied
    │         │      │      The type '0x8675309::M::S<0x8675309::M::Coin>' can have the ability 'drop' but the type argument '0x8675309::M::Coin' does not have the required ability 'drop'
    │         │      The type '0x8675309::M::S<0x8675309::M::Coin>' does not have the ability 'drop'
    │         'drop' constraint not satisifed
-
-error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:13:9
-   │
-13 │         S { c: S { c: Coin {} } };
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │
-   │         Cannot ignore values without the 'drop' ability. The value must be used
-   │         The type '0x8675309::M::S<0x8675309::M::S<0x8675309::M::Coin>>' can have the ability 'drop' but the type argument '0x8675309::M::S<0x8675309::M::Coin>' does not have the required ability 'drop'
-   │         The type '0x8675309::M::S<0x8675309::M::S<0x8675309::M::Coin>>' does not have the ability 'drop'
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:13:16

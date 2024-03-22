@@ -8,7 +8,10 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, Diagnostics},
+    diagnostics::{
+        codes::{Category, Syntax},
+        Diagnostic, Diagnostics,
+    },
     editions::{Edition, FeatureGate},
     parser::{ast::*, lexer::*, token_set::*},
     shared::*,
@@ -51,11 +54,11 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     /// way (including the first optional one passed as an argument).
     fn advance_until_at_stop_set(&mut self, diag_opt: Option<Diagnostic>) {
         if let Some(diag) = diag_opt {
-            self.env.add_diag(diag);
+            self.add_diag(diag);
         }
         while !self.at_stop_set() {
             if let Err(err) = self.tokens.advance() {
-                self.env.add_diag(*err);
+                self.add_diag(*err);
             }
         }
     }
@@ -63,8 +66,22 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     /// Advances token and records a resulting diagnostic (if any).
     fn advance(&mut self) {
         if let Err(diag) = self.tokens.advance() {
-            self.env.add_diag(*diag);
+            self.add_diag(*diag);
         }
+    }
+
+    fn add_diag(&mut self, diag: Diagnostic) {
+        if diag.info().category() == Category::Syntax as u8
+            && diag.info().code() == Syntax::UnexpectedToken as u8
+            && diag.primary_msg() == format!("Unexpected {EOF_ERROR_STR}")
+            && self.env.count_diags() > 0
+        {
+            // do not report the unexpected EOF token if other (parsing errors) are already present
+            // as it is most likely going to be redundant and confusing to the programmer
+            return;
+        }
+
+        self.env.add_diag(diag);
     }
 }
 
@@ -72,9 +89,11 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
 // Error Handling
 //**************************************************************************************************
 
+const EOF_ERROR_STR: &str = "end-of-file";
+
 fn current_token_error_string(tokens: &Lexer) -> String {
     if tokens.peek() == Tok::EOF {
-        "end-of-file".to_string()
+        EOF_ERROR_STR.to_string()
     } else {
         format!("'{}'", tokens.content())
     }
@@ -289,7 +308,7 @@ where
     if let Err(diag) = consume_token(context.tokens, start_token) {
         if !at_start_token {
             // not even starting token is present - parser has nothing much to do
-            context.env.add_diag(*diag);
+            context.add_diag(*diag);
             return vec![];
         }
         // advance token past the starting one but something went wrong, still there is a chance
@@ -397,7 +416,7 @@ where
         let current_loc = context.tokens.start_loc();
         let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
         let loc2 = make_loc(context.tokens.file_hash(), start_loc, start_loc);
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Syntax::UnexpectedToken,
             (loc, format!("Expected '{}'", end_token)),
             (loc2, format!("To match this '{}'", start_token)),
@@ -417,7 +436,7 @@ fn list_error_advance(
     for_list: bool,
     diag: Diagnostic,
 ) {
-    context.env.add_diag(diag);
+    context.add_diag(diag);
     let mut depth: i32 = 0; // When we find  another start token, we track how deep we are in them
     loop {
         if for_list {
@@ -477,9 +496,7 @@ where
 //**************************************************************************************************
 
 fn report_name_migration(context: &mut Context, name: &str, loc: Loc) {
-    context
-        .env
-        .add_diag(diag!(Migration::NeedsRestrictedIdentifier, (loc, name)));
+    context.add_diag(diag!(Migration::NeedsRestrictedIdentifier, (loc, name)));
 }
 
 // Parse an identifier:
@@ -543,9 +560,7 @@ fn parse_address_bytes(
     let addr_ = match addr_res {
         Ok(addr_) => addr_,
         Err(msg) => {
-            context
-                .env
-                .add_diag(diag!(Syntax::InvalidAddress, (loc, msg)));
+            context.add_diag(diag!(Syntax::InvalidAddress, (loc, msg)));
             NumericalAddress::DEFAULT_ERROR_ADDRESS
         }
     };
@@ -742,7 +757,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
     ) {
         let msg = format!("Duplicate '{modifier_name}' modifier");
         let prev_msg = format!("'{modifier_name}' modifier previously given here");
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Declarations::DuplicateItem,
             (loc, msg),
             (prev_loc, prev_msg),
@@ -814,9 +829,7 @@ fn check_no_modifier(
     let msg = format!(
         "Invalid {module_member} declaration. '{modifier_name}' is used only on {location}",
     );
-    context
-        .env
-        .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
+    context.add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
 }
 
 // Parse a function visibility modifier:
@@ -1282,9 +1295,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                             value: e.value,
                         });
                     } else {
-                        context
-                            .env
-                            .add_diag(*unexpected_token_error(context.tokens, "';'"));
+                        context.add_diag(*unexpected_token_error(context.tokens, "';'"));
                     }
                     break;
                 }
@@ -2138,7 +2149,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 let msg = "Invalid field access. Expected a decimal number but was given a hexadecimal";
                                 let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
                                 diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
-                                context.env.add_diag(diag);
+                                context.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
                                 Exp_::Dot(Box::new(lhs), field_access)
@@ -2150,7 +2161,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 );
                                 let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
                                 diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
-                                context.env.add_diag(diag);
+                                context.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
                                 Exp_::Dot(Box::new(lhs), field_access)
@@ -2954,9 +2965,7 @@ fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>
         let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
         let msg =
             "Invalid named field declaration in a struct that can contain only positional fields";
-        context
-            .env
-            .add_diag(diag!(Declarations::InvalidStruct, (loc, msg),));
+        context.add_diag(diag!(Declarations::InvalidStruct, (loc, msg),));
     }
     parse_type(context)
 }
@@ -2991,7 +3000,7 @@ fn parse_postfix_ability_declarations(
             let msg = "Duplicate ability declaration. Abilities can be declared before \
                        or after the field declarations, but not both.";
             let prev_msg = "Ability declaration previously given here";
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Syntax::InvalidModifier,
                 (has_location, msg),
                 (previous_declaration_loc, prev_msg)
@@ -3075,13 +3084,11 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
             );
             let note = "Visibility annotations are required on struct declarations from the Move 2024 edition onwards.";
             if context.env.edition(current_package) == Edition::E2024_MIGRATION {
-                context
-                    .env
-                    .add_diag(diag!(Migration::NeedsPublic, (loc, msg.clone())))
+                context.add_diag(diag!(Migration::NeedsPublic, (loc, msg.clone())))
             } else {
                 let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
                 err.add_note(note);
-                context.env.add_diag(err);
+                context.add_diag(err);
             }
         }
     } else if let Some(vis) = visibility {
@@ -3093,7 +3100,7 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
         let note = "Starting in the Move 2024 edition visibility must be annotated on struct declarations.";
         let mut err = diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg));
         err.add_note(note);
-        context.env.add_diag(err);
+        context.add_diag(err);
     }
 }
 
@@ -3118,9 +3125,7 @@ fn parse_constant_decl(
     if let Some(vis) = visibility {
         let msg = "Invalid constant declaration. Constants cannot have visibility modifiers as \
                    they are always internal";
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
+        context.add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
     }
     check_no_modifier(context, NATIVE_MODIFIER, native, "constant");
     check_no_modifier(context, ENTRY_MODIFIER, entry, "constant");
@@ -3347,9 +3352,7 @@ fn parse_use_decl(
                 let msg =
                     "Invalid use declaration. Non-'use fun' declarations cannot have visibility \
                            modifiers as they are always internal";
-                context
-                    .env
-                    .add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
+                context.add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
             }
             let address_start_loc = context.tokens.start_loc();
             let address = parse_leading_name_access(context)?;
@@ -3524,7 +3527,7 @@ fn parse_module(
                 context
                     .stop_set
                     .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
-                context.env.add_diag(*diag);
+                context.add_diag(*diag);
                 stop_parsing = next_def_fast_forward(context, curr_token_loc);
                 if stop_parsing {
                     break;
@@ -3585,7 +3588,7 @@ fn skip_to_next_desired_tok_or_eof(
         if let Err(diag) = context.tokens.advance() {
             // record diagnostics but keep advancing until encountering one of the desired tokens or
             // (which is eventually guaranteed) EOF
-            context.env.add_diag(*diag);
+            context.add_diag(*diag);
         }
     }
 }
@@ -3672,7 +3675,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                         ),
                     );
                     if tok == Tok::Module {
-                        context.env.add_diag(*diag);
+                        context.add_diag(*diag);
                         Err(ErrCase::ContinueToModule(attributes))
                     } else {
                         Err(ErrCase::Unknown(diag))
@@ -3735,7 +3738,7 @@ fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>>
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
         if let Err(diag) = parse_file_def(context, &mut defs) {
-            context.env.add_diag(*diag);
+            context.add_diag(*diag);
             // skip to the next def and try parsing it if it's there (ignore address blocks as they
             // are pretty much defunct anyway)
             skip_to_next_desired_tok_or_eof(context, is_start_of_module_or_spec);

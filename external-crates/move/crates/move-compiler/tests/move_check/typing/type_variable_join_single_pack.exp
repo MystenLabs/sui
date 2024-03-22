@@ -15,15 +15,6 @@ error[E01002]: unexpected token
   │                   Unexpected 'copy'
   │                   Expected '{'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:2:19
-  │
-2 │     struct Box<T> copy, drop { f1: T, f2: T }
-  │                   ^^^^
-  │                   │
-  │                   Unexpected 'copy'
-  │                   Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E03010]: unbound field
   ┌─ tests/move_check/typing/type_variable_join_single_pack.move:5:17
   │

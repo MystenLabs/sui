@@ -30,21 +30,3 @@ error[E01002]: unexpected token
 7 │ 
   │ ^ Expected ']'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:7:1
-  │
-7 │ 
-  │ ^
-  │ 
-  │ Unexpected end-of-file
-  │ Expected ';'
-
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/vector_literal_unclosed_args.move:7:1
-  │
-7 │ 
-  │ ^
-  │ 
-  │ Unexpected end-of-file
-  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

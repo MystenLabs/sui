@@ -7,15 +7,6 @@ warning[W09003]: unused assignment
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E04024]: invalid usage of immutable variable
-  ┌─ tests/move_2024/migration/let_mut_migrate.move:7:9
-  │
-3 │     public fun t(x: u64, yip: u64, s: S): u64  {
-  │                          --- To use the variable mutably, it must be declared 'mut', e.g. 'mut yip'
-  ·
-7 │         yip = 0;
-  │         ^^^ Invalid assignment of immutable variable 'yip'
-
-error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/migration/let_mut_migrate.move:8:9
   │
 3 │     public fun t(x: u64, yip: u64, s: S): u64  {

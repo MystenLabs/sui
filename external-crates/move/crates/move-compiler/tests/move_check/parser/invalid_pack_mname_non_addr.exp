@@ -16,12 +16,3 @@ error[E01002]: unexpected token
   │         Unexpected 'fun'
   │         Expected an expression term
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:11:1
-   │
-11 │ 
-   │ ^
-   │ 
-   │ Unexpected end-of-file
-   │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

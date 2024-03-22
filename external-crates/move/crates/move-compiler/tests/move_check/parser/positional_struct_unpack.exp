@@ -6,12 +6,6 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E03013]: positional call mismatch
-  ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
-  │
-7 │         Foo(_) = x;
-  │         ^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
-
 error[E04016]: too few arguments
   ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
   │

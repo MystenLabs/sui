@@ -245,16 +245,6 @@ error[E05001]: ability constraint not satisfied
    │         'drop' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_check/typing/instantiate_signatures.move:42:9
-   │
-42 │         S<S<R>> { f: abort 0 };
-   │         ^^^^^^^^^^^^^^^^^^^^^^
-   │         │ │
-   │         │ The type '0x42::M::S<0x42::M::S<0x42::M::R>>' can have the ability 'drop' but the type argument '0x42::M::S<0x42::M::R>' does not have the required ability 'drop'
-   │         Cannot ignore values without the 'drop' ability. The value must be used
-   │         The type '0x42::M::S<0x42::M::S<0x42::M::R>>' does not have the ability 'drop'
-
-error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/instantiate_signatures.move:42:11
    │
  3 │     struct S<T: drop> has drop { f: T }
