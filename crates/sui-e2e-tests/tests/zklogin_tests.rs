@@ -91,7 +91,7 @@ async fn zklogin_end_to_end_test() {
         .await;
 
     // trigger reconfiguration that advanced epoch to 1.
-    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 
     // load test vectors
     let (kp, pk_zklogin, inputs) =
