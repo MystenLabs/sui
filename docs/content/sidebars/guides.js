@@ -10,7 +10,7 @@ const guides = [
 	{
 		type: 'category',
 		label: 'Developer Guides',
-                collapsed: false,
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'guides/developer',
@@ -19,7 +19,7 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Getting Started',
-                                collapsed: false,
+				collapsed: false,
 				link: {
 					type: 'doc',
 					id: 'guides/developer/getting-started',
@@ -118,8 +118,9 @@ const guides = [
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
-					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/graphql-migration',
+					'guides/developer/advanced/move-2024-migration',
+					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/custom-indexer',
 				],
 			},
