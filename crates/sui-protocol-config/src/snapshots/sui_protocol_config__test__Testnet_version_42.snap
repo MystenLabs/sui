@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 41
+version: 42
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -36,6 +36,8 @@ feature_flags:
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
+  accept_zklogin_in_multisig: true
+  include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
   enable_coin_deny_list: true
