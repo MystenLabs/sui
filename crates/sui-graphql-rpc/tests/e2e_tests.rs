@@ -472,7 +472,7 @@ mod tests {
         assert_eq!(res.get("success").unwrap(), true);
 
         // set up an invalid intent scope.
-        let incorrect_intent_scope = 2;
+        let incorrect_intent_scope = "PERSONAL_MESSAGE";
         let incorrect_variables = vec![
             GraphqlQueryVariable {
                 name: "bytes".to_string(),
@@ -486,7 +486,7 @@ mod tests {
             },
             GraphqlQueryVariable {
                 name: "intent_scope".to_string(),
-                ty: "Int!".to_string(),
+                ty: "ZkLoginIntentScope!".to_string(),
                 value: json!(incorrect_intent_scope),
             },
             GraphqlQueryVariable {
