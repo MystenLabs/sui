@@ -4,7 +4,7 @@ Packages allow Move programmers to more easily re-use code and share it across p
 package system allows programmers to easily:
 
 - Define a package containing Move code;
-- Parameterize a package by [named addresses](./address.md);
+- Parameterize a package by [named addresses](./primitive-types/address.md);
 - Import and use packages in other Move code and instantiate named addresses;
 - Build packages and generate associated compilation artifacts from packages; and
 - Work with a common interface around compiled Move artifacts.
@@ -102,12 +102,12 @@ difficult to understand so it's worth examining them in a bit more detail.
 
 ## Named Addresses During Compilation
 
-Recall that Move has [named addresses](./address.md) and that named addresses cannot be declared in
-Move. Because of this, until now named addresses and their values needed to be passed to the
-compiler on the command line. With the Move package system this is no longer needed, and you can
-declare named addresses in the package, instantiate other named addresses in scope, and rename named
-addresses from other packages within the Move package system manifest file. Let's go through each of
-these individually:
+Recall that Move has [named addresses](./primitive-types/address.md) and that named addresses cannot
+be declared in Move. Because of this, until now named addresses and their values needed to be passed
+to the compiler on the command line. With the Move package system this is no longer needed, and you
+can declare named addresses in the package, instantiate other named addresses in scope, and rename
+named addresses from other packages within the Move package system manifest file. Let's go through
+each of these individually:
 
 ### Declaration
 
