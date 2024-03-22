@@ -2542,7 +2542,7 @@ impl AuthorityPerEpochStore {
                 cache_reader,
                 commit_round,
                 previously_deferred_tx_digests,
-                &mut randomness_manager,
+                randomness_manager.as_deref_mut(),
                 dkg_closed,
                 generate_randomness,
             )
@@ -2720,7 +2720,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
         previously_deferred_tx_digests: HashSet<TransactionDigest>,
-        randomness_manager: &mut Option<tokio::sync::MutexGuard<'_, RandomnessManager>>,
+        mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generate_randomness: bool,
     ) -> SuiResult<(
@@ -2813,7 +2813,7 @@ impl AuthorityPerEpochStore {
                     checkpoint_service,
                     commit_round,
                     &previously_deferred_tx_digests,
-                    randomness_manager,
+                    randomness_manager.as_deref_mut(),
                     dkg_closed,
                     generate_randomness,
                 )
@@ -2994,7 +2994,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         commit_round: Round,
         previously_deferred_tx_digests: &HashSet<TransactionDigest>,
-        randomness_manager: &mut Option<tokio::sync::MutexGuard<'_, RandomnessManager>>,
+        mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generating_randomness: bool,
     ) -> SuiResult<ConsensusCertificateResult> {
