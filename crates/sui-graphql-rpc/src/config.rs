@@ -135,26 +135,41 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
+/// The Version of the service. major.minor combination represents the major release.
+/// The patch represents a fix in that release.
 #[derive(Copy, Clone, Debug)]
 pub struct Version {
-    /// The major version is set as the year
-    pub major: &'static str,
-    /// The minor version is set as the quarter when this release happened
-    pub minor: &'static str,
-    /// The patch is just an integer that is incremented with each release
-    /// in that quarter
+    /// The year of this release.
+    pub year: &'static str,
+    /// The month of this release.
+    pub month: &'static str,
+    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
     pub patch: &'static str,
-    /// The commit sha for this release
+    /// The commit sha for this release.
     pub sha: &'static str,
+    /// The full version string.
+    /// Note that this extra field is used only for the uptime_metric function which requries a
+    /// &'static str.
+    pub full: &'static str,
 }
 
 impl Version {
+    /// Use for testing when you need the Version obj and a year.month &str
     pub fn for_testing() -> Self {
         Self {
-            major: env!("CARGO_PKG_VERSION_MAJOR"),
-            minor: env!("CARGO_PKG_VERSION_MINOR"),
+            year: env!("CARGO_PKG_VERSION_MAJOR"),
+            month: env!("CARGO_PKG_VERSION_MINOR"),
             patch: env!("CARGO_PKG_VERSION_PATCH"),
             sha: "unknown",
+            // note that this full field is needed for metrics but not for testing
+            full: const_str::concat!(
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_MINOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_PATCH"),
+                "-unknown"
+            ),
         }
     }
 }
@@ -164,7 +179,7 @@ impl Display for Version {
         write!(
             f,
             "{}.{}.{}-{}",
-            self.major, self.minor, self.patch, self.sha
+            self.year, self.month, self.patch, self.sha
         )
     }
 }

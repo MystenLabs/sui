@@ -92,7 +92,7 @@ pub(crate) async fn check_version_middleware<B>(
                 .into_response();
         };
 
-        if year != version.major || month != version.minor {
+        if year != version.year || month != version.month {
             return (
                 StatusCode::MISDIRECTED_REQUEST,
                 graphql_error_response(
@@ -108,7 +108,7 @@ pub(crate) async fn check_version_middleware<B>(
 }
 
 /// Mark every outgoing response with a header indicating the precise version of the RPC that was
-/// used (including the patch version).
+/// used (including the patch version and sha).
 pub(crate) async fn set_version_middleware<B>(
     State(version): State<Version>,
     request: Request<B>,
@@ -116,11 +116,9 @@ pub(crate) async fn set_version_middleware<B>(
 ) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
-    let version = version.to_string();
     headers.insert(
         VERSION_HEADER.clone(),
-        HeaderValue::from_str(version.as_str())
-            .unwrap_or_else(|_| HeaderValue::from_static(env!("CARGO_PKG_VERSION"))),
+        HeaderValue::from_static(version.full),
     );
     response
 }
@@ -156,18 +154,14 @@ mod tests {
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
 
-    fn test_version() -> Version {
-        Version::for_testing()
-    }
-
     fn metrics() -> Metrics {
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         Metrics::new(&registry)
     }
     fn service() -> Router {
+        let version = Version::for_testing();
         let metrics = metrics();
-        let version = test_version();
         let cancellation_token = CancellationToken::new();
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
         let service_config = ServiceConfig::default();
@@ -212,36 +206,32 @@ mod tests {
 
     #[tokio::test]
     async fn successful() {
-        let version = format!(
-            "{}.{}",
-            env!("CARGO_PKG_VERSION_MAJOR"),
-            env!("CARGO_PKG_VERSION_MINOR")
-        );
-
+        let version = Version::for_testing();
+        let major_version = format!("{}.{}", version.year, version.month);
         let service = service();
         let response = service
-            .oneshot(header_request(&[(&VERSION_HEADER, version.as_bytes())]))
+            .oneshot(header_request(&[(
+                &VERSION_HEADER,
+                major_version.as_bytes(),
+            )]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
     }
 
     #[tokio::test]
     async fn case_insensitive() {
-        let version = format!(
-            "{}.{}",
-            env!("CARGO_PKG_VERSION_MAJOR"),
-            env!("CARGO_PKG_VERSION_MINOR")
-        );
+        let version = Version::for_testing();
+        let major_version = format!("{}.{}", version.year, version.month);
         let service = service();
         let response = service
             .oneshot(header_request(&[(
                 &HeaderName::try_from("x-sUi-RpC-vERSION").unwrap(),
-                version.as_bytes(),
+                major_version.as_bytes(),
             )]))
             .await
             .unwrap();
@@ -249,24 +239,26 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
     }
 
     #[tokio::test]
     async fn default_version() {
+        let version = Version::for_testing();
         let service = service();
         let response = service.oneshot(plain_request()).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
     }
 
     #[tokio::test]
     async fn incompatible_version() {
+        let version = Version::for_testing();
         let service = service();
         let response = service
             .oneshot(header_request(&[(&VERSION_HEADER, "0.0".as_bytes())]))
@@ -276,7 +268,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::MISDIRECTED_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
 
         let expect = expect![[r#"
@@ -296,6 +288,7 @@ mod tests {
 
     #[tokio::test]
     async fn multiple_versions() {
+        let version = Version::for_testing();
         let service = service();
         let response = service
             .oneshot(header_request(&[
@@ -308,7 +301,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
 
         let expect = expect![[r#"
@@ -328,6 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn not_a_version() {
+        let version = Version::for_testing();
         let service = service();
         let response = service
             .oneshot(header_request(&[(&VERSION_HEADER, b"not-a-version")]))
@@ -337,7 +331,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
 
         let expect = expect![[r#"
@@ -357,6 +351,7 @@ mod tests {
 
     #[tokio::test]
     async fn not_a_string() {
+        let version = Version::for_testing();
         let service = service();
         let response = service
             .oneshot(header_request(&[(
@@ -369,7 +364,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_str(test_version().to_string().as_str()).unwrap())
+            Some(&HeaderValue::from_static(version.full))
         );
 
         let expect = expect![[r#"

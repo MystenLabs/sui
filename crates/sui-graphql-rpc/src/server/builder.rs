@@ -169,11 +169,11 @@ impl FromRef<AppState> for Metrics {
     }
 }
 
-impl FromRef<AppState> for Version {
-    fn from_ref(app_state: &AppState) -> Version {
-        app_state.version
-    }
-}
+// impl FromRef<AppState> for Version {
+//     fn from_ref(app_state: &AppState) -> Version {
+//         app_state.version
+//     }
+// }
 
 impl ServerBuilder {
     pub fn new(state: AppState) -> Self {
@@ -355,7 +355,7 @@ impl ServerBuilder {
         registry
             .register(mysten_metrics::uptime_metric(
                 "graphql",
-                Box::leak(Box::new(version.clone().to_string())),
+                version.full,
                 "unknown",
             ))
             .unwrap();
