@@ -11,6 +11,29 @@ error[E05001]: ability constraint not satisfied
 18 │     let _b_val = b[];
    │                  ^^^ 'copy' constraint not satisifed
 
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:18:18
+   │
+ 6 │ public fun in<T: drop + copy>(self: &Box<T>): &T { &self.value }
+   │                  ---- 'drop' constraint declared here
+   ·
+17 │ public fun test01<A>(b: &Box<A>) {
+   │                   -          - The type 'A' does not have the ability 'drop'
+   │                   │           
+   │                   To satisfy the constraint, the 'drop' ability would need to be added here
+18 │     let _b_val = b[];
+   │                  ^^^ 'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:18:18
+   │
+17 │ public fun test01<A>(b: &Box<A>) {
+   │                   -          - The type 'A' does not have the ability 'copy'
+   │                   │           
+   │                   To satisfy the constraint, the 'copy' ability would need to be added here
+18 │     let _b_val = b[];
+   │                  ^^^ Invalid implicit copy of index result without the 'copy' ability
+
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:18:21
    │
@@ -37,6 +60,19 @@ error[E05001]: ability constraint not satisfied
    │                  ^^^^ 'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:23:18
+   │
+ 6 │ public fun in<T: drop + copy>(self: &Box<T>): &T { &self.value }
+   │                  ---- 'drop' constraint declared here
+   ·
+22 │ public fun test02<A>(b: &mut Box<A>) {
+   │                   -              - The type 'A' does not have the ability 'drop'
+   │                   │               
+   │                   To satisfy the constraint, the 'drop' ability would need to be added here
+23 │     let _b_val = &b[];
+   │                  ^^^^ 'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:23:19
    │
  6 │ public fun in<T: drop + copy>(self: &Box<T>): &T { &self.value }
@@ -48,6 +84,19 @@ error[E05001]: ability constraint not satisfied
    │                   To satisfy the constraint, the 'copy' ability would need to be added here
 23 │     let _b_val = &b[];
    │                   ^^^ 'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:23:19
+   │
+ 6 │ public fun in<T: drop + copy>(self: &Box<T>): &T { &self.value }
+   │                  ---- 'drop' constraint declared here
+   ·
+22 │ public fun test02<A>(b: &mut Box<A>) {
+   │                   -              - The type 'A' does not have the ability 'drop'
+   │                   │               
+   │                   To satisfy the constraint, the 'drop' ability would need to be added here
+23 │     let _b_val = &b[];
+   │                   ^^^ 'drop' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/index_call_constraints_unsatisfied.move:28:18

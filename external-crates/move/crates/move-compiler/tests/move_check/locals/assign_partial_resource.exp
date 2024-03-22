@@ -49,6 +49,20 @@ warning[W09003]: unused assignment
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:20:24
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+19 │         let r: R;
+   │                - The type '0x8675309::M::R' does not have the ability 'drop'
+20 │         while (cond) { r = R{} };
+   │                        ^
+   │                        │
+   │                        Invalid assignment to variable 'r'
+   │                        The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+
+error[E06001]: unused value without 'drop'
    ┌─ tests/move_check/locals/assign_partial_resource.move:21:9
    │
  2 │     struct R {}
@@ -68,6 +82,20 @@ warning[W09003]: unused assignment
    │                ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_check/locals/assign_partial_resource.move:27:16
+   │
+ 2 │     struct R {}
+   │            - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+26 │         let r: R;
+   │                - The type '0x8675309::M::R' does not have the ability 'drop'
+27 │         loop { r = R{} }
+   │                ^
+   │                │
+   │                Invalid assignment to variable 'r'
+   │                The variable might contain a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
 
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_check/locals/assign_partial_resource.move:31:21

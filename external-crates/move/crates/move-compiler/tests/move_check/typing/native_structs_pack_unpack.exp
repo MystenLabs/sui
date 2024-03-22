@@ -7,6 +7,13 @@ error[E04015]: invalid use of native item
 9 │         C::T {}
   │         ^^^^^^^ Invalid argument usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
 
+error[E04001]: restricted visibility
+  ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9
+  │
+9 │         C::T {}
+  │         ^^^^^^^ Invalid instantiation of '0x42::C::T'.
+All structs can only be constructed in the module in which they are declared
+
 error[E04015]: invalid use of native item
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
    │
@@ -15,6 +22,13 @@ error[E04015]: invalid use of native item
    ·
 12 │         let C::T {} = c;
    │             ^^^^^^^ Invalid binding usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
+   │
+12 │         let C::T {} = c;
+   │             ^^^^^^^ Invalid deconstruction binding of '0x42::C::T'.
+ All structs can only be deconstructed in the module in which they are declared
 
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18

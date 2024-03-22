@@ -129,6 +129,32 @@ error[E06001]: unused value without 'drop'
 26 │         a == b && b == c && a == c
    │                          ^^ Invalid return
 
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+25 │     public fun test_9(a: S, b: S, c: S): bool {
+   │                             -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                             │   
+   │                             The parameter 'b' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+26 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+25 │     public fun test_9(a: S, b: S, c: S): bool {
+   │                                   -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                                   │   
+   │                                   The parameter 'c' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+26 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:29
    │
@@ -186,6 +212,19 @@ error[E06001]: unused value without 'drop'
 30 │         a == b && b == c && a == c
    │                          ^^ Invalid return
 
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:30:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+29 │     public fun test_10(a: S, b: S, c: &S): bool {
+   │                              -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                              │   
+   │                              The parameter 'b' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+30 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:34:9
    │
@@ -222,6 +261,19 @@ error[E06001]: unused value without 'drop'
    │                          ^^ Invalid return
 
 error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:34:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+33 │     public fun test_11(a: S, b: S, c: &mut S): bool {
+   │                              -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                              │   
+   │                              The parameter 'b' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+34 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
+error[E06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:38:26
    │
  3 │     public struct S has copy {}
@@ -231,6 +283,19 @@ error[E06001]: unused value without 'drop'
    │                        -  - The type '0x42::a::S' does not have the ability 'drop'
    │                        │   
    │                        The parameter 'a' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+38 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:38:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+37 │     public fun test_12(a: S, b: &S, c: S): bool {
+   │                                     -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                                     │   
+   │                                     The parameter 'c' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
 38 │         a == b && b == c && a == c
    │                          ^^ Invalid return
 
@@ -292,6 +357,19 @@ error[E06001]: unused value without 'drop'
    │                        -  - The type '0x42::a::S' does not have the ability 'drop'
    │                        │   
    │                        The parameter 'a' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+50 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:50:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+49 │     public fun test_15(a: S, b: &mut S, c: S): bool {
+   │                                         -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                                         │   
+   │                                         The parameter 'c' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
 50 │         a == b && b == c && a == c
    │                          ^^ Invalid return
 
@@ -379,6 +457,19 @@ error[E06001]: unused value without 'drop'
    │                          ^^ Invalid return
 
 error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:62:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+61 │     public fun test_18(a: &S, b: S, c: S): bool {
+   │                                     -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                                     │   
+   │                                     The parameter 'c' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+62 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
+error[E06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:66:26
    │
  3 │     public struct S has copy {}
@@ -462,6 +553,19 @@ error[E06001]: unused value without 'drop'
    │                                   -  - The type '0x42::a::S' does not have the ability 'drop'
    │                                   │   
    │                                   The parameter 'b' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
+82 │         a == b && b == c && a == c
+   │                          ^^ Invalid return
+
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:82:26
+   │
+ 3 │     public struct S has copy {}
+   │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+81 │     public fun test_27(a: &mut S, b: S, c: S): bool {
+   │                                         -  - The type '0x42::a::S' does not have the ability 'drop'
+   │                                         │   
+   │                                         The parameter 'c' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
 82 │         a == b && b == c && a == c
    │                          ^^ Invalid return
 

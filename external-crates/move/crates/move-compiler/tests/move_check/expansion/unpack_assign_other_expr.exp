@@ -6,6 +6,12 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
+error[E03013]: positional call mismatch
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+
 error[E04016]: too few arguments
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
   │
@@ -48,6 +54,12 @@ error[E13001]: feature is not supported in specified edition
    │         ^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:11:9
+   │
+11 │         G () = G {};
+   │         ^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:12:12

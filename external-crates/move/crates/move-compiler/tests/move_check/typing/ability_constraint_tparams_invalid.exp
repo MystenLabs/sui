@@ -115,6 +115,36 @@ error[E05001]: ability constraint not satisfied
    │         'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:28:9
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+ 9 │     fun cds<T: copy + drop + store>() {}
+   │                       ---- 'drop' constraint declared here
+   ·
+28 │         cds<Cup<TnoC>>();
+   │         ^^^^^^^^^^^^^^^^
+   │         │   │
+   │         │   The type '0x42::M::Cup<TnoC>' does not have the ability 'drop'
+   │         'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:28:9
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+ 9 │     fun cds<T: copy + drop + store>() {}
+   │                              ----- 'store' constraint declared here
+   ·
+28 │         cds<Cup<TnoC>>();
+   │         ^^^^^^^^^^^^^^^^
+   │         │   │
+   │         │   The type '0x42::M::Cup<TnoC>' does not have the ability 'store'
+   │         'store' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:29:9
    │
  3 │     struct Cup<T> { f: T }
@@ -128,6 +158,36 @@ error[E05001]: ability constraint not satisfied
    │         │   │
    │         │   The type '0x42::M::Cup<TnoK>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:29:9
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+ 9 │     fun cds<T: copy + drop + store>() {}
+   │                       ---- 'drop' constraint declared here
+   ·
+29 │         cds<Cup<TnoK>>();
+   │         ^^^^^^^^^^^^^^^^
+   │         │   │
+   │         │   The type '0x42::M::Cup<TnoK>' does not have the ability 'drop'
+   │         'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:29:9
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+ 9 │     fun cds<T: copy + drop + store>() {}
+   │                              ----- 'store' constraint declared here
+   ·
+29 │         cds<Cup<TnoK>>();
+   │         ^^^^^^^^^^^^^^^^
+   │         │   │
+   │         │   The type '0x42::M::Cup<TnoK>' does not have the ability 'store'
+   │         'store' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:30:9
@@ -354,6 +414,34 @@ error[E05001]: ability constraint not satisfied
    │             'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:13
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                   ---- 'drop' constraint declared here
+   ·
+38 │         let Scds {} = Scds<Cup<TnoC>> {};
+   │             ^^^^^^^        --------- The type '0x42::M::Cup<TnoC>' does not have the ability 'drop'
+   │             │               
+   │             'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:13
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                          ----- 'store' constraint declared here
+   ·
+38 │         let Scds {} = Scds<Cup<TnoC>> {};
+   │             ^^^^^^^        --------- The type '0x42::M::Cup<TnoC>' does not have the ability 'store'
+   │             │               
+   │             'store' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:23
    │
  3 │     struct Cup<T> { f: T }
@@ -367,6 +455,36 @@ error[E05001]: ability constraint not satisfied
    │                       │    │
    │                       │    The type '0x42::M::Cup<TnoC>' does not have the ability 'copy'
    │                       'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:23
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                   ---- 'drop' constraint declared here
+   ·
+38 │         let Scds {} = Scds<Cup<TnoC>> {};
+   │                       ^^^^^^^^^^^^^^^^^^
+   │                       │    │
+   │                       │    The type '0x42::M::Cup<TnoC>' does not have the ability 'drop'
+   │                       'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:23
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                          ----- 'store' constraint declared here
+   ·
+38 │         let Scds {} = Scds<Cup<TnoC>> {};
+   │                       ^^^^^^^^^^^^^^^^^^
+   │                       │    │
+   │                       │    The type '0x42::M::Cup<TnoC>' does not have the ability 'store'
+   │                       'store' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:13
@@ -383,6 +501,34 @@ error[E05001]: ability constraint not satisfied
    │             'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:13
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                   ---- 'drop' constraint declared here
+   ·
+39 │         let Scds {} = Scds<Cup<TnoK>> {};
+   │             ^^^^^^^        --------- The type '0x42::M::Cup<TnoK>' does not have the ability 'drop'
+   │             │               
+   │             'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:13
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                          ----- 'store' constraint declared here
+   ·
+39 │         let Scds {} = Scds<Cup<TnoK>> {};
+   │             ^^^^^^^        --------- The type '0x42::M::Cup<TnoK>' does not have the ability 'store'
+   │             │               
+   │             'store' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:23
    │
  3 │     struct Cup<T> { f: T }
@@ -396,6 +542,36 @@ error[E05001]: ability constraint not satisfied
    │                       │    │
    │                       │    The type '0x42::M::Cup<TnoK>' does not have the ability 'copy'
    │                       'copy' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:23
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                   ---- 'drop' constraint declared here
+   ·
+39 │         let Scds {} = Scds<Cup<TnoK>> {};
+   │                       ^^^^^^^^^^^^^^^^^^
+   │                       │    │
+   │                       │    The type '0x42::M::Cup<TnoK>' does not have the ability 'drop'
+   │                       'drop' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:23
+   │
+ 3 │     struct Cup<T> { f: T }
+   │            --- To satisfy the constraint, the 'store' ability would need to be added here
+   ·
+13 │     struct Scds<phantom T: copy + drop + store> {}
+   │                                          ----- 'store' constraint declared here
+   ·
+39 │         let Scds {} = Scds<Cup<TnoK>> {};
+   │                       ^^^^^^^^^^^^^^^^^^
+   │                       │    │
+   │                       │    The type '0x42::M::Cup<TnoK>' does not have the ability 'store'
+   │                       'store' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:40:13

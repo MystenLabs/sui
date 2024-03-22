@@ -9,4 +9,4 @@
 +        let S { f: mut fin } = s;
 @@ -15 +15 @@
 -        let x = 5; let y = 10;
-+        let mut x = 5; let y = 10;
++        let mut x = 5; let mut y = 10;

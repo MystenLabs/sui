@@ -6,6 +6,12 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
+error[E03013]: positional call mismatch
+  ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
+  │
+7 │         let _ = Foo(0);
+  │                 ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations.
+
 error[E04016]: too few arguments
   ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
   │

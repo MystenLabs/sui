@@ -364,7 +364,7 @@ impl CompilationEnv {
 
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
         if diag.info().severity() <= Severity::NonblockingError
-            && self.diags.any_with_primary_loc(diag.primary_loc())
+            && self.diags.any_syntax_with_primary_loc(diag.primary_loc())
         {
             // do not report multiple diags for the same location (unless they are blocking) to
             // avoid noise that is likely to confuse the developer trying to localize the problem
