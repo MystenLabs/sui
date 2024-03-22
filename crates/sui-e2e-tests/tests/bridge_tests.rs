@@ -10,12 +10,14 @@ use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_macros::sim_test;
+use sui_types::bridge::BridgeTrait;
 use sui_types::bridge::{get_bridge, get_bridge_obj_initial_shared_version, BRIDGE_MODULE_NAME};
-use sui_types::bridge::{BridgeTrait, BRIDGE_ENABLE_PROTOCOL_VERSION};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use test_cluster::TestClusterBuilder;
+
+pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 42;
 
 #[sim_test]
 async fn test_create_bridge_state_object() {
