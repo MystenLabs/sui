@@ -364,12 +364,6 @@ pub fn compile_module<'a>(
     }
 
     for ir_constant in module.constants {
-        let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
-        let constant_name = ir_constant.name.clone();
-        context.declare_constant(ir_constant.name.clone(), constant.clone())?;
-        let const_idx = context.constant_index(constant)?;
-        record_src_loc!(const_decl: context, const_idx, ir_constant.name);
-
         // If the constant is an error constant in the source, then add the error constant's name
         // look up the constant's name, as a constant valeu -- this may be present already,
         // e.g., in the case of something like `const Foo: vector<u8> = b"Foo"` in which case the
@@ -377,8 +371,13 @@ pub fn compile_module<'a>(
         if ir_constant.is_error_constant {
             // Will add if not present, and will return the index, or will just return
             // index if already present.
-            constant_name_as_constant_value_index(&mut context, &constant_name)?;
+            constant_name_as_constant_value_index(&mut context, &ir_constant.name)?;
         }
+
+        let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
+        context.declare_constant(ir_constant.name.clone(), constant.clone())?;
+        let const_idx = context.constant_index(constant)?;
+        record_src_loc!(const_decl: context, const_idx, ir_constant.name);
     }
 
     for (name, function) in &module.functions {
