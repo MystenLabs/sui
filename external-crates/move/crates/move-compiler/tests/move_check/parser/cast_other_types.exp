@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/cast_other_types.move:4:15
+  │
+4 │         (0 as ());
+  │               ^
+  │               │
+  │               Unexpected '('
+  │               Expected a type name
+
