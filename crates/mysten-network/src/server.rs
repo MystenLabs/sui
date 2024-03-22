@@ -21,7 +21,8 @@ use tonic::{
         http::{Request, Response},
         BoxFuture,
     },
-    transport::{server::Router, Body, NamedService},
+    server::NamedService,
+    transport::{server::Router, Body},
 };
 use tower::{
     layer::util::{Identity, Stack},
