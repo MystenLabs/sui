@@ -151,11 +151,7 @@ impl BlockManager {
                     .accept_blocks(blocks_to_accept.clone());
 
                 accepted_blocks.extend(blocks_to_accept);
-            } else {
-                let suspended_block = self
-                    .suspended_blocks
-                    .get(&block_ref)
-                    .expect("Block should be present");
+            } else if let Some(suspended_block) = self.suspended_blocks.get(&block_ref) {
                 missing_blocks.extend(&suspended_block.missing_ancestors);
             }
         }
