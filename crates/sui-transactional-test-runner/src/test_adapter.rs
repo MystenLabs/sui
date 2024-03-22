@@ -73,7 +73,6 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
@@ -93,6 +92,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tempfile::{tempdir, NamedTempFile};
