@@ -195,18 +195,20 @@ This section contains the core information needed in the lockfile:
 * The hash of the `Move.toml` file that was used to generate this lock file.
 * The hash of the `Move.lock` file of all dependencies. If no depencies are
   present, this will be an empty string.
+* The list of dependencies.
 
 ```
 [move]
 version = <string> # Lock file version, used for backwards compatibility checking.
 manifest_digest = <hash> # Sha3-256 hash of the Move.toml file that was used to generate this lock file.
 deps_digest = <hash> # Sha3-256 hash of the Move.lock file of all dependencies. If no depencies are present, this will be an empty string.
+dependencies = { (name = <string>)* } # List of dependencies. Not present if there are no dependencies.
 ```
 
-### The `[move.dependency]` Section
+### The `[move.package]` Sections
 
 After the Move compiler resolves each of the dependencies for the package it
-writes the location of the dependency to the Move.lock file. If a dependency
+writes the location of the dependency to the `Move.lock` file. If a dependency
 failed to resolve, the compiler will not write the `Move.lock` file and the
 build fails. If all dependencies resolve, the `Move.lock` file contains the
 locations (local and remote) of all of the package's transitive dependencies.
@@ -234,12 +236,12 @@ to the lock file that can then be used for on-chain source verification:
 ...
 
 [move.toolchain-version]
-compiler-version = <string> # The version of the Move compiler used to build the package, e.g. 1.21.0
-edition = <string> # The edition of the Move language used to build the package, e.g. 2024.alpha
+compiler-version = <string> # The version of the Move compiler used to build the package, e.g. "1.21.0"
+edition = <string> # The edition of the Move language used to build the package, e.g. "2024.alpha"
 flavor = <string> # The flavor of the Move compiler used to build the package, e.g. "sui"
 ```
 
-With that, lets now turn to the compilation process and how named addresses are
+With that, let's now turn to the compilation process and how named addresses are
 resolved, and how to use them.
 
 ## Named Addresses During Compilation
