@@ -17,12 +17,14 @@ mod checked {
         ObjectID,
     };
     use move_core_types::vm_status::StatusCode;
+    use serde::{Deserialize, Serialize};
     use sui_protocol_config::*;
 
     /// A bucket defines a range of units that will be priced the same.
     /// After execution a call to `GasStatus::bucketize` will round the computation
     /// cost to `cost` for the bucket ([`min`, `max`]) the gas used falls into.
     #[allow(dead_code)]
+    #[derive(Serialize, Deserialize)]
     pub(crate) struct ComputationBucket {
         min: u64,
         max: u64,
@@ -80,6 +82,7 @@ mod checked {
     }
 
     /// A list of constant costs of various operations in Sui.
+    #[derive(Serialize, Deserialize)]
     pub struct SuiCostTable {
         /// A flat fee charged for every transaction. This is also the minimum amount of
         /// gas charged for a transaction.
@@ -144,7 +147,7 @@ mod checked {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Serialize, Deserialize)]
     pub struct PerObjectStorage {
         /// storage_cost is the total storage gas to charge. This is computed
         /// at the end of execution while determining storage charges.
@@ -161,7 +164,7 @@ mod checked {
     }
 
     #[allow(dead_code)]
-    #[derive(Debug)]
+    #[derive(Debug, Serialize, Deserialize)]
     pub struct SuiGasStatus {
         // GasStatus as used by the VM, that is all the VM sees
         pub gas_status: GasStatus,

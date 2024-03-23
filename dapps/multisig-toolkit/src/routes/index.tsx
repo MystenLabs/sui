@@ -39,6 +39,13 @@ export const router = createBrowserRouter([
 				path: 'execute-transaction',
 				element: <ExecuteTransaction />,
 			},
+			{
+				path: 'replay',
+				async lazy() {
+					let { Replay } = await import('./replay');
+					return { Component: Replay };
+				},
+			},
 		],
 	},
 ]);

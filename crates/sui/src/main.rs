@@ -57,9 +57,15 @@ async fn main() {
         }
 
         SuiCommand::Client {
-            cmd: Some(ReplayTransaction {
-                gas_info, ptb_info, ..
-            }),
+            config: _,
+            cmd:
+                Some(ReplayTransaction {
+                    gas_info,
+                    ptb_info,
+                    html,
+                    json,
+                    ..
+                }),
             ..
         } => {
             let mut config = telemetry_subscribers::TelemetryConfig::new()
@@ -68,9 +74,10 @@ async fn main() {
             if gas_info {
                 config = config.with_trace_target("replay_gas_info");
             }
-            if ptb_info {
+            if ptb_info || html || json {
                 config = config.with_trace_target("replay_ptb_info");
             }
+
             config.init()
         }
         SuiCommand::Client {

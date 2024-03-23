@@ -23,6 +23,7 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
@@ -89,6 +90,8 @@ pub struct ExecutionSandboxState {
     pub local_exec_status: Option<Result<(), ExecutionError>>,
     /// Pre exec diag info
     pub pre_exec_diag: DiagInfo,
+    /// Json data of all transaction information collected during execution
+    pub output: String,
 }
 
 impl ExecutionSandboxState {
@@ -720,6 +723,7 @@ impl LocalExec {
                 local_exec_effects: effects,
                 local_exec_status: Some(Ok(())),
                 pre_exec_diag: self.diag.clone(),
+                output: "".to_string(),
             });
         }
         // Initialize the state necessary for execution
@@ -784,6 +788,11 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
+        let mut json_map = Map::new();
+        json_map.insert("effects".to_string(), json!(effects));
+        json_map.insert("gas_status".to_string(), json!(gas_status));
+        json_map.insert("transaction_info".to_string(), json!(transaction_kind));
+
         let skip_checks = true;
         if let ProgrammableTransaction(ref pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}",
@@ -791,6 +800,7 @@ impl LocalExec {
                     &FullPTB {
                         ptb: pt.clone(),
                         results: transform_command_results_to_annotated(
+                            &mut json_map,
                             &executor,
                             &self.clone(),
                             executor.dev_inspect_transaction(&self, protocol_config,
@@ -807,12 +817,14 @@ impl LocalExec {
                             *tx_digest,
                             skip_checks
                             ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),)?
-            }))
+            }));
         };
 
         let all_required_objects = self.storage.all_objects();
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
+
+        let combined_json = Value::Object(json_map).to_string();
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),
@@ -821,6 +833,7 @@ impl LocalExec {
             local_exec_effects: effects,
             local_exec_status: Some(result),
             pre_exec_diag: self.diag.clone(),
+            output: combined_json,
         })
     }
 
@@ -975,6 +988,7 @@ impl LocalExec {
             local_exec_effects: effects,
             local_exec_status: Some(exec_res),
             pre_exec_diag: pre_exec_diag.clone(),
+            output: "".to_string(),
         })
     }
 
