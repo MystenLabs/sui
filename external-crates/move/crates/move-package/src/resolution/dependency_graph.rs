@@ -221,6 +221,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         root_path: PathBuf,
         manifest_string: String,
         lock_string_opt: Option<String>,
+        mode: DependencyMode,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
         let root_manifest = parse_source_manifest(toml_manifest)?;
@@ -258,6 +259,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .values()
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
+
         let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
             .collect_graphs(
                 parent,
@@ -268,10 +270,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.dev_dependencies.clone(),
             )?;
 
-        let dev_dep_lock_files = dev_dep_graphs
-            .values()
-            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
-            .collect::<Result<Vec<LockFile>>>()?;
+        let mut dev_dep_lock_files = vec![];
+        if mode == DependencyMode::DevOnly {
+            dev_dep_lock_files = dev_dep_graphs
+                .values()
+                .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+                .collect::<Result<Vec<LockFile>>>()?;
+        }
+
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
         let (manifest_digest, deps_digest) = match digest_and_lock_contents {
             Some((old_manifest_digest, old_deps_digest, Some(lock_string)))
@@ -292,8 +298,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             _ => (new_manifest_digest, new_deps_digest),
         };
 
-        dep_graphs.extend(dev_dep_graphs);
-        dep_names.extend(dev_dep_names);
+        if mode == DependencyMode::DevOnly {
+            dep_graphs.extend(dev_dep_graphs);
+            dep_names.extend(dev_dep_names);
+        }
 
         let mut combined_graph = DependencyGraph {
             root_path,
@@ -333,7 +341,9 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         }
 
         let mut all_deps = resolved_id_deps;
-        all_deps.extend(dev_resolved_id_deps);
+        if mode == DependencyMode::DevOnly {
+            all_deps.extend(dev_resolved_id_deps);
+        }
 
         // we can mash overrides together as the sets cannot overlap (it's asserted during pruning)
         overrides.extend(dev_overrides);
@@ -464,7 +474,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 self.visited_dependencies
                     .push_front((resolved_pkg_id, d.clone()));
                 let (mut pkg_graph, modified) =
-                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string)?;
+                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string, mode)?;
                 self.visited_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {

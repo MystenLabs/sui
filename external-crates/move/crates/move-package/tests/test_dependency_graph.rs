@@ -45,6 +45,7 @@ fn no_dep_graph() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -161,6 +162,7 @@ fn always_deps() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -570,6 +572,7 @@ fn immediate_dependencies() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -591,6 +594,41 @@ fn immediate_dependencies() {
     assert_eq!(deps(b, DependencyMode::Always), BTreeSet::from([]));
     assert_eq!(deps(c, DependencyMode::Always), BTreeSet::from([]));
     assert_eq!(deps(d, DependencyMode::Always), BTreeSet::from([]));
+}
+
+#[test]
+fn immediate_dependencies_dev_only() {
+    let pkg = dev_dep_test_package();
+
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
+            &DependencyKind::default(),
+            pkg,
+            manifest_string,
+            /* lock_string_opt */ None,
+            DependencyMode::DevOnly,
+        )
+        .expect("Creating DependencyGraph");
+
+    let r = Symbol::from("Root");
+    let a = Symbol::from("A");
+    let b = Symbol::from("B");
+    let c = Symbol::from("C");
+    let d = Symbol::from("D");
+
+    let deps = |pkg, mode| {
+        graph
+            .immediate_dependencies(pkg, mode)
+            .map(|(pkg, _, _)| pkg)
+            .collect::<BTreeSet<_>>()
+    };
 
     assert_eq!(deps(r, DependencyMode::DevOnly), BTreeSet::from([a, b, c]));
     assert_eq!(deps(a, DependencyMode::DevOnly), BTreeSet::from([b, d]));
