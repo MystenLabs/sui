@@ -16,6 +16,7 @@ use move_core_types::parser::parse_type_tag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
+use rand::seq::SliceRandom;
 use rand::{
     distributions::{Distribution, Uniform},
     prelude::StdRng,
@@ -4628,6 +4629,7 @@ async fn make_test_transaction(
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
     arg_value: u64,
+    gas_price: Option<u64>,
     gas_budget: Option<u64>,
 ) -> VerifiedCertificate {
     // Make a sample transaction.
@@ -4656,7 +4658,7 @@ async fn make_test_transaction(
             CallArg::Pure(arg_value.to_le_bytes().to_vec()),
         ],
         gas_budget.unwrap_or(TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp),
-        rgp,
+        gas_price.unwrap_or(rgp),
     )
     .unwrap();
 
@@ -4716,6 +4718,7 @@ async fn prepare_authority_and_shared_object_cert(
         &gas_object_ref,
         &[&authority],
         16,
+        None,
         None,
     )
     .await;
@@ -4830,6 +4833,7 @@ async fn test_consensus_message_processed() {
             &gas_object_ref,
             &[&authority1, &authority2],
             Uniform::from(0..100000).sample(&mut rng),
+            None,
             None,
         )
         .await;
@@ -5689,84 +5693,102 @@ fn create_gas_objects(num: u32, owner: SuiAddress) -> Vec<Object> {
     objects
 }
 
+fn create_shared_objects(num: u32) -> Vec<Object> {
+    let mut objects = vec![];
+    for _ in 0..num {
+        let shared_object_id = ObjectID::random();
+        let shared_object = {
+            let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+            let owner = Owner::Shared {
+                initial_shared_version: obj.version(),
+            };
+            Object::new_move(obj, owner, TransactionDigest::genesis_marker())
+        };
+        objects.push(shared_object);
+    }
+    objects
+}
+
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_per_object_congestion_control() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
-    let gas_objects = create_gas_objects(3, sender);
+    let gas_objects = create_gas_objects(10, sender);
+    let new_gas_objects = create_gas_objects(5, sender);
 
     // Initialize an authority with a (owned) gas object and a shared object.
     // let gas_object_id = ObjectID::random();
     // let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     // let gas_object_ref = gas_object.compute_object_reference();
 
-    let shared_object_id = ObjectID::random();
-    let shared_object = {
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
-        let owner = Owner::Shared {
-            initial_shared_version: obj.version(),
-        };
-        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
-    };
-    let initial_shared_version = shared_object.version();
+    let shared_objects = create_shared_objects(2);
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config
         .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
-    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(2000000);
+    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
         .build()
         .await;
     let mut genesis_objects = gas_objects.clone();
-    genesis_objects.extend([shared_object.clone()]);
+    genesis_objects.extend(new_gas_objects.clone());
+    genesis_objects.extend(shared_objects.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
 
-    let certificate_0 = make_test_transaction(
-        &sender,
-        &keypair,
-        shared_object_id,
-        initial_shared_version,
-        &gas_objects[0].compute_object_reference(),
-        &[&authority],
-        16,
-        Some(1000000),
-    )
-    .await;
+    let mut certificates: Vec<VerifiedCertificate> = vec![];
+    for (index, gas_object) in gas_objects.iter().enumerate() {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            if index < 5 {
+                shared_objects[0].id()
+            } else {
+                shared_objects[1].id()
+            },
+            OBJECT_START_VERSION,
+            &gas_object.compute_object_reference(),
+            &[&authority],
+            12345,
+            if index < 5 {
+                Some(1000 * (index + 1) as u64)
+            } else {
+                Some(1000)
+            },
+            if index < 5 {
+                Some(100_000_000)
+            } else {
+                Some(10_000_000)
+            },
+        )
+        .await;
+        certificates.push(certificate);
+    }
 
-    let certificate_1 = make_test_transaction(
-        &sender,
-        &keypair,
-        shared_object_id,
-        initial_shared_version,
-        &gas_objects[1].compute_object_reference(),
-        &[&authority],
-        16,
-        Some(1000000),
-    )
-    .await;
-
-    let certificate_2 = make_test_transaction(
-        &sender,
-        &keypair,
-        shared_object_id,
-        initial_shared_version,
-        &gas_objects[2].compute_object_reference(),
-        &[&authority],
-        16,
-        Some(1000000),
-    )
-    .await;
+    certificates.shuffle(&mut rand::thread_rng());
+    for cert in certificates.iter() {
+        println!(
+            "Initial certificate gas price {:?}",
+            cert.data().transaction_data().gas_price()
+        );
+    }
 
     // Sequence the certificate to assign a sequence number to the shared object.
-    let scheduled_txns = send_batch_consensus_no_execution(
-        &authority,
-        &[certificate_0, certificate_1, certificate_2],
-    )
-    .await;
-    assert_eq!(scheduled_txns.len(), 2);
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
+    assert_eq!(scheduled_txns.len(), 7);
+    for cert in scheduled_txns.iter() {
+        assert!(
+            cert.data().transaction_data().gas_price() >= 4000
+                || cert
+                    .data()
+                    .transaction_data()
+                    .shared_input_objects()
+                    .iter()
+                    .any(|obj| { obj.id() == shared_objects[1].id() })
+        );
+    }
 
     let commit_round = authority
         .epoch_store_for_testing()
@@ -5777,6 +5799,7 @@ async fn test_per_object_congestion_control() {
         .get_all_deferred_transaction()
         .unwrap();
     assert_eq!(deferred_txns.len(), 1);
+    assert_eq!(deferred_txns[0].1.len(), 3);
     let deferral_key = deferred_txns[0].0;
     match deferral_key {
         DeferralKey::ConsensusRound {
@@ -5784,6 +5807,61 @@ async fn test_per_object_congestion_control() {
             deferred_from_round,
         } => {
             assert_eq!(future_round, commit_round + 1);
+            assert_eq!(deferred_from_round, commit_round);
+        }
+        DeferralKey::RandomnessDkg {
+            deferred_from_round,
+        } => {
+            panic!(
+                "Expected ConsensusRound, got RandomnessDkg: {:?}",
+                deferred_from_round
+            );
+        }
+    }
+
+    let mut new_certificates: Vec<VerifiedCertificate> = vec![];
+    for gas_object in new_gas_objects.iter() {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            shared_objects[1].id(),
+            OBJECT_START_VERSION,
+            &gas_object.compute_object_reference(),
+            &[&authority],
+            12345,
+            Some(1000),
+            Some(10_000_000),
+        )
+        .await;
+        new_certificates.push(certificate);
+    }
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &new_certificates).await;
+    assert_eq!(scheduled_txns.len(), 7);
+    for cert in scheduled_txns.iter() {
+        assert!(
+            cert.data().transaction_data().gas_price() >= 2000
+                || cert
+                    .data()
+                    .transaction_data()
+                    .shared_input_objects()
+                    .iter()
+                    .any(|obj| { obj.id() == shared_objects[1].id() })
+        );
+    }
+
+    let deferred_txns = authority
+        .epoch_store_for_testing()
+        .get_all_deferred_transaction()
+        .unwrap();
+    assert_eq!(deferred_txns.len(), 1);
+    assert_eq!(deferred_txns[0].1.len(), 1);
+    let deferral_key = deferred_txns[0].0;
+    match deferral_key {
+        DeferralKey::ConsensusRound {
+            future_round,
+            deferred_from_round,
+        } => {
+            assert_eq!(future_round, commit_round + 2);
             assert_eq!(deferred_from_round, commit_round);
         }
         DeferralKey::RandomnessDkg {

@@ -2048,13 +2048,7 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
-                42 => {
-                    if chain != Chain::Testnet && chain != Chain::Mainnet {
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::TotalGasBudget;
-                        cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(150_000_000);
-                    }
-                }
+                42 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

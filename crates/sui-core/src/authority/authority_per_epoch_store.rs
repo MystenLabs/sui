@@ -1844,12 +1844,6 @@ impl AuthorityPerEpochStore {
                     cert.shared_input_objects().collect(),
                 );
                 for obj in cert.shared_input_objects() {
-                    println!(
-                        "ZZZZZZZ {:?} {:?}",
-                        start_cost + cert.gas_budget(),
-                        self.protocol_config()
-                            .max_accumulated_txn_cost_per_object_in_checkpoint()
-                    );
                     if start_cost + cert.gas_budget()
                         > self
                             .protocol_config()
