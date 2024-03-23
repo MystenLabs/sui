@@ -125,64 +125,95 @@ This example leverages the Sui TypeScript SDK to subscribe to events the package
 
 ### TypeScript
 
-To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui.js` at the root of your project. In your TypeScript code, import `JsonRpcProvider` and a connection from the library.
+To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui.js` at the root of your project. In your TypeScript code, Use queryEvents within the executeMoveCall function below to query the events information for a Transaction.Below is an example of how to obtain the events information for the current transaction when calling a contract.
+
+Example code：
 
 ```ts
-import { JsonRpcProvider, testnetConnection } from '@mysten/sui.js';
+import {
+    useSignAndExecuteTransactionBlock,
+    useSuiClient,
+  } from "@mysten/dapp-kit";
+import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { Button, Flex, Heading } from "@radix-ui/themes";
+import { SICBOGAME_PACKAGE_ID } from "./constants";  
+  
+export function Creategame({ 
+    onCreated,
+}:{
+    onCreated: (id: string) => void;
+ }) {
+    const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+    const client = useSuiClient();
 
-// Package is on Testnet.
-const provider = new JsonRpcProvider(testnetConnection);
-const Package = '<PACKAGE_ID>';
+    const executeMoveCall = (method: "small" | "large") => {
+        const txb = new TransactionBlock();
 
-const MoveEventType = '<PACKAGE_ID>::<MODULE_NAME>::<METHOD_NAME>';
+        if (method === "small") {
+        txb.moveCall({
+            arguments: [txb.pure.u64(0)],
+            target: `${SICBOGAME_PACKAGE_ID}::sicbogame::create_game`,
+        });
+        } else {
+        txb.moveCall({
+            arguments: [txb.pure.u64(1)],
+            target: `${SICBOGAME_PACKAGE_ID}::sicbogame::create_game`,
+        });
+        }
 
-console.log(
-	await provider.getObject({
-		id: Package,
-		options: { showPreviousTransaction: true },
-	}),
-);
+        signAndExecute(
+        {
+            transactionBlock: txb,
+            options: {
+            showEffects: true,
+            showObjectChanges: true,
+            },
+        },
+        {
+            onSuccess: (tx) => {
+                client.
+                    queryEvents({
+                        query:{Transaction:tx.digest}
+                    }).then(PaginatedEvents=> {
+                        const events = JSON.stringify(PaginatedEvents.data[0].parsedJson);
+                    
+                        if (events.length > 0) {
+                          onCreated(events)
+                        } else {
+                          onCreated('No events found for the given criteria.');
+                        }
+                      })
+                      .catch(error => { 
+                        console.error('Error querying events:', error);
+                      });
+            },
+        },
+        );
+    };
+    return (
+        <>
+        <Heading size="3">Game Start</Heading>
 
-let unsubscribe = await provider.subscribeEvent({
-	filter: { Package },
-	onMessage: (event) => {
-		console.log('subscribeEvent', JSON.stringify(event, null, 2));
-	},
-});
-
-process.on('SIGINT', async () => {
-	console.log('Interrupted...');
-	if (unsubscribe) {
-		await unsubscribe();
-		unsubscribe = undefined;
-	}
-});
+        <Flex direction="column" gap="2">
+            <Flex direction="row" gap="2">
+            <Button onClick={() => executeMoveCall("small")}>
+                small
+            </Button>
+            <Button onClick={() => executeMoveCall("large")}>
+                large
+            </Button>
+            </Flex>
+        </Flex>
+        </>
+    );
+}
 ```
 
 ### Response
 
-When the subscribed to event fires, the example displays the following JSON representation of the event.
+Example transaction：https://suiexplorer.com/txblock/2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej?network=testnet
 
-```json
-subscribeEvent {
-  "id": {
-    "txDigest": "HkCBeBLQbpKBYXmuQeTM98zprUqaACRkjKmmtvC6MiP1",
-    "eventSeq": "0"
-  },
-  "packageId": "0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1",
-  "transactionModule": "coin_flip",
-  "sender": "0x46f184f2d68007e4344fffe603c4ccacd22f4f28c47f321826e83619dede558e",
-  "type": "0x2d6733a32e957430324196dc5d786d7c839f3c7bbfd92b83c469448b988413b1::coin_flip::Outcome",
-  "parsedJson": {
-    "bet_amount": "4000000000",
-    "game_id": "0xa7e1fb3c18a88d048b75532de219645410705fa48bfb8b13e8dbdbb7f4b9bbce",
-    "guess": 0,
-    "player_won": true
-  },
-  "bcs": "3oWWjWKRVu115bnnZphyDcJ8EyF9X4pgVguwhEtcsVpBf74B6RywQupm2X",
-  "timestampMs": "1687912116638"
-}
-```
+I can get the value of parsedJson in the example below, and its final value is {"msg":"You Win :)"} .
 
 ### Rust SDK
 
