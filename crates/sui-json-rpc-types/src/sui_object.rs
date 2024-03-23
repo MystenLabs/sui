@@ -497,17 +497,7 @@ impl
         };
 
         let bcs: Option<SuiRawData> = if show_bcs {
-            let data = match o.data.clone() {
-                Data::Move(m) => {
-                    let layout = layout.clone().ok_or_else(|| {
-                        anyhow!("Layout is required to convert Move object to json")
-                    })?;
-                    SuiRawData::try_from_object(m, layout)?
-                }
-                Data::Package(p) => SuiRawData::try_from_package(p)
-                    .map_err(|e| anyhow!("Error getting raw data from package: {e:#?}"))?,
-            };
-            Some(data)
+            Some(o.data.clone().into())
         } else {
             None
         };
@@ -602,6 +592,15 @@ impl SuiObjectResponse {
             Ok(data) => Ok(data.clone()),
             Err(error) => Err(error),
         }
+    }
+}
+
+impl TryFrom<Object> for SuiObjectData {
+    type Error = anyhow::Error;
+
+    fn try_from(o: Object) -> Result<Self, Self::Error> {
+        let obj_ref = o.compute_object_reference();
+        (obj_ref, o, None, SuiObjectDataOptions::bcs_lossless()).try_into()
     }
 }
 
@@ -703,6 +702,15 @@ pub enum SuiRawData {
     // Manually handle generic schema generation
     MoveObject(SuiRawMoveObject),
     Package(SuiRawMovePackage),
+}
+
+impl From<Data> for SuiRawData {
+    fn from(data: Data) -> Self {
+        match data {
+            Data::Move(m) => Self::MoveObject(m.into()),
+            Data::Package(p) => Self::Package(p.into()),
+        }
+    }
 }
 
 impl SuiData for SuiRawData {

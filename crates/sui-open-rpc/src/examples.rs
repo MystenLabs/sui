@@ -289,6 +289,7 @@ impl RpcExampleProvider {
             error: None,
             raw_txn_data: vec![],
             raw_effects: vec![],
+            written_objects: None,
         };
 
         Examples::new(
