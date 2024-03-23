@@ -416,7 +416,7 @@ impl Query {
     ) -> Result<Option<Address>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
         Ok(
-            NameService::resolve_to_record(ctx, &domain, Some(checkpoint_viewed_at))
+            SuinsRegistration::resolve_to_record(ctx, &domain, Some(checkpoint_viewed_at))
                 .await
                 .extend()?
                 .and_then(|r| r.target_address)

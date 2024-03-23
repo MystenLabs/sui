@@ -86,6 +86,7 @@ pub async fn start_cluster(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
+    wait_for_graphql_server(&client).await;
 
     Cluster {
         validator_fullnode_handle: val_fn,
@@ -138,6 +139,7 @@ pub async fn serve_executor(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
+    wait_for_graphql_server(&client).await;
 
     ExecutorCluster {
         executor_server_handle,

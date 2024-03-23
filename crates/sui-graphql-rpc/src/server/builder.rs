@@ -736,8 +736,9 @@ pub mod tests {
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
-        .await;
-        assert!(resp.is_ok());
+        .await
+        .into_result()
+        .expect("Should complete successfully");
 
         // Should fail
         let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
@@ -793,8 +794,9 @@ pub mod tests {
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
-        .await;
-        assert!(resp.is_ok());
+        .await
+        .into_result()
+        .expect("Should complete successfully");
 
         // Should fail
         let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
