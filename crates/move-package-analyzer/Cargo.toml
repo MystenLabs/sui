@@ -1,0 +1,28 @@
+[package]
+name = "move-package-analyzer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+clap.workspace = true
+diesel.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+once_cell.workspace = true
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json.workspace = true
+serde_yaml.workspace = true
+sui-indexer.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[[bin]]
+name = "pkg-analyzer"
+path = "src/main.rs"

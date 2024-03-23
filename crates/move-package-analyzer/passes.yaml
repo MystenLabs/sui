@@ -1,0 +1,15 @@
+# pass.yaml format:
+# output_dir: <path>>   // where to write the output
+# passes:               // Passes to run and known passes
+#   - Noop              // Does nothing
+#   - CsvEntities       // Builds CSV files for most entities of the type system (packages, modules, functions, etc.)
+#   - Summary           // Builds a summary of the environment (packages, modules, functions, etc.).
+#   - DumpEnv           // Write out the entire environment ina text format that is easily digestible
+#   - Versions          // Print summary of versions of all the packages in the environment
+
+output_dir: "/Users/dariorussi/tmp/pkg/analysis/testnet"
+passes:
+  - CsvEntities
+  - Summary
+  - DumpEnv
+  - Versions
