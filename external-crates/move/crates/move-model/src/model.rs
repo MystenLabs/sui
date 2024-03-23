@@ -1681,7 +1681,7 @@ impl<'env> ModuleEnv<'env> {
         let module_env = self
             .env
             .find_module(&module_name)
-            .expect("unexpected reference to module not found in global env");
+            .expect(&format!("unexpected reference to module: {:#?} not found in global env", module_name));
         module_env.into_function(FunId::new(self.env.symbol_pool.make(view.name().as_str())))
     }
 
