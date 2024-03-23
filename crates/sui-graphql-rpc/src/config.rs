@@ -42,6 +42,7 @@ pub(crate) const DEFAULT_SERVER_DB_URL: &str =
 pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
+pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;
 
 /// The combination of all configurations for the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
@@ -90,6 +91,9 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) name_service: NameServiceConfig,
+
+    #[serde(default)]
+    pub(crate) background_tasks: BackgroundTasksConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -119,6 +123,13 @@ pub struct Limits {
     pub max_type_nodes: u32,
     #[serde(default)]
     pub max_move_value_depth: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub struct BackgroundTasksConfig {
+    #[serde(default)]
+    pub watermark_update_ms: u64,
 }
 
 #[derive(Debug)]
@@ -323,6 +334,13 @@ impl ServiceConfig {
     pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
         toml::de::from_str::<Self>(contents)
     }
+
+    pub fn test_defaults() -> Self {
+        Self {
+            background_tasks: BackgroundTasksConfig::test_defaults(),
+            ..Default::default()
+        }
+    }
 }
 
 impl Limits {
@@ -341,6 +359,14 @@ impl Ide {
     pub fn new(ide_title: Option<String>) -> Self {
         Self {
             ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
+        }
+    }
+}
+
+impl BackgroundTasksConfig {
+    pub fn test_defaults() -> Self {
+        Self {
+            watermark_update_ms: 100, // Set to 100ms for testing
         }
     }
 }
@@ -396,6 +422,14 @@ impl Default for InternalFeatureConfig {
             tracing: false,
             apollo_tracing: false,
             open_telemetry: false,
+        }
+    }
+}
+
+impl Default for BackgroundTasksConfig {
+    fn default() -> Self {
+        Self {
+            watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
         }
     }
 }
