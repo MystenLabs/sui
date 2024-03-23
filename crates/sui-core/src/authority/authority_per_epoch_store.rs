@@ -79,7 +79,7 @@ use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::TransactionEffects;
 use sui_types::executable_transaction::{
@@ -529,14 +529,14 @@ impl DeferralKey {
         )
     }
 
-    fn range_for_consensus_round(future_round: Round) -> (Self, Self) {
+    fn range_for_up_to_consensus_round(consensus_round: Round) -> (Self, Self) {
         (
             Self::ConsensusRound {
-                future_round,
+                future_round: 0,
                 deferred_from_round: 0,
             },
             Self::ConsensusRound {
-                future_round: future_round.checked_add(1).unwrap(),
+                future_round: consensus_round.checked_add(1).unwrap(),
                 deferred_from_round: 0,
             },
         )
@@ -580,6 +580,241 @@ async fn test_deferral_key_sort_order() {
             }
         }
     }
+
+    let min_future_round = 100;
+    let max_future_round = 300;
+    for _ in 0..10000 {
+        let future_round = rand::thread_rng().gen_range(min_future_round..=max_future_round);
+        let current_round = rand::thread_rng().gen_range(0..u64::MAX);
+
+        let key = DeferralKey::new_for_consensus_round(future_round, current_round);
+        db.deferred_certs.insert(&key, &()).unwrap();
+        db.deferred_certs
+            .insert(&DeferralKey::new_for_randomness(current_round), &())
+            .unwrap();
+    }
+
+    let mut previous_future_round = 0;
+    let (min, max) = DeferralKey::range_for_up_to_consensus_round(200);
+    let mut result_count = 0;
+    for result in db
+        .deferred_certs
+        .safe_iter_with_bounds(Some(min), Some(max))
+    {
+        let (key, _) = result.unwrap();
+        match key {
+            DeferralKey::RandomnessDkg { .. } => {
+                panic!("Should not receive randomness deferral txn.")
+            }
+            DeferralKey::ConsensusRound { future_round, .. } => {
+                assert!(previous_future_round <= future_round);
+                previous_future_round = future_round;
+                assert!(future_round <= 200);
+                result_count += 1;
+            }
+        }
+    }
+    assert!(result_count > 0);
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+struct ObjectCost {
+    total_cost_to_last_write: u64,
+    total_cost: u64,
+}
+
+impl ObjectCost {
+    fn add_write_cost(&mut self, end_cost: u64) {
+        assert!(end_cost > self.total_cost_to_last_write);
+        assert!(end_cost > self.total_cost);
+        self.total_cost_to_last_write = end_cost;
+        self.total_cost = end_cost;
+    }
+
+    fn add_read_cost(&mut self, end_cost: u64) {
+        assert!(end_cost >= self.total_cost_to_last_write);
+        self.total_cost = core::cmp::max(end_cost, self.total_cost);
+    }
+}
+
+fn compute_object_start_cost(
+    object_total_cost: &HashMap<ObjectID, ObjectCost>,
+    shared_input_objects: Vec<SharedInputObject>,
+) -> u64 {
+    let mut start_cost = 0;
+    let default_object_cost = ObjectCost::default();
+    shared_input_objects.iter().for_each(|obj| {
+        let object_cost = object_total_cost
+            .get(&obj.id)
+            .unwrap_or(&default_object_cost);
+        if obj.mutable {
+            start_cost = core::cmp::max(start_cost, object_cost.total_cost);
+        } else {
+            start_cost = core::cmp::max(start_cost, object_cost.total_cost_to_last_write);
+        }
+    });
+    start_cost
+}
+
+#[test]
+fn test_compute_object_start_cost() {
+    let object_id_0 = ObjectID::random();
+    let object_id_1 = ObjectID::random();
+    let object_id_2 = ObjectID::random();
+    let object_total_cost: HashMap<ObjectID, ObjectCost> = HashMap::from_iter(
+        [
+            (
+                object_id_0,
+                ObjectCost {
+                    total_cost_to_last_write: 10,
+                    total_cost: 20,
+                },
+            ),
+            (
+                object_id_1,
+                ObjectCost {
+                    total_cost_to_last_write: 5,
+                    total_cost: 15,
+                },
+            ),
+        ]
+        .iter()
+        .cloned(),
+    );
+
+    {
+        let shared_input_objects = vec![SharedInputObject {
+            id: object_id_0,
+            initial_shared_version: SequenceNumber::new(),
+            mutable: false,
+        }];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            10
+        );
+    }
+
+    {
+        let shared_input_objects = vec![SharedInputObject {
+            id: object_id_0,
+            initial_shared_version: SequenceNumber::new(),
+            mutable: true,
+        }];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            20
+        );
+    }
+
+    {
+        let shared_input_objects = vec![
+            SharedInputObject {
+                id: object_id_0,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: false,
+            },
+            SharedInputObject {
+                id: object_id_1,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: false,
+            },
+        ];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            10
+        );
+    }
+
+    {
+        let shared_input_objects = vec![
+            SharedInputObject {
+                id: object_id_0,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: false,
+            },
+            SharedInputObject {
+                id: object_id_1,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: true,
+            },
+        ];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            15
+        );
+    }
+
+    {
+        let shared_input_objects = vec![
+            SharedInputObject {
+                id: object_id_0,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: true,
+            },
+            SharedInputObject {
+                id: object_id_1,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: false,
+            },
+        ];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            20
+        );
+    }
+
+    {
+        let shared_input_objects = vec![
+            SharedInputObject {
+                id: object_id_0,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: true,
+            },
+            SharedInputObject {
+                id: object_id_1,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: true,
+            },
+        ];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            20
+        );
+    }
+
+    {
+        let shared_input_objects = vec![SharedInputObject {
+            id: object_id_2,
+            initial_shared_version: SequenceNumber::new(),
+            mutable: true,
+        }];
+        assert_eq!(
+            compute_object_start_cost(&object_total_cost, shared_input_objects),
+            0
+        );
+    }
+}
+
+#[test]
+fn test_update_read_write_cost() {
+    let mut object_cost = ObjectCost {
+        total_cost_to_last_write: 0,
+        total_cost: 0,
+    };
+    object_cost.add_write_cost(10);
+    assert_eq!(object_cost.total_cost_to_last_write, 10);
+    assert_eq!(object_cost.total_cost, 10);
+
+    object_cost.add_read_cost(20);
+    assert_eq!(object_cost.total_cost_to_last_write, 10);
+    assert_eq!(object_cost.total_cost, 20);
+
+    object_cost.add_read_cost(15);
+    assert_eq!(object_cost.total_cost, 20);
+
+    object_cost.add_write_cost(30);
+    assert_eq!(object_cost.total_cost_to_last_write, 30);
+    assert_eq!(object_cost.total_cost, 30);
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -1516,7 +1751,7 @@ impl AuthorityPerEpochStore {
     fn load_deferred_transactions_for_randomness(
         &self,
         batch: &mut DBBatch,
-    ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         let (min, max) = DeferralKey::full_range_for_randomness();
         self.load_deferred_transactions(batch, min, max)
     }
@@ -1525,8 +1760,8 @@ impl AuthorityPerEpochStore {
         &self,
         batch: &mut DBBatch,
         consensus_round: u64,
-    ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
-        let (min, max) = DeferralKey::range_for_consensus_round(consensus_round);
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
+        let (min, max) = DeferralKey::range_for_up_to_consensus_round(consensus_round);
         self.load_deferred_transactions(batch, min, max)
     }
 
@@ -1536,7 +1771,8 @@ impl AuthorityPerEpochStore {
         batch: &mut DBBatch,
         min: DeferralKey,
         max: DeferralKey,
-    ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
+        debug!("Query epoch store to load deferred txn {:?} {:?}", min, max);
         let mut keys = Vec::new();
         let mut txns = Vec::new();
         self.tables()?
@@ -1544,8 +1780,13 @@ impl AuthorityPerEpochStore {
             .safe_iter_with_bounds(Some(min), Some(max))
             .try_for_each(|result| match result {
                 Ok((key, txs)) => {
+                    debug!(
+                        "Loaded {:?} deferred txn with deferral key {:?}",
+                        txs.len(),
+                        key
+                    );
                     keys.push(key);
-                    txns.extend(txs);
+                    txns.push((key, txs));
                     Ok(())
                 }
                 Err(err) => Err(err),
@@ -1556,8 +1797,10 @@ impl AuthorityPerEpochStore {
         #[cfg(debug_assertions)]
         {
             let mut seen = HashSet::new();
-            for txn in &txns {
-                assert!(seen.insert(txn.0.key()));
+            for defered_txn_batch in &txns {
+                for txn in &defered_txn_batch.1 {
+                    assert!(seen.insert(txn.0.key()));
+                }
             }
         }
 
@@ -1574,16 +1817,84 @@ impl AuthorityPerEpochStore {
         cert: &VerifiedExecutableTransaction,
         commit_round: Round,
         dkg_closed: bool,
-    ) -> Option<DeferralKey> {
+        previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
+        object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
+    ) -> (Option<DeferralKey>, Option<Vec<ObjectID>>) {
         // Defer transaction if it uses randomness but DKG has not yet closed.
         if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
-            return Some(DeferralKey::new_for_randomness(commit_round));
+            return (Some(DeferralKey::new_for_randomness(commit_round)), None);
         }
 
-        // placeholder construction to silence lints
-        let _ = DeferralKey::new_for_consensus_round(0, 0);
+        let mut congested_objects = vec![];
+        match self.protocol_config().per_object_congestion_control_mode() {
+            PerObjectCongestionControlMode::None => (None, None),
+            PerObjectCongestionControlMode::TotalGasBudget => {
+                let start_cost = compute_object_start_cost(
+                    object_total_cost,
+                    cert.shared_input_objects().collect(),
+                );
+                for obj in cert.shared_input_objects() {
+                    if start_cost + cert.gas_budget()
+                        > self
+                            .protocol_config()
+                            .max_accumulated_txn_cost_per_object_in_checkpoint()
+                    {
+                        congested_objects.push(obj.id)
+                    }
+                }
 
-        None
+                if !congested_objects.is_empty() {
+                    let deferral_key = if let Some(DeferralKey::ConsensusRound {
+                        future_round: _,
+                        deferred_from_round,
+                    }) = previously_deferred_tx_digests.get(cert.digest())
+                    {
+                        // This transaction has been deferred before.
+                        Some(DeferralKey::new_for_consensus_round(
+                            commit_round + 1,
+                            *deferred_from_round,
+                        ))
+                    } else {
+                        // This include previously deferred randomness transactions.
+                        Some(DeferralKey::new_for_consensus_round(
+                            commit_round + 1,
+                            commit_round,
+                        ))
+                    };
+                    (deferral_key, Some(congested_objects))
+                } else {
+                    (None, None)
+                }
+            }
+        }
+    }
+
+    fn update_object_total_cost(
+        &self,
+        cert: &VerifiedExecutableTransaction,
+        object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
+    ) {
+        let start_cost =
+            compute_object_start_cost(object_total_cost, cert.shared_input_objects().collect());
+
+        let unit_cost = match self.protocol_config().per_object_congestion_control_mode() {
+            PerObjectCongestionControlMode::None => 0,
+            PerObjectCongestionControlMode::TotalGasBudget => cert.gas_budget(),
+        };
+
+        let end_cost = start_cost + unit_cost;
+
+        for obj in cert.shared_input_objects() {
+            let object_cost = object_total_cost
+                .entry(obj.id)
+                .or_insert_with(Default::default);
+
+            if obj.mutable {
+                object_cost.add_write_cost(end_cost);
+            } else {
+                object_cost.add_read_cost(end_cost);
+            }
+        }
     }
 
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
@@ -2298,8 +2609,10 @@ impl AuthorityPerEpochStore {
             })
             .collect();
         let mut system_transactions = Vec::with_capacity(verified_transactions.len());
-        let mut sequenced_transactions = Vec::with_capacity(verified_transactions.len());
-        let mut sequenced_randomness_transactions = Vec::with_capacity(verified_transactions.len());
+        let mut current_consensus_sequenced_transactions =
+            Vec::with_capacity(verified_transactions.len());
+        let mut current_sequenced_randomness_transactions =
+            Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
         for tx in verified_transactions {
             if tx.0.is_end_of_publish() {
@@ -2310,9 +2623,9 @@ impl AuthorityPerEpochStore {
                 .0
                 .is_user_tx_with_randomness(self.randomness_state_enabled())
             {
-                sequenced_randomness_transactions.push(tx);
+                current_sequenced_randomness_transactions.push(tx);
             } else {
-                sequenced_transactions.push(tx);
+                current_consensus_sequenced_transactions.push(tx);
             }
         }
         let mut batch = self
@@ -2320,20 +2633,36 @@ impl AuthorityPerEpochStore {
             .expect("Consensus should not be processed past end of epoch");
 
         // Load transactions deferred from previous commits.
-        let deferred_tx: Vec<VerifiedSequencedConsensusTransaction> = self
+        let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
             .load_deferred_transactions_for_consensus_round(&mut batch, commit_round)?
             .into_iter()
             .collect();
-        let mut previously_deferred_tx_digests: HashSet<_> = deferred_tx
-            .iter()
-            .map(|tx| match tx.0.transaction.key() {
-                SequencedConsensusTransactionKey::External(
-                    ConsensusTransactionKey::Certificate(digest),
-                ) => digest,
-                _ => panic!("deferred transaction was not a user certificate: {tx:?}"),
-            })
-            .collect();
-        for tx in deferred_tx {
+        let mut previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey> =
+            deferred_txs
+                .iter()
+                .flat_map(|(deferral_key, txs)| {
+                    txs.iter().map(|tx| match tx.0.transaction.key() {
+                        SequencedConsensusTransactionKey::External(
+                            ConsensusTransactionKey::Certificate(digest),
+                        ) => (digest, *deferral_key),
+                        _ => panic!("deferred transaction was not a user certificate: {tx:?}"),
+                    })
+                })
+                .collect();
+        let mut sequenced_transactions: Vec<VerifiedSequencedConsensusTransaction> =
+            Vec::with_capacity(
+                current_consensus_sequenced_transactions.len()
+                    + previously_deferred_tx_digests.len(),
+            );
+        let mut sequenced_randomness_transactions: Vec<VerifiedSequencedConsensusTransaction> =
+            Vec::with_capacity(
+                current_sequenced_randomness_transactions.len()
+                    + previously_deferred_tx_digests.len(),
+            );
+        for tx in deferred_txs
+            .into_iter()
+            .flat_map(|(_, txs)| txs.into_iter())
+        {
             if tx
                 .0
                 .is_user_tx_with_randomness(self.randomness_state_enabled())
@@ -2343,6 +2672,8 @@ impl AuthorityPerEpochStore {
                 sequenced_transactions.push(tx);
             }
         }
+
+        sequenced_transactions.extend(current_consensus_sequenced_transactions);
 
         // If DKG is closed, we should now load any previously-deferred randomness-using tx
         // so we can decide what to do with them (execute or ignore, depending on whether
@@ -2359,18 +2690,22 @@ impl AuthorityPerEpochStore {
         if dkg_closed {
             let deferred_randomness_txs =
                 self.load_deferred_transactions_for_randomness(&mut batch)?;
-            previously_deferred_tx_digests.extend(deferred_randomness_txs.iter().map(|tx| {
-                match tx.0.transaction.key() {
-                    SequencedConsensusTransactionKey::External(
-                        ConsensusTransactionKey::Certificate(digest),
-                    ) => digest,
-                    _ => {
-                        panic!("deferred randomness transaction was not a user certificate: {tx:?}")
-                    }
-                }
-            }));
-            sequenced_randomness_transactions.extend(deferred_randomness_txs);
+            previously_deferred_tx_digests.extend(deferred_randomness_txs.iter().flat_map(
+                |(deferral_key, txs)| {
+                    txs.iter().map(|tx| match tx.0.transaction.key() {
+                        SequencedConsensusTransactionKey::External(
+                            ConsensusTransactionKey::Certificate(digest),
+                        ) => (digest, *deferral_key),
+                        _ => panic!(
+                            "deferred randomness transaction was not a user certificate: {tx:?}"
+                        ),
+                    })
+                },
+            ));
+            sequenced_randomness_transactions
+                .extend(deferred_randomness_txs.into_iter().flat_map(|(_, txs)| txs));
         }
+        sequenced_randomness_transactions.extend(current_sequenced_randomness_transactions);
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
         let mut roots: BTreeSet<_> = system_transactions
@@ -2647,7 +2982,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
-        previously_deferred_tx_digests: HashSet<TransactionDigest>,
+        previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generate_randomness: bool,
@@ -2677,11 +3012,22 @@ impl AuthorityPerEpochStore {
 
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
             BTreeMap::new();
+        let mut object_total_cost: HashMap<ObjectID, ObjectCost> = Default::default();
+        let mut object_using_randomness_total_cost: HashMap<ObjectID, ObjectCost> =
+            Default::default();
 
         let mut randomness_state_updated = false;
         for tx in transactions {
             let key = tx.0.transaction.key();
             let mut ignored = false;
+            let obj_total_cost = if tx
+                .0
+                .is_user_tx_with_randomness(self.randomness_state_enabled())
+            {
+                &mut object_using_randomness_total_cost
+            } else {
+                &mut object_total_cost
+            };
             match self
                 .process_consensus_transaction(
                     batch,
@@ -2692,6 +3038,7 @@ impl AuthorityPerEpochStore {
                     randomness_manager.as_deref_mut(),
                     dkg_closed,
                     generate_randomness,
+                    obj_total_cost,
                 )
                 .await?
             {
@@ -2706,12 +3053,13 @@ impl AuthorityPerEpochStore {
                         .entry(deferral_key)
                         .or_default()
                         .push(tx.clone());
-                    if let Some(key) =
+                    if let Some(txn_key) =
                         tx.0.transaction
                             .executable_transaction_digest()
                             .map(TransactionKey::Digest)
                     {
-                        deferred_tx_roots.push(key);
+                        deferred_tx_roots.push(txn_key);
+                        notifications.push(key.clone());
                     }
                 }
                 ConsensusCertificateResult::RandomnessConsensusMessage => {
@@ -2871,10 +3219,11 @@ impl AuthorityPerEpochStore {
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         commit_round: Round,
-        previously_deferred_tx_digests: &HashSet<TransactionDigest>,
+        previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generating_randomness: bool,
+        object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -2900,7 +3249,7 @@ impl AuthorityPerEpochStore {
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
                 if self.has_sent_end_of_publish(certificate_author)?
-                    && !previously_deferred_tx_digests.contains(certificate.digest())
+                    && !previously_deferred_tx_digests.contains_key(certificate.digest())
                 {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
@@ -2922,16 +3271,22 @@ impl AuthorityPerEpochStore {
                 if !self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
-                    && !previously_deferred_tx_digests.contains(certificate.digest())
+                    && !previously_deferred_tx_digests.contains_key(certificate.digest())
                 {
                     debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
                     certificate.digest());
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
 
-                if let Some(deferral_key) =
-                    self.should_defer(&certificate, commit_round, dkg_closed)
-                {
+                let (deferral_key, _) = self.should_defer(
+                    &certificate,
+                    commit_round,
+                    dkg_closed,
+                    previously_deferred_tx_digests,
+                    object_total_cost,
+                );
+
+                if let Some(deferral_key) = deferral_key {
                     debug!(
                         "Deferring consensus certificate for transaction {:?} until {deferral_key:?}",
                         certificate.digest(),
@@ -2950,6 +3305,10 @@ impl AuthorityPerEpochStore {
                         certificate.digest(),
                     );
                     return Ok(ConsensusCertificateResult::Ignored);
+                }
+
+                if certificate.contains_shared_object() {
+                    self.update_object_total_cost(&certificate, object_total_cost);
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))
