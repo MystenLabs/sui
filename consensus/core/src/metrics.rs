@@ -56,10 +56,7 @@ pub(crate) struct Metrics {
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
     let channel_metrics = ChannelMetrics::new(&registry);
-    let network_metrics = NetworkMetrics {
-        inbound: NetworkRouteMetrics::new("inbound", &registry),
-        outbound: NetworkRouteMetrics::new("outbound", &registry),
-    };
+    let network_metrics = NetworkMetrics::new(&registry);
     let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
@@ -289,6 +286,23 @@ impl ChannelMetrics {
 
 // Fields for network-agnostic metrics can be added here
 pub(crate) struct NetworkMetrics {
+    pub network_type: IntGaugeVec,
     pub inbound: NetworkRouteMetrics,
     pub outbound: NetworkRouteMetrics,
+}
+
+impl NetworkMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            network_type: register_int_gauge_vec_with_registry!(
+                "network_type",
+                "Type of the network used: anemo or tonic",
+                &["type"],
+                registry
+            )
+            .unwrap(),
+            inbound: NetworkRouteMetrics::new("inbound", registry),
+            outbound: NetworkRouteMetrics::new("outbound", registry),
+        }
+    }
 }
