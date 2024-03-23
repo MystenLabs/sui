@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
+use sui_core::authority::shared_object_version_manager::SharedObjVerManager;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
@@ -40,11 +41,7 @@ pub struct SingleValidator {
 }
 
 impl SingleValidator {
-    pub(crate) async fn new(
-        genesis_objects: &[Object],
-        component: Component,
-        checkpoint_size: usize,
-    ) -> Self {
+    pub(crate) async fn new(genesis_objects: &[Object], component: Component) -> Self {
         let validator = TestAuthorityBuilder::new()
             .disable_indexer()
             .with_starting_objects(genesis_objects)
@@ -54,9 +51,7 @@ impl SingleValidator {
             .await;
         let epoch_store = validator.epoch_store_for_testing().clone();
         let consensus_mode = match component {
-            Component::ValidatorWithFakeConsensus => {
-                ConsensusMode::DirectSequencing(checkpoint_size)
-            }
+            Component::ValidatorWithFakeConsensus => ConsensusMode::DirectSequencing,
             _ => ConsensusMode::Noop,
         };
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
@@ -144,6 +139,12 @@ impl SingleValidator {
             }
             Component::WithTxManager => {
                 let cert = VerifiedCertificate::new_unchecked(cert);
+                if cert.contains_shared_object() {
+                    // For shared objects transactions, `execute_certificate` won't enqueue it because
+                    // it expects consensus to do so. However we don't have consensus, hence the manual enqueue.
+                    self.get_validator()
+                        .enqueue_certificates_for_execution(vec![cert.clone()], &self.epoch_store);
+                }
                 self.get_validator()
                     .execute_certificate(&cert, &self.epoch_store)
                     .await
@@ -171,16 +172,15 @@ impl SingleValidator {
     pub(crate) async fn execute_transaction_in_memory(
         &self,
         store: InMemoryObjectStore,
-        transaction: Transaction,
+        transaction: CertifiedTransaction,
     ) -> TransactionEffects {
         let input_objects = transaction.transaction_data().input_objects().unwrap();
         let objects = store
             .read_objects_for_execution(&*self.epoch_store, &transaction.key(), &input_objects)
             .unwrap();
 
-        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
-            VerifiedTransaction::new_unchecked(transaction),
-            0,
+        let executable = VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(transaction),
         );
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             &executable,
@@ -190,22 +190,24 @@ impl SingleValidator {
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        let (_, _, effects, _) = self.epoch_store.executor().execute_transaction_to_effects(
-            &store,
-            self.epoch_store.protocol_config(),
-            self.get_validator().metrics.limits_metrics.clone(),
-            false,
-            &HashSet::new(),
-            &self.epoch_store.epoch(),
-            0,
-            input_objects,
-            gas,
-            gas_status,
-            kind,
-            signer,
-            *executable.digest(),
-        );
+        let (inner_temp_store, _, effects, _) =
+            self.epoch_store.executor().execute_transaction_to_effects(
+                &store,
+                self.epoch_store.protocol_config(),
+                self.get_validator().metrics.limits_metrics.clone(),
+                false,
+                &HashSet::new(),
+                &self.epoch_store.epoch(),
+                0,
+                input_objects,
+                gas,
+                gas_status,
+                kind,
+                signer,
+                *executable.digest(),
+            );
         assert!(effects.status().is_ok());
+        store.commit_objects(inner_temp_store);
         effects
     }
 
@@ -219,7 +221,7 @@ impl SingleValidator {
 
     pub(crate) async fn build_checkpoints(
         &self,
-        transactions: Vec<Transaction>,
+        transactions: Vec<CertifiedTransaction>,
         mut all_effects: BTreeMap<TransactionDigest, TransactionEffects>,
         checkpoint_size: usize,
     ) -> Vec<(VerifiedCheckpoint, VerifiedCheckpointContents)> {
@@ -232,7 +234,10 @@ impl SingleValidator {
         let mut checkpoints = vec![];
         for transaction in transactions {
             let effects = all_effects.remove(transaction.digest()).unwrap();
-            builder.push_transaction(VerifiedTransaction::new_unchecked(transaction), effects);
+            builder.push_transaction(
+                VerifiedTransaction::new_unchecked(transaction.into_unsigned()),
+                effects,
+            );
             if builder.size() == checkpoint_size {
                 let (checkpoint, _, full_contents) = builder.build(self, 0);
                 checkpoints.push((checkpoint, full_contents));
@@ -270,6 +275,31 @@ impl SingleValidator {
             })
             .collect();
         InMemoryObjectStore::new(objects)
+    }
+
+    pub(crate) async fn assigned_shared_object_versions(
+        &self,
+        transactions: &[CertifiedTransaction],
+    ) {
+        let transactions: Vec<_> = transactions
+            .iter()
+            .map(|tx| {
+                VerifiedExecutableTransaction::new_from_certificate(
+                    VerifiedCertificate::new_unchecked(tx.clone()),
+                )
+            })
+            .collect();
+        let versions = SharedObjVerManager::assign_versions_from_consensus(
+            self.epoch_store.as_ref(),
+            self.get_validator().get_cache_reader().as_ref(),
+            &transactions,
+            None,
+        )
+        .await
+        .unwrap();
+        self.epoch_store
+            .set_assigned_shared_object_versions_for_benchmark(versions.assigned_versions)
+            .await;
     }
 }
 

@@ -102,6 +102,14 @@ pub enum WorkloadKind {
             specified by this parameter * 100."
         )]
         computation: u8,
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "Whether to use shared objects in the transaction.\
+            If 0, no shared objects will be used.\
+            Otherwise `v` shared objects will be created and each transaction will use these `v` shared objects."
+        )]
+        num_shared_objects: usize,
     },
     Publish {
         #[arg(

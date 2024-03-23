@@ -1493,6 +1493,21 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub async fn set_assigned_shared_object_versions_for_benchmark(
+        &self,
+        versions: AssignedTxAndVersions,
+    ) {
+        let mut db_batch = self
+            .tables()
+            .unwrap()
+            .assigned_shared_object_versions
+            .batch();
+        self.set_assigned_shared_object_versions(versions, &mut db_batch)
+            .await
+            .expect("set_assigned_shared_object_versions cannot fail");
+        db_batch.write().expect("write cannot fail");
+    }
+
     fn defer_transactions(
         &self,
         batch: &mut DBBatch,
