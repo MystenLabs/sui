@@ -8,7 +8,7 @@ module sui::sui {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::transfer;
-    use sui::coin;
+    use sui::coin::{Self, CoinMetadata};
 
     const EAlreadyMinted: u64 = 0;
     /// Sender is not @0x0 the system address.
@@ -55,5 +55,19 @@ module sui::sui {
 
     public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
         transfer::public_transfer(c, recipient)
+    }
+
+    #[test_only]
+    /// Creates a `sui::coin::CoinMetadata` for Sui for testing purposes.
+    public fun new_metadata_for_testing(ctx: &mut TxContext): CoinMetadata<SUI> {
+        coin::new_coin_metadata_for_testing(
+            SUI {}, 
+            9, 
+            b"SUI", 
+            b"Sui", 
+            b"", 
+            option::none(), 
+            ctx
+        )
     }
 }
