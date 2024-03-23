@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use std::fmt;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::{ObjectDigest, SequenceNumber, TransactionDigest};
 use sui_types::coin::Coin;
@@ -42,6 +43,27 @@ pub type ObjectContentDigest = ObjectDigest;
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub enum StoreObjectWrapper {
     V1(StoreObjectV1),
+}
+
+/// Used to determine which actions the validator should be permitted to take
+/// in order to preserve safety guarantees on the network (potentially at the
+/// expense of loss of liveness).
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub enum ExecutionState {
+    /// The validator will perform the normal execution process.
+    Live,
+    /// Given this variant, the validator will not execute new transaction
+    /// certificates in order to prevent compounding a fork condition.
+    NetworkForked,
+}
+
+impl fmt::Display for ExecutionState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExecutionState::Live => write!(f, "Live"),
+            ExecutionState::NetworkForked => write!(f, "Suspected network fork detected"),
+        }
+    }
 }
 
 // always points to latest version.

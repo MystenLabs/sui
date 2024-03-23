@@ -19,7 +19,7 @@ use typed_store::rocks::{
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
+    get_store_object_pair, try_construct_object, ExecutionState, ObjectContentDigest, StoreData,
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -125,6 +125,8 @@ pub struct AuthorityPerpetualTables {
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
+
+    pub(crate) execution_state: DBMap<(), ExecutionState>,
 }
 
 impl AuthorityPerpetualTables {
@@ -431,6 +433,23 @@ impl AuthorityPerpetualTables {
         )?;
         wb.write()?;
         Ok(())
+    }
+
+    pub fn set_execution_state(&self, state: ExecutionState) -> SuiResult {
+        self.execution_state.insert(&(), &state)?;
+        Ok(())
+    }
+
+    /// Gets execution state, lazily setting it to ExecutionState::Live if not
+    /// already set
+    pub fn get_execution_state(&self) -> SuiResult<ExecutionState> {
+        let state = self.execution_state.get(&())?;
+        if let Some(state) = state {
+            Ok(state)
+        } else {
+            self.set_execution_state(ExecutionState::Live)?;
+            Ok(ExecutionState::Live)
+        }
     }
 }
 
