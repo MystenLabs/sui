@@ -1194,8 +1194,18 @@ impl ProtocolConfig {
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
     pub fn get_for_version(version: ProtocolVersion, chain: Chain) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
-        assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
-        assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
+        assert!(
+            version >= ProtocolVersion::MIN,
+            "Network protocol version is {:?}, but the minimum supported version by the binary is {:?}. Please upgrade the binary.",
+            version,
+            ProtocolVersion::MIN.0,
+        );
+        assert!(
+            version <= ProtocolVersion::MAX_ALLOWED,
+            "Network protocol version is {:?}, but the maximum supported version by the binary is {:?}. Please upgrade the binary.",
+            version,
+            ProtocolVersion::MAX_ALLOWED.0,
+        );
 
         let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
