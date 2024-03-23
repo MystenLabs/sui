@@ -1812,6 +1812,16 @@ impl AuthorityPerEpochStore {
         Ok(txns)
     }
 
+    pub fn get_all_deferred_transaction(
+        &self,
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
+        Ok(self
+            .tables()?
+            .deferred_transactions
+            .safe_iter()
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
     fn should_defer(
         &self,
         cert: &VerifiedExecutableTransaction,
@@ -1834,6 +1844,12 @@ impl AuthorityPerEpochStore {
                     cert.shared_input_objects().collect(),
                 );
                 for obj in cert.shared_input_objects() {
+                    println!(
+                        "ZZZZZZZ {:?} {:?}",
+                        start_cost + cert.gas_budget(),
+                        self.protocol_config()
+                            .max_accumulated_txn_cost_per_object_in_checkpoint()
+                    );
                     if start_cost + cert.gas_budget()
                         > self
                             .protocol_config()
@@ -2908,7 +2924,7 @@ impl AuthorityPerEpochStore {
     }
 
     #[cfg(any(test, feature = "test-utils"))]
-    fn get_highest_pending_checkpoint_height(&self) -> CheckpointHeight {
+    pub fn get_highest_pending_checkpoint_height(&self) -> CheckpointHeight {
         if self.randomness_state_enabled() {
             self.tables()
                 .expect("test should not cross epoch boundary")
