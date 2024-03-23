@@ -1,0 +1,26 @@
+error[E03002]: unbound module
+  ┌─ tests/custom_rules/missing_key.move:2:9
+  │
+2 │     use sui::object::UID;
+  │         ^^^^^^^^^^^ Invalid 'use'. Unbound module: 'sui::object'
+
+warning[Lint W08001]: Struct has an 'id' field of type 'UID' but is missing the 'key' ability.
+  ┌─ tests/custom_rules/missing_key.move:4:12
+  │
+4 │     struct MissingKeyAbility {
+  │            ^^^^^^^^^^^^^^^^^ Struct has an 'id' field of type 'UID' but is missing the 'key' ability.
+  │
+  = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03004]: unbound type
+  ┌─ tests/custom_rules/missing_key.move:5:13
+  │
+5 │         id: UID,
+  │             ^^^ Unbound type 'UID' in current scope
+
+error[E03004]: unbound type
+   ┌─ tests/custom_rules/missing_key.move:11:13
+   │
+11 │         id: UID,
+   │             ^^^ Unbound type 'UID' in current scope
+
