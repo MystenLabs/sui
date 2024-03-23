@@ -30,7 +30,10 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::sim_test;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{
+    Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion,
+    SupportedProtocolVersions,
+};
 use sui_types::digests::ConsensusCommitDigest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
@@ -56,6 +59,7 @@ use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::authority::authority_per_epoch_store::DeferralKey;
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -4624,6 +4628,7 @@ async fn make_test_transaction(
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
     arg_value: u64,
+    gas_budget: Option<u64>,
 ) -> VerifiedCertificate {
     // Make a sample transaction.
     let module = "object_basics";
@@ -4650,7 +4655,7 @@ async fn make_test_transaction(
             }),
             CallArg::Pure(arg_value.to_le_bytes().to_vec()),
         ],
-        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        gas_budget.unwrap_or(TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp),
         rgp,
     )
     .unwrap();
@@ -4711,6 +4716,7 @@ async fn prepare_authority_and_shared_object_cert(
         &gas_object_ref,
         &[&authority],
         16,
+        None,
     )
     .await;
     (authority, certificate, shared_object_id)
@@ -4824,6 +4830,7 @@ async fn test_consensus_message_processed() {
             &gas_object_ref,
             &[&authority1, &authority2],
             Uniform::from(0..100000).sample(&mut rng),
+            None,
         )
         .await;
         let transaction_digest = certificate.digest();
@@ -5671,4 +5678,124 @@ async fn test_publish_not_a_package_dependency() {
         },
         failure,
     )
+}
+
+fn create_gas_objects(num: u32, owner: SuiAddress) -> Vec<Object> {
+    let mut objects = vec![];
+    for _ in 0..num {
+        let gas_object_id = ObjectID::random();
+        objects.push(Object::with_id_owner_for_testing(gas_object_id, owner));
+    }
+    objects
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_per_object_congestion_control() {
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+
+    let gas_objects = create_gas_objects(3, sender);
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    // let gas_object_id = ObjectID::random();
+    // let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    // let gas_object_ref = gas_object.compute_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+        let owner = Owner::Shared {
+            initial_shared_version: obj.version(),
+        };
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
+    };
+    let initial_shared_version = shared_object.version();
+
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config
+        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
+    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(2000000);
+    let authority = TestAuthorityBuilder::new()
+        .with_reference_gas_price(1000)
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+    let mut genesis_objects = gas_objects.clone();
+    genesis_objects.extend([shared_object.clone()]);
+    authority.insert_genesis_objects(&genesis_objects).await;
+
+    let certificate_0 = make_test_transaction(
+        &sender,
+        &keypair,
+        shared_object_id,
+        initial_shared_version,
+        &gas_objects[0].compute_object_reference(),
+        &[&authority],
+        16,
+        Some(1000000),
+    )
+    .await;
+
+    let certificate_1 = make_test_transaction(
+        &sender,
+        &keypair,
+        shared_object_id,
+        initial_shared_version,
+        &gas_objects[1].compute_object_reference(),
+        &[&authority],
+        16,
+        Some(1000000),
+    )
+    .await;
+
+    let certificate_2 = make_test_transaction(
+        &sender,
+        &keypair,
+        shared_object_id,
+        initial_shared_version,
+        &gas_objects[2].compute_object_reference(),
+        &[&authority],
+        16,
+        Some(1000000),
+    )
+    .await;
+
+    // Sequence the certificate to assign a sequence number to the shared object.
+    let scheduled_txns = send_batch_consensus_no_execution(
+        &authority,
+        &[certificate_0, certificate_1, certificate_2],
+    )
+    .await;
+    assert_eq!(scheduled_txns.len(), 2);
+
+    let commit_round = authority
+        .epoch_store_for_testing()
+        .get_highest_pending_checkpoint_height();
+
+    let deferred_txns = authority
+        .epoch_store_for_testing()
+        .get_all_deferred_transaction()
+        .unwrap();
+    assert_eq!(deferred_txns.len(), 1);
+    let deferral_key = deferred_txns[0].0;
+    match deferral_key {
+        DeferralKey::ConsensusRound {
+            future_round,
+            deferred_from_round,
+        } => {
+            assert_eq!(future_round, commit_round + 1);
+            assert_eq!(deferred_from_round, commit_round);
+        }
+        DeferralKey::RandomnessDkg {
+            deferred_from_round,
+        } => {
+            panic!(
+                "Expected ConsensusRound, got RandomnessDkg: {:?}",
+                deferred_from_round
+            );
+        }
+    }
+
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    assert_eq!(scheduled_txns.len(), 1);
 }

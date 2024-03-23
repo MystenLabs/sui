@@ -2150,6 +2150,14 @@ impl ProtocolConfig {
     pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
         self.consensus_max_transactions_in_block_bytes = Some(val);
     }
+
+    pub fn set_per_object_congestion_control_mode(&mut self, val: PerObjectCongestionControlMode) {
+        self.feature_flags.per_object_congestion_control_mode = val;
+    }
+
+    pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {
+        self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
