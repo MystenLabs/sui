@@ -33,6 +33,7 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
+use typed_store::rocks::DBBatch;
 use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
@@ -61,6 +62,7 @@ pub struct AuthorityStorePruningMetrics {
     pub last_pruned_effects_checkpoint: IntGauge,
     pub num_epochs_to_retain_for_objects: IntGauge,
     pub num_epochs_to_retain_for_checkpoints: IntGauge,
+    pub num_pruning_commits: IntCounter,
 }
 
 impl AuthorityStorePruningMetrics {
@@ -102,6 +104,12 @@ impl AuthorityStorePruningMetrics {
                 registry
             )
             .unwrap(),
+            num_pruning_commits: register_int_counter_with_registry!(
+                "num_pruning_commits",
+                "Num pruning commits",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }
@@ -123,13 +131,13 @@ impl AuthorityStorePruner {
         transaction_effects: Vec<TransactionEffects>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
-        checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
         enable_pruning_tombstones: bool,
+        wb: &mut DBBatch,
+        range_delete_tombstones: &mut HashMap<ObjectID, (VersionNumber, VersionNumber)>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
-        let mut wb = perpetual_db.objects.batch();
 
         // Collect objects keys that need to be deleted from `transaction_effects`.
         let mut live_object_keys_to_prune = vec![];
@@ -170,22 +178,11 @@ impl AuthorityStorePruner {
             }
         }
 
-        let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
         for ObjectKey(object_id, seq_number) in live_object_keys_to_prune {
-            updates
+            range_delete_tombstones
                 .entry(object_id)
                 .and_modify(|range| *range = (min(range.0, seq_number), max(range.1, seq_number)))
                 .or_insert((seq_number, seq_number));
-        }
-
-        for (object_id, (min_version, max_version)) in updates {
-            debug!(
-                "Pruning object {:?} versions {:?} - {:?}",
-                object_id, min_version, max_version
-            );
-            let start_range = ObjectKey(object_id, min_version);
-            let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-            wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
         }
 
         // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
@@ -215,13 +212,10 @@ impl AuthorityStorePruner {
                 .map(|(digest, delta)| (digest, delta.to_le_bytes()));
             wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
         }
-        perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
-        metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
         let _locks = objects_lock_table
             .acquire_locks(indirect_objects.into_keys())
             .await;
-        wb.write()?;
         Ok(())
     }
 
@@ -391,8 +385,21 @@ impl AuthorityStorePruner {
         let mut checkpoints_to_prune = vec![];
         let mut checkpoint_content_to_prune = vec![];
         let mut effects_to_prune = vec![];
-
+        let mut range_delete_tombstones: HashMap<ObjectID, (VersionNumber, VersionNumber)> =
+            HashMap::new();
+        let mut wb = perpetual_db.objects.batch();
         loop {
+            if range_delete_tombstones.len() + wb.len() >= config.max_tombstones_per_write_batch {
+                Self::commit_write_batch(
+                    perpetual_db,
+                    &mut range_delete_tombstones,
+                    wb,
+                    checkpoint_number,
+                    &metrics,
+                )?;
+                range_delete_tombstones = HashMap::new();
+                wb = perpetual_db.objects.batch();
+            }
             let Some(ckpt) = checkpoint_store
                 .certified_checkpoints
                 .get(&(checkpoint_number + 1))?
@@ -437,10 +444,11 @@ impl AuthorityStorePruner {
                             effects_to_prune,
                             perpetual_db,
                             objects_lock_table,
-                            checkpoint_number,
                             metrics.clone(),
                             indirect_objects_threshold,
                             !config.killswitch_tombstone_pruning,
+                            &mut wb,
+                            &mut range_delete_tombstones,
                         )
                         .await?
                     }
@@ -467,10 +475,11 @@ impl AuthorityStorePruner {
                         effects_to_prune,
                         perpetual_db,
                         objects_lock_table,
-                        checkpoint_number,
                         metrics.clone(),
                         indirect_objects_threshold,
                         !config.killswitch_tombstone_pruning,
+                        &mut wb,
+                        &mut range_delete_tombstones,
                     )
                     .await?
                 }
@@ -485,6 +494,41 @@ impl AuthorityStorePruner {
                 )?,
             };
         }
+
+        if range_delete_tombstones.len() + wb.len() > 0 {
+            Self::commit_write_batch(
+                perpetual_db,
+                &mut range_delete_tombstones,
+                wb,
+                checkpoint_number,
+                &metrics,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn commit_write_batch(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        range_delete_tombstones: &mut HashMap<ObjectID, (VersionNumber, VersionNumber)>,
+        mut wb: DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+        metrics: &Arc<AuthorityStorePruningMetrics>,
+    ) -> anyhow::Result<()> {
+        for (object_id, (min_version, max_version)) in range_delete_tombstones.iter() {
+            debug!(
+                "Pruning object {:?} versions {:?} - {:?}",
+                object_id, min_version, max_version
+            );
+            let start_range = ObjectKey(*object_id, *min_version);
+            let end_range = ObjectKey(*object_id, (max_version.value() + 1).into());
+            wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+        }
+
+        perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
+        metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
+        metrics.num_pruning_commits.inc();
+        wb.write()?;
         Ok(())
     }
 
