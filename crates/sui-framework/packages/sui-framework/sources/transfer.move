@@ -137,4 +137,17 @@ module sui::transfer {
     public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
     native fun receive_impl<T: key>(parent: address, to_receive: object::ID, version: u64): T;
+
+    #[test_only]
+    public(friend) fun make_receiver<T: key>(id: ID, version: u64): Receiving<T> {
+        Receiving {
+            id,
+            version,
+        }
+    }
+
+    #[test_only]
+    public(friend) fun receiving_id<T: key>(r: &Receiving<T>): ID {
+        r.id
+    }
 }

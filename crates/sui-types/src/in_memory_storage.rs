@@ -13,6 +13,7 @@ use crate::{
     object::{Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
 };
+use better_any::{Tid, TidAble};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
@@ -20,7 +21,7 @@ use std::collections::BTreeMap;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Tid)]
 pub struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
 }
@@ -187,6 +188,10 @@ impl InMemoryStorage {
     pub fn insert_object(&mut self, object: Object) {
         let id = object.id();
         self.persistent.insert(id, object);
+    }
+
+    pub fn remove_object(&mut self, object_id: ObjectID) -> Option<Object> {
+        self.persistent.remove(&object_id)
     }
 
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {

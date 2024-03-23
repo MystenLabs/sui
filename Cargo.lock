@@ -12807,6 +12807,7 @@ version = "1.22.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "better_any",
  "clap",
  "colored",
  "const-str",
@@ -13857,6 +13858,7 @@ dependencies = [
  "anemo",
  "anyhow",
  "bcs",
+ "better_any",
  "bincode",
  "byteorder",
  "consensus-config",
