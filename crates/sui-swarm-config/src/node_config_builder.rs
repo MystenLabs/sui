@@ -24,7 +24,7 @@ use sui_config::{
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
-use sui_types::traffic_control::PolicyConfig;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
@@ -36,7 +36,8 @@ pub struct ValidatorConfigBuilder {
     jwk_fetch_interval: Option<Duration>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
-    traffic_control_config: Option<PolicyConfig>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: RemoteFirewallConfig,
 }
 
 impl ValidatorConfigBuilder {
@@ -79,8 +80,13 @@ impl ValidatorConfigBuilder {
         self
     }
 
-    pub fn with_traffic_control_config(mut self, config: Option<PolicyConfig>) -> Self {
-        self.traffic_control_config = config;
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: RemoteFirewallConfig) -> Self {
+        self.firewall_config = config;
         self
     }
 
@@ -202,7 +208,8 @@ impl ValidatorConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
-            traffic_control_config: self.traffic_control_config,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
         }
     }
 
@@ -456,7 +463,8 @@ impl FullnodeConfigBuilder {
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
             // TODO: not run on fullnodes for now
-            traffic_control_config: None,
+            policy_config: None,
+            firewall_config: RemoteFirewallConfig::default(),
         }
     }
 }

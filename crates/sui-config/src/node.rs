@@ -28,7 +28,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::traffic_control::PolicyConfig;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
@@ -171,7 +171,10 @@ pub struct NodeConfig {
 
     // For killswitch use None
     #[serde(default)]
-    pub traffic_control_config: Option<PolicyConfig>,
+    pub policy_config: Option<PolicyConfig>,
+
+    #[serde(default)]
+    pub firewall_config: RemoteFirewallConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

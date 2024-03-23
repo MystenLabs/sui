@@ -1397,7 +1397,8 @@ impl SuiNode {
             state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
-            config.traffic_control_config.clone().unwrap_or_default(),
+            config.policy_config.clone().unwrap_or_default(),
+            config.firewall_config.clone(),
         )
         .await;
 
