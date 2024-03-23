@@ -2585,7 +2585,10 @@ impl AuthorityPerEpochStore {
                     checkpoint_height,
                 },
             });
+
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
+            checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
+            std::thread::sleep(std::time::Duration::from_millis(300));
 
             // Generate pending checkpoint for user tx with randomness.
             if let Some(randomness_round) = randomness_round {
@@ -2602,21 +2605,13 @@ impl AuthorityPerEpochStore {
                         checkpoint_height: checkpoint_height + 1,
                     },
                 });
+
                 self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
+                checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
             }
         }
 
         batch.write()?;
-
-        // Only after batch is written, notify checkpoint service to start building any new
-        // pending checkpoints.
-        if make_checkpoint {
-            debug!(
-                ?commit_round,
-                "Notifying checkpoint service about new pending checkpoint(s)",
-            );
-            checkpoint_service.notify_checkpoint()?;
-        }
 
         // Once commit processing is recorded, kick off randomness generation.
         if let Some(randomness_round) = randomness_round {
