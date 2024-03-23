@@ -2,6 +2,7 @@
 
 ```
 pnpm prepare:e2e
+pnpm install
 pnpm turbo build
 pnpm test:e2e to run the unit tests.
 ```
