@@ -38,7 +38,7 @@ use crate::{
     CommitConsumer,
 };
 
-/// ConsensusAuthority is the used by Sui to manage the lifetime of AuthorityNode.
+/// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
 /// It hides the details of the implementation from the caller, MysticetiManager.
 #[allow(private_interfaces)]
 pub enum ConsensusAuthority {
