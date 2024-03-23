@@ -1,3 +1,18 @@
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:7:9
+  │
+7 │         call!(|x| -> u64 'a: 0); // parsing error needs a block
+  │         ^^^^^^^^^^^^^^^^^^^^^^^
+  │         │    │
+  │         │    Found 0 argument(s) here
+  │         Invalid call of 'a::m::call'. The call expected 1 argument(s) but got 0
+
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:7:9
+  │
+7 │         call!(|x| -> u64 'a: 0); // parsing error needs a block
+  │         ^^^^^^^^^^^^^^^^^^^^^^^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:7:30
   │
@@ -6,6 +21,21 @@ error[E01002]: unexpected token
   │                              │
   │                              Unexpected '0'
   │                              Expected '{'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:11:9
+   │
+11 │         call!(|x| -> u64 'a: loop { break 'a 0 }); // parsing error needs a block
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │    │
+   │         │    Found 0 argument(s) here
+   │         Invalid call of 'a::m::call'. The call expected 1 argument(s) but got 0
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:11:9
+   │
+11 │         call!(|x| -> u64 'a: loop { break 'a 0 }); // parsing error needs a block
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:11:30
@@ -20,15 +50,23 @@ error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:15:46
    │
 15 │         call!(|x| -> u64 'a: { return 'a x } + 1); // parsing error, lambdas cant appear in binop
-   │              -                               ^ Expected ')'
-   │              │                                
-   │              To match this '('
+   │                                              ^
+   │                                              │
+   │                                              Unexpected '+'
+   │                                              Expected ','
+
+error[E03004]: unbound type
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:19:22
+   │
+19 │         call!(|x| -> u6 { x } + 1); // parsing error, lambdas cant appear in binop
+   │                      ^^ Unbound type 'u6' in current scope
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:19:31
    │
 19 │         call!(|x| -> u6 { x } + 1); // parsing error, lambdas cant appear in binop
-   │              -                ^ Expected ')'
-   │              │                 
-   │              To match this '('
+   │                               ^
+   │                               │
+   │                               Unexpected '+'
+   │                               Expected ','
 

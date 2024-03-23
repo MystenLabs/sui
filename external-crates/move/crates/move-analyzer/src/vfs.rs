@@ -77,8 +77,8 @@ pub fn on_text_document_sync_notification(
         Some(vfs_file)
     }
 
-    fn vfs_file_remove(ide_files: &VfsPath, file_path: PathBuf) {
-        let Some(vfs_path) = ide_files.join(file_path.to_string_lossy()).ok() else {
+    fn vfs_file_remove(ide_files_root: &VfsPath, file_path: PathBuf) {
+        let Some(vfs_path) = ide_files_root.join(file_path.to_string_lossy()).ok() else {
             eprintln!(
                 "Could not construct file path for file removal at {:?}",
                 file_path

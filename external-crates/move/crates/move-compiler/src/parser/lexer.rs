@@ -6,13 +6,16 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    parser::syntax::make_loc,
+    parser::{syntax::make_loc, token_set::TokenSet},
     shared::CompilationEnv,
     FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
+
+// This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
+pub const TOK_COUNT: usize = 75;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -208,6 +211,18 @@ impl<'input> Lexer<'input> {
 
     pub fn peek(&self) -> Tok {
         self.token
+    }
+
+    pub fn at(&self, tok: Tok) -> bool {
+        self.token == tok
+    }
+
+    pub fn at_any(&self, toks: &BTreeSet<Tok>) -> bool {
+        toks.contains(&self.token)
+    }
+
+    pub fn at_set(&self, set: &TokenSet) -> bool {
+        set.contains(self.token, self.content())
     }
 
     pub fn content(&self) -> &'input str {

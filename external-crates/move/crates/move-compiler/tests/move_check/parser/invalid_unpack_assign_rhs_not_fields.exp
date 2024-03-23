@@ -1,10 +1,22 @@
-warning[W09001]: unused alias
-  ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:6:14
+error[E03003]: unbound module member
+  ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9
   │
-6 │     use 0x2::X;
-  │              ^ Unused 'use' of alias 'X'. Consider removing it
+9 │         X::S () = 0;
+  │         ^^^^ Invalid module access. Unbound struct 'S' in module '0x2::X'
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:9:9
   │
-  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+9 │         X::S () = 0;
+  │         ^^^^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:11:9
+   │
+11 │         X::S 0 = 0;
+   │         ^^^^ Invalid module access. Unbound constant 'S' in module '0x2::X'
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:11:14
@@ -14,4 +26,16 @@ error[E01002]: unexpected token
    │              │
    │              Unexpected '0'
    │              Expected ';'
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:13:9
+   │
+13 │         X::S { 0 } = 0;
+   │         ^^^^ Invalid module access. Unbound struct 'S' in module '0x2::X'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:13:16
+   │
+13 │         X::S { 0 } = 0;
+   │                ^ Expected a field expression
 

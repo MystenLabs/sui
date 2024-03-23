@@ -10,7 +10,7 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::{Edition, FeatureGate},
-    parser::{ast::*, lexer::*},
+    parser::{ast::*, lexer::*, token_set::*},
     shared::*,
     MatchedFileCommentMap,
 };
@@ -24,6 +24,7 @@ struct Context<'env, 'lexer, 'input> {
     package_name: Option<Symbol>,
     env: &'env mut CompilationEnv,
     tokens: &'lexer mut Lexer<'input>,
+    stop_set: TokenSet,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
@@ -32,10 +33,31 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         tokens: &'lexer mut Lexer<'input>,
         package_name: Option<Symbol>,
     ) -> Self {
+        let mut stop_set = TokenSet::new();
+        stop_set.add(Tok::EOF);
         Self {
             package_name,
             env,
             tokens,
+            stop_set,
+        }
+    }
+
+    /// Checks if the current token is a member of the stop set.
+    fn at_stop_set(&self) -> bool {
+        self.tokens.at_set(&self.stop_set)
+    }
+
+    /// Advances tokens until reaching an element of the stop set, recording diagnostics along the
+    /// way (including the first optional one passed as an argument.
+    fn advance_until_at_stop_set(&mut self, diag_opt: Option<Diagnostic>) {
+        if let Some(diag) = diag_opt {
+            self.env.add_diag(diag);
+        }
+        while !(self.at_stop_set()) {
+            if let Some(err) = self.tokens.advance().err() {
+                self.env.add_diag(*err);
+            }
         }
     }
 }
@@ -243,25 +265,53 @@ fn adjust_token(tokens: &mut Lexer, end_token: Tok) {
     }
 }
 
+fn advance_record_diag(context: &mut Context) {
+    if let Err(diag) = context.tokens.advance() {
+        context.env.add_diag(*diag);
+    }
+}
+
 // Parse a comma-separated list of items, including the specified starting and
 // ending tokens.
 fn parse_comma_list<F, R>(
     context: &mut Context,
     start_token: Tok,
     end_token: Tok,
+    item_first_set: &TokenSet,
     parse_list_item: F,
     item_description: &str,
-) -> Result<Vec<R>, Box<Diagnostic>>
+) -> Vec<R>
 where
     F: Fn(&mut Context) -> Result<R, Box<Diagnostic>>,
 {
     let start_loc = context.tokens.start_loc();
-    consume_token(context.tokens, start_token)?;
+    let at_start_token = context.tokens.at(start_token);
+    if let Err(diag) = consume_token(context.tokens, start_token) {
+        if at_start_token {
+            // advance token past the starting one but something went wrong, still there is a chance
+            // parse the rest of the list
+            let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
+            if at_stop_set {
+                // nothing else to do
+                return vec![];
+            }
+            if context.tokens.at(end_token) {
+                // at the end of the list - consume end token and keep parsing at the outer level
+                advance_record_diag(context);
+                return vec![];
+            }
+        } else {
+            // not even starting token is present - parser has nothing much to do
+            context.env.add_diag(*diag);
+            return vec![];
+        }
+    }
     parse_comma_list_after_start(
         context,
         start_loc,
         start_token,
         end_token,
+        item_first_set,
         parse_list_item,
         item_description,
     )
@@ -274,46 +324,117 @@ fn parse_comma_list_after_start<F, R>(
     start_loc: usize,
     start_token: Tok,
     end_token: Tok,
+    item_first_set: &TokenSet,
     parse_list_item: F,
     item_description: &str,
-) -> Result<Vec<R>, Box<Diagnostic>>
+) -> Vec<R>
 where
     F: Fn(&mut Context) -> Result<R, Box<Diagnostic>>,
 {
     adjust_token(context.tokens, end_token);
-    if match_token(context.tokens, end_token)? {
-        return Ok(vec![]);
-    }
     let mut v = vec![];
-    loop {
-        if context.tokens.peek() == Tok::Comma {
+    while !context.tokens.at(end_token) {
+        if context.tokens.at_set(item_first_set) {
+            match parse_list_item(context) {
+                Ok(item) => {
+                    v.push(item);
+                    adjust_token(context.tokens, end_token);
+                    if context.tokens.peek() == end_token {
+                        break;
+                    }
+                    // expect a commma - consume it or advance to the next time or end of the list
+                    if let Err(diag) = consume_token(context.tokens, Tok::Comma) {
+                        let at_stop_set =
+                            skip_comma_list_item(context, start_token, end_token, *diag);
+                        if at_stop_set {
+                            break;
+                        }
+                    }
+                    adjust_token(context.tokens, end_token);
+                }
+                Err(diag) => {
+                    let at_stop_set = skip_comma_list_item(context, start_token, end_token, *diag);
+                    if at_stop_set {
+                        break;
+                    }
+                }
+            }
+        } else {
             let current_loc = context.tokens.start_loc();
             let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
-            return Err(Box::new(diag!(
+            let diag = diag!(
                 Syntax::UnexpectedToken,
                 (loc, format!("Expected {}", item_description))
-            )));
-        }
-        v.push(parse_list_item(context)?);
-        adjust_token(context.tokens, end_token);
-        if match_token(context.tokens, end_token)? {
-            break Ok(v);
-        }
-        if !match_token(context.tokens, Tok::Comma)? {
-            let current_loc = context.tokens.start_loc();
-            let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
-            let loc2 = make_loc(context.tokens.file_hash(), start_loc, start_loc);
-            return Err(Box::new(diag!(
-                Syntax::UnexpectedToken,
-                (loc, format!("Expected '{}'", end_token)),
-                (loc2, format!("To match this '{}'", start_token)),
-            )));
-        }
-        adjust_token(context.tokens, end_token);
-        if match_token(context.tokens, end_token)? {
-            break Ok(v);
+            );
+            let at_stop_set = skip_comma_list_item(context, start_token, end_token, diag);
+            if at_stop_set {
+                break;
+            }
         }
     }
+    if consume_token(context.tokens, end_token).is_err() {
+        let current_loc = context.tokens.start_loc();
+        let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
+        let loc2 = make_loc(context.tokens.file_hash(), start_loc, start_loc);
+        context.env.add_diag(diag!(
+            Syntax::UnexpectedToken,
+            (loc, format!("Expected '{}'", end_token)),
+            (loc2, format!("To match this '{}'", start_token)),
+        ));
+    }
+    v
+}
+
+/// Attempts to skip tokens until the end of the item in the comma-separated list (which started
+/// with an already consumed starting token) - looks for a matched ending token or after a comma.
+fn skip_comma_list_item(
+    context: &mut Context,
+    start_token: Tok,
+    end_token: Tok,
+    diag: Diagnostic,
+) -> bool {
+    context.env.add_diag(diag);
+    let mut start_tokens = 0;
+    let mut stop_parsing = false;
+    loop {
+        if context.at_stop_set() {
+            stop_parsing = true;
+            break;
+        }
+        if context.tokens.at(Tok::Comma) {
+            advance_record_diag(context);
+            if start_tokens == 0 {
+                break;
+            }
+        };
+        if context.tokens.at(start_token) {
+            start_tokens += 1;
+            advance_record_diag(context);
+            continue;
+        };
+        if context.tokens.at(end_token) {
+            if start_tokens == 0 {
+                break;
+            }
+            start_tokens -= 1;
+            advance_record_diag(context);
+            continue;
+        };
+        if end_token == Tok::Greater && context.tokens.at(Tok::GreaterGreater) {
+            // this is not very pretty but arguably not uglier than adjust_token
+            if start_tokens == 0 || start_tokens == 1 {
+                adjust_token(context.tokens, end_token);
+                break;
+            }
+            start_tokens -= 2;
+            advance_record_diag(context);
+            continue;
+        }
+        if let Some(err) = context.tokens.advance().err() {
+            context.env.add_diag(*err);
+        }
+    }
+    stop_parsing
 }
 
 // Parse a list of items, without specified start and end tokens, and the separator determined by
@@ -757,9 +878,10 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
                 context,
                 Tok::LParen,
                 Tok::RParen,
+                &TokenSet::from(&[Tok::Identifier]),
                 parse_attribute,
                 "attribute",
-            )?;
+            );
             let end_loc = context.tokens.previous_end_loc();
             Attribute_::Parameterized(
                 n,
@@ -788,9 +910,10 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
             context,
             Tok::LBracket,
             Tok::RBracket,
+            &TokenSet::from(&[Tok::Identifier]),
             parse_attribute,
             "attribute",
-        )?;
+        );
         let end_loc = context.tokens.previous_end_loc();
         attributes_vec.push(spanned(
             context.tokens.file_hash(),
@@ -915,18 +1038,20 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
+            &TokenSet::from([Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_bind,
             "a field binding",
-        )?;
+        );
         FieldBindings::Positional(args)
     } else {
         let args = parse_comma_list(
             context,
             Tok::LBrace,
             Tok::RBrace,
+            &TokenSet::from([Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_bind_field,
             "a field binding",
-        )?;
+        );
         FieldBindings::Named(args)
     };
     let end_loc = context.tokens.previous_end_loc();
@@ -955,9 +1080,10 @@ fn parse_bind_list(context: &mut Context) -> Result<BindList, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
+            &PARAM_START_SET,
             parse_bind,
             "a variable or structure binding",
-        )?
+        )
     };
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, b))
@@ -972,6 +1098,7 @@ fn parse_lambda_bind_list(context: &mut Context) -> Result<LambdaBindings, Box<D
         context,
         Tok::Pipe,
         Tok::Pipe,
+        &PARAM_START_SET,
         |context| {
             let b = parse_bind_list(context)?;
             let ty_opt = if match_token(context.tokens, Tok::Colon)? {
@@ -982,7 +1109,7 @@ fn parse_lambda_bind_list(context: &mut Context) -> Result<LambdaBindings, Box<D
             Ok((b, ty_opt))
         },
         "a binding",
-    )?;
+    );
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, b))
 }
@@ -1124,28 +1251,88 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     let mut last_semicolon_loc = None;
     let mut eopt = None;
     while context.tokens.peek() != Tok::RBrace {
-        let item = parse_sequence_item(context)?;
-        if context.tokens.peek() == Tok::RBrace {
-            // If the sequence ends with an expression that is not
-            // followed by a semicolon, split out that expression
-            // from the rest of the SequenceItems.
-            match item.value {
-                SequenceItem_::Seq(e) => {
-                    eopt = Some(Spanned {
-                        loc: item.loc,
-                        value: e.value,
-                    });
+        // this helps when a sequence contains a comma-separated list without the ending token (in
+        // which case the parser would be likely fast-forwarded to EOF)
+        context.stop_set.add(Tok::Semicolon);
+        match parse_sequence_item(context) {
+            Ok(item) => {
+                context.stop_set.remove(Tok::Semicolon);
+                if context.tokens.peek() == Tok::RBrace {
+                    // If the sequence ends with an expression that is not
+                    // followed by a semicolon, split out that expression
+                    // from the rest of the SequenceItems.
+                    match item.value {
+                        SequenceItem_::Seq(e) => {
+                            eopt = Some(Spanned {
+                                loc: item.loc,
+                                value: e.value,
+                            });
+                        }
+                        _ => {
+                            context
+                                .env
+                                .add_diag(*unexpected_token_error(context.tokens, "';'"));
+                        }
+                    }
+                    break;
                 }
-                _ => return Err(unexpected_token_error(context.tokens, "';'")),
+                seq.push(item);
+                last_semicolon_loc = Some(current_token_loc(context.tokens));
+                if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
+                    let at_stop_set = skip_sequence(context, *diag);
+                    if at_stop_set {
+                        break;
+                    }
+                }
             }
-            break;
+            Err(diag) => {
+                context.stop_set.remove(Tok::Semicolon);
+                let at_stop_set = skip_sequence(context, *diag);
+                if at_stop_set {
+                    break;
+                }
+            }
         }
-        seq.push(item);
-        last_semicolon_loc = Some(current_token_loc(context.tokens));
-        consume_token(context.tokens, Tok::Semicolon)?;
     }
     context.tokens.advance()?; // consume the RBrace
     Ok((uses, seq, last_semicolon_loc, Box::new(eopt)))
+}
+
+/// Attempts to skip tokens until the end of the sequence (which started with an already consumed
+/// left brace) - looks for a matched right brace or a semicolon.
+fn skip_sequence(context: &mut Context, diag: Diagnostic) -> bool {
+    context.env.add_diag(diag);
+    let mut left_braces = 0;
+    let mut stop_parsing = false;
+    loop {
+        if context.at_stop_set() {
+            stop_parsing = true;
+            break;
+        }
+        if context.tokens.at(Tok::Semicolon) {
+            advance_record_diag(context);
+            if left_braces == 0 {
+                break;
+            }
+        };
+        if context.tokens.at(Tok::LBrace) {
+            left_braces += 1;
+            advance_record_diag(context);
+            continue;
+        };
+        if context.tokens.at(Tok::RBrace) {
+            if left_braces == 0 {
+                break;
+            }
+            left_braces -= 1;
+            advance_record_diag(context);
+            continue;
+        };
+        if let Some(err) = context.tokens.advance().err() {
+            context.env.add_diag(*err);
+        }
+    }
+    stop_parsing
 }
 
 //**************************************************************************************************
@@ -1208,9 +1395,10 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                 context,
                 Tok::LBracket,
                 Tok::RBracket,
+                &EXP_START_SET,
                 parse_exp,
                 "a vector argument expression",
-            )?;
+            );
             let args_end_loc = context.tokens.previous_end_loc();
             let args = spanned(
                 context.tokens.file_hash(),
@@ -1287,9 +1475,10 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                         list_loc,
                         Tok::LParen,
                         Tok::RParen,
+                        &EXP_START_SET,
                         parse_exp,
                         "an expression",
-                    )?;
+                    );
                     if es.is_empty() {
                         e.value
                     } else {
@@ -1551,9 +1740,11 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
                 context,
                 Tok::LBrace,
                 Tok::RBrace,
+                &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
                 parse_exp_field,
                 "a field expression",
-            )?;
+            );
+
             Ok(Exp_::Pack(name, tys, fs))
         }
 
@@ -1576,9 +1767,10 @@ fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagn
         context,
         Tok::LParen,
         Tok::RParen,
+        &EXP_START_SET,
         parse_exp,
         "a call argument expression",
-    )?;
+    );
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(
         context.tokens.file_hash(),
@@ -1595,9 +1787,10 @@ fn parse_index_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diag
         context,
         Tok::LBracket,
         Tok::RBracket,
+        &EXP_START_SET,
         parse_exp,
         "an index access expression",
-    )?;
+    );
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(
         context.tokens.file_hash(),
@@ -2104,13 +2297,14 @@ fn parse_quant(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
                 }
             },
             |context| {
-                parse_comma_list(
+                Ok(parse_comma_list(
                     context,
                     Tok::LBrace,
                     Tok::RBrace,
+                    &EXP_START_SET,
                     parse_exp,
                     "a trigger expresssion",
-                )
+                ))
             },
         )?
     } else {
@@ -2187,7 +2381,14 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
         Tok::LParen => {
-            let mut ts = parse_comma_list(context, Tok::LParen, Tok::RParen, parse_type, "a type")?;
+            let mut ts = parse_comma_list(
+                context,
+                Tok::LParen,
+                Tok::RParen,
+                &TYPE_START_SET,
+                parse_type,
+                "a type",
+            );
             match ts.len() {
                 0 => Type_::Unit,
                 1 => ts.pop().unwrap().value,
@@ -2210,7 +2411,14 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
                 context.tokens.advance()?;
                 vec![]
             } else {
-                parse_comma_list(context, Tok::Pipe, Tok::Pipe, parse_type, "a type")?
+                parse_comma_list(
+                    context,
+                    Tok::Pipe,
+                    Tok::Pipe,
+                    &TYPE_START_SET,
+                    parse_type,
+                    "a type",
+                )
             };
             let result = if context
                 .tokens
@@ -2243,7 +2451,14 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
         _ => {
             let tn = parse_name_access_chain(context, || "a type name")?;
             let tys = if context.tokens.peek() == Tok::Less {
-                parse_comma_list(context, Tok::Less, Tok::Greater, parse_type, "a type")?
+                parse_comma_list(
+                    context,
+                    Tok::Less,
+                    Tok::Greater,
+                    &TYPE_START_SET,
+                    parse_type,
+                    "a type",
+                )
             } else {
                 vec![]
             };
@@ -2262,9 +2477,10 @@ fn parse_optional_type_args(context: &mut Context) -> Result<Option<Vec<Type>>, 
             context,
             Tok::Less,
             Tok::Greater,
+            &TYPE_START_SET,
             parse_type,
             "a type",
-        )?))
+        )))
     } else {
         Ok(None)
     }
@@ -2365,19 +2581,22 @@ fn parse_type_parameter_with_phantom_decl(
 
 // Parse optional type parameter list.
 //    OptionalTypeParameters = '<' Comma<TypeParameter> ">" | <empty>
-fn parse_optional_type_parameters(
-    context: &mut Context,
-) -> Result<Vec<(Name, Vec<Ability>)>, Box<Diagnostic>> {
+fn parse_optional_type_parameters(context: &mut Context) -> Vec<(Name, Vec<Ability>)> {
     if context.tokens.peek() == Tok::Less {
         parse_comma_list(
             context,
             Tok::Less,
             Tok::Greater,
+            &TokenSet::from([
+                Tok::Identifier,
+                Tok::SyntaxIdentifier,
+                Tok::RestrictedIdentifier,
+            ]),
             parse_type_parameter,
             "a type parameter",
         )
     } else {
-        Ok(vec![])
+        vec![]
     }
 }
 
@@ -2387,13 +2606,14 @@ fn parse_struct_type_parameters(
     context: &mut Context,
 ) -> Result<Vec<StructTypeParameter>, Box<Diagnostic>> {
     if context.tokens.peek() == Tok::Less {
-        parse_comma_list(
+        Ok(parse_comma_list(
             context,
             Tok::Less,
             Tok::Greater,
+            &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_type_parameter_with_phantom_decl,
             "a type parameter",
-        )
+        ))
     } else {
         Ok(vec![])
     }
@@ -2427,79 +2647,68 @@ fn parse_function_decl(
     // "fun" <FunctionDefName>
     consume_token(context.tokens, Tok::Fun)?;
     let name = FunctionName(parse_identifier(context)?);
-    let type_parameters = parse_optional_type_parameters(context)?;
+
+    context.stop_set.add(Tok::LParen);
+    context.stop_set.add(Tok::Acquires);
+    context.stop_set.add(Tok::LBrace);
+
+    let type_parameters = parse_optional_type_parameters(context);
+    context.stop_set.remove(Tok::LParen);
 
     // "(" Comma<Parameter> ")"
     let parameters = parse_comma_list(
         context,
         Tok::LParen,
         Tok::RParen,
+        &PARAM_START_SET,
         parse_parameter,
         "a function parameter",
-    )?;
+    );
 
-    // (":" <Type>)?
-    let return_type = if match_token(context.tokens, Tok::Colon)? {
-        parse_type(context)?
-    } else {
-        sp(name.loc(), Type_::Unit)
-    };
-
-    // ("acquires" (<NameAccessChain> ",")* <NameAccessChain> ","?
-    let mut acquires = vec![];
-    if match_token(context.tokens, Tok::Acquires)? {
-        let follows_acquire = |tok| matches!(tok, Tok::Semicolon | Tok::LBrace);
-        loop {
-            acquires.push(parse_name_access_chain(context, || {
-                "a resource struct name"
-            })?);
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-            consume_token(context.tokens, Tok::Comma)?;
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-        }
+    let return_type = parse_ret_type(context, name)
+        .map_err(|diag| {
+            context.advance_until_at_stop_set(Some(*diag.clone()));
+            diag
+        })
+        .ok();
+    if let Err(diag) = parse_acquires(context) {
+        context.advance_until_at_stop_set(Some(*diag));
     }
+    context.stop_set.remove(Tok::Acquires);
 
-    let body = match native {
-        Some(loc) => {
-            consume_token(context.tokens, Tok::Semicolon)?;
-            sp(loc, FunctionBody_::Native)
-        }
-        _ => {
-            let start_loc = context.tokens.start_loc();
-            consume_token(context.tokens, Tok::LBrace)?;
-            let seq = parse_sequence(context)?;
-            let end_loc = context.tokens.previous_end_loc();
-            sp(
-                make_loc(context.tokens.file_hash(), start_loc, end_loc),
-                FunctionBody_::Defined(seq),
-            )
-        }
-    };
+    context.stop_set.remove(Tok::LBrace);
 
-    let signature = FunctionSignature {
-        type_parameters,
-        parameters,
-        return_type,
-    };
+    let body = parse_body(context, native)
+        .map_err(|diag| {
+            context.advance_until_at_stop_set(Some(*diag.clone()));
+            diag
+        })
+        .ok();
 
     let loc = make_loc(
         context.tokens.file_hash(),
         start_loc,
         context.tokens.previous_end_loc(),
     );
+
     Ok(Function {
         attributes,
         loc,
         visibility: visibility.unwrap_or(Visibility::Internal),
         entry,
         macro_,
-        signature,
+        signature: FunctionSignature {
+            type_parameters,
+            parameters,
+            return_type: return_type.unwrap_or_else(|| sp(name.loc(), Type_::UnresolvedError)),
+        },
         name,
-        body,
+        body: body.unwrap_or_else(|| {
+            sp(
+                context.tokens.current_token_loc(),
+                FunctionBody_::Defined((vec![], vec![], None, Box::new(None))),
+            )
+        }),
     })
 }
 
@@ -2517,6 +2726,72 @@ fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
     Ok((mut_, v, t))
+}
+
+// (":" <Type>)?
+fn parse_ret_type(context: &mut Context, name: FunctionName) -> Result<Type, Box<Diagnostic>> {
+    if match_token(context.tokens, Tok::Colon)? {
+        parse_type(context)
+    } else {
+        Ok(sp(name.loc(), Type_::Unit))
+    }
+}
+
+// ("acquires" (<NameAccessChain> ",")* <NameAccessChain> ","?
+fn parse_acquires(context: &mut Context) -> Result<Vec<NameAccessChain>, Box<Diagnostic>> {
+    let mut acquires = vec![];
+    if match_token(context.tokens, Tok::Acquires)? {
+        let follows_acquire = |tok| matches!(tok, Tok::Semicolon | Tok::LBrace);
+        loop {
+            acquires.push(parse_name_access_chain(context, || {
+                "a resource struct name"
+            })?);
+            if follows_acquire(context.tokens.peek()) {
+                break;
+            }
+            consume_token(context.tokens, Tok::Comma)?;
+            if follows_acquire(context.tokens.peek()) {
+                break;
+            }
+        }
+    }
+    Ok(acquires)
+}
+
+fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody, Box<Diagnostic>> {
+    match native {
+        Some(loc) => {
+            if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
+                context.advance_until_at_stop_set(Some(*diag));
+            }
+            Ok(sp(loc, FunctionBody_::Native))
+        }
+        _ => {
+            let start_loc = context.tokens.start_loc();
+            let seq = if context.tokens.peek() == Tok::LBrace {
+                match consume_token(context.tokens, Tok::LBrace) {
+                    Ok(_) => parse_sequence(context)?,
+                    Err(diag) => {
+                        // error advancing past opening brace - assume sequence (likely first)
+                        // parsing problem and try skipping it
+                        skip_sequence(context, *diag);
+                        let _ = match_token(context.tokens, Tok::RBrace);
+                        (vec![], vec![], None, Box::new(None))
+                    }
+                }
+            } else {
+                // not even opening brace - not much of a body to parse
+                context.advance_until_at_stop_set(None);
+                (vec![], vec![], None, Box::new(None))
+            };
+
+            let end_loc = context.tokens.previous_end_loc();
+            Ok(sp(
+                make_loc(context.tokens.file_hash(), start_loc, end_loc),
+                FunctionBody_::Defined(seq),
+            ))
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -2706,18 +2981,20 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
             context,
             Tok::LParen,
             Tok::RParen,
+            &TYPE_START_SET,
             parse_positional_field,
             "a type",
-        )?;
+        );
         Ok(StructFields::Positional(list))
     } else {
         let fields = parse_comma_list(
             context,
             Tok::LBrace,
             Tok::RBrace,
+            &TokenSet::from([Tok::Identifier, Tok::RestrictedIdentifier]),
             parse_field_annot,
             "a field",
-        )?;
+        );
         Ok(StructFields::Defined(fields))
     }
 }
@@ -2996,9 +3273,11 @@ fn parse_use_decl(
                         context,
                         Tok::LBrace,
                         Tok::RBrace,
+                        &TokenSet::from([Tok::Identifier]),
                         parse_inner,
                         "a module use clause",
-                    )?;
+                    );
+
                     Use::NestedModuleUses(address, use_decls)
                 }
                 _ => {
@@ -3045,9 +3324,10 @@ fn parse_use_module(
                     context,
                     Tok::LBrace,
                     Tok::RBrace,
+                    &TokenSet::from([Tok::Identifier]),
                     parse_use_member,
                     "a module member alias",
-                )?,
+                ),
                 _ => vec![parse_use_member(context)?],
             };
             ModuleUse::Members(sub_uses)
@@ -3125,9 +3405,18 @@ fn parse_module(
     let mut stop_parsing = false;
     while context.tokens.peek() != Tok::RBrace {
         let curr_token_loc = context.tokens.current_token_loc();
+        context.stop_set.union(&MODULE_MEMBER_OR_MODULE_START_SET);
         match parse_module_member(context) {
-            Ok(m) => members.push(m),
+            Ok(m) => {
+                context
+                    .stop_set
+                    .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
+                members.push(m);
+            }
             Err(ErrCase::ContinueToModule(attrs)) => {
+                context
+                    .stop_set
+                    .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
                 // while trying to parse module members, we moved past the current module and
                 // encountered a new one - keep parsing it at a higher level, keeping the
                 // already parsed attributes
@@ -3136,19 +3425,12 @@ fn parse_module(
                 break;
             }
             Err(ErrCase::Unknown(diag)) => {
+                context
+                    .stop_set
+                    .difference(&MODULE_MEMBER_OR_MODULE_START_SET);
                 context.env.add_diag(*diag);
-                let next_tok =
-                    skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
-                if next_tok == Tok::EOF || next_tok == Tok::Module {
-                    // either end of file or next module to potentially be parsed
-                    stop_parsing = true;
-                    break;
-                }
-                if curr_token_loc == context.tokens.current_token_loc() {
-                    // token wasn't advanced by either `parse_module_member` nor by
-                    // `skip_to_next_member_or_module_or_eof` - no further parsing is possible (in
-                    // particular, without this check, compiler tests get stuck)
-                    stop_parsing = true;
+                stop_parsing = next_def_fast_forward(context, curr_token_loc);
+                if stop_parsing {
                     break;
                 }
             }
@@ -3174,6 +3456,23 @@ fn parse_module(
     Ok((def, next_mod_attributes))
 }
 
+/// Skips tokens until next definition to be parsed (or EOF) is encountered
+fn next_def_fast_forward(context: &mut Context, prev_token_loc: Loc) -> bool {
+    let mut stop_parsing = false;
+    let next_tok = skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
+    if next_tok == Tok::EOF
+        || next_tok == Tok::Module
+        || prev_token_loc == context.tokens.current_token_loc()
+    {
+        // either end of file or next module to potentially be parsed; alternatively, token wasn't
+        // advanced by either `parse_module_member` nor by `skip_to_next_member_or_module_or_eof` -
+        // no further parsing is possible (in particular, without this check, compiler tests get
+        // stuck)
+        stop_parsing = true;
+    }
+    stop_parsing
+}
+
 /// Skips tokens until reaching the desired one or EOF. Returns true if further parsing is
 /// impossible and parser should stop.
 fn skip_to_next_desired_tok_or_eof(
@@ -3195,21 +3494,7 @@ fn skip_to_next_desired_tok_or_eof(
 }
 
 fn is_start_of_member_or_module(tok: Tok, content: &str) -> bool {
-    match tok {
-        Tok::Invariant
-        | Tok::Spec
-        | Tok::Friend
-        | Tok::Public
-        | Tok::Native
-        | Tok::Const
-        | Tok::Fun
-        | Tok::Struct
-        | Tok::Use
-        | Tok::Module
-        | Tok::NumSign => true,
-        Tok::Identifier => content == ENTRY_MODIFIER, // TODO: add macro start
-        _ => false,
-    }
+    MODULE_MEMBER_OR_MODULE_START_SET.contains(tok, content)
 }
 
 fn is_start_of_module_or_spec(tok: Tok, _: &str) -> bool {

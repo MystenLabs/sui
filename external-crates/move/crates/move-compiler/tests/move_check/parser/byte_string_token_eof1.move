@@ -1,5 +1,5 @@
 module 0x42::M {
-    public fun bad_value(): vector<u8> {
+    public fun bad_value() {
         b"diem\"
     }
 }

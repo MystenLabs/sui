@@ -115,11 +115,21 @@ pub const DEFS_AND_REFS_SUPPORT: bool = true;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
 /// Location of a definition's identifier
-struct DefLoc {
+pub struct DefLoc {
     /// File where the definition of the identifier starts
     fhash: FileHash,
     /// Location where the definition of the identifier starts
     start: Position,
+}
+
+impl DefLoc {
+    pub fn fhash(&self) -> FileHash {
+        self.fhash
+    }
+
+    pub fn start(&self) -> Position {
+        self.start
+    }
 }
 
 /// Location of a use's identifier
@@ -220,14 +230,14 @@ pub struct UseDef {
 
 /// Definition of a struct field
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct FieldDef {
+pub struct FieldDef {
     name: Symbol,
     start: Position,
 }
 
 /// Definition of a struct
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct StructDef {
+pub struct StructDef {
     name_start: Position,
     field_defs: Vec<FieldDef>,
 }
@@ -334,6 +344,7 @@ pub struct TypingSymbolicator<'a> {
 struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
 
 /// Result of the symbolication process
+#[derive(Clone)]
 pub struct Symbols {
     /// A map from def locations to all the references (uses)
     references: BTreeMap<DefLoc, BTreeSet<UseLoc>>,
@@ -362,6 +373,14 @@ pub struct SymbolicatorRunner {
 impl ModuleDefs {
     pub fn functions(&self) -> &BTreeMap<Symbol, FunctionDef> {
         &self.functions
+    }
+
+    pub fn structs(&self) -> &BTreeMap<Symbol, StructDef> {
+        &self.structs
+    }
+
+    pub fn fhash(&self) -> FileHash {
+        self.fhash
     }
 }
 
@@ -896,6 +915,10 @@ impl UseDef {
     pub fn col_end(&self) -> u32 {
         self.col_end
     }
+
+    pub fn def_loc(&self) -> DefLoc {
+        self.def_loc
+    }
 }
 
 impl Ord for UseDef {
@@ -955,11 +978,25 @@ impl Symbols {
         &self.file_mods
     }
 
-    pub fn line_uses(&self, use_fpath: &PathBuf, use_line: u32) -> BTreeSet<UseDef> {
+    pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
         let Some(file_symbols) = self.file_use_defs.get(use_fpath) else {
             return BTreeSet::new();
         };
         file_symbols.get(use_line).unwrap_or_else(BTreeSet::new)
+    }
+
+    pub fn def_info(&self, def_loc: &DefLoc) -> Option<&DefInfo> {
+        self.def_info.get(def_loc)
+    }
+
+    pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
+        let Some(fpath) = self.file_name_mapping.get(fhash) else {
+            return None;
+        };
+        let Some(mod_defs) = self.file_mods.get(fpath) else {
+            return None;
+        };
+        mod_defs.iter().find(|d| d.ident == mod_ident)
     }
 }
 
@@ -1982,6 +2019,7 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             T::Multiple(v) => v.iter().for_each(|t| self.type_symbols(t)),
             T::Unit => (),
+            T::UnresolvedError => (),
         }
     }
 
@@ -6231,4 +6269,39 @@ fn mod_ident_uniform_test() {
     let cpath = dunce::canonicalize(&fpath).unwrap();
 
     symbols.file_use_defs.get(&cpath).unwrap();
+}
+
+#[test]
+/// Tests symbolication of partially defined function
+fn partial_function_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/partial-function");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        2,
+        8,
+        "M1.move",
+        2,
+        8,
+        "M1.move",
+        "fun PartialFunction::M1::just_name()",
+        None,
+    );
 }

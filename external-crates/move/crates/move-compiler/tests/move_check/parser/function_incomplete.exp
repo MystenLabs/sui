@@ -1,9 +1,44 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/function_incomplete.move:5:1
+  ┌─ tests/move_check/parser/function_incomplete.move:6:5
   │
-5 │ 
-  │ ^
-  │ 
-  │ Unexpected end-of-file
-  │ Expected an expression term
+6 │     fun just_type_args<T>
+  │     ^^^
+  │     │
+  │     Unexpected 'fun'
+  │     Expected '('
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/function_incomplete.move:8:5
+  │
+8 │     fun just_param<T>(_u: u64)
+  │     ^^^
+  │     │
+  │     Unexpected 'fun'
+  │     Expected '('
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/parser/function_incomplete.move:12:5
+   │    
+10 │ │ │     fun just_ret<T>(_u: u64): u64
+   │ │ │                               --- Expected: 'u64'
+   │ ╰─│─────────────────────────────────^ Invalid return expression
+   │   ╰─────────────────────────────────' Given: '()'
+11 │     
+12 │ ╭ ╭     fun everything<T>(u: u64): u64 {
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/parser/function_incomplete.move:20:13
+   │
+20 │         let n1 = just_ret<u64>(42);
+   │             ^^ Unused local variable 'n1'. Consider removing or prefixing with an underscore: '_n1'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/parser/function_incomplete.move:21:13
+   │
+21 │         let n2 = everything<u64>(42);
+   │             ^^ Unused local variable 'n2'. Consider removing or prefixing with an underscore: '_n2'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
