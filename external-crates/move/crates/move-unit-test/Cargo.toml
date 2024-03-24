@@ -34,6 +34,7 @@ move-binary-format.workspace = true
 move-model.workspace = true
 move-stackless-bytecode-interpreter.workspace = true
 move-bytecode-utils.workspace = true
+bcs.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

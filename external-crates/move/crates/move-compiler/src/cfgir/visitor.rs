@@ -403,7 +403,9 @@ pub trait SimpleAbsInt: Sized {
             }
 
             E::Unit { .. } => vec![],
-            E::Value(_) | E::Constant(_) | E::UnresolvedError => default_values(1),
+            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => {
+                default_values(1)
+            }
 
             E::BinopExp(e1, _, e2) => {
                 self.exp(context, state, e1);
