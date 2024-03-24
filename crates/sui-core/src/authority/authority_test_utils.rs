@@ -406,7 +406,7 @@ pub async fn send_batch_consensus_no_execution(
     certificates: &[VerifiedCertificate],
 ) -> Vec<VerifiedExecutableTransaction> {
     let transactions = certificates
-        .into_iter()
+        .iter()
         .map(|cert| {
             SequencedConsensusTransaction::new_test(ConsensusTransaction::new_certificate_message(
                 &authority.name,
