@@ -26,7 +26,7 @@ use tokio_retry::Retry;
 const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
 /// Map from contract address to their start cursor (exclusive)
-pub type SuiTargetModules = HashMap<Identifier, EventID>;
+pub type SuiTargetModules = HashMap<Identifier, Option<EventID>>;
 
 pub struct SuiSyncer<C> {
     sui_client: Arc<SuiClient<C>>,
@@ -82,7 +82,7 @@ where
         // The module where interested events are defined.
         // Moudle is always of bridge package 0x9.
         module: Identifier,
-        mut cursor: EventID,
+        mut cursor: Option<EventID>,
         events_sender: mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
         sui_client: Arc<SuiClient<C>>,
         query_interval: Duration,
@@ -111,7 +111,7 @@ where
                     .await
                     .expect("All Sui event channel receivers are closed");
                 if let Some(next) = events.next_cursor {
-                    cursor = next;
+                    cursor = Some(next);
                 }
                 tracing::info!(?module, ?cursor, "Observed {len} new Sui events");
             }
@@ -148,8 +148,8 @@ mod tests {
         add_event_response(&mock, module_bar.clone(), cursor, empty_events.clone());
 
         let target_modules = HashMap::from_iter(vec![
-            (module_foo.clone(), cursor),
-            (module_bar.clone(), cursor),
+            (module_foo.clone(), Some(cursor)),
+            (module_bar.clone(), Some(cursor)),
         ]);
         let interval = Duration::from_millis(200);
         let (_handles, mut events_rx) = SuiSyncer::new(client, target_modules)
