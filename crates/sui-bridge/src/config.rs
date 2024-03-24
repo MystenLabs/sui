@@ -9,6 +9,7 @@ use crate::types::BridgeAction;
 use anyhow::anyhow;
 use ethers::types::Address as EthAddress;
 use fastcrypto::traits::EncodeDecodeBase64;
+use futures::{future, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashSet};
@@ -16,7 +17,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
-use sui_sdk::SuiClient as SuiSdkClient;
+use sui_json_rpc_types::Coin;
+use sui_sdk::apis::CoinReadApi;
+use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
@@ -48,10 +51,12 @@ pub struct BridgeNodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bridge_client_key_path_base64_sui_key: Option<PathBuf>,
     /// Whether to run client. If true, `bridge_client_key_path_base64_sui_key`,
-    /// `bridge_client_gas_object` and `db_path` needs to be provided.
+    /// and `db_path` needs to be provided.
     pub run_client: bool,
     /// The gas object to use for paying for gas fees for the client. It needs to
-    /// be owned by the address associated with bridge client key.
+    /// be owned by the address associated with bridge client key. If not set
+    /// and `run_client` is true, it will query and use the gas object with highest
+    /// amount for the account.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bridge_client_gas_object: Option<ObjectID>,
     /// Path of the client storage. Required when `run_client` is true.
@@ -144,9 +149,18 @@ impl BridgeNodeConfig {
 
         let client_sui_address = SuiAddress::from(&bridge_client_key.public());
         info!("Bridge client sui address: {:?}", client_sui_address);
-        let gas_object_id = self.bridge_client_gas_object.ok_or(anyhow!(
-            "`bridge_client_gas_object` is required when `run_client` is true"
-        ))?;
+
+        // TODO: decide a minimal amount here and return if no coin has enough balance
+        let gas_object_id = match self.bridge_client_gas_object {
+            Some(id) => id,
+            None => {
+                let sui_client = SuiClientBuilder::default().build(&self.sui_rpc_url).await?;
+                let coin =
+                    pick_highest_balance_coin(sui_client.coin_read_api(), client_sui_address, 0)
+                        .await?;
+                coin.coin_object_id
+            }
+        };
         let db_path = self
             .db_path
             .clone()
@@ -300,3 +314,33 @@ pub struct BridgeCommitteeConfig {
 }
 
 impl Config for BridgeCommitteeConfig {}
+
+pub async fn pick_highest_balance_coin(
+    coin_read_api: &CoinReadApi,
+    address: SuiAddress,
+    minimal_amount: u64,
+) -> anyhow::Result<Coin> {
+    let mut highest_balance = 0;
+    let mut highest_balance_coin = None;
+    coin_read_api
+        .get_coins_stream(address, None)
+        .for_each(|coin: Coin| {
+            if coin.balance > highest_balance {
+                highest_balance = coin.balance;
+                highest_balance_coin = Some(coin.clone());
+            }
+            future::ready(())
+        })
+        .await;
+    if highest_balance_coin.is_none() {
+        return Err(anyhow!("No Sui coins found for address {:?}", address));
+    }
+    if highest_balance < minimal_amount {
+        return Err(anyhow!(
+            "Found no single coin that has >= {} balance Sui for address {:?}",
+            minimal_amount,
+            address,
+        ));
+    }
+    Ok(highest_balance_coin.unwrap())
+}
