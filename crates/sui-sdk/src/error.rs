@@ -31,4 +31,6 @@ pub enum Error {
     },
     #[error("Insufficient fund for address [{address}], requested amount: {amount}")]
     InsufficientFund { address: SuiAddress, amount: u128 },
+    #[error("Invalid URI: {0}")]
+    InvalidURI(String),
 }
