@@ -188,6 +188,7 @@ pub mod authority_test_utils;
 
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
+pub mod authority_per_epoch_store_util;
 
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
