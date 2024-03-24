@@ -1884,20 +1884,24 @@ impl AuthorityPerEpochStore {
         cert: &VerifiedExecutableTransaction,
         object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
     ) {
+        if let PerObjectCongestionControlMode::None =
+            self.protocol_config().per_object_congestion_control_mode()
+        {
+            return;
+        }
+
+        assert!(
+            PerObjectCongestionControlMode::TotalGasBudget
+                == self.protocol_config().per_object_congestion_control_mode()
+        );
+
         let start_cost =
             compute_object_start_cost(object_total_cost, cert.shared_input_objects().collect());
 
-        let unit_cost = match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => 0,
-            PerObjectCongestionControlMode::TotalGasBudget => cert.gas_budget(),
-        };
-
-        let end_cost = start_cost + unit_cost;
+        let end_cost = start_cost + cert.gas_budget();
 
         for obj in cert.shared_input_objects() {
-            let object_cost = object_total_cost
-                .entry(obj.id)
-                .or_insert_with(Default::default);
+            let object_cost = object_total_cost.entry(obj.id).or_default();
 
             if obj.mutable {
                 object_cost.add_write_cost(end_cost);
