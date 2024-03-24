@@ -108,7 +108,7 @@ const config = {
             math,
             [
               require("@docusaurus/remark-plugin-npm2yarn"),
-              { sync: true, converters: ["npm", "yarn", "pnpm"] },
+              { sync: true, converters: ["yarn", "pnpm"] },
             ],
           ],
           rehypePlugins: [katex],
