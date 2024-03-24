@@ -85,10 +85,14 @@ export class MockWallet implements Wallet {
 		};
 	}
 
-	deleteFirstAccount() {
-		this.#accounts.splice(0, 1);
+	emit() {
 		this.#eventHandlers.forEach(({ listener }) => {
 			listener({ accounts: this.#accounts });
 		});
+	}
+
+	deleteFirstAccount() {
+		this.#accounts.splice(0, 1);
+		this.emit();
 	}
 }
