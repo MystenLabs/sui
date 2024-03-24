@@ -79,18 +79,22 @@ pub fn check_feature_or_error(
 
 pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
     assert!(!edition.supports(feature));
-    let valid_editions = format_oxford_list!("and", "'{}'", valid_editions_for_feature(feature));
-    let mut diag = diag!(
-        Editions::FeatureTooNew,
-        (
-            loc,
-            format!(
-                "{} not supported by current edition '{edition}', \
-                only {valid_editions} support this feature",
-                feature.error_prefix(),
-            )
+    let valid_editions = valid_editions_for_feature(feature);
+    let message = if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature)
+    {
+        format!(
+            "{} under development and should not be used right now.",
+            feature.error_prefix()
         )
-    );
+    } else {
+        format!(
+            "{} not supported by current edition '{edition}', \
+                only {} support this feature",
+            feature.error_prefix(),
+            format_oxford_list!("and", "'{}'", valid_editions)
+        )
+    };
+    let mut diag = diag!(Editions::FeatureTooNew, (loc, message));
     diag.add_note(UPGRADE_NOTE);
     diag
 }
@@ -126,10 +130,9 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
     FeatureGate::AutoborrowEq,
-    FeatureGate::CleverAssertions,
 ];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
