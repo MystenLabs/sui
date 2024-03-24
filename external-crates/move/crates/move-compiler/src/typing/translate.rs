@@ -1019,10 +1019,16 @@ fn subtype_no_report(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    core::subtype(subst, &lhs, &rhs).map(|(next_subst, ty)| {
-        context.subst = next_subst;
-        ty
-    })
+    match core::subtype(subst.clone(), &lhs, &rhs) {
+        Ok((next_subst, ty))  => {
+            context.subst = next_subst;
+            Ok(ty)
+        }
+        Err(err) => {
+            context.subst = subst;
+            Err(err)
+        }
+    }
 }
 
 fn subtype_impl<T: ToString, F: FnOnce() -> T>(
