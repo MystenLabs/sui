@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
-import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import type {
+	UseQueryOptions,
+	UseQueryResult,
+	UseSuspenseQueryOptions,
+	UseSuspenseQueryResult,
+} from '@tanstack/react-query';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 
 import type { PartialBy } from '../types/utilityTypes.js';
 import { useSuiClientContext } from './useSuiClient.js';
@@ -52,6 +57,44 @@ export function useSuiClientQuery<
 	const suiContext = useSuiClientContext();
 
 	return useQuery({
+		...options,
+		queryKey: [suiContext.network, method, params, ...queryKey],
+		queryFn: async () => {
+			return await suiContext.client[method](params as never);
+		},
+	});
+}
+
+export type UseSuiClientSuspenseQueryOptions<T extends keyof SuiRpcMethods, TData> = PartialBy<
+	Omit<UseSuspenseQueryOptions<SuiRpcMethods[T]['result'], Error, TData, unknown[]>, 'queryFn'>,
+	'queryKey'
+>;
+
+export function useSuiClientSuspenseQuery<
+	T extends keyof SuiRpcMethods,
+	TData = SuiRpcMethods[T]['result'],
+>(
+	...args: undefined extends SuiRpcMethods[T]['params']
+		? [
+				method: T,
+				params?: SuiRpcMethods[T]['params'],
+				options?: UseSuiClientSuspenseQueryOptions<T, TData>,
+		  ]
+		: [
+				method: T,
+				params: SuiRpcMethods[T]['params'],
+				options?: UseSuiClientSuspenseQueryOptions<T, TData>,
+		  ]
+): UseSuspenseQueryResult<TData, Error> {
+	const [method, params, { queryKey = [], ...options } = {}] = args as [
+		method: T,
+		params?: SuiRpcMethods[T]['params'],
+		options?: UseSuiClientSuspenseQueryOptions<T, TData>,
+	];
+
+	const suiContext = useSuiClientContext();
+
+	return useSuspenseQuery({
 		...options,
 		queryKey: [suiContext.network, method, params, ...queryKey],
 		queryFn: async () => {

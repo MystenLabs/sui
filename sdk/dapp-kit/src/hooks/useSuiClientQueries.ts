@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { UseQueryResult } from '@tanstack/react-query';
-import { useQueries } from '@tanstack/react-query';
+import type { UseQueryResult, UseSuspenseQueryResult } from '@tanstack/react-query';
+import { useQueries, useSuspenseQueries } from '@tanstack/react-query';
 
 import { useSuiClientContext } from './useSuiClient.js';
 import type { SuiRpcMethods, UseSuiClientQueryOptions } from './useSuiClientQuery.js';
@@ -52,6 +52,45 @@ export function useSuiClientQueries<
 	const suiContext = useSuiClientContext();
 
 	return useQueries({
+		combine: combine as never,
+		queries: queries.map((query) => {
+			const { method, params, options: { queryKey = [], ...restOptions } = {} } = query;
+
+			return {
+				...restOptions,
+				queryKey: [suiContext.network, method, params, ...queryKey],
+				queryFn: async () => {
+					return await suiContext.client[method](params as never);
+				},
+			};
+		}) as [],
+	});
+}
+
+export type UseSuiClientSuspenseQueriesResults<Args extends readonly SuiClientQueryOptions[]> = {
+	-readonly [K in keyof Args]: Args[K] extends {
+		method: infer M extends keyof SuiRpcMethods;
+		options?: {
+			select?: (...args: any[]) => infer R;
+		};
+	}
+		? UseSuspenseQueryResult<unknown extends R ? SuiRpcMethods[M]['result'] : R, Error>
+		: never;
+};
+
+export function useSuiClientSuspenseQueries<
+	const Queries extends readonly SuiClientQueryOptions[],
+	Results = UseSuiClientSuspenseQueriesResults<Queries>,
+>({
+	queries,
+	combine,
+}: {
+	queries: Queries;
+	combine?: (results: UseSuiClientSuspenseQueriesResults<Queries>) => Results;
+}): Results {
+	const suiContext = useSuiClientContext();
+
+	return useSuspenseQueries({
 		combine: combine as never,
 		queries: queries.map((query) => {
 			const { method, params, options: { queryKey = [], ...restOptions } = {} } = query;

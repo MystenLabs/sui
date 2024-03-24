@@ -6,8 +6,10 @@ import type {
 	InfiniteData,
 	UseInfiniteQueryOptions,
 	UseInfiniteQueryResult,
+	UseSuspenseInfiniteQueryOptions,
+	UseSuspenseInfiniteQueryResult,
 } from '@tanstack/react-query';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useSuspenseInfiniteQuery } from '@tanstack/react-query';
 
 import type { PartialBy } from '../types/utilityTypes.js';
 import { useSuiClientContext } from './useSuiClient.js';
@@ -73,6 +75,46 @@ export function useSuiClientInfiniteQuery<
 		initialPageParam: null,
 		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
+		queryFn: ({ pageParam }) =>
+			suiContext.client[method]({
+				...(params ?? {}),
+				cursor: pageParam,
+			} as never),
+		getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor ?? null : null),
+	});
+}
+
+export type UseSuiClientSuspenseInfiniteQueryOptions<
+	T extends keyof SuiRpcPaginatedMethods,
+	TData,
+> = PartialBy<
+	Omit<
+		UseSuspenseInfiniteQueryOptions<
+			SuiRpcPaginatedMethods[T]['result'],
+			Error,
+			TData,
+			SuiRpcPaginatedMethods[T]['result'],
+			unknown[]
+		>,
+		'queryFn' | 'initialPageParam' | 'getNextPageParam'
+	>,
+	'queryKey'
+>;
+
+export function useSuiClientSuspenseInfiniteQuery<
+	T extends keyof SuiRpcPaginatedMethods,
+	TData = InfiniteData<SuiRpcPaginatedMethods[T]['result']>,
+>(
+	method: T,
+	params: SuiRpcPaginatedMethods[T]['params'],
+	{ queryKey = [], ...options }: UseSuiClientSuspenseInfiniteQueryOptions<T, TData> = {},
+): UseSuspenseInfiniteQueryResult<TData, Error> {
+	const suiContext = useSuiClientContext();
+
+	return useSuspenseInfiniteQuery({
+		...options,
+		initialPageParam: null,
+		queryKey: [suiContext.network, method, params, ...queryKey],
 		queryFn: ({ pageParam }) =>
 			suiContext.client[method]({
 				...(params ?? {}),
