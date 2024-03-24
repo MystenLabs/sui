@@ -2842,6 +2842,8 @@ fn parse_address_block(
     context: &mut Context,
 ) -> Result<AddressDefinition, Box<Diagnostic>> {
     const UNEXPECTED_TOKEN: &str = "Invalid code unit. Expected 'address' or 'module'";
+    let in_migration_mode = context.env.edition(context.package_name) == Edition::E2024_MIGRATION;
+
     if context.tokens.peek() != Tok::Identifier {
         let start = context.tokens.start_loc();
         let end = start + context.tokens.content().len();
@@ -2861,6 +2863,7 @@ fn parse_address_block(
             (addr_name.loc, msg)
         )));
     }
+
     let start_loc = context.tokens.start_loc();
     let addr = parse_leading_name_access(context)?;
     let end_loc = context.tokens.previous_end_loc();
@@ -2868,6 +2871,16 @@ fn parse_address_block(
 
     let modules = match context.tokens.peek() {
         Tok::LBrace => {
+            if in_migration_mode {
+                let loc = make_loc(
+                    addr_name.loc.file_hash(),
+                    addr_name.loc.start() as usize,
+                    context.tokens.current_token_loc().end() as usize,
+                );
+                context
+                    .env
+                    .add_diag(diag!(Migration::AddressRemove, (loc, "address decl")));
+            }
             context.tokens.advance()?;
             let mut modules = vec![];
             loop {
@@ -2879,6 +2892,17 @@ fn parse_address_block(
                 let mut attributes = parse_attributes(context)?;
                 loop {
                     let (module, next_mod_attributes) = parse_module(attributes, context)?;
+
+                    if in_migration_mode {
+                        context.env.add_diag(diag!(
+                            Migration::AddressAdd,
+                            (
+                                module.name.loc(),
+                                format!("{}::", context.tokens.loc_contents(loc))
+                            ),
+                        ));
+                    }
+
                     modules.push(module);
                     let Some(attrs) = next_mod_attributes else {
                         // no attributes returned from parse_module - just keep parsing next module
@@ -2888,11 +2912,33 @@ fn parse_address_block(
                     attributes = attrs;
                 }
             }
+
+            if in_migration_mode {
+                let loc = context.tokens.current_token_loc();
+                context
+                    .env
+                    .add_diag(diag!(Migration::AddressRemove, (loc, "close lbrace")));
+            }
+
             consume_token(context.tokens, context.tokens.peek())?;
             modules
         }
         _ => return Err(unexpected_token_error(context.tokens, "'{'")),
     };
+
+    if context.env.edition(context.package_name) != Edition::LEGACY && !in_migration_mode {
+        let loc = addr_name.loc;
+        let msg = "'address' blocks are deprecated. Use addresses \
+                  directly in module definitions instead.";
+        let mut diag = diag!(Editions::DeprecatedFeature, (loc, msg));
+        for module in &modules {
+            diag.add_secondary_label((
+                module.name.loc(),
+                format!("Replace with '{}::{}'", addr, module.name),
+            ));
+        }
+        context.env.add_diag(diag);
+    }
 
     Ok(AddressDefinition {
         attributes,
