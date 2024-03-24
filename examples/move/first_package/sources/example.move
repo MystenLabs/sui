@@ -112,7 +112,7 @@ module first_package::example {
             ts::return_to_sender(&ts, forge);
         };
 
-        // third transaction executed by the initial sword owner
+        // third transaction executed by the ALICE
         {
             ts::next_tx(&mut ts, ALICE);
             // extract the sword owned by the initial owner
