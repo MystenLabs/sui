@@ -34,9 +34,7 @@ use move_command_line_common::files::{
 };
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_package::compilation::compiled_package::{
-    CompiledPackage as MoveCompiledPackage, CompiledUnitWithSource,
-};
+use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use move_symbol_pool::Symbol;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::error::Error;
@@ -230,7 +228,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             );
         }
 
-        let local_modules = local_modules(&compiled_package.package, verify_deps, source_mode)?;
+        let local_modules = local_modules(compiled_package, verify_deps, source_mode)?;
         let mut on_chain_modules = self.on_chain_modules(on_chain_pkgs.into_iter()).await?;
 
         let mut errors = Vec::new();
@@ -357,7 +355,7 @@ fn substitute_root_address(
 }
 
 fn local_modules(
-    compiled_package: &MoveCompiledPackage,
+    compiled_package: &CompiledPackage,
     include_deps: bool,
     source_mode: SourceMode,
 ) -> Result<LocalModules, SourceVerificationError> {
@@ -365,10 +363,12 @@ fn local_modules(
 
     if include_deps {
         // Compile dependencies with prior compilers if needed.
-        let deps_compiled_units = units_for_toolchain(&compiled_package.deps_compiled_units)
-            .map_err(|e| SourceVerificationError::CannotCheckLocalModules {
-                package: compiled_package.compiled_package_info.package_name,
-                message: e.to_string(),
+        let deps_compiled_units =
+            units_for_toolchain(&compiled_package.package.deps_compiled_units).map_err(|e| {
+                SourceVerificationError::CannotCheckLocalModules {
+                    package: compiled_package.package.compiled_package_info.package_name,
+                    message: e.to_string(),
+                }
             })?;
 
         for (package, local_unit) in deps_compiled_units {
@@ -381,9 +381,22 @@ fn local_modules(
 
             map.insert((address, module), (package, m.module.clone()));
         }
+
+        // Include bytecode dependencies.
+        for (package, module) in compiled_package.bytecode_deps.iter() {
+            let address = *module.address();
+            if address == AccountAddress::ZERO {
+                continue;
+            }
+
+            map.insert(
+                (address, Symbol::from(module.name().as_str())),
+                (*package, module.clone()),
+            );
+        }
     }
 
-    let root_package = compiled_package.compiled_package_info.package_name;
+    let root_package = compiled_package.package.compiled_package_info.package_name;
     match source_mode {
         SourceMode::Skip => { /* nop */ }
 
@@ -392,6 +405,7 @@ fn local_modules(
             // Compile root modules with prior compiler if needed.
             let root_compiled_units = {
                 let root_compiled_units = compiled_package
+                    .package
                     .root_compiled_units
                     .iter()
                     .map(|u| ("root".into(), u.clone()))
@@ -399,7 +413,7 @@ fn local_modules(
 
                 units_for_toolchain(&root_compiled_units).map_err(|e| {
                     SourceVerificationError::CannotCheckLocalModules {
-                        package: compiled_package.compiled_package_info.package_name,
+                        package: compiled_package.package.compiled_package_info.package_name,
                         message: e.to_string(),
                     }
                 })?
@@ -427,6 +441,7 @@ fn local_modules(
             // Compile root modules with prior compiler if needed.
             let root_compiled_units = {
                 let root_compiled_units = compiled_package
+                    .package
                     .root_compiled_units
                     .iter()
                     .map(|u| ("root".into(), u.clone()))
@@ -434,7 +449,7 @@ fn local_modules(
 
                 units_for_toolchain(&root_compiled_units).map_err(|e| {
                     SourceVerificationError::CannotCheckLocalModules {
-                        package: compiled_package.compiled_package_info.package_name,
+                        package: compiled_package.package.compiled_package_info.package_name,
                         message: e.to_string(),
                     }
                 })?
@@ -450,7 +465,7 @@ fn local_modules(
                 );
             }
 
-            for (package, local_unit) in &compiled_package.deps_compiled_units {
+            for (package, local_unit) in &compiled_package.package.deps_compiled_units {
                 let m = &local_unit.unit;
                 let module = m.name;
                 let address = m.address.into_inner();

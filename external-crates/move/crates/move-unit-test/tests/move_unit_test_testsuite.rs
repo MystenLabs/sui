@@ -25,7 +25,13 @@ fn run_test_with_modifiers(
     }
 
     results.push((
-        unit_test_config.run_and_report_unit_tests(test_plan.unwrap(), None, None, buffer)?,
+        unit_test_config.run_and_report_unit_tests(
+            test_plan.unwrap(),
+            None,
+            None,
+            vec![],
+            buffer,
+        )?,
         path.with_extension(EXP_EXT),
     ));
 
