@@ -1374,6 +1374,7 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "enable_coin_deny_list": false,
                 "enable_effects_v2": false,
+                "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
