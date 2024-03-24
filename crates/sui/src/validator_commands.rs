@@ -57,7 +57,7 @@ use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 #[cfg(test)]
 mod validator_tests;
 
-const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
+const DEFAULT_GAS_BUDGET: u64 = 2_000_000_000; // 2 SUI
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -163,6 +163,14 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    DisplayBecomeCandidateTxn {
+        #[clap(name = "validator-info-path")]
+        file: PathBuf,
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
+        #[clap(name = "gas-id", long)]
+        gas_id: Option<ObjectID>,
+    }
 }
 
 #[derive(Serialize)]
@@ -181,6 +189,10 @@ pub enum SuiValidatorCommandResponse {
         data: TransactionData,
         serialized_data: String,
     },
+    DisplayBecomeCandidateTxn {
+        data: TransactionData,
+        serialized_data: String,
+    }
 }
 
 fn make_key_files(
@@ -341,6 +353,56 @@ impl SuiValidatorCommand {
                 let response =
                     call_0x5(context, "request_add_validator_candidate", args, gas_budget).await?;
                 SuiValidatorCommandResponse::BecomeCandidate(response)
+            }
+
+            SuiValidatorCommand::DisplayBecomeCandidateTxn { file, gas_budget, gas_id } => {
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let validator_info_bytes = fs::read(file)?;
+                // Note: we should probably rename the struct or evolve it accordingly.
+                let validator_info: GenesisValidatorInfo =
+                    serde_yaml::from_slice(&validator_info_bytes)?;
+                let validator = validator_info.info;
+
+                let args = vec![
+                    CallArg::Pure(
+                        bcs::to_bytes(&AuthorityPublicKeyBytes::from_bytes(
+                            validator.protocol_key().as_bytes(),
+                        )?)
+                        .unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator.network_key().as_bytes().to_vec()).unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator.worker_key().as_bytes().to_vec()).unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator_info.proof_of_possession.as_ref().to_vec())
+                            .unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator.name().to_owned().into_bytes()).unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator.description.clone().into_bytes()).unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator.image_url.clone().into_bytes()).unwrap(),
+                    ),
+                    CallArg::Pure(
+                        bcs::to_bytes(&validator.project_url.clone().into_bytes()).unwrap(),
+                    ),
+                    CallArg::Pure(bcs::to_bytes(validator.network_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(validator.p2p_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(validator.narwhal_primary_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(validator.narwhal_worker_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&validator.gas_price()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&validator.commission_rate()).unwrap()),
+                ];
+                let sender = validator.sui_address();
+                let data = construct_unsigned_0x5_txn(context, sender, "request_add_validator_candidate", args, gas_budget).await?;
+                let serialized_data = Base64::encode(bcs::to_bytes(&data)?);
+                SuiValidatorCommandResponse::DisplayBecomeCandidateTxn{data, serialized_data}
             }
 
             SuiValidatorCommand::JoinCommittee { gas_budget } => {
@@ -610,6 +672,7 @@ async fn construct_unsigned_0x5_txn(
         .await?;
 
     let gas_obj_ref = get_gas_obj_ref(sender, &sui_client, gas_budget).await?;
+    println!("Gas object reference: {:?}", gas_obj_ref);
     TransactionData::new_move_call(
         sender,
         SUI_SYSTEM_PACKAGE_ID,
@@ -680,6 +743,16 @@ impl Display for SuiValidatorCommandResponse {
                 write!(writer, "Serialized payload: {}", response)?;
             }
             SuiValidatorCommandResponse::DisplayGasPriceUpdateRawTxn {
+                data,
+                serialized_data,
+            } => {
+                write!(
+                    writer,
+                    "Transaction: {:?}, \nSerialized transaction: {:?}",
+                    data, serialized_data
+                )?;
+            },
+            SuiValidatorCommandResponse::DisplayBecomeCandidateTxn {
                 data,
                 serialized_data,
             } => {
