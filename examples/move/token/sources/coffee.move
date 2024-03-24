@@ -23,6 +23,7 @@ module examples::coffee {
     /// OTW for the Token.
     struct COFFEE has drop {}
 
+    #[lint_allow(coin_field)]
     /// The shop that sells Coffee and allows to buy a Coffee if the customer
     /// has 10 COFFEE points.
     struct CoffeeShop has key {

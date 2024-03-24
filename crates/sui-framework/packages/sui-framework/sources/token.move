@@ -51,6 +51,8 @@ module sui::token {
     /// Using `confirm_request_mut` without `spent_balance`. Immutable version
     /// of the function must be used instead.
     const EUseImmutableConfirm: u64 = 7;
+    /// Using incorrect cap for the `freeze_policy` method.
+    const EIncorrectCap: u64 = 8;
 
     // === Protected Actions ===
 
@@ -170,6 +172,21 @@ module sui::token {
         });
 
         transfer::share_object(policy)
+    }
+
+    /// Freeze the `TokenPolicy`. After freezing, the `TokenPolicy` can no longer
+    /// be modified. Consumes the `TokenPolicyCap` as it becomes useless after
+    /// the object has been put into an immutable state.
+    ///
+    /// Warning: this action should only be performed in rare cases as the
+    /// consequences are irreversible. Changing or removing a frozen policy is
+    /// not possible.
+    public fun freeze_policy<T>(policy: TokenPolicy<T>, cap: TokenPolicyCap<T>) {
+        let TokenPolicyCap { id, for } = cap;
+        
+        assert!(object::id(&policy) == for, EIncorrectCap);
+        transfer::freeze_object(policy);
+        object::delete(id);
     }
 
     // === Protected Actions ===
