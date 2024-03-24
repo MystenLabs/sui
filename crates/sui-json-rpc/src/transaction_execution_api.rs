@@ -105,7 +105,7 @@ impl TransactionExecutionApi {
         }
         let txn = Transaction::from_generic_sig_data(tx_data, sigs);
         let raw_transaction = if opts.show_raw_input {
-            bcs::to_bytes(txn.data())?
+            tx_bytes.to_vec()?
         } else {
             vec![]
         };
