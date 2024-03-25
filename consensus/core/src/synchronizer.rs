@@ -44,6 +44,7 @@ enum Command {
         peer_index: AuthorityIndex,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
+    KickOffScheduler,
 }
 
 pub(crate) struct SynchronizerHandle {
@@ -88,6 +89,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     network_client: Arc<C>,
     block_verifier: Arc<V>,
     blocks_to_fetch: BlocksToFetchMap,
+    commands_sender: Sender<Command>,
 }
 
 impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C, V, D> {
@@ -116,9 +118,12 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 core_dispatcher.clone(),
                 receiver,
                 blocks_to_fetch.clone(),
+                commands_sender.clone(),
             ));
             fetch_block_senders.insert(index, sender);
         }
+
+        let commands_sender_clone = commands_sender.clone();
 
         // Spawn the task to listen to the requests & periodic runs
         tasks.spawn(async {
@@ -131,6 +136,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 network_client,
                 block_verifier,
                 blocks_to_fetch,
+                commands_sender: commands_sender_clone,
             };
             s.run().await;
         });
@@ -215,6 +221,27 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }*/
 
                             result.send(r).ok();
+                        },
+                        Command::KickOffScheduler => {
+                            // If is not already running, then kick off.
+                            if self.fetch_blocks_scheduler_task.is_empty() {
+                                if let Err(err) = self.start_fetch_missing_blocks_task().await {
+                                    debug!("Core is shutting down, synchronizer is shutting down: {err:?}");
+                                    return;
+                                };
+                                scheduler_timeout
+                                .as_mut()
+                                .reset(Instant::now() + SYNCHRONIZER_TIMEOUT);
+                            } else {
+                                // Otherwise shorten the timeout
+                                let timeout = Instant::now() + SYNCHRONIZER_TIMEOUT.checked_div(2).unwrap();
+
+                                if timeout < scheduler_timeout.deadline() {
+                                    scheduler_timeout
+                                    .as_mut()
+                                    .reset(timeout);
+                                }
+                            }
                         }
                     }
                 },
@@ -256,6 +283,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         core_dispatcher: Arc<D>,
         mut receiver: Receiver<BTreeSet<BlockRef>>,
         blocks_to_fetch: BlocksToFetchMap,
+        commands_sender: Sender<Command>,
     ) {
         const MAX_RETRIES: u32 = 5;
 
@@ -280,7 +308,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
                                 context.clone(),
-                                blocks_to_fetch.clone()).await {
+                                blocks_to_fetch.clone(),
+                                commands_sender.clone()).await {
                                 warn!("Error while processing fetched blocks from peer {peer_index}: {err}");
                             }
                         },
@@ -314,6 +343,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         block_verifier: Arc<V>,
         context: Arc<Context>,
         blocks_to_fetch: BlocksToFetchMap,
+        commands_sender: Sender<Command>,
     ) -> ConsensusResult<()> {
         let mut verified_blocks = Vec::new();
 
@@ -364,6 +394,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .add_blocks(verified_blocks)
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+
+        // kick off immediately the scheduled synchronizer
+        if !missing_blocks.is_empty() {
+            commands_sender.send(Command::KickOffScheduler).await.ok();
+        }
 
         context
             .metrics
@@ -439,6 +474,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let block_verifier = self.block_verifier.clone();
         let core_dispatcher = self.core_dispatcher.clone();
         let blocks_to_fetch = self.blocks_to_fetch.clone();
+        let commands_sender = self.commands_sender.clone();
 
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
@@ -462,7 +498,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     total_fetched += fetched_blocks.len();
                     context.metrics.node_metrics.fetched_blocks.with_label_values(&[&peer.to_string(), "periodic"]).inc_by(fetched_blocks.len() as u64);
 
-                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, requested_block_refs, core_dispatcher.clone(), block_verifier.clone(), context.clone(), blocks_to_fetch.clone()).await {
+                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, requested_block_refs, core_dispatcher.clone(), block_verifier.clone(), context.clone(), blocks_to_fetch.clone(), commands_sender.clone()).await {
                         warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");
                     }
                 }
