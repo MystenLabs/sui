@@ -28,6 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Spell Check Docs
-        uses: crate-ci/typos@v1.16.11
+        uses: crate-ci/typos@v1.19.0
         with:
           files: ./docs/content
