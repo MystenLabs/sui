@@ -2660,7 +2660,6 @@ impl AuthorityPerEpochStore {
         bool,                    // true if final round
     )> {
         let randomness_round = if generate_randomness {
-            // invariant checks
             assert!(dkg_closed);
             Some(
                 randomness_manager

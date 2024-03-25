@@ -54,7 +54,7 @@ impl SharedObjVerManager {
             // If we're generating randomness, update the randomness state object version.
             let version = shared_input_next_versions
                 .get_mut(&SUI_RANDOMNESS_STATE_OBJECT_ID)
-                .expect("added randomness state object to lookup above");
+                .expect("randomness state object must have been added in get_or_init_versions()");
             debug!("assigning shared object versions for randomness: epoch {}, round {round:?} -> version {version:?}", epoch_store.epoch());
             assigned_versions.push((
                 TransactionKey::RandomnessRound(epoch_store.epoch(), round),
