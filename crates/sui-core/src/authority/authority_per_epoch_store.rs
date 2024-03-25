@@ -625,28 +625,6 @@ enum DeferralReason {
     SharedObjectCongestion(Vec<ObjectID>),
 }
 
-#[test]
-fn test_update_read_write_cost() {
-    let mut object_cost = ObjectCost {
-        total_cost_to_last_write: 0,
-        total_cost: 0,
-    };
-    object_cost.add_write_cost(10);
-    assert_eq!(object_cost.total_cost_to_last_write, 10);
-    assert_eq!(object_cost.total_cost, 10);
-
-    object_cost.add_read_cost(20);
-    assert_eq!(object_cost.total_cost_to_last_write, 10);
-    assert_eq!(object_cost.total_cost, 20);
-
-    object_cost.add_read_cost(15);
-    assert_eq!(object_cost.total_cost, 20);
-
-    object_cost.add_write_cost(30);
-    assert_eq!(object_cost.total_cost_to_last_write, 30);
-    assert_eq!(object_cost.total_cost, 30);
-}
-
 fn signed_transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
