@@ -19,7 +19,7 @@ use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
-    editions::Edition,
+    editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
     Flags, FullyCompiledProgram,
 };
@@ -1865,6 +1865,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     };
     let config = PackageConfig {
         edition: Edition::E2024_BETA,
+        flavor: Flavor::Sui,
         ..Default::default()
     };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(

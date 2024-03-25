@@ -239,7 +239,7 @@ Make an <code><a href="../sui-framework/object.md#0x2_object_ID">ID</a></code> f
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../sui-framework/object.md#0x2_object_ID">ID</a> {
-    <a href="../sui-framework/object.md#0x2_object_id_from_address">id_from_address</a>(address::from_bytes(bytes))
+    address::from_bytes(bytes).to_id()
 }
 </code></pre>
 
@@ -290,7 +290,7 @@ This should only be called once from <code>sui_system</code>.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &TxContext): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/object.md#0x2_object_SUI_SYSTEM_STATE_OBJECT_ID">SUI_SYSTEM_STATE_OBJECT_ID</a> },
     }
@@ -532,7 +532,7 @@ This is the only way to create <code><a href="../sui-framework/object.md#0x2_obj
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/object.md#0x2_object_new">new</a>(ctx: &<b>mut</b> TxContext): <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../sui-framework/object.md#0x2_object_UID">UID</a> {
-        id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../sui-framework/tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx) },
+        id: <a href="../sui-framework/object.md#0x2_object_ID">ID</a> { bytes: ctx.fresh_object_address() },
     }
 }
 </code></pre>
