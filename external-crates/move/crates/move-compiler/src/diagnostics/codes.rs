@@ -356,6 +356,8 @@ codes!(
         NeedsGlobalQualification: { msg: "move 2024 migration: global qualification", severity: NonblockingError },
         RemoveFriend: { msg: "move 2024 migration: remove 'friend'", severity: NonblockingError },
         MakePubPackage: { msg: "move 2024 migration: make 'public(package)'", severity: NonblockingError },
+        AddressRemove: { msg: "move 2024 migration: address remove", severity: NonblockingError },
+        AddressAdd: { msg: "move 2024 migration: address add", severity: NonblockingError },
     ]
 );
 
