@@ -161,7 +161,7 @@ impl Version {
             year: env!("CARGO_PKG_VERSION_MAJOR"),
             month: env!("CARGO_PKG_VERSION_MINOR"),
             patch: env!("CARGO_PKG_VERSION_PATCH"),
-            sha: "unknown",
+            sha: "testing-no-sha",
             // note that this full field is needed for metrics but not for testing
             full: const_str::concat!(
                 env!("CARGO_PKG_VERSION_MAJOR"),
@@ -169,7 +169,7 @@ impl Version {
                 env!("CARGO_PKG_VERSION_MINOR"),
                 ".",
                 env!("CARGO_PKG_VERSION_PATCH"),
-                "-unknown"
+                "-testing-no-sha"
             ),
         }
     }

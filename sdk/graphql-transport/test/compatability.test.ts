@@ -61,8 +61,8 @@ describe('GraphQL SuiClient compatibility', () => {
 	test('getRpcApiVersion', async () => {
 		const version = await graphQLClient!.getRpcApiVersion();
 
-		// unknown is used for testing scenarios where we do not know the SHA
-		expect(version?.match(/^\d+.\d+.\d+-(unknown|[a-z0-9]{40})$/)).not.toBeNull();
+		// testing-no-sha is used for testing scenarios where we do not know the SHA
+		expect(version?.match(/^\d+.\d+.\d+-(testing-no-sha|[a-z0-9]{40})$/)).not.toBeNull();
 	});
 
 	test('getCoins', async () => {
