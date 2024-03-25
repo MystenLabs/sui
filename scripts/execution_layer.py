@@ -121,7 +121,7 @@ def parse_args():
 
 
 def feature(f):
-    if re.match(r"[a-z][a-zA-Z0-9_]*", f):
+    if re.match(r"[a-z]\w*", f):
         return f
     else:
         raise argparse.ArgumentTypeError(f"Invalid feature name: '{f}'")
@@ -561,7 +561,7 @@ def discover_cuts():
     for f in src.iterdir():
         if not f.is_file() or f.stem in NOT_A_CUT:
             continue
-        elif re.match(r"latest|v[0-9]+", f.stem):
+        elif re.match(r"latest|v\d+", f.stem):
             snapshots.append(f)
         else:
             features.append(f)
