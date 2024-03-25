@@ -33,6 +33,10 @@ const clearDirectory = async (directoryPath) => {
 
       // Iterate over the contents and remove each item.
       for (const file of files) {
+        if (file === "index.mdx") {
+          continue;
+        }
+
         const fullPath = path.join(directoryPath, file);
         await fs.promises.rm(fullPath, { recursive: true, force: true });
       }
