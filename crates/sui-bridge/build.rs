@@ -13,6 +13,7 @@ fn main() -> Result<(), ExitStatus> {
     }
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../../bridge/evm");
     let base = env!("CARGO_MANIFEST_DIR");
     let bridge_path = format!("{base}/../../bridge/evm");
     let bridge_lib_path = format!("{base}/../../bridge/evm/lib");

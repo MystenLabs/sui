@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import "./utils/CommitteeUpgradeable.sol";
 import "./interfaces/ISuiBridge.sol";
 import "./interfaces/IBridgeVault.sol";
@@ -54,28 +55,36 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// @param message The BridgeMessage containing the transfer details.
     function transferBridgedTokensWithSignatures(
         bytes[] memory signatures,
-        BridgeMessage.Message memory message
+        BridgeUtils.Message memory message
     )
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeMessage.TOKEN_TRANSFER)
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.TOKEN_TRANSFER)
         onlySupportedChain(message.chainID)
     {
         // verify that message has not been processed
         require(!isTransferProcessed[message.nonce], "SuiBridge: Message already processed");
 
-        BridgeMessage.TokenTransferPayload memory tokenTransferPayload =
-            BridgeMessage.decodeTokenTransferPayload(message.payload);
+        IBridgeConfig config = committee.config();
+
+        BridgeUtils.TokenTransferPayload memory tokenTransferPayload =
+            BridgeUtils.decodeTokenTransferPayload(message.payload);
 
         // verify target chain ID is this chain ID
         require(
-            tokenTransferPayload.targetChain == committee.config().chainID(),
-            "SuiBridge: Invalid target chain"
+            tokenTransferPayload.targetChain == config.chainID(), "SuiBridge: Invalid target chain"
+        );
+
+        // verify token ID is supported
+        require(
+            config.isTokenSupported(tokenTransferPayload.tokenID), "SuiBridge: Unsupported token"
         );
 
         // convert amount to ERC20 token decimals
-        uint256 erc20AdjustedAmount = committee.config().convertSuiToERC20Decimal(
-            tokenTransferPayload.tokenID, tokenTransferPayload.amount
+        uint256 erc20AdjustedAmount = BridgeUtils.convertSuiToERC20Decimal(
+            IERC20Metadata(config.tokenAddressOf(tokenTransferPayload.tokenID)).decimals(),
+            config.tokenSuiDecimalOf(tokenTransferPayload.tokenID),
+            tokenTransferPayload.amount
         );
 
         _transferTokensFromVault(
@@ -91,7 +100,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         emit TokensClaimed(
             message.chainID,
             message.nonce,
-            committee.config().chainID(),
+            config.chainID(),
             tokenTransferPayload.tokenID,
             erc20AdjustedAmount,
             tokenTransferPayload.senderAddress,
@@ -106,14 +115,14 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// @param message The BridgeMessage containing the details of the operation.
     function executeEmergencyOpWithSignatures(
         bytes[] memory signatures,
-        BridgeMessage.Message memory message
+        BridgeUtils.Message memory message
     )
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeMessage.EMERGENCY_OP)
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.EMERGENCY_OP)
     {
         // decode the emergency op message
-        bool isFreezing = BridgeMessage.decodeEmergencyOpPayload(message.payload);
+        bool isFreezing = BridgeUtils.decodeEmergencyOpPayload(message.payload);
 
         if (isFreezing) _pause();
         else _unpause();
@@ -134,9 +143,11 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         bytes memory recipientAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
-        require(committee.config().isTokenSupported(tokenID), "SuiBridge: Unsupported token");
+        IBridgeConfig config = committee.config();
 
-        address tokenAddress = committee.config().getTokenAddress(tokenID);
+        require(config.isTokenSupported(tokenID), "SuiBridge: Unsupported token");
+
+        address tokenAddress = config.tokenAddressOf(tokenID);
 
         // check that the bridge contract has allowance to transfer the tokens
         require(
@@ -147,12 +158,14 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         // Transfer the tokens from the contract to the vault
         IERC20(tokenAddress).transferFrom(msg.sender, address(vault), amount);
 
-        // Adjust the amount to emit.
-        uint64 suiAdjustedAmount = committee.config().convertERC20ToSuiDecimal(tokenID, amount);
+        // Adjust the amount
+        uint64 suiAdjustedAmount = BridgeUtils.convertERC20ToSuiDecimal(
+            IERC20Metadata(tokenAddress).decimals(), config.tokenSuiDecimalOf(tokenID), amount
+        );
 
         emit TokensDeposited(
-            committee.config().chainID(),
-            nonces[BridgeMessage.TOKEN_TRANSFER],
+            config.chainID(),
+            nonces[BridgeUtils.TOKEN_TRANSFER],
             destinationChainID,
             tokenID,
             suiAdjustedAmount,
@@ -161,7 +174,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         );
 
         // increment token transfer nonce
-        nonces[BridgeMessage.TOKEN_TRANSFER]++;
+        nonces[BridgeUtils.TOKEN_TRANSFER]++;
     }
 
     /// @notice Enables the caller to deposit Eth to be bridged to a given destination chain.
@@ -183,22 +196,27 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         // Transfer the wrapped ETH back to caller
         wETH.transfer(address(vault), amount);
 
-        // Adjust the amount to emit.
-        uint64 suiAdjustedAmount =
-            committee.config().convertERC20ToSuiDecimal(BridgeMessage.ETH, amount);
+        IBridgeConfig config = committee.config();
+
+        // Adjust the amount
+        uint64 suiAdjustedAmount = BridgeUtils.convertERC20ToSuiDecimal(
+            IERC20Metadata(config.tokenAddressOf(BridgeUtils.ETH)).decimals(),
+            config.tokenSuiDecimalOf(BridgeUtils.ETH),
+            amount
+        );
 
         emit TokensDeposited(
-            committee.config().chainID(),
-            nonces[BridgeMessage.TOKEN_TRANSFER],
+            config.chainID(),
+            nonces[BridgeUtils.TOKEN_TRANSFER],
             destinationChainID,
-            BridgeMessage.ETH,
+            BridgeUtils.ETH,
             suiAdjustedAmount,
             msg.sender,
             recipientAddress
         );
 
         // increment token transfer nonce
-        nonces[BridgeMessage.TOKEN_TRANSFER]++;
+        nonces[BridgeUtils.TOKEN_TRANSFER]++;
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -214,13 +232,13 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         address recipientAddress,
         uint256 amount
     ) private whenNotPaused limitNotExceeded(sendingChainID, tokenID, amount) {
-        address tokenAddress = committee.config().getTokenAddress(tokenID);
+        address tokenAddress = committee.config().tokenAddressOf(tokenID);
 
         // Check that the token address is supported
         require(tokenAddress != address(0), "SuiBridge: Unsupported token");
 
         // transfer eth if token type is eth
-        if (tokenID == BridgeMessage.ETH) {
+        if (tokenID == BridgeUtils.ETH) {
             vault.transferETH(payable(recipientAddress), amount);
         } else {
             // transfer tokens from vault to target address

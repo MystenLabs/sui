@@ -6,6 +6,6 @@
   "supportedChainIDs": [1],
   "supportedChainLimitsInDollars": [1000000],
   "supportedTokens": [],
-  "tokenPrices": [12800, 432518900, 25969600, 10000],
+  "tokenPrices": [12800, 432518900, 25969600, 10000, 10000],
   "wETHAddress": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
 }

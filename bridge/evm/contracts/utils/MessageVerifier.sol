@@ -31,7 +31,7 @@ abstract contract MessageVerifier is Initializable {
     /// @param signatures The array of signatures to be verified.
     /// @param messageType The expected message type of the provided message.
     modifier verifyMessageAndSignatures(
-        BridgeMessage.Message memory message,
+        BridgeUtils.Message memory message,
         bytes[] memory signatures,
         uint8 messageType
     ) {
@@ -40,7 +40,7 @@ abstract contract MessageVerifier is Initializable {
         // verify signatures
         committee.verifySignatures(signatures, message);
         // increment message type nonce
-        if (messageType != BridgeMessage.TOKEN_TRANSFER) {
+        if (messageType != BridgeUtils.TOKEN_TRANSFER) {
             // verify chain ID
             require(
                 message.chainID == committee.config().chainID(), "MessageVerifier: Invalid chain ID"
