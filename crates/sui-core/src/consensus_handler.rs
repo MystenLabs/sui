@@ -306,9 +306,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .expect("Unrecoverable error in consensus handler");
 
         if !new_jwks.is_empty() {
-            debug!("adding AuthenticatorStateUpdate tx: {:?}", new_jwks);
             let authenticator_state_update_transaction =
                 self.authenticator_state_update_transaction(round, new_jwks);
+            debug!(
+                "adding AuthenticatorStateUpdate({:?}) tx: {:?}",
+                authenticator_state_update_transaction.digest(),
+                authenticator_state_update_transaction,
+            );
 
             transactions.push((
                 empty_bytes.as_slice(),

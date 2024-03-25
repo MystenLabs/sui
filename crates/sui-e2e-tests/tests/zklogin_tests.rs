@@ -85,13 +85,13 @@ async fn test_legacy_zklogin_address_accept() {
 #[sim_test]
 async fn zklogin_end_to_end_test() {
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
         .build()
         .await;
 
     // trigger reconfiguration that advanced epoch to 1.
-    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 
     // load test vectors
     let (kp, pk_zklogin, inputs) =
@@ -188,7 +188,7 @@ async fn test_auth_state_creation() {
     // Create test cluster without auth state object in genesis
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(23.into())
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
         .build()
         .await;
@@ -253,7 +253,7 @@ async fn test_conflicting_jwks() {
     use tokio::time::Duration;
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(45000)
+        .with_epoch_duration_ms(30000)
         .with_jwk_fetch_interval(Duration::from_secs(5))
         .build()
         .await;

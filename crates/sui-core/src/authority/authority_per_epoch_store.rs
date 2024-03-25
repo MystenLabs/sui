@@ -1967,7 +1967,7 @@ impl AuthorityPerEpochStore {
         let insert_result = jwk_aggregator.insert(authority, key.clone());
 
         if !previously_active && insert_result.is_quorum_reached() {
-            info!("jwk {:?} became active at round {:?}", key, round);
+            info!(epoch = ?self.epoch(), ?round, jwk = ?key, "jwk became active");
             batch.insert_batch(
                 &self.tables()?.active_jwks,
                 std::iter::once(((round, key), ())),
