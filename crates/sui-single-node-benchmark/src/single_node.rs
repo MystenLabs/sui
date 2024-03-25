@@ -15,7 +15,6 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::state_accumulator::AccumulatorStore;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
@@ -279,7 +278,9 @@ impl SingleValidator {
             ckpt_receiver,
             validator.get_checkpoint_store().clone(),
             validator.clone(),
-            Arc::new(StateAccumulator::new(validator.get_execution_cache())),
+            Arc::new(StateAccumulator::new(
+                validator.get_accumulator_store().clone(),
+            )),
         );
         (checkpoint_executor, ckpt_sender)
     }
@@ -287,7 +288,7 @@ impl SingleValidator {
     pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
         let objects: HashMap<_, _> = self
             .get_validator()
-            .get_execution_cache()
+            .get_accumulator_store()
             .iter_cached_live_object_set_for_testing(false)
             .map(|o| match o {
                 LiveObject::Normal(object) => (object.id(), object),

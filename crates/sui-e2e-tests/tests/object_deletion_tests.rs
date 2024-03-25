@@ -5,6 +5,7 @@
 mod sim_only_tests {
     use std::path::PathBuf;
     use std::time::Duration;
+    use sui_core::authority::authority_store_tables::LiveObject;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::sim_test;
     use sui_node::SuiNode;
@@ -49,18 +50,22 @@ mod sim_only_tests {
                 .await
                 .unwrap();
 
+                let state = node.state();
+                let checkpoint_store = state.get_checkpoint_store();
+
                 // Manually initiating a pruning and compaction job to make sure that deleted objects are gong from object store.
-                node.state().prune_objects_and_compact_for_testing().await;
+                state
+                    .database_for_testing()
+                    .prune_objects_and_compact_for_testing(checkpoint_store)
+                    .await;
 
                 // Check that no object with `child_id` exists in object store.
                 assert_eq!(
-                    node.state()
-                        .database_for_testing()
-                        .count_object_versions(child_id),
+                    state.database_for_testing().count_object_versions(child_id),
                     0
                 );
                 assert!(
-                    node.state()
+                    state
                         .database_for_testing()
                         .count_object_versions(object_id)
                         > 0
@@ -102,18 +107,21 @@ mod sim_only_tests {
                 .await
                 .unwrap();
 
+                let state = node.state();
+                let checkpoit_store = state.get_checkpoint_store();
                 // Manually initiating a pruning and compaction job to make sure that deleted objects are gong from object store.
-                node.state().prune_objects_and_compact_for_testing().await;
+                state
+                    .database_for_testing()
+                    .prune_objects_and_compact_for_testing(checkpoit_store)
+                    .await;
 
                 // Check that both root and child objects are gone from object store.
                 assert_eq!(
-                    node.state()
-                        .database_for_testing()
-                        .count_object_versions(child_id),
+                    state.database_for_testing().count_object_versions(child_id),
                     0
                 );
                 assert_eq!(
-                    node.state()
+                    state
                         .database_for_testing()
                         .count_object_versions(object_id),
                     0

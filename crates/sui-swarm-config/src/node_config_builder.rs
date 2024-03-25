@@ -12,8 +12,9 @@ use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis,
-    KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
+    Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
+    DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -227,6 +228,7 @@ impl ValidatorConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             with_client_ip_injection: None,
+            execution_cache: ExecutionCacheConfig::default(),
         }
     }
 
@@ -501,6 +503,7 @@ impl FullnodeConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             with_client_ip_injection: self.with_client_ip_injection,
+            execution_cache: ExecutionCacheConfig::default(),
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::execution_cache::ExecutionCache;
+use crate::execution_cache::build_execution_cache;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -23,6 +23,7 @@ use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
 use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
@@ -53,6 +54,7 @@ pub struct TestAuthorityBuilder<'a> {
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    cache_config: ExecutionCacheConfig,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -220,10 +222,9 @@ impl<'a> TestAuthorityBuilder<'a> {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
-        let cache = Arc::new(ExecutionCache::new_for_tests(
-            authority_store.clone(),
-            &registry,
-        ));
+
+        let cache_traits = build_execution_cache(&self.cache_config, &registry, &authority_store);
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -231,7 +232,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             EpochMetrics::new(&registry),
             epoch_start_configuration,
-            cache.clone(),
+            cache_traits.backing_package_store.clone(),
+            cache_traits.object_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
@@ -284,7 +286,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             authority_store,
-            cache,
+            cache_traits,
             epoch_store,
             committee_store,
             index_store,

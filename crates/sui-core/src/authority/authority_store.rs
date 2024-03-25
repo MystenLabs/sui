@@ -7,6 +7,9 @@ use std::sync::Arc;
 use std::{iter, mem, thread};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_pruner::{
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+};
 use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
 };
@@ -19,6 +22,7 @@ use futures::stream::FuturesUnordered;
 use itertools::izip;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
@@ -1926,6 +1930,27 @@ impl AuthorityStore {
         );
     }
 
+    pub async fn prune_objects_and_compact_for_testing(
+        &self,
+        checkpoint_store: &Arc<CheckpointStore>,
+    ) {
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.perpetual_tables,
+            checkpoint_store,
+            &self.objects_lock_table,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+            usize::MAX,
+            EPOCH_DURATION_MS_FOR_TESTING,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.perpetual_tables);
+    }
+
     #[cfg(test)]
     pub async fn prune_objects_immediately_for_testing(
         &self,
@@ -2052,13 +2077,16 @@ impl ObjectStore for AuthorityStore {
 }
 
 /// A wrapper to make Orphan Rule happy
-pub struct ResolverWrapper<T: BackingPackageStore> {
-    pub resolver: Arc<T>,
+pub struct ResolverWrapper {
+    pub resolver: Arc<dyn BackingPackageStore + Send + Sync>,
     pub metrics: Arc<ResolverMetrics>,
 }
 
-impl<T: BackingPackageStore> ResolverWrapper<T> {
-    pub fn new(resolver: Arc<T>, metrics: Arc<ResolverMetrics>) -> Self {
+impl ResolverWrapper {
+    pub fn new(
+        resolver: Arc<dyn BackingPackageStore + Send + Sync>,
+        metrics: Arc<ResolverMetrics>,
+    ) -> Self {
         metrics.module_cache_size.set(0);
         ResolverWrapper { resolver, metrics }
     }
@@ -2070,11 +2098,11 @@ impl<T: BackingPackageStore> ResolverWrapper<T> {
     }
 }
 
-impl<T: BackingPackageStore> ModuleResolver for ResolverWrapper<T> {
+impl ModuleResolver for ResolverWrapper {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
-        get_module(&self.resolver, module_id)
+        get_module(&*self.resolver, module_id)
     }
 }
 
