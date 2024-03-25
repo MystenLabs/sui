@@ -12,6 +12,11 @@ CREATE TABLE events
     module                      text         NOT NULL,
     -- StructTag in Display format
     event_type                  text         NOT NULL,
+    -- Components of the StructTag: package, module, name
+    event_type_package          bytea        NOT NULL,
+    event_type_module           text         NOT NULL,
+    event_type_name             text         NOT NULL,
+    -- timestamp of the checkpoint during which the event was emitted
     timestamp_ms                BIGINT       NOT NULL,
     -- bcs of the Event contents (Event.contents)
     bcs                         BYTEA        NOT NULL,
@@ -20,5 +25,6 @@ CREATE TABLE events
 
 CREATE INDEX events_package ON events (package, tx_sequence_number, event_sequence_number);
 CREATE INDEX events_package_module ON events (package, module, tx_sequence_number, event_sequence_number);
+-- TODO: what should this index be changed to?
 CREATE INDEX events_event_type ON events (event_type text_pattern_ops, tx_sequence_number, event_sequence_number);
 CREATE INDEX events_checkpoint_sequence_number ON events (checkpoint_sequence_number);

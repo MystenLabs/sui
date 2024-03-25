@@ -13,7 +13,6 @@ use diesel::{
     query_builder::QueryFragment,
     sql_types::{Binary, Text},
     AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods, QueryDsl, QuerySource,
-    TextExpressionMethods,
 };
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};
@@ -68,76 +67,117 @@ pub(crate) enum Error {
 }
 
 impl TypeFilter {
-    /// Modify `query` to apply this filter to `field`, returning the new query.
-    pub(crate) fn apply<E, QS, ST, GB>(
+    /// Modify `query` to apply this filter to `type_field`, `package_field`, `module_field`
+    /// and `name_field`, where `type_field` stores the full type tag while the rest three
+    /// store the package, module and name of the type tag respectively. The new query
+    /// after applying the filter is returned.
+    pub(crate) fn apply<T, P, M, N, QS, ST, GB>(
         &self,
         query: Query<ST, QS, GB>,
-        field: E,
+        type_field: T,
+        package_field: P,
+        module_field: M,
+        name_field: N,
     ) -> Query<ST, QS, GB>
     where
         Query<ST, QS, GB>: QueryDsl,
-        E: ExpressionMethods + TextExpressionMethods,
-        E: Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        E: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        E: Clone + Send + 'static,
+        T: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
+        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
+        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
+        N: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
+        T: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
+        P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
+        M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
+        N: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
+        T: Send + 'static,
+        P: Send + 'static,
+        M: Send + 'static,
+        N: Send + 'static,
         QS: QuerySource,
     {
         match self {
             TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
-                query.filter(field.like(format!("{p}::%")))
+                query.filter(package_field.eq(p.into_vec()))
             }
 
-            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
-                query.filter(field.like(format!("{p}::{m}::%")))
-            }
+            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => query
+                .filter(package_field.eq(p.into_vec()))
+                .filter(module_field.eq(m.clone())),
 
             // A type filter without type parameters is interpreted as either an exact match, or a
-            // match for all generic instantiations of the type.
+            // match for all generic instantiations of the type so we check against only package, module
+            // and name fields.
             TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
-                let f1 = field.clone();
-                let f2 = field;
-                let exact = tag.to_canonical_string(/* with_prefix */ true);
-                let prefix = format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
-                query.filter(f1.eq(exact).or(f2.like(prefix)))
+                let p = tag.address.to_vec();
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                query.filter(
+                    package_field
+                        .eq(p)
+                        .and(module_field.eq(m))
+                        .and(name_field.eq(n)),
+                )
             }
 
             TypeFilter::ByType(tag) => {
                 let exact = tag.to_canonical_string(/* with_prefix */ true);
-                query.filter(field.eq(exact))
+                // We check against the full type field for an exact match.
+                query.filter(type_field.eq(exact))
             }
         }
     }
 
     /// Modify `query` to apply this filter to `field`, returning the new query.
-    pub(crate) fn apply_raw(&self, mut query: RawQuery, field: &str) -> RawQuery {
+    pub(crate) fn apply_raw(
+        &self,
+        mut query: RawQuery,
+        type_field: &str,
+        package_field: &str,
+        module_field: &str,
+        name_field: &str,
+    ) -> RawQuery {
         match self {
             TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
-                let pattern = format!("{p}::%");
-                let statement = field.to_string() + " LIKE {}";
-                query = filter!(query, statement, pattern);
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(p.into_vec())
+                );
+                query = filter!(query, statement);
             }
 
             TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
-                let pattern = format!("{p}::{m}::%");
-                let statement = field.to_string() + " LIKE {}";
-                query = filter!(query, statement, pattern);
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(p.into_vec())
+                );
+                query = filter!(query, statement);
+                let m = m.to_string();
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
             }
 
             // A type filter without type parameters is interpreted as either an exact match, or a
             // match for all generic instantiations of the type.
             TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
-                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
-                let generic_pattern =
-                    format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
-
-                let statement = format!("({field} = {{}} OR {field} LIKE {{}})");
-
-                query = filter!(query, statement, exact_pattern, generic_pattern);
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(tag.address.to_vec())
+                );
+                query = filter!(query, statement);
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
+                let statement = name_field.to_string() + " = {}";
+                query = filter!(query, statement, n);
             }
 
             TypeFilter::ByType(tag) => {
                 let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
-                let statement = field.to_string() + " = {}";
+                let statement = type_field.to_string() + " = {}";
                 query = filter!(query, statement, exact_pattern);
             }
         }

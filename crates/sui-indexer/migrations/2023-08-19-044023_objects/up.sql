@@ -10,6 +10,10 @@ CREATE TABLE objects (
     owner_id                    bytea,
     -- Object type
     object_type                 text,
+    -- Components of the StructTag: package, module, name
+    object_type_package         bytea,
+    object_type_module          text,
+    object_type_name            text,
     -- bcs serialized Object
     serialized_object           bytea         NOT NULL,
     -- Non-null when the object is a coin.
@@ -48,6 +52,9 @@ CREATE TABLE objects_history (
     owner_type                  smallint,
     owner_id                    bytea,
     object_type                 text,
+    object_type_package         bytea,
+    object_type_module          text,
+    object_type_name            text,
     serialized_object           bytea,
     coin_type                   text,
     coin_balance                bigint,
@@ -75,6 +82,9 @@ CREATE TABLE objects_snapshot (
     owner_type                  smallint,
     owner_id                    bytea,
     object_type                 text,
+    object_type_package         bytea,
+    object_type_module          text,
+    object_type_name            text,
     serialized_object           bytea,
     coin_type                   text,
     coin_balance                bigint,
