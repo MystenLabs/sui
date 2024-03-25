@@ -742,9 +742,32 @@ fn build_unsigned_genesis_data(
     // Get the correct system packages for our protocol version. If we cannot find the snapshot
     // that means that we must be at the latest version and we should use the latest version of the
     // framework.
-    let system_packages =
+    let mut system_packages =
         sui_framework_snapshot::load_bytecode_snapshot(parameters.protocol_version.as_u64())
             .unwrap_or_else(|_| BuiltInFramework::iter_system_packages().cloned().collect());
+
+    // Filter `objects` for system packages, and make `SystemPackage`s out of them.
+    use sui_types::is_system_package;
+    let system_package_overrides: BTreeMap<ObjectID, Vec<Vec<u8>>> = objects
+        .iter()
+        .filter_map(|obj| {
+            let pkg = obj.data.try_as_package()?;
+            is_system_package(pkg.id()).then(|| {
+                (
+                    pkg.id(),
+                    pkg.serialized_module_map().values().cloned().collect(),
+                )
+            })
+        })
+        .collect();
+
+    // Replace packages in `system_packages` that are present in `objects` with their counterparts
+    // from the previous step.
+    for package in &mut system_packages {
+        if let Some(overrides) = system_package_overrides.get(&package.id).cloned() {
+            package.bytes = overrides;
+        }
+    }
 
     let mut genesis_ctx = create_genesis_context(
         &epoch_data,
