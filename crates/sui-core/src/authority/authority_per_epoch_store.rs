@@ -492,6 +492,7 @@ pub struct AuthorityEpochTables {
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
 }
 
+// TODO: move deferral related data structures to authority_per_epoch_store_util.rs
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DeferralKey {
     // For transactions deferred until randomness DKG has completed.
