@@ -31,7 +31,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo, Random
 use sui_types::digests::ChainIdentifier;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
-use sui_types::storage::InputKey;
+use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, SenderSignedData, Transaction,
     TransactionDataAPI, TransactionKey, TransactionKind, VerifiedCertificate,
@@ -66,7 +66,7 @@ use crate::consensus_handler::{
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{RandomnessManager, RandomnessReporter};
 use crate::epoch::reconfiguration::ReconfigState;
-use crate::execution_cache::{ExecutionCache, ExecutionCacheRead};
+use crate::execution_cache::ExecutionCacheRead;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
@@ -219,11 +219,13 @@ pub struct ExecutionIndicesWithStats {
     pub stats: ConsensusStats,
 }
 
+type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
+
 // Data related to VM and Move execution and type layout
 pub struct ExecutionComponents {
     pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
-    pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>>,
+    pub(crate) module_cache: Arc<ExecutionModuleCache>,
     metrics: Arc<ResolverMetrics>,
 }
 
@@ -813,7 +815,8 @@ impl AuthorityPerEpochStore {
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
         epoch_start_configuration: EpochStartConfiguration,
-        execution_cache: Arc<ExecutionCache>,
+        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
@@ -858,7 +861,7 @@ impl AuthorityPerEpochStore {
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
-            execution_cache.clone(),
+            backing_package_store,
             cache_metrics,
             expensive_safety_check_config,
         );
@@ -893,7 +896,7 @@ impl AuthorityPerEpochStore {
 
         if authenticator_state_enabled {
             info!("authenticator_state enabled");
-            let authenticator_state = get_authenticator_state(execution_cache.as_ref())
+            let authenticator_state = get_authenticator_state(&*object_store)
                 .expect("Read cannot fail")
                 .expect("Authenticator state must exist");
 
@@ -1046,7 +1049,8 @@ impl AuthorityPerEpochStore {
         name: AuthorityName,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
-        cache: Arc<ExecutionCache>,
+        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
@@ -1060,7 +1064,8 @@ impl AuthorityPerEpochStore {
             self.db_options.clone(),
             self.metrics.clone(),
             epoch_start_configuration,
-            cache,
+            backing_package_store,
+            object_store,
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
@@ -1106,7 +1111,7 @@ impl AuthorityPerEpochStore {
         self.epoch_start_state().protocol_version()
     }
 
-    pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>> {
+    pub fn module_cache(&self) -> &Arc<ExecutionModuleCache> {
         &self.execution_component.module_cache
     }
 
@@ -3619,7 +3624,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
 impl ExecutionComponents {
     fn new(
         protocol_config: &ProtocolConfig,
-        store: Arc<ExecutionCache>,
+        store: Arc<dyn BackingPackageStore + Send + Sync>,
         metrics: Arc<ResolverMetrics>,
         // Keep this as a parameter for possible future use
         _expensive_safety_check_config: &ExpensiveSafetyCheckConfig,

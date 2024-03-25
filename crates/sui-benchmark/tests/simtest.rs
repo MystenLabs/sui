@@ -191,7 +191,10 @@ mod test {
                 return;
             }
         }
-        state.prune_objects_and_compact_for_testing().await;
+        state
+            .database_for_testing()
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+            .await;
     }
 
     async fn delay_failpoint<R>(range_ms: R, probability: f64)

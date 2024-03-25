@@ -124,13 +124,16 @@ where
     }
 }
 
-pub struct TemporaryPackageStore<'a, R> {
+pub struct TemporaryPackageStore<'a> {
     temp_store: &'a InnerTemporaryStore,
-    fallback: R,
+    fallback: Arc<dyn BackingPackageStore + Send + Sync>,
 }
 
-impl<'a, R> TemporaryPackageStore<'a, R> {
-    pub fn new(temp_store: &'a InnerTemporaryStore, fallback: R) -> Self {
+impl<'a> TemporaryPackageStore<'a> {
+    pub fn new(
+        temp_store: &'a InnerTemporaryStore,
+        fallback: Arc<dyn BackingPackageStore + Send + Sync>,
+    ) -> Self {
         Self {
             temp_store,
             fallback,
@@ -138,10 +141,7 @@ impl<'a, R> TemporaryPackageStore<'a, R> {
     }
 }
 
-impl<R> BackingPackageStore for TemporaryPackageStore<'_, R>
-where
-    R: BackingPackageStore,
-{
+impl BackingPackageStore for TemporaryPackageStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         // We first check the objects in the temporary store it is possible to read packages that are
         // just written in the same transaction.

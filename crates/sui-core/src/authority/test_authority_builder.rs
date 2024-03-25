@@ -8,7 +8,7 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::execution_cache::ExecutionCache;
+use crate::execution_cache::{ExecutionCache, ExecutionCacheTraitPointers};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -217,10 +217,11 @@ impl<'a> TestAuthorityBuilder<'a> {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
-        let cache = Arc::new(ExecutionCache::new_for_tests(
-            authority_store.clone(),
-            &registry,
-        ));
+
+        let cache_traits = ExecutionCacheTraitPointers::new(
+            ExecutionCache::new_for_tests(authority_store.clone(), &registry).into(),
+        );
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -228,7 +229,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             EpochMetrics::new(&registry),
             epoch_start_configuration,
-            cache.clone(),
+            cache_traits.backing_package_store.clone(),
+            cache_traits.object_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
@@ -275,7 +277,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             authority_store,
-            cache,
+            cache_traits,
             epoch_store,
             committee_store,
             index_store,

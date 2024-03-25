@@ -9,7 +9,6 @@ use tempfile::tempdir;
 use std::{sync::Arc, time::Duration};
 
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::state_accumulator::AccumulatorStore;
 use broadcast::{Receiver, Sender};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
@@ -189,7 +188,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
 
     // Ensure root state hash for epoch does not exist before we close epoch
     assert!(authority_state
-        .get_execution_cache()
+        .get_accumulator_store()
         .get_root_state_accumulator_for_epoch(0)
         .unwrap()
         .is_none());
@@ -214,7 +213,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
 
     // Ensure root state hash for epoch exists at end of epoch
     authority_state
-        .get_execution_cache()
+        .get_accumulator_store()
         .get_root_state_accumulator_for_epoch(first_epoch)
         .unwrap()
         .expect("root state hash for epoch should exist");
@@ -260,7 +259,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     assert!(second_epoch == new_epoch_store.epoch());
 
     authority_state
-        .get_execution_cache()
+        .get_accumulator_store()
         .get_root_state_accumulator_for_epoch(second_epoch)
         .unwrap()
         .expect("root state hash for epoch should exist");
@@ -392,7 +391,7 @@ async fn init_executor_test(
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
 
-    let accumulator = StateAccumulator::new(state.get_execution_cache());
+    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone());
     let accumulator = Arc::new(accumulator);
 
     let executor = CheckpointExecutor::new_for_tests(
