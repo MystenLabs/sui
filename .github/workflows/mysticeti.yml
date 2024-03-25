@@ -1,18 +1,29 @@
 name: Mysticeti
 
 on:
-  # Allow triggering the workflow manually.
+  push:
+    branches:
+      - 'main'
+      - 'devnet'
+      - 'testnet'
+      - 'mainnet'
+      - 'releases/sui-*-release'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       sui_repo_ref:
         description: "Branch / commit to test"
         type: string
-        required: true
-        default: main
-
+        required: false
+        default: ''
   # Triggers the workflow every day at 05:00 UTC.
   schedule:
     - cron: '0 5 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   # Enable Mysticeti in tests.
@@ -45,8 +56,23 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+      isMove: ${{ steps.diff.outputs.isMove }}
+      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
 
   test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -62,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
         with:
-          ref: ${{ github.event.inputs.sui_repo_ref }}
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -76,6 +102,8 @@ jobs:
         shell: bash
 
   test-extra:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -90,6 +118,8 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -119,12 +149,16 @@ jobs:
         shell: bash
 
   simtest:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
