@@ -49,7 +49,7 @@ use typed_store::{
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::authority_per_epoch_store_util::{
-    compute_object_start_cost, should_defer_due_to_object_congestion, ObjectCost,
+    compute_object_start_cost, should_defer_due_to_object_congestion, ObjectExecutionQueueMeasure,
 };
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::ResolverWrapper;
@@ -1636,7 +1636,7 @@ impl AuthorityPerEpochStore {
         commit_round: Round,
         dkg_closed: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
-        object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
+        object_execution_cost: &mut HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     ) -> Option<(DeferralKey, DeferralReason)> {
         // Defer transaction if it uses randomness but DKG has not yet closed.
         if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
@@ -1651,7 +1651,7 @@ impl AuthorityPerEpochStore {
             PerObjectCongestionControlMode::TotalGasBudget => {
                 if let Some((deferral_key, congested_objects)) =
                     should_defer_due_to_object_congestion(
-                        object_total_cost,
+                        object_execution_cost,
                         cert,
                         self.protocol_config()
                             .max_accumulated_txn_cost_per_object_in_checkpoint(),
@@ -1670,10 +1670,10 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    fn update_object_total_cost(
+    fn update_object_execution_cost(
         &self,
         cert: &VerifiedExecutableTransaction,
-        object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
+        object_execution_cost: &mut HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     ) {
         if let PerObjectCongestionControlMode::None =
             self.protocol_config().per_object_congestion_control_mode()
@@ -1687,17 +1687,17 @@ impl AuthorityPerEpochStore {
         );
 
         let start_cost =
-            compute_object_start_cost(object_total_cost, cert.shared_input_objects().collect());
+            compute_object_start_cost(object_execution_cost, cert.shared_input_objects().collect());
 
         let end_cost = start_cost + cert.gas_budget();
 
         for obj in cert.shared_input_objects() {
-            let object_cost = object_total_cost.entry(obj.id).or_default();
+            let object_cost = object_execution_cost.entry(obj.id).or_default();
 
             if obj.mutable {
-                object_cost.add_write_cost(end_cost);
+                object_cost.write_bump_cost(end_cost);
             } else {
-                object_cost.add_read_cost(end_cost);
+                object_cost.read_bump_cost(end_cost);
             }
         }
     }
@@ -2817,21 +2817,24 @@ impl AuthorityPerEpochStore {
 
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
             BTreeMap::new();
-        let mut object_total_cost: HashMap<ObjectID, ObjectCost> = Default::default();
-        let mut object_using_randomness_total_cost: HashMap<ObjectID, ObjectCost> =
+        let mut object_execution_cost: HashMap<ObjectID, ObjectExecutionQueueMeasure> =
             Default::default();
+        let mut object_using_randomness_execution_cost: HashMap<
+            ObjectID,
+            ObjectExecutionQueueMeasure,
+        > = Default::default();
 
         let mut randomness_state_updated = false;
         for tx in transactions {
             let key = tx.0.transaction.key();
             let mut ignored = false;
-            let obj_total_cost = if tx
+            let execution_cost = if tx
                 .0
                 .is_user_tx_with_randomness(self.randomness_state_enabled())
             {
-                &mut object_using_randomness_total_cost
+                &mut object_using_randomness_execution_cost
             } else {
-                &mut object_total_cost
+                &mut object_execution_cost
             };
             match self
                 .process_consensus_transaction(
@@ -2843,7 +2846,7 @@ impl AuthorityPerEpochStore {
                     randomness_manager.as_deref_mut(),
                     dkg_closed,
                     generate_randomness,
-                    obj_total_cost,
+                    execution_cost,
                 )
                 .await?
             {
@@ -3028,7 +3031,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generating_randomness: bool,
-        object_total_cost: &mut HashMap<ObjectID, ObjectCost>,
+        object_execution_cost: &mut HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -3088,7 +3091,7 @@ impl AuthorityPerEpochStore {
                     commit_round,
                     dkg_closed,
                     previously_deferred_tx_digests,
-                    object_total_cost,
+                    object_execution_cost,
                 );
 
                 if let Some((deferral_key, _)) = deferral_info {
@@ -3113,7 +3116,7 @@ impl AuthorityPerEpochStore {
                 }
 
                 if certificate.contains_shared_object() {
-                    self.update_object_total_cost(&certificate, object_total_cost);
+                    self.update_object_execution_cost(&certificate, object_execution_cost);
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))

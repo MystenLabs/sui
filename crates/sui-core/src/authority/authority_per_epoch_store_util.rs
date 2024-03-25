@@ -10,33 +10,33 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::SharedInputObject;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct ObjectCost {
+pub struct ObjectExecutionQueueMeasure {
     pub total_cost_to_last_write: u64,
     pub total_cost: u64,
 }
 
-impl ObjectCost {
-    pub fn add_write_cost(&mut self, end_cost: u64) {
+impl ObjectExecutionQueueMeasure {
+    pub fn write_bump_cost(&mut self, end_cost: u64) {
         assert!(end_cost > self.total_cost_to_last_write);
         assert!(end_cost > self.total_cost);
         self.total_cost_to_last_write = end_cost;
         self.total_cost = end_cost;
     }
 
-    pub fn add_read_cost(&mut self, end_cost: u64) {
+    pub fn read_bump_cost(&mut self, end_cost: u64) {
         assert!(end_cost >= self.total_cost_to_last_write);
         self.total_cost = core::cmp::max(end_cost, self.total_cost);
     }
 }
 
 pub fn compute_object_start_cost(
-    object_total_cost: &HashMap<ObjectID, ObjectCost>,
+    object_execution_cost: &HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     shared_input_objects: Vec<SharedInputObject>,
 ) -> u64 {
     let mut start_cost = 0;
-    let default_object_cost = ObjectCost::default();
+    let default_object_cost = ObjectExecutionQueueMeasure::default();
     shared_input_objects.iter().for_each(|obj| {
-        let object_cost = object_total_cost
+        let object_cost = object_execution_cost
             .get(&obj.id)
             .unwrap_or(&default_object_cost);
         if obj.mutable {
@@ -49,14 +49,14 @@ pub fn compute_object_start_cost(
 }
 
 pub fn should_defer_due_to_object_congestion(
-    object_total_cost: &HashMap<ObjectID, ObjectCost>,
+    object_execution_cost: &HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     cert: &VerifiedExecutableTransaction,
     max_accumulated_txn_cost_per_object_in_checkpoint: u64,
     previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
     commit_round: Round,
 ) -> Option<(DeferralKey, Vec<ObjectID>)> {
     let start_cost =
-        compute_object_start_cost(object_total_cost, cert.shared_input_objects().collect());
+        compute_object_start_cost(object_execution_cost, cert.shared_input_objects().collect());
     if start_cost + cert.gas_budget() <= max_accumulated_txn_cost_per_object_in_checkpoint {
         return None;
     }
@@ -65,20 +65,18 @@ pub fn should_defer_due_to_object_congestion(
     for obj in cert.shared_input_objects() {
         if obj.mutable {
             if start_cost
-                == object_total_cost
+                == object_execution_cost
                     .get(&obj.id)
                     .map_or(0, |cost| cost.total_cost)
             {
                 congested_objects.push(obj.id);
             }
-        } else {
-            if start_cost
-                == object_total_cost
-                    .get(&obj.id)
-                    .map_or(0, |cost| cost.total_cost_to_last_write)
-            {
-                congested_objects.push(obj.id);
-            }
+        } else if start_cost
+            == object_execution_cost
+                .get(&obj.id)
+                .map_or(0, |cost| cost.total_cost_to_last_write)
+        {
+            congested_objects.push(obj.id);
         }
     }
 
@@ -107,20 +105,20 @@ mod object_cost_tests {
     use sui_types::crypto::{get_key_pair, AccountKeyPair};
     use sui_types::transaction::{CallArg, ObjectArg, TransactionDataAPI, VerifiedTransaction};
 
-    fn init_object_total_cost(
+    fn init_object_execution_cost(
         init_values: &[(ObjectID, u64, u64)],
-    ) -> HashMap<ObjectID, ObjectCost> {
-        let mut object_total_cost = HashMap::new();
+    ) -> HashMap<ObjectID, ObjectExecutionQueueMeasure> {
+        let mut object_execution_cost = HashMap::new();
         for (object_id, total_cost_to_last_write, total_cost) in init_values {
-            object_total_cost.insert(
+            object_execution_cost.insert(
                 *object_id,
-                ObjectCost {
+                ObjectExecutionQueueMeasure {
                     total_cost_to_last_write: *total_cost_to_last_write,
                     total_cost: *total_cost,
                 },
             );
         }
-        object_total_cost
+        object_execution_cost
     }
 
     #[test]
@@ -128,26 +126,27 @@ mod object_cost_tests {
         let object_id_0 = ObjectID::random();
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
-        let object_total_cost: HashMap<ObjectID, ObjectCost> = HashMap::from_iter(
-            [
-                (
-                    object_id_0,
-                    ObjectCost {
-                        total_cost_to_last_write: 10,
-                        total_cost: 20,
-                    },
-                ),
-                (
-                    object_id_1,
-                    ObjectCost {
-                        total_cost_to_last_write: 5,
-                        total_cost: 15,
-                    },
-                ),
-            ]
-            .iter()
-            .cloned(),
-        );
+        let object_execution_cost: HashMap<ObjectID, ObjectExecutionQueueMeasure> =
+            HashMap::from_iter(
+                [
+                    (
+                        object_id_0,
+                        ObjectExecutionQueueMeasure {
+                            total_cost_to_last_write: 10,
+                            total_cost: 20,
+                        },
+                    ),
+                    (
+                        object_id_1,
+                        ObjectExecutionQueueMeasure {
+                            total_cost_to_last_write: 5,
+                            total_cost: 15,
+                        },
+                    ),
+                ]
+                .iter()
+                .cloned(),
+            );
 
         {
             let shared_input_objects = vec![SharedInputObject {
@@ -156,7 +155,7 @@ mod object_cost_tests {
                 mutable: false,
             }];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 10
             );
         }
@@ -168,7 +167,7 @@ mod object_cost_tests {
                 mutable: true,
             }];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 20
             );
         }
@@ -187,7 +186,7 @@ mod object_cost_tests {
                 },
             ];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 10
             );
         }
@@ -206,7 +205,7 @@ mod object_cost_tests {
                 },
             ];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 15
             );
         }
@@ -225,7 +224,7 @@ mod object_cost_tests {
                 },
             ];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 20
             );
         }
@@ -244,7 +243,7 @@ mod object_cost_tests {
                 },
             ];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 20
             );
         }
@@ -256,7 +255,7 @@ mod object_cost_tests {
                 mutable: true,
             }];
             assert_eq!(
-                compute_object_start_cost(&object_total_cost, shared_input_objects),
+                compute_object_start_cost(&object_execution_cost, shared_input_objects),
                 0
             );
         }
@@ -264,22 +263,22 @@ mod object_cost_tests {
 
     #[test]
     fn test_update_read_write_cost() {
-        let mut object_cost = ObjectCost {
+        let mut object_cost = ObjectExecutionQueueMeasure {
             total_cost_to_last_write: 0,
             total_cost: 0,
         };
-        object_cost.add_write_cost(10);
+        object_cost.write_bump_cost(10);
         assert_eq!(object_cost.total_cost_to_last_write, 10);
         assert_eq!(object_cost.total_cost, 10);
 
-        object_cost.add_read_cost(20);
+        object_cost.read_bump_cost(20);
         assert_eq!(object_cost.total_cost_to_last_write, 10);
         assert_eq!(object_cost.total_cost, 20);
 
-        object_cost.add_read_cost(15);
+        object_cost.read_bump_cost(15);
         assert_eq!(object_cost.total_cost, 20);
 
-        object_cost.add_write_cost(30);
+        object_cost.write_bump_cost(30);
         assert_eq!(object_cost.total_cost_to_last_write, 30);
         assert_eq!(object_cost.total_cost, 30);
     }
@@ -362,10 +361,10 @@ mod object_cost_tests {
         let max_accumulated_txn_cost_per_object_in_checkpoint =
             tx_write_0.transaction_data().gas_budget() + 1;
 
-        let object_total_cost =
-            init_object_total_cost(&[(shared_obj_0, 1, 10), (shared_obj_1, 1, 10)]);
+        let object_execution_cost =
+            init_object_execution_cost(&[(shared_obj_0, 1, 10), (shared_obj_1, 1, 10)]);
         if let Some((_, congested_objects)) = should_defer_due_to_object_congestion(
-            &object_total_cost,
+            &object_execution_cost,
             &tx_write_0,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &HashMap::new(),
@@ -378,7 +377,7 @@ mod object_cost_tests {
         }
 
         assert!(should_defer_due_to_object_congestion(
-            &object_total_cost,
+            &object_execution_cost,
             &tx_read_0_read_1,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &HashMap::new(),
@@ -386,10 +385,10 @@ mod object_cost_tests {
         )
         .is_none());
 
-        let object_total_cost =
-            init_object_total_cost(&[(shared_obj_0, 10, 10), (shared_obj_1, 1, 10)]);
+        let object_execution_cost =
+            init_object_execution_cost(&[(shared_obj_0, 10, 10), (shared_obj_1, 1, 10)]);
         if let Some((_, congested_objects)) = should_defer_due_to_object_congestion(
-            &object_total_cost,
+            &object_execution_cost,
             &tx_read_0_read_1,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &HashMap::new(),
@@ -401,10 +400,10 @@ mod object_cost_tests {
             panic!("should defer");
         }
 
-        let object_total_cost =
-            init_object_total_cost(&[(shared_obj_0, 1, 10), (shared_obj_1, 1, 10)]);
+        let object_execution_cost =
+            init_object_execution_cost(&[(shared_obj_0, 1, 10), (shared_obj_1, 1, 10)]);
         if let Some((_, congested_objects)) = should_defer_due_to_object_congestion(
-            &object_total_cost,
+            &object_execution_cost,
             &tx_read_0_write_1,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &HashMap::new(),
