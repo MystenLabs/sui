@@ -20,7 +20,7 @@ use crate::{
     shared::{
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
-        program_info::TypingProgramInfo,
+        program_info::{ConstantInfo, TypingProgramInfo},
         unique_map::UniqueMap,
         *,
     },
@@ -506,7 +506,7 @@ mod check_valid_constant {
 
             // NB: module scoping is checked during constant type creation, so we don't need to
             // relitigate here.
-            E::Constant(_, _) => {
+            E::Constant(_, _) | E::ErrorConstant(_) => {
                 return;
             }
 
@@ -1020,7 +1020,7 @@ fn subtype_no_report(
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
     match core::subtype(subst.clone(), &lhs, &rhs) {
-        Ok((next_subst, ty))  => {
+        Ok((next_subst, ty)) => {
             context.subst = next_subst;
             Ok(ty)
         }
@@ -1281,6 +1281,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
     let sp!(eloc, ne_) = *ne;
     let (ty, e_) = match ne_ {
+        NE::ErrorConstant => (Type_::u64(eloc), TE::ErrorConstant(None)),
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
@@ -1485,8 +1486,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (sp(eloc, Type_::Anything), TE::Return(eret))
         }
         NE::Abort(ncode) => {
-            let ecode = exp(context, ncode);
+            let mut ecode = exp(context, ncode);
             let code_ty = Type_::u64(eloc);
+            annotated_error_const(context, &mut ecode, "abort");
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
             (sp(eloc, Type_::Anything), TE::Abort(ecode))
         }
@@ -2944,12 +2946,80 @@ fn module_call_impl(
     (call, return_)
 }
 
+/// If the constant that we are referencing has an `error` attribute, we need to change the type of
+/// the constant to a u64 since this will be compiled into a u64 error code.
+fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_str: &str) {
+    let u64_type = Type_::u64(e.ty.loc);
+    let mut const_name = None;
+
+    if let sp!(
+        const_loc,
+        T::UnannotatedExp_::Constant(module_ident, constant_name)
+    ) = &mut e.exp
+    {
+        let ConstantInfo {
+            attributes,
+            defined_loc,
+            signature: _,
+        } = context.constant_info(module_ident, constant_name);
+        const_name = Some((*defined_loc, *constant_name));
+        let has_error_annotation =
+            attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+
+        if has_error_annotation {
+            *e = T::exp(
+                u64_type.clone(),
+                sp(
+                    *const_loc,
+                    T::UnannotatedExp_::ErrorConstant(Some(*constant_name)),
+                ),
+            );
+        }
+    }
+
+    let is_u64_type = subtype_no_report(context, e.ty.clone(), u64_type).is_ok();
+
+    // Add help messages
+    if !is_u64_type {
+        let msg = format!(
+            "Invalid error code for {abort_or_assert_str}, expected a u64 or constant declared with '#[error]' annotation"
+        );
+        let (const_loc, const_msg) = if let Some((const_loc, const_name)) = const_name {
+            let const_msg = format!(
+                "'{}' defined here with no '#[error]' annotation",
+                const_name,
+            );
+            (const_loc, const_msg)
+        } else {
+            let msg = "If you want to use a non-u64 as an abort code, \
+                      you must use a '#[error]' attribute on a constant"
+                .to_string();
+            (e.exp.loc, msg)
+        };
+
+        let mut err = diag!(
+            TypeSafety::InvalidErrorUsage,
+            (e.exp.loc, msg),
+            (const_loc, const_msg)
+        );
+        err.add_note(
+            "Non-u64 constants can only be used as error codes if \
+            the '#[error]' attribute is added to them."
+                .to_string(),
+        );
+        context.env.add_diag(err);
+
+        e.ty = context.error_type(e.ty.loc);
+        e.exp = sp(e.exp.loc, T::UnannotatedExp_::UnresolvedError);
+    }
+}
+
 fn builtin_call(
     context: &mut Context,
     loc: Loc,
     sp!(bloc, nb_): N::BuiltinFunction,
     argloc: Loc,
-    args: Vec<T::Exp>,
+    mut args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
     use N::BuiltinFunction_ as NB;
     use T::BuiltinFunction_ as TB;
@@ -2969,6 +3039,9 @@ fn builtin_call(
             b_ = TB::Assert(is_macro);
             params_ty = vec![Type_::bool(bloc), Type_::u64(bloc)];
             ret_ty = sp(loc, Type_::Unit);
+            if let Some(exp) = args.get_mut(1) {
+                annotated_error_const(context, exp, "assertion");
+            }
         }
     };
     let (arguments, arg_tys) = call_args(
@@ -2979,6 +3052,7 @@ fn builtin_call(
         argloc,
         args,
     );
+
     assert!(arg_tys.len() == params_ty.len());
     for ((idx, arg_ty), param_ty) in arg_tys.into_iter().enumerate().zip(params_ty) {
         let msg = || {

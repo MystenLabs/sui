@@ -1007,9 +1007,30 @@ fn known_attributes(
                 .add_diag(diag!(Declarations::UnknownAttribute, (loc, msg)));
             None
         }
-        sp!(loc, E::AttributeName_::Known(n)) => Some((sp(loc, n), attr)),
+        sp!(loc, E::AttributeName_::Known(n)) => {
+            gate_known_attribute(context, loc, &n);
+            Some((sp(loc, n), attr))
+        }
     }))
     .unwrap()
+}
+
+fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute) {
+    match known {
+        KnownAttribute::Testing(_)
+        | KnownAttribute::Verification(_)
+        | KnownAttribute::Native(_)
+        | KnownAttribute::Diagnostic(_)
+        | KnownAttribute::DefinesPrimitive(_)
+        | KnownAttribute::External(_)
+        | KnownAttribute::Syntax(_) => (),
+        KnownAttribute::Error(_) => {
+            let pkg = context.current_package();
+            context
+                .env()
+                .check_feature(pkg, FeatureGate::CleverAssertions, loc);
+        }
+    }
 }
 
 fn unique_attributes(

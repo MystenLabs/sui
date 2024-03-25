@@ -275,6 +275,7 @@ codes!(
         CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
         InvariantError: { msg: "types are not equal", severity: BlockingError },
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
+        InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

@@ -425,6 +425,8 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
 
+    ErrorConstant,
+
     UnresolvedError,
 }
 pub type Exp = Spanned<Exp_>;
@@ -1606,6 +1608,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
+            E::ErrorConstant => w.write("ErrorConstant"),
         }
     }
 }

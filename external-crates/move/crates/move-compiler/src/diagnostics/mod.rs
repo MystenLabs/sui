@@ -116,9 +116,9 @@ pub struct MappedFiles {
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
 #[allow(dead_code)]
 pub struct FileLineColSpan {
-    file_id: FileId,
-    start: LineColLocation,
-    end: LineColLocation,
+    pub file_id: FileId,
+    pub start: LineColLocation,
+    pub end: LineColLocation,
 }
 
 /// A line and column location in a file

@@ -209,7 +209,8 @@ fn test_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::Testing
                 | KnownAttribute::Diagnostic(_)
                 | KnownAttribute::DefinesPrimitive(_)
                 | KnownAttribute::External(_)
-                | KnownAttribute::Syntax(_) => None,
+                | KnownAttribute::Syntax(_)
+                | KnownAttribute::Error(_) => None,
             },
         )
         .collect()
