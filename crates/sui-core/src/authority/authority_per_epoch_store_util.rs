@@ -154,7 +154,7 @@ mod object_cost_tests {
 
     fn construct_shared_input_objects(objects: &[(ObjectID, bool)]) -> Vec<SharedInputObject> {
         objects
-            .into_iter()
+            .iter()
             .map(|(id, mutable)| SharedInputObject {
                 id: *id,
                 initial_shared_version: SequenceNumber::new(),
