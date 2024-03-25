@@ -19,29 +19,12 @@ use sui_types::{
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
 };
-use tempfile::tempdir;
 
 use super::*;
 use crate::{
-    authority::{authority_store_tables::AuthorityPerpetualTables, AuthorityStore},
+    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState, AuthorityStore},
     execution_cache::ExecutionCacheAPI,
-    test_utils::init_state_parameters_from_rng,
 };
-
-async fn init_authority_store() -> Arc<AuthorityStore> {
-    let seed = [1u8; 32];
-    let (genesis, _) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
-
-    // Create a random directory to store the DB
-    let dir = tempdir().unwrap();
-    let db_path = dir.path();
-
-    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(db_path, None));
-    AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
-        .await
-        .unwrap()
-}
 
 trait AssertInserted {
     fn assert_inserted(&self);
@@ -62,7 +45,9 @@ impl AssertInserted for bool {
 type ActionCb = Box<dyn Fn(&mut Scenario) + Send>;
 
 struct Scenario {
+    authority: Arc<AuthorityState>,
     store: Arc<AuthorityStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     cache: Arc<WritebackCache>,
 
     id_map: BTreeMap<u32, ObjectID>,
@@ -76,13 +61,19 @@ struct Scenario {
 
 impl Scenario {
     async fn new(do_after: Option<(u32, ActionCb)>, action_count: Arc<AtomicU32>) -> Self {
-        let store = init_authority_store().await;
+        let authority = TestAuthorityBuilder::new().build().await;
+
+        let store = authority.database_for_testing().clone();
+        let epoch_store = authority.epoch_store_for_testing().clone();
+
         static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
             once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
 
         let cache = Arc::new(WritebackCache::new(store.clone(), (*METRICS).clone()));
         Self {
+            authority,
             store,
+            epoch_store,
             cache,
             id_map: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -94,6 +85,7 @@ impl Scenario {
         }
     }
 
+    /*
     fn new_with_store_and_cache(store: Arc<AuthorityStore>, cache: Arc<WritebackCache>) -> Self {
         Self {
             store,
@@ -107,6 +99,7 @@ impl Scenario {
             do_after: None,
         }
     }
+    */
 
     fn cache(&self) -> &dyn ExecutionCacheAPI {
         &*self.cache
@@ -515,6 +508,10 @@ impl Scenario {
             .expect("no such object")
             .clone()
     }
+
+    fn obj_ref(&self, short_id: u32) -> ObjectRef {
+        self.object(short_id).compute_object_reference()
+    }
 }
 
 #[tokio::test]
@@ -689,6 +686,70 @@ async fn test_write_transaction_outputs_is_sync() {
     .await;
 }
 
+/*
+#[tokio::test]
+async fn test_acquire_transaction_locks_revert() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
+
+        let old2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]);
+        s.do_tx().await;
+
+        s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
+        let outputs = s.take_outputs();
+
+        let new1 = s.obj_ref(1);
+
+        let lock = s.authority.execution_lock_for_signing(0).await.unwrap();
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, old2], outputs.transaction)
+            .await
+            .unwrap_err();
+    })
+}
+*/
+
+#[tokio::test]
+async fn test_acquire_transaction_locks_is_sync() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        let tx1 = s.do_tx().await;
+
+        let objects: Vec<_> = vec![s.object(1), s.object(2)]
+            .into_iter()
+            .map(|o| o.compute_object_reference())
+            .collect();
+
+        //let lock = tokio::sync::RwLock<EpochId>::new(1);
+        //let guard = lock.read();
+
+        s.with_mutated(&[1, 2]);
+        let outputs = s.take_outputs();
+
+        let tx2 = VerifiedSignedTransaction::new(
+            s.epoch_store.epoch(),
+            (*outputs.transaction).clone(),
+            s.authority.name,
+            &*s.authority.secret,
+        );
+
+        let lock = s.authority.execution_lock_for_signing(0).await.unwrap();
+        // assert that acquire_transaction_locks is sync in non-simtest, which causes the
+        // fail_point_async! macros above to be elided
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &objects, tx2)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+    })
+    .await;
+}
+
 #[tokio::test]
 #[should_panic(expected = "should be empty due to revert_state_update")]
 async fn test_missing_reverts_panic() {
@@ -797,11 +858,14 @@ async fn test_concurrent_readers() {
         tokio::task::yield_now().await;
     });
 
-    let store = init_authority_store().await;
-    let registry = prometheus::Registry::new(); // One time registry for testing.
-    let cache = Arc::new(WritebackCache::new_for_tests(store.clone(), &registry));
+    //let store = init_authority_store().await;
+    //let registry = prometheus::Registry::new(); // One time registry for testing.
+    //let cache = Arc::new(WritebackCache::new_for_tests(store.clone(), &registry));
 
-    let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
+    //let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
+
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
     let mut txns = Vec::new();
 
     for i in 0..100 {
