@@ -5,7 +5,6 @@ module sui_system::validator_wrapper {
     use sui::versioned::Versioned;
     use sui_system::validator::Validator;
     use sui::versioned;
-    use sui::tx_context::TxContext;
 
     /* friend sui_system::validator_set; */
 
