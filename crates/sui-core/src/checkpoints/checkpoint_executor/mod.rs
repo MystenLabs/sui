@@ -355,7 +355,7 @@ impl CheckpointExecutor {
     ) {
         // Commit all transaction effects to disk
         let cache_commit = self.state.get_cache_commit();
-        debug!(seq = ?checkpoint.sequence_number, ?all_tx_digests, "committing checkpoint transactions to disk");
+        trace!(seq = ?checkpoint.sequence_number, ?all_tx_digests, "committing checkpoint transactions to disk");
         for digest in all_tx_digests {
             cache_commit
                 .commit_transaction_outputs(epoch_store.epoch(), digest)
