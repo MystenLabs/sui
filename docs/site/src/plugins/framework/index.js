@@ -17,7 +17,10 @@ const STDLIB_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/move-stdlib",
 );
-const DOCS_PATH = path.join(__dirname, "../../../content/references/framework");
+const DOCS_PATH = path.join(
+  __dirname,
+  "../../../../content/references/framework",
+);
 // Clear doc files.
 const clearDirectory = async (directoryPath) => {
   try {
