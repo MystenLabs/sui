@@ -1359,7 +1359,7 @@ export const RPC_METHODS: {
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
-			attributes[key] = {
+			attributes[key] = value === null ? null : {
 				[configTypeMap[key] ?? 'u64']: value,
 			} as ProtocolConfigValue;
 		}
