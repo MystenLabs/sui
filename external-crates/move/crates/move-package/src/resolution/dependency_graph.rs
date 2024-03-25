@@ -256,7 +256,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             )?;
         let dep_lock_files = dep_graphs
             .values()
-            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
         let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
             .collect_graphs(
@@ -270,7 +271,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         let dev_dep_lock_files = dev_dep_graphs
             .values()
-            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
         let (manifest_digest, deps_digest) = match digest_and_lock_contents {
@@ -1209,11 +1211,19 @@ impl DependencyGraph {
         Ok(graph)
     }
 
-    /// Serializes this dependency graph into a lock file and return it.
+    /// Serializes this dependency graph into a lock file and returns it.
     ///
     /// This operation fails, writing nothing, if the graph contains a cycle, and can fail with an
     /// undefined output if it cannot be represented in a TOML file.
-    pub fn write_to_lock(&self, install_dir: PathBuf) -> Result<LockFile> {
+    ///
+    /// `install_dir` is a working directory to create a lock file with dependency graph info.
+    /// `lock_path` is an optional parameter: if it is set, and exists, this `Move.lock` will be
+    /// updated with the dependency graph content. If not, the lock file is created from scratch.
+    pub fn write_to_lock(
+        &self,
+        install_dir: PathBuf,
+        lock_path: Option<PathBuf>,
+    ) -> Result<LockFile> {
         use fmt::Write;
         let mut writer = String::new();
 
@@ -1249,15 +1259,23 @@ impl DependencyGraph {
                 .and_then(|v| v.as_array_of_tables().cloned());
         }
 
-        use std::io::Seek;
-        let mut lock = LockFile::new(
-            install_dir,
-            self.manifest_digest.clone(),
-            self.deps_digest.clone(),
-        )?;
-        lock.flush()?;
-        lock.rewind()?;
-
+        let mut lock = match lock_path {
+            // Get a handle to update an existing Move.lock. Since dependency graph updates are
+            // compatible across all Move.lock schema versions, we can rely on the existing version.
+            Some(lock_path) if lock_path.exists() => LockFile::from(install_dir, &lock_path)?,
+            // Initialize a lock file if no existing lock_path is set for this operation.
+            _ => {
+                use std::io::Seek;
+                let mut lock = LockFile::new(
+                    install_dir,
+                    self.manifest_digest.clone(),
+                    self.deps_digest.clone(),
+                )?;
+                lock.flush()?;
+                lock.rewind()?;
+                lock
+            }
+        };
         schema::update_dependency_graph(
             &mut lock,
             self.manifest_digest.clone(),
