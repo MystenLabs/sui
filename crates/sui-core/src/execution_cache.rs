@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store::{
+    ExecutionLockReadGuard, ExecutionLockWriteGuard, SuiLockResult,
+};
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::{
     authority_notify_read::EffectsNotifyRead, epoch_start_configuration::EpochStartConfiguration,
@@ -132,11 +134,11 @@ pub trait ExecutionCacheRead: Send + Sync {
         for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
             match object_opt {
                 None => {
-                    let lock = self._get_latest_lock_for_object_id(object_ref.0)?;
-                    let error = if lock.1 >= object_ref.1 {
+                    let live_objref = self._get_live_objref(object_ref.0)?;
+                    let error = if live_objref.1 >= object_ref.1 {
                         UserInputError::ObjectVersionUnavailableForConsumption {
                             provided_obj_ref: *object_ref,
-                            current_version: lock.1,
+                            current_version: live_objref.1,
                         }
                     } else {
                         UserInputError::ObjectNotFound {
@@ -249,7 +251,7 @@ pub trait ExecutionCacheRead: Send + Sync {
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult;
 
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
-    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
 
     fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
@@ -496,6 +498,7 @@ pub trait ExecutionCacheWrite: Send + Sync {
     fn acquire_transaction_locks<'a>(
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
+        execution_lock: &'a ExecutionLockReadGuard<'a>,
         owned_input_objects: &'a [ObjectRef],
         transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult>;

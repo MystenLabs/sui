@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store::{
+    ExecutionLockReadGuard, ExecutionLockWriteGuard, SuiLockResult,
+};
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics,
 };
@@ -178,7 +180,7 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.get_lock(obj_ref, epoch_store)
     }
 
-    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
         self.store.get_latest_live_version_for_object_id(object_id)
     }
 
@@ -295,6 +297,7 @@ impl ExecutionCacheWrite for PassthroughCache {
     fn acquire_transaction_locks<'a>(
         &'a self,
         epoch_store: &'a AuthorityPerEpochStore,
+        _execution_lock: &'a ExecutionLockReadGuard<'_>,
         owned_input_objects: &'a [ObjectRef],
         transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {

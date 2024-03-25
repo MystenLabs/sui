@@ -901,12 +901,19 @@ impl AuthorityState {
             &*self.secret,
         );
 
+        let execution_lock = self.execution_lock_for_signing(epoch_store.epoch()).await?;
+
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.execution_cache
-            .acquire_transaction_locks(epoch_store, &owned_objects, signed_transaction.clone())
+            .acquire_transaction_locks(
+                epoch_store,
+                &execution_lock,
+                &owned_objects,
+                signed_transaction.clone(),
+            )
             .await?;
 
         Ok(signed_transaction)
@@ -2815,6 +2822,23 @@ impl AuthorityState {
             Err(SuiError::WrongEpoch {
                 expected_epoch: *lock,
                 actual_epoch: transaction.auth_sig().epoch(),
+            })
+        }
+    }
+
+    /// Acquire the execution lock while setting transaction locks during signing.
+    /// Required to ensure that we do not reconfigure while signing a transaction.
+    pub async fn execution_lock_for_signing(
+        &self,
+        epoch_id: EpochId,
+    ) -> SuiResult<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.read().await;
+        if *lock == epoch_id {
+            Ok(lock)
+        } else {
+            Err(SuiError::WrongEpoch {
+                expected_epoch: *lock,
+                actual_epoch: epoch_id,
             })
         }
     }

@@ -1133,7 +1133,7 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            epoch_tables.write_transaction_locks(transaction, locks_to_write)?;
+            epoch_tables.write_transaction_locks(transaction, locks_to_write.into_iter())?;
         }
 
         Ok(())

@@ -37,8 +37,11 @@
 //!
 //! The above design is used for both objects and markers.
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, LockDetails};
+use crate::authority::authority_store::{
+    ExecutionLockReadGuard, ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus,
+    SuiLockResult,
+};
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics,
 };
@@ -60,7 +63,7 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
@@ -79,11 +82,11 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument, trace};
 
 use super::ExecutionCacheAPI;
 use super::{
-    cached_version_map::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
+    cache_types::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
     ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI,
     ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
 };
@@ -251,6 +254,8 @@ pub struct WritebackCache {
     // - note that we removed any unfinalized packages from the cache during revert_state_update().
     packages: MokaCache<ObjectID, PackageObject>,
 
+    locked_transactions: DashMap<ObjectRef, LockDetails>,
+
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
     metrics: Arc<ExecutionCacheMetrics>,
@@ -296,6 +301,7 @@ impl WritebackCache {
             dirty: UncommittedData::new(),
             cached: CachedCommittedData::new(),
             packages,
+            locked_transactions: DashMap::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             store,
             metrics,
@@ -458,6 +464,75 @@ impl WritebackCache {
         )
     }
 
+    fn get_transaction_lock(
+        &self,
+        obj_ref: &ObjectRef,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<Option<LockDetails>> {
+        match self.locked_transactions.entry(*obj_ref) {
+            DashMapEntry::Vacant(vacant) => {
+                let tables = epoch_store.tables()?;
+                let lock = tables.get_locked_transaction(obj_ref)?;
+                if let Some(lock_details) = lock {
+                    vacant.insert(lock_details);
+                }
+                Ok(lock)
+            }
+            DashMapEntry::Occupied(occupied) => Ok(Some(*occupied.get())),
+        }
+    }
+
+    /// Attempts to atomically test-and-set a transaction lock on an object.
+    /// If the lock is already set, it will be overridden if the old lock is from a previous epoch.
+    /// If the lock is set successfully, the previous lock (if any) is returned
+    fn try_set_transaction_lock(
+        &self,
+        obj_ref: &ObjectRef,
+        new_lock: LockDetails,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult {
+        // entry holds a lock on the dashmap shard, so this function operates atomicly
+        let entry = self.locked_transactions.entry(*obj_ref);
+
+        // TODO: currently, the common case for this code is that we will miss the cache
+        // and read from the db. It is difficult to implement negative caching, since we
+        // may have restarted, in which case there could be locks in the db that we do
+        // not have in the cache. We may want to explore strategies for proving there
+        // cannot be a lock in the db that we do not know about. Two possibilities are:
+        //
+        // 1. Read all locks into memory at startup (and keep them there). The lifetime
+        //    of locks is relatively short in the common case, so this might be feasible.
+        // 2. Find some strategy to distinguish between the cases where we are re-executing
+        //    old transactions after restarting vs executing transactions that we have never
+        //    seen before. The output objects of novel transactions cannot previously have
+        //    been locked on this validator.
+        //
+        // Solving this is not terribly important as it is not in the execution path, and
+        // hence only improves the latency of transaction signing, not transaction execution
+        let occupied = match entry {
+            DashMapEntry::Vacant(vacant) => {
+                let tables = epoch_store.tables()?;
+                if let Some(lock_details) = tables.get_locked_transaction(obj_ref)? {
+                    vacant.insert_entry(lock_details)
+                } else {
+                    vacant.insert_entry(new_lock)
+                }
+            }
+            DashMapEntry::Occupied(occupied) => occupied,
+        };
+
+        let prev_lock = occupied.get();
+
+        if prev_lock != &new_lock {
+            Err(SuiError::ObjectLockConflict {
+                obj_ref: *obj_ref,
+                pending_transaction: *prev_lock,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     fn get_latest_marker_value_cache_only(
         &self,
         object_id: &ObjectID,
@@ -475,7 +550,229 @@ impl WritebackCache {
         )
     }
 
+    fn multi_get_objects_must_exist(&self, object_ids: &[ObjectID]) -> SuiResult<Vec<Object>> {
+        let objects = self.multi_get_objects(object_ids)?;
+        let mut result = Vec::with_capacity(objects.len());
+        for (i, object) in objects.into_iter().enumerate() {
+            if let Some(object) = object {
+                result.push(object);
+            } else {
+                return Err(SuiError::UserInputError {
+                    error: UserInputError::ObjectNotFound {
+                        object_id: object_ids[i],
+                        version: None,
+                    },
+                });
+            }
+        }
+        Ok(result)
+    }
+
+    fn verify_live_object(obj_ref: &ObjectRef, live_object: &Object) -> SuiResult {
+        if obj_ref.1 != live_object.version() {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: *obj_ref,
+                    current_version: live_object.version(),
+                },
+            });
+        }
+
+        let live_digest = live_object.digest();
+        if obj_ref.2 != live_digest {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::InvalidObjectDigest {
+                    object_id: obj_ref.0,
+                    expected_digest: live_digest,
+                },
+            });
+        }
+
+        Ok(())
+    }
+
+    fn clear_cached_locks(
+        &self,
+        locks: &[(ObjectRef, LockDetails)],
+        _execution_lock: &ExecutionLockReadGuard<'_>,
+    ) {
+        for (obj_ref, lock) in locks {
+            let entry = self.locked_transactions.entry(*obj_ref);
+            let occupied = match entry {
+                DashMapEntry::Vacant(_) => panic!("lock must exist"),
+                DashMapEntry::Occupied(occupied) => occupied,
+            };
+
+            if occupied.get() == lock {
+                occupied.remove();
+            } else {
+                // this is impossible because the only case in which we overwrite a
+                // lock is when the lock is from a previous epoch. but we are holding
+                // execution_lock, so the epoch cannot have changed.
+                panic!("lock was changed since we set it");
+            }
+        }
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    async fn acquire_transaction_locks(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        execution_lock: &ExecutionLockReadGuard<'_>,
+        owned_input_objects: &[ObjectRef],
+        transaction: VerifiedSignedTransaction,
+    ) -> SuiResult {
+        let tx_digest = *transaction.digest();
+
+        let mut locks_to_write: Vec<(_, LockDetails)> =
+            Vec::with_capacity(owned_input_objects.len());
+
+        let object_ids = owned_input_objects.iter().map(|o| o.0).collect::<Vec<_>>();
+        let live_objects = self.multi_get_objects_must_exist(&object_ids)?;
+
+        // Note that this function does not have to operate atomically. If there are two racing threads,
+        // then they are either trying to lock the same transaction (in which case both will succeed),
+        // or they are trying to lock the same object in two different transactions, in which case
+        // the sender has equivocated, and we are under no obligation to help them form a cert.
+        for (obj_ref, live_object) in owned_input_objects.iter().zip(live_objects.into_iter()) {
+            Self::verify_live_object(obj_ref, &live_object)?;
+
+            fail_point_async!("acquire_transaction_locks_wait");
+
+            match self.try_set_transaction_lock(obj_ref, tx_digest, epoch_store) {
+                Ok(()) => {
+                    locks_to_write.push((*obj_ref, tx_digest));
+                }
+                Err(mut e) => {
+                    // revert all pending writes and return error
+                    // Note that reverting is not required for liveness, since a well formed and un-equivocating
+                    // txn cannot fail to acquire locks.
+                    // However, a user may inadvertently sign a txn that tries to use an old object. If they do this,
+                    // they will not be able to obtain a lock, but we'd like to unlock the other objects in the
+                    // transaction so they can correct the error.
+                    self.clear_cached_locks(&locks_to_write, execution_lock);
+
+                    if let SuiError::ObjectLockedAtFutureEpoch { obj_refs, .. } = &mut e {
+                        *obj_refs = owned_input_objects.to_vec();
+                    }
+
+                    return Err(e);
+                }
+            }
+        }
+
+        // commit all writes to DB
+        epoch_store
+            .tables()?
+            .write_transaction_locks(transaction, locks_to_write.iter().cloned())?;
+
+        // remove pending locks from unbounded storage
+        self.clear_cached_locks(&locks_to_write, execution_lock);
+
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    async fn write_transaction_outputs(
+        &self,
+        epoch_id: EpochId,
+        tx_outputs: Arc<TransactionOutputs>,
+    ) -> SuiResult {
+        trace!(digest = ?tx_outputs.transaction.digest(), "writing transaction outputs to cache");
+
+        let TransactionOutputs {
+            transaction,
+            effects,
+            markers,
+            written,
+            deleted,
+            wrapped,
+            events,
+            locks_to_delete,
+            ..
+        } = &*tx_outputs;
+
+        // Safety check to make sure we are not writing outputs out of causal order
+        self.check_owned_object_locks_exist(locks_to_delete)?;
+
+        // Deletions and wraps must be written first. The reason is that one of the deletes
+        // may be a child object, and if we write the parent object first, a reader may or may
+        // not see the previous version of the child object, instead of the deleted/wrapped
+        // tombstone, which would cause an execution fork
+        for ObjectKey(id, version) in deleted.iter() {
+            self.write_object_entry(id, *version, ObjectEntry::Deleted)
+                .await;
+        }
+
+        for ObjectKey(id, version) in wrapped.iter() {
+            self.write_object_entry(id, *version, ObjectEntry::Wrapped)
+                .await;
+        }
+
+        // Update all markers
+        for (object_key, marker_value) in markers.iter() {
+            self.write_marker_value(epoch_id, object_key, *marker_value)
+                .await;
+        }
+
+        // Write children before parents to ensure that readers do not observe a parent object
+        // before its most recent children are visible.
+        for (object_id, object) in written.iter() {
+            if object.is_child_object() {
+                self.write_object_entry(object_id, object.version(), object.clone().into())
+                    .await;
+            }
+        }
+        for (object_id, object) in written.iter() {
+            if !object.is_child_object() {
+                self.write_object_entry(object_id, object.version(), object.clone().into())
+                    .await;
+                if object.is_package() {
+                    debug!("caching package: {:?}", object.compute_object_reference());
+                    self.packages
+                        .insert(*object_id, PackageObject::new(object.clone()));
+                }
+            }
+        }
+
+        let tx_digest = *transaction.digest();
+        let effects_digest = effects.digest();
+
+        self.dirty
+            .transaction_effects
+            .insert(effects_digest, effects.clone());
+
+        match self.dirty.transaction_events.entry(events.digest()) {
+            DashMapEntry::Occupied(mut occupied) => {
+                occupied.get_mut().0.insert(tx_digest);
+            }
+            DashMapEntry::Vacant(entry) => {
+                let mut txns = BTreeSet::new();
+                txns.insert(tx_digest);
+                entry.insert((txns, events.clone()));
+            }
+        }
+
+        self.dirty
+            .executed_effects_digests
+            .insert(tx_digest, effects_digest);
+
+        self.dirty
+            .pending_transaction_writes
+            .insert(tx_digest, tx_outputs);
+
+        self.executed_effects_digests_notify_read
+            .notify(&tx_digest, &effects_digest);
+
+        self.metrics
+            .pending_notify_read
+            .set(self.executed_effects_digests_notify_read.num_pending() as i64);
+
+        Ok(())
+    }
+
     // Commits dirty data for the given TransactionDigest to the db.
+    #[instrument(level = "debug", skip(self))]
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
@@ -1036,127 +1333,105 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    fn get_lock(
-        &self,
-        _obj_ref: ObjectRef,
-        _epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiLockResult {
-        todo!()
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
+        let cur_epoch = epoch_store.epoch();
+        match self.get_object_by_id_cache_only(&obj_ref.0) {
+            CacheResult::Hit((_, obj)) => {
+                let actual_objref = obj.compute_object_reference();
+                if obj_ref != actual_objref {
+                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
+                        locked_ref: actual_objref,
+                    })
+                } else {
+                    // requested object ref is live, check if there is a lock
+                    Ok(match self.get_transaction_lock(&obj_ref, epoch_store)? {
+                        Some(tx_digest) => ObjectLockStatus::LockedToTx {
+                            locked_by_tx: LockDetailsDeprecated {
+                                epoch: cur_epoch,
+                                tx_digest,
+                            },
+                        },
+                        None => ObjectLockStatus::Initialized,
+                    })
+                }
+            }
+            CacheResult::NegativeHit => {
+                Err(SuiError::from(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    // even though we know the requested version, we leave it as None to indicate
+                    // that the object does not exist at any version
+                    version: None,
+                }))
+            }
+            CacheResult::Miss => self.store.get_lock(obj_ref, epoch_store),
+        }
     }
 
-    fn _get_latest_lock_for_object_id(&self, _object_id: ObjectID) -> SuiResult<ObjectRef> {
-        todo!()
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+        let obj = ExecutionCacheRead::get_object(self, &object_id)?.ok_or(
+            UserInputError::ObjectNotFound {
+                object_id,
+                version: None,
+            },
+        )?;
+        Ok(obj.compute_object_reference())
     }
 
-    fn check_owned_object_locks_exist(&self, _owned_object_refs: &[ObjectRef]) -> SuiResult {
-        todo!()
+    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        do_fallback_lookup(
+            owned_object_refs,
+            |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
+                CacheResult::Hit((version, obj)) => {
+                    if obj.compute_object_reference() != *obj_ref {
+                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: version,
+                        }
+                        .into())
+                    } else {
+                        Ok(CacheResult::Hit(()))
+                    }
+                }
+                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: None,
+                }
+                .into()),
+                CacheResult::Miss => Ok(CacheResult::Miss),
+            },
+            |remaining| {
+                self.store.check_owned_object_locks_exist(remaining)?;
+                Ok(vec![(); remaining.len()])
+            },
+        )?;
+        Ok(())
     }
 }
 
 impl ExecutionCacheWrite for WritebackCache {
-    #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
-        _epoch_store: &AuthorityPerEpochStore,
-        _owned_input_objects: &'a [ObjectRef],
-        _tx_digest: VerifiedSignedTransaction,
+        epoch_store: &'a AuthorityPerEpochStore,
+        execution_lock: &'a ExecutionLockReadGuard<'_>,
+        owned_input_objects: &'a [ObjectRef],
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
-        todo!()
+        WritebackCache::acquire_transaction_locks(
+            self,
+            epoch_store,
+            execution_lock,
+            owned_input_objects,
+            transaction,
+        )
+        .boxed()
     }
 
-    #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
     ) -> BoxFuture<'_, SuiResult> {
-        async move {
-            let TransactionOutputs {
-                transaction,
-                effects,
-                markers,
-                written,
-                deleted,
-                wrapped,
-                events,
-                ..
-            } = &*tx_outputs;
-
-            // Deletions and wraps must be written first. The reason is that one of the deletes
-            // may be a child object, and if we write the parent object first, a reader may or may
-            // not see the previous version of the child object, instead of the deleted/wrapped
-            // tombstone, which would cause an execution fork
-            for ObjectKey(id, version) in deleted.iter() {
-                self.write_object_entry(id, *version, ObjectEntry::Deleted)
-                    .await;
-            }
-
-            for ObjectKey(id, version) in wrapped.iter() {
-                self.write_object_entry(id, *version, ObjectEntry::Wrapped)
-                    .await;
-            }
-
-            // Update all markers
-            for (object_key, marker_value) in markers.iter() {
-                self.write_marker_value(epoch_id, object_key, *marker_value)
-                    .await;
-            }
-
-            // Write children before parents to ensure that readers do not observe a parent object
-            // before its most recent children are visible.
-            for (object_id, object) in written.iter() {
-                if object.is_child_object() {
-                    self.write_object_entry(object_id, object.version(), object.clone().into())
-                        .await;
-                }
-            }
-            for (object_id, object) in written.iter() {
-                if !object.is_child_object() {
-                    self.write_object_entry(object_id, object.version(), object.clone().into())
-                        .await;
-                    if object.is_package() {
-                        self.packages
-                            .insert(*object_id, PackageObject::new(object.clone()));
-                    }
-                }
-            }
-
-            let tx_digest = *transaction.digest();
-            let effects_digest = effects.digest();
-
-            self.dirty
-                .transaction_effects
-                .insert(effects_digest, effects.clone());
-
-            match self.dirty.transaction_events.entry(events.digest()) {
-                DashMapEntry::Occupied(mut occupied) => {
-                    occupied.get_mut().0.insert(tx_digest);
-                }
-                DashMapEntry::Vacant(entry) => {
-                    let mut txns = BTreeSet::new();
-                    txns.insert(tx_digest);
-                    entry.insert((txns, events.clone()));
-                }
-            }
-
-            self.dirty
-                .executed_effects_digests
-                .insert(tx_digest, effects_digest);
-
-            self.dirty
-                .pending_transaction_writes
-                .insert(tx_digest, tx_outputs);
-
-            self.executed_effects_digests_notify_read
-                .notify(&tx_digest, &effects_digest);
-
-            self.metrics
-                .pending_notify_read
-                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-
-            Ok(())
-        }
-        .boxed()
+        WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs).boxed()
     }
 }
 
