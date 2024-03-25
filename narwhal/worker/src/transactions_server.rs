@@ -26,7 +26,7 @@ pub struct TxServer<V: TransactionValidator> {
     address: Multiaddr,
     rx_shutdown: ConditionalBroadcastReceiver,
     endpoint_metrics: WorkerEndpointMetrics,
-    tx_batch_maker: Sender<(Transaction, TxResponse)>,
+    local_client: Arc<LocalNarwhalClient>,
     validator: V,
 }
 
@@ -39,13 +39,17 @@ impl<V: TransactionValidator> TxServer<V> {
         tx_batch_maker: Sender<(Transaction, TxResponse)>,
         validator: V,
     ) -> JoinHandle<()> {
+        // create and initialize local Narwhal client.
+        let local_client = LocalNarwhalClient::new(tx_batch_maker);
+        LocalNarwhalClient::set_global(address.clone(), local_client.clone());
+
         spawn_logged_monitored_task!(
             Self {
                 address,
-                tx_batch_maker,
+                rx_shutdown,
                 endpoint_metrics,
+                local_client,
                 validator,
-                rx_shutdown
             }
             .run(),
             "TxServer"
@@ -57,13 +61,9 @@ impl<V: TransactionValidator> TxServer<V> {
         const RETRY_BACKOFF: Duration = Duration::from_millis(1_000);
         const GRACEFUL_SHUTDOWN_DURATION: Duration = Duration::from_millis(2_000);
 
-        // create and initialize local Narwhal client
-        let local_client = LocalNarwhalClient::new(self.tx_batch_maker.clone());
-        LocalNarwhalClient::set_global(self.address.clone(), local_client.clone());
-
         // create the handler
         let tx_handler = TxReceiverHandler {
-            local_client,
+            local_client: self.local_client.clone(),
             validator: self.validator,
         };
 
@@ -110,7 +110,7 @@ impl<V: TransactionValidator> TxServer<V> {
         // wait to receive a shutdown signal
         let _ = self.rx_shutdown.receiver.recv().await;
 
-        // once do just gracefully shutdown the node
+        // once do just gracefully signal the node to shutdown
         shutdown_handle.send(()).unwrap();
 
         // now wait until the handle completes or timeout if it takes long time
