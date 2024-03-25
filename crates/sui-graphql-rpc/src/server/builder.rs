@@ -169,12 +169,6 @@ impl FromRef<AppState> for Metrics {
     }
 }
 
-// impl FromRef<AppState> for Version {
-//     fn from_ref(app_state: &AppState) -> Version {
-//         app_state.version
-//     }
-// }
-
 impl ServerBuilder {
     pub fn new(state: AppState) -> Self {
         Self {

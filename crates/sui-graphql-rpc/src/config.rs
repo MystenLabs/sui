@@ -135,8 +135,9 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
-/// The Version of the service. major.minor combination represents the major release.
-/// The patch represents a fix in that release.
+/// The Version of the service. `year.month` represents the major release.
+/// New `patch` versions represent backwards compatible fixes for their major release.
+/// The `full` version is `year.month.patch-sha`.
 #[derive(Copy, Clone, Debug)]
 pub struct Version {
     /// The year of this release.
@@ -176,11 +177,7 @@ impl Version {
 
 impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}.{}.{}-{}",
-            self.year, self.month, self.patch, self.sha
-        )
+        write!(f, "{}", self.full)
     }
 }
 

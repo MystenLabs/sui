@@ -36,13 +36,11 @@ static VERSION: Version = Version {
     patch: env!("CARGO_PKG_VERSION_PATCH"),
     sha: GIT_REVISION,
     full: const_str::concat!(
-        concat!(
-            env!("CARGO_PKG_VERSION_MAJOR"),
-            ".",
-            env!("CARGO_PKG_VERSION_MINOR"),
-            ".",
-            env!("CARGO_PKG_VERSION_PATCH")
-        ),
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_PATCH"),
         "-",
         GIT_REVISION
     ),
