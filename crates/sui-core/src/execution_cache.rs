@@ -62,7 +62,7 @@ impl ExecutionCacheMetrics {
     }
 }
 
-pub type ExecutionCache = PassthroughCache;
+pub type ExecutionCache = WritebackCache;
 
 pub trait ExecutionCacheCommit: Send + Sync {
     /// Durably commit the transaction outputs of the given transaction to the database.
