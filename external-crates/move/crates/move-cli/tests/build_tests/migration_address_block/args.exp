@@ -50,6 +50,19 @@ The following changes will be made.
 @@ -1 +1 @@
 -address 0x2{ module m {} module n {}}
 +/* address 0x2{ */ module 0x2::m {} module 0x2::n {}/* } */
+--- sources/address_migration3.move
++++ sources/address_migration3.move
+@@ -1,2 +1,2 @@
+-address A {
+-module m {
++/* address A { */
++module A::m {
+@@ -4 +4 @@
+-module n {
++module A::n {
+@@ -6 +6 @@
+-}
++/* } */
 
 
 ============================================================
@@ -57,6 +70,7 @@ Apply changes? (Y/n)
 Updating "sources/address_migration.move" . . .
 Updating "sources/address_migration1.move" . . .
 Updating "sources/address_migration2.move" . . .
+Updating "sources/address_migration3.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch
@@ -66,5 +80,6 @@ External Command `diff -r -s sources migration_sources`:
 Files sources/address_migration.move and migration_sources/address_migration.move are identical
 Files sources/address_migration1.move and migration_sources/address_migration1.move are identical
 Files sources/address_migration2.move and migration_sources/address_migration2.move are identical
+Files sources/address_migration3.move and migration_sources/address_migration3.move are identical
 External Command `diff -s Move.toml Move.toml.expected`:
 Files Move.toml and Move.toml.expected are identical
