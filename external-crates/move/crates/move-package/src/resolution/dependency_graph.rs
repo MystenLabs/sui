@@ -229,7 +229,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
         let lock_path = root_path.join(SourcePackageLayout::Lock.path());
-        let lock_file = File::open(&lock_path);
+        let lock_file = File::open(lock_path);
         let digest_and_lock_contents = lock_file
             .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
                 Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string_opt)),
