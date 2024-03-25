@@ -8,7 +8,6 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::AuthorityOverloadConfig;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
@@ -135,8 +134,8 @@ async fn shared_object_deletion_multiple_times() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .get_effects_notify_read()
-        .notify_read_executed_effects(digests)
+        .get_cache_reader()
+        .notify_read_executed_effects(&digests)
         .await
         .unwrap();
 }
@@ -192,8 +191,8 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .get_effects_notify_read()
-        .notify_read_executed_effects(digests)
+        .get_cache_reader()
+        .notify_read_executed_effects(&digests)
         .await
         .unwrap();
 }
@@ -306,8 +305,8 @@ async fn shared_object_deletion_multi_certs() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![inc_tx_a_digest, inc_tx_b_digest])
+        .get_cache_reader()
+        .notify_read_executed_effects(&[inc_tx_a_digest, inc_tx_b_digest])
         .await
         .unwrap();
 }
