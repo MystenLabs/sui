@@ -651,6 +651,8 @@ async fn test_fetching_deferred_txs() {
 
 enum DeferralReason {
     RandomnessNotReady,
+
+    // The list of objects are congested objects.
     SharedObjectCongestion(Vec<ObjectID>),
 }
 
@@ -1593,7 +1595,7 @@ impl AuthorityPerEpochStore {
         self.load_deferred_transactions(batch, min, max)
     }
 
-    fn load_deferred_transactions_for_consensus_round(
+    fn load_deferred_transactions_for_up_to_consensus_round(
         &self,
         batch: &mut DBBatch,
         consensus_round: u64,
@@ -1649,7 +1651,7 @@ impl AuthorityPerEpochStore {
         Ok(txns)
     }
 
-    pub fn get_all_deferred_transaction(
+    pub fn get_all_deferred_transactions(
         &self,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         Ok(self
@@ -1675,6 +1677,7 @@ impl AuthorityPerEpochStore {
             ));
         }
 
+        // Defer transaction if it uses shared objects that are congested.
         match self.protocol_config().per_object_congestion_control_mode() {
             PerObjectCongestionControlMode::None => None,
             PerObjectCongestionControlMode::TotalGasBudget => {
@@ -1699,17 +1702,21 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    // Update shared objects' execution cost used in `cert` using `cert`'s execution cost.
+    // This is called when `cert` is scheduled for execution.
     fn update_object_execution_cost(
         &self,
         cert: &VerifiedExecutableTransaction,
         object_execution_cost: &mut HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     ) {
+        // Return early if per object congestion control is disabled.
         if let PerObjectCongestionControlMode::None =
             self.protocol_config().per_object_congestion_control_mode()
         {
             return;
         }
 
+        // There is only one PerObjectCongestionControlMode other than None for now.
         assert!(
             PerObjectCongestionControlMode::TotalGasBudget
                 == self.protocol_config().per_object_congestion_control_mode()
@@ -1717,12 +1724,10 @@ impl AuthorityPerEpochStore {
 
         let start_cost =
             compute_tx_start_at_cost(object_execution_cost, cert.shared_input_objects().collect());
-
         let end_cost = start_cost + cert.gas_budget();
 
         for obj in cert.shared_input_objects() {
             let object_cost = object_execution_cost.entry(obj.id).or_default();
-
             if obj.mutable {
                 object_cost.write_bump_cost(end_cost);
             } else {
@@ -2443,9 +2448,9 @@ impl AuthorityPerEpochStore {
             })
             .collect();
         let mut system_transactions = Vec::with_capacity(verified_transactions.len());
-        let mut current_consensus_sequenced_transactions =
+        let mut current_commit_sequenced_consensus_transactions =
             Vec::with_capacity(verified_transactions.len());
-        let mut current_sequenced_randomness_transactions =
+        let mut current_commit_sequenced_randomness_transactions =
             Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
         for tx in verified_transactions {
@@ -2457,9 +2462,9 @@ impl AuthorityPerEpochStore {
                 .0
                 .is_user_tx_with_randomness(self.randomness_state_enabled())
             {
-                current_sequenced_randomness_transactions.push(tx);
+                current_commit_sequenced_randomness_transactions.push(tx);
             } else {
-                current_consensus_sequenced_transactions.push(tx);
+                current_commit_sequenced_consensus_transactions.push(tx);
             }
         }
         let mut batch = self
@@ -2468,7 +2473,7 @@ impl AuthorityPerEpochStore {
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
-            .load_deferred_transactions_for_consensus_round(&mut batch, commit_round)?
+            .load_deferred_transactions_for_up_to_consensus_round(&mut batch, commit_round)?
             .into_iter()
             .collect();
         let mut previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey> =
@@ -2483,14 +2488,19 @@ impl AuthorityPerEpochStore {
                     })
                 })
                 .collect();
+
+        // Sequenced_transactions and sequenced_randomness_transactions store all transactions that will be sent to
+        // process_consensus_transactions. We put deferred transactions at the beginning of the list before
+        // PostConsensusTxReorder::reorder, so that for transactions with the same gas price, deferred transactions
+        // will be placed earlier in the execution queue.
         let mut sequenced_transactions: Vec<VerifiedSequencedConsensusTransaction> =
             Vec::with_capacity(
-                current_consensus_sequenced_transactions.len()
+                current_commit_sequenced_consensus_transactions.len()
                     + previously_deferred_tx_digests.len(),
             );
         let mut sequenced_randomness_transactions: Vec<VerifiedSequencedConsensusTransaction> =
             Vec::with_capacity(
-                current_sequenced_randomness_transactions.len()
+                current_commit_sequenced_randomness_transactions.len()
                     + previously_deferred_tx_digests.len(),
             );
         for tx in deferred_txs
@@ -2506,8 +2516,7 @@ impl AuthorityPerEpochStore {
                 sequenced_transactions.push(tx);
             }
         }
-
-        sequenced_transactions.extend(current_consensus_sequenced_transactions);
+        sequenced_transactions.extend(current_commit_sequenced_consensus_transactions);
 
         // If DKG is closed, we should now load any previously-deferred randomness-using tx
         // so we can decide what to do with them (execute or ignore, depending on whether
@@ -2539,7 +2548,7 @@ impl AuthorityPerEpochStore {
             sequenced_randomness_transactions
                 .extend(deferred_randomness_txs.into_iter().flat_map(|(_, txs)| txs));
         }
-        sequenced_randomness_transactions.extend(current_sequenced_randomness_transactions);
+        sequenced_randomness_transactions.extend(current_commit_sequenced_randomness_transactions);
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
         let mut roots: BTreeSet<_> = system_transactions
@@ -2846,12 +2855,15 @@ impl AuthorityPerEpochStore {
 
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
             BTreeMap::new();
+
+        // The map stores per object execution cost for this consensus commit. One for regular transactions and one for
+        // transactions using randomness.
         let mut object_execution_cost: HashMap<ObjectID, ObjectExecutionQueueMeasure> =
-            Default::default();
+            HashMap::new();
         let mut object_using_randomness_execution_cost: HashMap<
             ObjectID,
             ObjectExecutionQueueMeasure,
-        > = Default::default();
+        > = HashMap::new();
 
         let mut randomness_state_updated = false;
         for tx in transactions {
@@ -2896,6 +2908,8 @@ impl AuthorityPerEpochStore {
                             .map(TransactionKey::Digest)
                     {
                         deferred_tx_roots.push(txn_key);
+
+                        // Notify consensus adapter that the consensus handler has received the transaction.
                         notifications.push(key.clone());
                     }
                 }
@@ -3144,6 +3158,7 @@ impl AuthorityPerEpochStore {
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
 
+                // This certificate will be scheduled. Update object execution cost.
                 if certificate.contains_shared_object() {
                     self.update_object_execution_cost(&certificate, object_execution_cost);
                 }

@@ -5713,10 +5713,17 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
 async fn test_per_object_congestion_control() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
+    // In this test, we tests transactions that operate on 2 shared objects. The idea is that
+    // one of them is more expensive to operate on than the other. And we want to test that
+    // the system will defer transactions that operate on the more expensive object and allow
+    // transactions that operate on the cheaper object to go through.
+    //
+    // We will create 2 batches of commits. So here, we create gas objects for each of them separately.
+    let shared_objects = create_shared_objects(2);
     let gas_objects_commit_1 = create_gas_objects(10, sender);
     let gas_objects_commit_2 = create_gas_objects(5, sender);
-    let shared_objects = create_shared_objects(2);
 
+    // Create the cluster with controlled per object congestion control.
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config
@@ -5732,6 +5739,13 @@ async fn test_per_object_congestion_control() {
     genesis_objects.extend(shared_objects.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
 
+    // Create first batch of commits. Here, we create 5 transactions that operate on the first
+    // shared object with very high gas budget. And 5 transactions that operate on the second
+    // shared object with low gas budget (so that there won't be any congestion on the second
+    // object).
+    //
+    // For transaction operates on the expensive object, we use gas price from 1000 to 5000,
+    // and for transaction operates on the cheaper object, we use gas price of 1000.
     let mut certificates: Vec<VerifiedCertificate> = vec![];
     for (index, gas_object) in gas_objects_commit_1.iter().enumerate() {
         let certificate = make_test_transaction(
@@ -5761,8 +5775,12 @@ async fn test_per_object_congestion_control() {
         certificates.push(certificate);
     }
 
+    // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
     certificates.shuffle(&mut rand::thread_rng());
 
+    // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
+    // should go through, and all transactions oeprate on the cheaper object should go through.
+    // We also check that the scheduled transactions on the expensive object have the highest gas price.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
@@ -5777,13 +5795,13 @@ async fn test_per_object_congestion_control() {
         );
     }
 
+    // Checks that deferral keys are formed correctly.
     let commit_round = authority
         .epoch_store_for_testing()
         .get_highest_pending_checkpoint_height();
-
     let deferred_txns = authority
         .epoch_store_for_testing()
-        .get_all_deferred_transaction()
+        .get_all_deferred_transactions()
         .unwrap();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 3);
@@ -5806,6 +5824,7 @@ async fn test_per_object_congestion_control() {
         }
     }
 
+    // Create second batch of commits. Here, we create another 5 transactions that operate on the cheap object.
     let mut new_certificates: Vec<VerifiedCertificate> = vec![];
     for gas_object in gas_objects_commit_2.iter() {
         let certificate = make_test_transaction(
@@ -5822,6 +5841,10 @@ async fn test_per_object_congestion_control() {
         .await;
         new_certificates.push(certificate);
     }
+
+    // Sends the second batch of transactions. We should expect that another 2 transactions operate on the expensive object,
+    // which are deferred from the previous round, should go through, and all the new transactions oeprate on the cheaper
+    // object should go through.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &new_certificates).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
@@ -5838,7 +5861,7 @@ async fn test_per_object_congestion_control() {
 
     let deferred_txns = authority
         .epoch_store_for_testing()
-        .get_all_deferred_transaction()
+        .get_all_deferred_transactions()
         .unwrap();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 1);
@@ -5861,6 +5884,12 @@ async fn test_per_object_congestion_control() {
         }
     }
 
+    // Sends the last batch with no new transaction. The last deferred transactions should go through.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
     assert_eq!(scheduled_txns.len(), 1);
+    assert!(authority
+        .epoch_store_for_testing()
+        .get_all_deferred_transactions()
+        .unwrap()
+        .is_empty());
 }
