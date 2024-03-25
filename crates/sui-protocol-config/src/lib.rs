@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 40;
+const MAX_PROTOCOL_VERSION: u64 = 41;
 
 // Record history of protocol version allocations here:
 //
@@ -113,6 +113,7 @@ const MAX_PROTOCOL_VERSION: u64 = 40;
 // Version 39: Allow skipped epochs for randomness updates.
 //             Extra version to fix `test_upgrade_compatibility` simtest.
 // Version 40:
+// Version 41: Enable group operations native functions in testnet and mainnet (without msm).
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -383,6 +384,10 @@ struct FeatureFlags {
     // Enable native functions for group operations.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_functions: bool,
+
+    // Enable native function for msm.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_group_ops_native_function_msm: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1169,6 +1174,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_group_ops_native_functions
     }
 
+    pub fn enable_group_ops_native_function_msm(&self) -> bool {
+        self.feature_flags.enable_group_ops_native_function_msm
+    }
+
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
     }
@@ -1886,6 +1895,7 @@ impl ProtocolConfig {
                     // Only enable group ops on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_group_ops_native_functions = true;
+                        cfg.feature_flags.enable_group_ops_native_function_msm = true;
                         // Next values are arbitrary in a similar way as the other crypto native functions.
                         cfg.group_ops_bls12381_decode_scalar_cost = Some(52);
                         cfg.group_ops_bls12381_decode_g1_cost = Some(52);
@@ -1961,6 +1971,41 @@ impl ProtocolConfig {
                     // It is important that we keep this protocol version blank due to an issue with random.move.
                 }
                 40 => {}
+                41 => {
+                    // Enable group ops and all networks (but not msm)
+                    cfg.feature_flags.enable_group_ops_native_functions = true;
+                    // Next values are arbitrary in a similar way as the other crypto native functions.
+                    cfg.group_ops_bls12381_decode_scalar_cost = Some(52);
+                    cfg.group_ops_bls12381_decode_g1_cost = Some(52);
+                    cfg.group_ops_bls12381_decode_g2_cost = Some(52);
+                    cfg.group_ops_bls12381_decode_gt_cost = Some(52);
+                    cfg.group_ops_bls12381_scalar_add_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_add_cost = Some(52);
+                    cfg.group_ops_bls12381_g2_add_cost = Some(52);
+                    cfg.group_ops_bls12381_gt_add_cost = Some(52);
+                    cfg.group_ops_bls12381_scalar_sub_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_sub_cost = Some(52);
+                    cfg.group_ops_bls12381_g2_sub_cost = Some(52);
+                    cfg.group_ops_bls12381_gt_sub_cost = Some(52);
+                    cfg.group_ops_bls12381_scalar_mul_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_mul_cost = Some(52);
+                    cfg.group_ops_bls12381_g2_mul_cost = Some(52);
+                    cfg.group_ops_bls12381_gt_mul_cost = Some(52);
+                    cfg.group_ops_bls12381_scalar_div_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_div_cost = Some(52);
+                    cfg.group_ops_bls12381_g2_div_cost = Some(52);
+                    cfg.group_ops_bls12381_gt_div_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_hash_to_base_cost = Some(52);
+                    cfg.group_ops_bls12381_g2_hash_to_base_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_hash_to_cost_per_byte = Some(2);
+                    cfg.group_ops_bls12381_g2_hash_to_cost_per_byte = Some(2);
+                    cfg.group_ops_bls12381_g1_msm_base_cost = Some(52);
+                    cfg.group_ops_bls12381_g2_msm_base_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_msm_base_cost_per_input = Some(52);
+                    cfg.group_ops_bls12381_g2_msm_base_cost_per_input = Some(52);
+                    cfg.group_ops_bls12381_msm_max_len = Some(32);
+                    cfg.group_ops_bls12381_pairing_cost = Some(52);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
