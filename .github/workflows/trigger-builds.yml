@@ -3,7 +3,7 @@ name: Trigger builds for images and binaries
 on:
   workflow_dispatch:
   push:
-    branches:
+    branches: 
       - 'devnet'
       - 'testnet'
       - 'mainnet'
