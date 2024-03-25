@@ -11,13 +11,9 @@
 ///
 /// More entry functions might be added in the future depending on the use cases.
 module sui::display {
-    use sui::package::{from_package, Publisher};
-    use sui::tx_context::{sender, TxContext};
+    use sui::package::Publisher;
     use sui::vec_map::{Self, VecMap};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
     use sui::event;
-    use std::vector;
     use std::string::String;
 
     /// For when T does not belong to the package `Publisher`.
@@ -87,13 +83,13 @@ module sui::display {
     public fun new_with_fields<T: key>(
         pub: &Publisher, fields: vector<String>, values: vector<String>, ctx: &mut TxContext
     ): Display<T> {
-        let len = vector::length(&fields);
-        assert!(len == vector::length(&values), EVecLengthMismatch);
+        let len = fields.length();
+        assert!(len == values.length(), EVecLengthMismatch);
 
         let mut i = 0;
         let mut display = new<T>(pub, ctx);
         while (i < len) {
-            add_internal(&mut display, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            display.add_internal(fields[i], values[i]);
             i = i + 1;
         };
 
@@ -105,7 +101,7 @@ module sui::display {
     #[allow(lint(self_transfer))]
     /// Create a new empty Display<T> object and keep it.
     entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-        transfer::public_transfer(new<T>(pub, ctx), sender(ctx))
+        transfer::public_transfer(new<T>(pub, ctx), ctx.sender())
     }
 
     /// Manually bump the version and emit an event with the updated version's contents.
@@ -116,7 +112,7 @@ module sui::display {
         event::emit(VersionUpdated<T> {
             version: display.version,
             fields: *&display.fields,
-            id: object::uid_to_inner(&display.id),
+            id: display.id.to_inner(),
         })
     }
 
@@ -124,19 +120,19 @@ module sui::display {
 
     /// Sets a custom `name` field with the `value`.
     entry public fun add<T: key>(self: &mut Display<T>, name: String, value: String) {
-        add_internal(self, name, value)
+        self.add_internal(name, value)
     }
 
     /// Sets multiple `fields` with `values`.
     entry public fun add_multiple<T: key>(
         self: &mut Display<T>, fields: vector<String>, values: vector<String>
     ) {
-        let len = vector::length(&fields);
-        assert!(len == vector::length(&values), EVecLengthMismatch);
+        let len = fields.length();
+        assert!(len == values.length(), EVecLengthMismatch);
 
         let mut i = 0;
         while (i < len) {
-            add_internal(self, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            self.add_internal(fields[i], values[i]);
             i = i + 1;
         };
     }
@@ -144,20 +140,20 @@ module sui::display {
     /// Change the value of the field.
     /// TODO (long run): version changes;
     entry public fun edit<T: key>(self: &mut Display<T>, name: String, value: String) {
-        let (_, _) = vec_map::remove(&mut self.fields, &name);
-        add_internal(self, name, value)
+        let (_, _) = self.fields.remove(&name);
+        self.add_internal(name, value)
     }
 
     /// Remove the key from the Display.
     entry public fun remove<T: key>(self: &mut Display<T>, name: String) {
-        vec_map::remove(&mut self.fields, &name);
+        self.fields.remove(&name);
     }
 
     // === Access fields ===
 
     /// Authorization check; can be performed externally to implement protection rules for Display.
     public fun is_authorized<T: key>(pub: &Publisher): bool {
-        from_package<T>(pub)
+        pub.from_package<T>()
     }
 
     /// Read the `version` field.
@@ -177,7 +173,7 @@ module sui::display {
         let uid = object::new(ctx);
 
         event::emit(DisplayCreated<T> {
-            id: object::uid_to_inner(&uid)
+            id: uid.to_inner()
         });
 
         Display {
@@ -189,16 +185,14 @@ module sui::display {
 
     /// Private method for inserting fields without security checks.
     fun add_internal<T: key>(display: &mut Display<T>, name: String, value: String) {
-        vec_map::insert(&mut display.fields, name, value)
+        display.fields.insert(name, value)
     }
 }
 
 #[test_only]
 module sui::display_tests {
-    use sui::object::UID;
     use sui::test_scenario as test;
-    use sui::transfer;
-    use std::string::{utf8, String};
+    use std::string::String;
     use sui::package;
     use sui::display;
 
@@ -221,13 +215,13 @@ module sui::display_tests {
         // create a new display object
         let mut display = display::new<Capy>(&pub, test::ctx(&mut test));
 
-        display::add(&mut display, utf8(b"name"), utf8(b"Capy {name}"));
-        display::add(&mut display, utf8(b"link"), utf8(b"https://capy.art/capy/{id}"));
-        display::add(&mut display, utf8(b"image"), utf8(b"https://api.capy.art/capy/{id}/svg"));
-        display::add(&mut display, utf8(b"description"), utf8(b"A Lovely Capy"));
+        display.add(b"name".to_string(), b"Capy {name}".to_string());
+        display.add(b"link".to_string(), b"https://capy.art/capy/{id}".to_string());
+        display.add(b"image".to_string(), b"https://api.capy.art/capy/{id}/svg".to_string());
+        display.add(b"description".to_string(), b"A Lovely Capy".to_string());
 
-        package::burn_publisher(pub);
+        pub.burn_publisher();
         transfer::public_transfer(display, @0x2);
-        test::end(test);
+        test.end();
     }
 }

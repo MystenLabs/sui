@@ -263,13 +263,13 @@ Can only be called by genesis or change_epoch transactions.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_create">create</a>(ctx: &<b>mut</b> TxContext) {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
 
     <b>let</b> version = <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>;
 
     <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
         version,
-        epoch: <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+        epoch: ctx.epoch(),
         randomness_round: 0,
         random_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[],
     };
@@ -374,13 +374,12 @@ transaction.
     ctx: &TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>);
 
     // Randomness should only be incremented.
-    <b>let</b> epoch = <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
-    <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self);
-    <b>if</b> (inner.randomness_round == 0 && inner.epoch == 0 &&
-        <a href="../move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&inner.random_bytes)) {
+    <b>let</b> epoch = ctx.epoch();
+    <b>let</b> inner = self.<a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>();
+    <b>if</b> (inner.randomness_round == 0 && inner.epoch == 0 && inner.random_bytes.is_empty()) {
         // First <b>update</b> should be for round zero.
         <b>assert</b>!(new_round == 0, <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>);
     } <b>else</b> {
@@ -394,7 +393,7 @@ transaction.
         );
     };
 
-    inner.epoch = <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
+    inner.epoch = ctx.epoch();
     inner.randomness_round = new_round;
     inner.random_bytes = new_bytes;
 }
@@ -424,7 +423,7 @@ Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
     <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(r);
     <b>let</b> seed = hmac_sha3_256(
         &inner.random_bytes,
-        &to_bytes(fresh_object_address(ctx))
+        &ctx.fresh_object_address().to_bytes()
     );
     <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a> { seed, counter: 0, buffer: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }

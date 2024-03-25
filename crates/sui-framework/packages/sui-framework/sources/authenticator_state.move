@@ -9,13 +9,8 @@
 // state to the chain for auditability + restore from snapshot purposes.
 module sui::authenticator_state {
     use std::string;
-    use std::option::{Self, Option};
-    use std::vector;
     use sui::dynamic_field;
     use std::string::{String, utf8};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::math;
 
     /// Sender is not @0x0 the system address.
@@ -100,18 +95,18 @@ module sui::authenticator_state {
     // ordering is not necessarily the same as the string ordering, but we just need some
     // canonical that is cheap to compute.
     fun string_bytes_lt(a: &String, b: &String): bool {
-        let a_bytes = string::bytes(a);
-        let b_bytes = string::bytes(b);
+        let a_bytes = a.bytes();
+        let b_bytes = b.bytes();
 
-        if (vector::length(a_bytes) < vector::length(b_bytes)) {
+        if (a_bytes.length() < b_bytes.length()) {
             true
-        } else if (vector::length(a_bytes) > vector::length(b_bytes)) {
+        } else if (a_bytes.length() > b_bytes.length()) {
             false
         } else {
             let mut i = 0;
-            while (i < vector::length(a_bytes)) {
-                let a_byte = *vector::borrow(a_bytes, i);
-                let b_byte = *vector::borrow(b_bytes, i);
+            while (i < a_bytes.length()) {
+                let a_byte = a_bytes[i];
+                let b_byte = b_bytes[i];
                 if (a_byte < b_byte) {
                     return true
                 } else if (a_byte > b_byte) {
@@ -149,7 +144,7 @@ module sui::authenticator_state {
     /// the authenticator state object is first created.
     /// Can only be called by genesis or change_epoch transactions.
     fun create(ctx: &TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         let version = CurrentVersion;
 
@@ -197,9 +192,9 @@ module sui::authenticator_state {
 
     fun check_sorted(new_active_jwks: &vector<ActiveJwk>) {
         let mut i = 0;
-        while (i < vector::length(new_active_jwks) - 1) {
-            let a = vector::borrow(new_active_jwks, i);
-            let b = vector::borrow(new_active_jwks, i + 1);
+        while (i < new_active_jwks.length() - 1) {
+            let a = &new_active_jwks[i];
+            let b = &new_active_jwks[i + 1];
             assert!(jwk_lt(a, b), EJwksNotSorted);
             i = i + 1;
         };
@@ -216,52 +211,52 @@ module sui::authenticator_state {
         ctx: &TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         check_sorted(&new_active_jwks);
         let new_active_jwks = deduplicate(new_active_jwks);
 
-        let inner = load_inner_mut(self);
+        let inner = self.load_inner_mut();
 
         let mut res = vector[];
         let mut i = 0;
         let mut j = 0;
-        let active_jwks_len = vector::length(&inner.active_jwks);
-        let new_active_jwks_len = vector::length(&new_active_jwks);
+        let active_jwks_len = inner.active_jwks.length();
+        let new_active_jwks_len = new_active_jwks.length();
 
         while (i < active_jwks_len && j < new_active_jwks_len) {
-            let old_jwk = vector::borrow(&inner.active_jwks, i);
-            let new_jwk = vector::borrow(&new_active_jwks, j);
+            let old_jwk = &inner.active_jwks[i];
+            let new_jwk = &new_active_jwks[j];
 
             // when they are equal, push only one, but use the max epoch of the two
             if (active_jwk_equal(old_jwk, new_jwk)) {
                 let mut jwk = *old_jwk;
                 jwk.epoch = math::max(old_jwk.epoch, new_jwk.epoch);
-                vector::push_back(&mut res, jwk);
+                res.push_back(jwk);
                 i = i + 1;
                 j = j + 1;
             } else if (jwk_id_equal(&old_jwk.jwk_id, &new_jwk.jwk_id)) {
                 // if only jwk_id is equal, then the key has changed. Providers should not send
                 // JWKs like this, but if they do, we must ignore the new JWK to avoid having a
                 // liveness / forking issues
-                vector::push_back(&mut res, *old_jwk);
+                res.push_back(*old_jwk);
                 i = i + 1;
                 j = j + 1;
             } else if (jwk_lt(old_jwk, new_jwk)) {
-                vector::push_back(&mut res, *old_jwk);
+                res.push_back(*old_jwk);
                 i = i + 1;
             } else {
-                vector::push_back(&mut res, *new_jwk);
+                res.push_back(*new_jwk);
                 j = j + 1;
             }
         };
 
         while (i < active_jwks_len) {
-            vector::push_back(&mut res, *vector::borrow(&inner.active_jwks, i));
+            res.push_back(inner.active_jwks[i]);
             i = i + 1;
         };
         while (j < new_active_jwks_len) {
-            vector::push_back(&mut res, *vector::borrow(&new_active_jwks, j));
+            res.push_back(new_active_jwks[j]);
             j = j + 1;
         };
 
@@ -272,18 +267,18 @@ module sui::authenticator_state {
         let mut res = vector[];
         let mut i = 0;
         let mut prev: Option<JwkId> = option::none();
-        while (i < vector::length(&jwks)) {
-            let jwk = vector::borrow(&jwks, i);
-            if (option::is_none(&prev)) {
-                option::fill(&mut prev, jwk.jwk_id);
-            } else if (jwk_id_equal(option::borrow(&prev), &jwk.jwk_id)) {
+        while (i < jwks.length()) {
+            let jwk = &jwks[i];
+            if (prev.is_none()) {
+                prev.fill(jwk.jwk_id);
+            } else if (jwk_id_equal(prev.borrow(), &jwk.jwk_id)) {
                 // skip duplicate jwks in input
                 i = i + 1;
                 continue
             } else {
-                *option::borrow_mut(&mut prev) = jwk.jwk_id;
+                *prev.borrow_mut() = jwk.jwk_id;
             };
-            vector::push_back(&mut res, *jwk);
+            res.push_back(*jwk);
             i = i + 1;
         };
         res
@@ -297,11 +292,11 @@ module sui::authenticator_state {
         min_epoch: u64,
         ctx: &TxContext) {
         // This will only be called by sui_system::advance_epoch
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         let inner = load_inner_mut(self);
 
-        let len = vector::length(&inner.active_jwks);
+        let len = inner.active_jwks.length();
 
         // first we count how many jwks from each issuer are above the min_epoch
         // and store the counts in a vector that parallels the (sorted) active_jwks vector
@@ -310,19 +305,19 @@ module sui::authenticator_state {
         let mut prev_issuer: Option<String> = option::none();
 
         while (i < len) {
-            let cur = vector::borrow(&inner.active_jwks, i);
+            let cur = &inner.active_jwks[i];
             let cur_iss = &cur.jwk_id.iss;
-            if (option::is_none(&prev_issuer)) {
-                option::fill(&mut prev_issuer, *cur_iss);
-                vector::push_back(&mut issuer_max_epochs, cur.epoch);
+            if (prev_issuer.is_none()) {
+                prev_issuer.fill(*cur_iss);
+                issuer_max_epochs.push_back(cur.epoch);
             } else {
-                if (cur_iss == option::borrow(&prev_issuer)) {
-                    let back = vector::length(&issuer_max_epochs) - 1;
-                    let prev_max_epoch = vector::borrow_mut(&mut issuer_max_epochs, back);
+                if (cur_iss == prev_issuer.borrow()) {
+                    let back = issuer_max_epochs.length() - 1;
+                    let prev_max_epoch = &mut issuer_max_epochs[back];
                     *prev_max_epoch = math::max(*prev_max_epoch, cur.epoch);
                 } else {
-                    *option::borrow_mut(&mut prev_issuer) = *cur_iss;
-                    vector::push_back(&mut issuer_max_epochs, cur.epoch);
+                    *prev_issuer.borrow_mut() = *cur_iss;
+                    issuer_max_epochs.push_back(cur.epoch);
                 }
             };
             i = i + 1;
@@ -335,22 +330,22 @@ module sui::authenticator_state {
         let mut i = 0;
         let mut j = 0;
         while (i < len) {
-            let jwk = vector::borrow(&inner.active_jwks, i);
+            let jwk = &inner.active_jwks[i];
             let cur_iss = &jwk.jwk_id.iss;
 
-            if (option::is_none(&prev_issuer)) {
-                option::fill(&mut prev_issuer, *cur_iss);
-            } else if (cur_iss != option::borrow(&prev_issuer)) {
-                *option::borrow_mut(&mut prev_issuer) = *cur_iss;
+            if (prev_issuer.is_none()) {
+                prev_issuer.fill(*cur_iss);
+            } else if (cur_iss != prev_issuer.borrow()) {
+                *prev_issuer.borrow_mut() = *cur_iss;
                 j = j + 1;
             };
 
-            let max_epoch_for_iss = vector::borrow(&issuer_max_epochs, j);
+            let max_epoch_for_iss = &issuer_max_epochs[j];
 
             // TODO: if the iss for this jwk has *no* jwks that meet the minimum epoch,
             // then expire nothing.
             if (*max_epoch_for_iss < min_epoch || jwk.epoch >= min_epoch) {
-                vector::push_back(&mut new_active_jwks, *jwk);
+                new_active_jwks.push_back(*jwk);
             };
             i = i + 1;
         };
@@ -364,8 +359,8 @@ module sui::authenticator_state {
         self: &AuthenticatorState,
         ctx: &TxContext,
     ): vector<ActiveJwk> {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-        load_inner(self).active_jwks
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
+        self.load_inner().active_jwks
     }
 
     #[test_only]
@@ -379,7 +374,7 @@ module sui::authenticator_state {
         new_active_jwks: vector<ActiveJwk>,
         ctx: &TxContext,
     ) {
-        update_authenticator_state(self, new_active_jwks, ctx);
+        self.update_authenticator_state(new_active_jwks, ctx);
     }
 
     #[test_only]
@@ -388,7 +383,7 @@ module sui::authenticator_state {
         min_epoch: u64,
         ctx: &TxContext,
     ) {
-        expire_jwks(self, min_epoch, ctx);
+        self.expire_jwks(min_epoch, ctx);
     }
 
     #[test_only]
@@ -396,6 +391,6 @@ module sui::authenticator_state {
         self: &AuthenticatorState,
         ctx: &TxContext,
     ): vector<ActiveJwk> {
-        get_active_jwks(self, ctx)
+        self.get_active_jwks(ctx)
     }
 }
