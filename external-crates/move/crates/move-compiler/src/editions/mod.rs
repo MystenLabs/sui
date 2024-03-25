@@ -46,6 +46,7 @@ pub enum FeatureGate {
     Move2024Migration,
     SyntaxMethods,
     AutoborrowEq,
+    CleverAssertions,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -78,18 +79,22 @@ pub fn check_feature_or_error(
 
 pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
     assert!(!edition.supports(feature));
-    let valid_editions = format_oxford_list!("and", "'{}'", valid_editions_for_feature(feature));
-    let mut diag = diag!(
-        Editions::FeatureTooNew,
-        (
-            loc,
-            format!(
-                "{} not supported by current edition '{edition}', \
-                only {valid_editions} support this feature",
-                feature.error_prefix(),
-            )
+    let valid_editions = valid_editions_for_feature(feature);
+    let message = if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature)
+    {
+        format!(
+            "{} under development and should not be used right now.",
+            feature.error_prefix()
         )
-    );
+    } else {
+        format!(
+            "{} not supported by current edition '{edition}', \
+                only {} support this feature",
+            feature.error_prefix(),
+            format_oxford_list!("and", "'{}'", valid_editions)
+        )
+    };
+    let mut diag = diag!(Editions::FeatureTooNew, (loc, message));
     diag.add_note(UPGRADE_NOTE);
     diag
 }
@@ -127,7 +132,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::AutoborrowEq,
 ];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
@@ -213,7 +218,7 @@ impl Edition {
         panic!("{}", self.unknown_edition_error())
     }
 
-    fn unknown_edition_error(&self) -> anyhow::Error {
+    pub fn unknown_edition_error(&self) -> anyhow::Error {
         anyhow::anyhow!(
             "Unsupported edition \"{self}\". Current supported editions include: {}",
             format_oxford_list!("and", "\"{}\"", Self::VALID)
@@ -245,6 +250,7 @@ impl FeatureGate {
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
             FeatureGate::AutoborrowEq => "Automatic borrowing is",
+            FeatureGate::CleverAssertions => "Clever `assert!`, `abort`, and `#[error]` are",
         }
     }
 }
@@ -267,7 +273,7 @@ impl FromStr for Edition {
             edition: Symbol::from(edition),
             release: release.map(Symbol::from),
         };
-        if !Self::VALID.iter().any(|e| e == &edition) {
+        if !Self::VALID.iter().any(|e| e == &edition) && edition != Edition::DEVELOPMENT {
             return Err(edition.unknown_edition_error());
         }
         Ok(edition)
