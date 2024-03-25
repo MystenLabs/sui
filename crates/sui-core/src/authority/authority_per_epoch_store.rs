@@ -49,7 +49,7 @@ use typed_store::{
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::authority_per_epoch_store_util::{
-    compute_object_start_cost, should_defer_due_to_object_congestion, ObjectExecutionQueueMeasure,
+    compute_tx_start_at_cost, should_defer_due_to_object_congestion, ObjectExecutionQueueMeasure,
 };
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::ResolverWrapper;
@@ -532,6 +532,7 @@ impl DeferralKey {
         )
     }
 
+    // Returns a range of deferral keys that are deferred up to the given consensus round.
     fn range_for_up_to_consensus_round(consensus_round: Round) -> (Self, Self) {
         (
             Self::ConsensusRound {
@@ -583,22 +584,50 @@ async fn test_deferral_key_sort_order() {
             }
         }
     }
+}
 
+// Tests that fetching deferred transactions up to a given consensus rounds works as expected.
+#[tokio::test]
+async fn test_fetching_deferred_txs() {
+    use rand::prelude::*;
+
+    #[derive(DBMapUtils)]
+    struct TestDB {
+        deferred_certs: DBMap<DeferralKey, ()>,
+    }
+
+    // get a tempdir
+    let tempdir = tempfile::tempdir().unwrap();
+
+    let db = TestDB::open_tables_read_write(
+        tempdir.path().to_owned(),
+        MetricConf::new("test_db"),
+        None,
+        None,
+    );
+
+    // All future rounds are between 100 and 300.
     let min_future_round = 100;
     let max_future_round = 300;
     for _ in 0..10000 {
         let future_round = rand::thread_rng().gen_range(min_future_round..=max_future_round);
         let current_round = rand::thread_rng().gen_range(0..u64::MAX);
 
-        let key = DeferralKey::new_for_consensus_round(future_round, current_round);
-        db.deferred_certs.insert(&key, &()).unwrap();
+        db.deferred_certs
+            .insert(
+                &DeferralKey::new_for_consensus_round(future_round, current_round),
+                &(),
+            )
+            .unwrap();
+        // Add a randomness deferral txn to make sure that it won't show up when fetching deferred consensus round txs.
         db.deferred_certs
             .insert(&DeferralKey::new_for_randomness(current_round), &())
             .unwrap();
     }
 
-    let mut previous_future_round = 0;
+    // Fetch all deferred transactions up to consensus round 200.
     let (min, max) = DeferralKey::range_for_up_to_consensus_round(200);
+    let mut previous_future_round = 0;
     let mut result_count = 0;
     for result in db
         .deferred_certs
@@ -1687,7 +1716,7 @@ impl AuthorityPerEpochStore {
         );
 
         let start_cost =
-            compute_object_start_cost(object_execution_cost, cert.shared_input_objects().collect());
+            compute_tx_start_at_cost(object_execution_cost, cert.shared_input_objects().collect());
 
         let end_cost = start_cost + cert.gas_budget();
 

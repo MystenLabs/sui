@@ -5713,14 +5713,8 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
 async fn test_per_object_congestion_control() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
-    let gas_objects = create_gas_objects(10, sender);
-    let new_gas_objects = create_gas_objects(5, sender);
-
-    // Initialize an authority with a (owned) gas object and a shared object.
-    // let gas_object_id = ObjectID::random();
-    // let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    // let gas_object_ref = gas_object.compute_object_reference();
-
+    let gas_objects_commit_1 = create_gas_objects(10, sender);
+    let gas_objects_commit_2 = create_gas_objects(5, sender);
     let shared_objects = create_shared_objects(2);
 
     let mut protocol_config =
@@ -5733,13 +5727,13 @@ async fn test_per_object_congestion_control() {
         .with_protocol_config(protocol_config)
         .build()
         .await;
-    let mut genesis_objects = gas_objects.clone();
-    genesis_objects.extend(new_gas_objects.clone());
+    let mut genesis_objects = gas_objects_commit_1.clone();
+    genesis_objects.extend(gas_objects_commit_2.clone());
     genesis_objects.extend(shared_objects.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
 
     let mut certificates: Vec<VerifiedCertificate> = vec![];
-    for (index, gas_object) in gas_objects.iter().enumerate() {
+    for (index, gas_object) in gas_objects_commit_1.iter().enumerate() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
@@ -5768,14 +5762,7 @@ async fn test_per_object_congestion_control() {
     }
 
     certificates.shuffle(&mut rand::thread_rng());
-    for cert in certificates.iter() {
-        println!(
-            "Initial certificate gas price {:?}",
-            cert.data().transaction_data().gas_price()
-        );
-    }
 
-    // Sequence the certificate to assign a sequence number to the shared object.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
@@ -5820,7 +5807,7 @@ async fn test_per_object_congestion_control() {
     }
 
     let mut new_certificates: Vec<VerifiedCertificate> = vec![];
-    for gas_object in new_gas_objects.iter() {
+    for gas_object in gas_objects_commit_2.iter() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,

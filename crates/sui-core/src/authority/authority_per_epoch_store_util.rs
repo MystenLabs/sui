@@ -29,7 +29,7 @@ impl ObjectExecutionQueueMeasure {
     }
 }
 
-pub fn compute_object_start_cost(
+pub fn compute_tx_start_at_cost(
     object_execution_cost: &HashMap<ObjectID, ObjectExecutionQueueMeasure>,
     shared_input_objects: Vec<SharedInputObject>,
 ) -> u64 {
@@ -56,7 +56,7 @@ pub fn should_defer_due_to_object_congestion(
     commit_round: Round,
 ) -> Option<(DeferralKey, Vec<ObjectID>)> {
     let start_cost =
-        compute_object_start_cost(object_execution_cost, cert.shared_input_objects().collect());
+        compute_tx_start_at_cost(object_execution_cost, cert.shared_input_objects().collect());
     if start_cost + cert.gas_budget() <= max_accumulated_txn_cost_per_object_in_checkpoint {
         return None;
     }
@@ -121,144 +121,70 @@ mod object_cost_tests {
         object_execution_cost
     }
 
+    fn construct_shared_input_objects(objects: Vec<(ObjectID, bool)>) -> Vec<SharedInputObject> {
+        objects
+            .into_iter()
+            .map(|(id, mutable)| SharedInputObject {
+                id,
+                initial_shared_version: SequenceNumber::new(),
+                mutable,
+            })
+            .collect()
+    }
+
     #[test]
-    fn test_compute_object_start_cost() {
+    fn test_compute_tx_start_at_cost() {
         let object_id_0 = ObjectID::random();
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
-        let object_execution_cost: HashMap<ObjectID, ObjectExecutionQueueMeasure> =
-            HashMap::from_iter(
-                [
-                    (
-                        object_id_0,
-                        ObjectExecutionQueueMeasure {
-                            total_cost_to_last_write: 10,
-                            total_cost: 20,
-                        },
-                    ),
-                    (
-                        object_id_1,
-                        ObjectExecutionQueueMeasure {
-                            total_cost_to_last_write: 5,
-                            total_cost: 15,
-                        },
-                    ),
-                ]
-                .iter()
-                .cloned(),
-            );
+        let object_execution_cost =
+            init_object_execution_cost(&[(object_id_0, 10, 20), (object_id_1, 5, 15)]);
 
-        {
-            let shared_input_objects = vec![SharedInputObject {
-                id: object_id_0,
-                initial_shared_version: SequenceNumber::new(),
-                mutable: false,
-            }];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                10
-            );
-        }
+        let shared_input_objects = construct_shared_input_objects(vec![(object_id_0, false)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            10
+        );
 
-        {
-            let shared_input_objects = vec![SharedInputObject {
-                id: object_id_0,
-                initial_shared_version: SequenceNumber::new(),
-                mutable: true,
-            }];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                20
-            );
-        }
+        let shared_input_objects = construct_shared_input_objects(vec![(object_id_0, true)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            20
+        );
 
-        {
-            let shared_input_objects = vec![
-                SharedInputObject {
-                    id: object_id_0,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: false,
-                },
-                SharedInputObject {
-                    id: object_id_1,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: false,
-                },
-            ];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                10
-            );
-        }
+        let shared_input_objects =
+            construct_shared_input_objects(vec![(object_id_0, false), (object_id_1, false)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            10
+        );
 
-        {
-            let shared_input_objects = vec![
-                SharedInputObject {
-                    id: object_id_0,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: false,
-                },
-                SharedInputObject {
-                    id: object_id_1,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: true,
-                },
-            ];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                15
-            );
-        }
+        let shared_input_objects =
+            construct_shared_input_objects(vec![(object_id_0, false), (object_id_1, true)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            15
+        );
 
-        {
-            let shared_input_objects = vec![
-                SharedInputObject {
-                    id: object_id_0,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: true,
-                },
-                SharedInputObject {
-                    id: object_id_1,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: false,
-                },
-            ];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                20
-            );
-        }
+        let shared_input_objects =
+            construct_shared_input_objects(vec![(object_id_0, true), (object_id_1, false)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            20
+        );
 
-        {
-            let shared_input_objects = vec![
-                SharedInputObject {
-                    id: object_id_0,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: true,
-                },
-                SharedInputObject {
-                    id: object_id_1,
-                    initial_shared_version: SequenceNumber::new(),
-                    mutable: true,
-                },
-            ];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                20
-            );
-        }
+        let shared_input_objects =
+            construct_shared_input_objects(vec![(object_id_0, true), (object_id_1, true)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            20
+        );
 
-        {
-            let shared_input_objects = vec![SharedInputObject {
-                id: object_id_2,
-                initial_shared_version: SequenceNumber::new(),
-                mutable: true,
-            }];
-            assert_eq!(
-                compute_object_start_cost(&object_execution_cost, shared_input_objects),
-                0
-            );
-        }
+        let shared_input_objects = construct_shared_input_objects(vec![(object_id_2, true)]);
+        assert_eq!(
+            compute_tx_start_at_cost(&object_execution_cost, shared_input_objects),
+            0
+        );
     }
 
     #[test]
@@ -283,81 +209,42 @@ mod object_cost_tests {
         assert_eq!(object_cost.total_cost, 30);
     }
 
+    fn build_transaction(objects: &[(ObjectID, bool)]) -> VerifiedExecutableTransaction {
+        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+        let gas_object = random_object_ref();
+        VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_unchecked(
+                TestTransactionBuilder::new(sender, gas_object, 1000)
+                    .move_call(
+                        ObjectID::random(),
+                        "unimportant_module",
+                        "unimportant_function",
+                        objects
+                            .into_iter()
+                            .map(|(id, mutable)| {
+                                CallArg::Object(ObjectArg::SharedObject {
+                                    id: *id,
+                                    initial_shared_version: SequenceNumber::new(),
+                                    mutable: *mutable,
+                                })
+                            })
+                            .collect(),
+                    )
+                    .build_and_sign(&keypair),
+            ),
+            0,
+        )
+    }
+
     #[test]
     fn test_should_defer_return_correct_congested_objects() {
-        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
-
         let shared_obj_0 = ObjectID::random();
-        let shared_object_0_write = ObjectArg::SharedObject {
-            id: shared_obj_0,
-            initial_shared_version: 0.into(),
-            mutable: true,
-        };
-        let shared_object_0_read = ObjectArg::SharedObject {
-            id: shared_obj_0,
-            initial_shared_version: 0.into(),
-            mutable: false,
-        };
-
         let shared_obj_1 = ObjectID::random();
-        let shared_object_1_write = ObjectArg::SharedObject {
-            id: shared_obj_1,
-            initial_shared_version: 0.into(),
-            mutable: true,
-        };
-        let shared_object_1_read = ObjectArg::SharedObject {
-            id: shared_obj_1,
-            initial_shared_version: 0.into(),
-            mutable: false,
-        };
 
-        let gas_object = random_object_ref();
-        let tx_write_0 = VerifiedExecutableTransaction::new_system(
-            VerifiedTransaction::new_unchecked(
-                TestTransactionBuilder::new(sender, gas_object, 1000)
-                    .move_call(
-                        ObjectID::random(),
-                        "unimportant_module",
-                        "unimportant_function",
-                        vec![CallArg::Object(shared_object_0_write)],
-                    )
-                    .build_and_sign(&keypair),
-            ),
-            0,
-        );
+        let tx_write_0 = build_transaction(&[(shared_obj_0, true)]);
+        let tx_read_0_read_1 = build_transaction(&[(shared_obj_0, false), (shared_obj_1, false)]);
+        let tx_read_0_write_1 = build_transaction(&[(shared_obj_0, false), (shared_obj_1, true)]);
 
-        let tx_read_0_read_1 = VerifiedExecutableTransaction::new_system(
-            VerifiedTransaction::new_unchecked(
-                TestTransactionBuilder::new(sender, gas_object, 1000)
-                    .move_call(
-                        ObjectID::random(),
-                        "unimportant_module",
-                        "unimportant_function",
-                        vec![
-                            CallArg::Object(shared_object_0_read),
-                            CallArg::Object(shared_object_1_read),
-                        ],
-                    )
-                    .build_and_sign(&keypair),
-            ),
-            0,
-        );
-        let tx_read_0_write_1 = VerifiedExecutableTransaction::new_system(
-            VerifiedTransaction::new_unchecked(
-                TestTransactionBuilder::new(sender, gas_object, 1000)
-                    .move_call(
-                        ObjectID::random(),
-                        "unimportant_module",
-                        "unimportant_function",
-                        vec![
-                            CallArg::Object(shared_object_0_read),
-                            CallArg::Object(shared_object_1_write),
-                        ],
-                    )
-                    .build_and_sign(&keypair),
-            ),
-            0,
-        );
         let max_accumulated_txn_cost_per_object_in_checkpoint =
             tx_write_0.transaction_data().gas_budget() + 1;
 
@@ -418,28 +305,8 @@ mod object_cost_tests {
 
     #[test]
     fn test_should_defer_return_correct_deferral_key() {
-        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
-
         let shared_obj_0 = ObjectID::random();
-        let shared_object_0_write = ObjectArg::SharedObject {
-            id: shared_obj_0,
-            initial_shared_version: 0.into(),
-            mutable: true,
-        };
-        let gas_object = random_object_ref();
-        let tx = VerifiedExecutableTransaction::new_system(
-            VerifiedTransaction::new_unchecked(
-                TestTransactionBuilder::new(sender, gas_object, 1000)
-                    .move_call(
-                        ObjectID::random(),
-                        "unimportant_module",
-                        "unimportant_function",
-                        vec![CallArg::Object(shared_object_0_write)],
-                    )
-                    .build_and_sign(&keypair),
-            ),
-            10,
-        );
+        let tx = build_transaction(&[(shared_obj_0, true)]);
         let max_accumulated_txn_cost_per_object_in_checkpoint = 1;
 
         let mut previously_deferred_tx_digests = HashMap::new();
@@ -470,7 +337,7 @@ mod object_cost_tests {
         }
 
         previously_deferred_tx_digests.insert(
-            tx.digest().clone(),
+            *tx.digest(),
             DeferralKey::RandomnessDkg {
                 deferred_from_round: 5,
             },
@@ -495,7 +362,7 @@ mod object_cost_tests {
         }
 
         previously_deferred_tx_digests.insert(
-            tx.digest().clone(),
+            *tx.digest(),
             DeferralKey::ConsensusRound {
                 future_round: 10,
                 deferred_from_round: 5,
