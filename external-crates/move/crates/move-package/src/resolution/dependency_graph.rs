@@ -229,7 +229,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
         let lock_path = root_path.join(SourcePackageLayout::Lock.path());
-        let lock_file = File::open(lock_path.clone());
+        let lock_file = File::open(&lock_path);
         let digest_and_lock_contents = lock_file
             .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
                 Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string_opt)),
@@ -256,6 +256,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             )?;
         let dep_lock_files = dep_graphs
             .values()
+            // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
         let (dev_dep_graphs, dev_resolved_id_deps, dev_dep_names, dev_overrides) = self
@@ -270,6 +271,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         let dev_dep_lock_files = dev_dep_graphs
             .values()
+            // write_to_lock should create a fresh lockfile for computing the dependency digest, hence the `None` arg below
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone(), None))
             .collect::<Result<Vec<LockFile>>>()?;
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
@@ -1257,26 +1259,23 @@ impl DependencyGraph {
                 .and_then(|v| v.as_array_of_tables().cloned());
         }
 
-        let mut lock;
-        match lock_path {
-            // Get a handle to update an existing Move.lock.
-            // Since dependency graph updates are compatible across
-            // all Move.lock schema versions, we can rely on the existing version.
-            Some(lock_path) if lock_path.exists() => {
-                lock = LockFile::from(install_dir, &lock_path)?
-            }
+        let mut lock = match lock_path {
+            // Get a handle to update an existing Move.lock. Since dependency graph updates are
+            // compatible across all Move.lock schema versions, we can rely on the existing version.
+            Some(lock_path) if lock_path.exists() => LockFile::from(install_dir, &lock_path)?,
             // Initialize a lock file if no existing lock_path is set for this operation.
             _ => {
                 use std::io::Seek;
-                lock = LockFile::new(
+                let mut lock = LockFile::new(
                     install_dir,
                     self.manifest_digest.clone(),
                     self.deps_digest.clone(),
                 )?;
                 lock.flush()?;
                 lock.rewind()?;
+                lock
             }
-        }
+        };
         schema::update_dependency_graph(
             &mut lock,
             self.manifest_digest.clone(),
