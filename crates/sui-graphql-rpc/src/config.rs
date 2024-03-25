@@ -6,7 +6,7 @@ use crate::types::big_int::BigInt;
 use async_graphql::*;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
 
 // TODO: calculate proper cost limits
@@ -135,8 +135,51 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
-#[derive(Debug)]
-pub struct Version(pub &'static str);
+/// The Version of the service. `year.month` represents the major release.
+/// New `patch` versions represent backwards compatible fixes for their major release.
+/// The `full` version is `year.month.patch-sha`.
+#[derive(Copy, Clone, Debug)]
+pub struct Version {
+    /// The year of this release.
+    pub year: &'static str,
+    /// The month of this release.
+    pub month: &'static str,
+    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    pub patch: &'static str,
+    /// The commit sha for this release.
+    pub sha: &'static str,
+    /// The full version string.
+    /// Note that this extra field is used only for the uptime_metric function which requries a
+    /// &'static str.
+    pub full: &'static str,
+}
+
+impl Version {
+    /// Use for testing when you need the Version obj and a year.month &str
+    pub fn for_testing() -> Self {
+        Self {
+            year: env!("CARGO_PKG_VERSION_MAJOR"),
+            month: env!("CARGO_PKG_VERSION_MINOR"),
+            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            sha: "testing-no-sha",
+            // note that this full field is needed for metrics but not for testing
+            full: const_str::concat!(
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_MINOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_PATCH"),
+                "-testing-no-sha"
+            ),
+        }
+    }
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.full)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
