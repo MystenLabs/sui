@@ -12361,13 +12361,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "clap",
  "git-version",
  "serde",
  "serde_json",
  "sui-framework",
  "sui-protocol-config",
  "sui-types",
+ "telemetry-subscribers",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

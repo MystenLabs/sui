@@ -4,13 +4,25 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::{fs, io::Read, path::PathBuf};
-use sui_framework::SystemPackage;
+use sui_framework::{BuiltInFramework, SystemPackage};
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::ObjectID;
-use sui_types::{
-    DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
-};
 
-pub type SnapshotManifest = BTreeMap<u64, SingleSnapshot>;
+const GIT_REVISION: &str = {
+    if let Some(revision) = option_env!("GIT_REVISION") {
+        revision
+    } else {
+        let version = git_version::git_version!(
+            args = ["--always", "--dirty", "--exclude", "*"],
+            fallback = ""
+        );
+
+        if version.is_empty() {
+            panic!("unable to query git revision");
+        }
+        version
+    }
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct SingleSnapshot {
@@ -18,6 +30,9 @@ pub struct SingleSnapshot {
     git_revision: String,
     /// List of file names (also identical to object ID) of the bytecode package files.
     package_ids: Vec<ObjectID>,
+    /// Whether this bytecode version is already running in testnet or mainnet.
+    /// This means that we cannot change it anymore.
+    in_production: bool,
 }
 
 impl SingleSnapshot {
@@ -27,37 +42,106 @@ impl SingleSnapshot {
     pub fn package_ids(&self) -> &[ObjectID] {
         &self.package_ids
     }
+
+    pub fn set_in_production(&mut self) {
+        self.in_production = true;
+    }
 }
 
-const SYSTEM_PACKAGE_PUBLISH_ORDER: &[ObjectID] = &[
-    MOVE_STDLIB_PACKAGE_ID,
-    SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_SYSTEM_PACKAGE_ID,
-    DEEPBOOK_PACKAGE_ID,
-];
-
-pub fn load_bytecode_snapshot_manifest() -> SnapshotManifest {
-    let Ok(bytes) = fs::read(manifest_path()) else {
-        return SnapshotManifest::default();
-    };
-    serde_json::from_slice::<SnapshotManifest>(&bytes)
-        .expect("Could not deserialize SnapshotManifest")
+pub struct SnapshotManifest {
+    snapshots: BTreeMap<u64, SingleSnapshot>,
 }
 
-pub fn update_bytecode_snapshot_manifest(git_revision: &str, version: u64, files: Vec<ObjectID>) {
-    let mut snapshot = load_bytecode_snapshot_manifest();
+impl SnapshotManifest {
+    pub fn new() -> Self {
+        let bytes = fs::read(Self::manifest_path()).expect("Could not read manifest file");
+        let snapshots = serde_json::from_slice::<BTreeMap<u64, SingleSnapshot>>(&bytes)
+            .expect("Could not deserialize SnapshotManifest");
+        Self { snapshots }
+    }
 
-    snapshot.insert(
-        version,
-        SingleSnapshot {
-            git_revision: git_revision.to_string(),
-            package_ids: files,
-        },
-    );
+    pub fn generate_new_snapshot(&mut self) {
+        // Always generate snapshot for the latest version.
+        let version = ProtocolVersion::MAX.as_u64();
+        if let Some(snapshot) = self.snapshots.get(&version) {
+            if snapshot.in_production {
+                tracing::error!(
+                    "Cannot update snapshot version {} that's already in production. Aborting",
+                    version
+                );
+                return;
+            }
+            tracing::warn!(
+                "Snapshot already exists for version {}. Overwriting",
+                version
+            );
+        }
+        let mut files = vec![];
+        for package in BuiltInFramework::iter_system_packages() {
+            write_package_to_file(version, package);
+            files.push(*package.id());
+        }
+        self.update_bytecode_snapshot_manifest(GIT_REVISION, version, files);
+        tracing::info!("Generated new bytecode snapshot for version {}", version)
+    }
 
-    let json =
-        serde_json::to_string_pretty(&snapshot).expect("Could not serialize SnapshotManifest");
-    fs::write(manifest_path(), json).expect("Could not update manifest file");
+    fn update_bytecode_snapshot_manifest(
+        &mut self,
+        git_revision: &str,
+        version: u64,
+        files: Vec<ObjectID>,
+    ) {
+        self.snapshots.insert(
+            version,
+            SingleSnapshot {
+                git_revision: git_revision.to_string(),
+                package_ids: files,
+                in_production: false,
+            },
+        );
+    }
+
+    pub fn release_latest_snapshot(&mut self) {
+        let latest_version = *self.snapshots.keys().max().unwrap();
+        let latest_snapshot = self.snapshots.get_mut(&latest_version).unwrap();
+        if latest_snapshot.in_production {
+            tracing::error!(
+                "Snapshot version {} is already in production.",
+                latest_version
+            );
+            return;
+        }
+        latest_snapshot.set_in_production();
+    }
+
+    fn save_bytecode_snapshot_manifest(&self) {
+        let json = serde_json::to_string_pretty(&self.snapshots)
+            .expect("Could not serialize SnapshotManifest");
+        fs::write(Self::manifest_path(), json).expect("Could not update manifest file");
+    }
+
+    fn manifest_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifest.json")
+    }
+}
+
+impl Drop for SnapshotManifest {
+    fn drop(&mut self) {
+        self.save_bytecode_snapshot_manifest();
+    }
+}
+
+fn write_package_to_file(version: u64, package: &SystemPackage) {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["bytecode_snapshot", version.to_string().as_str()]);
+    fs::create_dir_all(&path)
+        .or_else(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => Ok(()),
+            _ => Err(e),
+        })
+        .expect("Unable to create snapshot directory");
+    let bytes = bcs::to_bytes(package).expect("Deserialization cannot fail");
+    fs::write(path.join(package.id().to_string()), bytes).expect("Unable to write data to file");
 }
 
 pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<SystemPackage>> {
@@ -75,17 +159,15 @@ pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<Syste
         })
         .collect::<anyhow::Result<_>>()?;
 
-    // system packages need to be restored in a specific order
-    assert!(snapshots.len() <= SYSTEM_PACKAGE_PUBLISH_ORDER.len());
+    // system packages need to be restored in a specific order.
+    // This is needed when creating a genesis from a bytecode snapshot.
+    let system_package_ids = sui_framework::BuiltInFramework::all_package_ids();
+    assert!(snapshots.len() <= system_package_ids.len());
     let mut snapshot_objects = Vec::new();
-    for package_id in SYSTEM_PACKAGE_PUBLISH_ORDER {
-        if let Some(object) = snapshots.remove(package_id) {
+    for package_id in system_package_ids {
+        if let Some(object) = snapshots.remove(&package_id) {
             snapshot_objects.push(object);
         }
     }
     Ok(snapshot_objects)
-}
-
-fn manifest_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifest.json")
 }
