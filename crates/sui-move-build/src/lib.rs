@@ -20,6 +20,7 @@ use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
+    editions::Edition,
     linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
@@ -623,6 +624,9 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
+        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+            return Err(Edition::DEVELOPMENT.unknown_edition_error());
+        }
         Ok(manifest.package.name)
     }
 

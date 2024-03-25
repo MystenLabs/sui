@@ -218,7 +218,7 @@ impl Edition {
         panic!("{}", self.unknown_edition_error())
     }
 
-    fn unknown_edition_error(&self) -> anyhow::Error {
+    pub fn unknown_edition_error(&self) -> anyhow::Error {
         anyhow::anyhow!(
             "Unsupported edition \"{self}\". Current supported editions include: {}",
             format_oxford_list!("and", "\"{}\"", Self::VALID)
