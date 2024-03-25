@@ -346,7 +346,7 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        tracing::trace!("inserting object entry {:?}: {:?}", object_id, version);
+        debug!("inserting object entry {:?}: {:?}", object_id, version);
         fail_point_async!("write_object_entry");
         self.dirty
             .objects
@@ -962,6 +962,8 @@ impl WritebackCache {
             "should be empty due to revert_state_update"
         );
         self.dirty.clear();
+        info!("clearing old transaction locks");
+        self.locked_transactions.clear();
     }
 
     fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
@@ -1026,6 +1028,10 @@ impl ExecutionCacheRead for WritebackCache {
         if let Some(p) = ExecutionCacheRead::get_object(self, package_id)? {
             if p.is_package() {
                 let p = PackageObject::new(p);
+                tracing::trace!(
+                    "caching package: {:?}",
+                    p.object().compute_object_reference()
+                );
                 self.packages.insert(*package_id, p.clone());
                 Ok(Some(p))
             } else {
