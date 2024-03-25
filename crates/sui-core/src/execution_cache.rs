@@ -4,11 +4,10 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::epoch_start_configuration::EpochFlag;
-use crate::authority::{
-    authority_notify_read::EffectsNotifyRead, epoch_start_configuration::EpochStartConfiguration,
-};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::AuthorityStore;
+use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
-use async_trait::async_trait;
 use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
@@ -16,6 +15,7 @@ use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::VerifiedExecutionData;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
@@ -25,8 +25,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
     error::{Error as StorageError, Result as StorageResult},
-    BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectOrTombstone,
-    ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, BackingStore, ChildObjectResolver, MarkerValue, ObjectKey,
+    ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
@@ -42,8 +42,8 @@ mod object_locks;
 pub mod passthrough_cache;
 pub mod writeback_cache;
 
-use passthrough_cache::PassthroughCache;
-use writeback_cache::WritebackCache;
+pub use passthrough_cache::PassthroughCache;
+pub use writeback_cache::WritebackCache;
 
 pub struct ExecutionCacheMetrics {
     pending_notify_read: IntGauge,
@@ -62,7 +62,94 @@ impl ExecutionCacheMetrics {
     }
 }
 
-pub type ExecutionCache = PassthroughCache;
+// If you have Arc<ExecutionCache>, you cannot return a reference to it as
+// an &Arc<dyn ExecutionCacheRead> (for example), because the trait object is a fat pointer.
+// So, in order to be able to return &Arc<dyn T>, we create all the converted trait objects
+// (aka fat pointers) up front and return references to them.
+#[derive(Clone)]
+pub struct ExecutionCacheTraitPointers {
+    pub cache_reader: Arc<dyn ExecutionCacheRead>,
+    pub cache_writer: Arc<dyn ExecutionCacheWrite>,
+    pub backing_store: Arc<dyn BackingStore + Send + Sync>,
+    pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
+    pub object_store: Arc<dyn ObjectStore + Send + Sync>,
+    pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
+    pub accumulator_store: Arc<dyn AccumulatorStore>,
+    pub checkpoint_cache: Arc<dyn CheckpointCache>,
+    pub state_sync_store: Arc<dyn StateSyncAPI>,
+    pub cache_commit: Arc<dyn ExecutionCacheCommit>,
+    pub testing_api: Arc<dyn TestingAPI>,
+}
+
+impl ExecutionCacheTraitPointers {
+    pub fn new<T>(cache: Arc<T>) -> Self
+    where
+        T: ExecutionCacheRead
+            + ExecutionCacheWrite
+            + BackingStore
+            + BackingPackageStore
+            + ObjectStore
+            + ExecutionCacheReconfigAPI
+            + AccumulatorStore
+            + CheckpointCache
+            + StateSyncAPI
+            + ExecutionCacheCommit
+            + TestingAPI
+            + 'static,
+    {
+        Self {
+            cache_reader: cache.clone(),
+            cache_writer: cache.clone(),
+            backing_store: cache.clone(),
+            backing_package_store: cache.clone(),
+            object_store: cache.clone(),
+            reconfig_api: cache.clone(),
+            accumulator_store: cache.clone(),
+            checkpoint_cache: cache.clone(),
+            state_sync_store: cache.clone(),
+            cache_commit: cache.clone(),
+            testing_api: cache.clone(),
+        }
+    }
+}
+
+static ENABLE_WRITEBACK_CACHE_ENV_VAR: &str = "ENABLE_WRITEBACK_CACHE";
+
+pub fn build_execution_cache(
+    config: &ExecutionCacheConfig,
+    prometheus_registry: &Registry,
+    store: &Arc<AuthorityStore>,
+) -> ExecutionCacheTraitPointers {
+    let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
+    let enable_write_back_cache = std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
+        || matches!(config, ExecutionCacheConfig::WritebackCache { .. });
+    if enable_write_back_cache {
+        ExecutionCacheTraitPointers::new(
+            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+        )
+    } else {
+        ExecutionCacheTraitPointers::new(
+            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
+        )
+    }
+}
+
+pub fn build_execution_cache_for_tests(
+    prometheus_registry: &Registry,
+    store: &Arc<AuthorityStore>,
+) -> ExecutionCacheTraitPointers {
+    let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
+
+    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
+        ExecutionCacheTraitPointers::new(
+            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+        )
+    } else {
+        ExecutionCacheTraitPointers::new(
+            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
+        )
+    }
+}
 
 pub trait ExecutionCacheCommit: Send + Sync {
     /// Durably commit the outputs of the given transactions to the database.
@@ -597,38 +684,8 @@ pub trait StateSyncAPI: Send + Sync {
     ) -> SuiResult;
 }
 
-// TODO: Remove EffectsNotifyRead trait and just use ExecutionCacheRead directly everywhere.
-/// This wrapper is used so that we don't have to disambiguate traits at every callsite.
-pub struct NotifyReadWrapper<T>(Arc<T>);
-
-impl<T> Clone for NotifyReadWrapper<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-#[async_trait]
-impl<T: ExecutionCacheRead + 'static> EffectsNotifyRead for NotifyReadWrapper<T> {
-    async fn notify_read_executed_effects(
-        &self,
-        digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<TransactionEffects>> {
-        self.0.notify_read_executed_effects(&digests).await
-    }
-
-    async fn notify_read_executed_effects_digests(
-        &self,
-        digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-        self.0.notify_read_executed_effects_digests(&digests).await
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.0.multi_get_executed_effects(digests)
-    }
+pub trait TestingAPI: Send + Sync {
+    fn database_for_testing(&self) -> &Arc<AuthorityStore>;
 }
 
 macro_rules! implement_storage_traits {
@@ -825,6 +882,12 @@ macro_rules! implement_passthrough_traits {
                 Ok(self
                     .store
                     .multi_insert_transaction_and_effects(transactions_and_effects.iter())?)
+            }
+        }
+
+        impl TestingAPI for $implementor {
+            fn database_for_testing(&self) -> &Arc<AuthorityStore> {
+                &self.store
             }
         }
     };

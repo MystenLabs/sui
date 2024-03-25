@@ -3,13 +3,9 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
-use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
-};
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
-use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -21,7 +17,6 @@ use futures::{
 use mysten_common::sync::notify_read::NotifyRead;
 use prometheus::Registry;
 use std::sync::Arc;
-use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::accumulator::Accumulator;
@@ -43,8 +38,7 @@ use typed_store::Map;
 
 use super::{
     implement_passthrough_traits, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics,
-    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper,
-    StateSyncAPI,
+    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, StateSyncAPI, TestingAPI,
 };
 
 pub struct PassthroughCache {
@@ -69,33 +63,8 @@ impl PassthroughCache {
         Self::new(store, metrics)
     }
 
-    pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
-        NotifyReadWrapper(self)
-    }
-
     pub fn store_for_testing(&self) -> &Arc<AuthorityStore> {
         &self.store
-    }
-
-    pub async fn prune_objects_and_compact_for_testing(
-        &self,
-        checkpoint_store: &Arc<CheckpointStore>,
-    ) {
-        let pruning_config = AuthorityStorePruningConfig {
-            num_epochs_to_retain: 0,
-            ..Default::default()
-        };
-        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
-            &self.store.perpetual_tables,
-            checkpoint_store,
-            &self.store.objects_lock_table,
-            pruning_config,
-            AuthorityStorePruningMetrics::new_for_test(),
-            usize::MAX,
-            EPOCH_DURATION_MS_FOR_TESTING,
-        )
-        .await;
-        let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
     }
 
     fn revert_state_update_impl(&self, digest: &TransactionDigest) -> SuiResult {

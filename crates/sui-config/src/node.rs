@@ -179,6 +179,19 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub firewall_config: Option<RemoteFirewallConfig>,
+
+    #[serde(default)]
+    pub execution_cache: ExecutionCacheConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionCacheConfig {
+    #[default]
+    PassthroughCache,
+    WritebackCache {
+        max_cache_size: Option<usize>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

@@ -293,8 +293,8 @@ pub fn get_package_objects<'a>(
     }
 }
 
-pub fn get_module<S: BackingPackageStore>(
-    store: S,
+pub fn get_module(
+    store: impl BackingPackageStore,
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
     Ok(store
@@ -309,7 +309,7 @@ pub fn get_module<S: BackingPackageStore>(
 }
 
 pub fn get_module_by_id<S: BackingPackageStore>(
-    store: S,
+    store: &S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
     Ok(get_module(store, id)?

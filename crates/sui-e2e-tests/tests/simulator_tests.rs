@@ -11,7 +11,6 @@ use rand::{
     Rng,
 };
 use std::collections::{HashMap, HashSet};
-use sui_core::authority::EffectsNotifyRead;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use tokio::time::{sleep, Duration, Instant};
@@ -148,8 +147,8 @@ async fn test_net_determinism() {
     handle
         .sui_node
         .state()
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![digest])
+        .get_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 }
