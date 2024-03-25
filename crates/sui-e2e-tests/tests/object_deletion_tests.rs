@@ -315,7 +315,7 @@ mod sim_only_tests {
     fn count_wrapped_tombstone(node: &SuiNode) -> usize {
         let store = node.state().get_execution_cache();
         store
-            .iter_live_object_set(true)
+            .iter_cached_live_object_set_for_testing(true)
             .filter(|o| matches!(o, LiveObject::Wrapped(_)))
             .count()
     }

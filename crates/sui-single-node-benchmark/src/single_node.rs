@@ -263,7 +263,7 @@ impl SingleValidator {
         let objects: HashMap<_, _> = self
             .get_validator()
             .get_execution_cache()
-            .iter_live_object_set(false)
+            .iter_cached_live_object_set_for_testing(false)
             .map(|o| match o {
                 LiveObject::Normal(object) => (object.id(), object),
                 LiveObject::Wrapped(_) => unreachable!(),
