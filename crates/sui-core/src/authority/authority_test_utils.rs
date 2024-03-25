@@ -93,7 +93,8 @@ pub async fn execute_certificate_with_execution_error(
         .epoch_store_for_testing()
         .protocol_config()
         .simplified_unwrap_then_delete();
-    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let mut state =
+        state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
 
     if with_shared {
         send_consensus(authority, &certificate).await;
@@ -105,7 +106,8 @@ pub async fn execute_certificate_with_execution_error(
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
-    let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let state_after =
+        state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
         vec![result.inner().data().clone()],
         epoch_store.protocol_config(),

@@ -606,7 +606,7 @@ impl SuiNode {
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
-            execution_cache,
+            execution_cache.clone(),
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
@@ -684,7 +684,7 @@ impl SuiNode {
             software_version,
         )?;
 
-        let accumulator = Arc::new(StateAccumulator::new(store));
+        let accumulator = Arc::new(StateAccumulator::new(execution_cache));
 
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_state()
