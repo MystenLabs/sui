@@ -112,6 +112,12 @@ impl BenchmarkContext {
             .await;
         let mut new_gas_objects = HashMap::new();
         for effects in results {
+            self.validator()
+                .get_validator()
+                .get_cache_commit()
+                .commit_transaction_outputs(effects.executed_epoch(), effects.transaction_digest())
+                .await
+                .unwrap();
             let (owner, root_object) = effects
                 .created()
                 .into_iter()
