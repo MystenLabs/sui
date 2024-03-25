@@ -113,7 +113,7 @@ const MAX_PROTOCOL_VERSION: u64 = 42;
 // Version 39: Allow skipped epochs for randomness updates.
 //             Extra version to fix `test_upgrade_compatibility` simtest.
 // Version 40:
-// Version 41: Enable group operations native functions in testnet and mainnet.
+// Version 41: Enable group operations native functions in testnet and mainnet (without msm).
 // Version 42: Migrate sui framework and related code to Move 2024
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -385,6 +385,10 @@ struct FeatureFlags {
     // Enable native functions for group operations.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_functions: bool,
+
+    // Enable native function for msm.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_group_ops_native_function_msm: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1175,6 +1179,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_group_ops_native_functions
     }
 
+    pub fn enable_group_ops_native_function_msm(&self) -> bool {
+        self.feature_flags.enable_group_ops_native_function_msm
+    }
+
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
     }
@@ -1905,6 +1913,7 @@ impl ProtocolConfig {
                     // Only enable group ops on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_group_ops_native_functions = true;
+                        cfg.feature_flags.enable_group_ops_native_function_msm = true;
                         // Next values are arbitrary in a similar way as the other crypto native functions.
                         cfg.group_ops_bls12381_decode_scalar_cost = Some(52);
                         cfg.group_ops_bls12381_decode_g1_cost = Some(52);
@@ -1981,7 +1990,7 @@ impl ProtocolConfig {
                 }
                 40 => {}
                 41 => {
-                    // Enable group ops and all networks
+                    // Enable group ops and all networks (but not msm)
                     cfg.feature_flags.enable_group_ops_native_functions = true;
                     // Next values are arbitrary in a similar way as the other crypto native functions.
                     cfg.group_ops_bls12381_decode_scalar_cost = Some(52);
