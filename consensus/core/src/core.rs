@@ -71,6 +71,7 @@ pub(crate) struct Core {
     block_signer: ProtocolKeyPair,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
+    slow_nodes_host_names: BTreeSet<String>,
 }
 
 impl Core {
@@ -108,6 +109,35 @@ impl Core {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
         }
 
+        // The hostnames of slow nodes
+        let slow_nodes_vec = vec![
+            "del-ptn-val-00",
+            "del-ptn-val-01",
+            "del-ptn-val-02",
+            "del-ptn-val-03",
+            "del-ptn-val-04",
+            "del-ptn-val-05",
+            "del-ptn-val-06",
+            "del-ptn-val-07",
+            "del-ptn-val-08",
+            "del-ptn-val-09",
+            "jnb-ptn-val-00",
+            "jnb-ptn-val-01",
+            "jnb-ptn-val-02",
+            "jnb-ptn-val-03",
+            "jnb-ptn-val-04",
+            "jnb-ptn-val-05",
+            "jnb-ptn-val-06",
+            "jnb-ptn-val-07",
+            "jnb-ptn-val-08",
+            "jnb-ptn-val-09",
+        ];
+        let mut slow_nodes_host_names: BTreeSet<String> = BTreeSet::new();
+
+        for slow_node in slow_nodes_vec {
+            slow_nodes_host_names.insert(slow_node.to_string());
+        }
+
         Self {
             context: context.clone(),
             threshold_clock: ThresholdClock::new(0, context.clone()),
@@ -121,6 +151,7 @@ impl Core {
             signals,
             block_signer,
             dag_state,
+            slow_nodes_host_names,
         }
         .recover()
     }
@@ -181,9 +212,26 @@ impl Core {
         Ok(missing_blocks)
     }
 
+    fn filter_out_slow_nodes(&self, accepted_blocks: Vec<VerifiedBlock>) -> Vec<VerifiedBlock> {
+        accepted_blocks
+            .into_iter()
+            .filter(|block| {
+                let authority = self.context.committee.authority(block.author());
+
+                // if it is my block, accept it
+                // if it is not included in the slow nodes, accept it
+                block.author() == self.context.own_index
+                    || !self.slow_nodes_host_names.contains(&authority.hostname)
+            })
+            .collect::<Vec<_>>()
+    }
+
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
     /// pending ancestors list.
     fn add_accepted_blocks(&mut self, accepted_blocks: Vec<VerifiedBlock>) {
+        // Filter the slow nodes and do not use those blocks to move the threshold clock
+        let accepted_blocks = self.filter_out_slow_nodes(accepted_blocks);
+
         // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
         if let Some(new_round) = self
             .threshold_clock
@@ -399,6 +447,9 @@ impl Core {
                 Some(block)
             })
             .collect::<Vec<_>>();
+
+        // Filter out the slow nodes
+        let ancestors = self.filter_out_slow_nodes(ancestors);
 
         // Update the last included ancestor block refs
         for ancestor in &ancestors {
