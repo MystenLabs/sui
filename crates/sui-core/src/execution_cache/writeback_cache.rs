@@ -306,7 +306,7 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
-    fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
+    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         let packages = MokaCache::builder()
             .max_capacity(10000)
             .initial_capacity(10000)
