@@ -313,7 +313,7 @@ where
         }
         // advance token past the starting one but something went wrong, still there is a chance
         // parse the rest of the list
-        list_error_advance(
+        separated_items_error_advance(
             context,
             start_token,
             end_token,
@@ -370,7 +370,7 @@ where
                     // expect a commma - since we are not at stop set, consume it or advance to the
                     // next time or end of the list
                     if let Err(diag) = consume_token(context.tokens, Tok::Comma) {
-                        list_error_advance(
+                        separated_items_error_advance(
                             context,
                             start_token,
                             end_token,
@@ -387,7 +387,7 @@ where
                     continue;
                 }
                 Err(diag) => {
-                    list_error_advance(
+                    separated_items_error_advance(
                         context,
                         start_token,
                         end_token,
@@ -404,7 +404,7 @@ where
                 Syntax::UnexpectedToken,
                 (loc, format!("Expected {}", item_description))
             );
-            list_error_advance(
+            separated_items_error_advance(
                 context,
                 start_token,
                 end_token,
@@ -430,10 +430,10 @@ where
     v
 }
 
-/// Attempts to skip tokens until the end of the item in the list with a given separator (which
-/// started with an already consumed starting token) - looks for a matched ending token or a token
-/// appearing after the separator. This helper function is also used to error advance sequences.
-fn list_error_advance(
+/// Attempts to skip tokens until the end of the item in a series of separated (which started with
+/// an already consumed starting token) - looks for a matched ending token or a token appearing
+/// after the separator. This helper function is used when parsing lists and sequences.
+fn separated_items_error_advance(
     context: &mut Context,
     start_token: Tok,
     end_token: Tok,
@@ -444,6 +444,9 @@ fn list_error_advance(
     context.add_diag(diag);
     let mut depth: i32 = 0; // When we find  another start token, we track how deep we are in them
     loop {
+        // adjusting tokens (replacing `<<` with `<`) makes sense only when parsing lists and it
+        // would feel odd to also do this when using this helper function to parse other things
+        // (e.g., sequences)
         if for_list {
             adjust_token(context.tokens, end_token);
         }
@@ -462,17 +465,13 @@ fn list_error_advance(
 
         if context.tokens.at(sep_token) {
             assert!(depth > 0);
-            context.advance();
         } else if context.tokens.at(start_token) {
             depth += 1;
-            context.advance();
         } else if context.tokens.at(end_token) {
             assert!(depth > 0);
             depth -= 1;
-            context.advance();
-        } else {
-            context.advance();
         }
+        context.advance();
     }
 }
 
@@ -1315,7 +1314,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 seq.push(item);
                 last_semicolon_loc = Some(current_token_loc(context.tokens));
                 if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
-                    list_error_advance(
+                    separated_items_error_advance(
                         context,
                         Tok::LBrace,
                         Tok::RBrace,
@@ -1330,7 +1329,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
             }
             Err(diag) => {
                 context.stop_set.remove(Tok::Semicolon);
-                list_error_advance(
+                separated_items_error_advance(
                     context,
                     Tok::LBrace,
                     Tok::RBrace,
@@ -2832,7 +2831,7 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
                     Err(diag) => {
                         // error advancing past opening brace - assume sequence (likely first)
                         // parsing problem and try skipping it
-                        list_error_advance(
+                        separated_items_error_advance(
                             context,
                             Tok::LBrace,
                             Tok::RBrace,
