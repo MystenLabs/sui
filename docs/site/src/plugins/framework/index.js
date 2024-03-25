@@ -114,7 +114,14 @@ const frameworkPlugin = (context, options) => {
                 const catfile = path.join(newDir, "_category_.json");
                 fs.writeFile(
                   catfile,
-                  JSON.stringify({ label: styledPart }),
+                  JSON.stringify({
+                    label: styledPart,
+                    link: {
+                      type: "generated-index",
+                      slug: path.join("/references/framework", part),
+                      description: `Documentation for the modules in the crates/sui-framework/packages/${part} crate. Select a module from the list to see its details.`,
+                    },
+                  }),
                   "utf8",
                   (err) => {
                     if (err) {
