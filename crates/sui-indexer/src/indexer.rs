@@ -19,7 +19,7 @@ use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::IndexerConfig;
 
-const DOWNLOAD_QUEUE_SIZE: usize = 1000;
+const DOWNLOAD_QUEUE_SIZE: usize = 200;
 
 pub struct Indexer;
 
@@ -79,12 +79,13 @@ impl Indexer {
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, metrics).await?;
+        let checkpoint_handler = new_handlers(store, metrics.clone()).await?;
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,
             ),
             vec![Box::new(checkpoint_handler)],
+            metrics,
         )
         .await;
 

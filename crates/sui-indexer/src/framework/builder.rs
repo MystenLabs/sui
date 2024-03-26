@@ -81,6 +81,7 @@ impl IndexerBuilder {
                 downloaded_checkpoint_data_receiver,
             ),
             self.handlers,
+            self.metrics.clone(),
         )
         .await;
     }
