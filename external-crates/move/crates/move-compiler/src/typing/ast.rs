@@ -673,9 +673,9 @@ impl AstDebug for UnannotatedExp_ {
             E::Cast(e, ty) => {
                 w.write("(");
                 e.ast_debug(w);
+                w.write(")");
                 w.write(" as ");
                 ty.ast_debug(w);
-                w.write(")");
             }
             E::Annotate(e, ty) => {
                 w.write("annot(");
