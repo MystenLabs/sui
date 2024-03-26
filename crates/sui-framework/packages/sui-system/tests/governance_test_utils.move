@@ -314,7 +314,7 @@ module sui_system::governance_test_utils {
     public fun stake_plus_current_rewards(addr: address, staking_pool: &StakingPool, scenario: &mut Scenario): u64 {
         let mut sum = 0;
         scenario.next_tx(addr);
-        let mut stake_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
+        let mut stake_ids = scenario.ids_for_sender<StakedSui>();
         let current_epoch = scenario.ctx().epoch();
 
         while (!stake_ids.is_empty()) {
@@ -329,7 +329,7 @@ module sui_system::governance_test_utils {
     public fun total_sui_balance(addr: address, scenario: &mut Scenario): u64 {
         let mut sum = 0;
         scenario.next_tx(addr);
-        let coin_ids = test_scenario::ids_for_sender<Coin<SUI>>(scenario);
+        let coin_ids = scenario.ids_for_sender<Coin<SUI>>();
         let mut i = 0;
         while (i < coin_ids.length()) {
             let coin = scenario.take_from_sender_by_id<Coin<SUI>>(coin_ids[i]);

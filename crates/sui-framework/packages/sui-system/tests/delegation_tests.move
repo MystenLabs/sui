@@ -5,7 +5,7 @@
 module sui_system::stake_tests {
     use sui::coin;
     use sui::test_scenario;
-    use sui_system::sui_system::{Self, SuiSystemState};
+    use sui_system::sui_system::SuiSystemState;
     use sui_system::staking_pool::{Self, StakedSui, PoolTokenExchangeRate};
     use sui::test_utils::assert_eq;
     use sui_system::validator_set;
@@ -160,8 +160,9 @@ module sui_system::stake_tests {
             let ctx = scenario.ctx();
 
             // Create a stake to VALIDATOR_ADDR_1.
-            sui_system::request_add_stake(
-                system_state_mut_ref, coin::mint_for_testing(60 * MIST_PER_SUI, ctx), VALIDATOR_ADDR_1, ctx);
+            system_state_mut_ref.request_add_stake(
+                coin::mint_for_testing(60 * MIST_PER_SUI, ctx), VALIDATOR_ADDR_1, ctx
+            );
 
             assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 100 * MIST_PER_SUI, 101);
             assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_2) == 100 * MIST_PER_SUI, 102);
@@ -249,10 +250,7 @@ module sui_system::stake_tests {
             let mut system_state = scenario.take_shared<SuiSystemState>();
             let system_state_mut_ref = &mut system_state;
 
-            assert!(!validator_set::is_active_validator_by_sui_address(
-                        system_state_mut_ref.validators(),
-                        VALIDATOR_ADDR_1
-                    ), 0);
+            assert!(!system_state_mut_ref.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1), 0);
 
             let staked_sui = scenario.take_from_sender<StakedSui>();
             assert_eq(staked_sui.amount(), 100 * MIST_PER_SUI);
@@ -352,10 +350,7 @@ module sui_system::stake_tests {
             let mut system_state = scenario.take_shared<SuiSystemState>();
             let system_state_mut_ref = &mut system_state;
 
-            assert!(!validator_set::is_active_validator_by_sui_address(
-                        system_state_mut_ref.validators(),
-                        VALIDATOR_ADDR_1
-                    ), 0);
+            assert!(!system_state_mut_ref.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1), 0);
 
             test_scenario::return_shared(system_state);
         };
