@@ -10,6 +10,7 @@ use crate::types::EthToSuiBridgeAction;
 use crate::types::EvmContractUpgradeAction;
 use crate::types::LimitUpdateAction;
 use crate::types::SuiToEthBridgeAction;
+use crate::types::SuiTokensInclusionAction;
 use enum_dispatch::enum_dispatch;
 use ethers::types::Address as EthAddress;
 use sui_types::base_types::SUI_ADDRESS_LENGTH;
@@ -20,6 +21,7 @@ pub const EMERGENCY_BUTTON_MESSAGE_VERSION: u8 = 1;
 pub const LIMIT_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const ASSET_PRICE_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const EVM_CONTRACT_UPGRADE_MESSAGE_VERSION: u8 = 1;
+pub const SUI_TOKEN_INCLUSION_MESSAGE_VERSION: u8 = 1;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 
@@ -270,6 +272,37 @@ impl BridgeMessageEncoding for EvmContractUpgradeAction {
             ethers::abi::Token::Address(self.new_impl_address),
             ethers::abi::Token::Bytes(self.call_data.clone()),
         ])
+    }
+}
+
+impl BridgeMessageEncoding for SuiTokensInclusionAction {
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Add message type
+        bytes.push(BridgeActionType::SuiTokensInclusion as u8);
+        // Add message version
+        bytes.push(SUI_TOKEN_INCLUSION_MESSAGE_VERSION);
+        // Add nonce
+        bytes.extend_from_slice(&self.nonce.to_be_bytes());
+        // Add chain id
+        bytes.push(self.chain_id as u8);
+
+        // Add payload bytes
+        bytes.extend_from_slice(&self.as_payload_bytes());
+
+        bytes
+    }
+
+    fn as_payload_bytes(&self) -> Vec<u8> {
+        unimplemented!()
+        // let mut bytes = Vec::new();
+        // // Add native
+        // bytes.push(self.native as u8);
+        // // Add token id length
+        // bytes.extend_from_slice(&self.new_usd_price.to_be_bytes());
+        // // Add new usd limit
+        // bytes.extend_from_slice(&self.new_usd_price.to_be_bytes());
+        // bytes
     }
 }
 

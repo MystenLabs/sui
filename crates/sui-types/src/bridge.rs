@@ -50,6 +50,7 @@ pub const APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST: u64 = 5001;
 pub const APPROVAL_THRESHOLD_LIMIT_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE: u64 = 5001;
+pub const APPROVAL_THRESHOLD_SUI_TOKEN_INCLUSION: u64 = 5001;
 
 #[derive(
     Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, JsonSchema, Hash,

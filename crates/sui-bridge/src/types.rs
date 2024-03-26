@@ -21,10 +21,10 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
-use sui_types::bridge::TokenId;
 use sui_types::bridge::{
     BridgeChainId, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
+use sui_types::bridge::{TokenId, APPROVAL_THRESHOLD_SUI_TOKEN_INCLUSION};
 use sui_types::bridge::{
     APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
     APPROVAL_THRESHOLD_EMERGENCY_PAUSE, APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
@@ -37,6 +37,7 @@ use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
+use sui_types::TypeTag;
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
@@ -173,6 +174,7 @@ pub enum BridgeActionType {
     LimitUpdate = 3,
     AssetPriceUpdate = 4,
     EvmContractUpgrade = 5,
+    SuiTokensInclusion = 6,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
@@ -284,6 +286,21 @@ pub struct EvmContractUpgradeAction {
     pub call_data: Vec<u8>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct SuiTokensInclusionAction {
+    pub nonce: u64,
+    /// Must be a Sui chain id
+    pub chain_id: BridgeChainId,
+    /// Are the new tokens originated on Sui
+    pub native: bool,
+    /// Ids of the tokens to include, must be in the same order and same length as `token_type_names` and `token_prices`
+    pub token_ids: Vec<u8>,
+    /// type names of the tokens to include, must be in the same order and same length as `token_ids` and `token_prices`
+    pub token_type_names: Vec<TypeTag>,
+    /// token prices in USD, must be in the same order and same length as `token_ids` and `token_type_names`
+    pub token_prices: Vec<u64>,
+}
+
 /// The type of actions Bridge Committee verify and sign off to execution.
 /// Its relationship with BridgeEvent is similar to the relationship between
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -298,6 +315,7 @@ pub enum BridgeAction {
     LimitUpdateAction(LimitUpdateAction),
     AssetPriceUpdateAction(AssetPriceUpdateAction),
     EvmContractUpgradeAction(EvmContractUpgradeAction),
+    SuiTokensInclusionAction(SuiTokensInclusionAction),
 }
 
 impl BridgeAction {
@@ -317,6 +335,7 @@ impl BridgeAction {
             BridgeAction::LimitUpdateAction(a) => a.chain_id,
             BridgeAction::AssetPriceUpdateAction(a) => a.chain_id,
             BridgeAction::EvmContractUpgradeAction(a) => a.chain_id,
+            BridgeAction::SuiTokensInclusionAction(a) => a.chain_id,
         }
     }
 
@@ -328,6 +347,7 @@ impl BridgeAction {
             BridgeActionType::LimitUpdate => true,
             BridgeActionType::AssetPriceUpdate => true,
             BridgeActionType::EvmContractUpgrade => true,
+            BridgeActionType::SuiTokensInclusion => true,
         }
     }
 
@@ -341,6 +361,7 @@ impl BridgeAction {
             BridgeAction::LimitUpdateAction(_) => BridgeActionType::LimitUpdate,
             BridgeAction::AssetPriceUpdateAction(_) => BridgeActionType::AssetPriceUpdate,
             BridgeAction::EvmContractUpgradeAction(_) => BridgeActionType::EvmContractUpgrade,
+            BridgeAction::SuiTokensInclusionAction(_) => BridgeActionType::SuiTokensInclusion,
         }
     }
 
@@ -354,6 +375,7 @@ impl BridgeAction {
             BridgeAction::LimitUpdateAction(a) => a.nonce,
             BridgeAction::AssetPriceUpdateAction(a) => a.nonce,
             BridgeAction::EvmContractUpgradeAction(a) => a.nonce,
+            BridgeAction::SuiTokensInclusionAction(a) => a.nonce,
         }
     }
 
@@ -369,6 +391,7 @@ impl BridgeAction {
             BridgeAction::LimitUpdateAction(_) => APPROVAL_THRESHOLD_LIMIT_UPDATE,
             BridgeAction::AssetPriceUpdateAction(_) => APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE,
             BridgeAction::EvmContractUpgradeAction(_) => APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE,
+            BridgeAction::SuiTokensInclusionAction(_) => APPROVAL_THRESHOLD_SUI_TOKEN_INCLUSION,
         }
     }
 }
