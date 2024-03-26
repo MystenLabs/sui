@@ -73,6 +73,8 @@ pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
+pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
+
 pub const INVALID_LOC: Loc = Loc::invalid();
 
 pub enum LinterDiagCategory {
@@ -83,6 +85,7 @@ pub enum LinterDiagCategory {
     FreezeWrapped,
     CollectionEquality,
     PublicRandom,
+    ConstantNaming,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
@@ -141,17 +144,15 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default | LintLevel::All => {
-            vec![
-                share_owned::ShareOwnedVerifier.visitor(),
-                self_transfer::SelfTransferVerifier.visitor(),
-                custom_state_change::CustomStateChangeVerifier.visitor(),
-                coin_field::CoinFieldVisitor.visitor(),
-                freeze_wrapped::FreezeWrappedVisitor.visitor(),
-                collection_equality::CollectionEqualityVisitor.visitor(),
-                public_random::PublicRandomVisitor.visitor(),
-            ]
-        }
+        LintLevel::Default | LintLevel::All => vec![
+            share_owned::ShareOwnedVerifier.visitor(),
+            self_transfer::SelfTransferVerifier.visitor(),
+            custom_state_change::CustomStateChangeVerifier.visitor(),
+            coin_field::CoinFieldVisitor.visitor(),
+            freeze_wrapped::FreezeWrappedVisitor.visitor(),
+            collection_equality::CollectionEqualityVisitor.visitor(),
+            public_random::PublicRandomVisitor.visitor(),
+        ],
     }
 }
 
