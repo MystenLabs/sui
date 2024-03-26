@@ -535,7 +535,7 @@ module sui_system::validator_set {
 
     public fun validator_voting_power(self: &ValidatorSet, validator_address: address): u64 {
         let validator = get_validator_ref(&self.active_validators, validator_address);
-        validator::voting_power(validator)
+        validator.voting_power()
     }
 
     public fun validator_staking_pool_id(self: &ValidatorSet, validator_address: address): ID {
