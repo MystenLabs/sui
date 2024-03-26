@@ -7,7 +7,7 @@ import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
-import "../contracts/utils/BridgeConfig.sol";
+import "../contracts/BridgeConfig.sol";
 import "../contracts/BridgeLimiter.sol";
 import "../contracts/SuiBridge.sol";
 import "../test/mocks/MockTokens.sol";
@@ -18,7 +18,8 @@ contract DeployBridge is Script {
         vm.startBroadcast(deployerPrivateKey);
         string memory chainID = Strings.toString(block.chainid);
         bytes32 chainIDHash = keccak256(abi.encode(chainID));
-        bool isLocal = chainIDHash != keccak256(abi.encode("11155111")) && chainIDHash != keccak256(abi.encode("1"));
+        bool isLocal = chainIDHash != keccak256(abi.encode("11155111"))
+            && chainIDHash != keccak256(abi.encode("1"));
         string memory root = vm.projectRoot();
         string memory path = string.concat(root, "/deploy_configs/", chainID, ".json");
         // If this is local deployment, we override the path if OVERRIDE_CONFIG_PATH is set.
@@ -30,53 +31,52 @@ contract DeployBridge is Script {
         console.log("config path: ", path);
         string memory json = vm.readFile(path);
         bytes memory bytesJson = vm.parseJson(json);
-        DeployConfig memory config = abi.decode(bytesJson, (DeployConfig));
-
-        // TODO: validate config values before deploying
+        DeployConfig memory deployConfig = abi.decode(bytesJson, (DeployConfig));
 
         // if deploying to local network, deploy mock tokens
         if (isLocal) {
             console.log("Deploying mock tokens for local network");
             // deploy WETH
-            config.WETH = address(new WETH());
+            deployConfig.WETH = address(new WETH());
 
             // deploy mock tokens
             MockWBTC wBTC = new MockWBTC();
             MockUSDC USDC = new MockUSDC();
             MockUSDT USDT = new MockUSDT();
 
-            // update config with mock addresses
-            config.supportedTokens = new address[](4);
+            // update deployConfig with mock addresses
+            deployConfig.supportedTokens = new address[](5);
             // In BridgeConfig.sol `supportedTokens is shifted by one
             // and the first token is SUI.
-            config.supportedTokens[0] = address(wBTC);
-            config.supportedTokens[1] = config.WETH;
-            config.supportedTokens[2] = address(USDC);
-            config.supportedTokens[3] = address(USDT);
+            deployConfig.supportedTokens[0] = address(0);
+            deployConfig.supportedTokens[1] = address(wBTC);
+            deployConfig.supportedTokens[2] = deployConfig.WETH;
+            deployConfig.supportedTokens[3] = address(USDC);
+            deployConfig.supportedTokens[4] = address(USDT);
         }
 
+        // TODO: validate config values before deploying
+
         // convert supported chains from uint256 to uint8[]
-        uint8[] memory supportedChainIDs = new uint8[](config.supportedChainIDs.length);
-        for (uint256 i; i < config.supportedChainIDs.length; i++) {
-            supportedChainIDs[i] = uint8(config.supportedChainIDs[i]);
+        uint8[] memory supportedChainIDs = new uint8[](deployConfig.supportedChainIDs.length);
+        for (uint256 i; i < deployConfig.supportedChainIDs.length; i++) {
+            supportedChainIDs[i] = uint8(deployConfig.supportedChainIDs[i]);
         }
 
         // deploy bridge config
         // price of Sui (id = 0) should not be included in tokenPrices
         require(
-            config.supportedTokens.length + 1 == config.tokenPrices.length,
+            deployConfig.supportedTokens.length == deployConfig.tokenPrices.length,
             "supportedTokens.length + 1 != tokenPrices.length"
         );
 
-        BridgeConfig bridgeConfig =
-            new BridgeConfig(uint8(config.sourceChainId), config.supportedTokens, supportedChainIDs);
-
-        // deploy Bridge Committee
+        // deploy Bridge Committee ===================================================================
 
         // convert committeeMembers stake from uint256 to uint16[]
-        uint16[] memory committeeMemberStake = new uint16[](config.committeeMemberStake.length);
-        for (uint256 i; i < config.committeeMemberStake.length; i++) {
-            committeeMemberStake[i] = uint16(config.committeeMemberStake[i]);
+        uint16[] memory committeeMemberStake =
+            new uint16[](deployConfig.committeeMemberStake.length);
+        for (uint256 i; i < deployConfig.committeeMemberStake.length; i++) {
+            committeeMemberStake[i] = uint16(deployConfig.committeeMemberStake[i]);
         }
 
         address bridgeCommittee = Upgrades.deployUUPSProxy(
@@ -84,43 +84,61 @@ contract DeployBridge is Script {
             abi.encodeCall(
                 BridgeCommittee.initialize,
                 (
-                    address(bridgeConfig),
-                    config.committeeMembers,
+                    deployConfig.committeeMembers,
                     committeeMemberStake,
-                    uint16(config.minCommitteeStakeRequired)
+                    uint16(deployConfig.minCommitteeStakeRequired)
                 )
             )
         );
 
-        // deploy vault
+        // deploy bridge config =====================================================================
 
-        BridgeVault vault = new BridgeVault(config.WETH);
+        address bridgeConfig = Upgrades.deployUUPSProxy(
+            "BridgeConfig.sol",
+            abi.encodeCall(
+                BridgeConfig.initialize,
+                (
+                    address(bridgeCommittee),
+                    uint8(deployConfig.sourceChainId),
+                    deployConfig.supportedTokens,
+                    deployConfig.tokenPrices,
+                    supportedChainIDs
+                )
+            )
+        );
 
-        // deploy limiter
+        // initialize config in the bridge committee
+        BridgeCommittee(bridgeCommittee).initializeConfig(address(bridgeConfig));
+
+        // deploy vault =============================================================================
+
+        BridgeVault vault = new BridgeVault(deployConfig.WETH);
+
+        // deploy limiter ===========================================================================
 
         // convert chain limits from uint256 to uint64[]
-        uint64[] memory chainLimits = new uint64[](config.supportedChainLimitsInDollars.length);
-        for (uint256 i; i < config.supportedChainLimitsInDollars.length; i++) {
-            chainLimits[i] = uint64(config.supportedChainLimitsInDollars[i]);
+        uint64[] memory chainLimits =
+            new uint64[](deployConfig.supportedChainLimitsInDollars.length);
+        for (uint256 i; i < deployConfig.supportedChainLimitsInDollars.length; i++) {
+            chainLimits[i] = uint64(deployConfig.supportedChainLimitsInDollars[i]);
         }
 
         address limiter = Upgrades.deployUUPSProxy(
             "BridgeLimiter.sol",
             abi.encodeCall(
-                BridgeLimiter.initialize,
-                (bridgeCommittee, config.tokenPrices, supportedChainIDs, chainLimits)
+                BridgeLimiter.initialize, (bridgeCommittee, supportedChainIDs, chainLimits)
             )
         );
 
         uint8[] memory _destinationChains = new uint8[](1);
         _destinationChains[0] = 1;
 
-        // deploy Sui Bridge
+        // deploy Sui Bridge ========================================================================
 
         address suiBridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
             abi.encodeCall(
-                SuiBridge.initialize, (bridgeCommittee, address(vault), limiter, config.WETH)
+                SuiBridge.initialize, (bridgeCommittee, address(vault), limiter, deployConfig.WETH)
             )
         );
 
@@ -131,15 +149,15 @@ contract DeployBridge is Script {
         instance.transferOwnership(suiBridge);
 
         // print deployed addresses for post deployment setup
-        console.log("[Deployed] BridgeConfig:", address(bridgeConfig));
+        console.log("[Deployed] BridgeConfig:", bridgeConfig);
         console.log("[Deployed] SuiBridge:", suiBridge);
         console.log("[Deployed] BridgeLimiter:", limiter);
         console.log("[Deployed] BridgeCommittee:", bridgeCommittee);
         console.log("[Deployed] BridgeVault:", address(vault));
-        console.log("[Deployed] BTC:", bridgeConfig.getTokenAddress(1));
-        console.log("[Deployed] ETH:", bridgeConfig.getTokenAddress(2));
-        console.log("[Deployed] USDC:", bridgeConfig.getTokenAddress(3));
-        console.log("[Deployed] USDT:", bridgeConfig.getTokenAddress(4));
+        console.log("[Deployed] BTC:", BridgeConfig(bridgeConfig).tokenAddressOf(1));
+        console.log("[Deployed] ETH:", BridgeConfig(bridgeConfig).tokenAddressOf(2));
+        console.log("[Deployed] USDC:", BridgeConfig(bridgeConfig).tokenAddressOf(3));
+        console.log("[Deployed] USDT:", BridgeConfig(bridgeConfig).tokenAddressOf(4));
 
         vm.stopBroadcast();
     }
