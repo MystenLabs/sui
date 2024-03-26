@@ -791,6 +791,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_safe_mode_recovery() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/base");
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
