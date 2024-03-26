@@ -1,0 +1,24 @@
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/redundant_conditional.move:5:9
+  │  
+5 │ ╭         if (x) {
+6 │ │             false
+7 │ │         } else {
+8 │ │             true
+9 │ │         };
+  │ ╰─────────^ Detected a redundant conditional expression `if x { false } else { true }`. Consider using `!x` directly.
+  │  
+  = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/redundant_conditional.move:11:9
+   │  
+11 │ ╭         if (x) {
+12 │ │             true
+13 │ │         } else {
+14 │ │             false
+15 │ │         };
+   │ ╰─────────^ Detected a redundant conditional expression `if x { true } else { false }`. Consider using `x` directly.
+   │  
+   = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
