@@ -7,10 +7,11 @@ use tokio::task::JoinHandle;
 
 use std::env;
 use std::net::SocketAddr;
+use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
-use crate::db::reset_database;
+use crate::db::{new_pg_connection_pool_with_config, reset_database, PgConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
@@ -74,6 +75,10 @@ pub async fn start_test_indexer_impl(
         .parse::<u16>()
         .unwrap();
 
+    // Set connection timeout for tests to 1 second
+    let mut pool_config = PgConnectionPoolConfig::default();
+    pool_config.set_connection_timeout(Duration::from_secs(1));
+
     // Default writer mode
     let mut config = IndexerConfig {
         db_url: Some(db_url.clone()),
@@ -98,7 +103,8 @@ pub async fn start_test_indexer_impl(
         let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
 
         // Open in default mode
-        let blocking_pool = new_test_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+        let blocking_pool =
+            new_pg_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -113,7 +119,8 @@ pub async fn start_test_indexer_impl(
         parsed_url = replace_db_name(&parsed_url, &new_database).0;
     }
 
-    let blocking_pool = new_test_pg_connection_pool(&parsed_url, Some(5)).unwrap();
+    let blocking_pool =
+        new_pg_connection_pool_with_config(&parsed_url, Some(5), pool_config).unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
@@ -165,8 +172,12 @@ pub async fn force_delete_database(db_url: String) {
     // This is necessary because you can't drop a database while being connected to it.
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
+    // Set connection timeout for tests to 1 second
+    let mut pool_config = PgConnectionPoolConfig::default();
+    pool_config.set_connection_timeout(Duration::from_secs(1));
 
-    let blocking_pool = new_test_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+    let blocking_pool =
+        new_pg_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();
     blocking_pool
         .get()
         .unwrap()
@@ -258,25 +269,4 @@ impl<'a> SuiTransactionBlockResponseBuilder<'a> {
             ..self.full_response.clone()
         }
     }
-}
-
-pub fn new_test_pg_connection_pool(
-    db_url: &str,
-    pool_size: Option<u32>,
-) -> Result<PgConnectionPool, IndexerError> {
-    let pool_config = PgConnectionPoolConfig::default();
-    let manager = ConnectionManager::<PgConnection>::new(db_url);
-
-    let pool_size = pool_size.unwrap_or(pool_config.pool_size);
-    diesel::r2d2::Pool::builder()
-        .max_size(pool_size)
-        .connection_timeout(Duration::from_secs(1))
-        .connection_customizer(Box::new(pool_config.connection_config()))
-        .build(manager)
-        .map_err(|e| {
-            IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool with error: {:?}",
-                e
-            ))
-        })
 }
