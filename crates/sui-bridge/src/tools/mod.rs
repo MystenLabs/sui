@@ -2,23 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::read_bridge_client_key;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::eth_transaction_builder::EthSigner;
 use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
     EmergencyActionType, LimitUpdateAction,
 };
+use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
 use clap::*;
-use ethers::middleware::SignerMiddleware;
-use ethers::providers::{Http, Middleware, Provider};
-use ethers::signers::{Signer, Wallet};
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::path::PathBuf;
-use std::str::FromStr;
 use sui_config::Config;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectRef;
@@ -195,16 +191,7 @@ impl BridgeCliConfig {
         let client_key = read_bridge_client_key(&self.bridge_client_key_path_base64_sui_key)?;
         let private_key = Hex::encode(client_key.to_bytes_no_flag());
         let url = self.eth_rpc_url.clone();
-        let provider = Provider::<Http>::try_from(url)
-            .unwrap()
-            .interval(std::time::Duration::from_millis(2000));
-        let chain_id = provider.get_chainid().await?;
-        let wallet = Wallet::from_str(&private_key)
-            .unwrap()
-            .with_chain_id(chain_id.as_u64());
-        let address = wallet.address();
-        println!("Using Eth address: {:?}", address);
-        Ok(SignerMiddleware::new(provider, wallet))
+        get_eth_signer_client(&url, &private_key).await
     }
 
     pub async fn get_sui_account_info(

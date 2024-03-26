@@ -148,7 +148,7 @@ where
         assert!(logs.iter().all(|log| log.address == address));
 
         let tasks = logs.into_iter().map(|log| self.get_log_tx_details(log));
-        let results = futures::future::join_all(tasks)
+        futures::future::join_all(tasks)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -158,8 +158,7 @@ where
                     filter,
                     e
                 )
-            })?;
-        Ok(results)
+            })
     }
 
     /// This function converts a `Log` to `EthLog`, to make sure the `block_num`, `tx_hash` and `log_index_in_tx`
@@ -213,7 +212,7 @@ where
             }
         }
         let log_index_in_tx = log_index_in_tx.ok_or(BridgeError::ProviderError(format!(
-            "Couldn't find matching log {:?} in transaction {}",
+            "Couldn't find matching log: {:?} in transaction {}",
             log, tx_hash
         )))?;
 

@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "../interfaces/IBridgeCommittee.sol";
+import "./MessageVerifier.sol";
+
+/// @title CommitteeUpgradeable
+/// @notice This contract enables message signature verification using a BridgeCommittee contract,
+/// in addition to providing an interface for upgradeability via signed message verification.
+/// @dev The contract is intended to be inherited by contracts that require message verification and
+/// upgradeability.
+abstract contract CommitteeUpgradeable is
+    UUPSUpgradeable,
+    MessageVerifier,
+    ReentrancyGuardUpgradeable
+{
+    /* ========== STATE VARIABLES ========== */
+
+    bool private _upgradeAuthorized;
+
+    /* ========== INITIALIZER ========== */
+
+    function __CommitteeUpgradeable_init(address _committee) internal onlyInitializing {
+        __ReentrancyGuard_init();
+        __MessageVerifier_init(_committee);
+        committee = IBridgeCommittee(_committee);
+    }
+
+    /* ========== EXTERNAL FUNCTIONS ========== */
+
+    /// @notice Enables the upgrade of the inheriting contract by verifying the provided signatures.
+    /// @dev The function will revert if the provided signatures or message is invalid.
+    /// @param signatures The array of signatures to be verified.
+    /// @param message The BridgeMessage to be verified.
+    function upgradeWithSignatures(bytes[] memory signatures, BridgeMessage.Message memory message)
+        external
+        nonReentrant
+        verifyMessageAndSignatures(message, signatures, BridgeMessage.UPGRADE)
+    {
+        // decode the upgrade payload
+        (address proxy, address implementation, bytes memory callData) =
+            BridgeMessage.decodeUpgradePayload(message.payload);
+
+        // verify proxy address
+        require(proxy == address(this), "CommitteeUpgradeable: Invalid proxy address");
+
+        // authorize upgrade
+        _upgradeAuthorized = true;
+        // upgrade contract
+        upgradeToAndCall(implementation, callData); // Upgraded event emitted with new implementation address
+        // reset upgrade authorization
+        _upgradeAuthorized = false;
+    }
+
+    /* ========== INTERNAL FUNCTIONS ========== */
+
+    /// @notice Authorizes the upgrade of the inheriting contract.
+    /// @dev The _upgradeAuthorized state variable can only be set with the upgradeWithSignatures
+    /// function, meaning that the upgrade can only be authorized by the committee.
+    function _authorizeUpgrade(address) internal view override {
+        require(_upgradeAuthorized, "CommitteeUpgradeable: Unauthorized upgrade");
+    }
+}
