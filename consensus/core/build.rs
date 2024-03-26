@@ -30,8 +30,8 @@ fn build_tonic_services(out_dir: &Path) {
             tonic_build::manual::Method::builder()
                 .name("send_block")
                 .route_name("SendBlock")
-                .input_type("crate::network::SendBlockRequest")
-                .output_type("crate::network::SendBlockResponse")
+                .input_type("crate::network::tonic_network::SendBlockRequest")
+                .output_type("crate::network::tonic_network::SendBlockResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -39,8 +39,8 @@ fn build_tonic_services(out_dir: &Path) {
             tonic_build::manual::Method::builder()
                 .name("fetch_blocks")
                 .route_name("FetchBlocks")
-                .input_type("crate::network::FetchBlocksRequest")
-                .output_type("crate::network::FetchBlocksResponse")
+                .input_type("crate::network::tonic_network::FetchBlocksRequest")
+                .output_type("crate::network::tonic_network::FetchBlocksResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -65,8 +65,8 @@ fn build_anemo_services(out_dir: &Path) {
             anemo_build::manual::Method::builder()
                 .name("send_block")
                 .route_name("SendBlock")
-                .request_type("crate::network::SendBlockRequest")
-                .response_type("crate::network::SendBlockResponse")
+                .request_type("crate::network::anemo_network::SendBlockRequest")
+                .response_type("crate::network::anemo_network::SendBlockResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -74,8 +74,8 @@ fn build_anemo_services(out_dir: &Path) {
             anemo_build::manual::Method::builder()
                 .name("fetch_blocks")
                 .route_name("FetchBlocks")
-                .request_type("crate::network::FetchBlocksRequest")
-                .response_type("crate::network::FetchBlocksResponse")
+                .request_type("crate::network::anemo_network::FetchBlocksRequest")
+                .response_type("crate::network::anemo_network::FetchBlocksResponse")
                 .codec_path(codec_path)
                 .build(),
         )

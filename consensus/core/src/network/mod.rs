@@ -6,7 +6,6 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -85,28 +84,4 @@ where
 
     /// Stops the network service.
     async fn stop(&mut self);
-}
-
-/// Network message types.
-#[derive(Clone, Serialize, Deserialize, prost::Message)]
-pub(crate) struct SendBlockRequest {
-    // Serialized SignedBlock.
-    #[prost(bytes = "bytes", tag = "1")]
-    block: Bytes,
-}
-
-#[derive(Clone, Serialize, Deserialize, prost::Message)]
-pub(crate) struct SendBlockResponse {}
-
-#[derive(Clone, Serialize, Deserialize, prost::Message)]
-pub(crate) struct FetchBlocksRequest {
-    #[prost(bytes = "vec", repeated, tag = "1")]
-    block_refs: Vec<Vec<u8>>,
-}
-
-#[derive(Clone, Serialize, Deserialize, prost::Message)]
-pub(crate) struct FetchBlocksResponse {
-    // Serialized SignedBlock.
-    #[prost(bytes = "bytes", repeated, tag = "1")]
-    blocks: Vec<Bytes>,
 }

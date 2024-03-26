@@ -29,8 +29,7 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    FetchBlocksRequest, FetchBlocksResponse, NetworkClient, NetworkManager, NetworkService,
-    SendBlockRequest, SendBlockResponse,
+    NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -402,6 +401,30 @@ fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
             Err("invalid address")
         }
     }
+}
+
+/// Network message types.
+#[derive(Clone, prost::Message)]
+pub(crate) struct SendBlockRequest {
+    // Serialized SignedBlock.
+    #[prost(bytes = "bytes", tag = "1")]
+    block: Bytes,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct SendBlockResponse {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchBlocksRequest {
+    #[prost(bytes = "vec", repeated, tag = "1")]
+    block_refs: Vec<Vec<u8>>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchBlocksResponse {
+    // Serialized SignedBlock.
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    blocks: Vec<Bytes>,
 }
 
 // TODO: after supporting peer authentication, using rtest to share the test case with anemo_network.rs
