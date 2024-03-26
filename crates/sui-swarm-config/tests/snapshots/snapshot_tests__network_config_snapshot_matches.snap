@@ -96,10 +96,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -220,10 +222,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -344,10 +348,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -468,10 +474,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -592,10 +600,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -716,10 +726,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -840,10 +852,12 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Apple
         - Facebook
         - Google
         - Twitch
@@ -878,3 +892,4 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
+
