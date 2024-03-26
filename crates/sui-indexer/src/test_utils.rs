@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
-use crate::db::{new_test_pg_connection_pool, reset_database};
+use crate::db::reset_database;
 use crate::errors::IndexerError;
 use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
@@ -62,7 +62,7 @@ pub async fn start_test_indexer_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    // TODO (wlmyng) - dynamically set ports instead of all to 9000
+    // dynamically set ports instead of all to 9000
     let base_port = rpc_url
         .chars()
         .rev()
@@ -258,4 +258,25 @@ impl<'a> SuiTransactionBlockResponseBuilder<'a> {
             ..self.full_response.clone()
         }
     }
+}
+
+pub fn new_test_pg_connection_pool(
+    db_url: &str,
+    pool_size: Option<u32>,
+) -> Result<PgConnectionPool, IndexerError> {
+    let pool_config = PgConnectionPoolConfig::default();
+    let manager = ConnectionManager::<PgConnection>::new(db_url);
+
+    let pool_size = pool_size.unwrap_or(pool_config.pool_size);
+    diesel::r2d2::Pool::builder()
+        .max_size(pool_size)
+        .connection_timeout(Duration::from_secs(1))
+        .connection_customizer(Box::new(pool_config.connection_config()))
+        .build(manager)
+        .map_err(|e| {
+            IndexerError::PgConnectionPoolInitError(format!(
+                "Failed to initialize connection pool with error: {:?}",
+                e
+            ))
+        })
 }

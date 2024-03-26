@@ -16,10 +16,8 @@ datatest_stable::harness!(run_test, TEST_DIR, r".*\.(mvir|move)$");
 #[cfg_attr(msim, msim::main)]
 async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
-    println!("Running test: {:?}", path);
     if cfg!(feature = "pg_integration") {
         run_test_impl::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
     }
-    println!("Test completed in {:?}", start.elapsed());
     Ok(())
 }
