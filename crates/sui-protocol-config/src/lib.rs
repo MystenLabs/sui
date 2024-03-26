@@ -2339,6 +2339,9 @@ impl ProtocolConfig {
     pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
+    pub fn set_disable_bridge_for_testing(&mut self) {
+        self.feature_flags.bridge = false
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

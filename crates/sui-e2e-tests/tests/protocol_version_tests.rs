@@ -67,6 +67,8 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
+    use sui_swarm_config::genesis_config::GenesisConfig;
+    use sui_swarm_config::network_config::NetworkConfig;
     use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -789,6 +791,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_safe_mode_recovery() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/base");
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
@@ -837,6 +844,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_mock_smoke_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -851,6 +863,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_shallow_upgrade_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/shallow_upgrade");
 
         let test_cluster = TestClusterBuilder::new()
@@ -883,6 +900,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_deep_upgrade_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/deep_upgrade");
 
         let test_cluster = TestClusterBuilder::new()
