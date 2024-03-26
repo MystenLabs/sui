@@ -159,7 +159,7 @@ impl SurferState {
             Identifier::new(function.as_str()).unwrap(),
             vec![],
             self.gas_object,
-            args,
+            args.clone(),
             TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
             rgp,
         )
@@ -185,10 +185,9 @@ impl SurferState {
         );
         let effects = response.effects.unwrap();
         info!(
-            "[{:?}] Calling Move function {:?}::{:?} returned {:?}",
-            self.address,
-            module,
+            "Calling {:?} with {:?} returned {:?}",
             function,
+            args,
             effects.status()
         );
         self.stats.record_transaction(

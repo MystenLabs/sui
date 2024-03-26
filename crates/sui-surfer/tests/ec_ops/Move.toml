@@ -1,0 +1,9 @@
+[package]
+name = "EcOps"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+ec_ops = "0x0"
