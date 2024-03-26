@@ -2295,6 +2295,10 @@ struct ExpDotted {
     base: T::Exp,
     base_type: N::Type,
     accessors: Vec<ExpDottedAccess>,
+    // This should only be used in the functions grouped here, nowhere else. This is for tracking
+    // if a constant appears plainly in a `use`/`copy` position, and suppresses constant usage
+    // warning if so.
+    warn_on_constant: bool,
 }
 
 impl ExpDotted {
@@ -2341,6 +2345,7 @@ fn process_exp_dotted(
                 base_kind,
                 base_type,
                 accessors,
+                warn_on_constant: true,
             }
         }
         N::ExpDotted_::Dot(ndot, field) => {
@@ -2543,7 +2548,6 @@ fn resolve_exp_dotted(
             copy_exp
         }
         DottedUsage::Use => {
-            warn_on_constant_borrow(context, edotted.base.exp.loc, &edotted.base);
             if edotted.accessors.is_empty() {
                 Box::new(edotted.base)
             } else {
@@ -2612,10 +2616,22 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
         base_type,
         base_kind,
         accessors,
+        mut warn_on_constant,
     } = ed;
 
+    // If we have accessors, we are definitely going to actually borrow and that means we'll copy
+    // a base constant, so we should warn if we do.
+    warn_on_constant = warn_on_constant || !accessors.is_empty();
+
     let mut exp = match base_kind {
-        BaseRefKind::Owned => exp_to_borrow(context, loc, mut_, Box::new(base), base_type),
+        BaseRefKind::Owned => exp_to_borrow_(
+            context,
+            loc,
+            mut_,
+            Box::new(base),
+            base_type,
+            warn_on_constant,
+        ),
         BaseRefKind::ImmRef | BaseRefKind::MutRef => Box::new(base),
     };
 
@@ -2711,21 +2727,18 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
         )));
         return make_error_exp(context, ed.loc);
     };
-    let borrow_exp = borrow_exp_dotted(context, false, ed);
     let case = match usage {
         DottedUsage::Move(_) => {
-            context.env.add_diag(ice!((
-                borrow_exp.exp.loc,
-                "Invalid dotted usage 'move' in to_owned"
-            )));
-            return make_error_exp(context, borrow_exp.exp.loc);
+            context
+                .env
+                .add_diag(ice!((ed.loc, "Invalid dotted usage 'move' in to_owned")));
+            return make_error_exp(context, ed.loc);
         }
         DottedUsage::Borrow(_) => {
-            context.env.add_diag(ice!((
-                borrow_exp.exp.loc,
-                "Invalid dotted usage 'borrow' in to_owned"
-            )));
-            return make_error_exp(context, borrow_exp.exp.loc);
+            context
+                .env
+                .add_diag(ice!((ed.loc, "Invalid dotted usage 'borrow' in to_owned")));
+            return make_error_exp(context, ed.loc);
         }
         DottedUsage::Use => "implicit copy",
         DottedUsage::Copy(loc) => {
@@ -2735,6 +2748,13 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
             "'copy'"
         }
     };
+    // If we are going to an owned value and we have a constant with no accessors, we're fine to
+    // not warn about its usage.
+    let mut edotted = ed;
+    if edotted.accessors.is_empty() {
+        edotted.warn_on_constant = false;
+    }
+    let borrow_exp = borrow_exp_dotted(context, false, edotted);
     let eloc = borrow_exp.exp.loc;
     context.add_ability_constraint(
         eloc,
@@ -2764,11 +2784,27 @@ fn exp_to_borrow(
     eb: Box<T::Exp>,
     base_type: Type,
 ) -> Box<T::Exp> {
+    exp_to_borrow_(
+        context, loc, mut_, eb, base_type, /* warn_on_constant */ true,
+    )
+}
+
+fn exp_to_borrow_(
+    context: &mut Context,
+    loc: Loc,
+    mut_: bool,
+    eb: Box<T::Exp>,
+    base_type: Type,
+    warn_on_constant: bool,
+) -> Box<T::Exp> {
     use Type_::*;
     use T::UnannotatedExp_ as TE;
-    warn_on_constant_borrow(context, eb.exp.loc, &eb);
+    if warn_on_constant {
+        warn_on_constant_borrow(context, eb.exp.loc, &eb)
+    };
     let eb_ty = eb.ty;
     let sp!(ebloc, eb_) = eb.exp;
+    let ref_ty = Ref(mut_, Box::new(base_type));
     let e_ = match eb_ {
         TE::Use(v) => TE::BorrowLocal(mut_, v),
         eb_ => {
@@ -2781,7 +2817,7 @@ fn exp_to_borrow(
             TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
         }
     };
-    let ty = sp(loc, Ref(mut_, Box::new(base_type)));
+    let ty = sp(loc, ref_ty);
     Box::new(T::exp(ty, sp(loc, e_)))
 }
 
@@ -2820,12 +2856,14 @@ fn method_call(
 fn method_call_resolve(
     context: &mut Context,
     loc: Loc,
-    mut edotted: ExpDotted,
+    edotted: ExpDotted,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
 ) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType, T::Exp)> {
     use TypeName_ as TN;
     use Type_ as Ty;
+
+    let mut edotted = edotted;
 
     edotted.loc = loc;
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
