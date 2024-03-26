@@ -166,10 +166,10 @@ Advance the epoch counter and draw down the subsidy for the epoch.
     // Take the minimum of the reward amount and the remaining <a href="../sui-framework/balance.md#0x2_balance">balance</a> in
     // order <b>to</b> ensure we don't overdraft the remaining stake subsidy
     // <a href="../sui-framework/balance.md#0x2_balance">balance</a>
-    <b>let</b> to_withdraw = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(self.current_distribution_amount, <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>));
+    <b>let</b> to_withdraw = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(self.current_distribution_amount, self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.value());
 
     // Drawn down the subsidy for this epoch.
-    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>, to_withdraw);
+    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.split(to_withdraw);
 
     self.distribution_counter = self.distribution_counter + 1;
 
@@ -205,7 +205,7 @@ Returns the amount of stake subsidy to be added at the end of the current epoch.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): u64 {
-    <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(self.current_distribution_amount, <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>))
+    <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(self.current_distribution_amount, self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.value())
 }
 </code></pre>
 
