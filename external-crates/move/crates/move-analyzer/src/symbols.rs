@@ -401,7 +401,7 @@ impl fmt::Display for DefInfo {
             }
             Self::Struct(mod_ident, name, visibility, type_args, field_names, field_types) => {
                 let type_args_str = struct_type_args_to_ide_string(type_args);
-                if field_names.len() == 0 {
+                if field_names.is_empty() {
                     write!(
                         f,
                         "{}struct {}::{}{} {{}}",
@@ -1323,7 +1323,7 @@ fn mark_positional_struct(
                     return mod_ident_str == &parsed_mod_ident_str;
                 }
             }
-            return false;
+            false
         })
         .or_else(|| {
             parsed_program.lib_definitions.iter().find(|pkg_def| {
@@ -1332,7 +1332,7 @@ fn mark_positional_struct(
                         return mod_ident_str == &parsed_mod_ident_str;
                     }
                 }
-                return false;
+                false
             })
         })
     else {
@@ -1433,10 +1433,9 @@ fn parsing_mod_def_to_map_key(mod_def: &P::ModuleDefinition) -> Option<String> {
     //
     // TODO: make this function simply return String when the other way of defining modules is
     // removed
-    match mod_def.address {
-        Some(a) => Some(format!("{}::{}", a, mod_def.name).to_string()),
-        None => None,
-    }
+    mod_def
+        .address
+        .map(|a| format!("{}::{}", a, mod_def.name).to_string())
 }
 
 /// Produces module ident string of the form pkg_name::module_name to be used as a map key
