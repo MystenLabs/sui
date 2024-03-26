@@ -393,6 +393,10 @@ struct FeatureFlags {
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
+
+    // Set the upper bound allowed for max_epoch in zklogin signature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zklogin_max_epoch_upper_bound: Option<u64>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1153,6 +1157,10 @@ impl ProtocolConfig {
 
     pub fn accept_zklogin_in_multisig(&self) -> bool {
         self.feature_flags.accept_zklogin_in_multisig
+    }
+
+    pub fn zklogin_max_epoch_upper_bound(&self) -> Option<u64> {
+        self.feature_flags.zklogin_max_epoch_upper_bound
     }
 
     pub fn throughput_aware_consensus_submission(&self) -> bool {
@@ -2024,7 +2032,9 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
-                42 => {}
+                42 => {
+                    cfg.feature_flags.zklogin_max_epoch_upper_bound = Some(2);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2119,6 +2129,9 @@ impl ProtocolConfig {
     }
     pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
         self.consensus_max_transactions_in_block_bytes = Some(val);
+    }
+    pub fn set_zklogin_max_epoch_upper_bound(&mut self, val: Option<u64>) {
+        self.feature_flags.zklogin_max_epoch_upper_bound = val
     }
 }
 
