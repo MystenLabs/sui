@@ -23,16 +23,16 @@ error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:25
    │
 16 │         let _ = Foo <u64>(0);
-   │                 --------^--- Found: integer. It is not compatible with the other type.
-   │                 │       │ 
+   │                 --------^ - Found: integer. It is not compatible with the other type.
+   │                 │       │  
    │                 │       Incompatible arguments to '>'
    │                 Found: 'bool'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:26
+   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:27
    │
 16 │         let _ = Foo <u64>(0);
-   │                 -------- ^^^ Invalid argument to '>'
-   │                 │         
+   │                 --------  ^ Invalid argument to '>'
+   │                 │          
    │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 

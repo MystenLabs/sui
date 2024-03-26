@@ -47,6 +47,7 @@ pub enum FeatureGate {
     SyntaxMethods,
     AutoborrowEq,
     CleverAssertions,
+    NoParensCast,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -130,6 +131,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
     FeatureGate::AutoborrowEq,
+    FeatureGate::NoParensCast,
 ];
 
 const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions];
@@ -251,6 +253,7 @@ impl FeatureGate {
             FeatureGate::SyntaxMethods => "'syntax' methods are",
             FeatureGate::AutoborrowEq => "Automatic borrowing is",
             FeatureGate::CleverAssertions => "Clever `assert!`, `abort`, and `#[error]` are",
+            FeatureGate::NoParensCast => "'as' without parentheses is",
         }
     }
 }
