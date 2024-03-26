@@ -1,0 +1,16 @@
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/redundant_assert.move:4:16
+  │
+4 │         assert!(true, 0); // Hypothetical syntax, assuming `assert` takes a condition and an error code
+  │                ^^^^^^^^^ Detected a redundant `assert!(true)` call. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/redundant_assert.move:9:16
+  │
+9 │         assert!(false, 1); // Hypothetical syntax, for demonstration
+  │                ^^^^^^^^^^ Detected a redundant `assert!(false)` call. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
