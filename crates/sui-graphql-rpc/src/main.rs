@@ -23,18 +23,28 @@ const GIT_REVISION: &str = {
         revision
     } else {
         git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
+            args = ["--always", "--abbrev=40", "--dirty", "--exclude", "*"],
             fallback = "DIRTY"
         )
     }
 };
 
 // VERSION mimics what other sui binaries use for the same const
-static VERSION: Version = Version(const_str::concat!(
-    env!("CARGO_PKG_VERSION"),
-    "-",
-    GIT_REVISION
-));
+static VERSION: Version = Version {
+    year: env!("CARGO_PKG_VERSION_MAJOR"),
+    month: env!("CARGO_PKG_VERSION_MINOR"),
+    patch: env!("CARGO_PKG_VERSION_PATCH"),
+    sha: GIT_REVISION,
+    full: const_str::concat!(
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_PATCH"),
+        "-",
+        GIT_REVISION
+    ),
+};
 
 #[tokio::main]
 async fn main() {
