@@ -4344,7 +4344,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=64ccc765d0a39bf231a009046d34c6fc65510b2f#64ccc765d0a39bf231a009046d34c6fc65510b2f"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4399,7 +4399,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=64ccc765d0a39bf231a009046d34c6fc65510b2f#64ccc765d0a39bf231a009046d34c6fc65510b2f"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4408,7 +4408,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=64ccc765d0a39bf231a009046d34c6fc65510b2f#64ccc765d0a39bf231a009046d34c6fc65510b2f"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4426,7 +4426,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=64ccc765d0a39bf231a009046d34c6fc65510b2f#64ccc765d0a39bf231a009046d34c6fc65510b2f"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -4451,6 +4451,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "thiserror",
  "typenum",
 ]
 
