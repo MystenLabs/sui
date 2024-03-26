@@ -22,3 +22,13 @@ module a::t2 {
         s.bar();
     }
 }
+
+module a::t3 {
+    use a::m::S;
+
+    use a::m::foo as bar;
+    fun call_bar(s: &S) {
+        use fun a::m::foo as S.bar;
+        s.bar();
+    }
+}
