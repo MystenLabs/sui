@@ -1,0 +1,43 @@
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/collapsible_nested_if.move:3:9
+  │  
+3 │ ╭         if (x) {
+4 │ │             if (y) {
+5 │ │                 // Action when both x and y are true
+6 │ │                 return true;
+7 │ │             }
+8 │ │         };
+  │ ╰─────────^ This `if` statement can be collapsed
+  │  
+  = This warning can be suppressed with '#[allow(lint(collapsible_nested_if))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+  ┌─ tests/custom_rules/collapsible_nested_if.move:6:28
+  │
+6 │                 return true;
+  │                 -----------^
+  │                 │          │
+  │                 │          Invalid trailing ';'
+  │                 │          A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+  │                 Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/custom_rules/collapsible_nested_if.move:18:9
+   │
+18 │         false
+   │         ^^^^^
+   │         │
+   │         Unexpected 'false'
+   │         Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/custom_rules/collapsible_nested_if.move:30:9
+   │
+30 │         false
+   │         ^^^^^
+   │         │
+   │         Unexpected 'false'
+   │         Expected ';'
+
