@@ -413,6 +413,11 @@ where
                 diag,
             );
         }
+        // The stop set check is done at the end of the loop on purpose as we need to attempt
+        // parsing before checking it. If we do not, in the best case, we will get a less meaningful
+        // error message if the item belongs to the token set incorrectly (e.g., `fun` keyword), and
+        // in the worst case, we will get an error in the correct code (e.g., if a function argument
+        // is named `entry`)
         if context.at_stop_set() {
             break;
         }
