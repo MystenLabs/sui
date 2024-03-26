@@ -17,7 +17,7 @@ use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use test_cluster::TestClusterBuilder;
 
-pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 42;
+pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
 
 #[sim_test]
 async fn test_create_bridge_state_object() {
