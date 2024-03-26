@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "./BridgeBaseTest.t.sol";
-import "../contracts/utils/BridgeMessage.sol";
+import "../contracts/utils/BridgeUtils.sol";
 
 contract BridgeCommitteeTest is BridgeBaseTest {
     // This function is called before each unit test
@@ -37,17 +37,65 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         assertEq(committee.nonces(4), 0);
     }
 
+    function testBridgeCommitteeInitializeConfig() public {
+        vm.expectRevert(bytes("BridgeCommittee: Config already initialized"));
+        // Initialize the committee with the config contract
+        committee.initializeConfig(address(101));
+    }
+
+    function testBridgeFailInitialization() public {
+        // Test fail initialize: Committee Duplicate Committee Member
+        BridgeCommittee _committee = new BridgeCommittee();
+        address[] memory _committeeDuplicateCommitteeMember = new address[](5);
+        _committeeDuplicateCommitteeMember[0] = committeeMemberA;
+        _committeeDuplicateCommitteeMember[1] = committeeMemberB;
+        _committeeDuplicateCommitteeMember[2] = committeeMemberC;
+        _committeeDuplicateCommitteeMember[3] = committeeMemberD;
+        _committeeDuplicateCommitteeMember[4] = committeeMemberA;
+
+        uint16[] memory _stakeDuplicateCommitteeMember = new uint16[](5);
+        _stakeDuplicateCommitteeMember[0] = 1000;
+        _stakeDuplicateCommitteeMember[1] = 1000;
+        _stakeDuplicateCommitteeMember[2] = 1000;
+        _stakeDuplicateCommitteeMember[3] = 2002;
+        _stakeDuplicateCommitteeMember[4] = 1000;
+
+        vm.expectRevert(bytes("BridgeCommittee: Duplicate committee member"));
+        _committee.initialize(
+            _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember, minStakeRequired
+        );
+
+        address[] memory _committeeNotSameLength = new address[](5);
+        _committeeNotSameLength[0] = committeeMemberA;
+        _committeeNotSameLength[1] = committeeMemberB;
+        _committeeNotSameLength[2] = committeeMemberC;
+        _committeeNotSameLength[3] = committeeMemberD;
+        _committeeNotSameLength[4] = committeeMemberE;
+
+        uint16[] memory _stakeNotSameLength = new uint16[](4);
+        _stakeNotSameLength[0] = 1000;
+        _stakeNotSameLength[1] = 1000;
+        _stakeNotSameLength[2] = 1000;
+        _stakeNotSameLength[3] = 2002;
+
+        vm.expectRevert(
+            bytes("BridgeCommittee: Committee and stake arrays must be of the same length")
+        );
+
+        _committee.initialize(_committeeNotSameLength, _stakeNotSameLength, minStakeRequired);
+    }
+
     function testVerifySignaturesWithValidSignatures() public {
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.TOKEN_TRANSFER,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.TOKEN_TRANSFER,
             version: 1,
             nonce: 1,
             chainID: chainID,
             payload: "0x0"
         });
 
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
 
         bytes32 messageHash = keccak256(messageBytes);
 
@@ -65,15 +113,15 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
     function testVerifySignaturesWithInvalidSignatures() public {
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.TOKEN_TRANSFER,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.TOKEN_TRANSFER,
             version: 1,
             nonce: 1,
             chainID: chainID,
             payload: "0x0"
         });
 
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
 
         bytes32 messageHash = keccak256(messageBytes);
 
@@ -91,15 +139,15 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
     function testVerifySignaturesDuplicateSignature() public {
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.TOKEN_TRANSFER,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.TOKEN_TRANSFER,
             version: 1,
             nonce: 1,
             chainID: chainID,
             payload: "0x0"
         });
 
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(messageBytes);
 
         bytes[] memory signatures = new bytes[](4);
@@ -122,14 +170,14 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         bytes memory payload = abi.encode(uint8(0), _blocklist);
 
         // Create a message with wrong nonce
-        BridgeMessage.Message memory messageWrongNonce = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        BridgeUtils.Message memory messageWrongNonce = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 0,
             chainID: chainID,
             payload: payload
         });
-        bytes memory messageBytes = BridgeMessage.encodeMessage(messageWrongNonce);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(messageWrongNonce);
         bytes32 messageHash = keccak256(messageBytes);
         bytes[] memory signatures = new bytes[](4);
 
@@ -149,14 +197,14 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         bytes memory payload = abi.encode(uint8(0), _blocklist);
 
         // Create a message with wrong messageType
-        BridgeMessage.Message memory messageWrongMessageType = BridgeMessage.Message({
-            messageType: BridgeMessage.TOKEN_TRANSFER,
+        BridgeUtils.Message memory messageWrongMessageType = BridgeUtils.Message({
+            messageType: BridgeUtils.TOKEN_TRANSFER,
             version: 1,
             nonce: 0,
             chainID: chainID,
             payload: payload
         });
-        bytes memory messageBytes = BridgeMessage.encodeMessage(messageWrongMessageType);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(messageWrongMessageType);
         bytes32 messageHash = keccak256(messageBytes);
         bytes[] memory signatures = new bytes[](4);
 
@@ -176,14 +224,14 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         bytes memory payload = abi.encode(uint8(0), _blocklist);
 
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 0,
             chainID: chainID,
             payload: payload
         });
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(messageBytes);
         bytes[] memory signatures = new bytes[](4);
 
@@ -201,15 +249,15 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         payload = abi.encodePacked(payload, committeeMemberA);
 
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 0,
             chainID: chainID,
             payload: payload
         });
 
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(messageBytes);
         bytes[] memory signatures = new bytes[](4);
 
@@ -228,7 +276,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         // update message
         message.nonce = 1;
         // reconstruct signatures
-        messageBytes = BridgeMessage.encodeMessage(message);
+        messageBytes = BridgeUtils.encodeMessage(message);
         messageHash = keccak256(messageBytes);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
         signatures[1] = getSignature(messageHash, committeeMemberPkB);
@@ -243,15 +291,15 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         bytes memory payload = abi.encode(committeeMemberA);
 
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: chainID,
             payload: payload
         });
 
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(messageBytes);
         bytes[] memory signatures = new bytes[](4);
 
@@ -277,15 +325,15 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         payload = abi.encodePacked(payload, committeeMemberA);
 
         // Create a message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 1,
             chainID: chainID,
             payload: payload
         });
 
-        bytes memory messageBytes = BridgeMessage.encodeMessage(message);
+        bytes memory messageBytes = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(messageBytes);
         bytes[] memory signatures = new bytes[](4);
 
@@ -314,19 +362,19 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(config), _committee, _stake, minStakeRequired);
+        committee.initialize(_committee, _stake, minStakeRequired);
 
         bytes memory payload =
             hex"010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";
         // Create blocklist message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 68,
             chainID: 2,
             payload: payload
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes memory expectedEncodedMessage =
             hex"5355495f4252494447455f4d4553534147450101000000000000004402010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";
 
@@ -338,7 +386,6 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         address[] memory _committee = new address[](4);
         uint16[] memory _stake = new uint16[](4);
         uint8 chainID = 11;
-        config = new BridgeConfig(chainID, supportedTokens, supportedChains);
         _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
         _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
         _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
@@ -348,20 +395,26 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(config), _committee, _stake, minStakeRequired);
+        committee.initialize(_committee, _stake, minStakeRequired);
+        config = new BridgeConfig();
+        config.initialize(
+            address(committee), chainID, supportedTokens, tokenPrices, supportedChains
+        );
+
+        committee.initializeConfig(address(config));
+
         assertEq(committee.blocklist(0x68B43fD906C0B8F024a18C56e06744F7c6157c65), false);
 
         // blocklist 1 member 02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4 ("0x68B43fD906C0B8F024a18C56e06744F7c6157c65")
-        bytes memory payload =
-            hex"000168b43fd906c0b8f024a18c56e06744f7c6157c65";
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        bytes memory payload = hex"000168b43fd906c0b8f024a18c56e06744f7c6157c65";
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 0,
             chainID: chainID,
             payload: payload
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes memory expectedEncodedMessage =
             hex"5355495f4252494447455f4d455353414745010100000000000000000b000168b43fd906c0b8f024a18c56e06744f7c6157c65";
 
@@ -384,14 +437,14 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
         // unblocklist 1 member 02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4 ("0x68B43fD906C0B8F024a18C56e06744F7c6157c65")
         payload = hex"010168b43fd906c0b8f024a18c56e06744f7c6157c65";
-        message = BridgeMessage.Message({
-            messageType: BridgeMessage.BLOCKLIST,
+        message = BridgeUtils.Message({
+            messageType: BridgeUtils.BLOCKLIST,
             version: 1,
             nonce: 1,
             chainID: chainID,
             payload: payload
         });
-        encodedMessage = BridgeMessage.encodeMessage(message);
+        encodedMessage = BridgeUtils.encodeMessage(message);
         expectedEncodedMessage =
             hex"5355495f4252494447455f4d455353414745010100000000000000010b010168b43fd906c0b8f024a18c56e06744f7c6157c65";
 

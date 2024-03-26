@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title BridgeMessage
+/// @title BridgeUtils
 /// @notice This library defines the message format and constants for the Sui native bridge. It also
 /// provides functions to encode and decode bridge messages and their payloads.
 /// @dev This library only utilizes internal functions to enable upgradeability via the OpenZeppelin
 /// UUPS proxy pattern (external libraries are not supported).
-library BridgeMessage {
+library BridgeUtils {
     /* ========== STRUCTS ========== */
 
     /// @dev A struct that represents a bridge message
@@ -48,8 +48,9 @@ library BridgeMessage {
     uint8 public constant BLOCKLIST = 1;
     uint8 public constant EMERGENCY_OP = 2;
     uint8 public constant UPDATE_BRIDGE_LIMIT = 3;
-    uint8 public constant UPDATE_TOKEN_PRICE = 4;
+    uint8 public constant UPDATE_TOKEN_PRICES = 4;
     uint8 public constant UPGRADE = 5;
+    uint8 public constant ADD_TOKENS = 7;
 
     // Message type stake requirements
     uint32 public constant TRANSFER_STAKE_REQUIRED = 3334;
@@ -58,7 +59,8 @@ library BridgeMessage {
     uint32 public constant UPGRADE_STAKE_REQUIRED = 5001;
     uint16 public constant BLOCKLIST_STAKE_REQUIRED = 5001;
     uint32 public constant BRIDGE_LIMIT_STAKE_REQUIRED = 5001;
-    uint32 public constant TOKEN_PRICE_STAKE_REQUIRED = 5001;
+    uint32 public constant UPDATE_TOKEN_PRICES_STAKE_REQUIRED = 5001;
+    uint32 public constant ADD_TOKENS_STAKE_REQUIRED = 5001;
 
     // token Ids
     uint8 public constant SUI = 0;
@@ -104,13 +106,64 @@ library BridgeMessage {
             return UNFREEZING_STAKE_REQUIRED;
         } else if (_message.messageType == UPDATE_BRIDGE_LIMIT) {
             return BRIDGE_LIMIT_STAKE_REQUIRED;
-        } else if (_message.messageType == UPDATE_TOKEN_PRICE) {
-            return TOKEN_PRICE_STAKE_REQUIRED;
+        } else if (_message.messageType == UPDATE_TOKEN_PRICES) {
+            return UPDATE_TOKEN_PRICES_STAKE_REQUIRED;
         } else if (_message.messageType == UPGRADE) {
             return UPGRADE_STAKE_REQUIRED;
+        } else if (_message.messageType == ADD_TOKENS) {
+            return ADD_TOKENS_STAKE_REQUIRED;
         } else {
-            revert("BridgeMessage: Invalid message type");
+            revert("BridgeUtils: Invalid message type");
         }
+    }
+
+    /// @notice Converts the provided token amount to the Sui decimal adjusted amount.
+    /// @param erc20Decimal The erc20 decimal value for the token.
+    /// @param suiDecimal The sui decimal value for the token.
+    /// @param amount The ERC20 amount of the tokens to convert to Sui.
+    /// @return Sui converted amount.
+    function convertERC20ToSuiDecimal(uint8 erc20Decimal, uint8 suiDecimal, uint256 amount)
+        internal
+        pure
+        returns (uint64)
+    {
+        if (erc20Decimal == suiDecimal) {
+            // Ensure converted amount fits within uint64
+            require(amount <= type(uint64).max, "BridgeUtils: Amount too large for uint64");
+            return uint64(amount);
+        }
+
+        require(erc20Decimal > suiDecimal, "BridgeUtils: Invalid Sui decimal");
+
+        // Difference in decimal places
+        uint256 factor = 10 ** (erc20Decimal - suiDecimal);
+        amount = amount / factor;
+
+        // Ensure the converted amount fits within uint64
+        require(amount <= type(uint64).max, "BridgeUtils: Amount too large for uint64");
+
+        return uint64(amount);
+    }
+
+    /// @notice Converts the provided Sui decimal adjusted amount to the ERC20 token amount.
+    /// @param erc20Decimal The erc20 decimal value for the token.
+    /// @param suiDecimal The sui decimal value for the token.
+    /// @param amount The Sui amount of the tokens to convert to ERC20.
+    /// @return ERC20 converted amount.
+    function convertSuiToERC20Decimal(uint8 erc20Decimal, uint8 suiDecimal, uint64 amount)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (suiDecimal == erc20Decimal) {
+            return uint256(amount);
+        }
+
+        require(erc20Decimal > suiDecimal, "BridgeUtils: Invalid Sui decimal");
+
+        // Difference in decimal places
+        uint256 factor = 10 ** (erc20Decimal - suiDecimal);
+        return uint256(amount * factor);
     }
 
     /// @notice Decodes a token transfer payload from bytes to a TokenTransferPayload struct.
@@ -128,15 +181,15 @@ library BridgeMessage {
     function decodeTokenTransferPayload(bytes memory _payload)
         internal
         pure
-        returns (BridgeMessage.TokenTransferPayload memory)
+        returns (TokenTransferPayload memory)
     {
-        require(_payload.length == 64, "BridgeMessage: TokenTransferPayload must be 64 bytes");
+        require(_payload.length == 64, "BridgeUtils: TokenTransferPayload must be 64 bytes");
 
         uint8 senderAddressLength = uint8(_payload[0]);
 
         require(
             senderAddressLength == 32,
-            "BridgeMessage: Invalid sender address length, Sui address must be 32 bytes"
+            "BridgeUtils: Invalid sender address length, Sui address must be 32 bytes"
         );
 
         // used to offset already read bytes
@@ -158,7 +211,7 @@ library BridgeMessage {
         uint8 recipientAddressLength = uint8(_payload[offset++]);
         require(
             recipientAddressLength == 20,
-            "BridgeMessage: Invalid target address length, EVM address must be 20 bytes"
+            "BridgeUtils: Invalid target address length, EVM address must be 20 bytes"
         );
 
         // extract target address from payload (35-54)
@@ -222,7 +275,7 @@ library BridgeMessage {
         uint8 membersLength = uint8(_payload[1]);
         address[] memory members = new address[](membersLength);
         uint8 offset = 2;
-        require((_payload.length - offset) % 20 == 0, "BridgeMessage: Invalid payload length");
+        require((_payload.length - offset) % 20 == 0, "BridgeUtils: Invalid payload length");
         for (uint8 i; i < membersLength; i++) {
             // Calculate the starting index for each address
             offset += i * 20;
@@ -246,9 +299,9 @@ library BridgeMessage {
     /// @param _payload The payload to be decoded.
     /// @return The emergency operation type.
     function decodeEmergencyOpPayload(bytes memory _payload) internal pure returns (bool) {
-        require(_payload.length == 1, "BridgeMessage: Invalid payload length");
+        require(_payload.length == 1, "BridgeUtils: Invalid payload length");
         uint8 emergencyOpCode = uint8(_payload[0]);
-        require(emergencyOpCode <= 1, "BridgeMessage: Invalid op code");
+        require(emergencyOpCode <= 1, "BridgeUtils: Invalid op code");
         return emergencyOpCode == 0;
     }
 
@@ -265,36 +318,13 @@ library BridgeMessage {
         pure
         returns (uint8 senderChainID, uint64 newLimit)
     {
-        require(_payload.length == 9, "BridgeMessage: Invalid payload length");
+        require(_payload.length == 9, "BridgeUtils: Invalid payload length");
         senderChainID = uint8(_payload[0]);
 
         // Extracts the uint64 value by loading 32 bytes starting just after the first byte.
         // Position uint64 to the least significant bits by shifting it 192 bits to the right.
         assembly {
             newLimit := shr(192, mload(add(add(_payload, 0x20), 1)))
-        }
-    }
-
-    /// @notice Decodes an update token price payload from bytes to a token ID and a new price.
-    /// @dev The function will revert if the payload length is invalid.
-    ///     Update token price payload is 9 bytes.
-    ///     byte 0       : token ID
-    ///     bytes 1-8    : new price
-    /// @param _payload The payload to be decoded.
-    /// @return tokenID the token ID to update the price of.
-    /// @return tokenPrice the new price of the token.
-    function decodeUpdateTokenPricePayload(bytes memory _payload)
-        internal
-        pure
-        returns (uint8 tokenID, uint64 tokenPrice)
-    {
-        require(_payload.length == 9, "BridgeMessage: Invalid payload length");
-        tokenID = uint8(_payload[0]);
-
-        // Extracts the uint64 value by loading 32 bytes starting just after the first byte.
-        // Position uint64 to the least significant bits by shifting it 192 bits to the right.
-        assembly {
-            tokenPrice := shr(192, mload(add(add(_payload, 0x20), 1)))
         }
     }
 
@@ -314,5 +344,47 @@ library BridgeMessage {
         (address proxy, address implementation, bytes memory callData) =
             abi.decode(_payload, (address, address, bytes));
         return (proxy, implementation, callData);
+    }
+
+    /// @notice Decodes an update token price payload from bytes to a token ID and a new price.
+    /// @dev The function will revert if the payload length is invalid.
+    ///     Update token price payload is 9 bytes.
+    ///     byte 0           : number of tokens
+    ///     bytes 1-n        : token IDs
+    ///     byte n + 1       : number of prices
+    ///     bytes n + 2 -> i : prices (uint64)
+    /// @param _payload The payload to be decoded.
+    /// @return tokenIDs the token ID to update the price of.
+    /// @return tokenPrices the new price of the token.
+    function decodeUpdateTokenPricesPayload(bytes memory _payload)
+        internal
+        pure
+        returns (uint8[] memory tokenIDs, uint64[] memory tokenPrices)
+    {
+        uint8 tokenCount = uint8(_payload[0]);
+
+        // Calculate the starting index for each token ID
+        uint8 offset = 1;
+        tokenIDs = new uint8[](tokenCount);
+        for (uint8 i; i < tokenCount; i++) {
+            tokenIDs[i] = uint8(_payload[offset++]);
+        }
+
+        uint8 priceCount = uint8(_payload[offset++]);
+        tokenPrices = new uint64[](priceCount);
+
+        for (uint8 i; i < priceCount; i++) {
+            // Calculate the starting index for each price
+            offset += i * 8;
+            uint64 tokenPrice;
+            // Extract each price
+            assembly {
+                tokenPrice := shr(192, mload(add(add(_payload, 0x20), offset)))
+            }
+            // Store the extracted price
+            tokenPrices[i] = tokenPrice;
+        }
+
+        return (tokenIDs, tokenPrices);
     }
 }
