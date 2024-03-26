@@ -54,9 +54,9 @@ module sui::pay_tests {
         scenario.next_tx(TEST_SENDER_ADDR);
         let mut split_coins = coin.divide_into_n(3, scenario.ctx());
 
-        assert!(vector::length(&split_coins) == 2, 0);
-        let coin1 = vector::pop_back(&mut split_coins);
-        let coin2 = vector::pop_back(&mut split_coins);
+        assert!(split_coins.length() == 2, 0);
+        let coin1 = split_coins.pop_back();
+        let coin2 = split_coins.pop_back();
         assert!(coin1.value() == 3, 0);
         assert!(coin2.value() == 3, 0);
         assert!(coin.value() == 4, 0);

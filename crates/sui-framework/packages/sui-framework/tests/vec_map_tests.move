@@ -77,7 +77,7 @@ module sui::vec_map_tests {
     #[test]
     fun destroy_empty() {
         let m: VecMap<u64, u64> = vec_map::empty();
-        assert!(vec_map::is_empty(&m), 0);
+        assert!(m.is_empty(), 0);
         vec_map::destroy_empty(m)
     }
 
@@ -91,13 +91,13 @@ module sui::vec_map_tests {
             vec_map::insert(&mut m, k, v);
             i = i + 1;
         };
-        assert!(!vec_map::is_empty(&m), 0);
+        assert!(!m.is_empty(), 0);
         assert!(vec_map::size(&m) == 10, 1);
         let mut i = 0;
         // make sure the elements are as expected in all of the getter APIs we expose
         while (i < 10) {
             let k = i + 2;
-            assert!(vec_map::contains(&m, &k), 2);
+            assert!(m.contains(&k), 2);
             let v = *vec_map::get(&m, &k);
             assert!(v == i + 5, 3);
             assert!(vec_map::get_idx(&m, &k) == i, 4);
@@ -111,11 +111,11 @@ module sui::vec_map_tests {
         let mut i = 0;
         while (i < 10) {
             let k = i + 2;
-            let (other_k, v) = vec_map::remove(&mut m, &k);
+            let (other_k, v) = m.remove(&k);
             assert!(k == other_k, 7);
             assert!(v == i + 5, 8);
-            assert!(*vector::borrow(&keys, i) == k, 9);
-            assert!(*vector::borrow(&values, i) == v, 10);
+            assert!(keys[i] == k, 9);
+            assert!(values[i] == v, 10);
 
             i = i + 1;
         }

@@ -12,13 +12,13 @@ module sui::test_random_tests {
         let lengths = vector[1, 31, 32, 33, 63, 64, 65];
 
         let mut i = 0;
-        while (i < vector::length(&lengths)) {
-            let length = *vector::borrow(&lengths, i);
+        while (i < lengths.length()) {
+            let length = lengths[i];
 
             // The length should be the requested length
             let mut random1 = new(b"seed");
             let bytes = next_bytes(&mut random1, length);
-            assert!(vector::length(&bytes) == length, 0);
+            assert!(bytes.length() == length, 0);
 
             // Two generators with different seeds should give different outputs
             let mut random1 = new(b"seed 1");
@@ -71,8 +71,8 @@ module sui::test_random_tests {
         let mut i = 0;
         let bounds = vector[1, 7, 8, 9, 15, 16, 17];
         let tests = 10;
-        while (i < vector::length(&bounds)) {
-            let upper_bound = *vector::borrow(&bounds, i);
+        while (i < bounds.length()) {
+            let upper_bound = bounds[i];
             let mut j = 0;
             while (j < tests) {
                 assert!(next_u8_in_range(&mut random, upper_bound) < upper_bound, 0);
@@ -103,8 +103,8 @@ module sui::test_random_tests {
         let mut i = 0;
         let bounds = vector[1, 7, 8, 9, 15, 16, 17];
         let tests = 10;
-        while (i < vector::length(&bounds)) {
-            let upper_bound = *vector::borrow(&bounds, i);
+        while (i < bounds.length()) {
+            let upper_bound = bounds[i];
             let mut j = 0;
             while (j < tests) {
                 assert!(next_u16_in_range(&mut random, upper_bound) < upper_bound, 0);
@@ -135,8 +135,8 @@ module sui::test_random_tests {
         let mut i = 0;
         let bounds = vector[1, 7, 8, 9, 15, 16, 17];
         let tests = 10;
-        while (i < vector::length(&bounds)) {
-            let upper_bound = *vector::borrow(&bounds, i);
+        while (i < bounds.length()) {
+            let upper_bound = bounds[i];
             let mut j = 0;
             while (j < tests) {
                 assert!(next_u32_in_range(&mut random, upper_bound) < upper_bound, 0);
@@ -167,8 +167,8 @@ module sui::test_random_tests {
         let mut i = 0;
         let bounds = vector[1, 7, 8, 9, 15, 16, 17];
         let tests = 10;
-        while (i < vector::length(&bounds)) {
-            let upper_bound = *vector::borrow(&bounds, i);
+        while (i < bounds.length()) {
+            let upper_bound = bounds[i];
             let mut j = 0;
             while (j < tests) {
                 assert!(next_u64_in_range(&mut random, upper_bound) < upper_bound, 0);
@@ -199,8 +199,8 @@ module sui::test_random_tests {
         let mut i = 0;
         let bounds = vector[1, 7, 8, 9, 15, 16, 17];
         let tests = 10;
-        while (i < vector::length(&bounds)) {
-            let upper_bound = *vector::borrow(&bounds, i);
+        while (i < bounds.length()) {
+            let upper_bound = bounds[i];
             let mut j = 0;
             while (j < tests) {
                 assert!(next_u128_in_range(&mut random, upper_bound) < upper_bound, 0);
@@ -255,8 +255,8 @@ module sui::test_random_tests {
         let mut i = 0;
         let bounds = vector[1, 7, 8, 9, 15, 16, 17];
         let tests = 10;
-        while (i < vector::length(&bounds)) {
-            let upper_bound = *vector::borrow(&bounds, i);
+        while (i < bounds.length()) {
+            let upper_bound = bounds[i];
             let mut j = 0;
             while (j < tests) {
                 assert!(next_u256_in_range(&mut random, upper_bound) < upper_bound, 0);
