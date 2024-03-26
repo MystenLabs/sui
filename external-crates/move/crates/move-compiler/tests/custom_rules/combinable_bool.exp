@@ -1,0 +1,104 @@
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/combinable_bool.move:6:13
+  │
+6 │         if (x == y || z < y) {};
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=`.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/combinable_bool.move:7:13
+  │
+7 │         if (x < y || x == y) {}; // should be x <= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=`.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/combinable_bool.move:8:13
+  │
+8 │         if (x == y || x > y) {}; // should be x >= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `>=`.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+  ┌─ tests/custom_rules/combinable_bool.move:9:13
+  │
+9 │         if (x > y || x == y) {}; // should be x >= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `>=`.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:10:13
+   │
+10 │         if (x != y || x < y) {}; // same as x < y
+   │             ^^^^^^^^^^^^^^^ Unequal (!=) condition is unnecessary and can be removed for simplicity.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:11:13
+   │
+11 │         if (x < y || x != y) {}; // same as x < y
+   │             ^^^^^^^^^^^^^^^ Unequal (!=) condition is unnecessary and can be removed for simplicity.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:12:13
+   │
+12 │         if (x != y || x > y) {}; // same as x > y
+   │             ^^^^^^^^^^^^^^^ Unequal (!=) condition is unnecessary and can be removed for simplicity.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:13:13
+   │
+13 │         if (x > y || x != y) {}; // same as x > y
+   │             ^^^^^^^^^^^^^^^ Unequal (!=) condition is unnecessary and can be removed for simplicity.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:14:13
+   │
+14 │         if (x > y || y != x) {}; // same as x > y
+   │             ^^^^^^^^^^^^^^^ Unequal (!=) condition is unnecessary and can be removed for simplicity.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:15:13
+   │
+15 │         if (x > y && y == x) {}; // same as x >= y
+   │             ^^^^^^^^^^^^^^^ Consider simplifying to `>=`.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:16:13
+   │
+16 │         if (m == n || m < n) {}; // should be m <= n
+   │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=`.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:22:13
+   │
+22 │         if (x == 11 || x < 3) {};
+   │             ^^^^^^^^^^^^^^^^ Consider simplifying to `<=`.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/combinable_bool.move:23:13
+   │
+23 │         if (x == 11 || x < 11) {};
+   │             ^^^^^^^^^^^^^^^^^ Consider simplifying to `<=`.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_bool_conditions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
