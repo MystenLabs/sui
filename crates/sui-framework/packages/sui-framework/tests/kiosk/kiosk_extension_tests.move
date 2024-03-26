@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::kiosk_marketplace_ext {
-    use sui::bag;
     use sui::sui::SUI;
     use sui::coin::Coin;
     use sui::kiosk_extension as ext;
@@ -43,11 +42,7 @@ module sui::kiosk_marketplace_ext {
         assert!(kiosk.has_access(cap), ENotOwner);
         assert!(ext::is_installed<Ext<Market>>(kiosk), ENotInstalled);
 
-        bag::add(
-            ext::storage_mut(Ext<Market> {}, kiosk),
-            Bid<T> {},
-            bid
-        );
+        ext::storage_mut(Ext<Market> {}, kiosk).add(Bid<T> {}, bid);
     }
 
     /// Collection bidding: offer the `T` and receive the bid.
@@ -58,10 +53,7 @@ module sui::kiosk_marketplace_ext {
         policy: &TransferPolicy<T>,
         lock: bool
     ): (TransferRequest<T>, TransferRequest<Market>) {
-        let bid: Coin<SUI> = bag::remove(
-            ext::storage_mut(Ext<Market> {}, destination),
-            Bid<T> {}
-        );
+        let bid: Coin<SUI> = ext::storage_mut(Ext<Market> {}, destination).remove(Bid<T> {});
 
         // form the request while we have all the data (not yet consumed)
         let market_request = policy::new_request(

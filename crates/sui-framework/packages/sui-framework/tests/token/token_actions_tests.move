@@ -50,8 +50,8 @@ module sui::token_actions_tests {
         assert!(request.amount() == 1000, 1);
         assert!(request.sender() == @0x0, 2);
         assert!(request.recipient().is_none(), 3);
-        assert!(option::is_some(&request.spent()), 4);
-        assert!(option::borrow(&request.spent()) == &1000, 5);
+        assert!(request.spent().is_some(), 4);
+        assert!(request.spent().borrow() == &1000, 5);
 
         token::confirm_request_mut(&mut policy, request, ctx);
 

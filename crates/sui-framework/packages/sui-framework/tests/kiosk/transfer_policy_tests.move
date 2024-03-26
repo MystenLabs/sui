@@ -148,6 +148,6 @@ module sui::transfer_policy_tests {
     }
 
     public fun fresh_id(ctx: &mut TxContext): ID {
-        tx_context::fresh_object_address(ctx).to_id()
+        ctx.fresh_object_address().to_id()
     }
 }

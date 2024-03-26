@@ -71,7 +71,7 @@ module sui::witness_policy_tests {
         let mut request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
 
         witness_policy::prove(Proof {}, &policy, &mut request);
-        policy::confirm_request(&policy, request);
+        policy.confirm_request(request);
         test::wrapup(policy, cap, ctx);
     }
 
@@ -85,7 +85,7 @@ module sui::witness_policy_tests {
         witness_policy::set<Asset, Proof>(&mut policy, &cap);
         let request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
 
-        policy::confirm_request(&policy, request);
+        policy.confirm_request(request);
         test::wrapup(policy, cap, ctx);
     }
 
@@ -101,7 +101,7 @@ module sui::witness_policy_tests {
         let mut request = policy::new_request(test::fresh_id(ctx), 0, test::fresh_id(ctx));
 
         witness_policy::prove(Cheat {}, &policy, &mut request);
-        policy::confirm_request(&policy, request);
+        policy.confirm_request(request);
         test::wrapup(policy, cap, ctx);
     }
 }
