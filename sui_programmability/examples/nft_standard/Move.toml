@@ -1,0 +1,9 @@
+[package]
+name = "nft_standard"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework" }
+
+[addresses]
+nft_standard = "0x0"
