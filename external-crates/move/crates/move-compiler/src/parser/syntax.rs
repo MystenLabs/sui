@@ -2761,9 +2761,15 @@ fn parse_function_decl(
         },
         name,
         body: body.unwrap_or_else(|| {
+            let cur_loc = context.tokens.current_token_loc();
             sp(
-                context.tokens.current_token_loc(),
-                FunctionBody_::Defined((vec![], vec![], None, Box::new(None))),
+                cur_loc,
+                FunctionBody_::Defined((
+                    vec![],
+                    vec![],
+                    None,
+                    Box::new(Some(sp(cur_loc, Exp_::UnresolvedError))),
+                )),
             )
         }),
     })
@@ -2840,13 +2846,29 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
                             *diag,
                         );
                         let _ = match_token(context.tokens, Tok::RBrace);
-                        (vec![], vec![], None, Box::new(None))
+                        (
+                            vec![],
+                            vec![],
+                            None,
+                            Box::new(Some(sp(
+                                context.tokens.current_token_loc(),
+                                Exp_::UnresolvedError,
+                            ))),
+                        )
                     }
                 }
             } else {
                 // not even opening brace - not much of a body to parse
                 context.advance_until_at_stop_set(None);
-                (vec![], vec![], None, Box::new(None))
+                (
+                    vec![],
+                    vec![],
+                    None,
+                    Box::new(Some(sp(
+                        context.tokens.current_token_loc(),
+                        Exp_::UnresolvedError,
+                    ))),
+                )
             };
 
             let end_loc = context.tokens.previous_end_loc();
