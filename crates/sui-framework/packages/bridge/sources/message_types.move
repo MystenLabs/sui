@@ -9,23 +9,9 @@ module bridge::message_types {
     const UPDATE_BRIDGE_LIMIT: u8 = 3;
     const UPDATE_ASSET_PRICE: u8 = 4;
 
-    public fun token():u8{
-        TOKEN
-    }
-
-    public fun committee_blocklist():u8{
-        COMMITTEE_BLOCKLIST
-    }
-
-    public fun emergency_op():u8{
-        EMERGENCY_OP
-    }
-
-    public fun update_bridge_limit():u8{
-        UPDATE_BRIDGE_LIMIT
-    }
-
-    public fun update_asset_price():u8{
-        UPDATE_ASSET_PRICE
-    }
+    public fun token(): u8 { TOKEN }
+    public fun committee_blocklist(): u8 { COMMITTEE_BLOCKLIST }
+    public fun emergency_op(): u8 { EMERGENCY_OP }
+    public fun update_bridge_limit(): u8 { UPDATE_BRIDGE_LIMIT }
+    public fun update_asset_price(): u8 { UPDATE_ASSET_PRICE }
 }

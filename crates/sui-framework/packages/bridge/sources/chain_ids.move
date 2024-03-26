@@ -3,8 +3,6 @@
 
 module bridge::chain_ids {
 
-    use std::vector;
-
     // Chain IDs
     const SuiMainnet: u8 = 0;
     const SuiTestnet: u8 = 1;
@@ -22,38 +20,21 @@ module bridge::chain_ids {
         destination: u8,
     }
 
-    public fun sui_mainnet(): u8 {
-        SuiMainnet
-    }
+    public fun sui_mainnet(): u8 { SuiMainnet }
+    public fun sui_testnet(): u8 { SuiTestnet }
+    public fun sui_devnet(): u8 { SuiDevnet }
+    public fun sui_local_test(): u8 { SuiLocalTest }
 
-    public fun sui_testnet(): u8 {
-        SuiTestnet
-    }
+    public fun eth_mainnet(): u8 { EthMainnet }
+    public fun eth_sepolia(): u8 { EthSepolia }
+    public fun eth_local_test(): u8 { EthLocalTest }
 
-    public fun sui_local_test(): u8 {
-        SuiLocalTest
-    }
-
-    public fun sui_devnet(): u8 {
-        SuiDevnet
-    }
-
-    public fun eth_mainnet(): u8 {
-        EthMainnet
-    }
-
-    public fun eth_sepolia(): u8 {
-        EthSepolia
-    }
-
-    public fun eth_local_test(): u8 {
-        EthLocalTest
-    }
-
+    public use fun route_source as BridgeRoute.source;
     public fun route_source(route: &BridgeRoute): &u8 {
         &route.source
     }
 
+    public use fun route_destination as BridgeRoute.destination;
     public fun route_destination(route: &BridgeRoute): &u8 {
         &route.destination
     }
@@ -93,13 +74,13 @@ module bridge::chain_ids {
 
     public fun is_valid_route(source: u8, destination: u8): bool {
         let route = BridgeRoute { source, destination };
-        return vector::contains(&valid_routes(), &route)
+        valid_routes().contains(&route)
     }
 
     // Checks and return BridgeRoute if the route is supported by the bridge.
     public fun get_route(source: u8, destination: u8): BridgeRoute {
         let route = BridgeRoute { source, destination };
-        assert!(vector::contains(&valid_routes(), &route), EInvalidBridgeRoute);
+        assert!(valid_routes().contains(&route), EInvalidBridgeRoute);
         route
     }
 }

@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::crypto {
-
-    use std::vector;
     use sui::ecdsa_k1;
     use sui::hash::keccak256;
     #[test_only]
@@ -13,11 +11,10 @@ module bridge::crypto {
         // Decompress pub key
         let decompressed = ecdsa_k1::decompress_pubkey(&compressed_pub_key);
 
-        // Remove first byte
+        // Skip the first byte
         let (mut i, mut decompressed_64) = (1, vector[]);
         while (i < 65) {
-            let value = vector::borrow(&decompressed, i);
-            vector::push_back(&mut decompressed_64, *value);
+            decompressed_64.push_back(decompressed[i]);
             i = i + 1;
         };
 
@@ -28,7 +25,7 @@ module bridge::crypto {
         let mut address = vector[];
         let mut i = 12;
         while (i < 32) {
-            vector::push_back(&mut address, *vector::borrow(&hash, i));
+            address.push_back(hash[i]);
             i = i + 1;
         };
         address
@@ -38,6 +35,7 @@ module bridge::crypto {
     fun test_pub_key_to_eth_address() {
         let validator_pub_key = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
         let expected_address = hex::decode(b"b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7");
+
         assert!(ecdsa_pub_key_to_eth_address(validator_pub_key) == expected_address, 0);
     }
 }
