@@ -4,6 +4,7 @@
 use crate::create_remote_store_client;
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
 use anyhow::Result;
+use backoff::backoff::Backoff;
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use notify::RecursiveMode;
@@ -85,7 +86,7 @@ impl CheckpointReader {
         (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark) <= checkpoint_number
     }
 
-    async fn remote_fetch_checkpoint(
+    async fn remote_fetch_checkpoint_internal(
         store: &dyn ObjectStore,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
@@ -93,6 +94,27 @@ impl CheckpointReader {
         let response = store.get(&path).await?;
         let bytes = response.bytes().await?;
         Blob::from_bytes::<CheckpointData>(&bytes)
+    }
+
+    async fn remote_fetch_checkpoint(
+        store: &dyn ObjectStore,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> Result<CheckpointData> {
+        let mut backoff = backoff::ExponentialBackoff::default();
+        backoff.max_elapsed_time = Some(Duration::from_secs(60));
+        backoff.initial_interval = Duration::from_millis(100);
+        backoff.current_interval = backoff.initial_interval;
+        backoff.multiplier = 1.0;
+        loop {
+            match Self::remote_fetch_checkpoint_internal(store, checkpoint_number).await {
+                Ok(data) => return Ok(data),
+                Err(err) if err.to_string().contains("404") => match backoff.next_backoff() {
+                    Some(duration) => tokio::time::sleep(duration).await,
+                    None => return Err(err),
+                },
+                Err(err) => return Err(err),
+            }
+        }
     }
 
     fn start_remote_fetcher(&mut self) -> mpsc::Receiver<Result<CheckpointData>> {
