@@ -25,7 +25,7 @@ module sui::item_locked_policy {
 
     /// Prove that an item a
     public fun prove<T>(request: &mut TransferRequest<T>, kiosk: &Kiosk) {
-        let item = policy::item(request);
+        let item = request.item();
         assert!(kiosk::has_item(kiosk, item) && kiosk::is_locked(kiosk, item), ENotInKiosk);
         policy::add_receipt(Rule {}, request)
     }
