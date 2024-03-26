@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
-/// Only uncommited and last committed blocks are cached in memory.
+/// Only uncommitted and last committed blocks are cached in memory.
 /// The rest of blocks are stored on disk.
 /// Refs to cached blocks and additional refs are cached as well, to speed up existence checks.
 ///
