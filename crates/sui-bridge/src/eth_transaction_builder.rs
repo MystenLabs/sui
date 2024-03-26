@@ -8,18 +8,13 @@ use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeCommitteeValiditySignInfo,
     LimitUpdateAction, VerifiedCertifiedBridgeAction,
 };
+use crate::utils::EthSigner;
 use crate::{
     abi::EthSuiBridge,
     types::{BridgeAction, EmergencyAction},
 };
-use ethers::core::k256::ecdsa::SigningKey;
-use ethers::middleware::SignerMiddleware;
 use ethers::prelude::*;
-use ethers::providers::{Http, Provider};
-use ethers::signers::Wallet;
 use ethers::types::Address as EthAddress;
-
-pub type EthSigner = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
 pub async fn build_eth_transaction(
     contract_address: EthAddress,

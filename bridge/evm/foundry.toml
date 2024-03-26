@@ -7,7 +7,7 @@ libs = ['lib']
 solc = "0.8.20"
 build_info = true
 extra_output = ["storageLayout"]
-fs_permissions = [{ access = "read", path = "./"}]
+fs_permissions = [{ access = "read", path = "/"}]
 gas_reports = ["SuiBridge"]
 [fmt] 
 line_length = 100
