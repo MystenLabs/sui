@@ -189,6 +189,9 @@ module sui_system::staking_pool {
         principal
     }
 
+    /// Allows calling `.into_balance()` on `StakedSui` to invoke `unwrap_staked_sui`
+    public use fun unwrap_staked_sui as StakedSui.into_balance;
+
     // ==== functions called at epoch boundaries ===
 
     /// Called at epoch advancement times to add rewards (in SUI) to the staking pool.
@@ -288,6 +291,9 @@ module sui_system::staking_pool {
 
     public fun staked_sui_amount(staked_sui: &StakedSui): u64 { staked_sui.principal.value() }
 
+    /// Allows calling `.amount()` on `StakedSui` to invoke `staked_sui_amount`
+    public use fun staked_sui_amount as StakedSui.amount;
+
     public fun stake_activation_epoch(staked_sui: &StakedSui): u64 {
         staked_sui.stake_activation_epoch
     }
@@ -326,6 +332,9 @@ module sui_system::staking_pool {
         transfer::transfer(split(stake, split_amount, ctx), ctx.sender());
     }
 
+    /// Allows calling `.split_to_sender()` on `StakedSui` to invoke `split_staked_sui`
+    public use fun split_staked_sui as StakedSui.split_to_sender;
+
     /// Consume the staked sui `other` and add its value to `self`.
     /// Aborts if some of the staking parameters are incompatible (pool id, stake activation epoch, etc.)
     public entry fun join_staked_sui(self: &mut StakedSui, other: StakedSui) {
@@ -341,12 +350,14 @@ module sui_system::staking_pool {
         self.principal.join(principal);
     }
 
+    /// Allows calling `.join()` on `StakedSui` to invoke `join_staked_sui`
+    public use fun join_staked_sui as StakedSui.join;
+
     /// Returns true if all the staking parameters of the staked sui except the principal are identical
     public fun is_equal_staking_metadata(self: &StakedSui, other: &StakedSui): bool {
         (self.pool_id == other.pool_id) &&
         (self.stake_activation_epoch == other.stake_activation_epoch)
     }
-
 
     public fun pool_token_exchange_rate_at_epoch(pool: &StakingPool, epoch: u64): PoolTokenExchangeRate {
         // If the pool is preactive then the exchange rate is always 1:1.
