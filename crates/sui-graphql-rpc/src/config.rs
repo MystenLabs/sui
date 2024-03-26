@@ -4,7 +4,6 @@
 use crate::functional_group::FunctionalGroup;
 use crate::types::big_int::BigInt;
 use async_graphql::*;
-use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
@@ -227,6 +226,15 @@ pub struct TxExecFullNodeConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ZkLoginConfig {
     pub env: ZkLoginEnv,
+}
+
+/// Enum to specify the environment to use for verifying keys.
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Copy)]
+pub enum ZkLoginEnv {
+    /// Use the secure global verifying key derived from ceremony.
+    Prod,
+    /// Use the insecure global verifying key.
+    Test,
 }
 
 /// The enabled features and service limits configured by the server.
@@ -486,6 +494,12 @@ impl Default for BackgroundTasksConfig {
         Self {
             watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
         }
+    }
+}
+
+impl Default for ZkLoginEnv {
+    fn default() -> Self {
+        Self::Prod
     }
 }
 

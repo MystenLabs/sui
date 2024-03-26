@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::ZkLoginConfig;
+use crate::config::{ZkLoginConfig, ZkLoginEnv as LocalZkLoginEnv};
 use crate::error::Error;
 use crate::types::base64::Base64;
 use crate::types::dynamic_field::{DynamicField, DynamicFieldName};
@@ -9,6 +9,7 @@ use crate::types::epoch::Epoch;
 use crate::types::sui_address::SuiAddress;
 use crate::types::type_filter::ExactTypeFilter;
 use async_graphql::*;
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use shared_crypto::intent::{
     AppId, Intent, IntentMessage, IntentScope, IntentVersion, PersonalMessage,
@@ -107,8 +108,13 @@ pub(crate) async fn verify_zklogin_signature(
             }
         }
     }
-    let verify_params =
-        VerifyParams::new(oidc_provider_jwks, vec![], zklogin_env_native, true, true);
+    let verify_params = VerifyParams::new(
+        oidc_provider_jwks,
+        vec![],
+        zklogin_env_native.into(),
+        true,
+        true,
+    );
 
     let bytes = bytes.0;
     match intent_scope {
@@ -169,4 +175,13 @@ pub(crate) async fn verify_zklogin_signature(
 /// Format the error message for failed JWK read.
 fn as_jwks_read_error(e: String) -> Error {
     Error::Internal(format!("Failed to read JWK from system object 0x7: {}", e))
+}
+
+impl From<LocalZkLoginEnv> for ZkLoginEnv {
+    fn from(env: LocalZkLoginEnv) -> Self {
+        match env {
+            LocalZkLoginEnv::Test => ZkLoginEnv::Test,
+            LocalZkLoginEnv::Prod => ZkLoginEnv::Prod,
+        }
+    }
 }
