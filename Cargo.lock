@@ -12722,6 +12722,7 @@ dependencies = [
  "sui-enum-compat-util",
  "sui-json",
  "sui-macros",
+ "sui-package-resolver",
  "sui-protocol-config",
  "sui-types",
  "tabled",
@@ -13107,6 +13108,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "eyre",
+ "futures",
  "hyper",
  "insta",
  "lru 0.10.0",
@@ -13857,6 +13859,7 @@ version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
+ "async-trait",
  "bcs",
  "bincode",
  "byteorder",

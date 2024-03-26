@@ -1,35 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::result::Result::Ok;
-use itertools::Itertools;
 use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use tap::Tap;
 
 use async_trait::async_trait;
+use core::result::Result::Ok;
 use diesel::dsl::max;
 use diesel::upsert::excluded;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
-use move_bytecode_utils::module_cache::SyncModuleCache;
+use itertools::Itertools;
+use tap::Tap;
 use tracing::info;
 
-use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::object::ObjectRead;
+use sui_types::base_types::ObjectID;
 
+use crate::db::PgConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
-
-use crate::db::PgConnectionPool;
 use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
@@ -44,7 +40,6 @@ use crate::schema::{
     transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::store::module_resolver::IndexerStorePackageModuleResolver;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
@@ -107,7 +102,6 @@ SET object_version = EXCLUDED.object_version,
 #[derive(Clone)]
 pub struct PgIndexerStore {
     blocking_cp: PgConnectionPool,
-    module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>>,
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
@@ -116,9 +110,6 @@ pub struct PgIndexerStore {
 
 impl PgIndexerStore {
     pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
-        let module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>> = Arc::new(
-            SyncModuleCache::new(IndexerStorePackageModuleResolver::new(blocking_cp.clone())),
-        );
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
             .parse::<usize>()
@@ -132,7 +123,6 @@ impl PgIndexerStore {
 
         Self {
             blocking_cp,
-            module_cache,
             metrics,
             parallel_chunk_size,
             parallel_objects_chunk_size,
@@ -164,31 +154,6 @@ impl PgIndexerStore {
                 .map(|v| v.map(|v| v as u64))
         })
         .context("Failed reading latest object snapshot checkpoint sequence number from PostgresDB")
-    }
-
-    // Note: here we treat Deleted as NotExists too
-    fn get_object_read(
-        &self,
-        object_id: ObjectID,
-        version: Option<SequenceNumber>,
-    ) -> Result<ObjectRead, IndexerError> {
-        // TOOD: read remote object_history kv store
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            let query =
-                objects::dsl::objects.filter(objects::dsl::object_id.eq(object_id.to_vec()));
-            let boxed_query = if let Some(version) = version {
-                query
-                    .filter(objects::dsl::object_version.eq(version.value() as i64))
-                    .into_boxed()
-            } else {
-                query.into_boxed()
-            };
-            match boxed_query.first::<StoredObject>(conn).optional()? {
-                None => Ok(ObjectRead::NotExists(object_id)),
-                Some(obj) => obj.try_into_object_read(self.module_cache.as_ref()),
-            }
-        })
-        .context("Failed to read object from PostgresDB")
     }
 
     fn persist_display_updates(
@@ -849,8 +814,6 @@ impl PgIndexerStore {
 
 #[async_trait]
 impl IndexerStore for PgIndexerStore {
-    type ModuleCache = SyncModuleCache<IndexerStorePackageModuleResolver>;
-
     async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_latest_tx_checkpoint_sequence_number())
             .await
@@ -863,15 +826,6 @@ impl IndexerStore for PgIndexerStore {
             this.get_latest_object_snapshot_checkpoint_sequence_number()
         })
         .await
-    }
-
-    async fn get_object_read(
-        &self,
-        object_id: ObjectID,
-        version: Option<SequenceNumber>,
-    ) -> Result<ObjectRead, IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.get_object_read(object_id, version))
-            .await
     }
 
     async fn persist_objects(
@@ -1123,10 +1077,6 @@ impl IndexerStore for PgIndexerStore {
             this.get_network_total_transactions_by_end_of_epoch(epoch)
         })
         .await
-    }
-
-    fn module_cache(&self) -> Arc<Self::ModuleCache> {
-        self.module_cache.clone()
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -1,24 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    db::{PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection},
-    errors::IndexerError,
-    models::{
-        checkpoints::StoredCheckpoint,
-        display::StoredDisplay,
-        epoch::StoredEpochInfo,
-        events::StoredEvent,
-        objects::{CoinBalance, ObjectRefColumn, StoredObject},
-        packages::StoredPackage,
-        transactions::StoredTransaction,
-        tx_indices::TxSequenceNumber,
-    },
-    schema::{
-        checkpoints, display, epochs, events, objects, objects_snapshot, packages, transactions,
-    },
-    types::{IndexerResult, OwnerType},
-};
+use std::{collections::HashMap, sync::Arc};
+
 use anyhow::{anyhow, Result};
 use cached::proc_macro::cached;
 use cached::SizedCache;
@@ -26,15 +10,13 @@ use diesel::{
     dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
     PgConnection, QueryDsl, RunQueryDsl, TextExpressionMethods,
 };
+use itertools::{any, Itertools};
+use tap::TapFallible;
+
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
-use itertools::{any, Itertools};
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::StructTag;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::{Arc, RwLock},
-};
 use sui_json_rpc_types::DisplayFieldsResponse;
 use sui_json_rpc_types::{
     Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
@@ -44,20 +26,38 @@ use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
     SuiTransactionBlockResponse, TransactionFilter,
 };
-use sui_types::{
-    balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName, object::MoveObject,
-};
+use sui_package_resolver::Package;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
+use sui_types::effects::TransactionEvents;
+use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     is_system_package,
-    move_package::MovePackage,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
 use sui_types::{coin::CoinMetadata, event::EventID};
+
+use crate::{
+    db::{PgConnectionConfig, PgConnectionPool, PgConnectionPoolConfig, PgPoolConnection},
+    errors::IndexerError,
+    models::{
+        checkpoints::StoredCheckpoint,
+        display::StoredDisplay,
+        epoch::StoredEpochInfo,
+        events::StoredEvent,
+        objects::{CoinBalance, ObjectRefColumn, StoredObject},
+        transactions::{tx_events_to_sui_tx_events, StoredTransaction},
+        tx_indices::TxSequenceNumber,
+    },
+    schema::{checkpoints, display, epochs, events, objects, objects_snapshot, transactions},
+    store::module_resolver::IndexerStorePackageResolver,
+    types::{IndexerResult, OwnerType},
+};
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
@@ -65,8 +65,8 @@ pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
 #[derive(Clone)]
 pub struct IndexerReader {
-    pool: crate::db::PgConnectionPool,
-    package_cache: PackageCache,
+    pool: PgConnectionPool,
+    package_resolver: Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>,
 }
 
 // Impl for common initialization and utilities
@@ -94,9 +94,13 @@ impl IndexerReader {
             .build(manager)
             .map_err(|e| anyhow!("Failed to initialize connection pool. Error: {:?}. If Error is None, please check whether the configured pool size (currently {}) exceeds the maximum number of connections allowed by the database.", e, config.pool_size))?;
 
+        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
+        let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
+        let package_resolver = Arc::new(Resolver::new(package_cache));
+
         Ok(Self {
             pool,
-            package_cache: Default::default(),
+            package_resolver,
         })
     }
 
@@ -253,76 +257,44 @@ impl IndexerReader {
         &self,
         object_id: ObjectID,
     ) -> Result<ObjectRead, IndexerError> {
-        self.spawn_blocking(move |this| this.get_object_read(&object_id))
-            .await
+        let stored_object = self
+            .spawn_blocking(move |this| this.get_object_raw(object_id))
+            .await?;
+
+        if let Some(object) = stored_object {
+            object
+                .try_into_object_read(self.package_resolver.clone())
+                .await
+        } else {
+            Ok(ObjectRead::NotExists(object_id))
+        }
     }
 
-    fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, IndexerError> {
+    fn get_object_raw(&self, object_id: ObjectID) -> Result<Option<StoredObject>, IndexerError> {
         let id = object_id.to_vec();
-
         let stored_object = self.run_query(|conn| {
             objects::dsl::objects
                 .filter(objects::dsl::object_id.eq(id))
                 .first::<StoredObject>(conn)
                 .optional()
         })?;
-
-        if let Some(object) = stored_object {
-            object.try_into_object_read(self)
-        } else {
-            Ok(ObjectRead::NotExists(*object_id))
-        }
+        Ok(stored_object)
     }
 
-    fn get_package_from_db(
-        &self,
-        package_id: &ObjectID,
-    ) -> Result<Option<MovePackage>, IndexerError> {
-        let package_id = package_id.to_vec();
-        let stored_package = self.run_query(|conn| {
-            packages::dsl::packages
-                .filter(packages::dsl::package_id.eq(package_id))
-                .first::<StoredPackage>(conn)
-                .optional()
-        })?;
-
-        let stored_package = match stored_package {
-            Some(pkg) => pkg,
-            None => return Ok(None),
-        };
-
-        let move_package =
-            bcs::from_bytes::<MovePackage>(&stored_package.move_package).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Error deserializing move package. Error: {}",
+    pub async fn get_package(&self, package_id: ObjectID) -> Result<Package, IndexerError> {
+        let store = self.package_resolver.package_store();
+        let pkg = store
+            .fetch(package_id.into())
+            .await
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Fail to fetch package from package store with error {:?}",
                     e
                 ))
-            })?;
-        Ok(Some(move_package))
-    }
-
-    pub fn get_package(&self, package_id: &ObjectID) -> Result<Option<MovePackage>, IndexerError> {
-        if let Some(package) = self.package_cache.get(package_id) {
-            return Ok(Some(package));
-        }
-
-        match self.get_package_from_db(package_id) {
-            Ok(Some(package)) => {
-                self.package_cache.insert(*package_id, package.clone());
-
-                Ok(Some(package))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn get_package_in_blocking_task(
-        &self,
-        package_id: ObjectID,
-    ) -> Result<Option<MovePackage>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_package(&package_id))
-            .await
+            })?
+            .as_ref()
+            .clone();
+        Ok(pkg)
     }
 
     pub fn get_epoch_info_from_db(
@@ -570,15 +542,30 @@ impl IndexerReader {
         })
     }
 
-    fn stored_transaction_to_transaction_block(
+    async fn stored_transaction_to_transaction_block(
         &self,
         stored_txes: Vec<StoredTransaction>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        stored_txes
+        let mut tx_block_responses_futures = vec![];
+        for stored_tx in stored_txes {
+            let package_resolver_clone = self.package_resolver();
+            let options_clone = options.clone();
+            tx_block_responses_futures.push(tokio::task::spawn(
+                stored_tx
+                    .try_into_sui_transaction_block_response(options_clone, package_resolver_clone),
+            ));
+        }
+
+        let tx_blocks = futures::future::join_all(tx_block_responses_futures)
+            .await
             .into_iter()
-            .map(|stored_tx| stored_tx.try_into_sui_transaction_block_response(&options, self))
-            .collect::<IndexerResult<Vec<_>>>()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Failed to join all tx block futures: {}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Failed to collect tx block futures: {}", e))?;
+        Ok(tx_blocks)
     }
 
     fn multi_get_transactions_with_sequence_numbers(
@@ -680,19 +667,6 @@ impl IndexerReader {
         })
     }
 
-    pub async fn query_events_in_blocking_task(
-        &self,
-        filter: EventFilter,
-        cursor: Option<EventID>,
-        limit: usize,
-        descending_order: bool,
-    ) -> IndexerResult<Vec<SuiEvent>> {
-        self.spawn_blocking(move |this| {
-            this.query_events_impl(filter, cursor, limit, descending_order)
-        })
-        .await
-    }
-
     fn filter_object_id_with_type(
         &self,
         object_ids: Vec<ObjectID>,
@@ -740,7 +714,7 @@ impl IndexerReader {
         })
     }
 
-    fn query_transaction_blocks_by_checkpoint_impl(
+    async fn query_transaction_blocks_by_checkpoint_impl(
         &self,
         checkpoint_seq: u64,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -766,10 +740,13 @@ impl IndexerReader {
             query = query.order(transactions::dsl::tx_sequence_number.asc());
         }
 
-        let stored_txes =
-            self.run_query(|conn| query.limit((limit) as i64).load::<StoredTransaction>(conn))?;
-
+        let stored_txes = self
+            .spawn_blocking(move |this| {
+                this.run_query(|conn| query.limit((limit) as i64).load::<StoredTransaction>(conn))
+            })
+            .await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
+            .await
     }
 
     pub async fn query_transaction_blocks_in_blocking_task(
@@ -780,13 +757,11 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        self.spawn_blocking(move |this| {
-            this.query_transaction_blocks_impl(filter, options, cursor, limit, is_descending)
-        })
-        .await
+        self.query_transaction_blocks_impl(filter, options, cursor, limit, is_descending)
+            .await
     }
 
-    fn query_transaction_blocks_impl(
+    async fn query_transaction_blocks_impl(
         &self,
         filter: Option<TransactionFilter>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -817,13 +792,15 @@ impl IndexerReader {
         let (table_name, main_where_clause) = match filter {
             // Processed above
             Some(TransactionFilter::Checkpoint(seq)) => {
-                return self.query_transaction_blocks_by_checkpoint_impl(
-                    seq,
-                    options,
-                    cursor_tx_seq,
-                    limit,
-                    is_descending,
-                )
+                return self
+                    .query_transaction_blocks_by_checkpoint_impl(
+                        seq,
+                        options,
+                        cursor_tx_seq,
+                        limit,
+                        is_descending,
+                    )
+                    .await
             }
             // FIXME: sanitize module & function
             Some(TransactionFilter::MoveFunction {
@@ -988,18 +965,20 @@ impl IndexerReader {
             options,
             Some(is_descending),
         )
+        .await
     }
 
-    fn multi_get_transaction_block_response_impl(
+    async fn multi_get_transaction_block_response_impl(
         &self,
         digests: &[TransactionDigest],
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
         let stored_txes = self.multi_get_transactions(digests)?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
+            .await
     }
 
-    fn multi_get_transaction_block_response_by_sequence_numbers(
+    async fn multi_get_transaction_block_response_by_sequence_numbers(
         &self,
         tx_sequence_numbers: Vec<i64>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -1009,6 +988,7 @@ impl IndexerReader {
         let stored_txes: Vec<StoredTransaction> =
             self.multi_get_transactions_with_sequence_numbers(tx_sequence_numbers, is_descending)?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
+            .await
     }
 
     pub async fn multi_get_transaction_block_response_in_blocking_task(
@@ -1016,44 +996,40 @@ impl IndexerReader {
         digests: Vec<TransactionDigest>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        self.spawn_blocking(move |this| {
-            this.multi_get_transaction_block_response_impl(&digests, options)
-        })
-        .await
+        self.multi_get_transaction_block_response_impl(&digests, options)
+            .await
     }
 
-    fn get_transaction_events_impl(
+    pub async fn get_transaction_events_in_blocking_task(
         &self,
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        let (timestamp_ms, serialized_events) = self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                .select((transactions::timestamp_ms, transactions::events))
-                .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
-        })?;
+        let (timestamp_ms, serialized_events) = self
+            .spawn_blocking(move |this| {
+                this.run_query(|conn| {
+                    transactions::table
+                        .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+                        .select((transactions::timestamp_ms, transactions::events))
+                        .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
+                })
+            })
+            .await?;
 
         let events = serialized_events
             .into_iter()
             .flatten()
             .map(|event| bcs::from_bytes::<sui_types::event::Event>(&event))
             .collect::<Result<Vec<_>, _>>()?;
+        let tx_events = TransactionEvents { data: events };
 
-        events
-            .into_iter()
-            .enumerate()
-            .map(|(i, event)| {
-                let layout = MoveObject::get_layout_from_struct_tag(event.type_.clone(), self)?;
-                sui_json_rpc_types::SuiEvent::try_from(
-                    event,
-                    digest,
-                    i as u64,
-                    Some(timestamp_ms as u64),
-                    layout,
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
+        let sui_tx_events = tx_events_to_sui_tx_events(
+            tx_events,
+            self.package_resolver(),
+            digest,
+            timestamp_ms as u64,
+        )
+        .await?;
+        Ok(sui_tx_events.map_or(vec![], |ste| ste.data))
     }
 
     fn query_events_by_tx_digest_query(
@@ -1095,7 +1071,7 @@ impl IndexerReader {
         ))
     }
 
-    fn query_events_impl(
+    pub async fn query_events_in_blocking_task(
         &self,
         filter: EventFilter,
         cursor: Option<EventID>,
@@ -1222,20 +1198,28 @@ impl IndexerReader {
             )
         };
         tracing::debug!("query events: {}", query);
-        let stored_events =
-            self.run_query(|conn| diesel::sql_query(query).load::<StoredEvent>(conn))?;
-        stored_events
-            .into_iter()
-            .map(|se| se.try_into_sui_event(self))
-            .collect()
-    }
+        let stored_events = self
+            .spawn_blocking(move |this| {
+                this.run_query(|conn| diesel::sql_query(query).load::<StoredEvent>(conn))
+            })
+            .await?;
 
-    pub async fn get_transaction_events_in_blocking_task(
-        &self,
-        digest: TransactionDigest,
-    ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_transaction_events_impl(digest))
+        let mut sui_event_futures = vec![];
+        for stored_event in stored_events {
+            sui_event_futures.push(tokio::task::spawn(
+                stored_event.try_into_sui_event(self.package_resolver.clone()),
+            ));
+        }
+
+        let sui_events = futures::future::join_all(sui_event_futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Failed to join sui event futures: {}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Failed to collect sui event futures: {}", e))?;
+        Ok(sui_events)
     }
 
     pub async fn get_dynamic_fields_in_blocking_task(
@@ -1244,19 +1228,11 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
-        self.spawn_blocking(move |this| {
-            this.get_dynamic_fields_impl(parent_object_id, cursor, limit)
-        })
-        .await
-    }
-
-    fn get_dynamic_fields_impl(
-        &self,
-        parent_object_id: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
-        let objects = self.get_dynamic_fields_raw(parent_object_id, cursor, limit)?;
+        let objects = self
+            .spawn_blocking(move |this| {
+                this.get_dynamic_fields_raw(parent_object_id, cursor, limit)
+            })
+            .await?;
 
         if any(objects.iter(), |o| o.df_object_id.is_none()) {
             return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -1281,10 +1257,21 @@ impl IndexerReader {
             .collect::<Vec<_>>();
 
         let object_refs = self.get_object_refs(dfo_ids)?;
-        let mut dynamic_fields = objects
+        let mut df_futures = vec![];
+        for object in objects {
+            let package_resolver_clone = self.package_resolver.clone();
+            df_futures.push(tokio::task::spawn(
+                object.try_into_expectant_dynamic_field_info(package_resolver_clone),
+            ));
+        }
+        let mut dynamic_fields = futures::future::join_all(df_futures)
+            .await
             .into_iter()
-            .map(|object| object.try_into_expectant_dynamic_field_info(self))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Error joining DF futures: {:?}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Error calling DF try_into function: {:?}", e))?;
 
         for df in dynamic_fields.iter_mut() {
             if let Some(obj_ref) = object_refs.get(&df.object_id) {
@@ -1330,24 +1317,23 @@ impl IndexerReader {
         Ok(objects)
     }
 
-    fn bcs_name_from_dynamic_field_name(
+    pub async fn bcs_name_from_dynamic_field_name(
         &self,
         name: &DynamicFieldName,
     ) -> Result<Vec<u8>, IndexerError> {
-        let layout =
-            move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(&name.type_, self)?;
-        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
-        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
-        Ok(name_bcs_value)
-    }
-
-    pub async fn bcs_name_from_dynamic_field_name_in_blocking_task(
-        &self,
-        name: &DynamicFieldName,
-    ) -> Result<Vec<u8>, IndexerError> {
-        let name = name.clone();
-        self.spawn_blocking(move |this| this.bcs_name_from_dynamic_field_name(&name))
+        let move_type_layout = self
+            .package_resolver()
+            .type_layout(name.type_.clone())
             .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to get type layout for type {}: {}",
+                    name.type_, e
+                ))
+            })?;
+        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&move_type_layout)?;
+        Ok(name_bcs_value)
     }
 
     fn get_object_refs(
@@ -1608,35 +1594,9 @@ impl IndexerReader {
             latest_checkpoint_sequence,
         ))
     }
-}
 
-#[derive(Clone, Default)]
-struct PackageCache {
-    inner: Arc<RwLock<BTreeMap<ObjectID, MovePackage>>>,
-}
-
-impl PackageCache {
-    fn insert(&self, object_id: ObjectID, package: MovePackage) {
-        self.inner.write().unwrap().insert(object_id, package);
-    }
-
-    fn get(&self, object_id: &ObjectID) -> Option<MovePackage> {
-        self.inner.read().unwrap().get(object_id).cloned()
-    }
-}
-
-impl move_core_types::resolver::ModuleResolver for IndexerReader {
-    type Error = IndexerError;
-
-    fn get_module(
-        &self,
-        id: &move_core_types::language_storage::ModuleId,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = ObjectID::from(*id.address());
-        let module_name = id.name().to_string();
-        Ok(self
-            .get_package(&package_id)?
-            .and_then(|package| package.serialized_module_map().get(&module_name).cloned()))
+    pub fn package_resolver(&self) -> Arc<Resolver<impl PackageStore>> {
+        self.package_resolver.clone()
     }
 }
 
@@ -1656,30 +1616,6 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, Some(version))
             .map_err(sui_types::storage::error::Error::custom)
-    }
-}
-
-impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
-    type Error = IndexerError;
-    type Item = move_binary_format::CompiledModule;
-
-    fn get_module_by_id(
-        &self,
-        id: &move_core_types::language_storage::ModuleId,
-    ) -> Result<Option<Self::Item>, Self::Error> {
-        let package_id = ObjectID::from(*id.address());
-        let module_name = id.name().to_string();
-        // TODO: we need a cache here for deserialized module and take care of package upgrades
-        self.get_package(&package_id)?
-            .and_then(|package| package.serialized_module_map().get(&module_name).cloned())
-            .map(|bytes| move_binary_format::CompiledModule::deserialize_with_defaults(&bytes))
-            .transpose()
-            .map_err(|e| {
-                IndexerError::ModuleResolutionError(format!(
-                    "Error deserializing module {}: {}",
-                    id, e
-                ))
-            })
     }
 }
 

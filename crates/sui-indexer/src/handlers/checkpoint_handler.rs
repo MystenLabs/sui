@@ -43,7 +43,7 @@ use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::PgConnectionPool;
-use crate::store::module_resolver::{IndexerStorePackageModuleResolver, InterimPackageResolver};
+use crate::store::module_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
     IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
@@ -142,9 +142,9 @@ where
         let package_objects = Self::get_package_objects(checkpoints);
 
         let pg_blocking_cp = self.pg_blocking_cp()?;
-        let module_package_db_resolver = IndexerStorePackageModuleResolver::new(pg_blocking_cp);
+        let package_db_resolver = IndexerStorePackageResolver::new(pg_blocking_cp);
         let in_mem_package_resolver = InterimPackageResolver::new(
-            module_package_db_resolver,
+            package_db_resolver,
             self.package_buffer.clone(),
             &package_objects,
             self.metrics.clone(),

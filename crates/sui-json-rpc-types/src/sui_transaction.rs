@@ -1,11 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::balance_changes::BalanceChange;
-use crate::object_changes::ObjectChange;
-use crate::sui_transaction::GenericSignature::Signature;
-use crate::{Filter, Page, SuiEvent, SuiObjectRef};
+use std::fmt::{self, Display, Formatter, Write};
+use std::sync::Arc;
+
 use enum_dispatch::enum_dispatch;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use sui_package_resolver::{PackageStore, Resolver};
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+};
+
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -15,10 +23,6 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_metrics::monitored_scope;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
@@ -47,10 +51,11 @@ use sui_types::transaction::{
 };
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use tabled::{
-    builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
-};
+
+use crate::balance_changes::BalanceChange;
+use crate::object_changes::ObjectChange;
+use crate::sui_transaction::GenericSignature::Signature;
+use crate::{Filter, Page, SuiEvent, SuiObjectRef};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -473,6 +478,86 @@ impl SuiTransactionBlockKind {
             }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
+            ),
+            TransactionKind::AuthenticatorStateUpdate(update) => {
+                Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
+                    epoch: update.epoch,
+                    round: update.round,
+                    new_active_jwks: update
+                        .new_active_jwks
+                        .into_iter()
+                        .map(SuiActiveJwk::from)
+                        .collect(),
+                })
+            }
+            TransactionKind::RandomnessStateUpdate(update) => {
+                Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
+                    epoch: update.epoch,
+                    randomness_round: update.randomness_round.0,
+                    random_bytes: update.random_bytes,
+                })
+            }
+            TransactionKind::EndOfEpochTransaction(end_of_epoch_tx) => {
+                Self::EndOfEpochTransaction(SuiEndOfEpochTransaction {
+                    transactions: end_of_epoch_tx
+                        .into_iter()
+                        .map(|tx| match tx {
+                            EndOfEpochTransactionKind::ChangeEpoch(e) => {
+                                SuiEndOfEpochTransactionKind::ChangeEpoch(e.into())
+                            }
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateCreate
+                            }
+                            EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateExpire(
+                                    SuiAuthenticatorStateExpire {
+                                        min_epoch: expire.min_epoch,
+                                    },
+                                )
+                            }
+                            EndOfEpochTransactionKind::RandomnessStateCreate => {
+                                SuiEndOfEpochTransactionKind::RandomnessStateCreate
+                            }
+                            EndOfEpochTransactionKind::DenyListStateCreate => {
+                                SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
+                            }
+                        })
+                        .collect(),
+                })
+            }
+        })
+    }
+
+    async fn try_from_with_package_resolver(
+        tx: TransactionKind,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(match tx {
+            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(e.into()),
+            TransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
+                objects: g.objects.iter().map(GenesisObject::id).collect(),
+            }),
+            TransactionKind::ConsensusCommitPrologue(p) => {
+                Self::ConsensusCommitPrologue(SuiConsensusCommitPrologue {
+                    epoch: p.epoch,
+                    round: p.round,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                })
+            }
+            TransactionKind::ConsensusCommitPrologueV2(p) => {
+                Self::ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                })
+            }
+            TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
+                SuiProgrammableTransactionBlock::try_from_with_package_resolver(
+                    p,
+                    package_resolver,
+                )
+                .await?,
             ),
             TransactionKind::AuthenticatorStateUpdate(update) => {
                 Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
@@ -1330,6 +1415,42 @@ impl SuiTransactionBlockData {
             )),
         }
     }
+
+    pub async fn try_from_with_package_resolver(
+        data: TransactionData,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> Result<Self, anyhow::Error> {
+        let message_version = data
+            .message_version()
+            .expect("TransactionData defines message_version()");
+        let sender = data.sender();
+        let gas_data = SuiGasData {
+            payment: data
+                .gas()
+                .iter()
+                .map(|obj_ref| SuiObjectRef::from(*obj_ref))
+                .collect(),
+            owner: data.gas_owner(),
+            price: data.gas_price(),
+            budget: data.gas_budget(),
+        };
+        let transaction = SuiTransactionBlockKind::try_from_with_package_resolver(
+            data.into_kind(),
+            package_resolver,
+        )
+        .await?;
+        match message_version {
+            1 => Ok(SuiTransactionBlockData::V1(SuiTransactionBlockDataV1 {
+                transaction,
+                sender,
+                gas_data,
+            })),
+            _ => Err(anyhow::anyhow!(
+                "Support for TransactionData version {} not implemented",
+                message_version
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
@@ -1349,6 +1470,22 @@ impl SuiTransactionBlock {
                 data.intent_message().value.clone(),
                 module_cache,
             )?,
+            tx_signatures: data.tx_signatures().to_vec(),
+        })
+    }
+
+    // TODO: the SuiTransactionBlock `try_from` can be removed after cleaning up indexer v1, so are the related
+    // `try_from` methods for nested structs like SuiTransactionBlockData etc.
+    pub async fn try_from_with_package_resolver(
+        data: SenderSignedData,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            data: SuiTransactionBlockData::try_from_with_package_resolver(
+                data.intent_message().value.clone(),
+                package_resolver,
+            )
+            .await?,
             tx_signatures: data.tx_signatures().to_vec(),
         })
     }
@@ -1569,6 +1706,25 @@ impl SuiProgrammableTransactionBlock {
         })
     }
 
+    async fn try_from_with_package_resolver(
+        value: ProgrammableTransaction,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> Result<Self, anyhow::Error> {
+        let input_types = package_resolver.pure_input_layouts(&value).await?;
+        let ProgrammableTransaction { inputs, commands } = value;
+        // let input_types =
+        //     Self::resolve_input_type_with_package_resolver(&inputs, &commands, package_resolver)
+        //         .await;
+        Ok(SuiProgrammableTransactionBlock {
+            inputs: inputs
+                .into_iter()
+                .zip(input_types)
+                .map(|(arg, layout)| SuiCallArg::try_from(arg, layout.as_ref()))
+                .collect::<Result<_, _>>()?,
+            commands: commands.into_iter().map(SuiCommand::from).collect(),
+        })
+    }
+
     fn resolve_input_type(
         inputs: &Vec<CallArg>,
         commands: &[Command],
@@ -1611,6 +1767,50 @@ impl SuiProgrammableTransactionBlock {
         }
         result_types
     }
+
+    // async fn resolve_input_type_with_package_resolver(
+    //     inputs: &Vec<CallArg>,
+    //     commands: &[Command],
+    //     package_resolver: Arc<Resolver<impl PackageStore>>,
+    // ) -> Vec<Option<MoveTypeLayout>> {
+    //     let mut result_types = vec![None; inputs.len()];
+    //     for command in commands.iter() {
+    //         match command {
+    //             Command::MoveCall(c) => {
+    //                 let id = ModuleId::new(c.package.into(), c.module.clone());
+    //                 let Some(types) = package_resolver
+    //                     .get_function_signature_types(id, c.function.as_ident_str())
+    //                     .await
+    //                 else {
+    //                     return result_types;
+    //                 };
+    //                 for (arg, type_) in c.arguments.iter().zip(types) {
+    //                     if let (&Argument::Input(i), Some(type_)) = (arg, type_) {
+    //                         if let Some(x) = result_types.get_mut(i as usize) {
+    //                             x.replace(type_);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             Command::SplitCoins(_, amounts) => {
+    //                 for arg in amounts {
+    //                     if let &Argument::Input(i) = arg {
+    //                         if let Some(x) = result_types.get_mut(i as usize) {
+    //                             x.replace(MoveTypeLayout::U64);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             Command::TransferObjects(_, Argument::Input(i)) => {
+    //                 if let Some(x) = result_types.get_mut((*i) as usize) {
+    //                     x.replace(MoveTypeLayout::Address);
+    //                 }
+    //             }
+    //             _ => {}
+    //         }
+    //     }
+    //     result_types
+    // }
 }
 
 fn get_signature_types(

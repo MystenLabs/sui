@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_binary_format::binary_config::BinaryConfig;
+use move_binary_format::normalized::Module as NormalizedModule;
 
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_json_rpc::SuiRpcModule;
@@ -19,7 +19,6 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
-use sui_types::move_package::normalize_modules;
 
 use crate::indexer_reader::IndexerReader;
 
@@ -39,29 +38,12 @@ impl MoveUtilsServer for MoveUtilsApi {
         &self,
         package_id: ObjectID,
     ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
-        let package = self
-            .inner
-            .get_package_in_blocking_task(package_id)
-            .await
-            .map_err(|e| SuiRpcInputError::GenericNotFound(e.to_string()))?
-            .ok_or_else(|| {
-                SuiRpcInputError::GenericNotFound(format!(
-                    "Package object does not exist with ID {package_id}",
-                ))
-            })?;
-        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
-        let modules =
-                // we are on the read path - it's OK to use VERSION_MAX of the supported Move
-                // binary format
-                normalize_modules(
-                    package.serialized_module_map().values(),
-                    &binary_config,
-                )
-                .map_err(|e| SuiRpcInputError::GenericInvalid(e.to_string()))?;
-        Ok(modules
+        let resolver_modules = self.inner.get_package(package_id).await?.modules().clone();
+        let sui_normalized_modules = resolver_modules
             .into_iter()
-            .map(|(name, module)| (name, module.into()))
-            .collect::<BTreeMap<String, SuiMoveNormalizedModule>>())
+            .map(|(k, v)| (k, NormalizedModule::new(v.bytecode()).into()))
+            .collect::<BTreeMap<String, SuiMoveNormalizedModule>>();
+        Ok(sui_normalized_modules)
     }
 
     async fn get_normalized_move_module(
