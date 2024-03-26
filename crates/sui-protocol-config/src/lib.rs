@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 42;
+const MAX_PROTOCOL_VERSION: u64 = 43;
 
 // Record history of protocol version allocations here:
 //
@@ -2141,6 +2141,9 @@ impl ProtocolConfig {
     }
     pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
         self.consensus_max_transactions_in_block_bytes = Some(val);
+    }
+    pub fn set_disable_bridge_for_testing(&mut self) {
+        self.feature_flags.bridge = false
     }
 }
 
