@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::table_tests {
-    use sui::table::{Self, add, contains, borrow, borrow_mut, remove};
+    use sui::table;
     use sui::test_scenario;
 
     #[test]
@@ -95,8 +95,8 @@ module sui::table_tests {
         let mut table = table::new<u64, u64>(scenario.ctx());
         assert!(!table.contains(0), 0);
         table.add(0, 0);
-        assert!(contains<u64, u64>(&table, 0), 0);
-        assert!(!contains<u64, u64>(&table, 1), 0);
+        assert!(table.contains<u64, u64>(0), 0);
+        assert!(!table.contains<u64, u64>(1), 0);
         scenario.end();
         table.drop();
     }

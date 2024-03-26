@@ -5,7 +5,6 @@
 /// This module defines base testing utilities for the
 module sui::token_test_utils {
     use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{Self, TxContext};
     use sui::token::{Self, Token, TokenPolicy, TokenPolicyCap};
 
     /// The type of the test Token.

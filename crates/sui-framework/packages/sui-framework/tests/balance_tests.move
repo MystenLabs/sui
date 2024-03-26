@@ -14,10 +14,10 @@ module sui::coin_balance_tests {
         let mut scenario = test_scenario::begin(@0x1);
 
         let balance = balance::zero<SUI>();
-        let coin = coin::from_balance(balance, scenario.ctx());
-        let balance = coin::into_balance(coin);
+        let coin = balance.into_coin(scenario.ctx());
+        let balance = coin.into_balance();
 
-        balance::destroy_zero(balance);
+        balance.destroy_zero();
 
         let mut coin = coin::mint_for_testing<SUI>(100, scenario.ctx());
         let balance_mut = coin::balance_mut(&mut coin);
@@ -26,12 +26,12 @@ module sui::coin_balance_tests {
         assert!(sub_balance.value() == 50, 0);
         assert!(coin.value() == 50, 0);
 
-        let mut balance = coin::into_balance(coin);
+        let mut balance = coin.into_balance();
         balance.join(sub_balance);
 
         assert!(balance.value() == 100, 0);
 
-        let coin = coin::from_balance(balance, scenario.ctx());
+        let coin = balance.into_coin(scenario.ctx());
         pay::keep(coin, scenario.ctx());
         scenario.end();
     }

@@ -8,7 +8,6 @@ module sui::linked_table_tests {
         LinkedTable,
     };
     use sui::test_scenario;
-    use sui::tx_context::TxContext;
 
     #[test]
     fun simple_all_functions() {

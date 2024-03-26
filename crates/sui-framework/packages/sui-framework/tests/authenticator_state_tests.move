@@ -5,7 +5,7 @@
 #[test_only]
 #[allow(unused_use)]
 module sui::authenticator_state_tests {
-    use std::string::{String};
+    use std::string::String;
 
     use sui::test_scenario;
     use sui::authenticator_state::{
@@ -17,7 +17,6 @@ module sui::authenticator_state_tests {
         expire_jwks_for_testing,
         ActiveJwk,
     };
-    use sui::tx_context;
 
     #[test]
     fun authenticator_state_tests_basic() {

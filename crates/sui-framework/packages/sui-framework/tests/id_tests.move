@@ -3,9 +3,6 @@
 
 #[test_only]
 module sui::id_tests {
-    use sui::object;
-    use sui::tx_context;
-
     const EIdBytesMismatch: u64 = 0;
 
     public struct Object has key {

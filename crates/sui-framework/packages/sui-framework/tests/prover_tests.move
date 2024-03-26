@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::prover_tests {
-    use sui::object::UID;
 
     public struct Obj has key, store {
         id: UID

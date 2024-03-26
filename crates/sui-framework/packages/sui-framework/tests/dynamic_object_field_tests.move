@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::dynamic_object_field_tests {
-    use std::option;
     use sui::dynamic_object_field::{
         add,
         borrow,
@@ -13,7 +12,6 @@ module sui::dynamic_object_field_tests {
         remove,
         id as field_id,
     };
-    use sui::object::{Self, UID};
     use sui::test_scenario;
 
     public struct Counter has key, store {
@@ -45,9 +43,9 @@ module sui::dynamic_object_field_tests {
         assert!(exists_(&id, b""), 0);
         assert!(exists_(&id, false), 0);
         // check the IDs
-        assert!(option::borrow(&field_id(&id, 0)) == &id1, 0);
-        assert!(option::borrow(&field_id(&id, b"")) == &id2, 0);
-        assert!(option::borrow(&field_id(&id, false)) == &id3, 0);
+        assert!(field_id(&id, 0).borrow() == &id1, 0);
+        assert!(field_id(&id, b"").borrow() == &id2, 0);
+        assert!(field_id(&id, false).borrow() == &id3, 0);
         // check the values
         assert!(count(borrow(&id, 0)) == 0, 0);
         assert!(count(borrow(&id, b"")) == 0, 0);
@@ -216,8 +214,8 @@ module sui::dynamic_object_field_tests {
         bump(borrow_mut(&mut id2, 0));
         assert!(count(borrow(&id2, 0)) == 2, 0);
         scenario.end();
-        object::delete(id1);
-        object::delete(id2);
+        id1.delete();
+        id2.delete();
     }
 
     fun new(scenario: &mut test_scenario::Scenario): Counter {

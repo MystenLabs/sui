@@ -3,11 +3,7 @@
 
 #[test_only]
 module sui::address_tests {
-    use std::ascii;
-    use std::string;
     use sui::address;
-    use sui::object;
-    use sui::tx_context;
 
     #[test]
     fun from_bytes_ok() {
@@ -89,24 +85,24 @@ module sui::address_tests {
 
     #[test]
     fun to_ascii_string_ok() {
-        assert!(@0x0.to_ascii_string() == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000"), 0);
-        assert!(@0x1.to_ascii_string() == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000001"), 0);
-        assert!(@0x10.to_ascii_string() == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000010"), 0);
-        assert!(@0xff.to_ascii_string() == ascii::string(b"00000000000000000000000000000000000000000000000000000000000000ff"), 0);
-        assert!(@0x101.to_ascii_string() == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000101"), 0);
-        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_ascii_string() == ascii::string(b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"), 0);
-        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_ascii_string() == ascii::string(b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 0);
+        assert!(@0x0.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000000".to_ascii_string(), 0);
+        assert!(@0x1.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000001".to_ascii_string(), 0);
+        assert!(@0x10.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000010".to_ascii_string(), 0);
+        assert!(@0xff.to_ascii_string() == b"00000000000000000000000000000000000000000000000000000000000000ff".to_ascii_string(), 0);
+        assert!(@0x101.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000101".to_ascii_string(), 0);
+        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_ascii_string() == b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe".to_ascii_string(), 0);
+        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_ascii_string() == b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_ascii_string(), 0);
     }
 
      #[test]
     fun to_string_ok() {
-        assert!(@0x0.to_string() == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000000"), 0);
-        assert!(@0x1.to_string() == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000001"), 0);
-        assert!(@0x10.to_string() == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000010"), 0);
-        assert!(@0xff.to_string() == string::utf8(b"00000000000000000000000000000000000000000000000000000000000000ff"), 0);
-        assert!(@0x101.to_string() == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000101"), 0);
-        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_string() == string::utf8(b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"), 0);
-        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_string() == string::utf8(b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 0);
+        assert!(@0x0.to_string() == b"0000000000000000000000000000000000000000000000000000000000000000".to_string(), 0);
+        assert!(@0x1.to_string() == b"0000000000000000000000000000000000000000000000000000000000000001".to_string(), 0);
+        assert!(@0x10.to_string() == b"0000000000000000000000000000000000000000000000000000000000000010".to_string(), 0);
+        assert!(@0xff.to_string() == b"00000000000000000000000000000000000000000000000000000000000000ff".to_string(), 0);
+        assert!(@0x101.to_string() == b"0000000000000000000000000000000000000000000000000000000000000101".to_string(), 0);
+        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_string() == b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe".to_string(), 0);
+        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_string() == b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(), 0);
     }
 
     #[test]

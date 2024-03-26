@@ -4,8 +4,7 @@
 #[test_only]
 module sui::object_table_tests {
     use sui::object_table::{Self, add};
-    use sui::object::{Self, UID};
-    use sui::test_scenario as ts;
+    use sui::test_scenario;
 
     public struct Counter has key, store {
         id: UID,
@@ -15,8 +14,8 @@ module sui::object_table_tests {
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new(test_scenario::ctx(&mut scenario));
         let counter1 = new(&mut scenario);
         let id1 = object::id(&counter1);
         let counter2 = new(&mut scenario);
@@ -45,7 +44,7 @@ module sui::object_table_tests {
         // verify that they are not there
         assert!(!table.contains(b"hello"), 0);
         assert!(!table.contains(b"goodbye"), 0);
-        ts::end(scenario);
+        scenario.end();
         table.destroy_empty();
     }
 
@@ -53,8 +52,8 @@ module sui::object_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new(test_scenario::ctx(&mut scenario));
         table.add(b"hello", new(&mut scenario));
         table.add(b"hello", new(&mut scenario));
         abort 42
@@ -64,8 +63,8 @@ module sui::object_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let table = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let table = object_table::new<u64, Counter>(test_scenario::ctx(&mut scenario));
         &table[0];
         abort 42
     }
@@ -74,8 +73,8 @@ module sui::object_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new<u64, Counter>(test_scenario::ctx(&mut scenario));
         &mut table[0];
         abort 42
     }
@@ -84,8 +83,8 @@ module sui::object_table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new<u64, Counter>(test_scenario::ctx(&mut scenario));
         table.remove(0).destroy();
         abort 42
     }
@@ -94,23 +93,23 @@ module sui::object_table_tests {
     #[expected_failure(abort_code = sui::object_table::ETableNotEmpty)]
     fun destroy_non_empty() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new(test_scenario::ctx(&mut scenario));
         table.add(0, new(&mut scenario));
         table.destroy_empty();
-        ts::end(scenario);
+        scenario.end();
     }
 
     #[test]
     fun sanity_check_contains() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new(test_scenario::ctx(&mut scenario));
         assert!(!table.contains(0), 0);
         table.add(0, new(&mut scenario));
         assert!(table.contains(0), 0);
         assert!(!table.contains(1), 0);
-        ts::end(scenario);
+        scenario.end();
         table.remove(0).destroy();
         table.destroy_empty()
     }
@@ -118,8 +117,8 @@ module sui::object_table_tests {
     #[test]
     fun sanity_check_size() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table = object_table::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table = object_table::new(test_scenario::ctx(&mut scenario));
         assert!(table.is_empty(), 0);
         assert!(table.length() == 0, 0);
         table.add(0, new(&mut scenario));
@@ -128,7 +127,7 @@ module sui::object_table_tests {
         table.add(1, new(&mut scenario));
         assert!(!table.is_empty(), 0);
         assert!(table.length() == 2, 0);
-        ts::end(scenario);
+        scenario.end();
         table.remove(0).destroy();
         table.remove(1).destroy();
         table.destroy_empty();
@@ -138,9 +137,9 @@ module sui::object_table_tests {
     #[test]
     fun transfer_object() {
         let sender = @0x0;
-        let mut scenario = ts::begin(sender);
-        let mut table1 = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
-        let mut table2 = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut table1 = object_table::new<u64, Counter>(test_scenario::ctx(&mut scenario));
+        let mut table2 = object_table::new<u64, Counter>(test_scenario::ctx(&mut scenario));
         table1.add(0, new(&mut scenario));
         assert!(table1.contains(0), 0);
         assert!(!table2.contains(0), 0);
@@ -151,14 +150,14 @@ module sui::object_table_tests {
         assert!(table2.contains(0), 0);
         bump(&mut table2[0]);
         assert!(&table2[0].count() == 2, 0);
-        ts::end(scenario);
+        scenario.end();
         table2.remove(0).destroy();
         table1.destroy_empty();
         table2.destroy_empty();
     }
 
-    fun new(scenario: &mut ts::Scenario): Counter {
-        Counter { id: ts::new_object(scenario), count: 0 }
+    fun new(scenario: &mut test_scenario::Scenario): Counter {
+        Counter { id: test_scenario::new_object(scenario), count: 0 }
     }
 
     fun count(counter: &Counter): u64 {

@@ -3,21 +3,18 @@
 
 #[test_only]
 module sui::test_scenario_tests {
-    use sui::object;
     use sui::test_scenario;
-    use sui::transfer;
-    use sui::tx_context;
 
     const EIdBytesMismatch: u64 = 0;
     const EValueMismatch: u64 = 1;
 
     public struct Object has key, store {
-        id: object::UID,
+        id: UID,
         value: u64,
     }
 
     public struct Wrapper has key {
-        id: object::UID,
+        id: UID,
         child: Object,
     }
 
@@ -187,7 +184,7 @@ module sui::test_scenario_tests {
         let id_bytes;
         {
             let id = scenario.new_object();
-            id_bytes = object::uid_to_inner(&id);
+            id_bytes = id.to_inner();
             let obj = Object { id, value: 100 };
             transfer::public_transfer(obj, copy tx2_sender);
             // sender cannot access the object
@@ -199,9 +196,9 @@ module sui::test_scenario_tests {
             assert!(scenario.has_most_recent_for_sender<Object>(), 1);
             let received_obj = scenario.take_from_sender<Object>();
             let Object { id: received_id, value } = received_obj;
-            assert!(object::uid_to_inner(&received_id) == id_bytes, EIdBytesMismatch);
+            assert!(received_id.to_inner() == id_bytes, EIdBytesMismatch);
             assert!(value == 100, EValueMismatch);
-            object::delete(received_id);
+            received_id.delete();
         };
         // check that the object is no longer accessible after deletion
         scenario.next_tx(tx2_sender);
@@ -218,9 +215,9 @@ module sui::test_scenario_tests {
         let uid1 = scenario.new_object();
         let uid2 = scenario.new_object();
         let uid3 = scenario.new_object();
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
+        let id1 = uid1.to_inner();
+        let id2 = uid2.to_inner();
+        let id3 = uid3.to_inner();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -242,9 +239,9 @@ module sui::test_scenario_tests {
         let uid1 = scenario.new_object();
         let uid2 = scenario.new_object();
         let uid3 = scenario.new_object();
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
+        let id1 = uid1.to_inner();
+        let id2 = uid2.to_inner();
+        let id3 = uid3.to_inner();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -274,11 +271,11 @@ module sui::test_scenario_tests {
         let mut scenario = test_scenario::begin(sender);
         {
             let id = scenario.new_object();
-            let id_addr = object::uid_to_address(&id);
+            let id_addr = id.to_address();
             let obj = Object { id, value: 10 };
             transfer::public_transfer(obj, copy sender);
             let ctx = scenario.ctx();
-            assert!(id_addr == tx_context::last_created_object_id(ctx), 0);
+            assert!(id_addr == ctx.last_created_object_id(), 0);
         };
         scenario.end();
     }
@@ -290,9 +287,9 @@ module sui::test_scenario_tests {
         let uid1 = scenario.new_object();
         let uid2 = scenario.new_object();
         let uid3 = scenario.new_object();
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
+        let id1 = uid1.uid_to_inner();
+        let id2 = uid2.uid_to_inner();
+        let id3 = uid3.uid_to_inner();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -362,9 +359,9 @@ module sui::test_scenario_tests {
         let uid1 = scenario.new_object();
         let uid2 = scenario.new_object();
         let uid3 = scenario.new_object();
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
+        let id1 = uid1.to_inner();
+        let id2 = uid2.to_inner();
+        let id3 = uid3.to_inner();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -438,31 +435,31 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
 
-        let ts0 = tx_context::epoch_timestamp_ms(scenario.ctx());
+        let ts0 = scenario.ctx().epoch_timestamp_ms();
 
         // epoch timestamp doesn't change between transactions
         scenario.next_tx(sender);
-        let ts1 = tx_context::epoch_timestamp_ms(scenario.ctx());
+        let ts1 = scenario.ctx().epoch_timestamp_ms();
         assert!(ts1 == ts0, 0);
 
         // ...or between epochs when `next_epoch` is used
         scenario.next_epoch(sender);
-        let ts2 = tx_context::epoch_timestamp_ms(scenario.ctx());
+        let ts2 = scenario.ctx().epoch_timestamp_ms();
         assert!(ts2 == ts1, 1);
 
         // ...but does change when `later_epoch` is used
         scenario.later_epoch(42, sender);
-        let ts3 = tx_context::epoch_timestamp_ms(scenario.ctx());
+        let ts3 = scenario.ctx().epoch_timestamp_ms();
         assert!(ts3 == ts2 + 42, 2);
 
         // ...and persists across further transactions
         scenario.next_tx(sender);
-        let ts4 = tx_context::epoch_timestamp_ms(scenario.ctx());
+        let ts4 = scenario.ctx().epoch_timestamp_ms();
         assert!(ts4 == ts3, 3);
 
         // ...and epochs
         scenario.next_epoch(sender);
-        let ts5 = tx_context::epoch_timestamp_ms(scenario.ctx());
+        let ts5 = scenario.ctx().epoch_timestamp_ms();
         assert!(ts5 == ts4, 4);
 
         scenario.end();
@@ -589,7 +586,7 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let uid = scenario.new_object();
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         scenario.return_to_sender(scenario.take_from_sender_by_id<Object>(id));
         abort 42
     }
@@ -600,7 +597,7 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let uid = scenario.new_object();
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         scenario.return_to_sender(scenario.take_shared_by_id<Object>(id));
         abort 42
     }
@@ -611,7 +608,7 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let uid = scenario.new_object();
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         scenario.return_to_sender(scenario.take_immutable_by_id<Object>(id));
         abort 42
     }
@@ -622,7 +619,7 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let uid = scenario.new_object();
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         transfer::public_transfer(Object { id: uid, value: 10 }, sender);
         scenario.return_to_sender(scenario.take_from_sender_by_id<Wrapper>(id));
         abort 42
@@ -634,7 +631,7 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let uid = scenario.new_object();
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         transfer::public_share_object(Object { id: uid, value: 10 });
         test_scenario::return_shared(scenario.take_shared_by_id<Object>(id));
         abort 42
@@ -646,7 +643,7 @@ module sui::test_scenario_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let uid = scenario.new_object();
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         transfer::public_freeze_object(Object { id: uid, value: 10 });
         test_scenario::return_immutable(scenario.take_immutable_by_id<Object>(id));
         abort 42
@@ -661,7 +658,7 @@ module sui::test_scenario_tests {
         let r = sui::dynamic_field::borrow<vector<u8>, u64>(&parent, b"");
         scenario.end();
         assert!(*r == 10, 0);
-        object::delete(parent);
+        parent.delete();
     }
 
     #[test]
@@ -674,7 +671,7 @@ module sui::test_scenario_tests {
         let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&parent, b"");
         scenario.end();
         assert!(obj.value == 10, 0);
-        object::delete(parent);
+        parent.delete();
     }
 
     #[test]
@@ -695,7 +692,7 @@ module sui::test_scenario_tests {
         scenario.next_tx(sender);
         assert!(!test_scenario::has_most_recent_for_address<Object>(sender), 0);
         scenario.end();
-        object::delete(parent);
+        parent.delete();
     }
 
     #[test]

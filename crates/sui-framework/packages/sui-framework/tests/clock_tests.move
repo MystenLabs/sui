@@ -4,7 +4,6 @@
 #[test_only]
 module sui::clock_tests {
     use sui::clock;
-    use sui::tx_context;
 
     #[test]
     fun creating_a_clock_and_incrementing_it() {

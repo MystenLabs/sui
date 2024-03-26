@@ -7,7 +7,6 @@
 ///
 /// It also tests custom actions which can be implemented by policy owner.
 module sui::token_actions_tests {
-    use std::option;
     use std::string;
     use sui::token;
     use sui::token_test_utils as test;

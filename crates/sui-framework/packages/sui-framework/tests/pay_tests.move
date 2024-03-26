@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::pay_tests {
-    use std::vector;
     use sui::test_scenario;
     use sui::coin::{Self, Coin};
     use sui::pay;
@@ -21,7 +20,7 @@ module sui::pay_tests {
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
         scenario.next_tx(TEST_SENDER_ADDR);
-        pay::divide_and_keep(&mut coin, 3, scenario.ctx());
+        coin.divide_and_keep(3, scenario.ctx());
 
         scenario.next_tx(TEST_SENDER_ADDR);
         let coin1 = scenario.take_from_sender<Coin<SUI>>();
@@ -61,7 +60,7 @@ module sui::pay_tests {
         assert!(coin2.value() == 3, 0);
         assert!(coin.value() == 4, 0);
 
-        vector::destroy_empty(split_coins);
+        split_coins.destroy_empty();
         test_utils::destroy(coin);
         test_utils::destroy(coin1);
         test_utils::destroy(coin2);
@@ -77,7 +76,7 @@ module sui::pay_tests {
 
         scenario.next_tx(TEST_SENDER_ADDR);
         let v = vector[1, 4];
-        pay::split_vec(&mut coin, v, scenario.ctx());
+        coin.split_vec(v, scenario.ctx());
 
         scenario.next_tx(TEST_SENDER_ADDR);
         let coin1 = scenario.take_from_sender<Coin<SUI>>();
@@ -104,7 +103,7 @@ module sui::pay_tests {
 
         scenario.next_tx(TEST_SENDER_ADDR);
         // Send 3 of 10
-        pay::split_and_transfer(&mut coin, 3, TEST_SENDER_ADDR, scenario.ctx());
+        coin.split_and_transfer(3, TEST_SENDER_ADDR, scenario.ctx());
 
         scenario.next_tx(TEST_SENDER_ADDR);
         let coin1 = scenario.take_from_sender<Coin<SUI>>();
@@ -126,7 +125,7 @@ module sui::pay_tests {
 
         scenario.next_tx(TEST_SENDER_ADDR);
         // Send 20 of 10 (should fail)
-        pay::split_and_transfer(&mut coin, 20, TEST_SENDER_ADDR, scenario.ctx());
+        coin.split_and_transfer(20, TEST_SENDER_ADDR, scenario.ctx());
         scenario.next_tx(TEST_SENDER_ADDR);
         let coin_transfer_fail = scenario.take_from_sender<Coin<SUI>>();
         assert!(&coin_transfer_fail.value() == 7, 0);

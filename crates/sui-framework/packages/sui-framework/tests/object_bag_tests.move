@@ -4,7 +4,6 @@
 #[test_only]
 module sui::object_bag_tests {
     use sui::object_bag;
-    use sui::object::{Self, UID};
     use sui::test_scenario;
 
     public struct Counter has key, store {

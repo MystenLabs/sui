@@ -3,15 +3,10 @@
 
 #[test_only]
 module sui::coin_tests {
-    use std::option;
     use sui::coin::{Self, Coin};
     use sui::pay;
     use sui::url;
     use sui::test_scenario;
-    use sui::transfer;
-    use sui::tx_context;
-    use std::string;
-    use std::ascii;
     use sui::deny_list;
 
     public struct COIN_TESTS has drop {}
@@ -23,13 +18,21 @@ module sui::coin_tests {
         let mut scenario = test_scenario::begin(TEST_ADDR);
         let ctx = scenario.ctx();
         let witness = COIN_TESTS{};
-        let (treasury, mut metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
+        let (treasury, mut metadata) = coin::create_currency(
+		witness,
+		6,
+		b"COIN_TESTS",
+		b"coin_name",
+		b"description",
+		option::some(url::new_unsafe_from_bytes(b"icon_url")),
+		ctx
+	);
 
         let decimals = metadata.get_decimals();
-        let symbol_bytes = ascii::as_bytes(&metadata.get_symbol<COIN_TESTS>());
-        let name_bytes = string::bytes(&metadata.get_name<COIN_TESTS>());
-        let description_bytes = string::bytes(&metadata.get_description<COIN_TESTS>());
-        let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&metadata.get_icon_url<COIN_TESTS>())));
+        let symbol_bytes = metadata.get_symbol<COIN_TESTS>().as_bytes();
+        let name_bytes = metadata.get_name<COIN_TESTS>().bytes();
+        let description_bytes = metadata.get_description<COIN_TESTS>().bytes();
+        let icon_url = url::inner_url(metadata.get_icon_url<COIN_TESTS>().borrow()).as_bytes();
 
         assert!(decimals == 6, 0);
         assert!(*symbol_bytes == b"COIN_TESTS", 0);
@@ -54,7 +57,7 @@ module sui::coin_tests {
         assert!(*icon_url == b"new_icon_url", 0);
 
         transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, tx_context::sender(ctx));
+        transfer::public_transfer(treasury, ctx.sender());
         scenario.end();
     }
 
@@ -62,9 +65,17 @@ module sui::coin_tests {
     fun coin_tests_mint() {
         let mut scenario = test_scenario::begin(TEST_ADDR);
         let witness = COIN_TESTS{};
-        let (mut treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), scenario.ctx());
+        let (mut treasury, metadata) = coin::create_currency(
+		witness,
+		6,
+		b"COIN_TESTS",
+		b"coin_name",
+		b"description",
+		option::some(url::new_unsafe_from_bytes(b"icon_url")),
+		scenario.ctx()
+	);
 
-        let balance = coin::mint_balance<COIN_TESTS>(&mut treasury, 1000);
+        let balance = treasury.mint_balance<COIN_TESTS>(1000);
         let coin = coin::from_balance(balance, scenario.ctx());
         let value = coin.value();
         assert!(value == 1000, 0);
