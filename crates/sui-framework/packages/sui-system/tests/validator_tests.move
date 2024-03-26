@@ -3,14 +3,15 @@
 
 #[test_only]
 module sui_system::validator_tests {
-    use sui::test_scenario;
-    use sui::url;
-    use sui_system::validator::{Self, Validator};
-    use sui::tx_context::TxContext;
-    use sui::coin::{Self};
-    use sui_system::staking_pool::StakedSui;
-    use sui::test_utils;
     use sui::bag;
+    use sui::balance;
+    use sui::coin::{Self, Coin};
+    use sui::sui::SUI;
+    use sui::test_scenario;
+    use sui::test_utils;
+    use sui::url;
+    use sui_system::staking_pool::StakedSui;
+    use sui_system::validator::{Self, Validator};
 
     const VALID_NET_PUBKEY: vector<u8> = vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
 
