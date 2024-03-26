@@ -6,16 +6,30 @@ import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import type { Input } from 'valibot';
 import { is, parse } from 'valibot';
 
-import type { ProtocolConfig, SuiClient } from '../client/index.js';
+import type { SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
 import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
 import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
+import {
+	normalizeInputs,
+	resolveObjectReferences,
+	setGasBudget,
+	setGasPayment,
+	setGasPrice,
+	validate,
+} from './buildSteps.js';
 import { getIdFromCallArg, Inputs } from './Inputs.js';
 import { createPure } from './pure.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
+import type {
+	BuildTransactionBlockOptions,
+	SerializeTransactionBlockOptions,
+	TransactionBlockDataResolver,
+	TransactionBlockStep,
+} from './TransactionBlockDataResolver.js';
+import { SuiClientTransactionBlockDataResolver } from './TransactionBlockDataResolver.js';
 import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
 
@@ -25,13 +39,6 @@ export type TransactionObjectArgument =
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
-
-const DefaultOfflineLimits = {
-	maxPureArgumentSize: 16 * 1024,
-	maxTxGas: 50_000_000_000,
-	maxGasObjects: 256,
-	maxTxSizeBytes: 128 * 1024,
-} satisfies Limits;
 
 function createTransactionResult(index: number): TransactionResult {
 	const baseResult: TransactionArgument = { $kind: 'Result', Result: index };
@@ -78,54 +85,9 @@ function createTransactionResult(index: number): TransactionResult {
 	}) as TransactionResult;
 }
 
-function expectClient(options: BuildOptions): SuiClient {
-	if (!options.client) {
-		throw new Error(
-			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
-		);
-	}
-
-	return options.client;
-}
-
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
 
-const LIMITS = {
-	// The maximum gas that is allowed.
-	maxTxGas: 'max_tx_gas',
-	// The maximum number of gas objects that can be selected for one transaction.
-	maxGasObjects: 'max_gas_payment_objects',
-	// The maximum size (in bytes) that the transaction can be:
-	maxTxSizeBytes: 'max_tx_size_bytes',
-	// The maximum size (in bytes) that pure arguments can be:
-	maxPureArgumentSize: 'max_pure_argument_size',
-} as const;
-
-type Limits = Partial<Record<keyof typeof LIMITS, number>>;
-
-interface BuildOptions {
-	client?: SuiClient;
-	onlyTransactionKind?: boolean;
-	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
-	protocolConfig?: ProtocolConfig;
-	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
-	limits?: Limits;
-}
-
-type TransactionBlockFeatures =
-	| 'setGasPrice'
-	| 'setGasBudget'
-	| 'setGasPayment'
-	| 'normalizeInputs'
-	| 'resolveObjectReferences';
-
-interface PrepareFeaturesOptions extends Omit<BuildOptions, 'onlyTransactionKind'> {
-	supportedFeatures?: TransactionBlockFeatures[];
-	supportedIntents?: string[];
-	validate?: boolean;
-}
-
-interface SignOptions extends BuildOptions {
+interface SignOptions extends BuildTransactionBlockOptions {
 	signer: Signer;
 }
 
@@ -139,6 +101,10 @@ export type TransactionObjectInput = string | CallArg | TransactionObjectArgumen
  * Transaction Builder
  */
 export class TransactionBlock {
+	#serializationSteps: TransactionBlockStep[] = [];
+	#buildSteps: TransactionBlockStep[] = [];
+	#intentResolvers = new Map<string, TransactionBlockStep>();
+
 	/**
 	 * Converts from a serialize transaction kind (built with `build({ onlyTransactionKind: true })`) to a `Transaction` class.
 	 * Supports either a byte array, or base64-encoded bytes.
@@ -172,6 +138,22 @@ export class TransactionBlock {
 		}
 
 		return tx;
+	}
+
+	addSerializationStep(step: TransactionBlockStep) {
+		this.#serializationSteps.push(step);
+	}
+
+	addBuildStep(step: TransactionBlockStep) {
+		this.#buildSteps.push(step);
+	}
+
+	addIntentResolver(intent: string, resolver: TransactionBlockStep) {
+		if (this.#intentResolvers.has(intent) && this.#intentResolvers.get(intent) !== resolver) {
+			throw new Error(`Intent resolver for ${intent} already exists`);
+		}
+
+		this.#intentResolvers.set(intent, resolver);
 	}
 
 	setSender(sender: string) {
@@ -462,43 +444,9 @@ export class TransactionBlock {
 		return JSON.stringify(v1BlockDataFromTransactionBlockState(this.#blockData.snapshot()));
 	}
 
-	async toJSON(options: PrepareFeaturesOptions = {}): Promise<string> {
-		await this.#prepareWithFeatures(options);
-
+	async toJSON(options: SerializeTransactionBlockOptions = {}): Promise<string> {
+		await this.#prepareForSerialization(options, await this.getDataResolver(options));
 		return JSON.stringify(this.#blockData.snapshot());
-	}
-
-	#getConfig(key: keyof typeof LIMITS, { protocolConfig, limits }: BuildOptions) {
-		// Use the limits definition if that exists:
-		if (limits && typeof limits[key] === 'number') {
-			return limits[key]!;
-		}
-
-		if (!protocolConfig) {
-			return DefaultOfflineLimits[key];
-		}
-
-		// Fallback to protocol config:
-		const attribute = protocolConfig?.attributes[LIMITS[key]];
-		if (!attribute) {
-			throw new Error(`Missing expected protocol config: "${LIMITS[key]}"`);
-		}
-
-		const value =
-			'u64' in attribute
-				? attribute.u64
-				: 'u32' in attribute
-				? attribute.u32
-				: 'u16' in attribute
-				? attribute.u16
-				: attribute.f64;
-
-		if (!value) {
-			throw new Error(`Unexpected protocol config value found for: "${LIMITS[key]}"`);
-		}
-
-		// NOTE: Technically this is not a safe conversion, but we know all of the values in protocol config are safe
-		return Number(value);
 	}
 
 	/** Build the transaction to BCS bytes, and sign it with the provided keypair. */
@@ -509,10 +457,12 @@ export class TransactionBlock {
 	}
 
 	/** Build the transaction to BCS bytes. */
-	async build(options: BuildOptions = {}): Promise<Uint8Array> {
-		await this.#prepare(options);
+	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
+		const dataResolver = await this.getDataResolver(options);
+
+		await this.#prepareBuild(options, dataResolver);
 		return this.#blockData.build({
-			maxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
+			maxSizeBytes: dataResolver.getLimit('maxTxSizeBytes'),
 			onlyTransactionKind: options.onlyTransactionKind,
 		});
 	}
@@ -523,7 +473,7 @@ export class TransactionBlock {
 			client?: SuiClient;
 		} = {},
 	): Promise<string> {
-		await this.#prepare(options);
+		await this.#prepareBuild(options, await this.getDataResolver(options));
 		return this.#blockData.getDigest();
 	}
 
@@ -531,76 +481,60 @@ export class TransactionBlock {
 	 * Prepare the transaction by validating the transaction data and resolving all inputs
 	 * so that it can be built into bytes.
 	 */
-	async #prepare(options: BuildOptions) {
+	async #prepareBuild(
+		options: BuildTransactionBlockOptions,
+		dataResolver: TransactionBlockDataResolver,
+	) {
 		if (!options.onlyTransactionKind && !this.#blockData.sender) {
 			throw new Error('Missing transaction sender');
 		}
 
-		if (!options.protocolConfig && !options.limits && options.client) {
-			options.protocolConfig = await options.client.getProtocolConfig();
+		const steps = [
+			...this.#buildSteps,
+			normalizeInputs,
+			resolveObjectReferences,
+			...(options.onlyTransactionKind ? [] : [setGasPrice, setGasBudget, setGasPayment]),
+			validate,
+		];
+
+		for (const step of steps) {
+			await step(this.#blockData, dataResolver);
 		}
-
-		await this.#prepareWithFeatures({
-			...options,
-			supportedFeatures: options.onlyTransactionKind
-				? ['setGasBudget', 'setGasPayment', 'setGasPrice']
-				: [],
-			validate: true,
-		});
-
-		this.#blockData.inputs.forEach((input, index) => {
-			if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
-				throw new Error(
-					`Input at index ${index} has not been resolved.  Expected a Pure or Object input, but found ${JSON.stringify(
-						input,
-					)}`,
-				);
-			}
-		});
 	}
 
-	async #prepareWithFeatures(options: PrepareFeaturesOptions = {}) {
-		const shouldSetGasPrice = !options.supportedFeatures?.includes('setGasPrice');
-		const shouldSetGasBudget = !options.supportedFeatures?.includes('setGasBudget');
-		const needsConfig = shouldSetGasPrice || shouldSetGasBudget;
-
-		if (needsConfig && !options.protocolConfig && !options.limits && options.client) {
-			options.protocolConfig = await options.client.getProtocolConfig();
+	async #prepareForSerialization(
+		options: SerializeTransactionBlockOptions,
+		dataResolver: TransactionBlockDataResolver,
+	) {
+		const intents = new Set<string>();
+		for (const transaction of this.#blockData.transactions) {
+			if (transaction.TransactionIntent && options.supportedIntents) {
+				intents.add(transaction.TransactionIntent.name);
+			}
 		}
 
-		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
+		for (const intent of intents) {
+			if (options.supportedIntents?.includes(intent)) {
+				continue;
+			}
 
-		if (!options.supportedFeatures?.includes('normalizeInputs')) {
-			await plugins.normalizeInputs(this.#blockData);
+			if (!this.#intentResolvers.has(intent)) {
+				throw new Error(`Missing intent resolver for ${intent}`);
+			}
+
+			await this.#intentResolvers.get(intent)!(this.#blockData, dataResolver);
+		}
+	}
+
+	async getDataResolver(options: SerializeTransactionBlockOptions = {}) {
+		let protocolConfig = options.protocolConfig;
+		if (!options.protocolConfig && !options.limits && options.client) {
+			protocolConfig = await options.client.getProtocolConfig();
 		}
 
-		if (!options.supportedFeatures?.includes('resolveObjectReferences')) {
-			await plugins.resolveObjectReferences(this.#blockData);
-		}
-
-		if (!options.supportedFeatures?.includes('setGasPrice')) {
-			await plugins.setGasPrice(this.#blockData);
-		}
-
-		if (shouldSetGasBudget) {
-			await plugins.setGasBudget(this.#blockData, {
-				maxTxGas: this.#getConfig('maxTxGas', options),
-				maxTxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
-			});
-		}
-
-		if (shouldSetGasPrice) {
-			await plugins.setGasPayment(this.#blockData, {
-				maxGasObjects: this.#getConfig('maxGasObjects', options),
-			});
-		}
-
-		await plugins.resolveUnsupportedIntents(this.#blockData, options.supportedIntents ?? []);
-
-		if (options.validate) {
-			await plugins.validate(this.#blockData, {
-				maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
-			});
-		}
+		return new SuiClientTransactionBlockDataResolver({
+			...options,
+			protocolConfig,
+		});
 	}
 }

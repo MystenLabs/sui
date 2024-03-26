@@ -8,7 +8,6 @@ import type { SuiMoveNormalizedType } from '../client/index.js';
 import { MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS } from '../utils/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature, OpenMoveTypeSignatureBody } from './blockData/v2.js';
-import { extractStructTag } from './utils.js';
 
 const OBJECT_MODULE_NAME = 'object';
 const ID_STRUCT_NAME = 'ID';
@@ -22,10 +21,13 @@ const STD_UTF8_STRUCT_NAME = 'String';
 const STD_OPTION_MODULE_NAME = 'option';
 const STD_OPTION_STRUCT_NAME = 'Option';
 
-export function isTxContext(param: SuiMoveNormalizedType): boolean {
-	const struct = extractStructTag(param)?.Struct;
+export function isTxContext(param: OpenMoveTypeSignature): boolean {
+	const struct =
+		typeof param.body === 'object' && 'datatype' in param.body ? param.body.datatype : null;
 	return (
-		struct?.address === '0x2' && struct?.module === 'tx_context' && struct?.name === 'TxContext'
+		struct?.package === normalizeSuiAddress('0x2') &&
+		struct?.module === 'tx_context' &&
+		struct?.type === 'TxContext'
 	);
 }
 
