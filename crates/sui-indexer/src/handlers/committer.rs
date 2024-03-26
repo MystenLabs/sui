@@ -17,6 +17,8 @@ use crate::types::IndexerResult;
 
 use super::{CheckpointDataToCommit, EpochToCommit};
 
+const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
+
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     metrics: IndexerMetrics,
@@ -29,7 +31,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
 
     info!("Indexer checkpoint commit task started...");
     let checkpoint_commit_batch_size = std::env::var("CHECKPOINT_COMMIT_BATCH_SIZE")
-        .unwrap_or(5.to_string())
+        .unwrap_or(CHECKPOINT_COMMIT_BATCH_SIZE.to_string())
         .parse::<usize>()
         .unwrap();
     info!("Using checkpoint commit batch size {checkpoint_commit_batch_size}");
