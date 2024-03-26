@@ -16,7 +16,7 @@ use crate::crypto::{
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::digests::TransactionEventsDigest;
-use crate::effects::{SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI};
+use crate::effects::{SignedTransactionEffects, TestEffectsBuilder, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
@@ -457,7 +457,7 @@ fn test_empty_bitmap() {
 fn test_digest_caching() {
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
     let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
 
     let (sa1, _ssec1): (_, AccountKeyPair) = get_key_pair();
@@ -512,10 +512,7 @@ fn test_digest_caching() {
     // cached digest was not serialized/deserialized
     assert_ne!(initial_digest, *deserialized_tx.digest());
 
-    let effects = TransactionEffects::new_with_tx_and_gas(
-        &transaction,
-        (random_object_ref(), Owner::AddressOwner(a1)),
-    );
+    let effects = TestEffectsBuilder::new(transaction.data()).build();
 
     let mut signed_effects = SignedTransactionEffects::new(
         committee.epoch(),

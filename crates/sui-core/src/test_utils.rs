@@ -26,7 +26,7 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
+use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
 use sui_types::error::SuiError;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
@@ -180,15 +180,11 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         committee,
     )
     .unwrap();
-    let effects = dummy_transaction_effects(&transaction);
+    let effects = TestEffectsBuilder::new(transaction.data()).build();
     (
         ExecutionDigests::new(*transaction.digest(), effects.digest()),
         cert,
     )
-}
-
-pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects::new_with_tx(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {

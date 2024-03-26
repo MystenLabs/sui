@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::effects_v2::TransactionEffectsV2;
-use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
+use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
@@ -20,7 +20,7 @@ use crate::message_envelope::{
 };
 use crate::object::Owner;
 use crate::storage::WriteKind;
-use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
+use crate::transaction::VersionedProtocolMessage;
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
@@ -29,10 +29,12 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
+pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
 mod effects_v2;
 mod object_change;
+mod test_effects_builder;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
@@ -108,6 +110,7 @@ impl Message for TransactionEffects {
 
 impl UnauthenticatedMessage for TransactionEffects {}
 
+// TODO: Get rid of this and use TestEffectsBuilder instead.
 impl Default for TransactionEffects {
     fn default() -> Self {
         TransactionEffects::V2(Default::default())
@@ -305,29 +308,6 @@ impl TransactionEffects {
             wrapped_object_count: self.wrapped().len(),
             dependency_count: self.dependencies().len(),
         }
-    }
-}
-
-// testing helpers.
-impl TransactionEffects {
-    pub fn new_with_tx(tx: &SenderSignedData) -> TransactionEffects {
-        Self::new_with_tx_and_gas(
-            tx,
-            (
-                random_object_ref(),
-                Owner::AddressOwner(tx.transaction_data().sender()),
-            ),
-        )
-    }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        // TODO: Figure out who is calling this and why.
-        // This creates an inconsistent effects where gas object is not mutated.
-        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_gas(tx, gas_object))
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_status(tx, status))
     }
 }
 
