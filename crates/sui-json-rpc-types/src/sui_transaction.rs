@@ -1712,9 +1712,6 @@ impl SuiProgrammableTransactionBlock {
     ) -> Result<Self, anyhow::Error> {
         let input_types = package_resolver.pure_input_layouts(&value).await?;
         let ProgrammableTransaction { inputs, commands } = value;
-        // let input_types =
-        //     Self::resolve_input_type_with_package_resolver(&inputs, &commands, package_resolver)
-        //         .await;
         Ok(SuiProgrammableTransactionBlock {
             inputs: inputs
                 .into_iter()
@@ -1767,50 +1764,6 @@ impl SuiProgrammableTransactionBlock {
         }
         result_types
     }
-
-    // async fn resolve_input_type_with_package_resolver(
-    //     inputs: &Vec<CallArg>,
-    //     commands: &[Command],
-    //     package_resolver: Arc<Resolver<impl PackageStore>>,
-    // ) -> Vec<Option<MoveTypeLayout>> {
-    //     let mut result_types = vec![None; inputs.len()];
-    //     for command in commands.iter() {
-    //         match command {
-    //             Command::MoveCall(c) => {
-    //                 let id = ModuleId::new(c.package.into(), c.module.clone());
-    //                 let Some(types) = package_resolver
-    //                     .get_function_signature_types(id, c.function.as_ident_str())
-    //                     .await
-    //                 else {
-    //                     return result_types;
-    //                 };
-    //                 for (arg, type_) in c.arguments.iter().zip(types) {
-    //                     if let (&Argument::Input(i), Some(type_)) = (arg, type_) {
-    //                         if let Some(x) = result_types.get_mut(i as usize) {
-    //                             x.replace(type_);
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             Command::SplitCoins(_, amounts) => {
-    //                 for arg in amounts {
-    //                     if let &Argument::Input(i) = arg {
-    //                         if let Some(x) = result_types.get_mut(i as usize) {
-    //                             x.replace(MoveTypeLayout::U64);
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             Command::TransferObjects(_, Argument::Input(i)) => {
-    //                 if let Some(x) = result_types.get_mut((*i) as usize) {
-    //                     x.replace(MoveTypeLayout::Address);
-    //                 }
-    //             }
-    //             _ => {}
-    //         }
-    //     }
-    //     result_types
-    // }
 }
 
 fn get_signature_types(
