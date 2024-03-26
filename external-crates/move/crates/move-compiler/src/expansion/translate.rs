@@ -3025,14 +3025,12 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
     let e_ = match pe_ {
         PE::Unit => EE::Unit { trailing: false },
         PE::Parens(pe) => {
-            if let PE::Cast(_, _) = &pe.value {
-                let sp!(pe_loc, PE::Cast(plhs, pty)) = *pe else {
-                    unreachable!()
-                };
-                let e_ = exp_cast(context, /* in_parens */ true, plhs, pty);
-                return Box::new(sp(pe_loc, e_));
-            } else {
-                return exp(context, pe);
+            match *pe {
+                sp!(pe_loc, PE::Cast(plhs, pty)) => {
+                    let e_ = exp_cast(context, /* in_parens */ true, plhs, pty);
+                    return Box::new(sp(pe_loc, e_));
+                }
+                pe => return exp(context, Box::new(pe)),
             }
         }
         PE::Value(pv) => unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value)),
