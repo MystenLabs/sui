@@ -12,8 +12,11 @@ module 0x8675309::M {
         (0 as bool);
         (0 as address);
         R{} = (0 as R);
+        (0 as Cup<u8>);
+        (0 as ());
+        (0 as (u64, u8));
 
-	    (x"1234" as u64);
+        (x"1234" as u64);
     }
 
     fun t1() {
@@ -26,7 +29,10 @@ module 0x8675309::M {
         0 as bool;
         0 as address;
         R{} = 0 as R;
+        0 as Cup<u8>;
+        0 as ();
+        0 as (u64, u8);
 
-	    x"1234" as u64;
+        x"1234" as u64;
     }
 }

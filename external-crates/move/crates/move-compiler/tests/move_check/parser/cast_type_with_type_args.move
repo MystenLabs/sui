@@ -1,6 +1,6 @@
 module a::m {
     fun t() {
-        // we only parse type names
-        (0 as Cup<u8>);
+        // The type arguments here are whitespace sensitive.
+        (0 as Cup <u8>);
     }
 }

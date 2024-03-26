@@ -1776,12 +1776,7 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
         let op_end_loc = context.tokens.previous_end_loc();
 
         if op_token == Tok::As {
-            let ty = {
-                // numeric types don't have type arguments, so don't attempt to parse '<' as a
-                // type arg
-                let tn = parse_name_access_chain(context, || "a type name")?;
-                sp(tn.loc, Type_::Apply(Box::new(tn), vec![]))
-            };
+            let ty = parse_type_(context, /* whitespace_sensitive_ty_args */ true)?;
             let start_loc = result.loc.start() as usize;
             let end_loc = context.tokens.previous_end_loc();
             let e_ = Exp_::Cast(Box::new(result), ty);
@@ -2195,6 +2190,13 @@ fn make_builtin_call(loc: Loc, name: Symbol, type_args: Option<Vec<Type>>, args:
 //          | "|" Comma<Type> "|" Type   (spec only)
 //          | "(" Comma<Type> ")"
 fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
+    parse_type_(context, /* whitespace_sensitive_ty_args */ false)
+}
+
+fn parse_type_(
+    context: &mut Context,
+    whitespace_sensitive_ty_args: bool,
+) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
         Tok::LParen => {
@@ -2253,7 +2255,10 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
         }
         _ => {
             let tn = parse_name_access_chain(context, || "a type name")?;
-            let tys = if context.tokens.peek() == Tok::Less {
+            let start_loc = context.tokens.start_loc();
+            let tys = if context.tokens.peek() == Tok::Less
+                && (!whitespace_sensitive_ty_args || tn.loc.end() as usize == start_loc)
+            {
                 parse_comma_list(context, Tok::Less, Tok::Greater, parse_type, "a type")?
             } else {
                 vec![]
