@@ -466,7 +466,7 @@ fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
 #[growing_stack]
 fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
     match e_ {
-        N::Exp_::Value(_) | N::Exp_::Constant(_, _) => (),
+        N::Exp_::Value(_) | N::Exp_::Constant(_, _) | N::Exp_::ErrorConstant => (),
         N::Exp_::Give(_usage, label, e) => {
             recolor_block_label(ctx, label);
             recolor_exp(ctx, e)
@@ -690,6 +690,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Give(_, _, e)
         | N::Exp_::Return(e)

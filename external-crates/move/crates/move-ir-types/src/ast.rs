@@ -265,6 +265,8 @@ pub struct Constant {
     pub signature: Type,
     /// The constant's value
     pub value: MoveValue,
+    /// Whether this constant appears as an error constant in the source code.
+    pub is_error_constant: bool,
 }
 
 //**************************************************************************************************
@@ -659,6 +661,10 @@ pub enum Bytecode_ {
     VecPopBack(Type),
     VecUnpack(Type, u64),
     VecSwap(Type),
+    ErrorConstant {
+        line_number: u16,
+        constant: Option<ConstantName>,
+    },
 }
 pub type Bytecode = Spanned<Bytecode_>;
 
@@ -1622,6 +1628,20 @@ impl fmt::Display for Bytecode_ {
             Bytecode_::VecPopBack(ty) => write!(f, "VecPopBack {}", ty),
             Bytecode_::VecUnpack(ty, n) => write!(f, "VecUnpack {} {}", ty, n),
             Bytecode_::VecSwap(ty) => write!(f, "VecSwap {}", ty),
+            Bytecode_::ErrorConstant {
+                line_number,
+                constant,
+            } => {
+                write!(
+                    f,
+                    "ErrorConstant {}:{}",
+                    line_number,
+                    constant
+                        .as_ref()
+                        .map(|s| s.0.to_string())
+                        .unwrap_or("<NONE>".to_owned())
+                )
+            }
         }
     }
 }

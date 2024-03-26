@@ -276,6 +276,7 @@ codes!(
         CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
         InvariantError: { msg: "types are not equal", severity: BlockingError },
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
+        InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -356,6 +357,8 @@ codes!(
         NeedsGlobalQualification: { msg: "move 2024 migration: global qualification", severity: NonblockingError },
         RemoveFriend: { msg: "move 2024 migration: remove 'friend'", severity: NonblockingError },
         MakePubPackage: { msg: "move 2024 migration: make 'public(package)'", severity: NonblockingError },
+        AddressRemove: { msg: "move 2024 migration: address remove", severity: NonblockingError },
+        AddressAdd: { msg: "move 2024 migration: address add", severity: NonblockingError },
     ]
 );
 

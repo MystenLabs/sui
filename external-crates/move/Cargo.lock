@@ -1641,6 +1641,7 @@ dependencies = [
  "move-core-types",
  "num-bigint",
  "once_cell",
+ "proptest",
  "serde",
  "sha2",
  "vfs",
@@ -2089,6 +2090,7 @@ name = "move-unit-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "better_any",
  "clap 4.4.1",
  "codespan-reporting",

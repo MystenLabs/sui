@@ -1449,12 +1449,33 @@ importers:
 
   sdk/docs:
     dependencies:
+      '@mysten/bcs':
+        specifier: workspace:*
+        version: link:../bcs
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../dapp-kit
+      '@mysten/deepbook':
+        specifier: workspace:*
+        version: link:../deepbook
+      '@mysten/enoki':
+        specifier: workspace:*
+        version: link:../enoki
+      '@mysten/graphql-transport':
+        specifier: workspace:*
+        version: link:../graphql-transport
+      '@mysten/kiosk':
+        specifier: workspace:*
+        version: link:../kiosk
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../typescript
+      '@mysten/zklogin':
+        specifier: workspace:*
+        version: link:../zklogin
+      '@mysten/zksend':
+        specifier: workspace:*
+        version: link:../zksend
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@18.2.0)(react@18.2.0)
@@ -1480,6 +1501,9 @@ importers:
       '@types/react':
         specifier: ^18.2.15
         version: 18.2.15
+      typedoc:
+        specifier: ^0.25.12
+        version: 0.25.12(typescript@5.3.3)
 
   sdk/enoki:
     dependencies:
@@ -1644,6 +1668,8 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
+  sdk/move-binary-format-wasm/pkg: {}
+
   sdk/move-bytecode-template:
     devDependencies:
       '@mysten/bcs':
@@ -1771,9 +1797,6 @@ importers:
       ts-retry-promise:
         specifier: ^0.7.0
         version: 0.7.0
-      typedoc:
-        specifier: ^0.24.8
-        version: 0.24.8(typescript@5.3.3)
       typescript:
         specifier: ^5.3.3
         version: 5.3.3
@@ -12984,6 +13007,11 @@ packages:
 
   /ansi-sequence-parser@1.1.0:
     resolution: {integrity: sha512-lEm8mt52to2fT8GhciPCGeCXACSz2UwIN4X2e2LJSnZ5uAbn2/dsYdOmUXq0AtWS5cpAupysIneExOgH0Vd2TQ==}
+    dev: false
+
+  /ansi-sequence-parser@1.1.1:
+    resolution: {integrity: sha512-vJXt3yiaUL4UU546s3rPXlsry/RnM730G1+HkpKE012AN0sx1eOrxSu95oKDIonskeLTijMgqWZ3uDEe3NFvyg==}
+    dev: true
 
   /ansi-styles@3.2.1:
     resolution: {integrity: sha512-VT0ZI6kZRdTh8YyJw3SMbYm/u+NqfsAxEpWO0Pf9sq8/e94WxxOpPKx9FR1FlyCtOVDNOQ+8ntlqFxiRc+r5qA==}
@@ -19686,6 +19714,11 @@ packages:
 
   /jsonc-parser@3.2.0:
     resolution: {integrity: sha512-gfFQZrcTc8CnKXp6Y4/CBT3fTc0OVuDofpre4aEeEpSBPV5X5v4+Vmx+8snU7RLPrNHPKSgLxGo9YuQzz20o+w==}
+    dev: false
+
+  /jsonc-parser@3.2.1:
+    resolution: {integrity: sha512-AilxAyFOAcK5wA1+LeaySVBrHsGQvUFCDWXKpZjzaL0PqW+xfBOttn8GNtWKFWqneyMZj41MWF9Kl6iPWLwgOA==}
+    dev: true
 
   /jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
@@ -22274,7 +22307,7 @@ packages:
   /pkg-types@1.0.3:
     resolution: {integrity: sha512-nN7pYi0AQqJnoLPC9eHFQ8AcyaixBUOwvqc5TDnIKCMEE6I0y8P7OKA7fPexsXGCGxQDl/cmrLAp26LhcwxZ4A==}
     dependencies:
-      jsonc-parser: 3.2.0
+      jsonc-parser: 3.2.1
       mlly: 1.4.0
       pathe: 1.1.1
     dev: true
@@ -24557,6 +24590,16 @@ packages:
       jsonc-parser: 3.2.0
       vscode-oniguruma: 1.7.0
       vscode-textmate: 8.0.0
+    dev: false
+
+  /shiki@0.14.7:
+    resolution: {integrity: sha512-dNPAPrxSc87ua2sKJ3H5dQ/6ZaY8RNnaAqK+t0eG7p0Soi2ydiqbGOTaZCqaYvA/uZYfS1LJnemt3Q+mSfcPCg==}
+    dependencies:
+      ansi-sequence-parser: 1.1.1
+      jsonc-parser: 3.2.1
+      vscode-oniguruma: 1.7.0
+      vscode-textmate: 8.0.0
+    dev: true
 
   /side-channel@1.0.4:
     resolution: {integrity: sha512-q5XPytqFEIKHkGdiMIrY10mvLRvnQh42/+GoBlFW3b2LXLE2xxJpZFdm94we0BaoV3RwJyGqg5wS7epxTv0Zvw==}
@@ -26002,17 +26045,17 @@ packages:
     resolution: {integrity: sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==}
     dev: true
 
-  /typedoc@0.24.8(typescript@5.3.3):
-    resolution: {integrity: sha512-ahJ6Cpcvxwaxfu4KtjA8qZNqS43wYt6JL27wYiIgl1vd38WW/KWX11YuAeZhuz9v+ttrutSsgK+XO1CjL1kA3w==}
-    engines: {node: '>= 14.14'}
+  /typedoc@0.25.12(typescript@5.3.3):
+    resolution: {integrity: sha512-F+qhkK2VoTweDXd1c42GS/By2DvI2uDF4/EpG424dTexSHdtCH52C6IcAvMA6jR3DzAWZjHpUOW+E02kyPNUNw==}
+    engines: {node: '>= 16'}
     hasBin: true
     peerDependencies:
-      typescript: 4.6.x || 4.7.x || 4.8.x || 4.9.x || 5.0.x || 5.1.x
+      typescript: 4.6.x || 4.7.x || 4.8.x || 4.9.x || 5.0.x || 5.1.x || 5.2.x || 5.3.x || 5.4.x
     dependencies:
       lunr: 2.3.9
       marked: 4.3.0
       minimatch: 9.0.3
-      shiki: 0.14.3
+      shiki: 0.14.7
       typescript: 5.3.3
     dev: true
 

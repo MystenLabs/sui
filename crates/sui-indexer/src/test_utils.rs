@@ -12,8 +12,8 @@ use tracing::info;
 
 use crate::db::{new_pg_connection_pool, reset_database};
 use crate::errors::IndexerError;
+use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
-use crate::processors::objects_snapshot_processor::SnapshotLagConfig;
 use crate::store::PgIndexerStore;
 use crate::{IndexerConfig, IndexerMetrics};
 

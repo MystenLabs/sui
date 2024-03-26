@@ -271,7 +271,8 @@ impl BuildConfig {
         let path = SourcePackageLayout::try_find_root(path)?;
         let manifest_string =
             std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
-        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let lock_path = path.join(SourcePackageLayout::Lock.path());
+        let lock_string = std::fs::read_to_string(lock_path.clone()).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
         let install_dir_set = self.install_dir.is_some();
@@ -292,7 +293,7 @@ impl BuildConfig {
         if modified || install_dir_set {
             // (1) Write the Move.lock file if the existing one is `modified`, or
             // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
-            let lock = dependency_graph.write_to_lock(install_dir)?;
+            let lock = dependency_graph.write_to_lock(install_dir, Some(lock_path))?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
             }

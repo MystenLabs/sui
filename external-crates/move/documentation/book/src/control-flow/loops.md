@@ -164,8 +164,8 @@ produce that value as the final function result.
 
 ### Using `continue` Inside of `loop` Expressions
 
-As you might expect, `continue` can also be used inside a `loop`. Here is the previous `sum_even` function
-rewritten using `loop` with `break `and` continue` instead of `while`.
+As you might expect, `continue` can also be used inside a `loop`. Here is the previous `sum_even`
+function rewritten using `loop` with `break `and` continue` instead of `while`.
 
 ```move
 fun sum_even(values: &vector<u64>): u64 {
@@ -192,8 +192,8 @@ In Move, loops are typed expressions. A `while` expression always has type `()`.
 let () = while (i < 10) { i = i + 1 };
 ```
 
-If a `loop` contains a `break`, the expression has the type of the break. A break with no
-value has the unit type `()`.
+If a `loop` contains a `break`, the expression has the type of the break. A break with no value has
+the unit type `()`.
 
 ```move
 (loop { if (i < 10) i = i + 1 else break }: ());

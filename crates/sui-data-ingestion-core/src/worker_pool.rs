@@ -44,6 +44,8 @@ impl<W: Worker + 'static> WorkerPool<W> {
         let mut idle: BTreeSet<_> = (0..self.concurrency).collect();
         let mut checkpoints = VecDeque::new();
 
+        let mut join_handles = vec![];
+
         // spawn child workers
         for worker_id in 0..self.concurrency {
             let (worker_sender, mut worker_recv) =
@@ -54,7 +56,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
             workers.push((worker_sender, term_sender));
 
             let worker = self.worker.clone();
-            spawn_monitored_task!(async move {
+            let join_handle = spawn_monitored_task!(async move {
                 loop {
                     tokio::select! {
                         _ = &mut term_receiver => break,
@@ -76,11 +78,17 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             .await
                             .expect("checkpoint processing failed for checkpoint");
                             info!("finished checkpoint processing {} for workflow {} in {:?}", sequence_number, task_name, start_time.elapsed());
-                            cloned_progress_sender.send((worker_id, sequence_number, worker.save_progress(sequence_number).await)).await.expect("failed to update progress");
+                            if cloned_progress_sender.send((worker_id, sequence_number, worker.save_progress(sequence_number).await)).await.is_err() {
+                                // The progress channel closing is a sign we need to exit this loop.
+                                break;
+                            }
                         }
                     }
                 }
             });
+
+            // Keep all join handles to ensure all workers are terminated before exiting
+            join_handles.push(join_handle);
         }
         // main worker pool loop
         loop {
@@ -97,16 +105,22 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             current_checkpoint_number += 1;
                         }
                         if let Some(update) = executor_status_update {
-                            executor_progress_sender
+                            if executor_progress_sender
                                 .send((self.task_name.clone(), update))
-                                .await
-                                .expect("Failed to send progress update to the executor");
+                                .await.is_err() {
+                                    // The executor progress channel closing is a sign we need to
+                                    // exit this loop.
+                                    break;
+                                }
                         }
                     }
                     while !checkpoints.is_empty() && !idle.is_empty() {
                         let checkpoint = checkpoints.pop_front().unwrap();
                         let worker_id = idle.pop_first().unwrap();
-                        workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
+                        if workers[worker_id].0.send(checkpoint).await.is_err() {
+                            // The worker channel closing is a sign we need to exit this loop.
+                            break;
+                        }
                     }
                 }
                 Some(checkpoint) = checkpoint_receiver.recv() => {
@@ -118,10 +132,23 @@ impl<W: Worker + 'static> WorkerPool<W> {
                         checkpoints.push_back(checkpoint);
                     } else {
                         let worker_id = idle.pop_first().unwrap();
-                        workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
+                        if workers[worker_id].0.send(checkpoint).await.is_err() {
+                            // The worker channel closing is a sign we need to exit this loop.
+                            break;
+                        };
                     }
                 }
             }
+        }
+
+        // Clean up code for graceful termination
+
+        // Notify the exit handles of all workers to terminate
+        drop(workers);
+
+        // Wait for all workers to finish
+        for join_handle in join_handles {
+            join_handle.await.expect("worker thread panicked");
         }
     }
 }

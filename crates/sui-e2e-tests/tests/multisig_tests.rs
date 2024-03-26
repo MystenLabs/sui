@@ -175,13 +175,12 @@ async fn test_multisig_e2e() {
 #[sim_test]
 async fn test_multisig_with_zklogin_scenerios() {
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
         .build()
         .await;
 
-    // trigger reconfiguration that advanced epoch to 1.
-    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch(Some(1)).await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &test_cluster.wallet;
@@ -646,12 +645,7 @@ async fn test_expired_epoch_zklogin_in_multisig() {
         .with_default_jwks()
         .build()
         .await;
-    // trigger reconfiguration that advanced epoch to 1.
-    test_cluster.trigger_reconfiguration().await;
-    // trigger reconfiguration that advanced epoch to 2.
-    test_cluster.trigger_reconfiguration().await;
-    // trigger reconfiguration that advanced epoch to 3.
-    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch(Some(3)).await;
     let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res

@@ -29,19 +29,33 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{anemo_network::AnemoManager, NetworkManager, NetworkService},
+    network::{
+        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager, NetworkService,
+    },
     storage::rocksdb_store::RocksDBStore,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     CommitConsumer,
 };
 
-// This type is used by Sui as part of starting consensus via MysticetiManager.
-// It hides the details of the types.
-pub struct ConsensusAuthority(AuthorityNode<AnemoManager>);
+/// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
+/// It hides the details of the implementation from the caller, MysticetiManager.
+#[allow(private_interfaces)]
+pub enum ConsensusAuthority {
+    WithAnemo(AuthorityNode<AnemoManager>),
+    WithTonic(AuthorityNode<TonicManager>),
+}
+
+// Type of network used by the authority node.
+#[derive(Clone, Copy)]
+pub enum NetworkType {
+    Anemo,
+    Tonic,
+}
 
 impl ConsensusAuthority {
     pub async fn start(
+        network_type: NetworkType,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -52,27 +66,60 @@ impl ConsensusAuthority {
         commit_consumer: CommitConsumer,
         registry: Registry,
     ) -> Self {
-        let authority_node = AuthorityNode::start(
-            own_index,
-            committee,
-            parameters,
-            protocol_config,
-            protocol_keypair,
-            network_keypair,
-            transaction_verifier,
-            commit_consumer,
-            registry,
-        )
-        .await;
-        Self(authority_node)
+        match network_type {
+            NetworkType::Anemo => {
+                let authority = AuthorityNode::start(
+                    own_index,
+                    committee,
+                    parameters,
+                    protocol_config,
+                    protocol_keypair,
+                    network_keypair,
+                    transaction_verifier,
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                Self::WithAnemo(authority)
+            }
+            NetworkType::Tonic => {
+                let authority = AuthorityNode::start(
+                    own_index,
+                    committee,
+                    parameters,
+                    protocol_config,
+                    protocol_keypair,
+                    network_keypair,
+                    transaction_verifier,
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                Self::WithTonic(authority)
+            }
+        }
     }
 
     pub async fn stop(self) {
-        self.0.stop().await;
+        match self {
+            Self::WithAnemo(authority) => authority.stop().await,
+            Self::WithTonic(authority) => authority.stop().await,
+        }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
-        self.0.transaction_client()
+        match self {
+            Self::WithAnemo(authority) => authority.transaction_client(),
+            Self::WithTonic(authority) => authority.transaction_client(),
+        }
+    }
+
+    #[cfg(test)]
+    fn context(&self) -> &Arc<Context> {
+        match self {
+            Self::WithAnemo(authority) => &authority.context,
+            Self::WithTonic(authority) => &authority.context,
+        }
     }
 }
 
@@ -353,6 +400,7 @@ mod tests {
     use consensus_config::{local_committee_and_keys, Parameters};
     use parking_lot::Mutex;
     use prometheus::Registry;
+    use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
     use tokio::{sync::mpsc::unbounded_channel, time::sleep};
@@ -413,7 +461,8 @@ mod tests {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
-            _serialized_block: &Bytes,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
             unimplemented!("Unimplemented")
         }
@@ -422,13 +471,17 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_authority_start_and_stop() {
+    async fn test_authority_start_and_stop(
+        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+    ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
 
@@ -447,6 +500,7 @@ mod tests {
         let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
+            network_type,
             own_index,
             committee,
             parameters,
@@ -459,9 +513,9 @@ mod tests {
         )
         .await;
 
-        assert_eq!(authority.0.context.own_index, own_index);
-        assert_eq!(authority.0.context.committee.epoch(), 0);
-        assert_eq!(authority.0.context.committee.size(), 1);
+        assert_eq!(authority.context().own_index, own_index);
+        assert_eq!(authority.context().committee.epoch(), 0);
+        assert_eq!(authority.context().committee.size(), 1);
 
         authority.stop().await;
     }
@@ -517,8 +571,11 @@ mod tests {
     }
 
     // TODO: build AuthorityFixture.
+    #[rstest]
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_authority_committee() {
+    async fn test_authority_committee(
+        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+    ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let mut output_receivers = vec![];
         let mut authorities = vec![];
@@ -540,6 +597,7 @@ mod tests {
             output_receivers.push(receiver);
 
             let authority = ConsensusAuthority::start(
+                network_type,
                 index,
                 committee.clone(),
                 parameters,

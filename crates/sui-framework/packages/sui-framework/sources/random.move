@@ -4,12 +4,8 @@
 /// This module provides functionality for generating secure randomness.
 module sui::random {
     use std::bcs;
-    use std::vector;
-    use sui::address::to_bytes;
     use sui::hmac::hmac_sha3_256;
-    use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext, fresh_object_address};
     use sui::versioned::{Self, Versioned};
 
     // Sender is not @0x0 the system address.
@@ -44,13 +40,13 @@ module sui::random {
     /// the Random object is first created.
     /// Can only be called by genesis or change_epoch transactions.
     fun create(ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         let version = CURRENT_VERSION;
 
         let inner = RandomInner {
             version,
-            epoch: tx_context::epoch(ctx),
+            epoch: ctx.epoch(),
             randomness_round: 0,
             random_bytes: vector[],
         };
@@ -101,13 +97,12 @@ module sui::random {
         ctx: &TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         // Randomness should only be incremented.
-        let epoch = tx_context::epoch(ctx);
-        let inner = load_inner_mut(self);
-        if (inner.randomness_round == 0 && inner.epoch == 0 &&
-            vector::is_empty(&inner.random_bytes)) {
+        let epoch = ctx.epoch();
+        let inner = self.load_inner_mut();
+        if (inner.randomness_round == 0 && inner.epoch == 0 && inner.random_bytes.is_empty()) {
             // First update should be for round zero.
             assert!(new_round == 0, EInvalidRandomnessUpdate);
         } else {
@@ -121,7 +116,7 @@ module sui::random {
             );
         };
 
-        inner.epoch = tx_context::epoch(ctx);
+        inner.epoch = ctx.epoch();
         inner.randomness_round = new_round;
         inner.random_bytes = new_bytes;
     }
@@ -133,7 +128,7 @@ module sui::random {
         new_bytes: vector<u8>,
         ctx: &TxContext,
     ) {
-        update_randomness_state(self, new_round, new_bytes, ctx);
+        self.update_randomness_state(new_round, new_bytes, ctx);
     }
 
 
@@ -149,7 +144,7 @@ module sui::random {
         let inner = load_inner(r);
         let seed = hmac_sha3_256(
             &inner.random_bytes,
-            &to_bytes(fresh_object_address(ctx))
+            &ctx.fresh_object_address().to_bytes()
         );
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
