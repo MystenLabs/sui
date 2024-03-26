@@ -3,7 +3,7 @@
 
 import { useZodForm } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import { TransactionBlock, getPureSerializationType } from '@mysten/sui.js/transactions';
+import { TransactionBlock, getPureBcsSchema } from '@mysten/sui.js/transactions';
 import { Button } from '@mysten/ui';
 import {
 	ConnectButton,
@@ -67,11 +67,16 @@ export function ModuleFunction({
 				target: `${packageId}::${moduleName}::${functionName}`,
 				typeArguments: types ?? [],
 				arguments:
-					params?.map((param, i) =>
-						getPureSerializationType(functionDetails.parameters[i], param)
-							? tx.pure(param)
-							: tx.object(param),
-					) ?? [],
+					params?.map((param, i) => {
+						const typeSignature = paramsDetails[i].moveTypeSignature;
+						const schema = getPureBcsSchema(typeSignature.body);
+
+						if (!schema) {
+							return tx.object(param);
+						}
+
+						return tx.pure(schema.serialize(param));
+					}) ?? [],
 			});
 			const result = await signAndExecuteTransactionBlock({
 				transactionBlock: tx,

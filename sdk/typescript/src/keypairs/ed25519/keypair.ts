@@ -105,14 +105,10 @@ export class Ed25519Keypair extends Keypair {
 		);
 	}
 
-	async sign(data: Uint8Array) {
-		return this.signData(data);
-	}
-
 	/**
 	 * Return the signature for the provided data using Ed25519.
 	 */
-	signData(data: Uint8Array): Uint8Array {
+	async sign(data: Uint8Array) {
 		return nacl.sign.detached(data, this.keypair.secretKey);
 	}
 

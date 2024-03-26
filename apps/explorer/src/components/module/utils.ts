@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiMoveNormalizedType } from '@mysten/sui.js/client';
+import { normalizedTypeToMoveTypeSignature } from '@mysten/sui.js/transactions';
 
 /**
  * Converts a SuiMoveNormalizedType to string
@@ -54,6 +55,7 @@ export function getNormalizedFunctionParameterTypeDetails(
 	const paramTypeText = normalizedFunctionParameterTypeToString(param, functionTypeArgNames);
 	return {
 		isTxContext: paramTypeText === '0x2::tx_context::TxContext',
+		moveTypeSignature: normalizedTypeToMoveTypeSignature(param),
 		paramTypeText,
 	};
 }

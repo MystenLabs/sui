@@ -7,7 +7,6 @@ import { bytesToHex } from '@noble/hashes/utils';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
-import type { SerializedSignature } from './index.js';
 import { IntentScope, messageWithIntent } from './intent.js';
 
 /**
@@ -66,7 +65,7 @@ export abstract class PublicKey {
 
 	verifyWithIntent(
 		bytes: Uint8Array,
-		signature: Uint8Array | SerializedSignature,
+		signature: Uint8Array | string,
 		intent: IntentScope,
 	): Promise<boolean> {
 		const intentMessage = messageWithIntent(intent, bytes);
@@ -78,10 +77,7 @@ export abstract class PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided PersonalMessage
 	 */
-	verifyPersonalMessage(
-		message: Uint8Array,
-		signature: Uint8Array | SerializedSignature,
-	): Promise<boolean> {
+	verifyPersonalMessage(message: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		return this.verifyWithIntent(
 			bcs.vector(bcs.u8()).serialize(message).toBytes(),
 			signature,
@@ -94,7 +90,7 @@ export abstract class PublicKey {
 	 */
 	verifyTransactionBlock(
 		transactionBlock: Uint8Array,
-		signature: Uint8Array | SerializedSignature,
+		signature: Uint8Array | string,
 	): Promise<boolean> {
 		return this.verifyWithIntent(transactionBlock, signature, IntentScope.TransactionData);
 	}
@@ -135,5 +131,5 @@ export abstract class PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	abstract verify(data: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean>;
+	abstract verify(data: Uint8Array, signature: Uint8Array | string): Promise<boolean>;
 }

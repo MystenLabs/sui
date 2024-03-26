@@ -114,14 +114,10 @@ export class Secp256k1Keypair extends Keypair {
 		return encodeSuiPrivateKey(this.keypair.secretKey, this.getKeyScheme());
 	}
 
-	async sign(data: Uint8Array) {
-		return this.signData(data);
-	}
-
 	/**
 	 * Return the signature for the provided data.
 	 */
-	signData(data: Uint8Array): Uint8Array {
+	async sign(data: Uint8Array) {
 		const msgHash = sha256(data);
 		const sig = secp256k1.sign(msgHash, this.keypair.secretKey, {
 			lowS: true,

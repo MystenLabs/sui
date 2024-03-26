@@ -6,7 +6,6 @@ import { fromB64 } from '@mysten/bcs';
 import { PublicKey } from '../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
-import type { SerializedSignature } from '../cryptography/signature.js';
 import { toPaddedBigEndianBytes } from './utils.js';
 
 /**
@@ -55,10 +54,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(
-		_message: Uint8Array,
-		_signature: Uint8Array | SerializedSignature,
-	): Promise<boolean> {
+	async verify(_message: Uint8Array, _signature: Uint8Array | string): Promise<boolean> {
 		throw Error('does not support');
 	}
 }

@@ -2,23 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
-import {
-	bcs,
-	BCS as BcsRegistry,
-	fromB58,
-	fromB64,
-	fromHEX,
-	getSuiMoveConfig,
-	toB58,
-	toB64,
-	toHEX,
-} from '@mysten/bcs';
+import { bcs, fromB58, fromB64, fromHEX, toB58, toB64, toHEX } from '@mysten/bcs';
 
-import type { MoveCallTransaction } from '../transactions/Transactions.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
-import { TypeTagSerializer } from './type-tag-serializer.js';
 
 export { TypeTagSerializer } from './type-tag-serializer.js';
+export { BcsType, type BcsTypeOptions } from '@mysten/bcs';
 
 /**
  * A reference to a shared object.
@@ -38,7 +27,7 @@ export type SuiObjectRef = {
 	/** Base64 string representing the object digest */
 	objectId: string;
 	/** Object version */
-	version: number | string | bigint;
+	version: number | string;
 	/** Hex code as string representing the object id */
 	digest: string;
 };
@@ -47,14 +36,18 @@ export type SuiObjectRef = {
  * An object argument.
  */
 export type ObjectArg =
-	| { ImmOrOwned: SuiObjectRef }
-	| { Shared: SharedObjectRef }
+	| { ImmOrOwnedObject: SuiObjectRef }
+	| { SharedObject: SharedObjectRef }
 	| { Receiving: SuiObjectRef };
+
+export type ObjectCallArg = {
+	Object: ObjectArg;
+};
 
 /**
  * A pure argument.
  */
-export type PureArg = { Pure: ArrayLike<number> };
+export type PureArg = { Pure: Array<number> };
 
 export function isPureArg(arg: any): arg is PureArg {
 	return (arg as PureArg).Pure !== undefined;
@@ -83,7 +76,7 @@ export function isPureArg(arg: any): arg is PureArg {
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
-export type CallArg = PureArg | { Object: ObjectArg };
+export type CallArg = PureArg | ObjectCallArg;
 
 /**
  * Kind of a TypeTag which is represented by a Move type identifier.
@@ -130,18 +123,6 @@ export type GasData = {
  */
 export type TransactionExpiration = { None: null } | { Epoch: number };
 
-const bcsRegistry = new BcsRegistry({
-	...getSuiMoveConfig(),
-	types: {
-		enums: {
-			'Option<T>': {
-				None: null,
-				Some: 'T',
-			},
-		},
-	},
-});
-
 function unsafe_u64(options?: BcsTypeOptions<number>) {
 	return bcs
 		.u64({
@@ -149,7 +130,7 @@ function unsafe_u64(options?: BcsTypeOptions<number>) {
 			...(options as object),
 		})
 		.transform({
-			input: (val: number) => val,
+			input: (val: number | string) => val,
 			output: (val) => Number(val),
 		});
 }
@@ -158,34 +139,6 @@ function optionEnum<T extends BcsType<any, any>>(type: T) {
 	return bcs.enum('Option', {
 		None: null,
 		Some: type,
-	});
-}
-
-/**
- * Wrapper around Enum, which transforms any `T` into an object with `kind` property:
- * @example
- * ```
- * let bcsEnum = { TransferObjects: { objects: [], address: ... } }
- * // becomes
- * let translatedEnum = { kind: 'TransferObjects', objects: [], address: ... };
- * ```
- */
-function enumKind<T extends object, Input extends object>(type: BcsType<T, Input>) {
-	type Merge<T> = T extends infer U ? { [K in keyof U]: U[K] } : never;
-	type EnumKindTransform<T> = T extends infer U
-		? Merge<(U[keyof U] extends null | boolean ? object : U[keyof U]) & { kind: keyof U }>
-		: never;
-
-	return type.transform({
-		input: (val: EnumKindTransform<Input>) =>
-			({
-				[val.kind]: val,
-			}) as Input,
-		output: (val) => {
-			const key = Object.keys(val)[0] as keyof T;
-
-			return { kind: key, ...val[key] } as EnumKindTransform<T>;
-		},
 	});
 }
 
@@ -214,15 +167,15 @@ const SharedObjectRef = bcs.struct('SharedObjectRef', {
 });
 
 const ObjectArg = bcs.enum('ObjectArg', {
-	ImmOrOwned: SuiObjectRef,
-	Shared: SharedObjectRef,
+	ImmOrOwnedObject: SuiObjectRef,
+	SharedObject: SharedObjectRef,
 	Receiving: SuiObjectRef,
 });
 
 const CallArg = bcs.enum('CallArg', {
 	Pure: bcs.vector(bcs.u8()),
 	Object: ObjectArg,
-	ObjVec: bcs.vector(ObjectArg),
+	// ObjVec: bcs.vector(ObjectArg),
 });
 
 const TypeTag: BcsType<TypeTag> = bcs.enum('TypeTag', {
@@ -239,98 +192,53 @@ const TypeTag: BcsType<TypeTag> = bcs.enum('TypeTag', {
 	u256: null,
 }) as never;
 
-const Argument = enumKind(
-	bcs.enum('Argument', {
-		GasCoin: null,
-		Input: bcs.struct('Input', { index: bcs.u16() }),
-		Result: bcs.struct('Result', { index: bcs.u16() }),
-		NestedResult: bcs.struct('NestedResult', { index: bcs.u16(), resultIndex: bcs.u16() }),
-	}),
-);
+const Argument = bcs.enum('Argument', {
+	GasCoin: null,
+	Input: bcs.u16(),
+	Result: bcs.u16(),
+	NestedResult: bcs.tuple([bcs.u16(), bcs.u16()]),
+});
 
-/** Custom serializer for decoding package, module, function easier */
-const ProgrammableMoveCall = bcs
-	.struct('ProgrammableMoveCall', {
-		package: Address,
-		module: bcs.string(),
-		function: bcs.string(),
-		type_arguments: bcs.vector(TypeTag),
-		arguments: bcs.vector(Argument),
-	})
-	.transform({
-		input: (data: MoveCallTransaction) => {
-			const [pkg, module, fun] = data.target.split('::');
-			const type_arguments = data.typeArguments.map((tag) =>
-				TypeTagSerializer.parseFromStr(tag, true),
-			);
+const ProgrammableMoveCall = bcs.struct('ProgrammableMoveCall', {
+	package: Address,
+	module: bcs.string(),
+	function: bcs.string(),
+	typeArguments: bcs.vector(TypeTag),
+	arguments: bcs.vector(Argument),
+});
 
-			return {
-				package: normalizeSuiAddress(pkg),
-				module,
-				function: fun,
-				type_arguments,
-				arguments: data.arguments,
-			};
-		},
-		output: (data) => {
-			return {
-				target: [data.package, data.module, data.function].join(
-					'::',
-				) as `${string}::${string}::${string}`,
-				arguments: data.arguments,
-				typeArguments: data.type_arguments.map(TypeTagSerializer.tagToString),
-			};
-		},
-	});
-
-const Transaction = enumKind(
-	bcs.enum('Transaction', {
-		/**
-		 * A Move Call - any public Move function can be called via
-		 * this transaction. The results can be used that instant to pass
-		 * into the next transaction.
-		 */
-		MoveCall: ProgrammableMoveCall,
-		/**
-		 * Transfer vector of objects to a receiver.
-		 */
-		TransferObjects: bcs.struct('TransferObjects', {
-			objects: bcs.vector(Argument),
-			address: Argument,
-		}),
-		/**
-		 * Split `amount` from a `coin`.
-		 */
-		SplitCoins: bcs.struct('SplitCoins', { coin: Argument, amounts: bcs.vector(Argument) }),
-		/**
-		 * Merge Vector of Coins (`sources`) into a `destination`.
-		 */
-		MergeCoins: bcs.struct('MergeCoins', { destination: Argument, sources: bcs.vector(Argument) }),
-		/**
-		 * Publish a Move module.
-		 */
-		Publish: bcs.struct('Publish', {
-			modules: bcs.vector(bcs.vector(bcs.u8())),
-			dependencies: bcs.vector(Address),
-		}),
-		/**
-		 * Build a vector of objects using the input arguments.
-		 * It is impossible to construct a `vector<T: key>` otherwise,
-		 * so this call serves a utility function.
-		 */
-		MakeMoveVec: bcs.struct('MakeMoveVec', {
-			type: optionEnum(TypeTag),
-			objects: bcs.vector(Argument),
-		}),
-		/**  */
-		Upgrade: bcs.struct('Upgrade', {
-			modules: bcs.vector(bcs.vector(bcs.u8())),
-			dependencies: bcs.vector(Address),
-			packageId: Address,
-			ticket: Argument,
-		}),
-	}),
-);
+const Transaction = bcs.enum('Transaction', {
+	/**
+	 * A Move Call - any public Move function can be called via
+	 * this transaction. The results can be used that instant to pass
+	 * into the next transaction.
+	 */
+	MoveCall: ProgrammableMoveCall,
+	/**
+	 * Transfer vector of objects to a receiver.
+	 */
+	TransferObjects: bcs.tuple([bcs.vector(Argument), Argument]),
+	// /**
+	//  * Split `amount` from a `coin`.
+	//  */
+	SplitCoins: bcs.tuple([Argument, bcs.vector(Argument)]),
+	// /**
+	//  * Merge Vector of Coins (`sources`) into a `destination`.
+	//  */
+	MergeCoins: bcs.tuple([Argument, bcs.vector(Argument)]),
+	// /**
+	//  * Publish a Move module.
+	//  */
+	Publish: bcs.tuple([bcs.vector(bcs.vector(bcs.u8())), bcs.vector(Address)]),
+	// /**
+	//  * Build a vector of objects using the input arguments.
+	//  * It is impossible to construct a `vector<T: key>` otherwise,
+	//  * so this call serves a utility function.
+	//  */
+	MakeMoveVec: bcs.tuple([optionEnum(TypeTag), bcs.vector(Argument)]),
+	// /**  */
+	Upgrade: bcs.tuple([bcs.vector(bcs.vector(bcs.u8())), bcs.vector(Address), Address, Argument]),
+});
 
 const ProgrammableTransaction = bcs.struct('ProgrammableTransaction', {
 	inputs: bcs.vector(CallArg),
@@ -395,12 +303,12 @@ const Intent = bcs.struct('Intent', {
 	appId: AppId,
 });
 
-const IntentMessage = bcs.generic(['T'], (T) =>
-	bcs.struct('IntentMessage<T>', {
+function IntentMessage<T extends BcsType<any>>(T: T) {
+	return bcs.struct(`IntentMessage<${T.name}>`, {
 		intent: Intent,
 		value: T,
-	}),
-);
+	});
+}
 
 const CompressedSignature = bcs.enum('CompressedSignature', {
 	ED25519: bcs.fixedArray(64, bcs.u8()),
@@ -458,10 +366,15 @@ const suiBcs = {
 	Bool: bcs.bool(),
 	String: bcs.string(),
 	Address,
+	AppId,
 	Argument,
 	CallArg,
 	CompressedSignature,
 	GasData,
+	Intent,
+	IntentMessage,
+	IntentScope,
+	IntentVersion,
 	MultiSig,
 	MultiSigPkMap,
 	MultiSigPublicKey,
@@ -481,52 +394,6 @@ const suiBcs = {
 	TransactionExpiration,
 	TransactionKind,
 	TypeTag,
-
-	// preserve backwards compatibility with old bcs export
-	ser: bcsRegistry.ser.bind(bcsRegistry),
-	de: bcsRegistry.de.bind(bcsRegistry),
-	getTypeInterface: bcsRegistry.getTypeInterface.bind(bcsRegistry),
-	hasType: bcsRegistry.hasType.bind(bcsRegistry),
-	parseTypeName: bcsRegistry.parseTypeName.bind(bcsRegistry),
-	registerAddressType: bcsRegistry.registerAddressType.bind(bcsRegistry),
-	registerAlias: bcsRegistry.registerAlias.bind(bcsRegistry),
-	registerBcsType: bcsRegistry.registerBcsType.bind(bcsRegistry),
-	registerEnumType: bcsRegistry.registerEnumType.bind(bcsRegistry),
-	registerStructType: bcsRegistry.registerStructType.bind(bcsRegistry),
-	registerType: bcsRegistry.registerType.bind(bcsRegistry),
-	types: bcsRegistry.types,
 };
 
-bcsRegistry.registerBcsType('utf8string', () => bcs.string({ name: 'utf8string' }));
-bcsRegistry.registerBcsType('unsafe_u64', () => unsafe_u64());
-bcsRegistry.registerBcsType('enumKind', (T) => enumKind(T));
-
-[
-	Address,
-	Argument,
-	CallArg,
-	CompressedSignature,
-	GasData,
-	MultiSig,
-	MultiSigPkMap,
-	MultiSigPublicKey,
-	ObjectArg,
-	ObjectDigest,
-	ProgrammableMoveCall,
-	ProgrammableTransaction,
-	PublicKey,
-	SenderSignedData,
-	SharedObjectRef,
-	StructTag,
-	SuiObjectRef,
-	Transaction,
-	TransactionData,
-	TransactionDataV1,
-	TransactionExpiration,
-	TransactionKind,
-	TypeTag,
-].forEach((type) => {
-	bcsRegistry.registerBcsType(type.name, () => type);
-});
-
-export { suiBcs as bcs, bcsRegistry };
+export { suiBcs as bcs };

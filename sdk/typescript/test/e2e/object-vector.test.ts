@@ -15,7 +15,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		const tx = new TransactionBlock();
 		tx.moveCall({
 			target: `${packageId}::entry_point_vector::mint`,
-			arguments: [tx.pure(String(val))],
+			arguments: [tx.pure.u64(val)],
 		});
 		const result = await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,

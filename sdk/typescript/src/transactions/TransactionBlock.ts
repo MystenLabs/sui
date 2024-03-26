@@ -3,37 +3,26 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
-import { is, mask } from 'superstruct';
+import type { Input } from 'valibot';
+import { is, parse } from 'valibot';
 
-import { bcs } from '../bcs/index.js';
-import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
+import type { ProtocolConfig, SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
-import { SUI_TYPE_ARG } from '../utils/index.js';
-import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
-import {
-	BuilderCallArg,
-	getIdFromCallArg,
-	Inputs,
-	isMutableSharedObjectInput,
-	ObjectCallArg,
-	PureCallArg,
-	SuiObjectRef,
-} from './Inputs.js';
+import { normalizeSuiAddress } from '../utils/sui-types.js';
+import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
+import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
+import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
+import { getIdFromCallArg, Inputs } from './Inputs.js';
 import { createPure } from './pure.js';
-import { getPureSerializationType, isTxContext } from './serializer.js';
-import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-import type { MoveCallTransaction, TransactionArgument, TransactionType } from './Transactions.js';
-import { TransactionBlockInput, Transactions } from './Transactions.js';
-import { create, extractMutableReference, extractReference, extractStructTag } from './utils.js';
+import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
+import type { TransactionArgument } from './Transactions.js';
+import { Transactions } from './Transactions.js';
 
-export type TransactionObjectArgument = Exclude<
-	TransactionArgument,
-	{ kind: 'Input'; type: 'pure' }
->;
+export type TransactionObjectArgument = Exclude<Argument, { Input: unknown; type?: 'pure' }>;
 
-export type TransactionResult = Extract<TransactionArgument, { kind: 'Result' }> &
-	Extract<TransactionArgument, { kind: 'NestedResult' }>[];
+export type TransactionResult = Extract<Argument, { Result: unknown }> &
+	Extract<Argument, { NestedResult: unknown }>[];
 
 const DefaultOfflineLimits = {
 	maxPureArgumentSize: 16 * 1024,
@@ -43,14 +32,13 @@ const DefaultOfflineLimits = {
 } satisfies Limits;
 
 function createTransactionResult(index: number): TransactionResult {
-	const baseResult: TransactionArgument = { kind: 'Result', index };
+	const baseResult: TransactionArgument = { $kind: 'Result', Result: index };
 
 	const nestedResults: TransactionArgument[] = [];
 	const nestedResultFor = (resultIndex: number): TransactionArgument =>
 		(nestedResults[resultIndex] ??= {
-			kind: 'NestedResult',
-			index,
-			resultIndex,
+			$kind: 'NestedResult',
+			NestedResult: [index, resultIndex],
 		});
 
 	return new Proxy(baseResult, {
@@ -88,18 +76,6 @@ function createTransactionResult(index: number): TransactionResult {
 	}) as TransactionResult;
 }
 
-function isReceivingType(normalizedType: SuiMoveNormalizedType): boolean {
-	const tag = extractStructTag(normalizedType);
-	if (tag) {
-		return (
-			tag.Struct.address === '0x2' &&
-			tag.Struct.module === 'transfer' &&
-			tag.Struct.name === 'Receiving'
-		);
-	}
-	return false;
-}
-
 function expectClient(options: BuildOptions): SuiClient {
 	if (!options.client) {
 		throw new Error(
@@ -125,17 +101,6 @@ const LIMITS = {
 
 type Limits = Partial<Record<keyof typeof LIMITS, number>>;
 
-// An amount of gas (in gas units) that is added to transactions as an overhead to ensure transactions do not fail.
-const GAS_SAFE_OVERHEAD = 1000n;
-
-// The maximum objects that can be fetched at once using multiGetObjects.
-const MAX_OBJECTS_PER_FETCH = 50;
-
-const chunk = <T>(arr: T[], size: number): T[][] =>
-	Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-		arr.slice(i * size, i * size + size),
-	);
-
 interface BuildOptions {
 	client?: SuiClient;
 	onlyTransactionKind?: boolean;
@@ -153,7 +118,7 @@ export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
 	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 }
 
-export type TransactionObjectInput = string | ObjectCallArg | TransactionObjectArgument;
+export type TransactionObjectInput = string | CallArg | TransactionObjectArgument;
 
 /**
  * Transaction Builder
@@ -206,8 +171,8 @@ export class TransactionBlock {
 			this.#blockData.sender = sender;
 		}
 	}
-	setExpiration(expiration?: TransactionExpiration) {
-		this.#blockData.expiration = expiration;
+	setExpiration(expiration?: Input<typeof TransactionExpiration> | null) {
+		this.#blockData.expiration = expiration ? parse(TransactionExpiration, expiration) : null;
 	}
 	setGasPrice(price: number | bigint) {
 		this.#blockData.gasConfig.price = String(price);
@@ -218,13 +183,19 @@ export class TransactionBlock {
 	setGasOwner(owner: string) {
 		this.#blockData.gasConfig.owner = owner;
 	}
-	setGasPayment(payments: SuiObjectRef[]) {
-		this.#blockData.gasConfig.payment = payments.map((payment) => mask(payment, SuiObjectRef));
+	setGasPayment(payments: ObjectRef[]) {
+		this.#blockData.gasConfig.payment = payments.map((payment) => parse(ObjectRef, payment));
 	}
 
 	#blockData: TransactionBlockDataBuilder;
-	/** Get a snapshot of the transaction data, in JSON form: */
+	/** @deprecated Use `getBlockData()` instead. */
+
 	get blockData() {
+		return v1BlockDataFromTransactionBlockState(this.#blockData.snapshot());
+	}
+
+	/** Get a snapshot of the transaction data, in JSON form: */
+	getBlockData() {
 		return this.#blockData.snapshot();
 	}
 
@@ -238,9 +209,10 @@ export class TransactionBlock {
 	get pure(): ReturnType<typeof createPure> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
-			value: createPure((value, type) => {
+			value: createPure((value): Argument => {
 				if (isSerializedBcs(value)) {
 					return this.#input('pure', {
+						$kind: 'Pure',
 						Pure: Array.from(value.toBytes()),
 					});
 				}
@@ -248,11 +220,11 @@ export class TransactionBlock {
 				// TODO: we can also do some deduplication here
 				return this.#input(
 					'pure',
-					value instanceof Uint8Array
+					is(NormalizedCallArg, value)
+						? parse(NormalizedCallArg, value)
+						: value instanceof Uint8Array
 						? Inputs.Pure(value)
-						: type
-						? Inputs.Pure(value, type)
-						: value,
+						: { $kind: 'RawValue', RawValue: { value } },
 				);
 			}),
 		});
@@ -262,13 +234,13 @@ export class TransactionBlock {
 
 	constructor(transaction?: TransactionBlock) {
 		this.#blockData = new TransactionBlockDataBuilder(
-			transaction ? transaction.blockData : undefined,
+			transaction ? transaction.getBlockData() : undefined,
 		);
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
-	get gas(): TransactionObjectArgument {
-		return { kind: 'GasCoin' };
+	get gas() {
+		return { $kind: 'GasCoin' as const, GasCoin: true as const };
 	}
 
 	/**
@@ -280,52 +252,41 @@ export class TransactionBlock {
 	 * is the format required for custom serialization.
 	 *
 	 */
-	#input<T extends 'object' | 'pure'>(type: T, value?: unknown) {
+	#input<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
 		const index = this.#blockData.inputs.length;
-		const input = create(
-			{
-				kind: 'Input',
-				// bigints can't be serialized to JSON, so just string-convert them here:
-				value: typeof value === 'bigint' ? String(value) : value,
-				index,
-				type,
-			},
-			TransactionBlockInput,
-		);
-		this.#blockData.inputs.push(input);
-		return input as Extract<typeof input, { type: T }>;
+		this.#blockData.inputs.push(arg);
+		return { Input: index, type, $kind: 'Input' as const };
 	}
 
 	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: TransactionObjectInput) {
-		if (typeof value === 'object' && 'kind' in value) {
+	object(value: TransactionObjectInput): TransactionObjectArgument {
+		if (typeof value === 'object' && is(Argument, value)) {
 			return value;
 		}
 
 		const id = getIdFromCallArg(value);
 
-		const inserted = this.#blockData.inputs.find(
-			(i) => i.type === 'object' && id === getIdFromCallArg(i.value),
-		) as Extract<TransactionArgument, { type?: 'object' }> | undefined;
+		const inserted = this.#blockData.inputs.find((i) => id === getIdFromCallArg(i));
 
 		// Upgrade shared object inputs to mutable if needed:
-		if (
-			inserted &&
-			is(inserted.value, ObjectCallArg) &&
-			'Shared' in inserted.value.Object &&
-			is(value, ObjectCallArg) &&
-			'Shared' in value.Object
-		) {
-			inserted.value.Object.Shared.mutable =
-				inserted.value.Object.Shared.mutable || value.Object.Shared.mutable;
+		if (inserted?.Object?.SharedObject && typeof value === 'object' && value.Object?.SharedObject) {
+			inserted.Object.SharedObject.mutable =
+				inserted.Object.SharedObject.mutable || value.Object.SharedObject.mutable;
 		}
 
-		return (
-			inserted ??
-			this.#input('object', typeof value === 'string' ? normalizeSuiAddress(value) : value)
-		);
+		return inserted
+			? { $kind: 'Input', Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
+			: this.#input(
+					'object',
+					typeof value === 'string'
+						? {
+								$kind: 'UnresolvedObject',
+								UnresolvedObject: { value: normalizeSuiAddress(value), typeSignatures: [] },
+						  }
+						: value,
+			  );
 	}
 
 	/**
@@ -353,7 +314,7 @@ export class TransactionBlock {
 	}
 
 	/** Add a transaction to the transaction block. */
-	add(transaction: TransactionType) {
+	add(transaction: Transaction) {
 		const index = this.#blockData.transactions.push(transaction);
 		return createTransactionResult(index - 1);
 	}
@@ -426,19 +387,25 @@ export class TransactionBlock {
 	}
 	moveCall({
 		arguments: args,
-		typeArguments,
-		target,
-	}: {
-		arguments?: (TransactionArgument | SerializedBcs<any>)[];
-		typeArguments?: string[];
-		target: `${string}::${string}::${string}`;
-	}) {
+		...input
+	}:
+		| {
+				package: string;
+				module: string;
+				function: string;
+				arguments?: (TransactionArgument | SerializedBcs<any>)[];
+				typeArguments?: (string | TypeTag)[];
+		  }
+		| {
+				target: string;
+				arguments?: (TransactionArgument | SerializedBcs<any>)[];
+				typeArguments?: (string | TypeTag)[];
+		  }) {
 		return this.add(
 			Transactions.MoveCall({
+				...input,
 				arguments: args?.map((arg) => this.#normalizeTransactionArgument(arg)),
-				typeArguments,
-				target,
-			}),
+			} as Parameters<typeof Transactions.MoveCall>[0]),
 		);
 	}
 	transferObjects(
@@ -482,7 +449,7 @@ export class TransactionBlock {
 	 * and performing a dry run).
 	 */
 	serialize() {
-		return JSON.stringify(this.#blockData.snapshot());
+		return JSON.stringify(v1BlockDataFromTransactionBlockState(this.#blockData.snapshot()));
 	}
 
 	#getConfig(key: keyof typeof LIMITS, { protocolConfig, limits }: BuildOptions) {
@@ -538,275 +505,8 @@ export class TransactionBlock {
 		return this.#blockData.getDigest();
 	}
 
-	#validate(options: BuildOptions) {
-		const maxPureArgumentSize = this.#getConfig('maxPureArgumentSize', options);
-		// Validate all inputs are the correct size:
-		this.#blockData.inputs.forEach((input, index) => {
-			if (is(input.value, PureCallArg)) {
-				if (input.value.Pure.length > maxPureArgumentSize) {
-					throw new Error(
-						`Input at index ${index} is too large, max pure input size is ${maxPureArgumentSize} bytes, got ${input.value.Pure.length} bytes`,
-					);
-				}
-			}
-		});
-	}
-
-	// The current default is just picking _all_ coins we can which may not be ideal.
-	async #prepareGasPayment(options: BuildOptions) {
-		if (this.#blockData.gasConfig.payment) {
-			const maxGasObjects = this.#getConfig('maxGasObjects', options);
-			if (this.#blockData.gasConfig.payment.length > maxGasObjects) {
-				throw new Error(`Payment objects exceed maximum amount: ${maxGasObjects}`);
-			}
-		}
-
-		// Early return if the payment is already set:
-		if (options.onlyTransactionKind || this.#blockData.gasConfig.payment) {
-			return;
-		}
-
-		const gasOwner = this.#blockData.gasConfig.owner ?? this.#blockData.sender;
-
-		const coins = await expectClient(options).getCoins({
-			owner: gasOwner!,
-			coinType: SUI_TYPE_ARG,
-		});
-
-		const paymentCoins = coins.data
-			// Filter out coins that are also used as input:
-			.filter((coin) => {
-				const matchingInput = this.#blockData.inputs.find((input) => {
-					if (
-						is(input.value, BuilderCallArg) &&
-						'Object' in input.value &&
-						'ImmOrOwned' in input.value.Object
-					) {
-						return coin.coinObjectId === input.value.Object.ImmOrOwned.objectId;
-					}
-
-					return false;
-				});
-
-				return !matchingInput;
-			})
-			.slice(0, this.#getConfig('maxGasObjects', options) - 1)
-			.map((coin) => ({
-				objectId: coin.coinObjectId,
-				digest: coin.digest,
-				version: coin.version,
-			}));
-
-		if (!paymentCoins.length) {
-			throw new Error('No valid gas coins found for the transaction.');
-		}
-
-		this.setGasPayment(paymentCoins);
-	}
-
-	async #prepareGasPrice(options: BuildOptions) {
-		if (options.onlyTransactionKind || this.#blockData.gasConfig.price) {
-			return;
-		}
-
-		this.setGasPrice(await expectClient(options).getReferenceGasPrice());
-	}
-
-	async #prepareTransactions(options: BuildOptions) {
-		const { inputs, transactions } = this.#blockData;
-
-		const moveModulesToResolve: MoveCallTransaction[] = [];
-
-		// Keep track of the object references that will need to be resolved at the end of the transaction.
-		// We keep the input by-reference to avoid needing to re-resolve it:
-		const objectsToResolve: {
-			id: string;
-			input: TransactionBlockInput;
-			normalizedType?: SuiMoveNormalizedType;
-		}[] = [];
-
-		inputs.forEach((input) => {
-			if (input.type === 'object' && typeof input.value === 'string') {
-				// The input is a string that we need to resolve to an object reference:
-				objectsToResolve.push({ id: normalizeSuiAddress(input.value), input });
-				return;
-			}
-		});
-
-		transactions.forEach((transaction) => {
-			// Special case move call:
-			if (transaction.kind === 'MoveCall') {
-				// Determine if any of the arguments require encoding.
-				// - If they don't, then this is good to go.
-				// - If they do, then we need to fetch the normalized move module.
-				const needsResolution = transaction.arguments.some(
-					(arg) => arg.kind === 'Input' && !is(inputs[arg.index].value, BuilderCallArg),
-				);
-
-				if (needsResolution) {
-					moveModulesToResolve.push(transaction);
-				}
-			}
-
-			// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
-			// This should only happen when transaction block data was hydrated from an old version of the SDK
-			if (transaction.kind === 'SplitCoins') {
-				transaction.amounts.forEach((amount) => {
-					if (amount.kind === 'Input') {
-						const input = inputs[amount.index];
-						if (typeof input.value !== 'object') {
-							input.value = Inputs.Pure(bcs.U64.serialize(input.value));
-						}
-					}
-				});
-			}
-
-			if (transaction.kind === 'TransferObjects') {
-				if (transaction.address.kind === 'Input') {
-					const input = inputs[transaction.address.index];
-					if (typeof input.value !== 'object') {
-						input.value = Inputs.Pure(bcs.Address.serialize(input.value));
-					}
-				}
-			}
-		});
-
-		if (moveModulesToResolve.length) {
-			await Promise.all(
-				moveModulesToResolve.map(async (moveCall) => {
-					const [packageId, moduleName, functionName] = moveCall.target.split('::');
-
-					const normalized = await expectClient(options).getNormalizedMoveFunction({
-						package: normalizeSuiObjectId(packageId),
-						module: moduleName,
-						function: functionName,
-					});
-
-					// Entry functions can have a mutable reference to an instance of the TxContext
-					// struct defined in the TxContext module as the last parameter. The caller of
-					// the function does not need to pass it in as an argument.
-					const hasTxContext =
-						normalized.parameters.length > 0 && isTxContext(normalized.parameters.at(-1)!);
-
-					const params = hasTxContext
-						? normalized.parameters.slice(0, normalized.parameters.length - 1)
-						: normalized.parameters;
-
-					if (params.length !== moveCall.arguments.length) {
-						throw new Error('Incorrect number of arguments.');
-					}
-
-					params.forEach((param, i) => {
-						const arg = moveCall.arguments[i];
-						if (arg.kind !== 'Input') return;
-						const input = inputs[arg.index];
-						// Skip if the input is already resolved
-						if (is(input.value, BuilderCallArg)) return;
-
-						const inputValue = input.value;
-
-						const serType = getPureSerializationType(param, inputValue);
-
-						if (serType) {
-							input.value = Inputs.Pure(inputValue, serType);
-							return;
-						}
-
-						const structVal = extractStructTag(param);
-						if (structVal != null || (typeof param === 'object' && 'TypeParameter' in param)) {
-							if (typeof inputValue !== 'string') {
-								throw new Error(
-									`Expect the argument to be an object id string, got ${JSON.stringify(
-										inputValue,
-										null,
-										2,
-									)}`,
-								);
-							}
-							objectsToResolve.push({
-								id: inputValue,
-								input,
-								normalizedType: param,
-							});
-							return;
-						}
-
-						throw new Error(
-							`Unknown call arg type ${JSON.stringify(param, null, 2)} for value ${JSON.stringify(
-								inputValue,
-								null,
-								2,
-							)}`,
-						);
-					});
-				}),
-			);
-		}
-
-		if (objectsToResolve.length) {
-			const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
-			const objectChunks = chunk(dedupedIds, MAX_OBJECTS_PER_FETCH);
-			const objects = (
-				await Promise.all(
-					objectChunks.map((chunk) =>
-						expectClient(options).multiGetObjects({
-							ids: chunk,
-							options: { showOwner: true },
-						}),
-					),
-				)
-			).flat();
-
-			let objectsById = new Map(
-				dedupedIds.map((id, index) => {
-					return [id, objects[index]];
-				}),
-			);
-
-			const invalidObjects = Array.from(objectsById)
-				.filter(([_, obj]) => obj.error)
-				.map(([id, _]) => id);
-			if (invalidObjects.length) {
-				throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
-			}
-
-			objectsToResolve.forEach(({ id, input, normalizedType }) => {
-				const object = objectsById.get(id)!;
-				const owner = object.data?.owner;
-				const initialSharedVersion =
-					owner && typeof owner === 'object' && 'Shared' in owner
-						? owner.Shared.initial_shared_version
-						: undefined;
-
-				if (initialSharedVersion) {
-					// There could be multiple transactions that reference the same shared object.
-					// If one of them is a mutable reference or taken by value, then we should mark the input
-					// as mutable.
-					const isByValue =
-						normalizedType != null &&
-						extractMutableReference(normalizedType) == null &&
-						extractReference(normalizedType) == null;
-					const mutable =
-						isMutableSharedObjectInput(input.value) ||
-						isByValue ||
-						(normalizedType != null && extractMutableReference(normalizedType) != null);
-
-					input.value = Inputs.SharedObjectRef({
-						objectId: id,
-						initialSharedVersion,
-						mutable,
-					});
-				} else if (normalizedType && isReceivingType(normalizedType)) {
-					input.value = Inputs.ReceivingRef(object.data!);
-				} else {
-					input.value = Inputs.ObjectRef(object.data!);
-				}
-			});
-		}
-	}
-
 	/**
-	 * Prepare the transaction by valdiating the transaction data and resolving all inputs
+	 * Prepare the transaction by validating the transaction data and resolving all inputs
 	 * so that it can be built into bytes.
 	 */
 	async #prepare(options: BuildOptions) {
@@ -818,48 +518,35 @@ export class TransactionBlock {
 			options.protocolConfig = await options.client.getProtocolConfig();
 		}
 
-		await Promise.all([this.#prepareGasPrice(options), this.#prepareTransactions(options)]);
+		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
+		await plugins.normalizeInputs(this.#blockData);
+		await plugins.resolveObjectReferences(this.#blockData);
 
-		if (!options.onlyTransactionKind) {
-			await this.#prepareGasPayment(options);
-
-			if (!this.#blockData.gasConfig.budget) {
-				const dryRunResult = await expectClient(options).dryRunTransactionBlock({
-					transactionBlock: this.#blockData.build({
-						maxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
-						overrides: {
-							gasConfig: {
-								budget: String(this.#getConfig('maxTxGas', options)),
-								payment: [],
-							},
-						},
-					}),
-				});
-				if (dryRunResult.effects.status.status !== 'success') {
-					throw new Error(
-						`Dry run failed, could not automatically determine a budget: ${dryRunResult.effects.status.error}`,
-						{ cause: dryRunResult },
-					);
-				}
-
-				const safeOverhead = GAS_SAFE_OVERHEAD * BigInt(this.blockData.gasConfig.price || 1n);
-
-				const baseComputationCostWithOverhead =
-					BigInt(dryRunResult.effects.gasUsed.computationCost) + safeOverhead;
-
-				const gasBudget =
-					baseComputationCostWithOverhead +
-					BigInt(dryRunResult.effects.gasUsed.storageCost) -
-					BigInt(dryRunResult.effects.gasUsed.storageRebate);
-
-				// Set the budget to max(computation, computation + storage - rebate)
-				this.setGasBudget(
-					gasBudget > baseComputationCostWithOverhead ? gasBudget : baseComputationCostWithOverhead,
+		this.#blockData.inputs.forEach((input, index) => {
+			if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
+				throw new Error(
+					`Input at index ${index} has not been resolved.  Expected a Pure or Object input, but found ${JSON.stringify(
+						input,
+					)}`,
 				);
 			}
+		});
+
+		if (!options.onlyTransactionKind) {
+			await plugins.setGasPrice(this.#blockData);
+
+			await plugins.setGasBudget(this.#blockData, {
+				maxTxGas: this.#getConfig('maxTxGas', options),
+				maxTxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
+			});
+
+			await plugins.setGasPayment(this.#blockData, {
+				maxGasObjects: this.#getConfig('maxGasObjects', options),
+			});
 		}
 
-		// Perform final validation on the transaction:
-		this.#validate(options);
+		await plugins.validate(this.#blockData, {
+			maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
+		});
 	}
 }

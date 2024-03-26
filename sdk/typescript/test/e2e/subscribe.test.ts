@@ -21,8 +21,8 @@ test('subscribeTransaction', async () => {
 				});
 
 				const tx = new TransactionBlock();
-				const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
-				tx.transferObjects([coin], tx.pure(toolbox.address()));
+				const [coin] = tx.splitCoins(tx.gas, [1]);
+				tx.transferObjects([coin], toolbox.address());
 				await toolbox.client.signAndExecuteTransactionBlock({
 					signer: toolbox.keypair,
 					transactionBlock: tx,
