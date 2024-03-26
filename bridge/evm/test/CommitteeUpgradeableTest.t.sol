@@ -340,6 +340,4 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         MockSuiBridgeV2(address(bridge));
         assertEq(Upgrades.getImplementationAddress(address(bridge)), address(bridgeV2));
     }
-
-    // TODO: addMockUpgradeTest using OZ upgrades package to show upgrade safety checks
 }
