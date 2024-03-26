@@ -13,7 +13,10 @@ module sui::random_tests {
 
     #[test]
     fun random_test_basic_flow() {
-        let scenario = test_scenario::begin(@0x0);
+        let mut scenario = test_scenario::begin(@0x0);
+
+        random::create_for_testing(scenario.ctx());
+        scenario.next_tx(@0x0);
 
         let mut random_state = scenario.take_shared<Random>();
         random_state.update_randomness_state_for_testing(
@@ -390,11 +393,11 @@ module sui::random_tests {
         // check that numbers indeed eventaually move to all positions
         loop {
             gen.shuffle(&mut v);
-            if ((v.borrow[4] == 1u16)) break;
+            if ((v[4] == 1u16)) break;
         };
         loop {
             gen.shuffle(&mut v);
-            if ((v.borrow[0] == 2u16)) break;
+            if ((v[0] == 2u16)) break;
         };
 
         let mut v: vector<u32> = vector[];
