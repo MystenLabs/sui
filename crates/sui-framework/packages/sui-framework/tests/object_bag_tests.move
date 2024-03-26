@@ -21,9 +21,9 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = object_bag::new(scenario.ctx());
-        let counter1 = new_counter(&mut scenario);
+        let counter1 = new(&mut scenario);
         let id1 = object::id(&counter1);
-        let counter2 = new_counter(&mut scenario);
+        let counter2 = new(&mut scenario);
         let id2 = object::id(&counter2);
         // add fields
         bag.add(b"hello", counter1);
@@ -41,13 +41,13 @@ module sui::object_bag_tests {
         assert!((&bag[1] : &Counter).count() == 0, 0);
         // mutate them
         bump(&mut bag[b"hello"]);
-        bump(&mut bag[1]);
+        bump(bump(&mut bag[1]));
         // check the new value
         assert!((&bag[b"hello"] : &Counter).count() == 1, 0);
-        assert!((&bag[1] : &Counter).count() == 1, 0);
+        assert!((&bag[1] : &Counter).count() == 2, 0);
         // remove the value and check it
         assert!(bag.remove<vector<u8>, Counter>(b"hello").destroy() == 1, 0);
-        assert!(bag.remove<u64, Counter>(1).destroy() == 1, 0);
+        assert!(bag.remove<u64, Counter>(1).destroy() == 2, 0);
         // verify that they are not there
         assert!(!bag.contains(b"hello"), 0);
         assert!(!bag.contains(1), 0);
@@ -61,8 +61,8 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = object_bag::new(scenario.ctx());
-        bag.add(b"hello", new_counter(&mut scenario));
-        bag.add(b"hello", new_counter(&mut scenario));
+        bag.add(b"hello", new(&mut scenario));
+        bag.add(b"hello", new(&mut scenario));
         abort 42
     }
 
@@ -102,7 +102,7 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = object_bag::new(scenario.ctx());
-        let counter = new_counter(&mut scenario);
+        let counter = new(&mut scenario);
         bag.add(0, counter);
         bag.destroy_empty();
         scenario.end();
@@ -113,7 +113,7 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = object_bag::new(scenario.ctx());
-        let counter = new_counter(&mut scenario);
+        let counter = new(&mut scenario);
         assert!(!bag.contains(0), 0);
         bag.add(0, counter);
         assert!(bag.contains(0), 0);
@@ -128,7 +128,7 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = object_bag::new(scenario.ctx());
-        let counter = new_counter(&mut scenario);
+        let counter = new(&mut scenario);
         assert!(!bag.contains_with_type<u64, Counter>(0), 0);
         assert!(!bag.contains_with_type<u64, Fake>(0), 0);
         bag.add(0, counter);
@@ -145,8 +145,8 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut bag = object_bag::new(scenario.ctx());
-        let counter1 = new_counter(&mut scenario);
-        let counter2 = new_counter(&mut scenario);
+        let counter1 = new(&mut scenario);
+        let counter2 = new(&mut scenario);
         assert!(bag.is_empty(), 0);
         assert!(bag.length() == 0, 0);
         bag.add(0, counter1);
@@ -168,7 +168,7 @@ module sui::object_bag_tests {
         let mut scenario = test_scenario::begin(sender);
         let mut bag1 = object_bag::new(scenario.ctx());
         let mut bag2 = object_bag::new(scenario.ctx());
-        bag1.add(0, new_counter(&mut scenario));
+        bag1.add(0, new(&mut scenario));
         assert!(bag1.contains(0), 0);
         assert!(!bag2.contains(0), 0);
         bump(&mut bag1[0]);
@@ -184,7 +184,7 @@ module sui::object_bag_tests {
         bag2.destroy_empty();
     }
 
-    fun new_counter(scenario: &mut test_scenario::Scenario): Counter {
+    fun new(scenario: &mut test_scenario::Scenario): Counter {
         Counter { id: scenario.new_object(), count: 0 }
     }
 

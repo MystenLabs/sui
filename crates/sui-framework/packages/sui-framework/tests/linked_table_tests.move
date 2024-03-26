@@ -324,7 +324,7 @@ module sui::linked_table_tests {
         assert!(n == keys.length(), 0);
         if (n == 0) {
             assert!(table.front().is_none(), 0);
-            assert!(table.front().is_none(), 0);
+            assert!(table.back().is_none(), 0);
             return
         };
 

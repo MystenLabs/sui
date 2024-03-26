@@ -633,7 +633,7 @@ module sui::test_scenario_tests {
         let uid = scenario.new_object();
         let id = uid.to_inner();
         transfer::public_share_object(Object { id: uid, value: 10 });
-        test_scenario::return_shared(scenario.take_shared_by_id<Object>(id));
+        test_scenario::return_shared(scenario.take_shared_by_id<Wrapper>(id));
         abort 42
     }
 
@@ -645,7 +645,7 @@ module sui::test_scenario_tests {
         let uid = scenario.new_object();
         let id = uid.to_inner();
         transfer::public_freeze_object(Object { id: uid, value: 10 });
-        test_scenario::return_immutable(scenario.take_immutable_by_id<Object>(id));
+        test_scenario::return_immutable(scenario.take_immutable_by_id<Wrapper>(id));
         abort 42
     }
 

@@ -14,8 +14,7 @@ module sui::pay_tests {
 
     #[test]
     fun test_coin_split_n() {
-        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
         let ctx = scenario.ctx();
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
@@ -40,13 +39,12 @@ module sui::pay_tests {
         test_utils::destroy(coin);
         test_utils::destroy(coin1);
         test_utils::destroy(coin2);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun test_coin_split_n_to_vec() {
-        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
         let ctx = scenario.ctx();
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
@@ -64,13 +62,12 @@ module sui::pay_tests {
         test_utils::destroy(coin);
         test_utils::destroy(coin1);
         test_utils::destroy(coin2);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun test_split_vec() {
-        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
         let ctx = scenario.ctx();
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
@@ -91,13 +88,12 @@ module sui::pay_tests {
         test_utils::destroy(coin);
         test_utils::destroy(coin1);
         test_utils::destroy(coin2);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun test_split_and_transfer() {
-        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
         let ctx = scenario.ctx();
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
@@ -112,14 +108,13 @@ module sui::pay_tests {
 
         test_utils::destroy(coin);
         test_utils::destroy(coin1);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     #[expected_failure(abort_code = balance::ENotEnough)]
     fun test_split_and_transfer_fail() {
-        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
         let ctx = scenario.ctx();
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
@@ -128,17 +123,16 @@ module sui::pay_tests {
         coin.split_and_transfer(20, TEST_SENDER_ADDR, scenario.ctx());
         scenario.next_tx(TEST_SENDER_ADDR);
         let coin_transfer_fail = scenario.take_from_sender<Coin<SUI>>();
-        assert!(&coin_transfer_fail.value() == 7, 0);
+        assert!(coin_transfer_fail.value() == 7, 0);
 
         test_utils::destroy(coin);
         test_utils::destroy(coin_transfer_fail);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun test_join_vec_and_transfer() {
-        let mut scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
         let ctx = scenario.ctx();
         let mut coin = coin::mint_for_testing<SUI>(10, ctx);
 
@@ -156,6 +150,6 @@ module sui::pay_tests {
 
         test_utils::destroy(coin);
         test_utils::destroy(coin1);
-        scenario_val.end();
+        scenario.end();
     }
 }

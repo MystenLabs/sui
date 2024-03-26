@@ -7,7 +7,6 @@ module sui::bls12381_tests {
     use sui::bls12381;
     use sui::group_ops;
     use std::hash::sha2_256;
-    use std::vector;
     use sui::test_utils::assert_eq;
 
     const ORDER_BYTES: vector<u8> = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
@@ -106,7 +105,7 @@ module sui::bls12381_tests {
             round = round >> 8;
             i = i - 1;
         };
-        vector::append(&mut prev_sig, round_bytes);
+        prev_sig.append(round_bytes);
         sha2_256(prev_sig)
     }
 
