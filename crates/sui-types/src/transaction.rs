@@ -1371,8 +1371,17 @@ impl TransactionKind {
             }
             Self::EndOfEpochTransaction(txns) => {
                 // Dedup since transactions may have a overlap in input objects.
-                let deduped: HashSet<_> = txns.iter().flat_map(|txn| txn.input_objects()).collect();
-                deduped.into_iter().collect()
+                // Note: it's critical to ensure the order of inputs are deterministic.
+                let before_dedup: Vec<_> =
+                    txns.iter().flat_map(|txn| txn.input_objects()).collect();
+                let mut has_seen = HashSet::new();
+                let mut after_dedup = vec![];
+                for obj in before_dedup {
+                    if has_seen.insert(obj) {
+                        after_dedup.push(obj);
+                    }
+                }
+                after_dedup
             }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };

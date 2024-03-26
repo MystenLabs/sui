@@ -314,6 +314,14 @@ String representation of an arbitrary width, possibly signed integer.
 scalar BigInt
 
 
+type BridgeCommitteeInitTransaction {
+	bridgeObjInitialSharedVersion: Int!
+}
+
+type BridgeStateCreateTransaction {
+	chainId: String!
+}
+
 """
 A system transaction that updates epoch information on-chain (increments the current epoch).
 Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
@@ -947,7 +955,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
