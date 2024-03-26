@@ -10,6 +10,7 @@ use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::server::background_tasks::{check_epoch_boundary, epoch_boundary_listener};
 use crate::types::checkpoint::Checkpoint;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
@@ -55,7 +56,7 @@ use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
-use tokio::sync::OnceCell;
+use tokio::sync::{Notify, OnceCell};
 use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -83,16 +84,47 @@ impl Server {
             let metrics = self.state.metrics.clone();
             let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
             let cancellation_token = self.state.cancellation_token.clone();
+            let db_reader = self.db_reader.clone();
             info!("Starting watermark update task");
             spawn_monitored_task!(async move {
                 update_watermark(
-                    &self.db_reader,
+                    &db_reader,
                     self.checkpoint_watermark,
                     metrics,
                     tokio::time::Duration::from_millis(sleep_ms),
                     cancellation_token,
                 )
                 .await;
+            })
+        };
+
+        let notify = Arc::new(Notify::new());
+
+        // A handle that checks every 12 hours for an epoch change. If an epoch change is detected,
+        // emits a signal and updates the latest epoch value.
+        let epoch_boundary_task_notifier = {
+            let metrics = self.state.metrics.clone();
+            let cancellation_token = self.state.cancellation_token.clone();
+            let controller = notify.clone();
+            info!("Starting epoch boundary task");
+            spawn_monitored_task!(async move {
+                check_epoch_boundary(
+                    &self.db_reader,
+                    metrics,
+                    tokio::time::Duration::from_secs(12 * 60 * 60),
+                    cancellation_token,
+                    controller,
+                )
+                .await;
+            })
+        };
+
+        // A handle for tasks that are dependent on the epoch boundary signal.
+        let epoch_boundary_task_listener = {
+            let cancellation_token = self.state.cancellation_token.clone();
+            let notification = notify.clone();
+            spawn_monitored_task!(async move {
+                epoch_boundary_listener(cancellation_token, notification).await;
             })
         };
 
@@ -110,9 +142,14 @@ impl Server {
             })
         };
 
-        // Wait for both tasks to complete. This ensures that the service doesn't fully shut down
-        // until both the background task and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, server_task);
+        // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
+        // until all tasks and the server have completed their shutdown processes.
+        let _ = join!(
+            watermark_task,
+            epoch_boundary_task_listener,
+            epoch_boundary_task_notifier,
+            server_task
+        );
 
         Ok(())
     }
