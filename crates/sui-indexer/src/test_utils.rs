@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
-use crate::db::{new_pg_connection_pool, reset_database};
+use crate::db::{new_test_pg_connection_pool, reset_database};
 use crate::errors::IndexerError;
 use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
@@ -62,6 +62,18 @@ pub async fn start_test_indexer_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
+    // TODO (wlmyng) - dynamically set ports instead of all to 9000
+    let base_port = rpc_url
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>()
+        .parse::<u16>()
+        .unwrap();
+
     // Default writer mode
     let mut config = IndexerConfig {
         db_url: Some(db_url.clone()),
@@ -69,6 +81,7 @@ pub async fn start_test_indexer_impl(
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
+        rpc_server_port: base_port + 1,
         ..Default::default()
     };
 
@@ -85,7 +98,7 @@ pub async fn start_test_indexer_impl(
         let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
 
         // Open in default mode
-        let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+        let blocking_pool = new_test_pg_connection_pool(&default_db_url, Some(5)).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -100,7 +113,7 @@ pub async fn start_test_indexer_impl(
         parsed_url = replace_db_name(&parsed_url, &new_database).0;
     }
 
-    let blocking_pool = new_pg_connection_pool(&parsed_url, Some(5)).unwrap();
+    let blocking_pool = new_test_pg_connection_pool(&parsed_url, Some(5)).unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
@@ -153,7 +166,7 @@ pub async fn force_delete_database(db_url: String) {
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
 
-    let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+    let blocking_pool = new_test_pg_connection_pool(&default_db_url, Some(5)).unwrap();
     blocking_pool
         .get()
         .unwrap()

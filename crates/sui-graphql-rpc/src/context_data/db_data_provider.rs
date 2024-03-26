@@ -41,9 +41,11 @@ impl PgManager {
         pool_size: u32,
         timeout_ms: u64,
     ) -> Result<IndexerReader, Error> {
+        // TODO (wlmyng) - this is a location to set connection_timeout, but probably not the root
         let mut config = PgConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));
+        // config.connection_timeout = Duration::from_secs(1);
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }

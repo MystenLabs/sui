@@ -23,8 +23,8 @@ pub struct PgConnectionPoolConfig {
 
 impl PgConnectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
-    const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
-    const DEFAULT_STATEMENT_TIMEOUT: u64 = 30;
+    const DEFAULT_CONNECTION_TIMEOUT: u64 = 3600;
+    const DEFAULT_STATEMENT_TIMEOUT: u64 = 3600;
 
     fn connection_config(&self) -> PgConnectionConfig {
         PgConnectionConfig {
@@ -107,6 +107,33 @@ pub fn new_pg_connection_pool(
     diesel::r2d2::Pool::builder()
         .max_size(pool_size)
         .connection_timeout(pool_config.connection_timeout)
+        // TODO (wlmyng) - perhaps new_pg_connection_pool is responsible
+        // .connection_timeout(Duration::from_secs(1))
+        // .idle_timeout(Some(Duration::from_secs(1)))
+        .connection_customizer(Box::new(pool_config.connection_config()))
+        .build(manager)
+        .map_err(|e| {
+            IndexerError::PgConnectionPoolInitError(format!(
+                "Failed to initialize connection pool with error: {:?}",
+                e
+            ))
+        })
+}
+
+pub fn new_test_pg_connection_pool(
+    db_url: &str,
+    pool_size: Option<u32>,
+) -> Result<PgConnectionPool, IndexerError> {
+    let pool_config = PgConnectionPoolConfig::default();
+    let manager = ConnectionManager::<PgConnection>::new(db_url);
+
+    let pool_size = pool_size.unwrap_or(pool_config.pool_size);
+    diesel::r2d2::Pool::builder()
+        .max_size(pool_size)
+        // .connection_timeout(pool_config.connection_timeout)
+        // TODO (wlmyng) - perhaps new_pg_connection_pool is responsible
+        .connection_timeout(Duration::from_secs(1))
+        // .idle_timeout(Some(Duration::from_secs(1)))
         .connection_customizer(Box::new(pool_config.connection_config()))
         .build(manager)
         .map_err(|e| {
@@ -118,6 +145,8 @@ pub fn new_pg_connection_pool(
 }
 
 pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
+    // TODO (wlmyng) - or even get_pg_pool_connection - it should immediately return error if connection is broken, no?
+    // pool.get_timeout(Duration::from_secs(1)).map_err(|e| {
     pool.get().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed to get connection from PG connection pool with error: {:?}",
