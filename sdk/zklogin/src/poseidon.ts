@@ -39,10 +39,11 @@ const poseidonNumToHashFN = [
 	poseidon16,
 ];
 
-export const BN254_FIELD_SIZE = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export const BN254_FIELD_SIZE =
+	21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 
 export function poseidonHash(inputs: (number | bigint | string)[]): bigint {
-	inputs.forEach(x => {
+	inputs.forEach((x) => {
 		const b = BigInt(x);
 		if (b < 0 || b >= BN254_FIELD_SIZE) {
 			throw new Error(`Element ${b} not in the BN254 field`);

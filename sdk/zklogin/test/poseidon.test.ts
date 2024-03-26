@@ -1,4 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 import { expect, test } from 'vitest';
+
 import { BN254_FIELD_SIZE, poseidonHash } from '../src/poseidon';
 
 test('can hash single input', () => {
@@ -16,5 +19,7 @@ test('throws error for invalid input', () => {
 });
 
 test('throws error for invalid input greater than BN254_FIELD_SIZE', () => {
-	expect(() => poseidonHash([BN254_FIELD_SIZE])).toThrowError('Element 21888242871839275222246405745257275088548364400416034343698204186575808495617 not in the BN254 field');
+	expect(() => poseidonHash([BN254_FIELD_SIZE])).toThrowError(
+		'Element 21888242871839275222246405745257275088548364400416034343698204186575808495617 not in the BN254 field',
+	);
 });
