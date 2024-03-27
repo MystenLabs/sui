@@ -41,15 +41,21 @@ pub enum ExpectedFailure {
     // expected failure, but codes are not checked
     Expected,
     // expected failure, abort code checked but without the module specified
-    ExpectedWithCodeDEPRECATED(u64),
+    ExpectedWithCodeDEPRECATED(MoveErrorType),
     // expected failure, abort code with the module specified
     ExpectedWithError(ExpectedMoveError),
 }
 
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+pub enum MoveErrorType {
+    Code(u64),
+    ConstantName(String),
+}
+
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ExpectedMoveError(
     pub StatusCode,
-    pub Option<u64>,
+    pub Option<MoveErrorType>,
     pub move_binary_format::errors::Location,
 );
 
@@ -104,6 +110,15 @@ impl ExpectedMoveError {
     }
 }
 
+impl fmt::Display for MoveErrorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MoveErrorType::Code(code) => write!(f, "{}", code),
+            MoveErrorType::ConstantName(name) => write!(f, "'{}'", name),
+        }
+    }
+}
+
 impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use move_binary_format::errors::Location;
@@ -132,7 +147,13 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
             };
         }
         if status == &StatusCode::ABORTED {
-            write!(f, " with code {}", sub_status.unwrap())?
+            match sub_status {
+                Some(MoveErrorType::Code(code)) => write!(f, " with code {}", code)?,
+                Some(MoveErrorType::ConstantName(name)) => {
+                    write!(f, " with error constant '{}'", name)?
+                }
+                None => (),
+            }
         } else if let Some(code) = sub_status {
             write!(f, " with sub-status {code}")?
         };

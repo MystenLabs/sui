@@ -5,7 +5,7 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, NetworkType, Round};
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
@@ -89,6 +89,16 @@ impl ConsensusManagerTrait for MysticetiManager {
         let committee: Committee = system_state.get_mysticeti_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
+        let network_type = match std::env::var("CONSENSUS_NETWORK") {
+            Ok(type_str) => {
+                if type_str.to_lowercase() == "tonic" {
+                    NetworkType::Tonic
+                } else {
+                    NetworkType::Anemo
+                }
+            }
+            Err(_) => NetworkType::Anemo,
+        };
 
         let Some(_guard) = RunningLockGuard::acquire_start(
             &self.metrics,
@@ -131,6 +141,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
         let authority = ConsensusAuthority::start(
+            network_type,
             own_index,
             committee.clone(),
             parameters.clone(),

@@ -5,7 +5,9 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
-    use sui::tx_context::{Self, TxContext};
+
+    /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
+    public use fun sui::coin::from_balance as Balance.into_coin;
 
     /* friend sui::sui; */
 
@@ -96,7 +98,7 @@ module sui::balance {
     /// It should only be called by the epoch change system txn to create staking rewards,
     /// and nowhere else.
     fun create_staking_rewards<T>(value: u64, ctx: &TxContext): Balance<T> {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         Balance { value }
     }
 
@@ -105,7 +107,7 @@ module sui::balance {
     /// It should only be called by the epoch change system txn to destroy storage rebates,
     /// and nowhere else.
     fun destroy_storage_rebates<T>(self: Balance<T>, ctx: &TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         let Balance { value: _ } = self;
     }
 
@@ -146,19 +148,19 @@ module sui::balance_tests {
         let mut balance = balance::zero<SUI>();
         let another = balance::create_for_testing(1000);
 
-        balance::join(&mut balance, another);
+        balance.join(another);
 
-        assert!(balance::value(&balance) == 1000, 0);
+        assert!(balance.value() == 1000, 0);
 
-        let balance1 = balance::split(&mut balance, 333);
-        let balance2 = balance::split(&mut balance, 333);
-        let balance3 = balance::split(&mut balance, 334);
+        let balance1 = balance.split(333);
+        let balance2 = balance.split(333);
+        let balance3 = balance.split(334);
 
-        balance::destroy_zero(balance);
+        balance.destroy_zero();
 
-        assert!(balance::value(&balance1) == 333, 1);
-        assert!(balance::value(&balance2) == 333, 2);
-        assert!(balance::value(&balance3) == 334, 3);
+        assert!(balance1.value() == 333, 1);
+        assert!(balance2.value() == 333, 2);
+        assert!(balance3.value() == 334, 3);
 
         test_utils::destroy(balance1);
         test_utils::destroy(balance2);

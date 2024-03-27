@@ -21,7 +21,6 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 use crate::Page;
 
 pub type EpochPage = Page<EpochInfo, BigInt<u64>>;
-pub type EpochMetricsPage = Page<EpochMetrics, BigInt<u64>>;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -57,26 +56,6 @@ impl EpochInfo {
         }
         Ok(Committee::new(self.epoch, voting_rights))
     }
-}
-
-/// a light-weight version of `EpochInfo` for faster loading
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EpochMetrics {
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch: EpochId,
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch_total_transactions: u64,
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub first_checkpoint_id: CheckpointSequenceNumber,
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch_start_timestamp: u64,
-    pub end_of_epoch_info: Option<EndOfEpochInfo>,
 }
 
 #[serde_as]
@@ -126,51 +105,6 @@ pub struct EndOfEpochInfo {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkMetrics {
-    /// Current TPS - Transaction Blocks per Second.
-    pub current_tps: f64,
-    /// Peak TPS in the past 30 days
-    pub tps_30_days: f64,
-    /// Total number of packages published in the network
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub total_packages: u64,
-    /// Total number of addresses seen in the network
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub total_addresses: u64,
-    /// Total number of live objects in the network
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub total_objects: u64,
-    /// Current epoch number
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub current_epoch: u64,
-    /// Current checkpoint number
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub current_checkpoint: u64,
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct MoveCallMetrics {
-    #[schemars(with = "Vec<(MoveFunctionName, BigInt<usize>)>")]
-    #[serde_as(as = "Vec<(_, BigInt<usize>)>")]
-    pub rank_3_days: Vec<(MoveFunctionName, usize)>,
-    #[schemars(with = "Vec<(MoveFunctionName, BigInt<usize>)>")]
-    #[serde_as(as = "Vec<(_, BigInt<usize>)>")]
-    pub rank_7_days: Vec<(MoveFunctionName, usize)>,
-    #[schemars(with = "Vec<(MoveFunctionName, BigInt<usize>)>")]
-    #[serde_as(as = "Vec<(_, BigInt<usize>)>")]
-    pub rank_30_days: Vec<(MoveFunctionName, usize)>,
-}
-
-#[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveFunctionName {
@@ -181,16 +115,4 @@ pub struct MoveFunctionName {
     #[schemars(with = "String")]
     #[serde_as(as = "DisplayFromStr")]
     pub function: Identifier,
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AddressMetrics {
-    pub checkpoint: u64,
-    pub epoch: u64,
-    pub timestamp_ms: u64,
-    pub cumulative_addresses: u64,
-    pub cumulative_active_addresses: u64,
-    pub daily_active_addresses: u64,
 }

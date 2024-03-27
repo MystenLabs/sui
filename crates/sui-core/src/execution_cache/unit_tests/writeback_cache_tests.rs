@@ -13,6 +13,7 @@ use std::{
 use sui_framework::BuiltInFramework;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::effects::TestEffectsBuilder;
 use sui_types::{
     base_types::{random_object_ref, SuiAddress},
     crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
@@ -161,7 +162,7 @@ impl Scenario {
             .build_and_sign(&keypair);
 
         let tx = VerifiedTransaction::new_unchecked(tx);
-        let effects = TransactionEffects::new_with_tx(tx.inner());
+        let effects = TestEffectsBuilder::new(tx.inner()).build();
 
         TransactionOutputs {
             transaction: Arc::new(tx),
@@ -703,7 +704,7 @@ async fn test_missing_reverts_panic() {
 
 #[tokio::test]
 #[should_panic(expected = "transaction must exist")]
-async fn test_revert_commited_tx_panics() {
+async fn test_revert_committed_tx_panics() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);

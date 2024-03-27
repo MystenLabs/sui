@@ -9,8 +9,6 @@
 /// This gives Sui programmers the flexibility to extend objects on-the-fly, and it also serves as a
 /// building block for core collection types
 module sui::dynamic_field {
-    use std::option::{Self, Option};
-    use sui::object::{Self, ID, UID};
 
     /* friend sui::dynamic_object_field; */
 
@@ -45,7 +43,7 @@ module sui::dynamic_field {
         name: Name,
         value: Value,
     ) {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         assert!(!has_child_object(object_addr, hash), EFieldAlreadyExists);
         let field = Field {
@@ -64,7 +62,7 @@ module sui::dynamic_field {
         object: &UID,
         name: Name,
     ): &Value {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         let field = borrow_child_object<Field<Name, Value>>(object, hash);
         &field.value
@@ -78,7 +76,7 @@ module sui::dynamic_field {
         object: &mut UID,
         name: Name,
     ): &mut Value {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
         &mut field.value
@@ -93,10 +91,10 @@ module sui::dynamic_field {
         object: &mut UID,
         name: Name,
     ): Value {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         let Field { id, name: _, value } = remove_child_object<Field<Name, Value>>(object_addr, hash);
-        object::delete(id);
+        id.delete();
         value
     }
 
@@ -106,7 +104,7 @@ module sui::dynamic_field {
         object: &UID,
         name: Name,
     ): bool {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         has_child_object(object_addr, hash)
     }
@@ -129,7 +127,7 @@ module sui::dynamic_field {
         object: &UID,
         name: Name,
     ): bool {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
     }
@@ -138,20 +136,20 @@ module sui::dynamic_field {
         object: &UID,
         name: Name,
     ): (&UID, address) {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         let Field { id, name: _, value } = borrow_child_object<Field<Name, ID>>(object, hash);
-        (id, object::id_to_address(value))
+        (id, value.to_address())
     }
 
     public(package) fun field_info_mut<Name: copy + drop + store>(
         object: &mut UID,
         name: Name,
     ): (&mut UID, address) {
-        let object_addr = object::uid_to_address(object);
+        let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         let Field { id, name: _, value } = borrow_child_object_mut<Field<Name, ID>>(object, hash);
-        (id, object::id_to_address(value))
+        (id, value.to_address())
     }
 
     /// May abort with `EBCSSerializationFailure`.

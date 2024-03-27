@@ -35,7 +35,9 @@ use tokio::time::Instant;
 
 #[cfg(msim)]
 use sui_simulator::configs::constant_latency_ms;
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::{
     HandleTransactionResponse, TransactionStatus, VerifiedObjectInfoResponse,
@@ -759,13 +761,12 @@ async fn test_handle_transaction_fork() {
     );
 
     // Validator 0 and 1 return failed effects
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(2),
@@ -1030,13 +1031,12 @@ async fn test_handle_transaction_response() {
     // Val 0, 1 & 2 returns retryable error
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
     // Validators 3 returns tx-cert with epoch 1
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(3),
@@ -1071,13 +1071,12 @@ async fn test_handle_transaction_response() {
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
 
     // Validators 2 returns tx-cert and tx-effects with epoch 1
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1097,13 +1096,12 @@ async fn test_handle_transaction_response() {
         .set_tx_info_response(resp);
 
     // Validators 3 returns different tx-effects without cert for epoch 1 (simulating byzantine behavior)
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InvalidGasObject,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1159,13 +1157,12 @@ async fn test_handle_transaction_response() {
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
 
     // Validators 2 returns tx-cert and tx-effects with epoch 1
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1185,13 +1182,12 @@ async fn test_handle_transaction_response() {
         .set_tx_info_response(resp);
 
     // Validators 3 returns tx2-effects without cert for epoch 1 (simulating byzantine behavior)
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0_2.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0_2.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1756,7 +1752,7 @@ async fn test_handle_conflicting_transaction_response() {
 
     // Val-0 returns cert
     let (name_0, key_0) = &authority_keys[0];
-    let effects = TransactionEffects::new_with_tx(cert_epoch_0.data());
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data()).build();
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
             Some(cert_epoch_0.auth_sig().clone()),
@@ -1789,7 +1785,7 @@ async fn test_handle_conflicting_transaction_response() {
         .into_cert_for_testing();
 
     // Validators have moved to epoch 2 and return tx-effects with epoch 2, client expects 1
-    let effects = TransactionEffects::new_with_tx(cert_epoch_1.data());
+    let effects = TestEffectsBuilder::new(cert_epoch_1.data()).build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),

@@ -11,17 +11,17 @@ use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
-const SCOPE_LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05,
-    0.1, // starts from 1μs, 50μs, 100μs...
-    0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0,
-    4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
+// starts from 1μs, 50μs, 100μs...
+const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25,
+    0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5,
+    4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
-    1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
-    12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
+    1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5,
+    9.0, 9.5, 10., 12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
 ];
 
 const SIZE_BUCKETS: &[f64] = &[
@@ -56,10 +56,7 @@ pub(crate) struct Metrics {
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
     let channel_metrics = ChannelMetrics::new(&registry);
-    let network_metrics = NetworkMetrics {
-        inbound: NetworkRouteMetrics::new("inbound", &registry),
-        outbound: NetworkRouteMetrics::new("outbound", &registry),
-    };
+    let network_metrics = NetworkMetrics::new(&registry);
     let quinn_connection_metrics = QuinnConnectionMetrics::new(&registry);
 
     Arc::new(Metrics {
@@ -84,13 +81,16 @@ pub(crate) struct NodeMetrics {
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub core_lock_dequeued: IntCounter,
     pub core_lock_enqueued: IntCounter,
+    pub highest_accepted_round: IntGauge,
+    pub accepted_blocks: IntCounter,
     pub dag_state_store_read_count: IntCounterVec,
     pub dag_state_store_write_count: IntCounter,
-    pub committed_leaders_total: IntCounterVec,
     pub fetch_blocks_scheduler_inflight: IntGauge,
     pub fetched_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub committed_leaders_total: IntCounterVec,
     pub last_committed_leader_round: IntGauge,
+    pub commit_round_advancement_interval: Histogram,
     pub last_decided_leader_round: IntGauge,
     pub leader_timeout_total: IntCounter,
     pub missing_blocks_total: IntGauge,
@@ -150,6 +150,16 @@ impl NodeMetrics {
                 "Number of enqueued core requests",
                 registry,
             ).unwrap(),
+            highest_accepted_round: register_int_gauge_with_registry!(
+                "highest_accepted_round",
+                "The highest round where a block has been accepted. Resets on restart.",
+                registry,
+            ).unwrap(),
+            accepted_blocks: register_int_counter_with_registry!(
+                "accepted_blocks",
+                "Number of accepted blocks",
+                registry,
+            ).unwrap(),
             dag_state_store_read_count: register_int_counter_vec_with_registry!(
                 "dag_state_store_read_count",
                 "Number of times DagState needs to read from store per operation type",
@@ -159,12 +169,6 @@ impl NodeMetrics {
             dag_state_store_write_count: register_int_counter_with_registry!(
                 "dag_state_store_write_count",
                 "Number of times DagState needs to write to store",
-                registry,
-            ).unwrap(),
-            committed_leaders_total: register_int_counter_vec_with_registry!(
-                "committed_leaders_total",
-                "Total number of (direct or indirect) committed leaders per authority",
-                &["authority", "commit_type"],
                 registry,
             ).unwrap(),
             fetch_blocks_scheduler_inflight: register_int_gauge_with_registry!(
@@ -185,9 +189,21 @@ impl NodeMetrics {
                 &["authority", "source"],
                 registry,
             ).unwrap(),
+            committed_leaders_total: register_int_counter_vec_with_registry!(
+                "committed_leaders_total",
+                "Total number of (direct or indirect) committed leaders per authority",
+                &["authority", "commit_type"],
+                registry,
+            ).unwrap(),
             last_committed_leader_round: register_int_gauge_with_registry!(
                 "last_committed_leader_round",
                 "The last round where a leader was committed to store and sent to commit consumer.",
+                registry,
+            ).unwrap(),
+            commit_round_advancement_interval: register_histogram_with_registry!(
+                "commit_round_advancement_interval",
+                "Intervals (in secs) between commit round advancements.",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             last_decided_leader_round: register_int_gauge_with_registry!(
@@ -214,7 +230,7 @@ impl NodeMetrics {
                 "scope_processing_time",
                 "The processing time of a specific code scope",
                 &["scope"],
-                SCOPE_LATENCY_SEC_BUCKETS.to_vec(),
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
             sub_dags_per_commit_count: register_histogram_with_registry!(
@@ -289,6 +305,23 @@ impl ChannelMetrics {
 
 // Fields for network-agnostic metrics can be added here
 pub(crate) struct NetworkMetrics {
+    pub network_type: IntGaugeVec,
     pub inbound: NetworkRouteMetrics,
     pub outbound: NetworkRouteMetrics,
+}
+
+impl NetworkMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            network_type: register_int_gauge_vec_with_registry!(
+                "network_type",
+                "Type of the network used: anemo or tonic",
+                &["type"],
+                registry
+            )
+            .unwrap(),
+            inbound: NetworkRouteMetrics::new("inbound", registry),
+            outbound: NetworkRouteMetrics::new("outbound", registry),
+        }
+    }
 }

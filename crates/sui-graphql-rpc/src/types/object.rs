@@ -170,7 +170,6 @@ pub struct AddressOwner {
     owner: Option<Owner>,
 }
 
-#[allow(dead_code)]
 pub(crate) enum ObjectLookupKey {
     Latest,
     LatestAt(u64),

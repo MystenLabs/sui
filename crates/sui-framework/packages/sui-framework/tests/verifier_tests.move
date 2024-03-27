@@ -15,11 +15,10 @@ module sui::verifier_tests {
         use sui::test_scenario;
         let admin = @0xBABE;
 
-        let mut scenario_val = test_scenario::begin(admin);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(admin);
         let otw = VERIFIER_TESTS{};
-        init(otw, test_scenario::ctx(scenario));
-        test_scenario::end(scenario_val);
+        init(otw, scenario.ctx());
+        scenario.end();
     }
 
     fun is_otw(witness: VERIFIER_TESTS): bool {

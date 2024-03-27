@@ -397,8 +397,8 @@ prometheus-http-query = { version = "0.6.6", default_features = false, features 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.1.0"
 proptest-derive = "0.3.0"
-prost = "0.12.1"
-prost-build = "0.12.1"
+prost = "0.12.3"
+prost-build = "0.12.3"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
 quinn-proto = "^0.10.5"
@@ -479,9 +479,9 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.10", features = ["transport", "tls"] }
-tonic-build = { version = "0.10", features = ["prost", "transport"] }
-tonic-health = "0.10"
+tonic = { version = "0.11", features = ["transport", "tls"] }
+tonic-build = { version = "0.11", features = ["prost", "transport"] }
+tonic-health = "0.11"
 tower = { version = "0.4.12", features = [
   "full",
   "util",
@@ -552,9 +552,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a499d84d07cbe33014531249f6ceeff85664502d", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "52d00a506a965883f0904ee64bbd5fb9471c42b3" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "52d00a506a965883f0904ee64bbd5fb9471c42b3" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "52d00a506a965883f0904ee64bbd5fb9471c42b3", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }

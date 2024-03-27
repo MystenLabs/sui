@@ -54,9 +54,9 @@ In the future, we plan on adding to declare structs as `public(package)` or as i
 ### Abilities
 
 As mentioned above: by default, a struct declaration is linear and ephemeral. So to allow the value
-to be used with certain operations (that copy it, drop it, store it in global storage, or use it as
-a storage schema), structs can be granted [abilities](./abilities.md) by annotating them with
-`has <ability>`:
+to be used in these ways (e.g., copied, dropped, stored in an [object](./abilities/object.md), or
+used to define a storable [object](./abilities/object.md)), structs can be granted
+[abilities](./abilities.md) by annotating them with `has <ability>`:
 
 ```move
 module a::m {
@@ -64,9 +64,9 @@ module a::m {
 }
 ```
 
-The ability declaration can occur either before or after the struct's
-fields. However, only one or the other can be used, and not both. If declared after
-the struct's field, the ability declaration must be terminated with a semicolon:
+The ability declaration can occur either before or after the struct's fields. However, only one or
+the other can be used, and not both. If declared after the struct's fields, the ability declaration
+must be terminated with a semicolon:
 
 ```move
 module a::m {
@@ -110,12 +110,12 @@ features. It may or may not be removed later.
 ### Creating Structs
 
 Values of a struct type can be created (or "packed") by indicating the struct name, followed by
-value for each field. 
+value for each field.
 
-For a struct with named fields, the order of the fields does not matter, but
-the field name needs to be provided. For a struct with positional
-fields, the order of the fields must match the order of the fields in the struct
-definition, and instead of using `{}` to create the struct, `()` are used.
+For a struct with named fields, the order of the fields does not matter, but the field name needs to
+be provided. For a struct with positional fields, the order of the fields must match the order of
+the fields in the struct definition, and it must be created using `()` instead of `{}` to enclose
+the parameters.
 
 ```move
 module a::m {
@@ -135,8 +135,8 @@ module a::m {
 }
 ```
 
-For structs with named fields, you can use the following shorthand if you have
-a local variable with the same name as the field:
+For structs with named fields, you can use the following shorthand if you have a local variable with
+the same name as the field:
 
 ```move
 let baz = Baz { foo: foo };
@@ -148,8 +148,8 @@ This is sometimes called "field name punning".
 
 ### Destroying Structs via Pattern Matching
 
-Struct values can be destroyed by binding or assigning them in patterns using
-similar syntax to constructing them.
+Struct values can be destroyed by binding or assigning them in patterns using similar syntax to
+constructing them.
 
 ```move
 module a::m {
@@ -227,7 +227,7 @@ module a::m {
 
 ### Accessing Struct Fields
 
-Fields of a struct can be accessed using the dot operator `.`. 
+Fields of a struct can be accessed using the dot operator `.`.
 
 For structs with named fields, the fields can be accessed by their name:
 
@@ -247,10 +247,10 @@ let x = pos_foo.0;  // x == 3
 let y = pos_foo.1;  // y == true
 ```
 
-Accessing struct fields without borrowing or copying them is subject to the
-field's ability constraints. For more details see the sections on [borrowing
-structs and fields](#borrowing-structs-and-fields) and [reading and writing
-fields](#reading-and-writing-fields) for more information.
+Accessing struct fields without borrowing or copying them is subject to the field's ability
+constraints. For more details see the sections on
+[borrowing structs and fields](#borrowing-structs-and-fields) and
+[reading and writing fields](#reading-and-writing-fields) for more information.
 
 ### Borrowing Structs and Fields
 
@@ -298,8 +298,9 @@ let foo2: Foo = *&bar.0;
 ```
 
 More canonically, the dot operator can be used to read fields of a struct without any borrowing. As
-is true with [dereferencing](./references.md#reading-and-writing-through-references), the field type
-must have the `copy` [ability](./abilities.md).
+is true with
+[dereferencing](./primitive-types/references.md#reading-and-writing-through-references), the field
+type must have the `copy` [ability](./abilities.md).
 
 ```move
 let foo = Foo { x: 3, y: true };
@@ -474,4 +475,5 @@ module a::m {
 ## Storage
 
 Structs can be used to define storage schemas, but the details are different per deployment of Move.
-See the documentation for the [`key` ability](./abilities.md#key) for more details.
+See the documentation for the [`key` ability](./abilities.md#key) and
+[Sui objects](./abilities/object.md) for more details.

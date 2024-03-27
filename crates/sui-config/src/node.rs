@@ -79,6 +79,10 @@ pub struct NodeConfig {
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
+    // only alow websocket connections for jsonrpc traffic
+    #[serde(default)]
+    pub websocket_only: bool,
+
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -193,6 +197,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Google".to_string(),
         "Facebook".to_string(),
         "Twitch".to_string(),
+        "Apple".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);

@@ -3,12 +3,7 @@
 
 #[test_only]
 module sui::address_tests {
-    use std::ascii;
-    use std::string;
-    use std::vector;
     use sui::address;
-    use sui::object;
-    use sui::tx_context;
 
     #[test]
     fun from_bytes_ok() {
@@ -27,12 +22,12 @@ module sui::address_tests {
         let mut ctx = tx_context::dummy();
         let uid = object::new(&mut ctx);
 
-        let mut bytes = object::uid_to_bytes(&uid);
-        vector::pop_back(&mut bytes);
+        let mut bytes = uid.to_bytes();
+        bytes.pop_back();
 
         let _ = address::from_bytes(bytes);
 
-        object::delete(uid);
+        uid.delete();
     }
 
     #[test]
@@ -41,23 +36,23 @@ module sui::address_tests {
         let mut ctx = tx_context::dummy();
         let uid = object::new(&mut ctx);
 
-        let mut bytes = object::uid_to_bytes(&uid);
-        vector::push_back(&mut bytes, 0x42);
+        let mut bytes = uid.to_bytes();
+        bytes.push_back(0x42);
 
         let _ = address::from_bytes(bytes);
 
-        object::delete(uid);
+        uid.delete();
     }
 
     #[test]
     fun to_u256_ok() {
-        assert!(address::to_u256(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000000")) == 0, 0);
-        assert!(address::to_u256(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000001")) == 1, 0);
-        assert!(address::to_u256(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000010")) == 16, 0);
-        assert!(address::to_u256(address::from_bytes(x"00000000000000000000000000000000000000000000000000000000000000ff")) == 255, 0);
-        assert!(address::to_u256(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000100")) == 256, 0);
-        assert!(address::to_u256(address::from_bytes(x"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe")) == address::max() - 1, 0);
-        assert!(address::to_u256(address::from_bytes(x"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")) == address::max(), 0);
+        assert!(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000000").to_u256() == 0, 0);
+        assert!(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000001").to_u256() == 1, 0);
+        assert!(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000010").to_u256() == 16, 0);
+        assert!(address::from_bytes(x"00000000000000000000000000000000000000000000000000000000000000ff").to_u256() == 255, 0);
+        assert!(address::from_bytes(x"0000000000000000000000000000000000000000000000000000000000000100").to_u256() == 256, 0);
+        assert!(address::from_bytes(x"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe").to_u256() == address::max() - 1, 0);
+        assert!(address::from_bytes(x"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").to_u256() == address::max(), 0);
     }
 
     #[test]
@@ -79,35 +74,35 @@ module sui::address_tests {
 
     #[test]
     fun to_bytes_ok() {
-        assert!(address::to_bytes(@0x0) == x"0000000000000000000000000000000000000000000000000000000000000000", 0);
-        assert!(address::to_bytes(@0x1) == x"0000000000000000000000000000000000000000000000000000000000000001", 0);
-        assert!(address::to_bytes(@0x10) == x"0000000000000000000000000000000000000000000000000000000000000010", 0);
-        assert!(address::to_bytes(@0xff) == x"00000000000000000000000000000000000000000000000000000000000000ff", 0);
-        assert!(address::to_bytes(@0x101) == x"0000000000000000000000000000000000000000000000000000000000000101", 0);
-        assert!(address::to_bytes(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe) == x"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", 0);
-        assert!(address::to_bytes(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) == x"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0);
+        assert!(@0x0.to_bytes() == x"0000000000000000000000000000000000000000000000000000000000000000", 0);
+        assert!(@0x1.to_bytes() == x"0000000000000000000000000000000000000000000000000000000000000001", 0);
+        assert!(@0x10.to_bytes() == x"0000000000000000000000000000000000000000000000000000000000000010", 0);
+        assert!(@0xff.to_bytes() == x"00000000000000000000000000000000000000000000000000000000000000ff", 0);
+        assert!(@0x101.to_bytes() == x"0000000000000000000000000000000000000000000000000000000000000101", 0);
+        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_bytes() == x"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", 0);
+        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_bytes() == x"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0);
     }
 
     #[test]
     fun to_ascii_string_ok() {
-        assert!(address::to_ascii_string(@0x0) == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000000"), 0);
-        assert!(address::to_ascii_string(@0x1) == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000001"), 0);
-        assert!(address::to_ascii_string(@0x10) == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000010"), 0);
-        assert!(address::to_ascii_string(@0xff) == ascii::string(b"00000000000000000000000000000000000000000000000000000000000000ff"), 0);
-        assert!(address::to_ascii_string(@0x101) == ascii::string(b"0000000000000000000000000000000000000000000000000000000000000101"), 0);
-        assert!(address::to_ascii_string(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe) == ascii::string(b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"), 0);
-        assert!(address::to_ascii_string(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) == ascii::string(b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 0);
+        assert!(@0x0.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000000".to_ascii_string(), 0);
+        assert!(@0x1.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000001".to_ascii_string(), 0);
+        assert!(@0x10.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000010".to_ascii_string(), 0);
+        assert!(@0xff.to_ascii_string() == b"00000000000000000000000000000000000000000000000000000000000000ff".to_ascii_string(), 0);
+        assert!(@0x101.to_ascii_string() == b"0000000000000000000000000000000000000000000000000000000000000101".to_ascii_string(), 0);
+        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_ascii_string() == b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe".to_ascii_string(), 0);
+        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_ascii_string() == b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_ascii_string(), 0);
     }
 
      #[test]
     fun to_string_ok() {
-        assert!(address::to_string(@0x0) == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000000"), 0);
-        assert!(address::to_string(@0x1) == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000001"), 0);
-        assert!(address::to_string(@0x10) == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000010"), 0);
-        assert!(address::to_string(@0xff) == string::utf8(b"00000000000000000000000000000000000000000000000000000000000000ff"), 0);
-        assert!(address::to_string(@0x101) == string::utf8(b"0000000000000000000000000000000000000000000000000000000000000101"), 0);
-        assert!(address::to_string(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe) == string::utf8(b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"), 0);
-        assert!(address::to_string(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) == string::utf8(b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 0);
+        assert!(@0x0.to_string() == b"0000000000000000000000000000000000000000000000000000000000000000".to_string(), 0);
+        assert!(@0x1.to_string() == b"0000000000000000000000000000000000000000000000000000000000000001".to_string(), 0);
+        assert!(@0x10.to_string() == b"0000000000000000000000000000000000000000000000000000000000000010".to_string(), 0);
+        assert!(@0xff.to_string() == b"00000000000000000000000000000000000000000000000000000000000000ff".to_string(), 0);
+        assert!(@0x101.to_string() == b"0000000000000000000000000000000000000000000000000000000000000101".to_string(), 0);
+        assert!(@0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe.to_string() == b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe".to_string(), 0);
+        assert!(@0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.to_string() == b"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(), 0);
     }
 
     #[test]

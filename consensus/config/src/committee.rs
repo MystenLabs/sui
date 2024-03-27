@@ -157,7 +157,7 @@ pub struct Authority {
 pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
-    // Minimum committee size is 4, so 0 index is always valid.
+    // Minimum committee size is 1, so 0 index is always valid.
     pub const ZERO: AuthorityIndex = AuthorityIndex(0);
 
     pub fn value(&self) -> usize {

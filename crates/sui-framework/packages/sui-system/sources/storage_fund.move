@@ -39,21 +39,21 @@ module sui_system::storage_fund {
         non_refundable_storage_fee_amount: u64,
     ) : Balance<SUI> {
         // Both the reinvestment and leftover rewards are not to be refunded so they go to the non-refundable balance.
-        balance::join(&mut self.non_refundable_balance, storage_fund_reinvestment);
-        balance::join(&mut self.non_refundable_balance, leftover_staking_rewards);
+        self.non_refundable_balance.join(storage_fund_reinvestment);
+        self.non_refundable_balance.join(leftover_staking_rewards);
 
         // The storage charges for the epoch come from the storage rebate of the new objects created
         // and the new storage rebates of the objects modified during the epoch so we put the charges
         // into `total_object_storage_rebates`.
-        balance::join(&mut self.total_object_storage_rebates, storage_charges);
+        self.total_object_storage_rebates.join(storage_charges);
 
         // Split out the non-refundable portion of the storage rebate and put it into the non-refundable balance.
-        let non_refundable_storage_fee = balance::split(&mut self.total_object_storage_rebates, non_refundable_storage_fee_amount);
-        balance::join(&mut self.non_refundable_balance, non_refundable_storage_fee);
+        let non_refundable_storage_fee = self.total_object_storage_rebates.split(non_refundable_storage_fee_amount);
+        self.non_refundable_balance.join(non_refundable_storage_fee);
 
         // `storage_rebates` include the already refunded rebates of deleted objects and old rebates of modified objects and
         // should be taken out of the `total_object_storage_rebates`.
-        let storage_rebate = balance::split(&mut self.total_object_storage_rebates, storage_rebate_amount);
+        let storage_rebate = self.total_object_storage_rebates.split(storage_rebate_amount);
 
         // The storage rebate has already been returned to individual transaction senders' gas coins
         // so we return the balance to be burnt at the very end of epoch change.
@@ -61,10 +61,10 @@ module sui_system::storage_fund {
     }
 
     public fun total_object_storage_rebates(self: &StorageFund): u64 {
-        balance::value(&self.total_object_storage_rebates)
+        self.total_object_storage_rebates.value()
     }
 
     public fun total_balance(self: &StorageFund): u64 {
-        balance::value(&self.total_object_storage_rebates) + balance::value(&self.non_refundable_balance)
+        self.total_object_storage_rebates.value() + self.non_refundable_balance.value()
     }
 }

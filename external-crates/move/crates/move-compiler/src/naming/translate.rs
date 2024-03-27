@@ -1687,7 +1687,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             use N::BuiltinFunction_ as BF;
             let ty_args = tys_opt.map(|tys| types(context, tys));
-            let nes = call_args(context, rhs);
+            let mut nes = call_args(context, rhs);
             match resolve_function(context, ResolveFunctionCase::Call, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
                     if is_macro.is_none() {
@@ -1706,6 +1706,16 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                             (bloc, dep_msg),
                             (bloc, help_msg),
                         ));
+                    }
+                    // If no abort code is given for the assert, we add in the abort code as the
+                    // bitset-line-number if `CleverAssertions` is set.
+                    if nes.value.len() == 1 && is_macro.is_some() {
+                        context.env.check_feature(
+                            context.current_package,
+                            FeatureGate::CleverAssertions,
+                            bloc,
+                        );
+                        nes.value.push(sp(bloc, NE::ErrorConstant));
                     }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }
@@ -2282,6 +2292,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)

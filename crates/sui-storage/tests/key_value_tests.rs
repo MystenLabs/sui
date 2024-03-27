@@ -13,7 +13,9 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
 };
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::messages_checkpoint::{
@@ -37,7 +39,7 @@ fn random_tx() -> Transaction {
 
 fn random_fx() -> TransactionEffects {
     let tx = random_tx();
-    TransactionEffects::new_with_tx(&tx)
+    TestEffectsBuilder::new(tx.data()).build()
 }
 
 fn random_events() -> TransactionEvents {

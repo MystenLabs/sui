@@ -90,11 +90,11 @@ The API in Sui for verifying a proof expects a special processed verification ke
 
 The output of the `prepare_verifying_key` function is a vector with four byte arrays, which corresponds to the `vk_gamma_abc_g1_bytes`, `alpha_g1_beta_g2_bytes`, `gamma_g2_neg_pc_bytes`, `delta_g2_neg_pc_bytes`.
 
-To verify a proof, you also need two more inputs, `proof_inputs_bytes` and `proof_points_bytes`, which contain the public inputs and the proof respectively. These are serializations of the `inputs` and `proof` values from the previous example, which you can compute in Rust as follows:
+To verify a proof, you also need two more inputs, `public_inputs_bytes` and `proof_points_bytes`, which contain the public inputs and the proof respectively. These are serializations of the `inputs` and `proof` values from the previous example, which you can compute in Rust as follows:
 
 ```rust
-let mut proof_inputs_bytes = Vec::new();
-inputs.serialize_compressed(&mut proof_inputs_bytes).unwrap();
+let mut public_inputs_bytes = Vec::new();
+inputs.serialize_compressed(&mut public_inputs_bytes).unwrap();
 
 let mut proof_points_bytes = Vec::new();
 proof.a.serialize_compressed(&mut proof_points_bytes).unwrap();

@@ -13,14 +13,13 @@ use crate::build_json_rpc_server;
 use crate::errors::IndexerError;
 use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler::new_handlers;
+use crate::handlers::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
-use crate::processors::objects_snapshot_processor::{ObjectsSnapshotProcessor, SnapshotLagConfig};
-use crate::processors::processor_orchestrator::ProcessorOrchestrator;
-use crate::store::{IndexerStore, PgIndexerAnalyticalStore};
+use crate::store::IndexerStore;
 use crate::IndexerConfig;
 
-const DOWNLOAD_QUEUE_SIZE: usize = 1000;
+const DOWNLOAD_QUEUE_SIZE: usize = 200;
 
 pub struct Indexer;
 
@@ -80,12 +79,13 @@ impl Indexer {
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, metrics).await?;
+        let checkpoint_handler = new_handlers(store, metrics.clone()).await?;
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,
             ),
             vec![Box::new(checkpoint_handler)],
+            metrics,
         )
         .await;
 
@@ -109,19 +109,6 @@ impl Indexer {
             .await
             .expect("Rpc server task failed");
 
-        Ok(())
-    }
-
-    pub async fn start_analytical_worker(
-        store: PgIndexerAnalyticalStore,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError> {
-        info!(
-            "Sui Indexer Analytical Worker (version {:?}) started...",
-            env!("CARGO_PKG_VERSION")
-        );
-        let mut processor_orchestrator = ProcessorOrchestrator::new(store, metrics);
-        processor_orchestrator.run_forever().await;
         Ok(())
     }
 }

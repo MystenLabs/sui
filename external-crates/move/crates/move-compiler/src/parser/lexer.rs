@@ -214,6 +214,10 @@ impl<'input> Lexer<'input> {
         &self.text[self.cur_start..self.cur_end]
     }
 
+    pub fn loc_contents(&self, loc: Loc) -> &'input str {
+        &self.text[loc.start() as usize..loc.end() as usize]
+    }
+
     pub fn file_hash(&self) -> FileHash {
         self.file_hash
     }

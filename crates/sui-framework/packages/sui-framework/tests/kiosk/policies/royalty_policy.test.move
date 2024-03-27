@@ -6,7 +6,6 @@
 module sui::royalty_policy {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::tx_context::TxContext;
     use sui::transfer_policy::{
         Self as policy,
         TransferPolicy,
@@ -49,7 +48,7 @@ module sui::royalty_policy {
     ) {
         let config: &Config = policy::get_rule(Rule {}, policy);
         let paid = policy::paid(request);
-        let amount = (((paid as u128) * (config.amount_bp as u128) / 10_000) as u64);
+        let amount = (paid as u128 * (config.amount_bp as u128) / 10_000) as u64;
 
         assert!(coin::value(payment) >= amount, EInsufficientAmount);
 
@@ -64,13 +63,12 @@ module sui::royalty_policy_tests {
     use sui::coin;
     use sui::sui::SUI;
     use sui::royalty_policy;
-    use sui::tx_context::dummy as ctx;
     use sui::transfer_policy as policy;
     use sui::transfer_policy_tests as test;
 
     #[test]
     fun test_default_flow() {
-        let ctx = &mut ctx();
+        let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);
 
         // 1% royalty
@@ -92,7 +90,7 @@ module sui::royalty_policy_tests {
     #[test]
     #[expected_failure(abort_code = sui::royalty_policy::EIncorrectArgument)]
     fun test_incorrect_config() {
-        let ctx = &mut ctx();
+        let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);
 
         royalty_policy::set(&mut policy, &cap, 11_000);
@@ -102,7 +100,7 @@ module sui::royalty_policy_tests {
     #[test]
     #[expected_failure(abort_code = sui::royalty_policy::EInsufficientAmount)]
     fun test_insufficient_amount() {
-        let ctx = &mut ctx();
+        let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);
 
         // 1% royalty

@@ -212,6 +212,7 @@ pub trait TypingVisitorContext {
             | E::Constant(..)
             | E::Continue(_)
             | E::BorrowLocal(..)
+            | E::ErrorConstant(_)
             | E::UnresolvedError => (),
         }
     }
