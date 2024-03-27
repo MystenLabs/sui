@@ -1,9 +1,34 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:27
+  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:28
   │
-4 │         let v = vector<u64[0, 1];
-  │                       -   ^ Expected '>'
-  │                       │    
-  │                       To match this '<'
-  │                       Perhaps you need a blank space before this '<' operator?
+4 │         let _v = vector<u64[0, 1];
+  │                            ^
+  │                            │
+  │                            Unexpected '['
+  │                            Expected ','
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:33
+  │
+4 │         let _v = vector<u64[0, 1];
+  │                                -^ Unexpected ']'
+  │                                │ 
+  │                                Expected '::' after an address in a module access chain
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:34
+  │
+4 │         let _v = vector<u64[0, 1];
+  │                        -         ^ Expected '>'
+  │                        │          
+  │                        To match this '<'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:34
+  │
+4 │         let _v = vector<u64[0, 1];
+  │                                  ^
+  │                                  │
+  │                                  Unexpected ';'
+  │                                  Expected '['
 

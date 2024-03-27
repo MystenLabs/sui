@@ -1,3 +1,15 @@
+error[E01009]: invalid assignment
+  ┌─ tests/move_check/expansion/weird_apply_assign.move:5:9
+  │
+5 │         { f } = S { f: 0 };
+  │         ^^^^^ Invalid assignment syntax. Expected: a local, a field write, or a deconstructing assignment
+
+error[E03003]: unbound module member
+  ┌─ tests/move_check/expansion/weird_apply_assign.move:7:9
+  │
+7 │         S f = S { f: 0 };
+  │         ^ Invalid module access. Unbound constant 'S' in module '0x42::M'
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/weird_apply_assign.move:7:11
   │
