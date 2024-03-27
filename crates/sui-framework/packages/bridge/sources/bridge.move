@@ -2,18 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::bridge {
-    use std::option;
-    use std::option::{none, Option, some};
-
     use sui::address;
     use sui::balance;
     use sui::clock::Clock;
     use sui::coin::{Self, Coin};
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::object::UID;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
     use sui_system::sui_system::SuiSystemState;
@@ -28,19 +22,9 @@ module bridge::bridge {
     use bridge::treasury::{Self, BridgeTreasury};
 
     #[test_only]
-    use sui::hex;
+    use sui::{hex, test_scenario, test_utils::{assert_eq, destroy}};
     #[test_only]
-    use sui::object;
-    #[test_only]
-    use sui::test_scenario;
-    #[test_only]
-    use sui::test_utils::{assert_eq, destroy};
-    #[test_only]
-    use bridge::btc::BTC;
-    #[test_only]
-    use bridge::eth::ETH;
-    #[test_only]
-    use bridge::message::create_blocklist_message;
+    use bridge::{btc::BTC, eth::ETH, message::create_blocklist_message};
 
     const MESSAGE_VERSION: u8 = 1;
 
@@ -131,7 +115,7 @@ module bridge::bridge {
     // this method is called once in end of epoch tx to create the bridge
     #[allow(unused_function)]
     fun create(id: UID, chain_id: u8, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
             message_version: MESSAGE_VERSION,
@@ -157,7 +141,7 @@ module bridge::bridge {
         min_stake_participation_percentage: u64,
         ctx: &TxContext
     ) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         let inner = load_inner_mut(self);
         if (vec_map::is_empty(committee::committee_members(&inner.committee))) {
             committee::try_create_next_committee(
@@ -169,13 +153,16 @@ module bridge::bridge {
         }
     }
 
-    public fun committee_registration(self: &mut Bridge,
-                                      system_state: &mut SuiSystemState,
-                                      bridge_pubkey_bytes: vector<u8>,
-                                      http_rest_url: vector<u8>,
-                                      ctx: &TxContext) {
-        let inner = load_inner_mut(self);
-        committee::register(&mut inner.committee, system_state, bridge_pubkey_bytes, http_rest_url, ctx)
+    public fun committee_registration(
+        self: &mut Bridge,
+        system_state: &mut SuiSystemState,
+        bridge_pubkey_bytes: vector<u8>,
+        http_rest_url: vector<u8>,
+        ctx: &TxContext
+    ) {
+        load_inner_mut(self)
+            .committee
+            .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
     }
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved
@@ -198,7 +185,7 @@ module bridge::bridge {
         let message = message::create_token_bridge_message(
             inner.chain_id,
             bridge_seq_num,
-            address::to_bytes(tx_context::sender(ctx)),
+            address::to_bytes(ctx.sender()),
             target_chain,
             target_address,
             token_id,
@@ -206,13 +193,12 @@ module bridge::bridge {
         );
 
         // burn / escrow token, unsupported coins will fail in this step
-        treasury::burn(&mut inner.treasury, token, ctx);
+        inner.treasury.burn(token, ctx);
 
         // Store pending bridge request
-        let key = message::key(&message);
-        linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
+        inner.bridge_records.push_back(message.key(), BridgeRecord {
             message,
-            verified_signatures: none(),
+            verified_signatures: option::none(),
             claimed: false,
         });
 
@@ -221,7 +207,7 @@ module bridge::bridge {
             message_type: message_types::token(),
             seq_num: bridge_seq_num,
             source_chain: inner.chain_id,
-            sender_address: address::to_bytes(tx_context::sender(ctx)),
+            sender_address: address::to_bytes(ctx.sender()),
             target_chain,
             target_address,
             token_type: token_id,
@@ -239,45 +225,47 @@ module bridge::bridge {
     ) {
         // FIXME: need to check pause
         let inner = load_inner_mut(self);
-        let key = message::key(&message);
+        let message_key = message.key();
         // TODO: test this
-        assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
-        if (message::message_type(&message) == message_types::token() && message::source_chain(
+        if (message.message_type() == message_types::token() && message::source_chain(
             &message
         ) == inner.chain_id) {
-            let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
+            let record = &mut inner.bridge_records[message_key];
+
             assert!(record.message == message, EMalformedMessageError);
             assert!(!record.claimed, EInvariantSuiInitializedTokenTransferShouldNotBeClaimed);
 
             // If record already has verified signatures, it means the message has been approved.
             // Then we exit early.
-            if (option::is_some(&record.verified_signatures)) {
-                emit(TokenTransferAlreadyApproved { message_key: key });
+            if (record.verified_signatures.is_some()) {
+                emit(TokenTransferAlreadyApproved { message_key });
                 return
             };
             // verify signatures
-            committee::verify_signatures(&inner.committee, message, signatures);
+            inner.committee.verify_signatures(message, signatures);
             // Store approval
-            record.verified_signatures = some(signatures)
+            record.verified_signatures = option::some(signatures)
         } else {
             // At this point, if this message is in bridge_records, we know it's already approved
             // because we only add a message to bridge_records after verifying the signatures.
-            if (linked_table::contains(&inner.bridge_records, key)) {
-                emit(TokenTransferAlreadyApproved { message_key: key });
+            if (inner.bridge_records.contains(message_key)) {
+                emit(TokenTransferAlreadyApproved { message_key });
                 return
             };
             // verify signatures
-            committee::verify_signatures(&inner.committee, message, signatures);
+            inner.committee.verify_signatures(message, signatures);
             // Store message and approval
-            linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
+            inner.bridge_records.push_back(message_key, BridgeRecord {
                 message,
-                verified_signatures: some(signatures),
+                verified_signatures: option::some(signatures),
                 claimed: false
             });
         };
-        emit(TokenTransferApproved { message_key: key });
+
+        emit(TokenTransferApproved { message_key });
     }
 
     // This function can only be called by the token recipient
@@ -285,9 +273,9 @@ module bridge::bridge {
     public fun claim_token<T>(self: &mut Bridge, clock: &Clock, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
         let (maybe_token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
-        assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
-        assert!(option::is_some(&maybe_token), ETokenAlreadyClaimed);
-        option::destroy_some(maybe_token)
+        assert!(ctx.sender() == owner, EUnauthorisedClaim);
+        assert!(maybe_token.is_some(), ETokenAlreadyClaimed);
+        maybe_token.destroy_some()
     }
 
     // This function can be called by anyone to claim and transfer the token to the recipient
@@ -300,20 +288,29 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let (token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
-        if (option::is_none(&token)) {
-            option::destroy_none(token);
-            let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+        if (token.is_none()) {
+            token.destroy_none();
+            let key = message::create_key(
+                source_chain,
+                message_types::token(),
+                bridge_seq_num
+            );
+
             emit(TokenTransferAlreadyClaimed { message_key: key });
             return
         };
-        transfer::public_transfer(option::destroy_some(token), owner)
+
+        transfer::public_transfer(
+            token.destroy_some(),
+            owner
+        )
     }
 
     fun load_inner_mut(self: &mut Bridge): &mut BridgeInner {
-        let version = versioned::version(&self.inner);
+        let version = self.inner.version();
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
+        let inner: &mut BridgeInner = self.inner.load_value_mut();
         assert!(inner.bridge_version == version, EWrongInnerVersion);
         inner
     }
@@ -322,11 +319,11 @@ module bridge::bridge {
     fun load_inner(
         self: &Bridge,
     ): &BridgeInner {
-        let version = versioned::version(&self.inner);
+        let version = self.inner.version();
 
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &BridgeInner = versioned::load_value(&self.inner);
+        let inner: &BridgeInner = self.inner.load_value();
         assert!(inner.bridge_version == version, EWrongInnerVersion);
         inner
     }
@@ -344,26 +341,26 @@ module bridge::bridge {
         assert!(!inner.paused, EBridgeUnavailable);
 
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
-        assert!(linked_table::contains(&inner.bridge_records, key), EMessageNotFoundInRecords);
+        assert!(inner.bridge_records.contains(key), EMessageNotFoundInRecords);
 
         // retrieve approved bridge message
-        let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
+        let record = &mut inner.bridge_records[key];
         // ensure this is a token bridge message
-        assert!(message::message_type(&record.message) == message_types::token(), EUnexpectedMessageType);
+        assert!(&record.message.message_type() == message_types::token(), EUnexpectedMessageType);
         // Ensure it's signed
-        assert!(option::is_some(&record.verified_signatures), EUnauthorisedClaim);
+        assert!(record.verified_signatures.is_some(), EUnauthorisedClaim);
 
         // extract token message
-        let token_payload = message::extract_token_bridge_payload(&record.message);
+        let token_payload = record.message.extract_token_bridge_payload();
         // get owner address
-        let owner = address::from_bytes(message::token_target_address(&token_payload));
+        let owner = address::from_bytes(token_payload.token_target_address());
 
         // If already claimed, exit early
         if (record.claimed) {
             return (option::none(), owner)
         };
 
-        let target_chain = message::token_target_chain(&token_payload);
+        let target_chain = token_payload.token_target_chain();
         // ensure target chain matches self.chain_id
         assert!(target_chain == inner.chain_id, EUnexpectedChainID);
 
@@ -373,19 +370,23 @@ module bridge::bridge {
         // `get_route` abort if route is invalid
         let route = chain_ids::get_route(source_chain, target_chain);
         // get owner address
-        let owner = address::from_bytes(message::token_target_address(&token_payload));
+        let owner = address::from_bytes(token_payload.token_target_address());
         // check token type
-        assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
-        let amount = message::token_amount(&token_payload);
+        assert!(treasury::token_id<T>() == token_payload.token_type(), EUnexpectedTokenType);
+
+        let amount = token_payload.token_amount();
         // Make sure transfer is within limit.
-        if (!limiter::check_and_record_sending_transfer<T>(&mut inner.limiter, clock, route, amount)) {
+        if (!inner.limiter.check_and_record_sending_transfer<T>(clock, route, amount)) {
             return (option::none(), owner)
         };
+
         // claim from treasury
-        let token = treasury::mint<T>(&mut inner.treasury, amount, ctx);
+        let token = inner.treasury.mint<T>(amount, ctx);
+
         // Record changes
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
+        
         (option::some(token), owner)
     }
 
@@ -394,31 +395,31 @@ module bridge::bridge {
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
     ) {
-        let message_type = message::message_type(&message);
+        let message_type = message.message_type();
 
         // TODO: test version mismatch
-        assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
         let inner = load_inner_mut(self);
 
-        assert!(message::source_chain(&message) == inner.chain_id, EUnexpectedChainID);
+        assert!(message.source_chain() == inner.chain_id, EUnexpectedChainID);
 
         // check system ops seq number and increment it
         let expected_seq_num = get_current_seq_num_and_increment(inner, message_type);
-        assert!(message::seq_num(&message) == expected_seq_num, EUnexpectedSeqNum);
+        assert!(message.seq_num() == expected_seq_num, EUnexpectedSeqNum);
 
-        committee::verify_signatures(&inner.committee, message, signatures);
+        inner.committee.verify_signatures(message, signatures);
 
         if (message_type == message_types::emergency_op()) {
-            let payload = message::extract_emergency_op_payload(&message);
+            let payload = message.extract_emergency_op_payload();
             execute_emergency_op(inner, payload);
         } else if (message_type == message_types::committee_blocklist()) {
-            let payload = message::extract_blocklist_payload(&message);
-            committee::execute_blocklist(&mut inner.committee, payload);
+            let payload = message.extract_blocklist_payload();
+            inner.committee.execute_blocklist(payload);
         } else if (message_type == message_types::update_bridge_limit()) {
-            let payload = message::extract_update_bridge_limit(&message);
+            let payload = message.extract_update_bridge_limit();
             execute_update_bridge_limit(inner, payload);
         } else if (message_type == message_types::update_asset_price()) {
-            let payload = message::extract_update_asset_price(&message);
+            let payload = message.extract_update_asset_price();
             execute_update_asset_price(inner, payload);
         } else {
             abort EUnexpectedMessageType
@@ -426,7 +427,7 @@ module bridge::bridge {
     }
 
     fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
-        let op = message::emergency_op_type(&payload);
+        let op = payload.emergency_op_type();
         if (op == message::emergency_op_pause()) {
             assert!(!inner.paused, EBridgeAlreadyPaused);
             inner.paused = true;
@@ -441,24 +442,35 @@ module bridge::bridge {
     }
 
     fun execute_update_bridge_limit(inner: &mut BridgeInner, payload: UpdateBridgeLimit) {
-        let receiving_chain = message::update_bridge_limit_payload_receiving_chain(&payload);
+        let receiving_chain = payload.update_bridge_limit_payload_receiving_chain();
         assert!(receiving_chain == inner.chain_id, EUnexpectedChainID);
-        let route = chain_ids::get_route(message::update_bridge_limit_payload_sending_chain(&payload), receiving_chain);
-        limiter::update_route_limit(&mut inner.limiter, &route, message::update_bridge_limit_payload_limit(&payload))
+        let route = chain_ids::get_route(
+            payload.update_bridge_limit_payload_sending_chain(),
+            receiving_chain
+        );
+
+        inner.limiter.update_route_limit(
+            &route,
+            payload.update_bridge_limit_payload_limit()
+        )
     }
 
     fun execute_update_asset_price(inner: &mut BridgeInner, payload: UpdateAssetPrice) {
-        limiter::update_asset_notional_price(&mut inner.limiter, message::update_asset_price_payload_token_id(&payload), message::update_asset_price_payload_new_price(&payload))
+        inner.limiter.update_asset_notional_price(
+            payload.update_asset_price_payload_token_id(),
+            payload.update_asset_price_payload_new_price()
+        )
     }
 
     // Verify seq number matches the next expected seq number for the message type,
     // and increment it.
     fun get_current_seq_num_and_increment(self: &mut BridgeInner, msg_type: u8): u64 {
-        if (!vec_map::contains(&self.sequence_nums, &msg_type)) {
-            vec_map::insert(&mut self.sequence_nums, msg_type, 1);
+        if (!self.sequence_nums.contains(&msg_type)) {
+            self.sequence_nums.insert(msg_type, 1);
             return 0
         };
-        let entry = vec_map::get_mut(&mut self.sequence_nums, &msg_type);
+
+        let entry = &mut self.sequence_nums[&msg_type];
         let seq_num = *entry;
         *entry = seq_num + 1;
         seq_num
@@ -470,17 +482,25 @@ module bridge::bridge {
         bridge_seq_num: u64,
     ): u8 {
         let inner = load_inner_mut(self);
-        let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
-        if (!linked_table::contains(&inner.bridge_records, key)) {
+        let key = message::create_key(
+            source_chain,
+            message_types::token(),
+            bridge_seq_num
+        );
+
+        if (!inner.bridge_records.contains(key)) {
             return TRANSFER_STATUS_NOT_FOUND
         };
-        let record = linked_table::borrow(&inner.bridge_records, key);
+
+        let record = &inner.bridge_records[key];
         if (record.claimed) {
             return TRANSFER_STATUS_CLAIMED
         };
-        if (option::is_some(&record.verified_signatures)) {
+
+        if (record.verified_signatures.is_some()) {
             return TRANSFER_STATUS_APPROVED
         };
+
         TRANSFER_STATUS_PENDING
     }
 
@@ -507,13 +527,13 @@ module bridge::bridge {
     #[expected_failure(abort_code = EUnexpectedChainID)]
     fun test_system_msg_incorrect_chain_id() {
         let mut scenario = test_scenario::begin(@0x0);
-        let ctx = test_scenario::ctx(&mut scenario);
+        let ctx = scenario.ctx();
         let chain_id = chain_ids::sui_devnet();
         let mut bridge = new_for_testing(ctx, chain_id);
         let blocklist = create_blocklist_message(chain_ids::sui_mainnet(), 0, 0, vector[]);
         execute_system_message(&mut bridge, blocklist, vector[]);
         destroy(bridge);
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     #[test]
@@ -739,7 +759,7 @@ module bridge::bridge {
         let message = message::create_token_bridge_message(
             chain_ids::sui_devnet(), // source chain
             10, // seq_num
-            address::to_bytes(tx_context::sender(ctx)), // sender address
+            address::to_bytes(ctx.sender()), // sender address
             chain_ids::eth_sepolia(), // target_chain
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
@@ -749,7 +769,7 @@ module bridge::bridge {
         let key = message::key(&message);
         linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
             message,
-            verified_signatures: none(),
+            verified_signatures: option::none(),
             claimed: false,
         });
         assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 10), TRANSFER_STATUS_PENDING);
@@ -758,7 +778,7 @@ module bridge::bridge {
         let message = message::create_token_bridge_message(
             chain_ids::sui_devnet(), // source chain
             11, // seq_num
-            address::to_bytes(tx_context::sender(ctx)), // sender address
+            address::to_bytes(ctx.sender()), // sender address
             chain_ids::eth_sepolia(), // target_chain
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
@@ -776,7 +796,7 @@ module bridge::bridge {
         let message = message::create_token_bridge_message(
             chain_ids::sui_devnet(), // source chain
             12, // seq_num
-            address::to_bytes(tx_context::sender(ctx)), // sender address
+            address::to_bytes(ctx.sender()), // sender address
             chain_ids::eth_sepolia(), // target_chain
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
