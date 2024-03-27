@@ -246,8 +246,13 @@ public fun return_val<T: key + store>(
 		promise: Promise, 
 		_ctx: &mut TxContext)
 ```
+:::note
 
-The `reclaim` function enables an owner to claim back their asset after the rental period is over and place it inside their Kiosk. If a lock rule is present, the example also locks the item inside the owner kiosk.
+It is important to note that the `reclaim` functionality is manually invoked and the rental service provider is responsible for ensuring that the renter is reminded to `reclaim`. As such this can cause the borrower to hold the asset for longer than the rental period. This can be mitigated if we modified the current contract by adding an assertion in the `borrow` & `borrow_val` functions to check if the rental period has expired.
+
+:::
+
+The `reclaim` function enables an owner to claim back their asset after the rental period is over and place it inside their Kiosk. If a lock rule is present, the example also locks the item inside the owner kiosk. 
 
 ```move
 public fun reclaim<T: key + store>(
