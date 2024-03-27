@@ -197,6 +197,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Google".to_string(),
         "Facebook".to_string(),
         "Twitch".to_string(),
+        "Apple".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
