@@ -118,16 +118,14 @@ async fn zklogin_end_to_end_test() {
         .build()
         .await;
 
-    // trigger reconfiguration that advanced epoch to 1.
-
-    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_authenticator_state_update().await;
     let signed_txn = build_zklogin_tx(&test_cluster, 2).await;
     let context = &test_cluster.wallet;
     let res = context.execute_transaction_may_fail(signed_txn).await;
     assert!(res.is_ok());
 
     // a txn with max_epoch mismatch with proof, fails to execute.
-    let signed_txn_with_wrong_max_epoch = build_zklogin_tx(&test_cluster, 2).await;
+    let signed_txn_with_wrong_max_epoch = build_zklogin_tx(&test_cluster, 1).await;
     assert!(context
         .execute_transaction_may_fail(signed_txn_with_wrong_max_epoch)
         .await
@@ -161,7 +159,7 @@ async fn test_max_epoch_too_large_fail_tx() {
 #[sim_test]
 async fn test_expired_zklogin_sig() {
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
         .build()
         .await;
@@ -228,7 +226,7 @@ async fn test_auth_state_creation() {
 async fn test_create_authenticator_state_object() {
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(23.into())
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(15000)
         .build()
         .await;
 

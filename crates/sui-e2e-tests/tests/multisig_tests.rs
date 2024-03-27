@@ -639,7 +639,7 @@ async fn test_multisig_with_zklogin_scenerios() {
 #[sim_test]
 async fn test_expired_epoch_zklogin_in_multisig() {
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
         .build()
         .await;
@@ -770,7 +770,7 @@ async fn test_zklogin_inside_multisig_feature_deny() {
     });
     let test_cluster = TestClusterBuilder::new()
         .with_default_jwks()
-        .with_epoch_duration_ms(1000)
+        .with_epoch_duration_ms(15000)
         .build()
         .await;
     test_cluster.wait_for_authenticator_state_update().await;
