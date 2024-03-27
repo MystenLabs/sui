@@ -8,6 +8,8 @@
 
 //# publish
 module test::m {
+    use sui::transfer::Receiving;
+
     public struct Parent has key { id: UID }
     public struct S has key { id: UID }
     public struct Cup<phantom T> has key { id: UID }

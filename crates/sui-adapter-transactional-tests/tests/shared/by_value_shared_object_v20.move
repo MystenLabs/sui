@@ -8,8 +8,6 @@
 //# publish
 
 module t2::o2 {
-    use sui::transfer::Receiving;
-
     public struct Obj2 has key, store {
         id: UID,
     }
