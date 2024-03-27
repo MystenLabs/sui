@@ -443,6 +443,7 @@ impl SuiClientInner for SuiSdkClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
     use crate::{
         events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
         sui_mock_client::SuiMockClient,
@@ -588,15 +589,15 @@ mod tests {
     // Test get_action_onchain_status.
     // Use validator secrets to bridge USDC from Ethereum initially.
     // TODO: we need an e2e test for this with published solidity contract and committee with BridgeNodes
-    #[ignore]
     #[tokio::test]
     async fn test_get_action_onchain_status_for_sui_to_eth_transfer() {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version(37.into())
-            .with_epoch_duration_ms(5000)
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_epoch_duration_ms(15000)
             .build_with_bridge()
             .await;
+
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
             .unwrap();
