@@ -362,8 +362,15 @@ mod tests {
             .await;
         assert!(entry_.unwrap().lock().await.is_none());
 
-        let action =
-            get_test_sui_to_eth_bridge_action(Some(sui_tx_digest), Some(sui_event_idx), None, None);
+        let action = get_test_sui_to_eth_bridge_action(
+            Some(sui_tx_digest),
+            Some(sui_event_idx),
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
         let sig = BridgeAuthoritySignInfo::new(&action, &signer);
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig);
         entry.lock().await.replace(Ok(signed_action));
@@ -596,7 +603,7 @@ mod tests {
         ));
 
         // Non governace action is not signable
-        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert!(matches!(
             signer_with_cache.sign(action_4.clone()).await.unwrap_err(),
             BridgeError::ActionIsNotGovernanceAction(..)
