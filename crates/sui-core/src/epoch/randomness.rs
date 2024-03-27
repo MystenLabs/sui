@@ -17,6 +17,7 @@ use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
 use std::time::Instant;
+use sui_macros::fail_point_if;
 use sui_network::randomness;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
@@ -312,8 +313,17 @@ impl RandomnessManager {
 
         let epoch_store = self.epoch_store()?;
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
-        self.consensus_adapter
-            .submit(transaction, None, &epoch_store)?;
+
+        #[allow(unused_mut)]
+        let mut fail_point_skip_sending = false;
+        fail_point_if!("rb-dkg", || {
+            // maybe skip sending in simtests
+            fail_point_skip_sending = true;
+        });
+        if !fail_point_skip_sending {
+            self.consensus_adapter
+                .submit(transaction, None, &epoch_store)?;
+        }
 
         epoch_store
             .metrics
@@ -375,8 +385,17 @@ impl RandomnessManager {
                         epoch_store.name,
                         &conf,
                     );
-                    self.consensus_adapter
-                        .submit(transaction, None, &epoch_store)?;
+
+                    #[allow(unused_mut)]
+                    let mut fail_point_skip_sending = false;
+                    fail_point_if!("rb-dkg", || {
+                        // maybe skip sending in simtests
+                        fail_point_skip_sending = true;
+                    });
+                    if !fail_point_skip_sending {
+                        self.consensus_adapter
+                            .submit(transaction, None, &epoch_store)?;
+                    }
 
                     let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
                     if let Some(elapsed) = elapsed {
