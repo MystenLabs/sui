@@ -78,7 +78,7 @@ The `nft_rental` module provides an API that facilitates lending or borrowing th
 
 ### Structs
 
-The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct only has the `drop` ability and acts as the extension key for the Kiosk `Rentables` extension.
+The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct only has the `drop` ability and acts as the extension key for the kiosk `Rentables` extension.
 
 ```move
 struct Rentables has drop {}
@@ -128,7 +128,7 @@ struct Rentable<T: key + store> has store {
 }
 ```
 
-The `RentalPolicy` struct is a shared object that every creator mints. Defines the royalties the creator receives from each rent invocation.
+The `RentalPolicy` struct is a shared object that every creator mints. The struct defines the royalties the creator receives from each rent invocation.
 
 ```move
 struct RentalPolicy<phantom T> has key, store {
@@ -143,8 +143,8 @@ struct RentalPolicy<phantom T> has key, store {
 ```
 
 The `ProtectedTP` object is a shared object that creators mint to enable renting, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
-A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to be resolved (like lock rule, loyalty rule, and so on).
-If the creator desires to enforce royalties on rentals, they can do so via the `RentalPolicy` above.
+
+A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to resolve (like lock rule, loyalty rule, and so on). If creators want to enforce royalties on rentals, they can use the `RentalPolicy` detailed previously.
 
 ```move
 struct ProtectedTP<phantom T> has key, store {
@@ -158,15 +158,13 @@ struct ProtectedTP<phantom T> has key, store {
 
 The NFT Rental example includes the following functions that define the project's logic. 
 
-The `install` function enables installation of the `Rentables` extension in a Kiosk. 
-The party facilitating the rental process is responsible to ensure that the extension has been installed in the user's Kiosk.
+The `install` function enables installation of the `Rentables` extension in a kiosk. The party facilitating the rental process is responsible for making sure that the user installs the extension in the their kiosk.
 
 ```move
 public fun install(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext)
 ```
 
-The `remove` function enables the owner (and only the owner) of the kiosk to remove the extension. The extension storage must be empty for the transaction to succeed.
-The extension storage empties after the user is no longer borrowing or renting any items.
+The `remove` function enables the owner (and only the owner) of the kiosk to remove the extension. The extension storage must be empty for the transaction to succeed. The extension storage empties after the user is no longer borrowing or renting any items.
 
 ```move
 public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, _ctx: &mut TxContext)
@@ -178,7 +176,7 @@ The `setup_renting` function mints and shares a `ProtectedTP` and a `RentalPolic
 public fun setup_renting<T>(publisher: &Publisher, amount_bp: u64, ctx: &mut TxContext)
 ```
 
-The `list` function enables listing of an asset within the `Rentables` extension's bag, creating a bag entry with the asset's ID as the key and a `Rentable` wrapper object as the value. Requires the existence of a `ProtectedTP` transfer policy that only the creator of type `T` can create. The function assumes an item is already placed (and optionally locked) in a Kiosk.
+The `list` function enables listing of an asset within the `Rentables` extension's bag, creating a bag entry with the asset's ID as the key and a `Rentable` wrapper object as the value. Requires the existence of a `ProtectedTP` transfer policy that only the creator of type `T` can create. The function assumes an item is already placed (and optionally locked) in a kiosk.
 
 ```move
 public fun list<T: key + store>(
@@ -191,7 +189,7 @@ public fun list<T: key + store>(
     ctx: &mut TxContext)
 ```
 
-The `delist` function allows the renter to delist an item, as long as it's not currently being rented. The function also places (or locks, if a lock rule is present) the object back to owner's Kiosk. You should mint an empty `TransferPolicy` even if you don't want to apply any royalties.
+The `delist` function allows the renter to delist an item, as long as it's not currently being rented. The function also places (or locks, if a lock rule is present) the object back to owner's kiosk. You should mint an empty `TransferPolicy` even if you don't want to apply any royalties.
 
 ```move
 public fun delist<T: key + store>(
@@ -248,11 +246,11 @@ public fun return_val<T: key + store>(
 ```
 :::note
 
-It is important to note that the `reclaim` functionality is manually invoked and the rental service provider is responsible for ensuring that the renter is reminded to `reclaim`. As such, this can cause the borrower to hold the asset for longer than the rental period. This can be mitigated through modification of the current contract by adding an assertion in the `borrow` and `borrow_val` functions to check if the rental period has expired.
+The `reclaim` functionality is manually invoked and the rental service provider is responsible for ensuring that the renter is reminded to `reclaim`. As such, this can cause the borrower to hold the asset for longer than the rental period. This can be mitigated through modification of the current contract by adding an assertion in the `borrow` and `borrow_val` functions to check if the rental period has expired.
 
 :::
 
-The `reclaim` function enables an owner to claim back their asset after the rental period is over and place it inside their Kiosk. If a lock rule is present, the example also locks the item inside the owner kiosk. 
+The `reclaim` function enables an owner to claim back their asset after the rental period is over and place it inside their kiosk. If a lock rule is present, the example also locks the item inside the owner kiosk. 
 
 ```move
 public fun reclaim<T: key + store>(
@@ -279,11 +277,11 @@ The initialization process is part of the flow but only happens once for each en
 - For a new type that a creator would like to allow to be rented
     - Involves invoking `setup_renting` and `TransferPolicy` creation with optional lock rule
 - For a Borrower that has never borrowed before using this framework
-    - If no Kiosk exists for the user, one should be created
-    - Involves installing the extension in their Kiosk
+    - If no kiosk exists for the user, one should be created
+    - Involves installing the extension in their kiosk
 - For a Renter that has never rented before using this framework
-    - If no Kiosk exists for the user, one should be created
-    - Involves installing the extension in their Kiosk
+    - If no kiosk exists for the user, one should be created
+    - Involves installing the extension in their kiosk
 
 ```mermaid
 sequenceDiagram
