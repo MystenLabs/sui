@@ -8,7 +8,6 @@
 use crate::{
     acquires_list_verifier::AcquiresVerifier,
     control_flow, locals_safety,
-    meter::{Meter, Scope},
     reference_safety,
     stack_usage_verifier::StackUsageVerifier,
     type_safety,
@@ -24,6 +23,7 @@ use move_binary_format::{
     },
     IndexKind,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;

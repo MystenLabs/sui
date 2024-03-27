@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_bytecode_verifier::meter::Scope;
+use move_bytecode_verifier_meter::Scope;
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc, time::Instant};
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;

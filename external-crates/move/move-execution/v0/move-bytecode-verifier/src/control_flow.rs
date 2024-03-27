@@ -15,7 +15,6 @@
 use crate::{
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
-    meter::Meter,
 };
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
@@ -26,6 +25,7 @@ use move_binary_format::{
     },
     CompiledModule,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::BTreeSet;

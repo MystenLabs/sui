@@ -4,70 +4,9 @@
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
-use std::ops::Mul;
+use crate::{Meter, Scope};
 
-/// Scope of meterinng
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Scope {
-    // Metering is for transaction level
-    Transaction,
-    // Metering is for package level
-    Package,
-    // Metering is for module level
-    Module,
-    // Metering is for function level
-    Function,
-}
-
-pub const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
-pub const EXECUTE_BLOCK_BASE_COST: u128 = 10;
-pub const PER_BACKEDGE_COST: u128 = 10;
-pub const PER_SUCCESSOR_COST: u128 = 10;
-
-/// Trait for a metering verification.
-pub trait Meter {
-    /// Indicates the begin of a new scope.
-    fn enter_scope(&mut self, name: &str, scope: Scope);
-
-    /// Transfer the amount of metering from once scope to the next. If the current scope has
-    /// metered N units, the target scope will be charged with N*factor.
-    fn transfer(&mut self, from: Scope, to: Scope, factor: f32) -> PartialVMResult<()>;
-
-    /// Add the number of units to the meter, returns an error if a limit is hit.
-    fn add(&mut self, scope: Scope, units: u128) -> PartialVMResult<()>;
-
-    /// Adds the number of items.
-    fn add_items(
-        &mut self,
-        scope: Scope,
-        units_per_item: u128,
-        items: usize,
-    ) -> PartialVMResult<()> {
-        if items == 0 {
-            return Ok(());
-        }
-        self.add(scope, units_per_item.saturating_mul(items as u128))
-    }
-
-    /// Adds the number of items with growth factor
-    fn add_items_with_growth(
-        &mut self,
-        scope: Scope,
-        mut units_per_item: u128,
-        items: usize,
-        growth_factor: f32,
-    ) -> PartialVMResult<()> {
-        if items == 0 {
-            return Ok(());
-        }
-        for _ in 0..items {
-            self.add(scope, units_per_item)?;
-            units_per_item = growth_factor.mul(units_per_item as f32) as u128;
-        }
-        Ok(())
-    }
-}
-
+/// Module and function level metering.
 pub struct BoundMeter {
     mod_bounds: Bounds,
     fun_bounds: Bounds,
@@ -153,16 +92,5 @@ impl BoundMeter {
 
     pub fn get_limit(&self, scope: Scope) -> Option<u128> {
         self.get_bounds(scope).max
-    }
-}
-
-pub struct DummyMeter;
-impl Meter for DummyMeter {
-    fn enter_scope(&mut self, _name: &str, _scope: Scope) {}
-    fn transfer(&mut self, _from: Scope, _to: Scope, _factor: f32) -> PartialVMResult<()> {
-        Ok(())
-    }
-    fn add(&mut self, _scope: Scope, _units: u128) -> PartialVMResult<()> {
-        Ok(())
     }
 }

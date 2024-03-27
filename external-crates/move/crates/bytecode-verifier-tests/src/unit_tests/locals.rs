@@ -7,7 +7,7 @@ use move_binary_format::file_format::{
     IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
     Visibility::Public,
 };
-use move_bytecode_verifier::meter::BoundMeter;
+use move_bytecode_verifier_meter::BoundMeter;
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
 
 #[test]

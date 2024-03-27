@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains the public APIs supported by the bytecode verifier.
-use crate::meter::{DummyMeter, Meter};
 use crate::{
     ability_field_requirements, check_duplication::DuplicationChecker,
     code_unit_verifier::CodeUnitVerifier, constants, friends,
@@ -17,6 +16,7 @@ use move_binary_format::{
     errors::{Location, VMResult},
     file_format::{CompiledModule, CompiledScript},
 };
+use move_bytecode_verifier_meter::{dummy::DummyMeter, Meter};
 use move_vm_config::verifier::VerifierConfig;
 use std::time::Instant;
 

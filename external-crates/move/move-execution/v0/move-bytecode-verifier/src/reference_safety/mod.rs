@@ -12,7 +12,6 @@ mod abstract_state;
 
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
-    meter::{Meter, Scope},
     reference_safety::abstract_state::{
         STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
     },
@@ -28,6 +27,7 @@ use move_binary_format::{
     },
     safe_assert, safe_unwrap, safe_unwrap_err,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::{
     collections::{BTreeSet, HashMap},
