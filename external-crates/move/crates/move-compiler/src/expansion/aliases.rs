@@ -45,10 +45,10 @@ trait NamespaceEntry: Copy {
                 break None;
             };
             let Some(entry) = Self::namespace(scope).get(name).copied() else {
-                current_scope = scope.previous.as_mut().map(|x| &mut **x);
+                current_scope = scope.previous.as_deref_mut();
                 continue;
             };
-            let original_name = Self::namespace_mut(scope).get_full_key(&name).unwrap();
+            let original_name = Self::namespace_mut(scope).get_full_key(name).unwrap();
             f_entry(scope, &original_name, &entry);
             break Some((original_name, entry));
         }
