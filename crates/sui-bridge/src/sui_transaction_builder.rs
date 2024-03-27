@@ -72,10 +72,12 @@ pub fn build_sui_transaction(
             false,
             bridge_object_arg,
         ),
-        BridgeAction::BlocklistCommitteeAction(_) => {
-            // TODO: handle this case
-            unimplemented!()
-        }
+        BridgeAction::BlocklistCommitteeAction(_) => build_committee_blocklist_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            bridge_object_arg,
+        ),
         BridgeAction::EmergencyAction(_) => build_emergency_op_approve_transaction(
             client_address,
             gas_object_ref,
@@ -277,13 +279,83 @@ fn build_emergency_op_approve_transaction(
     ))
 }
 
+// TODO: pass in gas price
+fn build_committee_blocklist_approve_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+    bridge_object_arg: ObjectArg,
+) -> BridgeResult<TransactionData> {
+    let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let (source_chain, seq_num, blocklist_type, blocklisted_members) = match bridge_action {
+        BridgeAction::BlocklistCommitteeAction(a) => {
+            (a.chain_id, a.nonce, a.blocklist_type, a.blocklisted_members)
+        }
+        _ => unreachable!(),
+    };
+
+    // Unwrap: these should not fail
+    let source_chain = builder.pure(source_chain as u8).unwrap();
+    let seq_num = builder.pure(seq_num).unwrap();
+    let blocklist_type = builder.pure(blocklist_type as u8).unwrap();
+    let blocklisted_members = blocklisted_members
+        .into_iter()
+        .map(|m| m.to_eth_address().as_bytes().to_vec())
+        .collect::<Vec<_>>();
+    let blocklisted_members = builder.pure(blocklisted_members).unwrap();
+    let arg_bridge = builder.obj(bridge_object_arg).unwrap();
+
+    let arg_msg = builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("message").to_owned(),
+        ident_str!("create_blocklist_message").to_owned(),
+        vec![],
+        vec![source_chain, seq_num, blocklist_type, blocklisted_members],
+    );
+
+    let mut sig_bytes = vec![];
+    for (_, sig) in sigs.signatures {
+        sig_bytes.push(sig.as_bytes().to_vec());
+    }
+    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+        BridgeError::BridgeSerializationError(format!(
+            "Failed to serialize signatures: {:?}. Err: {:?}",
+            sig_bytes, e
+        ))
+    })?;
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("bridge").to_owned(),
+        ident_str!("execute_system_message").to_owned(),
+        vec![],
+        vec![arg_bridge, arg_msg, arg_signatures],
+    );
+
+    let pt = builder.finish();
+
+    Ok(TransactionData::new_programmable(
+        client_address,
+        vec![*gas_object_ref],
+        pt,
+        100_000_000,
+        // TODO: use reference gas price
+        1500,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::sui_client::SuiClient;
     use crate::types::BridgeAction;
     use crate::types::EmergencyAction;
     use crate::types::EmergencyActionType;
+    use crate::types::*;
     use crate::{
+        crypto::BridgeAuthorityPublicKeyBytes,
         test_utils::{
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
             get_test_sui_to_eth_bridge_action,
@@ -293,6 +365,7 @@ mod tests {
     };
     use ethers::types::Address as EthAddress;
     use sui_types::bridge::BridgeChainId;
+    use sui_types::crypto::ToFromBytes;
     use test_cluster::TestClusterBuilder;
 
     #[tokio::test]
@@ -423,5 +496,86 @@ mod tests {
         .await;
         let summary = sui_client.get_bridge_summary().await.unwrap();
         assert!(!summary.is_frozen);
+    }
+
+    #[tokio::test]
+    async fn test_build_sui_transaction_for_committee_blocklist() {
+        telemetry_subscribers::init_for_testing();
+        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_epoch_duration_ms(15000)
+            .build_with_bridge()
+            .await;
+        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
+        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+
+        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
+        // is not initialized during the construction of `BridgeCommittee`.
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        if committee.members.is_empty() {
+            test_cluster.wait_for_epoch(None).await;
+        }
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        let victim = committee.members.first().unwrap().clone().1;
+        for member in committee.members {
+            assert!(!member.1.blocklisted);
+        }
+
+        let context = &mut test_cluster.wallet;
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+
+        // 1. blocklist The victim
+        let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
+            nonce: 0,
+            chain_id: BridgeChainId::SuiLocalTest,
+            blocklist_type: BlocklistType::Blocklist,
+            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
+                &victim.bridge_pubkey_bytes,
+            )
+            .unwrap()],
+        });
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        for member in committee.members {
+            if member.1.bridge_pubkey_bytes == victim.bridge_pubkey_bytes {
+                assert!(member.1.blocklisted);
+            } else {
+                assert!(!member.1.blocklisted);
+            }
+        }
+
+        // 2. unblocklist the victim
+        let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
+            nonce: 1,
+            chain_id: BridgeChainId::SuiLocalTest,
+            blocklist_type: BlocklistType::Unblocklist,
+            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
+                &victim.bridge_pubkey_bytes,
+            )
+            .unwrap()],
+        });
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        for member in committee.members {
+            assert!(!member.1.blocklisted);
+        }
     }
 }
