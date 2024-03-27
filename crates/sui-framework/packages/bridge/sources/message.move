@@ -2,35 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::message {
-    use std::vector;
-
-    use sui::bcs;
-    use sui::bcs::BCS;
+    use sui::bcs::{Self, BCS};
 
     use bridge::chain_ids;
     use bridge::message_types;
     use bridge::treasury;
 
     #[test_only]
-    use sui::address;
+    use sui::{address, balance, coin, hex, test_scenario, test_utils::assert_eq};
     #[test_only]
-    use sui::balance;
-    #[test_only]
-    use sui::coin;
-    #[test_only]
-    use sui::hex;
-    #[test_only]
-    use sui::test_scenario;
-    #[test_only]
-    use sui::test_utils::assert_eq;
-    #[test_only]
-    use bridge::btc::BTC;
-    #[test_only]
-    use bridge::eth::ETH;
-    #[test_only]
-    use bridge::treasury::token_id;
-    #[test_only]
-    use bridge::usdc::USDC;
+    use bridge::{btc::BTC, eth::ETH, treasury::token_id, usdc::USDC};
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
     const ECDSA_ADDRESS_LENGTH: u64 = 20;
@@ -97,14 +78,17 @@ module bridge::message {
     // See `create_token_bridge_message` for the actual encoding rule.
     public fun extract_token_bridge_payload(message: &BridgeMessage): TokenPayload {
         let mut bcs = bcs::new(message.payload);
-        let sender_address = bcs::peel_vec_u8(&mut bcs);
-        let target_chain = bcs::peel_u8(&mut bcs);
-        // TODO: add test case for invalid chain id
-        chain_ids::assert_valid_chain_id(target_chain);
-        let target_address = bcs::peel_vec_u8(&mut bcs);
-        let token_type = bcs::peel_u8(&mut bcs);
+        let sender_address = bcs.peel_vec_u8();
+        let target_chain = bcs.peel_u8();
+        let target_address = bcs.peel_vec_u8();
+        let token_type = bcs.peel_u8();
         let amount = peel_u64_be(&mut bcs);
-        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
+
+        // TODO: add test case for invalid chain id
+        // TODO: replace with `chain_ids::is_valid_chain_id()`
+        chain_ids::assert_valid_chain_id(target_chain);
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
         TokenPayload {
             sender_address,
             target_chain,
@@ -114,32 +98,34 @@ module bridge::message {
         }
     }
 
+    /// Emergency op payload is just a single byte
     public fun extract_emergency_op_payload(message: &BridgeMessage): EmergencyOp {
-        // emergency op payload is just a single byte
-        assert!(vector::length(&message.payload) == 1, ETrailingBytes);
-        EmergencyOp {
-            op_type: *vector::borrow(&message.payload, 0)
-        }
+        assert!(message.payload.length() == 1, ETrailingBytes);
+        EmergencyOp { op_type: message.payload[0] }
     }
 
     public fun extract_blocklist_payload(message: &BridgeMessage): Blocklist {
         // blocklist payload should consist of one byte blocklist type, and list of 33 bytes ecdsa pub keys
         let mut bcs = bcs::new(message.payload);
-        let blocklist_type = bcs::peel_u8(&mut bcs);
-        let mut address_count = bcs::peel_u8(&mut bcs);
+        let blocklist_type = bcs.peel_u8();
+        let mut address_count = bcs.peel_u8();
+
         // TODO: add test case for 0 value
         assert!(address_count != 0, EEmptyList);
+
         let mut validator_eth_addresses = vector[];
         while (address_count > 0) {
             let (mut address, mut i) = (vector[], 0);
             while (i < ECDSA_ADDRESS_LENGTH) {
-                vector::push_back(&mut address, bcs::peel_u8(&mut bcs));
+                address.push_back(bcs.peel_u8());
                 i = i + 1;
             };
-            vector::push_back(&mut validator_eth_addresses, address);
+            validator_eth_addresses.push_back(address);
             address_count = address_count - 1;
         };
-        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
+
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
         Blocklist {
             blocklist_type,
             validator_eth_addresses
@@ -148,11 +134,13 @@ module bridge::message {
 
     public fun extract_update_bridge_limit(message: &BridgeMessage): UpdateBridgeLimit {
         let mut bcs = bcs::new(message.payload);
-        let sending_chain = bcs::peel_u8(&mut bcs);
+        let sending_chain = bcs.peel_u8();
+        let limit = peel_u64_be(&mut bcs);
+
         // TODO: add test case for invalid chain id
         chain_ids::assert_valid_chain_id(sending_chain);
-        let limit = peel_u64_be(&mut bcs);
-        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
         UpdateBridgeLimit {
             receiving_chain: message.source_chain,
             sending_chain,
@@ -162,9 +150,11 @@ module bridge::message {
 
     public fun extract_update_asset_price(message: &BridgeMessage): UpdateAssetPrice {
         let mut bcs = bcs::new(message.payload);
-        let token_id = bcs::peel_u8(&mut bcs);
+        let token_id = bcs.peel_u8();
         let new_price = peel_u64_be(&mut bcs);
-        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
+
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
         UpdateAssetPrice {
             token_id,
             new_price
@@ -180,13 +170,15 @@ module bridge::message {
             payload
         } = message;
 
-        let mut message = vector[];
-        vector::push_back(&mut message, message_type);
-        vector::push_back(&mut message, message_version);
+        let mut message = vector[
+            message_type,
+            message_version,
+        ];
+
         // bcs serializes u64 as 8 bytes
-        vector::append(&mut message, reverse_bytes(bcs::to_bytes(&seq_num)));
-        vector::push_back(&mut message, source_chain);
-        vector::append(&mut message, payload);
+        message.append(reverse_bytes(bcs::to_bytes(&seq_num)));
+        message.push_back(source_chain);
+        message.append(payload);
         message
     }
 
@@ -212,20 +204,23 @@ module bridge::message {
         amount: u64
     ): BridgeMessage {
         // TODO: add test case for invalid chain id
-        chain_ids::assert_valid_chain_id(source_chain);
         // TODO: add test case for invalid chain id
+        // TODO: replace with `chain_ids::is_valid_chain_id()`
+        chain_ids::assert_valid_chain_id(source_chain);
         chain_ids::assert_valid_chain_id(target_chain);
+
         let mut payload = vector[];
+
         // sender address should be less than 255 bytes so can fit into u8
-        vector::push_back(&mut payload, (vector::length(&sender_address) as u8));
-        vector::append(&mut payload, sender_address);
-        vector::push_back(&mut payload, target_chain);
+        payload.push_back((vector::length(&sender_address) as u8));
+        payload.append(sender_address);
+        payload.push_back(target_chain);
         // target address should be less than 255 bytes so can fit into u8
-        vector::push_back(&mut payload, (vector::length(&target_address) as u8));
-        vector::append(&mut payload, target_address);
-        vector::push_back(&mut payload, token_type);
+        payload.push_back((vector::length(&target_address) as u8));
+        payload.append(target_address);
+        payload.push_back(token_type);
         // bcs serialzies u64 as 8 bytes
-        vector::append(&mut payload, reverse_bytes(bcs::to_bytes(&amount)));
+        payload.append(reverse_bytes(bcs::to_bytes(&amount)));
 
         BridgeMessage {
             message_type: message_types::token(),
@@ -248,7 +243,9 @@ module bridge::message {
         op_type: u8,
     ): BridgeMessage {
         // TODO: add test case for invalid chain id
+        // TODO: replace with `chain_ids::is_valid_chain_id()`
         chain_ids::assert_valid_chain_id(source_chain);
+
         BridgeMessage {
             message_type: message_types::emergency_op(),
             message_version: CURRENT_MESSAGE_VERSION,
@@ -274,15 +271,18 @@ module bridge::message {
         validator_ecdsa_addresses: vector<vector<u8>>,
     ): BridgeMessage {
         // TODO: add test case for invalid chain id
+        // TODO: replace with `chain_ids::is_valid_chain_id()`
         chain_ids::assert_valid_chain_id(source_chain);
-        let address_length = (vector::length(&validator_ecdsa_addresses) as u8);
-        let mut payload = vector[blocklist_type, address_length];
+
+        let address_length = validator_ecdsa_addresses.length();
+        let mut payload = vector[blocklist_type, (address_length as u8)];
         let mut i = 0;
 
         while (i < address_length) {
-            let address = vector::borrow(&validator_ecdsa_addresses, (i as u64));
-            assert!(vector::length(address) == ECDSA_ADDRESS_LENGTH, EInvalidAddressLength);
-            vector::append(&mut payload, *address);
+            let address = validator_ecdsa_addresses[i];
+            assert!(address.length() == ECDSA_ADDRESS_LENGTH, EInvalidAddressLength);
+            payload.append(address);
+
             i = i + 1;
         };
 
@@ -309,11 +309,14 @@ module bridge::message {
         new_limit: u64,
     ): BridgeMessage {
         // TODO: add test case for invalid chain id
-        chain_ids::assert_valid_chain_id(receiving_chain);
         // TODO: add test case for invalid chain id
+        // TODO: replace with `chain_ids::is_valid_chain_id()`
+        chain_ids::assert_valid_chain_id(receiving_chain);
         chain_ids::assert_valid_chain_id(sending_chain);
+
         let mut payload = vector[sending_chain];
-        vector::append(&mut payload, reverse_bytes(bcs::to_bytes(&new_limit)));
+        payload.append(reverse_bytes(bcs::to_bytes(&new_limit)));
+
         BridgeMessage {
             message_type: message_types::update_bridge_limit(),
             message_version: CURRENT_MESSAGE_VERSION,
@@ -336,9 +339,12 @@ module bridge::message {
         new_price: u64,
     ): BridgeMessage {
         // TODO: add test case for invalid chain id
+        // TODO: replace with `chain_ids::is_valid_chain_id()`
         chain_ids::assert_valid_chain_id(source_chain);
+
         let mut payload = vector[treasury::token_id<T>()];
-        vector::append(&mut payload, reverse_bytes(bcs::to_bytes(&new_price)));
+        payload.append(reverse_bytes(bcs::to_bytes(&new_price)));
+
         BridgeMessage {
             message_type: message_types::update_asset_price(),
             message_version: CURRENT_MESSAGE_VERSION,
