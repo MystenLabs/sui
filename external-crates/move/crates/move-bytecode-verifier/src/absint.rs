@@ -2,16 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::meter::{
-    Meter, Scope, ANALYZE_FUNCTION_BASE_COST, EXECUTE_BLOCK_BASE_COST, PER_BACKEDGE_COST,
-    PER_SUCCESSOR_COST,
-};
 use move_binary_format::{
     binary_views::FunctionView,
     control_flow_graph::{BlockId, ControlFlowGraph},
     errors::PartialVMResult,
     file_format::{Bytecode, CodeOffset},
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use std::collections::BTreeMap;
 
 /// Trait for finite-height abstract domains. Infinite height domains would require a more complex
@@ -36,6 +33,12 @@ pub struct BlockInvariant<State> {
 /// A map from block id's to the pre/post of each block after a fixed point is reached.
 #[allow(dead_code)]
 pub type InvariantMap<State> = BTreeMap<BlockId, BlockInvariant<State>>;
+
+/// Costs for metered verification
+const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
+const EXECUTE_BLOCK_BASE_COST: u128 = 10;
+const PER_BACKEDGE_COST: u128 = 10;
+const PER_SUCCESSOR_COST: u128 = 10;
 
 /// Take a pre-state + instruction and mutate it to produce a post-state
 /// Auxiliary data can be stored in self.

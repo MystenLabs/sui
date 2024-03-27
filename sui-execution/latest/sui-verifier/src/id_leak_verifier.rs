@@ -21,10 +21,10 @@ use move_binary_format::{
         StructDefinition, StructFieldInformation,
     },
 };
-use move_bytecode_verifier::{
-    absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
-    meter::{Meter, Scope},
+use move_bytecode_verifier::absint::{
+    AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
 };

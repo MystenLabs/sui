@@ -13,7 +13,6 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use crate::meter::Meter;
 use move_binary_format::{
     access::ModuleAccess,
     errors::{PartialVMError, PartialVMResult},
@@ -23,6 +22,7 @@ use move_binary_format::{
     },
     safe_unwrap,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) struct AcquiresVerifier<'a> {
