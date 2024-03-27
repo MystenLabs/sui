@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    schema::{tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders},
+    schema::{
+        tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients, tx_senders,
+    },
     types::TxIndex,
 };
 use diesel::prelude::*;
@@ -61,6 +63,14 @@ pub struct StoredTxCalls {
     pub func: String,
 }
 
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = tx_digests)]
+pub struct StoredTxDigest {
+    pub tx_digest: Vec<u8>,
+    pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
+}
+
 #[allow(clippy::type_complexity)]
 impl TxIndex {
     pub fn split(
@@ -71,6 +81,7 @@ impl TxIndex {
         Vec<StoredTxInputObject>,
         Vec<StoredTxChangedObject>,
         Vec<StoredTxCalls>,
+        Vec<StoredTxDigest>,
     ) {
         let tx_sequence_number = self.tx_sequence_number as i64;
         let cp_sequence_number = self.checkpoint_sequence_number as i64;
@@ -121,12 +132,19 @@ impl TxIndex {
                 func: f.to_string(),
             })
             .collect();
+        let stored_tx_digest = StoredTxDigest {
+            tx_digest: self.transaction_digest.into_inner().to_vec(),
+            tx_sequence_number,
+            cp_sequence_number,
+        };
+
         (
             tx_senders,
             tx_recipients,
             tx_input_objects,
             tx_changed_objects,
             tx_calls,
+            vec![stored_tx_digest],
         )
     }
 }
