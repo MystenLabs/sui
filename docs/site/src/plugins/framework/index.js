@@ -21,6 +21,7 @@ const DOCS_PATH = path.join(
   __dirname,
   "../../../../content/references/framework",
 );
+const FRAMEWORK_PARENT_MDX = DOCS_PATH + ".mdx";
 // Clear doc files.
 const clearDirectory = async (directoryPath) => {
   try {
@@ -55,6 +56,9 @@ const clearDirectory = async (directoryPath) => {
   }
 };
 clearDirectory(DOCS_PATH);
+if (!fs.existsSync(DOCS_PATH)) {
+  fs.mkdirSync(DOCS_PATH);
+}
 
 const frameworkPlugin = (context, options) => {
   return {
@@ -90,7 +94,7 @@ const frameworkPlugin = (context, options) => {
           // Remove empty code blocks because it looks lame.
           const reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
-            .replace(/(title: .*)`(.*)`/g, `$1$2`)
+            .replace(/(title: .*)Module `0x[1, 2]::(.*)`/g, `$1$2`)
             .replace(/(?<!<pre>)<code>(.*?)<\/code>/gs, `$1`)
             .replace(/<pre><code><\/code><\/pre>/g, "");
           const filename = file.replace(/.*\/docs\/(.*)$/, `$1`);
@@ -148,6 +152,7 @@ const frameworkPlugin = (context, options) => {
           });
         });
       });
+
       return;
     },
   };
