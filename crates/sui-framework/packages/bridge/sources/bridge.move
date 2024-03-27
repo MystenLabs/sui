@@ -468,7 +468,21 @@ module bridge::bridge {
     }
 
     fun execute_update_sui_token(inner: &mut BridgeInner, payload: UpdateSuiToken) {
-        treasury::approve_new_token(&mut inner.treasury, message::update_asset_price_payload_token_id(&payload), message::update_asset_price_payload_new_price(&payload))
+        let native_token = message::is_native(&payload);
+        let mut token_ids = message::token_ids(&payload);
+        let mut token_type_names = message::token_type_names(&payload);
+        let mut token_prices = message::token_prices(&payload);
+
+        // Make sure token data is consistent
+        assert!(vector::length(&token_ids) == vector::length(&token_type_names), EMalformedMessageError);
+        assert!(vector::length(&token_ids) == vector::length(&token_prices), EMalformedMessageError);
+
+        while (vector::length(&token_ids) > 0){
+            let token_id = vector::pop_back(&mut token_ids);
+            let token_type_name = vector::pop_back(&mut token_type_names);
+            let token_price = vector::pop_back(&mut token_prices);
+            treasury::approve_new_token(&mut inner.treasury, token_type_name, token_id, native_token, token_price)
+        }
     }
 
     // Verify seq number matches the next expected seq number for the message type,

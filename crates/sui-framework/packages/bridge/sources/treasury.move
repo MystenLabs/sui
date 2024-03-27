@@ -3,6 +3,7 @@
 
 module bridge::treasury {
     use std::ascii;
+    use std::ascii::String;
     use std::option;
     use std::type_name;
     use std::type_name::TypeName;
@@ -24,6 +25,7 @@ module bridge::treasury {
     const EUnsupportedTokenType: u64 = 0;
     const EInvalidUpgradeCap: u64 = 1;
 
+    #[test_only]
     const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
 
     public struct BridgeTreasury has store {
@@ -43,12 +45,10 @@ module bridge::treasury {
         native_token: bool
     }
 
-    public struct ForeignTokenRegistration<phantom T> has store {
+    public struct ForeignTokenRegistration has store {
         type_name: TypeName,
-        tc: TreasuryCap<T>,
         uc: UpgradeCap,
         decimal: u8,
-        notional_value: u64
     }
 
     public struct UpdateTokenPriceEvent has copy, drop {
@@ -62,19 +62,18 @@ module bridge::treasury {
         native_token: bool
     }
 
-    public fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>, notional_value: u64) {
+    public fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
         let type_name = type_name::get<T>();
         let coin_address = address::from_ascii_bytes(ascii::as_bytes(&type_name::get_address(&type_name)));
         // Make sure upgrade cap is for the Coin package
         assert!(object::id_to_address(&package::upgrade_package(&uc)) == coin_address, EInvalidUpgradeCap);
         let registration = ForeignTokenRegistration {
             type_name,
-            tc,
             uc,
             decimal: coin::get_decimals(metadata),
-            notional_value
         };
-        bag::add(&mut self.waiting_room, type_name, registration)
+        bag::add(&mut self.waiting_room, type_name::into_string(type_name), registration);
+        object_bag::add(&mut self.treasuries, type_name, tc)
     }
 
     public fun token_id<T>(self: &BridgeTreasury): u8 {
@@ -92,24 +91,20 @@ module bridge::treasury {
         metadata.notional_value
     }
 
-    public(package) fun approve_new_token<T>(self: &mut BridgeTreasury, token_id:u8, native_token: bool) {
-        let type_name = type_name::get<T>();
+    public(package) fun approve_new_token(self: &mut BridgeTreasury, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
         if (!native_token){
-            let ForeignTokenRegistration<T>{
+            let ForeignTokenRegistration{
                 type_name,
-                tc,
                 uc,
                 decimal,
-                notional_value
-            } = bag::remove<TypeName, ForeignTokenRegistration<T>>(&mut self.waiting_room, type_name);
-            vec_map::insert(&mut self.supported_tokens, type_name::get<BTC>(), BridgeTokenMetadata{
+            } = bag::remove<String, ForeignTokenRegistration>(&mut self.waiting_room, token_name);
+            vec_map::insert(&mut self.supported_tokens, type_name, BridgeTokenMetadata{
                 id: token_id,
                 decimal_multiplier: math::pow(10, decimal),
                 notional_value,
                 native_token
             });
             vec_map::insert(&mut self.id_token_type_map, token_id, type_name);
-            object_bag::add(&mut self.treasuries, type_name, tc);
 
             // Freeze upgrade cap to prevent changes to the coin
             transfer::public_freeze_object(uc);

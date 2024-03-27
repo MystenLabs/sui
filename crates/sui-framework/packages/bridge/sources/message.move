@@ -6,6 +6,7 @@ module bridge::message {
 
     use bridge::chain_ids;
     use bridge::message_types;
+    #[test_only]
     use bridge::treasury;
 
     #[test_only]
@@ -74,9 +75,9 @@ module bridge::message {
 
     public struct UpdateSuiToken has drop {
         native_token: bool,
-        token_id: u8,
-        token_type_name: String,
-        token_price: u64
+        token_ids: vector<u8>,
+        token_type_names: vector<String>,
+        token_prices: vector<u64>
     }
 
     // Note: `bcs::peel_vec_u8` *happens* to work here because
@@ -170,13 +171,23 @@ module bridge::message {
 
     public fun extract_update_sui_token(message: &BridgeMessage): UpdateSuiToken {
         let mut bcs = bcs::new(message.payload);
-        let token_id = bcs::peel_u8(&mut bcs);
-        let new_price = peel_u64_be(&mut bcs);
+        let native_token = bcs::peel_bool(&mut bcs);
+        let token_ids = bcs::peel_vec_u8(&mut bcs);
+        let token_type_names_bytes = bcs::peel_vec_vec_u8(&mut bcs);
+        let token_prices = bcs::peel_vec_u64(&mut bcs);
 
+        let mut n = 0;
+        let mut token_type_names = vector[];
+        while (n < vector::length(&token_type_names_bytes)){
+            vector::push_back(&mut token_type_names, ascii::string(*vector::borrow(&token_type_names_bytes, n)));
+            n = n + 1;
+        };
         assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         UpdateSuiToken {
-            token_id,
-            new_price
+            native_token,
+            token_ids,
+            token_type_names,
+            token_prices
         }
     }
 
@@ -445,6 +456,22 @@ module bridge::message {
 
     public fun update_asset_price_payload_new_price(self: &UpdateAssetPrice): u64 {
         self.new_price
+    }
+
+    public fun is_native(self: &UpdateSuiToken): bool {
+        self.native_token
+    }
+
+    public fun token_ids(self: &UpdateSuiToken): vector<u8> {
+        self.token_ids
+    }
+
+    public fun token_type_names(self: &UpdateSuiToken): vector<String> {
+        self.token_type_names
+    }
+
+    public fun token_prices(self: &UpdateSuiToken): vector<u64> {
+        self.token_prices
     }
 
     public fun emergency_op_pause(): u8 {

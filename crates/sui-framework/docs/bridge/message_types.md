@@ -11,6 +11,7 @@ title: Module `0xb::message_types`
 -  [Function `emergency_op`](#0xb_message_types_emergency_op)
 -  [Function `update_bridge_limit`](#0xb_message_types_update_bridge_limit)
 -  [Function `update_asset_price`](#0xb_message_types_update_asset_price)
+-  [Function `update_sui_token`](#0xb_message_types_update_sui_token)
 
 
 <pre><code></code></pre>
@@ -63,6 +64,15 @@ title: Module `0xb::message_types`
 
 
 <pre><code><b>const</b> <a href="message_types.md#0xb_message_types_UPDATE_BRIDGE_LIMIT">UPDATE_BRIDGE_LIMIT</a>: u8 = 3;
+</code></pre>
+
+
+
+<a name="0xb_message_types_UPDATE_SUI_TOKEN"></a>
+
+
+
+<pre><code><b>const</b> <a href="message_types.md#0xb_message_types_UPDATE_SUI_TOKEN">UPDATE_SUI_TOKEN</a>: u8 = 6;
 </code></pre>
 
 
@@ -171,6 +181,30 @@ title: Module `0xb::message_types`
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_asset_price">update_asset_price</a>(): u8 { <a href="message_types.md#0xb_message_types_UPDATE_ASSET_PRICE">UPDATE_ASSET_PRICE</a> }
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_types_update_sui_token"></a>
+
+## Function `update_sui_token`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_sui_token">update_sui_token</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_sui_token">update_sui_token</a>():u8{
+    <a href="message_types.md#0xb_message_types_UPDATE_SUI_TOKEN">UPDATE_SUI_TOKEN</a>
+}
 </code></pre>
 
 
