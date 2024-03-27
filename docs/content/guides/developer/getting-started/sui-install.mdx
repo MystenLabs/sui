@@ -46,28 +46,98 @@ Find more [versions of Sui for Windows](https://community.chocolatey.org/package
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
 
+<Tabs groupId="operating-systems">
+
+<TabItem value="linux" label="Linux">
 1. Go to https://github.com/MystenLabs/sui.
 1. In the right pane, find the **Releases** section.
 
     ![Sui releases in GitHub](./images/releases.png)
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
-1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder and double-click the appropriate binary to install, beginning with sui-`<OS>`-`<ARCHITECTURE>`:
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the `target/release` directory of the expanded folder. Rename each file to remove the `-ubuntu-x86_64` suffix from each file name. For example, rename `sui-ubuntu-x86_64` to `sui`. If you don't do this step, you must type `sui-ubuntu-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following files:
 
-    - sui-faucet-`<OS>`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
-    - sui-indexer-`<OS>`-`<ARCHITECTURE>`: An indexer for a local Sui network.
-    - sui-`<OS>`-`<ARCHITECTURE>`: Main Sui binary.
-    - sui-node-`<OS>`-`<ARCHITECTURE>`: Run a local node.
-    - sui-test-validator-`<OS>`-`<ARCHITECTURE>`: Run test validators on a local network for development.
-    - sui-tool-`<OS>`-`<ARCHITECTURE>`: Provides utilities for Sui.
+    - `sui-data-ingestion`: Capture Full node data for indexer to store in a database.
+    - `sui-faucet`: Local faucet to mint coins on local network.
+    - `sui-indexer`: An indexer for a local Sui network.
+    - `sui`: Main Sui binary.
+    - `sui-node`: Run a local node.
+    - `sui-test-validator`: Run test validators on a local network for development.
+    - `sui-tool`: Provides utilities for Sui.
 
-    The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
+1. Add both folders containing the extracted files to your `PATH` variable. Update your `~/.profile` or `~/.bash_profile` to include the location of the sui binaries. If using the suggested location, add `export PATH="~/sui/target/release:~/sui/external-crates/move/target/release:$PATH"`.
+1. Start a new Terminal session or type `source ~/.profile` (or `.bash_profile`) to load the new `PATH` value.
 
+</TabItem>
+
+<TabItem value="mac" label="macOS">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the `target/release` directory of the expanded folder. Rename each file to remove the `-macos-<ARCHITECTURE>` suffix from each file name. For example, rename `sui-macos-arm64` to `sui`. If you don't do this step, you must type `sui-macos-<ARCHITECTURE>` to execute commands instead of simply `sui`. When complete, you should have the following files:
+
+    - `sui-data-ingestion`: Capture Full node data for indexer to store in a database.
+    - `sui-faucet`: Local faucet to mint coins on local network.
+    - `sui-indexer`: An indexer for a local Sui network.
+    - `sui`: Main Sui binary.
+    - `sui-node`: Run a local node.
+    - `sui-test-validator`: Run test validators on a local network for development.
+    - `sui-tool`: Provides utilities for Sui.
+
+    :::info
+
+    Rename `external-crates/move/target/release/move-analyzer-macos-<ARCHITECTURE>` in the same way.
+
+    :::
+1. Add both folders containing the extracted files to your `PATH` variable. Update your `~/.zshrc` or `~/.bashrc` to include the location of the sui binaries. If using the suggested location, add `export PATH="~/sui/target/release:~/sui/external-crates/move/target/release:$PATH"`.
+1. Start a new Terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
+
+</TabItem>
+
+<TabItem value="win" label="Windows">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the `target\release` directory of the expanded folder. Rename each file to remove the `-windows-x86_64` suffix from each file name. For example, rename `sui-windows-x86_64.exe` to `sui.exe`. If you don't do this step, you must type `sui-windows-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following .exe files:
+
+    - `sui-data-ingestion`: Capture Full node data for indexer to store in a database.
+    - `sui-faucet`: Local faucet to mint coins on local network.
+    - `sui-indexer`: An indexer for a local Sui network.
+    - `sui`: Main Sui binary.
+    - `sui-node`: Run a local node.
+    - `sui-test-validator`: Run test validators on a local network for development.
+    - `sui-tool`: Provides utilities for Sui.
+
+    :::info
+
+    Rename the `external-crates\move\target\release\move-analyzer-windows-x86_64.exe` in the same way.
+
+    :::
+
+1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
+1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button. 
+1. In the Edit environment variable window, click **New** and add the path to your expanded folder. Using the example path, this would be `C:\sui\target\release`.
+1. Add an additional path pointing to the Move analyzer, as well: `C:\sui\external-crates\move\target\release`, for example.
+1. Click **OK**.
+
+</TabItem>
+
+</Tabs>
 
 ### Confirm the installation {#confirm-the-installation}
 
-To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands.
+To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands. If the command is not recognized, make sure you're using a new console or terminal window.
 
 ## Install from source
 
@@ -93,7 +163,7 @@ Use the following command to install Rust and Cargo on macOS or Linux:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-If you use Windows 11, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
+If you use Windows, see information about using the [Rust installer](https://www.rust-lang.org/tools/install) on the Rust website. The installer checks for C++ build tools and prompts you to install them if necessary. Select the option that best defines your environment and follow the instructions in the install wizard.
 
 For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
 
@@ -302,7 +372,7 @@ After installing Git, download and install the [Git command line interface](http
 
 <TabItem value="win" label="Windows">
 
-The prerequisites needed for the Windows 11 operating system include:
+The prerequisites needed for the Windows 10 and 11 operating systems include:
 
 - cURL
 - Rust and Cargo
@@ -313,7 +383,7 @@ The prerequisites needed for the Windows 11 operating system include:
 
 #### cURL {#curl-2}
 
-Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed. If you want to use the curl project version instead, download and install it from [https://curl.se/windows/](https://curl.se/windows/).
+Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed. If you want to use the cURL project version instead, download and install it from [https://curl.se/windows/](https://curl.se/windows/).
 
 #### Git CLI {#git-cli-2}
 
@@ -333,7 +403,7 @@ Sui requires the following additional tools on computers running Windows.
 
 - For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
 - [C++ build tools](https://visualstudio.microsoft.com/downloads/) is required to [install Rust](#rust-and-cargo).
-- The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-15.0.7-win64.exe for 64-bit Windows, or LLVM-15.0.7-win32.exe for 32-bit Windows.
+- The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-17.0.1-win64.exe for 64-bit Windows, or LLVM-17.0.1-win32.exe for 32-bit Windows.
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
