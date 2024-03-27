@@ -11,8 +11,6 @@
 module a::m {
 
 use sui::dynamic_object_field::{add, exists_, borrow, borrow_mut, remove};
-use sui::object::{Self, UID};
-use sui::tx_context::{sender, TxContext};
 
 public struct Obj has key, store {
     id: UID,

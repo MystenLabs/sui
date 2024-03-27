@@ -10,8 +10,6 @@
 module a::m {
 
 use sui::dynamic_field::{add, remove};
-use sui::object;
-use sui::tx_context::{sender, TxContext};
 
 public struct Obj has key {
     id: object::UID,

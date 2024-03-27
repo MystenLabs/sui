@@ -18,10 +18,6 @@ module Test::M1_1234567891234567890123456789012345678912345678901234567890123456
 
 /// Test Identifer length limits enforced for function name
 module Test::M1_12345678912345678901234567890 {
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
-    use std::vector;
-
     public entry fun create_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_ids() {
     }
 }

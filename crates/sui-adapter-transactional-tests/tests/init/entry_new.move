@@ -7,7 +7,6 @@
 
 //# publish
 module test::m {
-    use sui::tx_context::TxContext;
     entry fun init(_: &mut TxContext) {
     }
 }

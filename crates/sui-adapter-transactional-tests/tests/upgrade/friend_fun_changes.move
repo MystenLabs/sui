@@ -5,7 +5,6 @@
 
 //# publish --upgradeable --sender A
 module V0::base_module {
-    use sui::object::UID;
     public struct Object has key, store {
         id: UID,
         field0: u64,
@@ -21,7 +20,6 @@ module V0::friend_module {
 // Change the friend function signature -- should work
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V1::base_module {
-    use sui::object::UID;
     public struct Object has key, store {
         id: UID,
         field0: u64,
@@ -37,9 +35,6 @@ module V1::friend_module {
 // Change the friend entry to a friend -- should work
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A
 module V2::base_module {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
     public struct Object has key, store {
         id: UID,
         field0: u64,
@@ -65,9 +60,6 @@ module V2::friend_module {
 // Remove a friend function -- and replace with a call to a public function at a previous version should also be fine
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A
 module V3::base_module {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
     public struct Object has key, store {
         id: UID,
         field0: u64,
@@ -84,7 +76,6 @@ module V3::base_module {
     public fun public_fun2(x: u64): u64 { x }
 }
 module V3::friend_module {
-    use sui::tx_context::TxContext;
     public fun call_friend(): u64 { V2::base_module::public_fun2(10) }
 
     // Cross-version package call

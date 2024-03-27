@@ -10,8 +10,6 @@
 module a::m {
 
 use sui::dynamic_field::{add, exists_with_type, borrow};
-use sui::object;
-use sui::tx_context::{sender, TxContext};
 
 public struct Obj has key {
     id: object::UID,

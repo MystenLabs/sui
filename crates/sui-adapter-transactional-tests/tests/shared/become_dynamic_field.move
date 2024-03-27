@@ -8,10 +8,7 @@
 
 //# publish
 module a::m {
-    use sui::transfer;
     use sui::dynamic_field::{add, remove};
-    use sui::object;
-    use sui::tx_context::{sender, TxContext};
 
     public struct Outer has key, store {
         id: object::UID,

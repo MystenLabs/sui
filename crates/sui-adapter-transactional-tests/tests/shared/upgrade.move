@@ -8,10 +8,6 @@
 //# publish
 
 module t::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{sender, TxContext};
-
     public struct Obj has key, store {
         id: UID,
     }

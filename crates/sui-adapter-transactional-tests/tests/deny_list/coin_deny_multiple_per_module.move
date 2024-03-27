@@ -32,7 +32,6 @@ module test::first_coin {
 
 module test::second_coin {
     use sui::coin;
-    use sui::transfer;
 
     public struct SECOND_COIN has drop {}
 

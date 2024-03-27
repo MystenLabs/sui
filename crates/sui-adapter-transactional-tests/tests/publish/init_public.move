@@ -7,10 +7,6 @@
 // initializer not valid due to public visibility
 
 module Test::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-
     public struct Object has key, store {
         id: UID,
         value: u64,
