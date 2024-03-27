@@ -76,10 +76,12 @@ pub fn build_sui_transaction(
             // TODO: handle this case
             unimplemented!()
         }
-        BridgeAction::EmergencyAction(_) => {
-            // TODO: handle this case
-            unimplemented!()
-        }
+        BridgeAction::EmergencyAction(_) => build_emergency_op_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            bridge_object_arg,
+        ),
         BridgeAction::LimitUpdateAction(_) => {
             // TODO: handle this case
             unimplemented!()
@@ -89,8 +91,8 @@ pub fn build_sui_transaction(
             unimplemented!()
         }
         BridgeAction::EvmContractUpgradeAction(_) => {
-            // TODO: handle this case
-            unimplemented!()
+            // It does not need a Sui tranaction to execute EVM contract upgrade
+            unreachable!()
         }
     }
 }
@@ -214,20 +216,84 @@ fn build_token_bridge_approve_transaction(
     ))
 }
 
+// TODO: pass in gas price
+fn build_emergency_op_approve_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+    bridge_object_arg: ObjectArg,
+) -> BridgeResult<TransactionData> {
+    let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let (source_chain, seq_num, action_type) = match bridge_action {
+        BridgeAction::EmergencyAction(a) => (a.chain_id, a.nonce, a.action_type),
+        _ => unreachable!(),
+    };
+
+    // Unwrap: these should not fail
+    let source_chain = builder.pure(source_chain as u8).unwrap();
+    let seq_num = builder.pure(seq_num).unwrap();
+    let action_type = builder.pure(action_type as u8).unwrap();
+    let arg_bridge = builder.obj(bridge_object_arg).unwrap();
+
+    let arg_msg = builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("message").to_owned(),
+        ident_str!("create_emergency_op_message").to_owned(),
+        vec![],
+        vec![source_chain, seq_num, action_type],
+    );
+
+    let mut sig_bytes = vec![];
+    for (_, sig) in sigs.signatures {
+        sig_bytes.push(sig.as_bytes().to_vec());
+    }
+    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+        BridgeError::BridgeSerializationError(format!(
+            "Failed to serialize signatures: {:?}. Err: {:?}",
+            sig_bytes, e
+        ))
+    })?;
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("bridge").to_owned(),
+        ident_str!("execute_system_message").to_owned(),
+        vec![],
+        vec![arg_bridge, arg_msg, arg_signatures],
+    );
+
+    let pt = builder.finish();
+
+    Ok(TransactionData::new_programmable(
+        client_address,
+        vec![*gas_object_ref],
+        pt,
+        100_000_000,
+        // TODO: use reference gas price
+        1500,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::sui_client::SuiClient;
+    use crate::types::BridgeAction;
+    use crate::types::EmergencyAction;
+    use crate::types::EmergencyActionType;
     use crate::{
         test_utils::{
-            approve_token_bridge_with_validator_secrets, bridge_token,
-            get_test_eth_to_sui_bridge_action, get_test_sui_to_eth_bridge_action,
+            approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
+            get_test_sui_to_eth_bridge_action,
         },
         types::TokenId,
         BRIDGE_ENABLE_PROTOCOL_VERSION,
     };
     use ethers::types::Address as EthAddress;
+    use sui_types::bridge::BridgeChainId;
     use test_cluster::TestClusterBuilder;
-
-    use crate::sui_client::SuiClient;
 
     #[tokio::test]
     async fn test_build_sui_transaction_for_token_transfer() {
@@ -256,8 +322,8 @@ mod tests {
 
         // 1. Test Eth -> Sui Transfer approval
         let action = get_test_eth_to_sui_bridge_action(None, Some(usdc_amount), Some(sender));
-        // `approve_token_bridge_with_validator_secrets` covers transaction building
-        let usdc_object_ref = approve_token_bridge_with_validator_secrets(
+        // `approve_action_with_validator_secrets` covers transaction building
+        let usdc_object_ref = approve_action_with_validator_secrets(
             context,
             bridge_object_arg,
             action.clone(),
@@ -286,8 +352,8 @@ mod tests {
             Some(bridge_event.eth_address),
             Some(TokenId::USDC),
         );
-        // `approve_token_bridge_with_validator_secrets` covers transaction building
-        approve_token_bridge_with_validator_secrets(
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
             context,
             bridge_object_arg,
             action.clone(),
@@ -295,5 +361,67 @@ mod tests {
             None,
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_build_sui_transaction_for_emergency_op() {
+        telemetry_subscribers::init_for_testing();
+        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_epoch_duration_ms(15000)
+            .build_with_bridge()
+            .await;
+        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
+        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+
+        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
+        // is not initialized during the construction of `BridgeCommittee`.
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        if committee.members.is_empty() {
+            test_cluster.wait_for_epoch(None).await;
+        }
+        let summary = sui_client.get_bridge_summary().await.unwrap();
+        assert!(!summary.is_frozen);
+
+        let context = &mut test_cluster.wallet;
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+
+        // 1. Pause
+        let action = BridgeAction::EmergencyAction(EmergencyAction {
+            nonce: 0,
+            chain_id: BridgeChainId::SuiLocalTest,
+            action_type: EmergencyActionType::Pause,
+        });
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+        let summary = sui_client.get_bridge_summary().await.unwrap();
+        assert!(summary.is_frozen);
+
+        // 2. Unpause
+        let action = BridgeAction::EmergencyAction(EmergencyAction {
+            nonce: 1,
+            chain_id: BridgeChainId::SuiLocalTest,
+            action_type: EmergencyActionType::Unpause,
+        });
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+        let summary = sui_client.get_bridge_summary().await.unwrap();
+        assert!(!summary.is_frozen);
     }
 }
