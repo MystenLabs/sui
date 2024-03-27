@@ -294,7 +294,7 @@ impl<'env> Context<'env> {
         &mut self,
         tn: &TypeName,
         method: Name,
-        mut kuse_fun: impl FnMut(&mut N::UseFun),
+        mut fmap_use_fun: impl FnMut(&mut N::UseFun),
     ) -> Option<&UseFun> {
         let cur_color = self.use_funs.last().unwrap().color;
         self.use_funs.iter_mut().rev().find_map(|scope| {
@@ -305,7 +305,7 @@ impl<'env> Context<'env> {
                 return None;
             }
             let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
-            kuse_fun(use_fun);
+            fmap_use_fun(use_fun);
             Some(&*use_fun)
         })
     }
