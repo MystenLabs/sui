@@ -27,6 +27,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -62,6 +64,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
