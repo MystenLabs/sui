@@ -42,7 +42,7 @@ fun destroy(counter: Counter): u64 {
 
 entry fun t0(ctx: &mut TxContext) {
     let id = object::new(ctx);
-    sui::transfer::public_transfer(Obj { id }, sender(ctx))
+    sui::transfer::public_transfer(Obj { id }, ctx.sender())
 }
 
 entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {

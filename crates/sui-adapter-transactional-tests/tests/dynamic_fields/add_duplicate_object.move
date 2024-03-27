@@ -19,7 +19,7 @@ public struct Obj has key, store {
 entry fun t1(ctx: &mut TxContext) {
     let mut id = object::new(ctx);
     add(&mut id, 0, Obj { id: object::new(ctx) });
-    sui::transfer::public_transfer(Obj { id }, sender(ctx))
+    sui::transfer::public_transfer(Obj { id }, ctx.sender())
 }
 
 entry fun t2(obj: &mut Obj, ctx: &mut TxContext) {
