@@ -47,6 +47,13 @@ pub(crate) struct NameService;
 #[derive(Debug)]
 pub(crate) struct Domain(NativeDomain);
 
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(remote = "sui_json_rpc::name_service::DomainFormat")]
+pub enum DomainFormat {
+    At,
+    Dot,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct NativeSuinsRegistration {
     pub id: UID,
@@ -162,9 +169,13 @@ impl SuinsRegistration {
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
         OwnerImpl::from(&self.super_.super_)
-            .default_suins_name(ctx)
+            .default_suins_name(ctx, format)
             .await
     }
 
