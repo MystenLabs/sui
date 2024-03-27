@@ -2,21 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::clob_v2 {
-    use std::option;
     use std::type_name::{Self, TypeName};
-    use std::vector;
-    use std::option::{Option};
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin, join};
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::object::{Self, UID, ID};
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
@@ -2146,14 +2140,14 @@ module deepbook::clob_v2 {
         matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
         (
-            matched_order_metadata.pool_id, 
+            matched_order_metadata.pool_id,
             matched_order_metadata.order_id,
-            matched_order_metadata.is_bid, 
+            matched_order_metadata.is_bid,
             matched_order_metadata.taker_address,
-            matched_order_metadata.maker_address, 
+            matched_order_metadata.maker_address,
             matched_order_metadata.base_asset_quantity_filled,
-            matched_order_metadata.price, 
-            matched_order_metadata.taker_commission, 
+            matched_order_metadata.price,
+            matched_order_metadata.taker_commission,
             matched_order_metadata.maker_rebates
         )
     }
