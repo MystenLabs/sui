@@ -43,26 +43,51 @@ impl AliasSet {
     }
 }
 
-macro_rules! resolve_alias {
-    ($map:expr, .$namespace:ident, $name:expr) => {{
-        let mut current_scope = Some($map);
-        let name = $name;
-        loop {
-            let Some(scope) = current_scope else {
-                break None;
-            };
-            let Some(entry) = scope.$namespace.get(name).copied() else {
-                current_scope = scope.previous.as_mut().map(|x| &mut **x);
-                continue;
-            };
-            // Note, might have already been removed by a different `$namespace` resolution
-            scope.unused.remove(&(*name, entry).into());
+macro_rules! decl_resolve_alias {
+    ($f:ident, $fimpl: ident, .$namespace:ident, $t:ty) => {
+        impl AliasMap {
+            fn $fimpl(
+                &mut self,
+                name: &Name,
+                mut k: impl FnMut(&mut Self, &Name, &$t),
+            ) -> Option<(Name, $t)> {
+                let mut current_scope = Some(self);
+                loop {
+                    let Some(scope) = current_scope else {
+                        break None;
+                    };
+                    let Some(entry) = scope.$namespace.get(name).copied() else {
+                        current_scope = scope.previous.as_mut().map(|x| &mut **x);
+                        continue;
+                    };
+                    k(scope, name, &entry);
 
-            let original_name = scope.$namespace.get_full_key(&name).unwrap();
-            break Some((original_name, entry));
+                    let original_name = scope.$namespace.get_full_key(&name).unwrap();
+                    break Some((original_name, entry));
+                }
+            }
+
+            fn $f(&mut self, name: &Name) -> Option<(Name, $t)> {
+                self.$fimpl(name, |scope, name, entry| {
+                    scope.unused.remove(&(*name, *entry).into());
+                })
+            }
         }
-    }};
+    };
 }
+
+decl_resolve_alias!(
+    find_alias_leading_access,
+    find_alias_leading_access_impl,
+    .leading_access,
+    LeadingAccessEntry
+);
+decl_resolve_alias!(
+    find_alias_module_member,
+    find_alias_module_member_impl,
+    .module_members,
+    MemberEntry
+);
 
 impl AliasMap {
     pub fn new() -> Self {
@@ -75,7 +100,7 @@ impl AliasMap {
     }
 
     pub fn resolve_leading_access(&mut self, name: &Name) -> Option<(Name, LeadingAccessEntry)> {
-        let (name, entry) = resolve_alias!(self, .leading_access, name)?;
+        let (name, entry) = self.find_alias_leading_access(name)?;
         match &entry {
             LeadingAccessEntry::Module(_)
             | LeadingAccessEntry::Address(_)
@@ -87,7 +112,7 @@ impl AliasMap {
     }
 
     pub fn resolve_call(&mut self, name: &Name) -> Option<(Name, MemberEntry)> {
-        let (name, entry) = resolve_alias!(self, .module_members, name)?;
+        let (name, entry) = self.find_alias_module_member(name)?;
         match &entry {
             MemberEntry::Member(_, _) => Some((name, entry)),
             // For code legacy reasons, don't resolve type parameters, they are just here for
@@ -121,7 +146,7 @@ impl AliasMap {
         &mut self,
         loc: Loc,
         new_aliases: AliasMapBuilder,
-    ) -> Result<(), Box<Diagnostic>> {
+    ) -> Result<Vec<UnnecessaryAlias>, Box<Diagnostic>> {
         let AliasMapBuilder::Namespaced {
             leading_access: new_leading_access,
             module_members: new_module_members,
@@ -134,14 +159,33 @@ impl AliasMap {
         };
 
         let mut unused = BTreeSet::new();
+        let mut duplicate = vec![];
         for (alias, (entry, is_implicit)) in new_leading_access.key_cloned_iter() {
             if !*is_implicit {
                 unused.insert((alias, *entry).into());
+                self.find_alias_leading_access_impl(&alias, |scope, prev_name, prev_entry| {
+                    if entry == prev_entry {
+                        duplicate.push(UnnecessaryAlias {
+                            entry: (alias, *entry).into(),
+                            prev: prev_name.loc,
+                        });
+                        scope.unused.remove(&(*prev_name, *prev_entry).into());
+                    }
+                });
             }
         }
         for (alias, (entry, is_implicit)) in new_module_members.key_cloned_iter() {
             if !*is_implicit {
                 unused.insert((alias, *entry).into());
+                self.find_alias_module_member_impl(&alias, |scope, prev_name, prev_entry| {
+                    if entry == prev_entry {
+                        duplicate.push(UnnecessaryAlias {
+                            entry: (alias, *entry).into(),
+                            prev: prev_name.loc,
+                        });
+                        scope.unused.remove(&(*prev_name, *prev_entry).into());
+                    }
+                });
             }
         }
 
@@ -158,7 +202,7 @@ impl AliasMap {
         // set the previous scope
         let previous = std::mem::replace(self, new_map);
         self.previous = Some(Box::new(previous));
-        Ok(())
+        Ok(duplicate)
     }
 
     /// Similar to add_and_shadow but just hides aliases now shadowed by a type parameter.

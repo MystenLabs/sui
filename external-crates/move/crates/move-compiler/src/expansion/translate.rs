@@ -8,12 +8,13 @@ use crate::{
     editions::{self, create_feature_error, Edition, FeatureGate, Flavor},
     expansion::{
         alias_map_builder::{
-            AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
+            AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UnnecessaryAlias,
+            UseFunsBuilder,
         },
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string, legacy_aliases,
-        translate::known_attributes::KnownAttribute,
+        translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
     ice,
     parser::ast::{
@@ -33,8 +34,6 @@ use std::{
     iter::IntoIterator,
     sync::Arc,
 };
-
-use self::known_attributes::DiagnosticAttribute;
 
 //**************************************************************************************************
 // Context
@@ -125,8 +124,41 @@ impl<'env, 'map> Context<'env, 'map> {
             .as_mut()
             .unwrap()
             .push_alias_scope(loc, new_scope);
-        if let Err(diag) = res {
-            self.env().add_diag(*diag);
+        match res {
+            Err(diag) => self.env().add_diag(*diag),
+            Ok(unnecessaries) => {
+                for UnnecessaryAlias { entry, prev } in unnecessaries {
+                    let loc = entry.loc();
+                    let (alias, case) = match entry {
+                        AliasEntry::Address(_, _) => {
+                            debug_assert!(false, "ICE cannot manually make address aliases");
+                            continue;
+                        }
+                        AliasEntry::TypeParam(_) => {
+                            debug_assert!(
+                                false,
+                                "ICE cannot manually make type param aliases. \
+                                We do not have nested TypeParam scopes"
+                            );
+                            continue;
+                        }
+                        AliasEntry::Module(n, m) => (n, format!(" for module '{m}'")),
+                        AliasEntry::Member(n, m, mem) => {
+                            (n, format!(" for module member '{m}::{mem}'"))
+                        }
+                    };
+                    let msg = format!("Unnecessary alias '{alias}'{case}. It was already in scope");
+                    let mut diag = diag!(Declarations::DuplicateAlias, (loc, msg));
+                    if prev != Loc::invalid() {
+                        diag.add_secondary_label((
+                            prev,
+                            "The same alias was previously declared here",
+                        ))
+                    } else {
+                        diag.add_note("This alias is provided by default")
+                    }
+                }
+            }
         }
     }
 
@@ -1294,7 +1326,7 @@ trait PathExpander {
         &mut self,
         loc: Loc,
         new_scope: AliasMapBuilder,
-    ) -> Result<(), Box<Diagnostic>>;
+    ) -> Result<Vec<UnnecessaryAlias>, Box<Diagnostic>>;
 
     // Push a number of type parameters onto the alias information in the path expander. They are
     // never resolved, but are tracked to apply appropriate shadowing.
@@ -1345,10 +1377,10 @@ impl PathExpander for LegacyPathExpander {
         &mut self,
         loc: Loc,
         new_scope: AliasMapBuilder,
-    ) -> Result<(), Box<Diagnostic>> {
+    ) -> Result<Vec<UnnecessaryAlias>, Box<Diagnostic>> {
         self.old_alias_maps
             .push(self.aliases.add_and_shadow_all(loc, new_scope)?);
-        Ok(())
+        Ok(vec![])
     }
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
@@ -1806,7 +1838,7 @@ impl PathExpander for Move2024PathExpander {
         &mut self,
         loc: Loc,
         new_scope: AliasMapBuilder,
-    ) -> Result<(), Box<Diagnostic>> {
+    ) -> Result<Vec<UnnecessaryAlias>, Box<Diagnostic>> {
         self.aliases.push_alias_scope(loc, new_scope)
     }
 
