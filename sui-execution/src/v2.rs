@@ -224,7 +224,7 @@ impl<'m> verifier::Verifier for Verifier<'m> {
         config.max_per_mod_meter_units = config_overrides.max_per_mod_meter_units;
         run_metered_move_bytecode_verifier(modules, &config, &mut self.meter, self.metrics)?;
         let fun_meter_units_result = self.meter.get_usage(Scope::Function);
-        let mod_meter_units_result = self.meter.get_usage(Scope::Function);
+        let mod_meter_units_result = self.meter.get_usage(Scope::Module);
         Ok(VerifierMeteredValues::new(
             max_per_fun_meter_current,
             max_per_mod_meter_current,
