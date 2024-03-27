@@ -14,7 +14,7 @@ module std::vector {
 
 module a::invalid0 {
 
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> }
 
@@ -32,7 +32,7 @@ module a::invalid0 {
 
 module a::invalid1 {
 
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> }
 
@@ -49,7 +49,7 @@ module a::invalid1 {
 }
 
 module a::invalid2 {
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> , q: vector<u32> }
 
@@ -66,7 +66,7 @@ module a::invalid2 {
 }
 
 module a::invalid3 {
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> }
 
@@ -84,7 +84,7 @@ module a::invalid3 {
 
 module a::invalid4 {
 
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> }
 
@@ -99,4 +99,3 @@ module a::invalid4 {
     }
 
 }
-

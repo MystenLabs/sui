@@ -157,6 +157,7 @@ impl<'env, 'map> Context<'env, 'map> {
                     } else {
                         diag.add_note("This alias is provided by default")
                     }
+                    self.env().add_diag(diag);
                 }
             }
         }

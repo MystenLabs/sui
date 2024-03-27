@@ -6,6 +6,8 @@ warning[W02021]: duplicate alias
    ·
 10 │     use fun a::m::foo as S.foo;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary method alias 'a::m::S.foo' for 'a::m::foo'
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:21:9
@@ -15,6 +17,8 @@ warning[W02021]: duplicate alias
 20 │     fun call_bar(s: &S) {
 21 │         use fun a::m::foo as S.bar;
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate method alias 'a::m::S.bar' for 'a::m::foo'
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:31:9
@@ -24,4 +28,6 @@ warning[W02021]: duplicate alias
 30 │     fun call_bar(s: &S) {
 31 │         use fun a::m::foo as S.bar;
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate method alias 'a::m::S.bar' for 'a::m::foo'
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

@@ -60,9 +60,8 @@ macro_rules! decl_resolve_alias {
                         current_scope = scope.previous.as_mut().map(|x| &mut **x);
                         continue;
                     };
-                    k(scope, name, &entry);
-
                     let original_name = scope.$namespace.get_full_key(&name).unwrap();
+                    k(scope, &original_name, &entry);
                     break Some((original_name, entry));
                 }
             }
