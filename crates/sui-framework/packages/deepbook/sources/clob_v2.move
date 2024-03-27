@@ -64,9 +64,9 @@ module deepbook::clob_v2 {
     const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
-    const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
     #[test_only]
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
     const REFERENCE_MAKER_REBATE_RATE: u64 = 1_500_000;
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
@@ -2146,14 +2146,14 @@ module deepbook::clob_v2 {
         matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
         (
-            matched_order_metadata.pool_id, 
+            matched_order_metadata.pool_id,
             matched_order_metadata.order_id,
-            matched_order_metadata.is_bid, 
+            matched_order_metadata.is_bid,
             matched_order_metadata.taker_address,
-            matched_order_metadata.maker_address, 
+            matched_order_metadata.maker_address,
             matched_order_metadata.base_asset_quantity_filled,
-            matched_order_metadata.price, 
-            matched_order_metadata.taker_commission, 
+            matched_order_metadata.price,
+            matched_order_metadata.taker_commission,
             matched_order_metadata.maker_rebates
         )
     }

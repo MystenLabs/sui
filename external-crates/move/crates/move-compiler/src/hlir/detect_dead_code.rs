@@ -482,7 +482,12 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         // value-based expressions without subexpressions -- no control flow
         // -----------------------------------------------------------------------------------------
-        E::Unit { .. } | E::Value(_) | E::Constant(_, _) | E::Move { .. } | E::Copy { .. } => None,
+        E::Unit { .. }
+        | E::Value(_)
+        | E::Constant(_, _)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::ErrorConstant(_) => None,
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -652,6 +657,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::Annotate(_, _)
         | E::BorrowLocal(_, _)
         | E::Constant(_, _)
+        | E::ErrorConstant(_)
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError => value(context, e),

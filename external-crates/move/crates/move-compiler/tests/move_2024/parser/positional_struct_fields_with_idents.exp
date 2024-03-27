@@ -1,7 +1,7 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/positional_struct_fields_with_idents.move:4:24
+  ┌─ tests/move_2024/parser/positional_struct_fields_with_idents.move:3:24
   │
-4 │     public struct Foo(x: u64) has copy, drop;
+3 │     public struct Foo(x: u64) has copy, drop;
   │                      - ^ Expected ')'
   │                      │  
   │                      To match this '('

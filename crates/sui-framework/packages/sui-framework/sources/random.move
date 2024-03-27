@@ -4,12 +4,8 @@
 /// This module provides functionality for generating secure randomness.
 module sui::random {
     use std::bcs;
-    use std::vector;
-    use sui::address::to_bytes;
     use sui::hmac::hmac_sha3_256;
-    use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext, fresh_object_address};
     use sui::versioned::{Self, Versioned};
 
     // Sender is not @0x0 the system address.
@@ -44,13 +40,13 @@ module sui::random {
     /// the Random object is first created.
     /// Can only be called by genesis or change_epoch transactions.
     fun create(ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         let version = CURRENT_VERSION;
 
         let inner = RandomInner {
             version,
-            epoch: tx_context::epoch(ctx),
+            epoch: ctx.epoch(),
             randomness_round: 0,
             random_bytes: vector[],
         };
@@ -101,13 +97,12 @@ module sui::random {
         ctx: &TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
         // Randomness should only be incremented.
-        let epoch = tx_context::epoch(ctx);
-        let inner = load_inner_mut(self);
-        if (inner.randomness_round == 0 && inner.epoch == 0 &&
-            vector::is_empty(&inner.random_bytes)) {
+        let epoch = ctx.epoch();
+        let inner = self.load_inner_mut();
+        if (inner.randomness_round == 0 && inner.epoch == 0 && inner.random_bytes.is_empty()) {
             // First update should be for round zero.
             assert!(new_round == 0, EInvalidRandomnessUpdate);
         } else {
@@ -121,7 +116,7 @@ module sui::random {
             );
         };
 
-        inner.epoch = tx_context::epoch(ctx);
+        inner.epoch = ctx.epoch();
         inner.randomness_round = new_round;
         inner.random_bytes = new_bytes;
     }
@@ -133,7 +128,7 @@ module sui::random {
         new_bytes: vector<u8>,
         ctx: &TxContext,
     ) {
-        update_randomness_state(self, new_round, new_bytes, ctx);
+        self.update_randomness_state(new_round, new_bytes, ctx);
     }
 
 
@@ -149,7 +144,7 @@ module sui::random {
         let inner = load_inner(r);
         let seed = hmac_sha3_256(
             &inner.random_bytes,
-            &to_bytes(fresh_object_address(ctx))
+            &ctx.fresh_object_address().to_bytes()
         );
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
@@ -176,7 +171,7 @@ module sui::random {
             num_of_blocks = num_of_blocks - 1;
         };
         // Fill the generator's buffer if needed.
-        let num_of_bytes = (num_of_bytes as u64);
+        let num_of_bytes = num_of_bytes as u64;
         if (vector::length(&g.buffer) < (num_of_bytes - vector::length(&result))) {
             fill_buffer(g);
         };
@@ -191,7 +186,7 @@ module sui::random {
     // Assumes that the caller has already checked that num_of_bytes is valid.
     // TODO: Replace with a macro when we have support for it.
     fun u256_from_bytes(g: &mut RandomGenerator, num_of_bytes: u8): u256 {
-        if (vector::length(&g.buffer) < (num_of_bytes as u64)) {
+        if (vector::length(&g.buffer) < num_of_bytes as u64) {
             fill_buffer(g);
         };
         let mut result: u256 = 0;
@@ -211,27 +206,27 @@ module sui::random {
 
     /// Generate a u128.
     public fun generate_u128(g: &mut RandomGenerator): u128 {
-        (u256_from_bytes(g, 16) as u128)
+        u256_from_bytes(g, 16) as u128
     }
 
     /// Generate a u64.
     public fun generate_u64(g: &mut RandomGenerator): u64 {
-        (u256_from_bytes(g, 8) as u64)
+        u256_from_bytes(g, 8) as u64
     }
 
     /// Generate a u32.
     public fun generate_u32(g: &mut RandomGenerator): u32 {
-        (u256_from_bytes(g, 4) as u32)
+        u256_from_bytes(g, 4) as u32
     }
 
     /// Generate a u16.
     public fun generate_u16(g: &mut RandomGenerator): u16 {
-        (u256_from_bytes(g, 2) as u16)
+        u256_from_bytes(g, 2) as u16
     }
 
     /// Generate a u8.
     public fun generate_u8(g: &mut RandomGenerator): u8 {
-        (u256_from_bytes(g, 1) as u8)
+        u256_from_bytes(g, 1) as u8
     }
 
     /// Generate a boolean.
@@ -251,9 +246,9 @@ module sui::random {
         // Pick a random number in [0, max - min] by generating a random number that is larger than max-min, and taking
         // the modulo of the random number by the range size. Then add the min to the result to get a number in
         // [min, max].
-        let range_size = ((max - min) as u256) + 1;
+        let range_size = (max - min) as u256 + 1;
         let rand = u256_from_bytes(g, num_of_bytes);
-        min + ((rand % range_size) as u128)
+        min + (rand % range_size as u128)
     }
 
     /// Generate a random u128 in [min, max] (with a bias of 2^{-64}).
@@ -263,22 +258,22 @@ module sui::random {
 
     //// Generate a random u64 in [min, max] (with a bias of 2^{-64}).
     public fun generate_u64_in_range(g: &mut RandomGenerator, min: u64, max: u64): u64 {
-        (u128_in_range(g, (min as u128), (max as u128), 16) as u64)
+        u128_in_range(g, min as u128, max as u128, 16) as u64
     }
 
     /// Generate a random u32 in [min, max] (with a bias of 2^{-64}).
     public fun generate_u32_in_range(g: &mut RandomGenerator, min: u32, max: u32): u32 {
-        (u128_in_range(g, (min as u128), (max as u128), 12) as u32)
+        u128_in_range(g, min as u128, max as u128, 12) as u32
     }
 
     /// Generate a random u16 in [min, max] (with a bias of 2^{-64}).
     public fun generate_u16_in_range(g: &mut RandomGenerator, min: u16, max: u16): u16 {
-        (u128_in_range(g, (min as u128), (max as u128), 10) as u16)
+        u128_in_range(g, min as u128, max as u128, 10) as u16
     }
 
     /// Generate a random u8 in [min, max] (with a bias of 2^{-64}).
     public fun generate_u8_in_range(g: &mut RandomGenerator, min: u8, max: u8): u8 {
-        (u128_in_range(g, (min as u128), (max as u128), 9) as u8)
+        u128_in_range(g, min as u128, max as u128, 9) as u8
     }
 
     /// Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
@@ -288,12 +283,12 @@ module sui::random {
             return
         };
         assert!(n <= U16_MAX, EInvalidLength);
-        let n = (n as u16);
+        let n = n as u16;
         let mut i: u16 = 0;
         let end = n - 1;
         while (i < end) {
             let j = generate_u16_in_range(g, i, end);
-            vector::swap(v, (i as u64), (j as u64));
+            vector::swap(v, i as u64, j as u64);
             i = i + 1;
         };
     }

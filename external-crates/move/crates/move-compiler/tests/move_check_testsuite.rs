@@ -27,6 +27,7 @@ const MIGRATION_EXT: &str = "migration";
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
 const MOVE_2024_DIR: &str = "move_2024";
+const DEV_DIR: &str = "development";
 
 fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
     let mut mapping = vec![
@@ -50,14 +51,17 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
 }
 
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
-    let lint = path.components().any(|c| c.as_os_str() == LINTER_DIR);
-    let flavor = if path.components().any(|c| c.as_os_str() == SUI_MODE_DIR) {
+    let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
+    let lint = path_contains(LINTER_DIR);
+    let flavor = if path_contains(SUI_MODE_DIR) {
         Flavor::Sui
     } else {
         Flavor::default()
     };
-    let edition = if path.components().any(|c| c.as_os_str() == MOVE_2024_DIR) {
+    let edition = if path_contains(MOVE_2024_DIR) {
         Edition::E2024_ALPHA
+    } else if path_contains(DEV_DIR) {
+        Edition::DEVELOPMENT
     } else {
         Edition::default()
     };

@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::functional_group::FunctionalGroup;
 use crate::types::big_int::BigInt;
 use async_graphql::*;
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
-
-use crate::functional_group::FunctionalGroup;
 
 // TODO: calculate proper cost limits
 
@@ -94,6 +94,9 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) background_tasks: BackgroundTasksConfig,
+
+    #[serde(default)]
+    pub(crate) zklogin: ZkLoginConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -132,8 +135,51 @@ pub struct BackgroundTasksConfig {
     pub watermark_update_ms: u64,
 }
 
-#[derive(Debug)]
-pub struct Version(pub &'static str);
+/// The Version of the service. `year.month` represents the major release.
+/// New `patch` versions represent backwards compatible fixes for their major release.
+/// The `full` version is `year.month.patch-sha`.
+#[derive(Copy, Clone, Debug)]
+pub struct Version {
+    /// The year of this release.
+    pub year: &'static str,
+    /// The month of this release.
+    pub month: &'static str,
+    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    pub patch: &'static str,
+    /// The commit sha for this release.
+    pub sha: &'static str,
+    /// The full version string.
+    /// Note that this extra field is used only for the uptime_metric function which requries a
+    /// &'static str.
+    pub full: &'static str,
+}
+
+impl Version {
+    /// Use for testing when you need the Version obj and a year.month &str
+    pub fn for_testing() -> Self {
+        Self {
+            year: env!("CARGO_PKG_VERSION_MAJOR"),
+            month: env!("CARGO_PKG_VERSION_MINOR"),
+            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            sha: "testing-no-sha",
+            // note that this full field is needed for metrics but not for testing
+            full: const_str::concat!(
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_MINOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_PATCH"),
+                "-testing-no-sha"
+            ),
+        }
+    }
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.full)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -175,6 +221,12 @@ pub struct InternalFeatureConfig {
 pub struct TxExecFullNodeConfig {
     #[serde(default)]
     pub(crate) node_rpc_url: Option<String>,
+}
+
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct ZkLoginConfig {
+    pub env: ZkLoginEnv,
 }
 
 /// The enabled features and service limits configured by the server.
@@ -338,6 +390,9 @@ impl ServiceConfig {
     pub fn test_defaults() -> Self {
         Self {
             background_tasks: BackgroundTasksConfig::test_defaults(),
+            zklogin: ZkLoginConfig {
+                env: ZkLoginEnv::Test,
+            },
             ..Default::default()
         }
     }

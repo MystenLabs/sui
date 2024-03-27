@@ -99,6 +99,8 @@ enum MigrationChange {
     AddGlobalQual,
     RemoveFriend,
     MakePubPackage,
+    AddressRemove,
+    AddressAdd(String),
 }
 
 // All of the migration changes
@@ -116,9 +118,9 @@ pub struct MappedFiles {
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
 #[allow(dead_code)]
 pub struct FileLineColSpan {
-    file_id: FileId,
-    start: LineColLocation,
-    end: LineColLocation,
+    pub file_id: FileId,
+    pub start: LineColLocation,
+    pub end: LineColLocation,
 }
 
 /// A line and column location in a file
@@ -897,6 +899,8 @@ impl Migration {
         const NEEDS_GLOBAL_QUAL: u8 = codes::Migration::NeedsGlobalQualification as u8;
         const REMOVE_FRIEND: u8 = codes::Migration::RemoveFriend as u8;
         const MAKE_PUB_PACKAGE: u8 = codes::Migration::MakePubPackage as u8;
+        const ADDRESS_REMOVE: u8 = codes::Migration::AddressRemove as u8;
+        const ADDRESS_ADD: u8 = codes::Migration::AddressAdd as u8;
 
         let FileByteSpan { file_id, byte_span } = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
@@ -910,6 +914,11 @@ impl Migration {
             (CAT, NEEDS_GLOBAL_QUAL) => MigrationChange::AddGlobalQual,
             (CAT, REMOVE_FRIEND) => MigrationChange::RemoveFriend,
             (CAT, MAKE_PUB_PACKAGE) => MigrationChange::MakePubPackage,
+            (CAT, ADDRESS_REMOVE) => MigrationChange::AddressRemove,
+            (CAT, ADDRESS_ADD) => {
+                let insertion = diag.primary_msg().to_string();
+                MigrationChange::AddressAdd(insertion)
+            }
             _ => unreachable!(),
         };
         file_change_entry.push((byte_span, change));
@@ -961,6 +970,19 @@ impl Migration {
                 MigrationChange::MakePubPackage => {
                     let rest = &source_prefix[loc.end..];
                     output = format!("public(package){}{}", rest, output);
+                }
+                MigrationChange::AddressRemove => {
+                    let rest = &source_prefix[loc.end..];
+                    output = format!(
+                        "/* {} */{}{}",
+                        &source_prefix[loc.start..loc.end],
+                        rest,
+                        output
+                    );
+                }
+                MigrationChange::AddressAdd(insertion) => {
+                    let rest = &source_prefix[loc.start..];
+                    output = format!("{}{}{}", insertion, rest, output);
                 }
             }
             source_prefix = &source_prefix[..loc.start];

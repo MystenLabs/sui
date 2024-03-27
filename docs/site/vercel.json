@@ -92,6 +92,7 @@
       { "source": "/concepts/dynamic-fields/transfers/transfer-to-object", "destination": "/concepts/transfers/transfer-to-object", "permanent": true},
       { "source": "/references/sui-graphql/:path*", "destination": "/references/sui-api/sui-graphql/:path*", "permanent": true},
       { "source": "/references/research-papers", "destination": "/concepts/research-papers", "permanent": true},
-      { "source": "/guides/developer/app-examples/trading/:path*", "destination": "/guides/developer/app-examples/trustless-token-swap/:path*", "permanent": true}
+      { "source": "/guides/developer/app-examples/trading/:path*", "destination": "/guides/developer/app-examples/trustless-token-swap/:path*", "permanent": true},
+      { "source": "/concepts/graphql-rpc/:path*", "destination": "/concepts/graphql-rpc", "permanent": true}
     ]
   }

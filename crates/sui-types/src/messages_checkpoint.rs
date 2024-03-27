@@ -11,7 +11,7 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo,
 };
 use crate::digests::Digest;
-use crate::effects::{TransactionEffects, TransactionEffectsAPI};
+use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{
@@ -613,7 +613,7 @@ impl FullCheckpointContents {
             ),
             vec![&key],
         );
-        let effects = TransactionEffects::new_with_tx(&transaction);
+        let effects = TestEffectsBuilder::new(transaction.data()).build();
         let exe_data = ExecutionData {
             transaction,
             effects,

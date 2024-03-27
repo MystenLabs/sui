@@ -23,7 +23,7 @@ pub async fn start_graphiql_server(
     cancellation_token: CancellationToken,
 ) -> Result<(), Error> {
     info!("Starting server with config: {:?}", server_config);
-    info!("Server version: {:?}", version);
+    info!("Server version: {}", version);
     start_graphiql_server_impl(
         ServerBuilder::from_config(server_config, version, cancellation_token).await?,
         server_config.ide.ide_title.clone(),

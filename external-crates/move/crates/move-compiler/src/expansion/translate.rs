@@ -1007,9 +1007,30 @@ fn known_attributes(
                 .add_diag(diag!(Declarations::UnknownAttribute, (loc, msg)));
             None
         }
-        sp!(loc, E::AttributeName_::Known(n)) => Some((sp(loc, n), attr)),
+        sp!(loc, E::AttributeName_::Known(n)) => {
+            gate_known_attribute(context, loc, &n);
+            Some((sp(loc, n), attr))
+        }
     }))
     .unwrap()
+}
+
+fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute) {
+    match known {
+        KnownAttribute::Testing(_)
+        | KnownAttribute::Verification(_)
+        | KnownAttribute::Native(_)
+        | KnownAttribute::Diagnostic(_)
+        | KnownAttribute::DefinesPrimitive(_)
+        | KnownAttribute::External(_)
+        | KnownAttribute::Syntax(_) => (),
+        KnownAttribute::Error(_) => {
+            let pkg = context.current_package();
+            context
+                .env()
+                .check_feature(pkg, FeatureGate::CleverAssertions, loc);
+        }
+    }
 }
 
 fn unique_attributes(
@@ -3003,6 +3024,15 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
     }
     let e_ = match pe_ {
         PE::Unit => EE::Unit { trailing: false },
+        PE::Parens(pe) => {
+            match *pe {
+                sp!(pe_loc, PE::Cast(plhs, pty)) => {
+                    let e_ = exp_cast(context, /* in_parens */ true, plhs, pty);
+                    return Box::new(sp(pe_loc, e_));
+                }
+                pe => return exp(context, Box::new(pe)),
+            }
+        }
         PE::Value(pv) => unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value)),
         PE::Name(_, Some(_)) => {
             let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
@@ -3193,7 +3223,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 }
             }
         }
-        PE::Cast(e, ty) => EE::Cast(exp(context, e), type_(context, ty)),
+        PE::Cast(e, ty) => exp_cast(context, /* in_parens */ false, e, ty),
         PE::Annotate(e, ty) => EE::Annotate(exp(context, e), type_(context, ty)),
         PE::Spec(_) => {
             context.spec_deprecated(loc, /* is_error */ false);
@@ -3202,6 +3232,65 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::UnresolvedError => EE::UnresolvedError,
     };
     Box::new(sp(loc, e_))
+}
+
+fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::Type) -> E::Exp_ {
+    use E::Exp_ as EE;
+    use P::Exp_ as PE;
+    fn ambiguous_cast(e: &P::Exp) -> bool {
+        match &e.value {
+            PE::Value(_)
+            | PE::Move(_, _)
+            | PE::Copy(_, _)
+            | PE::Name(_, _)
+            | PE::Call(_, _, _, _)
+            | PE::Pack(_, _, _)
+            | PE::Vector(_, _, _)
+            | PE::Block(_)
+            | PE::ExpList(_)
+            | PE::Unit
+            | PE::Parens(_)
+            | PE::Annotate(_, _)
+            | PE::UnresolvedError => false,
+
+            PE::IfElse(_, _, _)
+            | PE::While(_, _)
+            | PE::Loop(_)
+            | PE::Labeled(_, _)
+            | PE::Lambda(_, _, _)
+            | PE::Quant(_, _, _, _, _)
+            | PE::Assign(_, _)
+            | PE::Abort(_)
+            | PE::Return(_, _)
+            | PE::Break(_, _)
+            | PE::Continue(_)
+            | PE::UnaryExp(_, _)
+            | PE::BinopExp(_, _, _)
+            | PE::Cast(_, _)
+            | PE::Spec(_) => true,
+
+            PE::DotCall(lhs, _, _, _, _)
+            | PE::Dot(lhs, _)
+            | PE::Index(lhs, _)
+            | PE::Borrow(_, lhs)
+            | PE::Dereference(lhs) => ambiguous_cast(lhs),
+        }
+    }
+    if !in_parens {
+        let current_package = context.current_package();
+        let loc = plhs.loc;
+        let supports_feature =
+            context
+                .env()
+                .check_feature(current_package, FeatureGate::NoParensCast, loc);
+        if supports_feature && ambiguous_cast(&plhs) {
+            let msg = "Potentially ambiguous 'as'. Add parentheses to disambiguate";
+            context
+                .env()
+                .add_diag(diag!(Syntax::AmbiguousCast, (loc, msg)));
+        }
+    }
+    EE::Cast(exp(context, plhs), type_(context, pty))
 }
 
 // If the expression can take a label, attach the label. Otherwise error

@@ -131,6 +131,7 @@ pub(crate) struct AppState {
     service: ServiceConfig,
     metrics: Metrics,
     cancellation_token: CancellationToken,
+    pub version: Version,
 }
 
 /// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
@@ -139,17 +140,19 @@ pub(crate) struct AppState {
 pub(crate) struct CheckpointWatermark(pub Arc<AtomicU64>);
 
 impl AppState {
-    fn new(
+    pub(crate) fn new(
         connection: ConnectionConfig,
         service: ServiceConfig,
         metrics: Metrics,
         cancellation_token: CancellationToken,
+        version: Version,
     ) -> Self {
         Self {
             connection,
             service,
             metrics,
             cancellation_token,
+            version,
         }
     }
 }
@@ -230,13 +233,16 @@ impl ServerBuilder {
                 .route("/health", axum::routing::get(health_checks))
                 .with_state(self.state.clone())
                 .route_layer(middleware::from_fn_with_state(
-                    self.state.metrics.clone(),
+                    self.state.version,
+                    set_version_middleware,
+                ))
+                .route_layer(middleware::from_fn_with_state(
+                    self.state.version,
                     check_version_middleware,
                 ))
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
-                }))
-                .layer(middleware::from_fn(set_version_middleware));
+                }));
             self.router = Some(router);
         }
     }
@@ -336,12 +342,15 @@ impl ServerBuilder {
                 config.connection.prom_url, config.connection.prom_port
             ))
         })?;
+
         let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
         info!("Starting Prometheus HTTP endpoint at {}", prom_addr);
         let registry = registry_service.default_registry();
         registry
             .register(mysten_metrics::uptime_metric(
-                "graphql", version.0, "unknown",
+                "graphql",
+                version.full,
+                "unknown",
             ))
             .unwrap();
 
@@ -352,10 +361,12 @@ impl ServerBuilder {
             config.service.clone(),
             metrics.clone(),
             cancellation_token,
+            *version,
         );
         let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.service.name_service.clone();
+        let zklogin_config = config.service.zklogin.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
@@ -400,6 +411,7 @@ impl ServerBuilder {
             ))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
+            .context_data(zklogin_config)
             .context_data(metrics.clone())
             .context_data(config.clone());
 
@@ -589,7 +601,7 @@ pub(crate) async fn update_watermark(
 pub mod tests {
     use super::*;
     use crate::{
-        config::{ConnectionConfig, Limits, ServiceConfig},
+        config::{ConnectionConfig, Limits, ServiceConfig, Version},
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
@@ -614,7 +626,7 @@ pub mod tests {
 
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-
+        let version = Version::for_testing();
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
@@ -625,6 +637,7 @@ pub mod tests {
             service_config.clone(),
             metrics.clone(),
             cancellation_token.clone(),
+            version,
         );
         ServerBuilder::new(state)
             .context_data(db)

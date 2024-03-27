@@ -20,7 +20,7 @@ use crate::{
     shared::{
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
-        program_info::TypingProgramInfo,
+        program_info::{ConstantInfo, TypingProgramInfo},
         unique_map::UniqueMap,
         *,
     },
@@ -506,7 +506,7 @@ mod check_valid_constant {
 
             // NB: module scoping is checked during constant type creation, so we don't need to
             // relitigate here.
-            E::Constant(_, _) => {
+            E::Constant(_, _) | E::ErrorConstant(_) => {
                 return;
             }
 
@@ -1019,10 +1019,16 @@ fn subtype_no_report(
     let subst = std::mem::replace(&mut context.subst, Subst::empty());
     let lhs = core::ready_tvars(&subst, pre_lhs);
     let rhs = core::ready_tvars(&subst, pre_rhs);
-    core::subtype(subst, &lhs, &rhs).map(|(next_subst, ty)| {
-        context.subst = next_subst;
-        ty
-    })
+    match core::subtype(subst.clone(), &lhs, &rhs) {
+        Ok((next_subst, ty)) => {
+            context.subst = next_subst;
+            Ok(ty)
+        }
+        Err(err) => {
+            context.subst = subst;
+            Err(err)
+        }
+    }
 }
 
 fn subtype_impl<T: ToString, F: FnOnce() -> T>(
@@ -1275,6 +1281,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
     let sp!(eloc, ne_) = *ne;
     let (ty, e_) = match ne_ {
+        NE::ErrorConstant => (Type_::u64(eloc), TE::ErrorConstant(None)),
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
@@ -1479,8 +1486,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (sp(eloc, Type_::Anything), TE::Return(eret))
         }
         NE::Abort(ncode) => {
-            let ecode = exp(context, ncode);
+            let mut ecode = exp(context, ncode);
             let code_ty = Type_::u64(eloc);
+            annotated_error_const(context, &mut ecode, "abort");
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
             (sp(eloc, Type_::Anything), TE::Abort(ecode))
         }
@@ -2287,6 +2295,10 @@ struct ExpDotted {
     base: T::Exp,
     base_type: N::Type,
     accessors: Vec<ExpDottedAccess>,
+    // This should only be used in the functions grouped here, nowhere else. This is for tracking
+    // if a constant appears plainly in a `use`/`copy` position, and suppresses constant usage
+    // warning if so.
+    warn_on_constant: bool,
 }
 
 impl ExpDotted {
@@ -2333,6 +2345,7 @@ fn process_exp_dotted(
                 base_kind,
                 base_type,
                 accessors,
+                warn_on_constant: true,
             }
         }
         N::ExpDotted_::Dot(ndot, field) => {
@@ -2535,7 +2548,6 @@ fn resolve_exp_dotted(
             copy_exp
         }
         DottedUsage::Use => {
-            warn_on_constant_borrow(context, edotted.base.exp.loc, &edotted.base);
             if edotted.accessors.is_empty() {
                 Box::new(edotted.base)
             } else {
@@ -2604,10 +2616,22 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
         base_type,
         base_kind,
         accessors,
+        mut warn_on_constant,
     } = ed;
 
+    // If we have accessors, we are definitely going to actually borrow and that means we'll copy
+    // a base constant, so we should warn if we do.
+    warn_on_constant = warn_on_constant || !accessors.is_empty();
+
     let mut exp = match base_kind {
-        BaseRefKind::Owned => exp_to_borrow(context, loc, mut_, Box::new(base), base_type),
+        BaseRefKind::Owned => exp_to_borrow_(
+            context,
+            loc,
+            mut_,
+            Box::new(base),
+            base_type,
+            warn_on_constant,
+        ),
         BaseRefKind::ImmRef | BaseRefKind::MutRef => Box::new(base),
     };
 
@@ -2703,21 +2727,18 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
         )));
         return make_error_exp(context, ed.loc);
     };
-    let borrow_exp = borrow_exp_dotted(context, false, ed);
     let case = match usage {
         DottedUsage::Move(_) => {
-            context.env.add_diag(ice!((
-                borrow_exp.exp.loc,
-                "Invalid dotted usage 'move' in to_owned"
-            )));
-            return make_error_exp(context, borrow_exp.exp.loc);
+            context
+                .env
+                .add_diag(ice!((ed.loc, "Invalid dotted usage 'move' in to_owned")));
+            return make_error_exp(context, ed.loc);
         }
         DottedUsage::Borrow(_) => {
-            context.env.add_diag(ice!((
-                borrow_exp.exp.loc,
-                "Invalid dotted usage 'borrow' in to_owned"
-            )));
-            return make_error_exp(context, borrow_exp.exp.loc);
+            context
+                .env
+                .add_diag(ice!((ed.loc, "Invalid dotted usage 'borrow' in to_owned")));
+            return make_error_exp(context, ed.loc);
         }
         DottedUsage::Use => "implicit copy",
         DottedUsage::Copy(loc) => {
@@ -2727,6 +2748,13 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
             "'copy'"
         }
     };
+    // If we are going to an owned value and we have a constant with no accessors, we're fine to
+    // not warn about its usage.
+    let mut edotted = ed;
+    if edotted.accessors.is_empty() {
+        edotted.warn_on_constant = false;
+    }
+    let borrow_exp = borrow_exp_dotted(context, false, edotted);
     let eloc = borrow_exp.exp.loc;
     context.add_ability_constraint(
         eloc,
@@ -2756,11 +2784,27 @@ fn exp_to_borrow(
     eb: Box<T::Exp>,
     base_type: Type,
 ) -> Box<T::Exp> {
+    exp_to_borrow_(
+        context, loc, mut_, eb, base_type, /* warn_on_constant */ true,
+    )
+}
+
+fn exp_to_borrow_(
+    context: &mut Context,
+    loc: Loc,
+    mut_: bool,
+    eb: Box<T::Exp>,
+    base_type: Type,
+    warn_on_constant: bool,
+) -> Box<T::Exp> {
     use Type_::*;
     use T::UnannotatedExp_ as TE;
-    warn_on_constant_borrow(context, eb.exp.loc, &eb);
+    if warn_on_constant {
+        warn_on_constant_borrow(context, eb.exp.loc, &eb)
+    };
     let eb_ty = eb.ty;
     let sp!(ebloc, eb_) = eb.exp;
+    let ref_ty = Ref(mut_, Box::new(base_type));
     let e_ = match eb_ {
         TE::Use(v) => TE::BorrowLocal(mut_, v),
         eb_ => {
@@ -2773,7 +2817,7 @@ fn exp_to_borrow(
             TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
         }
     };
-    let ty = sp(loc, Ref(mut_, Box::new(base_type)));
+    let ty = sp(loc, ref_ty);
     Box::new(T::exp(ty, sp(loc, e_)))
 }
 
@@ -2812,12 +2856,14 @@ fn method_call(
 fn method_call_resolve(
     context: &mut Context,
     loc: Loc,
-    mut edotted: ExpDotted,
+    edotted: ExpDotted,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
 ) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType, T::Exp)> {
     use TypeName_ as TN;
     use Type_ as Ty;
+
+    let mut edotted = edotted;
 
     edotted.loc = loc;
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
@@ -2938,12 +2984,80 @@ fn module_call_impl(
     (call, return_)
 }
 
+/// If the constant that we are referencing has an `error` attribute, we need to change the type of
+/// the constant to a u64 since this will be compiled into a u64 error code.
+fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_str: &str) {
+    let u64_type = Type_::u64(e.ty.loc);
+    let mut const_name = None;
+
+    if let sp!(
+        const_loc,
+        T::UnannotatedExp_::Constant(module_ident, constant_name)
+    ) = &mut e.exp
+    {
+        let ConstantInfo {
+            attributes,
+            defined_loc,
+            signature: _,
+        } = context.constant_info(module_ident, constant_name);
+        const_name = Some((*defined_loc, *constant_name));
+        let has_error_annotation =
+            attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+
+        if has_error_annotation {
+            *e = T::exp(
+                u64_type.clone(),
+                sp(
+                    *const_loc,
+                    T::UnannotatedExp_::ErrorConstant(Some(*constant_name)),
+                ),
+            );
+        }
+    }
+
+    let is_u64_type = subtype_no_report(context, e.ty.clone(), u64_type).is_ok();
+
+    // Add help messages
+    if !is_u64_type {
+        let msg = format!(
+            "Invalid error code for {abort_or_assert_str}, expected a u64 or constant declared with '#[error]' annotation"
+        );
+        let (const_loc, const_msg) = if let Some((const_loc, const_name)) = const_name {
+            let const_msg = format!(
+                "'{}' defined here with no '#[error]' annotation",
+                const_name,
+            );
+            (const_loc, const_msg)
+        } else {
+            let msg = "If you want to use a non-u64 as an abort code, \
+                      you must use a '#[error]' attribute on a constant"
+                .to_string();
+            (e.exp.loc, msg)
+        };
+
+        let mut err = diag!(
+            TypeSafety::InvalidErrorUsage,
+            (e.exp.loc, msg),
+            (const_loc, const_msg)
+        );
+        err.add_note(
+            "Non-u64 constants can only be used as error codes if \
+            the '#[error]' attribute is added to them."
+                .to_string(),
+        );
+        context.env.add_diag(err);
+
+        e.ty = context.error_type(e.ty.loc);
+        e.exp = sp(e.exp.loc, T::UnannotatedExp_::UnresolvedError);
+    }
+}
+
 fn builtin_call(
     context: &mut Context,
     loc: Loc,
     sp!(bloc, nb_): N::BuiltinFunction,
     argloc: Loc,
-    args: Vec<T::Exp>,
+    mut args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
     use N::BuiltinFunction_ as NB;
     use T::BuiltinFunction_ as TB;
@@ -2963,6 +3077,9 @@ fn builtin_call(
             b_ = TB::Assert(is_macro);
             params_ty = vec![Type_::bool(bloc), Type_::u64(bloc)];
             ret_ty = sp(loc, Type_::Unit);
+            if let Some(exp) = args.get_mut(1) {
+                annotated_error_const(context, exp, "assertion");
+            }
         }
     };
     let (arguments, arg_tys) = call_args(
@@ -2973,6 +3090,7 @@ fn builtin_call(
         argloc,
         args,
     );
+
     assert!(arg_tys.len() == params_ty.len());
     for ((idx, arg_ty), param_ty) in arg_tys.into_iter().enumerate().zip(params_ty) {
         let msg = || {

@@ -160,7 +160,7 @@ pub fn mock_certified_checkpoint<'a>(
 }
 
 mod zk_login {
-    use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
+    use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
     use shared_crypto::intent::PersonalMessage;
 
     use crate::{crypto::PublicKey, zk_login_util::get_zklogin_inputs};
@@ -197,7 +197,7 @@ mod zk_login {
                 let iss_bytes = inputs.get_iss().as_bytes();
                 hasher.update([iss_bytes.len() as u8]);
                 hasher.update(iss_bytes);
-                hasher.update(big_int_str_to_bytes(inputs.get_address_seed()).unwrap());
+                hasher.update(inputs.get_address_seed().unpadded());
                 SuiAddress::from_bytes(hasher.finalize().digest).unwrap()
             };
         }

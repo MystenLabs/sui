@@ -570,7 +570,7 @@ impl<'env> Context<'env> {
         self.macros.get(m)?.get(n)
     }
 
-    fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
         let constants = &self.module_info(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }

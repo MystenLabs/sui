@@ -2,19 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui_system::genesis {
-    use std::vector;
 
     use sui::balance::{Self, Balance};
-    use sui::coin;
-    use sui::object::UID;
     use sui::sui::{Self, SUI};
     use sui_system::sui_system;
-    use sui::tx_context::{Self, TxContext};
     use sui_system::validator::{Self, Validator};
     use sui_system::validator_set;
     use sui_system::sui_system_state_inner;
     use sui_system::stake_subsidy;
-    use std::option::{Option, Self};
 
     public struct GenesisValidatorMetadata has drop, copy {
         name: vector<u8>,
@@ -90,22 +85,19 @@ module sui_system::genesis {
         ctx: &mut TxContext,
     ) {
         // Ensure this is only called at genesis
-        assert!(tx_context::epoch(ctx) == 0, ENotCalledAtGenesis);
+        assert!(ctx.epoch() == 0, ENotCalledAtGenesis);
 
         let TokenDistributionSchedule {
             stake_subsidy_fund_mist,
             allocations,
         } = token_distribution_schedule;
 
-        let subsidy_fund = balance::split(
-            &mut sui_supply,
-            stake_subsidy_fund_mist,
-        );
+        let subsidy_fund = sui_supply.split(stake_subsidy_fund_mist);
         let storage_fund = balance::zero();
 
         // Create all the `Validator` structs
-        let mut validators = vector::empty();
-        let count = vector::length(&genesis_validators);
+        let mut validators = vector[];
+        let count = genesis_validators.length();
         let mut i = 0;
         while (i < count) {
             let GenesisValidatorMetadata {
@@ -124,7 +116,7 @@ module sui_system::genesis {
                 p2p_address,
                 primary_address,
                 worker_address,
-            } = *vector::borrow(&genesis_validators, i);
+            } = genesis_validators[i];
 
             let validator = validator::new(
                 sui_address,
@@ -151,7 +143,7 @@ module sui_system::genesis {
                 EDuplicateValidator,
             );
 
-            vector::push_back(&mut validators, validator);
+            validators.push_back(validator);
 
             i = i + 1;
         };
@@ -208,45 +200,44 @@ module sui_system::genesis {
         ctx: &mut TxContext,
     ) {
 
-        while (!vector::is_empty(&allocations)) {
+        while (!allocations.is_empty()) {
             let TokenAllocation {
                 recipient_address,
                 amount_mist,
                 staked_with_validator,
-            } = vector::pop_back(&mut allocations);
+            } = allocations.pop_back();
 
-            let allocation_balance = balance::split(&mut sui_supply, amount_mist);
+            let allocation_balance = sui_supply.split(amount_mist);
 
-            if (option::is_some(&staked_with_validator)) {
-                let validator_address = option::destroy_some(staked_with_validator);
+            if (staked_with_validator.is_some()) {
+                let validator_address = staked_with_validator.destroy_some();
                 let validator = validator_set::get_validator_mut(validators, validator_address);
-                validator::request_add_stake_at_genesis(
-                    validator,
+                validator.request_add_stake_at_genesis(
                     allocation_balance,
                     recipient_address,
                     ctx
                 );
             } else {
                 sui::transfer(
-                    coin::from_balance(allocation_balance, ctx),
+                    allocation_balance.into_coin(ctx),
                     recipient_address,
                 );
             };
         };
-        vector::destroy_empty(allocations);
+        allocations.destroy_empty();
 
         // Provided allocations must fully allocate the sui_supply and there
         // should be none left at this point.
-        balance::destroy_zero(sui_supply);
+        sui_supply.destroy_zero();
     }
 
     fun activate_validators(validators: &mut vector<Validator>) {
         // Activate all genesis validators
-        let count = vector::length(validators);
+        let count = validators.length();
         let mut i = 0;
         while (i < count) {
-            let validator = vector::borrow_mut(validators, i);
-            validator::activate(validator, 0);
+            let validator = &mut validators[i];
+            validator.activate(0);
 
             i = i + 1;
         };
