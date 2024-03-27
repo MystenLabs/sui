@@ -9,8 +9,8 @@ title: Module `0xb::chain_ids`
 -  [Constants](#@Constants_0)
 -  [Function `sui_mainnet`](#0xb_chain_ids_sui_mainnet)
 -  [Function `sui_testnet`](#0xb_chain_ids_sui_testnet)
--  [Function `sui_local_test`](#0xb_chain_ids_sui_local_test)
 -  [Function `sui_devnet`](#0xb_chain_ids_sui_devnet)
+-  [Function `sui_local_test`](#0xb_chain_ids_sui_local_test)
 -  [Function `eth_mainnet`](#0xb_chain_ids_eth_mainnet)
 -  [Function `eth_sepolia`](#0xb_chain_ids_eth_sepolia)
 -  [Function `eth_local_test`](#0xb_chain_ids_eth_local_test)
@@ -152,9 +152,7 @@ title: Module `0xb::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_mainnet">sui_mainnet</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_mainnet">sui_mainnet</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a> }
 </code></pre>
 
 
@@ -176,33 +174,7 @@ title: Module `0xb::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_testnet">sui_testnet</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_chain_ids_sui_local_test"></a>
-
-## Function `sui_local_test`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_testnet">sui_testnet</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> }
 </code></pre>
 
 
@@ -224,9 +196,29 @@ title: Module `0xb::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_devnet">sui_devnet</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_devnet">sui_devnet</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> }
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_chain_ids_sui_local_test"></a>
+
+## Function `sui_local_test`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> }
 </code></pre>
 
 
@@ -248,9 +240,7 @@ title: Module `0xb::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_mainnet">eth_mainnet</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_mainnet">eth_mainnet</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a> }
 </code></pre>
 
 
@@ -272,9 +262,7 @@ title: Module `0xb::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">eth_sepolia</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">eth_sepolia</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> }
 </code></pre>
 
 
@@ -296,9 +284,7 @@ title: Module `0xb::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_local_test">eth_local_test</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_local_test">eth_local_test</a>(): u8 { <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> }
 </code></pre>
 
 
@@ -443,7 +429,7 @@ title: Module `0xb::chain_ids`
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_is_valid_route">is_valid_route</a>(source: u8, destination: u8): bool {
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
-    <b>return</b> <a href="../move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)
+    <a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>().contains(&route)
 }
 </code></pre>
 
@@ -468,7 +454,7 @@ title: Module `0xb::chain_ids`
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_get_route">get_route</a>(source: u8, destination: u8): <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> {
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
-    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route), <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
+    <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>().contains(&route), <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
     route
 }
 </code></pre>

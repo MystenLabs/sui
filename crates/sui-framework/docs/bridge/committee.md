@@ -376,27 +376,30 @@ title: Module `0xb::committee`
 ) {
     <b>let</b> (<b>mut</b> i, signature_counts) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&signatures));
     <b>let</b> <b>mut</b> seen_pub_key = <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
-    <b>let</b> required_voting_power = <a href="message.md#0xb_message_required_voting_power">message::required_voting_power</a>(&<a href="message.md#0xb_message">message</a>);
+    <b>let</b> required_voting_power = <a href="message.md#0xb_message">message</a>.required_voting_power();
     // add prefix <b>to</b> the <a href="message.md#0xb_message">message</a> bytes
     <b>let</b> <b>mut</b> message_bytes = <a href="committee.md#0xb_committee_SUI_MESSAGE_PREFIX">SUI_MESSAGE_PREFIX</a>;
-    <a href="../move-stdlib/vector.md#0x1_vector_append">vector::append</a>(&<b>mut</b> message_bytes, <a href="message.md#0xb_message_serialize_message">message::serialize_message</a>(<a href="message.md#0xb_message">message</a>));
+    message_bytes.append(<a href="message.md#0xb_message">message</a>.serialize_message());
 
     <b>let</b> <b>mut</b> threshold = 0;
     <b>while</b> (i &lt; signature_counts) {
         <b>let</b> signature = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&signatures, i);
         <b>let</b> pubkey = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">ecdsa_k1::secp256k1_ecrecover</a>(signature, &message_bytes, 0);
+
         // check duplicate
-        <b>assert</b>!(!<a href="../sui-framework/vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(&seen_pub_key, &pubkey), <a href="committee.md#0xb_committee_EDuplicatedSignature">EDuplicatedSignature</a>);
-        // make sure pub key is part of the <a href="committee.md#0xb_committee">committee</a>
-        <b>assert</b>!(<a href="../sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.members, &pubkey), <a href="committee.md#0xb_committee_EInvalidSignature">EInvalidSignature</a>);
+        // and make sure pub key is part of the <a href="committee.md#0xb_committee">committee</a>
+        <b>assert</b>!(!seen_pub_key.contains(&pubkey), <a href="committee.md#0xb_committee_EDuplicatedSignature">EDuplicatedSignature</a>);
+        <b>assert</b>!(self.members.contains(&pubkey), <a href="committee.md#0xb_committee_EInvalidSignature">EInvalidSignature</a>);
+
         // get <a href="committee.md#0xb_committee">committee</a> signature weight and check pubkey is part of the <a href="committee.md#0xb_committee">committee</a>
-        <b>let</b> member = <a href="../sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.members, &pubkey);
+        <b>let</b> member = &self.members[&pubkey];
         <b>if</b> (!member.blocklisted) {
             threshold = threshold + member.<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
         };
+        seen_pub_key.insert(pubkey);
         i = i + 1;
-        <a href="../sui-framework/vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(&<b>mut</b> seen_pub_key, pubkey);
     };
+
     <b>assert</b>!(threshold &gt;= required_voting_power, <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>);
 }
 </code></pre>
@@ -432,15 +435,15 @@ title: Module `0xb::committee`
     // Ensure pubkey is valid
     <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bridge_pubkey_bytes) == <a href="committee.md#0xb_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>, <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>);
     // sender must be the same sender that created the <a href="../sui-system/validator.md#0x3_validator">validator</a> <a href="../sui-framework/object.md#0x2_object">object</a>, this is <b>to</b> prevent DDoS from non-<a href="../sui-system/validator.md#0x3_validator">validator</a> actor.
-    <b>let</b> sender = <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    <b>let</b> validators = <a href="../sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
+    <b>let</b> sender = ctx.sender();
+    <b>let</b> validators = system_state.active_validator_addresses();
 
-    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&validators, &sender), <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>);
+    <b>assert</b>!(validators.contains(&sender), <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>);
     // Sender is active <a href="../sui-system/validator.md#0x3_validator">validator</a>, record the registration
 
     // In case <a href="../sui-system/validator.md#0x3_validator">validator</a> need <b>to</b> <b>update</b> the info
-    <b>let</b> registration = <b>if</b> (<a href="../sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.member_registrations, &sender)) {
-        <b>let</b> registration = <a href="../sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.member_registrations, &sender);
+    <b>let</b> registration = <b>if</b> (self.member_registrations.contains(&sender)) {
+        <b>let</b> registration = &<b>mut</b> self.member_registrations[&sender];
         registration.http_rest_url = http_rest_url;
         registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
         *registration
@@ -450,9 +453,10 @@ title: Module `0xb::committee`
             bridge_pubkey_bytes,
             http_rest_url,
         };
-        <a href="../sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.member_registrations, sender, registration);
+        self.member_registrations.insert(sender, registration);
         registration
     };
+
     emit(registration)
 }
 </code></pre>
@@ -486,16 +490,17 @@ title: Module `0xb::committee`
     <b>let</b> <b>mut</b> new_members = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
     <b>let</b> <b>mut</b> stake_participation_percentage = 0;
 
-    <b>while</b> (i &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.member_registrations)) {
+    <b>while</b> (i &lt; self.member_registrations.size()) {
         // retrieve registration
-        <b>let</b> (_, registration) = <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">vec_map::get_entry_by_idx</a>(&self.member_registrations, i);
+        <b>let</b> (_, registration) = self.member_registrations.get_entry_by_idx(i);
         // Find <a href="../sui-system/validator.md#0x3_validator">validator</a> stake amount from system state
 
         // Process registration <b>if</b> it's active <a href="../sui-system/validator.md#0x3_validator">validator</a>
-        <b>let</b> <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="../sui-framework/vec_map.md#0x2_vec_map_try_get">vec_map::try_get</a>(&active_validator_voting_power, &registration.sui_address);
-        <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>)) {
-            <b>let</b> <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>);
+        <b>let</b> <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = active_validator_voting_power.try_get(&registration.sui_address);
+        <b>if</b> (<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>.is_some()) {
+            <b>let</b> <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>.destroy_some();
             stake_participation_percentage = stake_participation_percentage + <a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
+
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
                 bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
@@ -503,8 +508,10 @@ title: Module `0xb::committee`
                 http_rest_url: registration.http_rest_url,
                 blocklisted: <b>false</b>,
             };
-            <a href="../sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> new_members, registration.bridge_pubkey_bytes, member)
+
+            new_members.insert(registration.bridge_pubkey_bytes, member)
         };
+
         i = i + 1;
     };
 
@@ -514,7 +521,8 @@ title: Module `0xb::committee`
         self.member_registrations = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
         // Store new <a href="committee.md#0xb_committee">committee</a> info
         self.members = new_members;
-        self.last_committee_update_epoch = <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
+        self.last_committee_update_epoch = ctx.epoch();
+
         emit(<a href="committee.md#0xb_committee_CommitteeUpdateEvent">CommitteeUpdateEvent</a> {
             members: new_members,
             stake_participation_percentage
@@ -543,29 +551,35 @@ title: Module `0xb::committee`
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="committee.md#0xb_committee_execute_blocklist">execute_blocklist</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, blocklist: Blocklist) {
-    <b>let</b> blocklisted = <a href="message.md#0xb_message_blocklist_type">message::blocklist_type</a>(&blocklist) != 1;
-    <b>let</b> eth_addresses = <a href="message.md#0xb_message_blocklist_validator_addresses">message::blocklist_validator_addresses</a>(&blocklist);
-    <b>let</b> list_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(eth_addresses);
+    <b>let</b> blocklisted = blocklist.blocklist_type() != 1;
+    <b>let</b> eth_addresses = blocklist.blocklist_validator_addresses();
+    <b>let</b> list_len = eth_addresses.length();
     <b>let</b> <b>mut</b> list_idx = 0;
     <b>let</b> <b>mut</b> member_idx = 0;
-    <b>let</b> <b>mut</b> pub_keys = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
+    <b>let</b> <b>mut</b> pub_keys = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+
     <b>while</b> (list_idx &lt; list_len) {
-        <b>let</b> target_address = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(eth_addresses, list_idx);
+        <b>let</b> target_address = &eth_addresses[list_idx];
         <b>let</b> <b>mut</b> found = <b>false</b>;
-        <b>while</b> (member_idx &lt; <a href="../sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.members)) {
-            <b>let</b> (pub_key, member) = <a href="../sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">vec_map::get_entry_by_idx_mut</a>(&<b>mut</b> self.members, member_idx);
+
+        <b>while</b> (member_idx &lt; self.members.size()) {
+            <b>let</b> (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
             <b>let</b> eth_address = <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(*pub_key);
+
             <b>if</b> (*target_address == eth_address) {
                 member.blocklisted = blocklisted;
-                <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> pub_keys, *pub_key);
+                pub_keys.push_back(*pub_key);
                 found = <b>true</b>;
                 <b>break</b>
             };
+
             member_idx = member_idx + 1;
         };
+
         <b>assert</b>!(found, <a href="committee.md#0xb_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>);
         list_idx = list_idx + 1;
     };
+
     emit(<a href="committee.md#0xb_committee_BlocklistValidatorEvent">BlocklistValidatorEvent</a> {
         blocklisted,
         public_keys: pub_keys,

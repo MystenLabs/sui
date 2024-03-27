@@ -33,11 +33,10 @@ title: Module `0xb::crypto`
     // Decompress pub key
     <b>let</b> decompressed = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">ecdsa_k1::decompress_pubkey</a>(&compressed_pub_key);
 
-    // Remove first byte
+    // Skip the first byte
     <b>let</b> (<b>mut</b> i, <b>mut</b> decompressed_64) = (1, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]);
     <b>while</b> (i &lt; 65) {
-        <b>let</b> value = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&decompressed, i);
-        <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> decompressed_64, *value);
+        decompressed_64.push_back(decompressed[i]);
         i = i + 1;
     };
 
@@ -48,7 +47,7 @@ title: Module `0xb::crypto`
     <b>let</b> <b>mut</b> <b>address</b> = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 12;
     <b>while</b> (i &lt; 32) {
-        <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> <b>address</b>, *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&<a href="../sui-framework/hash.md#0x2_hash">hash</a>, i));
+        <b>address</b>.push_back(<a href="../sui-framework/hash.md#0x2_hash">hash</a>[i]);
         i = i + 1;
     };
     <b>address</b>
