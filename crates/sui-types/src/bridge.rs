@@ -4,6 +4,7 @@
 use enum_dispatch::enum_dispatch;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use num_enum::TryFromPrimitive;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -37,6 +38,22 @@ pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
+
+pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 7500; // out of 10000 (75%)
+pub const BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER: u64 = 10000; // (100%)
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
+#[repr(u8)]
+pub enum BridgeChainId {
+    SuiMainnet = 0,
+    SuiTestnet = 1,
+    SuiDevnet = 2,
+    SuiLocalTest = 3,
+
+    EthMainnet = 10,
+    EthSepolia = 11,
+    EthLocalTest = 12,
+}
 
 pub fn get_bridge_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
