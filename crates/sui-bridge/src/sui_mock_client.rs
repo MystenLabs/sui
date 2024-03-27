@@ -201,7 +201,7 @@ impl SuiClientInner for SuiMockClient {
 
     async fn get_token_transfer_action_onchain_status(
         &self,
-        _bridge_records_id: ObjectID,
+        _bridge_object_arg: ObjectArg,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {
         Ok(self

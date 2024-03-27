@@ -151,9 +151,25 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let store = BridgeOrchestratorTables::new(temp_dir.path());
 
-        let action1 = get_test_sui_to_eth_bridge_action(None, Some(0), Some(99), Some(10000));
+        let action1 = get_test_sui_to_eth_bridge_action(
+            None,
+            Some(0),
+            Some(99),
+            Some(10000),
+            None,
+            None,
+            None,
+        );
 
-        let action2 = get_test_sui_to_eth_bridge_action(None, Some(2), Some(100), Some(10000));
+        let action2 = get_test_sui_to_eth_bridge_action(
+            None,
+            Some(2),
+            Some(100),
+            Some(10000),
+            None,
+            None,
+            None,
+        );
 
         // in the beginning it's empty
         let actions = store.get_all_pending_actions().unwrap();

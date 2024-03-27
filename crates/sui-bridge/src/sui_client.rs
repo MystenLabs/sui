@@ -16,6 +16,7 @@ use std::str::from_utf8;
 use std::str::FromStr;
 use std::time::Duration;
 use sui_json_rpc_api::BridgeReadApiClient;
+use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::{EventFilter, Page, SuiData, SuiEvent};
 use sui_json_rpc_types::{
     EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
@@ -25,6 +26,7 @@ use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge;
+use sui_types::bridge::get_bridge;
 use sui_types::bridge::BridgeCommitteeSummary;
 use sui_types::bridge::BridgeInnerDynamicField;
 use sui_types::bridge::BridgeRecordDyanmicField;
@@ -40,8 +42,14 @@ use sui_types::error::UserInputError;
 use sui_types::event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Object, Owner};
+use sui_types::transaction::Argument;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::Command;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction::ProgrammableMoveCall;
+use sui_types::transaction::ProgrammableTransaction;
 use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionKind;
 use sui_types::TypeTag;
 use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
@@ -65,7 +73,9 @@ pub struct SuiClient<P> {
     inner: P,
 }
 
-impl SuiClient<SuiSdkClient> {
+pub type SuiBridgeClient = SuiClient<SuiSdkClient>;
+
+impl SuiBridgeClient {
     pub async fn new(rpc_url: &str) -> anyhow::Result<Self> {
         let inner = SuiClientBuilder::default().build(rpc_url).await?;
         let self_ = Self { inner };
@@ -92,6 +102,7 @@ where
         Ok(())
     }
 
+    // TODO(bridge): cache this
     pub async fn get_mutable_bridge_object_arg(&self) -> BridgeResult<ObjectArg> {
         self.inner
             .get_mutable_bridge_object_arg()
@@ -143,6 +154,13 @@ where
         bridge_event
             .try_into_bridge_action(*tx_digest, event_idx)
             .ok_or(BridgeError::BridgeEventNotActionable)
+    }
+
+    pub async fn get_bridge_summary(&self) -> BridgeResult<BridgeSummary> {
+        self.inner
+            .get_bridge_summary()
+            .await
+            .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
     }
 
     // TODO: cache this
@@ -201,16 +219,17 @@ where
         action: &BridgeAction,
     ) -> BridgeActionStatus {
         loop {
-            let Ok(Ok(bridge_records_id)) =
-                retry_with_max_elapsed_time!(self.get_bridge_record_id(), Duration::from_secs(30))
-            else {
+            let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
+                self.get_mutable_bridge_object_arg(),
+                Duration::from_secs(30)
+            ) else {
                 // TODO: add metrics and fire alert
-                error!("Failed to get bridge records id");
+                error!("Failed to get bridge object arg");
                 continue;
             };
             let Ok(Ok(status)) = retry_with_max_elapsed_time!(
                 self.inner
-                    .get_token_transfer_action_onchain_status(bridge_records_id, action),
+                    .get_token_transfer_action_onchain_status(bridge_object_arg, action),
                 Duration::from_secs(30)
             ) else {
                 // TODO: add metrics and fire alert
@@ -261,7 +280,7 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_token_transfer_action_onchain_status(
         &self,
-        bridge_records_id: ObjectID,
+        bridge_object_arg: ObjectArg,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError>;
 
@@ -320,66 +339,63 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_token_transfer_action_onchain_status(
         &self,
-        bridge_records_id: ObjectID,
+        bridge_object_arg: ObjectArg,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {
-        match &action {
-            BridgeAction::SuiToEthBridgeAction(_) | BridgeAction::EthToSuiBridgeAction(_) => (),
-            _ => return Err(BridgeError::ActionIsNotTokenTransferAction),
+        let pt = ProgrammableTransaction {
+            inputs: vec![
+                CallArg::Object(bridge_object_arg),
+                CallArg::Pure(bcs::to_bytes(&(action.chain_id() as u8)).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&action.seq_number()).unwrap()),
+            ],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: BRIDGE_PACKAGE_ID,
+                module: Identifier::new("bridge").unwrap(),
+                function: Identifier::new("get_token_transfer_action_status").unwrap(),
+                type_arguments: vec![],
+                arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+            }))],
         };
-        let package_id = BRIDGE_PACKAGE_ID;
-        let key = serde_json::json!(
-            {
-                // u64 is represented as string
-                "bridge_seq_num": action.seq_number().to_string(),
-                "message_type": action.action_type() as u8,
-                "source_chain": action.chain_id() as u8,
-            }
-        );
-        let status_object_id = match self
+        let kind = TransactionKind::programmable(pt.clone());
+        let resp = self
             .read_api()
-            .get_dynamic_field_object(
-                bridge_records_id,
-                DynamicFieldName {
-                    type_: TypeTag::from_str(&format!(
-                        "{:?}::message::BridgeMessageKey",
-                        package_id
-                    ))
-                    .unwrap(),
-                    value: key.clone(),
-                },
-            )
-            .await?
-            .into_object()
-        {
-            Ok(object) => object.object_id,
-            Err(SuiObjectResponseError::DynamicFieldNotFound { .. }) => {
-                return Ok(BridgeActionStatus::RecordNotFound)
-            }
-            other => {
-                return Err(BridgeError::Generic(format!(
-                    "Can't get bridge action record dynamic field {:?}: {:?}",
-                    key, other
-                )))
-            }
-        };
-
-        // get_dynamic_field_object does not return bcs, so we have to issue another query
-        let bcs_bytes = self
-            .read_api()
-            .get_move_object_bcs(status_object_id)
+            .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
             .await?;
-        let status_object: BridgeRecordDynamicField = bcs::from_bytes(&bcs_bytes)?;
+        let DevInspectResults {
+            results, effects, ..
+        } = resp;
+        let Some(results) = results else {
+            return Err(BridgeError::Generic(format!(
+                "Can't get token transfer action status (empty results). effects: {:?}",
+                effects
+            )));
+        };
+        let return_values = &results
+            .first()
+            .ok_or(BridgeError::Generic(format!(
+                "Can't get token transfer action status, results: {:?}",
+                results
+            )))?
+            .return_values;
+        let (value_bytes, _type_tag) =
+            return_values.first().ok_or(BridgeError::Generic(format!(
+                "Can't get token transfer action status, results: {:?}",
+                results
+            )))?;
+        let status = bcs::from_bytes::<u8>(value_bytes).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Can't parse token transfer action status as u8: {:?}",
+                results
+            ))
+        })?;
+        let status = BridgeActionStatus::try_from(status).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Can't parse token transfer action status as BridgeActionStatus: {:?}",
+                results
+            ))
+        })?;
 
-        if status_object.value.value.claimed {
-            return Ok(BridgeActionStatus::Claimed);
-        }
-
-        if status_object.value.value.verified_signatures.is_some() {
-            return Ok(BridgeActionStatus::Approved);
-        }
-
-        return Ok(BridgeActionStatus::Pending);
+        return Ok(status);
     }
 
     async fn execute_transaction_block_with_effects(
@@ -431,7 +447,8 @@ mod tests {
         events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
         sui_mock_client::SuiMockClient,
         test_utils::{
-            bridge_token, get_test_sui_to_eth_bridge_action, mint_tokens, publish_bridge_package,
+            approve_token_bridge_with_validator_secrets, bridge_token,
+            get_test_eth_to_sui_bridge_action, get_test_sui_to_eth_bridge_action,
         },
         types::{BridgeActionType, SuiToEthBridgeAction, TokenId},
     };
@@ -445,6 +462,8 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use prometheus::Registry;
     use std::{collections::HashSet, str::FromStr};
+    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+    use sui_sdk::wallet_context;
     use sui_types::bridge::BridgeChainId;
     use test_cluster::TestClusterBuilder;
 
@@ -566,62 +585,118 @@ mod tests {
             .unwrap_err();
     }
 
+    // Test get_action_onchain_status.
+    // Use validator secrets to bridge USDC from Ethereum initially.
+    // TODO: we need an e2e test for this with published solidity contract and committee with BridgeNodes
     #[ignore]
     #[tokio::test]
     async fn test_get_action_onchain_status_for_sui_to_eth_transfer() {
-        let mut test_cluster = TestClusterBuilder::new().build().await;
-        let context = &mut test_cluster.wallet;
-        let sender = context.active_address().unwrap();
-
-        let treasury_caps = publish_bridge_package(context).await;
+        telemetry_subscribers::init_for_testing();
+        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version(37.into())
+            .with_epoch_duration_ms(5000)
+            .build_with_bridge()
+            .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
             .unwrap();
-        let arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
-        let bridge_records_id = sui_client.get_bridge_record_id().await.unwrap();
+        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
 
-        let action = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        // Return once the bridge committee is initialized. Return immediately if it's already the case.
+        // Otherwise wait until the next epoch. This call should be called after proper bridge committee setup,
+        // such as `build_with_bridge`.
+        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
+        // is not initialized during the construction of `BridgeCommittee`.
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        if committee.members.is_empty() {
+            test_cluster.wait_for_epoch(None).await;
+        }
+        let context = &mut test_cluster.wallet;
+        let sender = context.active_address().unwrap();
+        let summary = sui_client.inner.get_bridge_summary().await.unwrap();
+        let usdc_amount = 5000000;
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+
+        // 1. Create a Eth -> Sui Transfer (recipient is sender address), approve with validator secrets and assert its status to be Claimed
+        let action = get_test_eth_to_sui_bridge_action(None, Some(usdc_amount), Some(sender));
+        let usdc_object_ref = approve_token_bridge_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            Some(sender),
+        )
+        .await
+        .unwrap();
 
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(bridge_records_id, &action)
+            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
             .await
             .unwrap();
-        assert_eq!(status, BridgeActionStatus::RecordNotFound);
+        assert_eq!(status, BridgeActionStatus::Claimed);
 
-        // mint 1000 USDC
-        let amount = 1_000_000_000u64;
-        let (treasury_cap_obj_ref, usdc_coin_obj_ref) = mint_tokens(
+        // 2. Create a Sui -> Eth Transfer, approve with validator secrets and assert its status to be Approved
+        // We need to actually send tokens to bridge to initialize the record.
+        let eth_recv_address = EthAddress::random();
+        let bridge_event = bridge_token(
             context,
-            treasury_caps[&TokenId::USDC],
-            amount,
+            eth_recv_address,
+            usdc_object_ref,
             TokenId::USDC,
+            bridge_object_arg,
         )
         .await;
-
-        let recv_address = EthAddress::random();
-        let bridge_event =
-            bridge_token(context, recv_address, usdc_coin_obj_ref, TokenId::USDC, arg).await;
         assert_eq!(bridge_event.nonce, 0);
         assert_eq!(bridge_event.sui_chain_id, BridgeChainId::SuiLocalTest);
         assert_eq!(bridge_event.eth_chain_id, BridgeChainId::EthLocalTest);
-        assert_eq!(bridge_event.eth_address, recv_address);
+        assert_eq!(bridge_event.eth_address, eth_recv_address);
         assert_eq!(bridge_event.sui_address, sender);
         assert_eq!(bridge_event.token_id, TokenId::USDC);
-        assert_eq!(bridge_event.amount, amount);
+        assert_eq!(bridge_event.amount, usdc_amount);
+
+        let action = get_test_sui_to_eth_bridge_action(
+            None,
+            None,
+            Some(bridge_event.nonce),
+            Some(bridge_event.amount),
+            Some(bridge_event.sui_address),
+            Some(bridge_event.eth_address),
+            Some(TokenId::USDC),
+        );
+        let status = sui_client
+            .inner
+            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
+            .await
+            .unwrap();
+        // At this point, the record is created and the status is Pending
+        assert_eq!(status, BridgeActionStatus::Pending);
+
+        // Approve it and assert its status to be Approved
+        approve_token_bridge_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
 
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(bridge_records_id, &action)
+            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
             .await
             .unwrap();
-        assert_eq!(status, BridgeActionStatus::Pending);
+        assert_eq!(status, BridgeActionStatus::Approved);
 
-        // TODO: run bridge committee and approve the action, then assert status is Approved
-    }
-
-    #[tokio::test]
-    async fn test_get_action_onchain_status_for_eth_to_sui_transfer() {
-        // TODO: init an eth -> sui transfer, run bridge committee, approve the action, then assert status is Approved/Claimed
+        // 3. Create a random action and assert its status as NotFound
+        let action =
+            get_test_sui_to_eth_bridge_action(None, None, Some(100), None, None, None, None);
+        let status = sui_client
+            .inner
+            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
+            .await
+            .unwrap();
+        assert_eq!(status, BridgeActionStatus::NotFound);
     }
 }

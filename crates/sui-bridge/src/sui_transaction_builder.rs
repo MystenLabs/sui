@@ -7,7 +7,9 @@ use fastcrypto::traits::ToFromBytes;
 use move_core_types::ident_str;
 use once_cell::sync::OnceCell;
 use sui_types::gas_coin::GAS;
+use sui_types::transaction::CallArg;
 use sui_types::BRIDGE_PACKAGE_ID;
+
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -167,8 +169,9 @@ fn build_token_bridge_approve_transaction(
         ],
     );
 
-    // Unwrap: this should not fail
+    // Unwrap: these should not fail
     let arg_bridge = builder.obj(bridge_object_arg).unwrap();
+    let arg_clock = builder.input(CallArg::CLOCK_IMM).unwrap();
 
     let mut sig_bytes = vec![];
     for (_, sig) in sigs.signatures {
@@ -195,7 +198,7 @@ fn build_token_bridge_approve_transaction(
             sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
             ident_str!("claim_and_transfer_token").to_owned(),
             vec![get_sui_token_type_tag(token_type)],
-            vec![arg_bridge, source_chain, seq_num],
+            vec![arg_bridge, arg_clock, source_chain, seq_num],
         );
     }
 
@@ -205,7 +208,7 @@ fn build_token_bridge_approve_transaction(
         client_address,
         vec![*gas_object_ref],
         pt,
-        15_000_000,
+        100_000_000,
         // TODO: use reference gas price
         1500,
     ))

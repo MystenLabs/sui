@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::ToFromBytes;
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
@@ -10,15 +11,20 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use sui_bridge::crypto::BridgeAuthorityKeyPair;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_json_rpc_api::BridgeReadApiClient;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_json_rpc_types::{
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, TransactionFilter,
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    TransactionFilter,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
@@ -38,8 +44,12 @@ use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConf
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
+use sui_types::bridge::get_bridge_obj_initial_shared_version;
+use sui_types::bridge::BridgeSummary;
+use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
+use sui_types::crypto::get_key_pair;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -47,13 +57,19 @@ use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
+use sui_types::transaction::CallArg;
 use sui_types::transaction::{
-    CertifiedTransaction, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+    CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
+    TransactionKind,
 };
+use sui_types::Identifier;
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info};
@@ -97,6 +113,8 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+
+    pub bridge_authority_keys: Option<Vec<BridgeAuthorityKeyPair>>,
 }
 
 impl TestCluster {
@@ -1059,7 +1077,124 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
+            bridge_authority_keys: None,
         }
+    }
+
+    pub async fn build_with_bridge(self) -> TestCluster {
+        let mut test_cluster = self.build().await;
+        let ref_gas_price = test_cluster.get_reference_gas_price().await;
+        let bridge_shared_version = get_bridge_obj_initial_shared_version(
+            test_cluster
+                .fullnode_handle
+                .sui_node
+                .state()
+                .get_object_store(),
+        )
+        .unwrap()
+        .unwrap();
+
+        let mut bridge_authority_keys = vec![];
+
+        // Register bridge authorities
+        let mut tasks = vec![];
+        for node in test_cluster.swarm.active_validators() {
+            let validator_address = node.config.sui_address();
+            // 1, send some gas to validator
+            let sender = test_cluster.get_address_0();
+            let tx = test_cluster
+                .test_transaction_builder_with_sender(sender)
+                .await
+                .transfer_sui(Some(1000000000), validator_address)
+                .build();
+            let response = test_cluster.sign_and_execute_transaction(&tx).await;
+            assert_eq!(
+                &SuiExecutionStatus::Success,
+                response.effects.unwrap().status()
+            );
+
+            // 2, create committee registration tx
+            let coins = test_cluster
+                .sui_client()
+                .coin_read_api()
+                .get_coins(validator_address, None, None, None)
+                .await
+                .unwrap();
+            let gas = coins.data.first().unwrap();
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let bridge = builder
+                .obj(ObjectArg::SharedObject {
+                    id: SUI_BRIDGE_OBJECT_ID,
+                    initial_shared_version: bridge_shared_version,
+                    mutable: true,
+                })
+                .unwrap();
+            let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            let pub_key = kp.public().as_bytes().to_vec();
+            bridge_authority_keys.push(kp);
+            let bridge_pubkey = builder
+                .input(CallArg::Pure(bcs::to_bytes(&pub_key).unwrap()))
+                .unwrap();
+            let url = builder
+                .input(CallArg::Pure(
+                    bcs::to_bytes("bridge_test_url".as_bytes()).unwrap(),
+                ))
+                .unwrap();
+
+            builder.programmable_move_call(
+                BRIDGE_PACKAGE_ID,
+                BRIDGE_MODULE_NAME.into(),
+                Identifier::from_str("committee_registration").unwrap(),
+                vec![],
+                vec![bridge, system_state, bridge_pubkey, url],
+            );
+
+            let data = TransactionData::new_programmable(
+                validator_address,
+                vec![gas.object_ref()],
+                builder.finish(),
+                1000000000,
+                ref_gas_price,
+            );
+
+            let tx = Transaction::from_data_and_signer(
+                data,
+                vec![node.config.account_key_pair.keypair()],
+            );
+            tasks.push(
+                test_cluster
+                    .sui_client()
+                    .quorum_driver_api()
+                    .execute_transaction_block(
+                        tx,
+                        SuiTransactionBlockResponseOptions::new().with_effects(),
+                        None,
+                    ),
+            );
+        }
+        // The tx may fail if a member tries to register when the committee is already finalized.
+        // In that case, we just need to check the committee members is not empty since once
+        // the committee is finalized, it should not be empty.
+        let responses = join_all(tasks).await;
+        let mut has_failure = false;
+        for response in responses {
+            if response.unwrap().effects.unwrap().status() != &SuiExecutionStatus::Success {
+                has_failure = true;
+            }
+        }
+        if has_failure {
+            let bridge_summary: BridgeSummary = test_cluster
+                .sui_client()
+                .http()
+                .get_latest_bridge()
+                .await
+                .unwrap();
+            assert_ne!(bridge_summary.committee.members.len(), 0);
+        }
+
+        test_cluster.bridge_authority_keys = Some(bridge_authority_keys);
+        test_cluster
     }
 
     /// Start a Swarm and set up WalletConfig
