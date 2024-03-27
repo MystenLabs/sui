@@ -74,16 +74,16 @@ const references = [
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
-      {
+			{
 				type: 'link',
 				label: 'Sui Go SDK',
 				href: 'https://github.com/block-vision/sui-go-sdk',
-      },
-      {
+			},
+			{
 				type: 'link',
 				label: 'Sui Python SDK',
 				href: 'https://github.com/FrankC01/pysui',
-      },
+			},
 			'references/rust-sdk',
 			{
 				type: 'link',
