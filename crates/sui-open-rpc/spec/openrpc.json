@@ -5319,25 +5319,11 @@
       },
       "Bn254FqElement": {
         "description": "A struct that stores a Bn254 Fq field element as 32 bytes.",
-        "type": "array",
-        "items": {
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 0.0
-        },
-        "maxItems": 32,
-        "minItems": 32
+        "type": "string"
       },
       "Bn254FrElement": {
         "description": "A struct that stores a Bn254 Fr field element as 32 bytes.",
-        "type": "array",
-        "items": {
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 0.0
-        },
-        "maxItems": 32,
-        "minItems": 32
+        "type": "string"
       },
       "Checkpoint": {
         "type": "object",
