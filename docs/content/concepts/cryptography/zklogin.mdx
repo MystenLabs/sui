@@ -529,6 +529,14 @@ However, the ephemeral key pair needs to be treated as a secret akin to a key pa
 
 Consequently, you should not store them persistently in an unsecure storage location, on any platform. For example, on browsers, use session storage instead of local storage to store the ephemeral key pair and the ZK proof. This is because session storage automatically clears its data when the browser session ends, while data in local storage persists indefinitely.
 
+## Efficiency considerations
+
+Compared to traditional signatures, zkLogin signatures take a longer time to generate. For example, the Mysten Labs-maintained prover currently takes about 3s to return a proof, which runs on a machine with 16 vCPUs and 64 GB RAM. Using more powerful machines, e.g., metal or GPUs, can reduce the proving time further.
+
+It is important to think carefully about how many prover-requests your application needs. Broadly speaking, the right metric to consider is the number of active user sessions and not the number of signatures. This is because the same ZK proof can be cached and reused across the session, as explained before. For example, if you expect a million active user sessions per day, then you need a prover that can handle 1-2 requests per second (RPS) assuming evenly distributed traffic.
+
+The Mysten Labs-maintained prover is set to auto-scale in order to handle traffic peaks. If you are not sure whether we can handle a specific number of requests, please reach out to us. Our plan is to horizontally scale the prover to handle any RPS you've in mind!
+
 ## How zkLogin Works {#how-zklogin-works}
 
 In rough sketches, the zkLogin protocol relies on the following:
