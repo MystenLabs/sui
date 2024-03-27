@@ -176,10 +176,15 @@ impl JsonRpcServerBuilder {
 
         match server_type {
             Some(ServerType::WebSocket) => {
-                router = router.route(
-                    "/",
-                    axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
-                );
+                router = router
+                    .route(
+                        "/",
+                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
+                    )
+                    .route(
+                        "/subscribe",
+                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
+                    );
             }
             Some(ServerType::Http) => {
                 router = router
@@ -189,6 +194,10 @@ impl JsonRpcServerBuilder {
                     )
                     .route(
                         "/json-rpc",
+                        axum::routing::post(crate::axum_router::json_rpc_handler),
+                    )
+                    .route(
+                        "/public",
                         axum::routing::post(crate::axum_router::json_rpc_handler),
                     );
             }
@@ -203,7 +212,15 @@ impl JsonRpcServerBuilder {
                         axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
                     )
                     .route(
+                        "/subscribe",
+                        axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
+                    )
+                    .route(
                         "/json-rpc",
+                        axum::routing::post(crate::axum_router::json_rpc_handler),
+                    )
+                    .route(
+                        "/public",
                         axum::routing::post(crate::axum_router::json_rpc_handler),
                     );
             }
