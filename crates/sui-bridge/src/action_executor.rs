@@ -12,7 +12,6 @@ use sui_json_rpc_types::{
 use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    committee::VALIDITY_THRESHOLD,
     crypto::{Signature, SuiKeyPair},
     digests::TransactionDigest,
     gas_coin::GasCoin,
@@ -26,7 +25,7 @@ use crate::{
     error::BridgeError,
     storage::BridgeOrchestratorTables,
     sui_client::{SuiClient, SuiClientInner},
-    sui_transaction_builder::build_transaction,
+    sui_transaction_builder::build_sui_transaction,
     types::{BridgeAction, BridgeActionStatus, VerifiedCertifiedBridgeAction},
 };
 use std::sync::Arc;
@@ -249,10 +248,9 @@ where
         {
             return;
         }
-
-        // TODO: use different threshold based on action types.
+        let threshold = action.approval_threshold();
         match auth_agg
-            .request_committee_signatures(action.clone(), VALIDITY_THRESHOLD)
+            .request_committee_signatures(action.clone(), threshold)
             .await
         {
             Ok(certificate) => {
@@ -318,7 +316,7 @@ where
             let (_gas_coin, gas_object_ref) =
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
             let ceriticate_clone = certificate.clone();
-            let tx_data = match build_transaction(
+            let tx_data = match build_sui_transaction(
                 sui_address,
                 &gas_object_ref,
                 ceriticate_clone,
@@ -496,7 +494,7 @@ mod tests {
         );
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(
+        let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
             action_certificate,
@@ -547,7 +545,7 @@ mod tests {
 
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(
+        let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
             action_certificate,
@@ -596,7 +594,7 @@ mod tests {
 
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(
+        let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
             action_certificate,
@@ -739,7 +737,7 @@ mod tests {
             BridgeCommitteeValiditySignInfo { signatures: sigs },
         );
         let action_certificate = VerifiedCertifiedBridgeAction::new_from_verified(certified_action);
-        let tx_data = build_transaction(
+        let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
             action_certificate,
@@ -863,7 +861,7 @@ mod tests {
 
         let action = action_certificate.data().clone();
         let arg = DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
-        let tx_data = build_transaction(
+        let tx_data = build_sui_transaction(
             sui_address,
             &gas_object_ref,
             action_certificate.clone(),

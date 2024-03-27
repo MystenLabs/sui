@@ -22,6 +22,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use sui_types::bridge::{
     BridgeChainId, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
+use sui_types::bridge::{
+    APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
+    APPROVAL_THRESHOLD_EMERGENCY_PAUSE, APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
+    APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE, APPROVAL_THRESHOLD_LIMIT_UPDATE,
+    APPROVAL_THRESHOLD_TOKEN_TRANSFER,
+};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
@@ -563,6 +569,21 @@ impl BridgeAction {
             BridgeAction::EvmContractUpgradeAction(a) => a.nonce,
         }
     }
+
+    pub fn approval_threshold(&self) -> u64 {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(_) => APPROVAL_THRESHOLD_TOKEN_TRANSFER,
+            BridgeAction::EthToSuiBridgeAction(_) => APPROVAL_THRESHOLD_TOKEN_TRANSFER,
+            BridgeAction::BlocklistCommitteeAction(_) => APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
+            BridgeAction::EmergencyAction(a) => match a.action_type {
+                EmergencyActionType::Pause => APPROVAL_THRESHOLD_EMERGENCY_PAUSE,
+                EmergencyActionType::Unpause => APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
+            },
+            BridgeAction::LimitUpdateAction(_) => APPROVAL_THRESHOLD_LIMIT_UPDATE,
+            BridgeAction::AssetPriceUpdateAction(_) => APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE,
+            BridgeAction::EvmContractUpgradeAction(_) => APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -617,6 +638,8 @@ pub struct EthLog {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::get_test_eth_to_sui_bridge_action;
+    use crate::test_utils::get_test_sui_to_eth_bridge_action;
     use crate::{test_utils::get_test_authority_and_key, types::TokenId};
     use ethers::abi::ParamType;
     use ethers::types::{Address as EthAddress, TxHash};
@@ -1189,6 +1212,64 @@ mod tests {
             3000
         );
 
+        Ok(())
+    }
+
+    // Regression test to avoid accidentally change to approval threshold
+    #[test]
+    fn test_bridge_action_approval_threshold_regression_test() -> anyhow::Result<()> {
+        let action = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
+        assert_eq!(action.approval_threshold(), 3334);
+
+        let action = get_test_eth_to_sui_bridge_action(None, None, None);
+        assert_eq!(action.approval_threshold(), 3334);
+
+        let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
+            nonce: 94,
+            chain_id: BridgeChainId::EthSepolia,
+            blocklist_type: BlocklistType::Unblocklist,
+            blocklisted_members: vec![],
+        });
+        assert_eq!(action.approval_threshold(), 5001);
+
+        let action = BridgeAction::EmergencyAction(EmergencyAction {
+            nonce: 56,
+            chain_id: BridgeChainId::EthSepolia,
+            action_type: EmergencyActionType::Pause,
+        });
+        assert_eq!(action.approval_threshold(), 450);
+
+        let action = BridgeAction::EmergencyAction(EmergencyAction {
+            nonce: 56,
+            chain_id: BridgeChainId::EthSepolia,
+            action_type: EmergencyActionType::Unpause,
+        });
+        assert_eq!(action.approval_threshold(), 5001);
+
+        let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
+            nonce: 15,
+            chain_id: BridgeChainId::SuiLocalTest,
+            sending_chain_id: BridgeChainId::EthLocalTest,
+            new_usd_limit: 1_000_000 * USD_MULTIPLIER,
+        });
+        assert_eq!(action.approval_threshold(), 5001);
+
+        let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
+            nonce: 266,
+            chain_id: BridgeChainId::SuiLocalTest,
+            token_id: TokenId::BTC,
+            new_usd_price: 100_000 * USD_MULTIPLIER,
+        });
+        assert_eq!(action.approval_threshold(), 5001);
+
+        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: 123,
+            chain_id: BridgeChainId::EthLocalTest,
+            proxy_address: EthAddress::repeat_byte(6),
+            new_impl_address: EthAddress::repeat_byte(9),
+            call_data: vec![],
+        });
+        assert_eq!(action.approval_threshold(), 5001);
         Ok(())
     }
 

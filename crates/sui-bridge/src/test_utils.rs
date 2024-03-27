@@ -5,7 +5,7 @@ use crate::abi::EthToSuiTokenBridgeV1;
 use crate::eth_mock_provider::EthMockProvider;
 use crate::events::SuiBridgeEvent;
 use crate::server::mock_handler::run_mock_server;
-use crate::sui_transaction_builder::{build_transaction, get_sui_token_type_tag};
+use crate::sui_transaction_builder::{build_sui_transaction, get_sui_token_type_tag};
 use crate::types::{
     BridgeCommitteeValiditySignInfo, CertifiedBridgeAction, VerifiedCertifiedBridgeAction,
 };
@@ -358,7 +358,7 @@ pub async fn approve_token_bridge_with_validator_secrets(
         .unwrap()
         .unwrap()
         .1;
-    let tx_data = build_transaction(
+    let tx_data = build_sui_transaction(
         sui_address,
         &gas_obj_ref,
         action_certificate,

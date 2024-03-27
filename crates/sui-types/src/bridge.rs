@@ -42,6 +42,15 @@ pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 7500; // out of 10000 (75%)
 pub const BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER: u64 = 10000; // (100%)
 
+// Threshold for action to be approved by the committee (our of 10000)
+pub const APPROVAL_THRESHOLD_TOKEN_TRANSFER: u64 = 3334;
+pub const APPROVAL_THRESHOLD_EMERGENCY_PAUSE: u64 = 450;
+pub const APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE: u64 = 5001;
+pub const APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST: u64 = 5001;
+pub const APPROVAL_THRESHOLD_LIMIT_UPDATE: u64 = 5001;
+pub const APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE: u64 = 5001;
+pub const APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE: u64 = 5001;
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum BridgeChainId {

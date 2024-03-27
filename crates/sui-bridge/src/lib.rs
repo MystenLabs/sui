@@ -28,6 +28,8 @@ pub(crate) mod sui_mock_client;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
+pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
+
 #[macro_export]
 macro_rules! retry_with_max_elapsed_time {
     ($func:expr, $max_elapsed_time:expr) => {{
