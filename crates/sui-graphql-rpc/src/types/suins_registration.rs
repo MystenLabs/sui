@@ -333,7 +333,7 @@ impl NameService {
     /// the domain name registry, and its type.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
-    /// for, or `None` if the data was requested at the latest checkpoint.
+    /// for.
     ///
     /// The `NameRecord` is returned only if it has not expired as of the `checkpoint_viewed_at` or
     /// latest checkpoint's timestamp.
@@ -342,7 +342,7 @@ impl NameService {
     pub(crate) async fn resolve_to_record(
         ctx: &Context<'_>,
         domain: &Domain,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NameRecord>, Error> {
         // Query for the domain's NameRecord and parent NameRecord if applicable. The checkpoint's
         // timestamp is also fetched. These values are used to determine if the domain is expired.
@@ -388,11 +388,11 @@ impl NameService {
     /// name registry, and its type.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
-    /// for, or `None` if the data was requested at the latest checkpoint.
+    /// for.
     pub(crate) async fn reverse_resolve_to_name(
         ctx: &Context<'_>,
         address: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NativeDomain>, Error> {
         let config = ctx.data_unchecked::<NameServiceConfig>();
 
@@ -401,10 +401,7 @@ impl NameService {
         let Some(object) = MoveObject::query(
             ctx.data_unchecked(),
             reverse_record_id.into(),
-            match checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
         )
         .await?
         else {
@@ -432,7 +429,7 @@ impl NameService {
     async fn query_domain_expiration(
         ctx: &Context<'_>,
         domain: &Domain,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<DomainExpiration>, Error> {
         let config = ctx.data_unchecked::<NameServiceConfig>();
         let db: &crate::data::pg::PgExecutor = ctx.data_unchecked::<Db>();
@@ -464,7 +461,7 @@ impl NameService {
 
         let response = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
@@ -502,7 +499,7 @@ impl NameService {
         // name_record. We then assign it to the correct field on `domain_expiration` based on the
         // address.
         for result in results {
-            let object = Object::try_from_stored_history_object(result, None)?;
+            let object = Object::try_from_stored_history_object(result, checkpoint_viewed_at)?;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
                     "Expected {0} to be a NameRecord, but it's not a Move Object.",
@@ -529,15 +526,13 @@ impl SuinsRegistration {
     /// where to find the domain name registry and its type.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
-    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
-    /// state, it will be as if it was read at the same checkpoint.
+    /// queried for.
     pub(crate) async fn paginate(
         db: &Db,
         config: &NameServiceConfig,
         page: Page<object::Cursor>,
         owner: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, SuinsRegistration>, Error> {
         let type_ = SuinsRegistration::type_(config.package_address.into());
 

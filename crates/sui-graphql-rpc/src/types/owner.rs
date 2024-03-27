@@ -35,9 +35,8 @@ pub(crate) struct Owner {
 /// Type to implement GraphQL fields that are shared by all Owners.
 pub(crate) struct OwnerImpl {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Interface implemented by GraphQL types representing entities that can own objects. Object owners
@@ -495,7 +494,7 @@ impl From<&Owner> for OwnerImpl {
     fn from(owner: &Owner) -> Self {
         OwnerImpl {
             address: owner.address,
-            checkpoint_viewed_at: Some(owner.checkpoint_viewed_at),
+            checkpoint_viewed_at: owner.checkpoint_viewed_at,
         }
     }
 }

@@ -211,7 +211,7 @@ impl Query {
                 address,
                 ObjectLookupKey::VersionAt {
                     version,
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                 },
             )
             .await
@@ -304,7 +304,7 @@ impl Query {
             page,
             coin,
             /* owner */ None,
-            Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -395,7 +395,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -421,7 +421,7 @@ impl Query {
     ) -> Result<Option<Address>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
         Ok(
-            NameService::resolve_to_record(ctx, &domain, Some(checkpoint_viewed_at))
+            NameService::resolve_to_record(ctx, &domain, checkpoint_viewed_at)
                 .await
                 .extend()?
                 .and_then(|r| r.target_address)
@@ -462,9 +462,18 @@ impl Query {
         intent_scope: ZkLoginIntentScope,
         author: SuiAddress,
     ) -> Result<ZkLoginVerifyResult> {
-        verify_zklogin_signature(ctx, bytes, signature, intent_scope, author)
-            .await
-            .extend()
+        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+
+        verify_zklogin_signature(
+            ctx,
+            bytes,
+            signature,
+            intent_scope,
+            author,
+            checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 }
 

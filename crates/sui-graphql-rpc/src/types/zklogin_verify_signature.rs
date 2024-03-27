@@ -49,6 +49,7 @@ pub(crate) async fn verify_zklogin_signature(
     signature: Base64,
     intent_scope: ZkLoginIntentScope,
     author: SuiAddress,
+    checkpoint_viewed_at: u64,
 ) -> Result<ZkLoginVerifyResult, Error> {
     // get current epoch from db.
     let Some(curr_epoch) = Epoch::query(ctx, None, None).await? else {
@@ -82,7 +83,7 @@ pub(crate) async fn verify_zklogin_signature(
             bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
         },
         DynamicFieldType::DynamicField,
-        None,
+        checkpoint_viewed_at,
     )
     .await
     .map_err(|e| as_jwks_read_error(e.to_string()))?;

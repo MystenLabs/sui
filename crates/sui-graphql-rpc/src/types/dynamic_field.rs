@@ -157,7 +157,7 @@ impl DynamicField {
         parent_version: Option<u64>,
         name: DynamicFieldName,
         kind: DynamicFieldType,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<DynamicField>, Error> {
         let type_ = match kind {
             DynamicFieldType::DynamicField => name.type_.0,
@@ -171,8 +171,7 @@ impl DynamicField {
 
         use ObjectLookupKey as K;
         let key = match (parent_version, checkpoint_viewed_at) {
-            (None, None) => K::Latest,
-            (None, Some(checkpoint_viewed_at)) => K::LatestAt(checkpoint_viewed_at),
+            (None, checkpoint_viewed_at) => K::LatestAt(checkpoint_viewed_at),
             (Some(version), checkpoint_viewed_at) => K::LatestAtParentVersion {
                 version,
                 checkpoint_viewed_at,
@@ -194,17 +193,17 @@ impl DynamicField {
         page: Page<object::Cursor>,
         parent: SuiAddress,
         parent_version: Option<u64>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, DynamicField>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
         let Some(((prev, next, results), checkpoint_viewed_at)) = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
@@ -230,8 +229,7 @@ impl DynamicField {
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
 
-            let object =
-                Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
+            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
