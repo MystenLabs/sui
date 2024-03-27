@@ -163,7 +163,7 @@ title: Module `0xb::treasury`
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="treasury.md#0xb_treasury_create">create</a>(ctx: &<b>mut</b> TxContext): <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a> {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="treasury.md#0xb_treasury_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="treasury.md#0xb_treasury_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a> {
         treasuries: <a href="../sui-framework/object_bag.md#0x2_object_bag_new">object_bag::new</a>(ctx)
     }
@@ -191,7 +191,7 @@ title: Module `0xb::treasury`
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="treasury.md#0xb_treasury_burn">burn</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, token: Coin&lt;T&gt;, ctx: &<b>mut</b> TxContext) {
     <a href="treasury.md#0xb_treasury_create_treasury_if_not_exist">create_treasury_if_not_exist</a>&lt;T&gt;(self, ctx);
-    <b>let</b> <a href="treasury.md#0xb_treasury">treasury</a> = <a href="../sui-framework/object_bag.md#0x2_object_bag_borrow_mut">object_bag::borrow_mut</a>(&<b>mut</b> self.treasuries, <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;());
+    <b>let</b> <a href="treasury.md#0xb_treasury">treasury</a> = &<b>mut</b> self.treasuries[<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;()];
     <a href="../sui-framework/coin.md#0x2_coin_burn">coin::burn</a>(<a href="treasury.md#0xb_treasury">treasury</a>, token);
 }
 </code></pre>
@@ -217,7 +217,7 @@ title: Module `0xb::treasury`
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="treasury.md#0xb_treasury_mint">mint</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, amount: u64, ctx: &<b>mut</b> TxContext): Coin&lt;T&gt; {
     <a href="treasury.md#0xb_treasury_create_treasury_if_not_exist">create_treasury_if_not_exist</a>&lt;T&gt;(self, ctx);
-    <b>let</b> <a href="treasury.md#0xb_treasury">treasury</a> = <a href="../sui-framework/object_bag.md#0x2_object_bag_borrow_mut">object_bag::borrow_mut</a>(&<b>mut</b> self.treasuries, <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;());
+    <b>let</b> <a href="treasury.md#0xb_treasury">treasury</a> = &<b>mut</b> self.treasuries[<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;()];
     <a href="../sui-framework/coin.md#0x2_coin_mint">coin::mint</a>(<a href="treasury.md#0xb_treasury">treasury</a>, amount, ctx)
 }
 </code></pre>
@@ -243,16 +243,16 @@ title: Module `0xb::treasury`
 
 <pre><code><b>fun</b> <a href="treasury.md#0xb_treasury_create_treasury_if_not_exist">create_treasury_if_not_exist</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> type_ = <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
-    <b>if</b> (!<a href="../sui-framework/object_bag.md#0x2_object_bag_contains">object_bag::contains</a>(&self.treasuries, type_)) {
+    <b>if</b> (!self.treasuries.contains(type_)) {
         // Lazily create currency <b>if</b> not exists
         <b>if</b> (type_ == <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;BTC&gt;()) {
-            <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, type_, <a href="btc.md#0xb_btc_create">btc::create</a>(ctx));
+            self.treasuries.add(type_, <a href="btc.md#0xb_btc_create">btc::create</a>(ctx));
         } <b>else</b> <b>if</b> (type_ == <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;ETH&gt;()) {
-            <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, type_, <a href="eth.md#0xb_eth_create">eth::create</a>(ctx));
+            self.treasuries.add(type_, <a href="eth.md#0xb_eth_create">eth::create</a>(ctx));
         } <b>else</b> <b>if</b> (type_ == <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDC&gt;()) {
-            <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, type_, <a href="usdc.md#0xb_usdc_create">usdc::create</a>(ctx));
+            self.treasuries.add(type_, <a href="usdc.md#0xb_usdc_create">usdc::create</a>(ctx));
         } <b>else</b> <b>if</b> (type_ == <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;()) {
-            <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, type_, <a href="usdt.md#0xb_usdt_create">usdt::create</a>(ctx));
+            self.treasuries.add(type_, <a href="usdt.md#0xb_usdt_create">usdt::create</a>(ctx));
         } <b>else</b> {
             <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
         };

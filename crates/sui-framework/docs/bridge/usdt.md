@@ -132,9 +132,7 @@ Multiplier of the token, it must be 10^DECIMAL
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="usdt.md#0xb_usdt_decimal">decimal</a>(): u8 {
-    <a href="usdt.md#0xb_usdt_DECIMAL">DECIMAL</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="usdt.md#0xb_usdt_decimal">decimal</a>(): u8 { <a href="usdt.md#0xb_usdt_DECIMAL">DECIMAL</a> }
 </code></pre>
 
 
@@ -156,9 +154,7 @@ Multiplier of the token, it must be 10^DECIMAL
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="usdt.md#0xb_usdt_multiplier">multiplier</a>(): u64 {
-    <a href="usdt.md#0xb_usdt_MULTIPLIER">MULTIPLIER</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="usdt.md#0xb_usdt_multiplier">multiplier</a>(): u64 { <a href="usdt.md#0xb_usdt_MULTIPLIER">MULTIPLIER</a> }
 </code></pre>
 
 

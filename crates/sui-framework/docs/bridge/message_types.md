@@ -82,9 +82,7 @@ title: Module `0xb::message_types`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_token">token</a>():u8{
-    <a href="message_types.md#0xb_message_types_TOKEN">TOKEN</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_token">token</a>(): u8 { <a href="message_types.md#0xb_message_types_TOKEN">TOKEN</a> }
 </code></pre>
 
 
@@ -106,9 +104,7 @@ title: Module `0xb::message_types`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_committee_blocklist">committee_blocklist</a>():u8{
-    <a href="message_types.md#0xb_message_types_COMMITTEE_BLOCKLIST">COMMITTEE_BLOCKLIST</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_committee_blocklist">committee_blocklist</a>(): u8 { <a href="message_types.md#0xb_message_types_COMMITTEE_BLOCKLIST">COMMITTEE_BLOCKLIST</a> }
 </code></pre>
 
 
@@ -130,9 +126,7 @@ title: Module `0xb::message_types`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_emergency_op">emergency_op</a>():u8{
-    <a href="message_types.md#0xb_message_types_EMERGENCY_OP">EMERGENCY_OP</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_emergency_op">emergency_op</a>(): u8 { <a href="message_types.md#0xb_message_types_EMERGENCY_OP">EMERGENCY_OP</a> }
 </code></pre>
 
 
@@ -154,9 +148,7 @@ title: Module `0xb::message_types`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_bridge_limit">update_bridge_limit</a>():u8{
-    <a href="message_types.md#0xb_message_types_UPDATE_BRIDGE_LIMIT">UPDATE_BRIDGE_LIMIT</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_bridge_limit">update_bridge_limit</a>(): u8 { <a href="message_types.md#0xb_message_types_UPDATE_BRIDGE_LIMIT">UPDATE_BRIDGE_LIMIT</a> }
 </code></pre>
 
 
@@ -178,9 +170,7 @@ title: Module `0xb::message_types`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_asset_price">update_asset_price</a>():u8{
-    <a href="message_types.md#0xb_message_types_UPDATE_ASSET_PRICE">UPDATE_ASSET_PRICE</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_asset_price">update_asset_price</a>(): u8 { <a href="message_types.md#0xb_message_types_UPDATE_ASSET_PRICE">UPDATE_ASSET_PRICE</a> }
 </code></pre>
 
 

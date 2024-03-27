@@ -2,12 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::usdt {
-    use std::option;
-   use sui::math::pow;
-    use sui::coin;
-    use sui::coin::TreasuryCap;
-    use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::math::pow;
+    use sui::coin::{Self, TreasuryCap};
 
     public struct USDT has drop {}
 
@@ -31,11 +27,6 @@ module bridge::usdt {
         treasury_cap
     }
 
-    public fun decimal(): u8 {
-        DECIMAL
-    }
-
-    public fun multiplier(): u64 {
-        MULTIPLIER
-    }
+    public fun decimal(): u8 { DECIMAL }
+    public fun multiplier(): u64 { MULTIPLIER }
 }

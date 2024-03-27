@@ -18,17 +18,13 @@ module bridge::committee {
     use bridge::message::{Self, Blocklist, BridgeMessage};
 
     #[test_only]
-    use sui::hex;
-    #[test_only]
-    use sui::test_scenario;
-    #[test_only]
-    use sui::test_utils;
-    #[test_only]
-    use sui::test_utils::assert_eq;
+    use sui::{hex, test_scenario, test_utils::{Self, assert_eq}};
     #[test_only]
     use bridge::chain_ids;
     #[test_only]
-    use sui_system::governance_test_utils::{advance_epoch_with_reward_amounts, create_sui_system_state_for_testing,
+    use sui_system::governance_test_utils::{
+        advance_epoch_with_reward_amounts,
+        create_sui_system_state_for_testing,
         create_validator_for_testing
     };
 
@@ -107,27 +103,30 @@ module bridge::committee {
     ) {
         let (mut i, signature_counts) = (0, vector::length(&signatures));
         let mut seen_pub_key = vec_set::empty<vector<u8>>();
-        let required_voting_power = message::required_voting_power(&message);
+        let required_voting_power = message.required_voting_power();
         // add prefix to the message bytes
         let mut message_bytes = SUI_MESSAGE_PREFIX;
-        vector::append(&mut message_bytes, message::serialize_message(message));
+        message_bytes.append(message.serialize_message());
 
         let mut threshold = 0;
         while (i < signature_counts) {
             let signature = vector::borrow(&signatures, i);
             let pubkey = ecdsa_k1::secp256k1_ecrecover(signature, &message_bytes, 0);
+
             // check duplicate
-            assert!(!vec_set::contains(&seen_pub_key, &pubkey), EDuplicatedSignature);
-            // make sure pub key is part of the committee
-            assert!(vec_map::contains(&self.members, &pubkey), EInvalidSignature);
+            // and make sure pub key is part of the committee
+            assert!(!seen_pub_key.contains(&pubkey), EDuplicatedSignature);
+            assert!(self.members.contains(&pubkey), EInvalidSignature);
+
             // get committee signature weight and check pubkey is part of the committee
-            let member = vec_map::get(&self.members, &pubkey);
+            let member = &self.members[&pubkey];
             if (!member.blocklisted) {
                 threshold = threshold + member.voting_power;
             };
+            seen_pub_key.insert(pubkey);
             i = i + 1;
-            vec_set::insert(&mut seen_pub_key, pubkey);
         };
+
         assert!(threshold >= required_voting_power, ESignatureBelowThreshold);
     }
 
@@ -143,15 +142,15 @@ module bridge::committee {
         // Ensure pubkey is valid
         assert!(vector::length(&bridge_pubkey_bytes) == ECDSA_COMPRESSED_PUBKEY_LENGTH, EInvalidPubkeyLength);
         // sender must be the same sender that created the validator object, this is to prevent DDoS from non-validator actor.
-        let sender = tx_context::sender(ctx);
-        let validators = sui_system::active_validator_addresses(system_state);
+        let sender = ctx.sender();
+        let validators = system_state.active_validator_addresses();
 
-        assert!(vector::contains(&validators, &sender), ESenderNotActiveValidator);
+        assert!(validators.contains(&sender), ESenderNotActiveValidator);
         // Sender is active validator, record the registration
 
         // In case validator need to update the info
-        let registration = if (vec_map::contains(&self.member_registrations, &sender)) {
-            let registration = vec_map::get_mut(&mut self.member_registrations, &sender);
+        let registration = if (self.member_registrations.contains(&sender)) {
+            let registration = &mut self.member_registrations[&sender];
             registration.http_rest_url = http_rest_url;
             registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
             *registration
@@ -161,9 +160,10 @@ module bridge::committee {
                 bridge_pubkey_bytes,
                 http_rest_url,
             };
-            vec_map::insert(&mut self.member_registrations, sender, registration);
+            self.member_registrations.insert(sender, registration);
             registration
         };
+
         emit(registration)
     }
 
@@ -180,16 +180,17 @@ module bridge::committee {
         let mut new_members = vec_map::empty();
         let mut stake_participation_percentage = 0;
 
-        while (i < vec_map::size(&self.member_registrations)) {
+        while (i < self.member_registrations.size()) {
             // retrieve registration
-            let (_, registration) = vec_map::get_entry_by_idx(&self.member_registrations, i);
+            let (_, registration) = self.member_registrations.get_entry_by_idx(i);
             // Find validator stake amount from system state
 
             // Process registration if it's active validator
-            let voting_power = vec_map::try_get(&active_validator_voting_power, &registration.sui_address);
-            if (option::is_some(&voting_power)) {
-                let voting_power = option::destroy_some(voting_power);
+            let voting_power = active_validator_voting_power.try_get(&registration.sui_address);
+            if (voting_power.is_some()) {
+                let voting_power = voting_power.destroy_some();
                 stake_participation_percentage = stake_participation_percentage + voting_power;
+
                 let member = CommitteeMember {
                     sui_address: registration.sui_address,
                     bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
@@ -197,8 +198,10 @@ module bridge::committee {
                     http_rest_url: registration.http_rest_url,
                     blocklisted: false,
                 };
-                vec_map::insert(&mut new_members, registration.bridge_pubkey_bytes, member)
+
+                new_members.insert(registration.bridge_pubkey_bytes, member)
             };
+
             i = i + 1;
         };
 
@@ -208,7 +211,8 @@ module bridge::committee {
             self.member_registrations = vec_map::empty();
             // Store new committee info
             self.members = new_members;
-            self.last_committee_update_epoch = tx_context::epoch(ctx);
+            self.last_committee_update_epoch = ctx.epoch();
+
             emit(CommitteeUpdateEvent {
                 members: new_members,
                 stake_participation_percentage
@@ -219,29 +223,35 @@ module bridge::committee {
     // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
     // TODO: add tests for this function
     public(package) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
-        let blocklisted = message::blocklist_type(&blocklist) != 1;
-        let eth_addresses = message::blocklist_validator_addresses(&blocklist);
-        let list_len = vector::length(eth_addresses);
+        let blocklisted = blocklist.blocklist_type() != 1;
+        let eth_addresses = blocklist.blocklist_validator_addresses();
+        let list_len = eth_addresses.length();
         let mut list_idx = 0;
         let mut member_idx = 0;
-        let mut pub_keys = vector::empty<vector<u8>>();
+        let mut pub_keys = vector[];
+
         while (list_idx < list_len) {
-            let target_address = vector::borrow(eth_addresses, list_idx);
+            let target_address = &eth_addresses[list_idx];
             let mut found = false;
-            while (member_idx < vec_map::size(&self.members)) {
-                let (pub_key, member) = vec_map::get_entry_by_idx_mut(&mut self.members, member_idx);
+
+            while (member_idx < self.members.size()) {
+                let (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
                 let eth_address = crypto::ecdsa_pub_key_to_eth_address(*pub_key);
+
                 if (*target_address == eth_address) {
                     member.blocklisted = blocklisted;
-                    vector::push_back(&mut pub_keys, *pub_key);
+                    pub_keys.push_back(*pub_key);
                     found = true;
                     break
                 };
+
                 member_idx = member_idx + 1;
             };
+
             assert!(found, EValidatorBlocklistContainsUnknownKey);
             list_idx = list_idx + 1;
         };
+
         emit(BlocklistValidatorEvent {
             blocklisted,
             public_keys: pub_keys,
