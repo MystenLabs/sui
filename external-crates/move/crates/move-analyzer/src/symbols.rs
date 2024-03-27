@@ -388,7 +388,9 @@ impl fmt::Display for DefInfo {
                     f,
                     "{}fun {}::{}{}({}){}",
                     visibility_to_ide_string(visibility),
-                    mod_ident,
+                    // this mod_ident conversion will ensure that only pkg name (without numerical
+                    // address) is displayed which is the same as in source
+                    expansion_mod_ident_to_map_key(mod_ident),
                     name,
                     type_args_str,
                     typed_id_list_to_ide_string(arg_names, arg_types, false),
@@ -400,7 +402,9 @@ impl fmt::Display for DefInfo {
                 write!(
                     f,
                     "struct {}::{}{}{{\n{}\n}}",
-                    mod_ident,
+                    // this mod_ident conversion will ensure that only pkg name (without numerical
+                    // address) is displayed which is the same as in source
+                    expansion_mod_ident_to_map_key(mod_ident),
                     name,
                     type_args_str,
                     typed_id_list_to_ide_string(field_names, field_types, true),
