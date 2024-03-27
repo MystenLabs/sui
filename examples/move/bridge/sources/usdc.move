@@ -8,9 +8,9 @@ module bridge::usdc {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    friend bridge::treasury;
+    /* friend bridge::treasury; */
 
-    struct USDC has drop {}
+    public struct USDC has drop {}
 
     fun init(witness: USDC, ctx: &mut TxContext) {
 

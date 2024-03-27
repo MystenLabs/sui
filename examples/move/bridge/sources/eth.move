@@ -8,9 +8,9 @@ module bridge::eth {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    friend bridge::treasury;
+    /* friend bridge::treasury; */
 
-    struct ETH has drop {}
+    public struct ETH has drop {}
 
     fun init(witness: ETH, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(

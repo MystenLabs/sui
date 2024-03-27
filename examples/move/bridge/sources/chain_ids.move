@@ -15,7 +15,7 @@ module bridge::chain_ids {
     const EthSepolia: u8 = 11;
     const EthLocalTest: u8 = 12;
 
-    struct BridgeRoute has drop {
+    public struct BridgeRoute has drop {
         source: u8,
         destination: u8,
     }

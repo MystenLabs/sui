@@ -8,9 +8,9 @@ module bridge::btc {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    friend bridge::treasury;
+    /* friend bridge::treasury; */
 
-    struct BTC has drop {}
+    public struct BTC has drop {}
 
     fun init(witness: BTC, ctx: &mut TxContext) {
 
