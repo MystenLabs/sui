@@ -200,16 +200,14 @@ pub(crate) fn build_objects_query(
 /// database if `checkpoint_viewed_at` is `None`.
 pub(crate) fn consistent_range(
     conn: &mut Conn,
-    checkpoint_viewed_at: Option<u64>,
+    checkpoint_viewed_at: u64,
 ) -> Result<Option<(u64, u64)>, diesel::result::Error> {
     let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
 
-    if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-        if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-            return Ok(None);
-        }
-        rhs = checkpoint_viewed_at;
+    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
+        return Ok(None);
     }
+    rhs = checkpoint_viewed_at;
 
     Ok(Some((lhs, rhs)))
 }

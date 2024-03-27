@@ -725,7 +725,7 @@ impl Object {
 
         let response = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
@@ -776,7 +776,7 @@ impl Object {
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
@@ -831,7 +831,7 @@ impl Object {
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
@@ -881,7 +881,7 @@ impl Object {
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 

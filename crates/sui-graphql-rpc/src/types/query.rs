@@ -63,7 +63,7 @@ impl Query {
         let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
         let result = ctx
             .data_unchecked::<Db>()
-            .execute(move |conn| consistent_range(conn, Some(checkpoint_viewed_at)))
+            .execute(move |conn| consistent_range(conn, checkpoint_viewed_at))
             .await
             .extend()?;
 
