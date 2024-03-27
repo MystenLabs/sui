@@ -5,7 +5,7 @@ module color_object::example {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
-    struct ColorObject has key, store {
+    public struct ColorObject has key, store {
         id: UID,
         red: u8,
         green: u8,
@@ -63,7 +63,7 @@ module color_object::example {
 
     #[test]
     fun test_create() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let alice = @0xA;
         let bob = @0xB;
 
@@ -97,7 +97,7 @@ module color_object::example {
 
     #[test]
     fun test_copy_into() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let owner = @0xA;
 
         // Create two ColorObjects owned by `owner`, and obtain their IDs.
@@ -122,7 +122,7 @@ module color_object::example {
 
         {
             ts::next_tx(&mut ts, owner);
-            let obj1: ColorObject = ts::take_from_sender_by_id(&ts, id1);
+            let mut obj1: ColorObject = ts::take_from_sender_by_id(&ts, id1);
             let obj2: ColorObject = ts::take_from_sender_by_id(&ts, id2);
             let (red, green, blue) = get_color(&obj1);
             assert!(red == 255 && green == 255 && blue == 255, 0);
@@ -145,7 +145,7 @@ module color_object::example {
 
     #[test]
     fun test_delete() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let owner = @0xA;
 
         // Create a ColorObject and transfer it to owner.
@@ -173,7 +173,7 @@ module color_object::example {
 
     #[test]
     fun test_transfer() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let sender = @0xA;
         let recipient = @0xB;
 
@@ -210,7 +210,7 @@ module color_object::example {
 
     #[test]
     fun test_immutable() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let alice = @0xA;
         let bob = @0xB;
 

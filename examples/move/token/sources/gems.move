@@ -18,7 +18,7 @@ module examples::sword {
     const SWORD_PRICE: u64 = 10;
 
     /// A game item that can be purchased with Gems.
-    struct Sword has key, store { id: UID }
+    public struct Sword has key, store { id: UID }
 
     /// Purchase a sword with Gems.
     public fun buy_sword(
@@ -64,7 +64,7 @@ module examples::gem {
 
     #[allow(lint(coin_field))]
     /// Gems can be purchased through the `Store`.
-    struct GemStore has key {
+    public struct GemStore has key {
         id: UID,
         /// Profits from selling Gems.
         profits: Balance<SUI>,
@@ -73,7 +73,7 @@ module examples::gem {
     }
 
     /// The OTW to create the in-game currency.
-    struct GEM has drop {}
+    public struct GEM has drop {}
 
     // In the module initializer we create the in-game currency and define the
     // rules for different types of actions.
@@ -85,7 +85,7 @@ module examples::gem {
         );
 
         // create a `TokenPolicy` for GEMs
-        let (policy, cap) = token::new_policy(&treasury_cap, ctx);
+        let (mut policy, cap) = token::new_policy(&treasury_cap, ctx);
 
         token::allow(&mut policy, &cap, buy_action(), ctx);
         token::allow(&mut policy, &cap, token::spend_action(), ctx);

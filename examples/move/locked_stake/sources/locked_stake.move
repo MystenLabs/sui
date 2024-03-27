@@ -17,7 +17,7 @@ module locked_stake::locked_stake {
 
     /// An object that locks SUI tokens and stake objects until a given epoch, and allows
     /// staking and unstaking operations when locked.
-    struct LockedStake has key {
+    public struct LockedStake has key {
         id: UID,
         staked_sui: VecMap<ID, StakedSui>,
         sui: Balance<SUI>,

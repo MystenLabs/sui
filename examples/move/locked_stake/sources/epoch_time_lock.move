@@ -12,7 +12,7 @@ module locked_stake::epoch_time_lock {
 
     /// Holder of an epoch number that can only be discarded in the epoch or
     /// after the epoch has passed.
-    struct EpochTimeLock has store, copy {
+    public struct EpochTimeLock has store, copy {
         epoch: u64
     }
 

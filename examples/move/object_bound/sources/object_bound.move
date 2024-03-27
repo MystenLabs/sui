@@ -18,30 +18,30 @@ module obo::object_bound {
 
     /// An object bound to a specific object. Created with the intention of
     /// being returned to the original owner.
-    struct ObjectBound<T: key + store> has key {
+    public struct ObjectBound<T: key + store> has key {
         id: UID,
-        for: address,
+        `for`: address,
         inner: Option<T>,
     }
 
     /// A HotPotato ensuring that the object is returned and sent back to the
     /// original owner.
-    struct Borrow<T: key + store> { object: ObjectBound<T>, inner_id: ID }
+    public struct Borrow<T: key + store> { object: ObjectBound<T>, inner_id: ID }
 
     /// Create and send an ObjectBound.
-    public fun new<T: key + store>(inner: T, for: address, ctx: &mut TxContext) {
+    public fun new<T: key + store>(inner: T, `for`: address, ctx: &mut TxContext) {
         transfer::transfer(ObjectBound {
-            for,
+            `for`,
             id: object::new(ctx),
             inner: option::some(inner),
-        }, for);
+        }, `for`);
     }
 
     /// Receive and use an ObjectBound.
     public fun borrow<T: key + store>(
         parent: &mut UID, to_receive: Receiving<ObjectBound<T>>
     ): (T, Borrow<T>) {
-        let object = transfer::receive(parent, to_receive);
+        let mut object = transfer::receive(parent, to_receive);
         let inner = option::extract(&mut object.inner);
         let inner_id = object::id(&inner);
 
@@ -51,9 +51,9 @@ module obo::object_bound {
     /// Store an ObjectBound.
     public fun store<T: key + store>(inner: T, borrow: Borrow<T>) {
         assert!(object::id(&inner) == borrow.inner_id, EDontMessWithMe);
-        let Borrow { object, inner_id: _ } = borrow;
-        let for = object.for;
+        let Borrow { mut object, inner_id: _ } = borrow;
+        let `for` = object.`for`;
         option::fill(&mut object.inner, inner);
-        transfer::transfer(object, for);
+        transfer::transfer(object, `for`);
     }
 }
