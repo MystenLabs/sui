@@ -7,6 +7,7 @@ use crate::config::ServiceConfig;
 use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
@@ -57,15 +58,19 @@ pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
 ) -> Cluster {
+    let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
     let db_url = graphql_connection_config.db_url.clone();
     // Starts validator+fullnode
-    let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
+    let val_fn =
+        start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
+            .await;
 
     // Starts indexer
     let (pg_store, pg_handle) = start_test_indexer(
         Some(db_url),
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None),
+        data_ingestion_path,
     )
     .await;
 
@@ -103,6 +108,7 @@ pub async fn serve_executor(
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn ReadStore + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
+    data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
     let cancellation_token = CancellationToken::new();
@@ -129,6 +135,7 @@ pub async fn serve_executor(
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
         Some(graphql_connection_config.db_name()),
+        Some(data_ingestion_path),
     )
     .await;
 
@@ -191,10 +198,14 @@ pub async fn start_graphql_server_with_fn_rpc(
     })
 }
 
-async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16>) -> TestCluster {
+async fn start_validator_with_fullnode(
+    internal_data_source_rpc_port: Option<u16>,
+    data_ingestion_dir: PathBuf,
+) -> TestCluster {
     let mut test_cluster_builder = TestClusterBuilder::new()
         .with_num_validators(VALIDATOR_COUNT)
         .with_epoch_duration_ms(EPOCH_DURATION_MS)
+        .with_data_ingestion_dir(data_ingestion_dir)
         .with_accounts(vec![
             AccountConfig {
                 address: None,

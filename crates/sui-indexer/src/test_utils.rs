@@ -7,6 +7,7 @@ use tokio::task::JoinHandle;
 
 use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
@@ -40,8 +41,16 @@ pub async fn start_test_indexer(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
+    data_ingestion_path: PathBuf,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    start_test_indexer_impl(db_url, rpc_url, reader_writer_config, None).await
+    start_test_indexer_impl(
+        db_url,
+        rpc_url,
+        reader_writer_config,
+        None,
+        Some(data_ingestion_path),
+    )
+    .await
 }
 
 pub async fn start_test_indexer_impl(
@@ -49,6 +58,7 @@ pub async fn start_test_indexer_impl(
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
+    data_ingestion_path: Option<PathBuf>,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -69,6 +79,8 @@ pub async fn start_test_indexer_impl(
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
+        remote_store_url: None,
+        data_ingestion_path,
         ..Default::default()
     };
 
