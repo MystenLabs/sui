@@ -18,6 +18,7 @@ use sui_types::{
     crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
+    transaction::TransactionDataAPI,
 };
 
 use super::*;
@@ -512,6 +513,15 @@ impl Scenario {
     fn obj_ref(&self, short_id: u32) -> ObjectRef {
         self.object(short_id).compute_object_reference()
     }
+
+    fn make_signed_transaction(&self, tx: &VerifiedTransaction) -> VerifiedSignedTransaction {
+        VerifiedSignedTransaction::new(
+            self.epoch_store.epoch(),
+            tx.clone(),
+            self.authority.name,
+            &*self.authority.secret,
+        )
+    }
 }
 
 #[tokio::test]
@@ -615,6 +625,7 @@ async fn test_received() {
 }
 
 #[tokio::test]
+#[should_panic(expected = "version must be the oldest in the map")]
 async fn test_out_of_order_commit() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
@@ -686,7 +697,86 @@ async fn test_write_transaction_outputs_is_sync() {
     .await;
 }
 
-/*
+#[tokio::test]
+async fn test_transaction_locks_are_exclusive() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2, 3]);
+        s.do_tx().await;
+
+        s.with_mutated(&[1, 2, 3]);
+        s.do_tx().await;
+
+        let new1 = s.obj_ref(1);
+        let new2 = s.obj_ref(2);
+        let new3 = s.obj_ref(3);
+
+        s.with_mutated(&[1, 2, 3]); // begin forming a tx but never execute it
+        let outputs = s.take_outputs();
+
+        let tx1 = s.make_signed_transaction(&outputs.transaction);
+
+        tx2.inner_mut()
+            .data_mut_for_testing()
+            .intent_message_mut_for_testing()
+            .value
+            .gas_data_mut();
+
+        let lock = s.authority.execution_lock_for_signing(0).await.unwrap();
+
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, new2], tx1)
+            .await
+            .expect("locks should be available");
+
+        dbg!(s
+            .cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, new2], tx2)
+            .await
+            .unwrap_err());
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_transaction_locks_are_durable() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
+
+        let old2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]);
+        s.do_tx().await;
+
+        let new1 = s.obj_ref(1);
+        let new2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
+        let outputs = s.take_outputs();
+
+        let tx = s.make_signed_transaction(&outputs.transaction);
+
+        let lock = s.authority.execution_lock_for_signing(0).await.unwrap();
+
+        // fails because we are referring to an old object
+        dbg!(s
+            .cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, old2], tx.clone())
+            .await
+            .unwrap_err());
+
+        // succeeds because the above call releases the lock on new1 after failing
+        // to get the lock on old2
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, new2], tx)
+            .await
+            .expect("new1 should be unlocked after revert");
+    })
+    .await;
+}
+
 #[tokio::test]
 async fn test_acquire_transaction_locks_revert() {
     telemetry_subscribers::init_for_testing();
@@ -699,45 +789,48 @@ async fn test_acquire_transaction_locks_revert() {
         s.with_mutated(&[1, 2]);
         s.do_tx().await;
 
+        let new1 = s.obj_ref(1);
+        let new2 = s.obj_ref(2);
+
         s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
         let outputs = s.take_outputs();
 
-        let new1 = s.obj_ref(1);
+        let tx = s.make_signed_transaction(&outputs.transaction);
 
         let lock = s.authority.execution_lock_for_signing(0).await.unwrap();
+
+        // fails because we are referring to an old object
         s.cache
-            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, old2], outputs.transaction)
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, old2], tx.clone())
             .await
             .unwrap_err();
+
+        // succeeds because the above call releases the lock on new1 after failing
+        // to get the lock on old2
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &lock, &[new1, new2], tx)
+            .await
+            .expect("new1 should be unlocked after revert");
     })
+    .await;
 }
-*/
 
 #[tokio::test]
 async fn test_acquire_transaction_locks_is_sync() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1, 2]);
-        let tx1 = s.do_tx().await;
+        s.do_tx().await;
 
         let objects: Vec<_> = vec![s.object(1), s.object(2)]
             .into_iter()
             .map(|o| o.compute_object_reference())
             .collect();
 
-        //let lock = tokio::sync::RwLock<EpochId>::new(1);
-        //let guard = lock.read();
-
         s.with_mutated(&[1, 2]);
         let outputs = s.take_outputs();
 
-        let tx2 = VerifiedSignedTransaction::new(
-            s.epoch_store.epoch(),
-            (*outputs.transaction).clone(),
-            s.authority.name,
-            &*s.authority.secret,
-        );
-
+        let tx2 = s.make_signed_transaction(&outputs.transaction);
         let lock = s.authority.execution_lock_for_signing(0).await.unwrap();
         // assert that acquire_transaction_locks is sync in non-simtest, which causes the
         // fail_point_async! macros above to be elided

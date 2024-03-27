@@ -2189,7 +2189,6 @@ impl SenderSignedData {
             .any(|sig| sig.is_upgraded_multisig())
     }
 
-    #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
     }

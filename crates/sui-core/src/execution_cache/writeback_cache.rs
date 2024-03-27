@@ -527,6 +527,7 @@ impl WritebackCache {
             DashMapEntry::Vacant(vacant) => {
                 let tables = epoch_store.tables()?;
                 if let Some(lock_details) = tables.get_locked_transaction(obj_ref)? {
+                    trace!("read lock from db: {:?}", lock_details);
                     vacant.insert_entry(lock_details)
                 } else {
                     vacant.insert_entry(new_lock)
@@ -538,11 +539,13 @@ impl WritebackCache {
         let prev_lock = occupied.get();
 
         if prev_lock != &new_lock {
+            debug!("lock conflict detected: {:?} != {:?}", prev_lock, new_lock);
             Err(SuiError::ObjectLockConflict {
                 obj_ref: *obj_ref,
                 pending_transaction: *prev_lock,
             })
         } else {
+            trace!("set lock: {:?}", new_lock);
             Ok(())
         }
     }
@@ -584,6 +587,11 @@ impl WritebackCache {
 
     fn verify_live_object(obj_ref: &ObjectRef, live_object: &Object) -> SuiResult {
         if obj_ref.1 != live_object.version() {
+            debug!(
+                "object version unavailable for consumption: {:?} (current: {})",
+                obj_ref,
+                live_object.version()
+            );
             return Err(SuiError::UserInputError {
                 error: UserInputError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: *obj_ref,
@@ -594,6 +602,7 @@ impl WritebackCache {
 
         let live_digest = live_object.digest();
         if obj_ref.2 != live_digest {
+            debug!("object digest mismatch: {:?} vs {:?}", obj_ref, live_digest);
             return Err(SuiError::UserInputError {
                 error: UserInputError::InvalidObjectDigest {
                     object_id: obj_ref.0,
@@ -618,6 +627,7 @@ impl WritebackCache {
             };
 
             if occupied.get() == lock {
+                trace!("clearing lock: {:?}", lock);
                 occupied.remove();
             } else {
                 // this is impossible because the only case in which we overwrite a
