@@ -29,11 +29,13 @@ title: Module `0xb::bridge`
 -  [Function `execute_emergency_op`](#0xb_bridge_execute_emergency_op)
 -  [Function `execute_update_bridge_limit`](#0xb_bridge_execute_update_bridge_limit)
 -  [Function `execute_update_asset_price`](#0xb_bridge_execute_update_asset_price)
+-  [Function `execute_update_sui_token`](#0xb_bridge_execute_update_sui_token)
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
 -  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 
 
-<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="../sui-framework/clock.md#0x2_clock">0x2::clock</a>;
@@ -744,7 +746,7 @@ title: Module `0xb::bridge`
     <b>let</b> amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="../sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     <b>let</b> bridge_seq_num = <a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(inner, <a href="message_types.md#0xb_message_types_token">message_types::token</a>());
-    <b>let</b> token_id = <a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;();
+    <b>let</b> token_id = <a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;(&inner.<a href="treasury.md#0xb_treasury">treasury</a>);
     <b>let</b> token_amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="../sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     // create <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
@@ -1038,10 +1040,10 @@ title: Module `0xb::bridge`
     // get owner <b>address</b>
     <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
     // check token type
-    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == <a href="message.md#0xb_message_token_type">message::token_type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
+    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;(&inner.<a href="treasury.md#0xb_treasury">treasury</a>) == <a href="message.md#0xb_message_token_type">message::token_type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
     <b>let</b> amount = <a href="message.md#0xb_message_token_amount">message::token_amount</a>(&token_payload);
     // Make sure <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> is within limit.
-    <b>if</b> (!<a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">limiter::check_and_record_sending_transfer</a>&lt;T&gt;(&<b>mut</b> inner.<a href="limiter.md#0xb_limiter">limiter</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>, route, amount)) {
+    <b>if</b> (!<a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">limiter::check_and_record_sending_transfer</a>&lt;T&gt;(&<b>mut</b> inner.<a href="limiter.md#0xb_limiter">limiter</a>, &inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>, route, amount)) {
         <b>return</b> (<a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
     };
     // claim from <a href="treasury.md#0xb_treasury">treasury</a>
@@ -1103,6 +1105,9 @@ title: Module `0xb::bridge`
     } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
         <b>let</b> payload = <a href="message.md#0xb_message_extract_update_asset_price">message::extract_update_asset_price</a>(&<a href="message.md#0xb_message">message</a>);
         <a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner, payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_sui_token">message_types::update_sui_token</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message_extract_update_sui_token">message::extract_update_sui_token</a>(&<a href="message.md#0xb_message">message</a>);
+        <a href="bridge.md#0xb_bridge_execute_update_sui_token">execute_update_sui_token</a>(inner, payload);
     } <b>else</b> {
         <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>
     };
@@ -1191,7 +1196,46 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: UpdateAssetPrice) {
-    <a href="limiter.md#0xb_limiter_update_asset_notional_price">limiter::update_asset_notional_price</a>(&<b>mut</b> inner.<a href="limiter.md#0xb_limiter">limiter</a>, <a href="message.md#0xb_message_update_asset_price_payload_token_id">message::update_asset_price_payload_token_id</a>(&payload), <a href="message.md#0xb_message_update_asset_price_payload_new_price">message::update_asset_price_payload_new_price</a>(&payload))
+    <a href="treasury.md#0xb_treasury_update_asset_notional_price">treasury::update_asset_notional_price</a>(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="message.md#0xb_message_update_asset_price_payload_token_id">message::update_asset_price_payload_token_id</a>(&payload), <a href="message.md#0xb_message_update_asset_price_payload_new_price">message::update_asset_price_payload_new_price</a>(&payload))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_execute_update_sui_token"></a>
+
+## Function `execute_update_sui_token`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_sui_token">execute_update_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>, payload: <a href="message.md#0xb_message_UpdateSuiToken">message::UpdateSuiToken</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_sui_token">execute_update_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: UpdateSuiToken) {
+    <b>let</b> native_token = <a href="message.md#0xb_message_is_native">message::is_native</a>(&payload);
+    <b>let</b> <b>mut</b> token_ids = <a href="message.md#0xb_message_token_ids">message::token_ids</a>(&payload);
+    <b>let</b> <b>mut</b> token_type_names = <a href="message.md#0xb_message_token_type_names">message::token_type_names</a>(&payload);
+    <b>let</b> <b>mut</b> token_prices = <a href="message.md#0xb_message_token_prices">message::token_prices</a>(&payload);
+
+    // Make sure token data is consistent
+    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) == <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_type_names), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
+    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) == <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_prices), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
+
+    <b>while</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) &gt; 0){
+        <b>let</b> token_id = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> token_ids);
+        <b>let</b> token_type_name = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> token_type_names);
+        <b>let</b> token_price = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> token_prices);
+        <a href="treasury.md#0xb_treasury_approve_new_token">treasury::approve_new_token</a>(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, token_type_name, token_id, native_token, token_price)
+    }
+
 }
 </code></pre>
 
