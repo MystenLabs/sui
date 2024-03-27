@@ -2,14 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_bridge::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use sui_json_rpc_api::BridgeReadApiClient;
 use sui_macros::sim_test;
 use sui_types::bridge::get_bridge;
 use sui_types::bridge::BridgeTrait;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use test_cluster::TestClusterBuilder;
-
-pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
 
 #[sim_test]
 async fn test_create_bridge_state_object() {

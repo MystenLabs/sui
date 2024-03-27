@@ -12222,6 +12222,7 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "sui",
+ "sui-bridge",
  "sui-config",
  "sui-core",
  "sui-framework",

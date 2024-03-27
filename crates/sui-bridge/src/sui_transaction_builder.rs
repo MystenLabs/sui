@@ -51,7 +51,7 @@ pub fn get_sui_token_type_tag(token_id: TokenId) -> TypeTag {
 }
 
 // TODO: pass in gas price
-pub fn build_transaction(
+pub fn build_sui_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
@@ -212,4 +212,88 @@ fn build_token_bridge_approve_transaction(
         // TODO: use reference gas price
         1500,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        test_utils::{
+            approve_token_bridge_with_validator_secrets, bridge_token,
+            get_test_eth_to_sui_bridge_action, get_test_sui_to_eth_bridge_action,
+        },
+        types::TokenId,
+        BRIDGE_ENABLE_PROTOCOL_VERSION,
+    };
+    use ethers::types::Address as EthAddress;
+    use test_cluster::TestClusterBuilder;
+
+    use crate::sui_client::SuiClient;
+
+    #[tokio::test]
+    async fn test_build_sui_transaction_for_token_transfer() {
+        telemetry_subscribers::init_for_testing();
+        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_epoch_duration_ms(15000)
+            .build_with_bridge()
+            .await;
+
+        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
+        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+
+        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
+        // is not initialized during the construction of `BridgeCommittee`.
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        if committee.members.is_empty() {
+            test_cluster.wait_for_epoch(None).await;
+        }
+        let context = &mut test_cluster.wallet;
+        let sender = context.active_address().unwrap();
+        let usdc_amount = 5000000;
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+
+        // 1. Test Eth -> Sui Transfer approval
+        let action = get_test_eth_to_sui_bridge_action(None, Some(usdc_amount), Some(sender));
+        // `approve_token_bridge_with_validator_secrets` covers transaction building
+        let usdc_object_ref = approve_token_bridge_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            Some(sender),
+        )
+        .await
+        .unwrap();
+
+        // 2. Test Sui -> Eth Transfer approval
+        let bridge_event = bridge_token(
+            context,
+            EthAddress::random(),
+            usdc_object_ref,
+            TokenId::USDC,
+            bridge_object_arg,
+        )
+        .await;
+
+        let action = get_test_sui_to_eth_bridge_action(
+            None,
+            None,
+            Some(bridge_event.nonce),
+            Some(bridge_event.amount),
+            Some(bridge_event.sui_address),
+            Some(bridge_event.eth_address),
+            Some(TokenId::USDC),
+        );
+        // `approve_token_bridge_with_validator_secrets` covers transaction building
+        approve_token_bridge_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+    }
 }
