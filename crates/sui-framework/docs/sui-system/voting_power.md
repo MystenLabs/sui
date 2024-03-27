@@ -241,8 +241,8 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = &validators[i];
         <b>let</b> stake = <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power_total_stake">total_stake</a>();
-        <b>let</b> adjusted_stake = (stake <b>as</b> u128) * (<a href="voting_power.md#0x3_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128);
-        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a> = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>((adjusted_stake <b>as</b> u64), threshold);
+        <b>let</b> adjusted_stake = stake <b>as</b> u128 * (<a href="voting_power.md#0x3_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128);
+        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a> = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(adjusted_stake <b>as</b> u64, threshold);
         <b>let</b> info = <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index: i,
             <a href="voting_power.md#0x3_voting_power">voting_power</a>,

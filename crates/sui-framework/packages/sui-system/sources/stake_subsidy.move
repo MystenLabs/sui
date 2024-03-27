@@ -49,7 +49,7 @@ module sui_system::stake_subsidy {
     ): StakeSubsidy {
         // Rate can't be higher than 100%.
         assert!(
-            stake_subsidy_decrease_rate <= (BASIS_POINT_DENOMINATOR as u16),
+            stake_subsidy_decrease_rate <= BASIS_POINT_DENOMINATOR as u16,
             ESubsidyDecreaseRateTooLarge,
         );
 
@@ -77,7 +77,7 @@ module sui_system::stake_subsidy {
 
         // Decrease the subsidy amount only when the current period ends.
         if (self.distribution_counter % self.stake_subsidy_period_length == 0) {
-            let decrease_amount = (self.current_distribution_amount as u128)
+            let decrease_amount = self.current_distribution_amount as u128
                 * (self.stake_subsidy_decrease_rate as u128) / BASIS_POINT_DENOMINATOR;
             self.current_distribution_amount = self.current_distribution_amount - (decrease_amount as u64)
         };

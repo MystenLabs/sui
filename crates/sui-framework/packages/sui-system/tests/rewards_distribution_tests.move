@@ -418,7 +418,7 @@ module sui_system::rewards_distribution_tests {
         // Create a set of 20 validators, each with 481 + i * 2 SUI of stake.
         // The stake total sums up to be 481 + 483 + ... + 517 + 519 = 1000 SUI.
         while (i < num_validators) {
-            let validator = create_validator_for_testing(address::from_u256((i as u256)), (481 + i * 2), ctx);
+            let validator = create_validator_for_testing(address::from_u256(i as u256), (481 + i * 2), ctx);
             validators.push_back(validator);
             i = i + 1;
         };
@@ -432,7 +432,7 @@ module sui_system::rewards_distribution_tests {
         // Check that each validator has the correct amount of SUI in their stake pool.
         let mut system_state = scenario.take_shared<SuiSystemState>();
         while (i < num_validators) {
-            let addr = address::from_u256((i as u256));
+            let addr = address::from_u256(i as u256);
             assert_eq(system_state.validator_stake_amount(addr), (962 + i * 4) * MIST_PER_SUI);
             i = i + 1;
         };

@@ -17,7 +17,7 @@ module sui::hex {
         let (mut i, mut r, l) = (0, vector[], bytes.length());
         let hex_vector = HEX;
         while (i < l) {
-            r.append(hex_vector[(bytes[i] as u64)]);
+            r.append(hex_vector[bytes[i] as u64]);
             i = i + 1;
         };
         r

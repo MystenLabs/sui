@@ -22,7 +22,7 @@ module deepbook::order_query_tests {
     const CLIENT_ID_ALICE: u64 = 0;
     const FLOAT_SCALING: u64 = 1000000000;
     const CANCEL_OLDEST: u8 = 0;
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
 
     const OWNER: address = @0xf;
     const ALICE: address = @0xBEEF;
