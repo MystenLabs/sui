@@ -3,30 +3,30 @@ processed 13 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 13-54:
+task 1 'publish'. lines 13-52:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8329600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 56-56:
+task 2 'run'. lines 54-54:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 58-58:
+task 3 'run'. lines 56-56:
 created: object(3,0), object(3,1), object(3,2)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6536000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 4 'run'. lines 60-60:
+task 4 'run'. lines 58-58:
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 5 'create-checkpoint'. lines 62-62:
+task 5 'create-checkpoint'. lines 60-60:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 64-87:
+task 6 'run-graphql'. lines 62-85:
 Response: {
   "data": {
     "object": {
@@ -94,16 +94,16 @@ Response: {
   }
 }
 
-task 7 'run'. lines 89-89:
+task 7 'run'. lines 87-87:
 created: object(7,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 8 'create-checkpoint'. lines 91-91:
+task 8 'create-checkpoint'. lines 89-89:
 Checkpoint created: 2
 
-task 9 'run-graphql'. lines 93-116:
+task 9 'run-graphql'. lines 91-114:
 Response: {
   "data": {
     "object": {
@@ -171,7 +171,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 118-143:
+task 10 'run-graphql'. lines 116-141:
 Response: {
   "data": {
     "owner": {
@@ -251,7 +251,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 145-165:
+task 11 'run-graphql'. lines 143-163:
 Response: {
   "data": {
     "owner": {
@@ -277,7 +277,7 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 167-178:
+task 12 'run-graphql'. lines 165-176:
 Response: {
   "data": {
     "owner": {
