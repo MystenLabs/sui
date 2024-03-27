@@ -2,31 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    ops::Bound::{Excluded, Included},
     sync::Arc,
     time::Duration,
 };
 
-use consensus_config::ProtocolKeyPair;
+use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
-use crate::transaction::TransactionGuard;
 use crate::{
     block::{
-        timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock, GENESIS_ROUND,
+        timestamp_utc_ms, Block, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, BlockV1, Round,
+        SignedBlock, Slot, VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    leader_schedule::{LeaderSchedule, LeaderSwapTable, ReputationScores},
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
-    transaction::TransactionConsumer,
+    transaction::{TransactionConsumer, TransactionGuard},
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
@@ -62,6 +63,13 @@ pub(crate) struct Core {
     /// to go through CommitObserver and persist the commit in store. On recovery/restart
     /// the last_decided_leader will be set to the last_commit leader in dag state.
     last_decided_leader: Slot,
+    /// The list of committed subdags that have been sequenced by the universal
+    /// committer that will be used to calculate reputation scores on the next
+    /// leader schedule change. For now they are considers as "unscored" subdags.
+    unscored_committed_subdags: Vec<CommittedSubDag>,
+    /// The consensus leader schedule to be used to resolve the leader for a
+    /// given round.
+    leader_schedule: Arc<LeaderSchedule>,
     /// The commit observer is responsible for observing the commits and collecting
     /// + sending subdags over the consensus output channel.
     commit_observer: CommitObserver,
@@ -84,11 +92,16 @@ impl Core {
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
-
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
-            .with_pipeline(true)
-            .build();
+        // TODO(arun): Change this to restore LS from store.
+        let leader_schedule = Arc::new(LeaderSchedule::new(context.clone()));
+        let committer = UniversalCommitterBuilder::new(
+            context.clone(),
+            leader_schedule.clone(),
+            dag_state.clone(),
+        )
+        .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
+        .with_pipeline(true)
+        .build();
 
         // Recover the last proposed block
         let last_proposed_block = dag_state
@@ -108,15 +121,22 @@ impl Core {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
         }
 
+        // TODO(arun): Add a method to retrieve the last committed subdags from
+        // store that are not part of the commit range of the last stored reputation
+        // scores.
+        let unscored_committed_subdags = Vec::new();
+
         Self {
             context: context.clone(),
             threshold_clock: ThresholdClock::new(0, context.clone()),
             last_proposed_block,
-            transaction_consumer,
             last_included_ancestors,
+            last_decided_leader,
+            leader_schedule,
+            transaction_consumer,
             block_manager,
             committer,
-            last_decided_leader,
+            unscored_committed_subdags,
             commit_observer,
             signals,
             block_signer,
@@ -347,24 +367,137 @@ impl Core {
             .with_label_values(&["Core::try_commit"])
             .start_timer();
 
+        let mut committed_subdags = Vec::new();
         // TODO: Add optimization to abort early without quorum for a round.
-        let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
+        loop {
+            let sequenced_leaders = self
+                .committer
+                .try_commit(self.last_decided_leader)
+                .into_iter()
+                .take(
+                    self.leader_schedule
+                        .num_commits_per_schedule
+                        .saturating_sub(self.unscored_committed_subdags.len() as u64)
+                        as usize,
+                )
+                .collect::<Vec<_>>();
 
-        if let Some(last) = sequenced_leaders.last() {
-            self.last_decided_leader = last.get_decided_slot();
-            self.context
-                .metrics
-                .node_metrics
-                .last_decided_leader_round
-                .set(self.last_decided_leader.round as i64);
+            if sequenced_leaders.is_empty() {
+                break;
+            }
+
+            // Find how many sequenced leaders can be committed with the existing leader schedule
+            // chunk or use all sequenced leaders and collect subdags
+            // Calling into leader schedule will get you how many commits till next leader change
+
+            if let Some(last) = sequenced_leaders.last() {
+                self.last_decided_leader = last.get_decided_slot();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .last_decided_leader_round
+                    .set(self.last_decided_leader.round as i64);
+            }
+
+            let committed_leaders = sequenced_leaders
+                .into_iter()
+                .filter_map(|leader| leader.into_committed_block())
+                .collect::<Vec<_>>();
+
+            match self.commit_observer.handle_commit(committed_leaders) {
+                Ok(subdags) => {
+                    self.unscored_committed_subdags.extend(subdags.clone());
+                    committed_subdags.extend(subdags);
+                }
+                Err(err) => {
+                    warn!("Error while handling commit: {err}");
+                    return Err(err);
+                }
+            };
+
+            if self.unscored_committed_subdags.len()
+                == self.leader_schedule.num_commits_per_schedule as usize
+            {
+                // Leader Schedule Change
+                self.update_leader_schedule();
+            }
+
+            // accumulate the subdags in some cache in the leader schedule
+            // if the subdags will trigger a schedule change that will happen
+            // after the subdags have been passed to leader schedule
+            // if the call to add subdags triggers a schedule change then the internal
+            // leader schedule will be updated
+
+            // if there were any left over sequenced leaders then just loop back around
+            // and resume the same strategy to commit leaders
         }
 
-        let committed_leaders = sequenced_leaders
-            .into_iter()
-            .filter_map(|leader| leader.into_committed_block())
-            .collect::<Vec<_>>();
+        Ok(committed_subdags)
+    }
 
-        self.commit_observer.handle_commit(committed_leaders)
+    // can I move this to reputation scores struct
+    fn update_leader_schedule(&self) {
+        let mut reputation_scores = ReputationScores::new(self.context.clone());
+        // Update the leader schedule with the new subdags
+        let subdags = self.unscored_committed_subdags.clone();
+        // Get a BTreeMap of the blocks in the committed subdags so I can do dag state stuff on the blocks
+        let committed_blocks = subdags
+            .iter()
+            .flat_map(|subdag| subdag.blocks.iter())
+            .map(|block| (block.reference(), block.clone()))
+            .collect::<BTreeMap<_, _>>();
+
+        let rounds = committed_blocks
+            .iter()
+            .map(|(block_ref, _)| block_ref.round);
+        // we should have multiple rounds across the committed subdags
+        let min_round = rounds.clone().min().unwrap();
+        let max_round = rounds.max().unwrap();
+
+        // We will search for certificates for leaders up to R - 3.
+        for round in min_round..=(max_round - 3) {
+            for committer in self.committer.committers.iter() {
+                if let Some(leader) = committer.elect_leader(round) {
+                    let leader_slot = Slot::new(round, leader.authority);
+                    let wave = committer.wave_number(leader_slot.round);
+                    let decision_round = committer.decision_round(wave);
+
+                    let leader_blocks = get_blocks_at_slot(&committed_blocks, leader_slot);
+
+                    if leader_blocks.is_empty() {
+                        // No block for leader slot in this set of committed subdags, skip
+                        continue;
+                    }
+
+                    // At this point we are guarnteed that there is only one leader per slot
+                    // because we are operating on committed subdags.
+                    assert!(leader_blocks.len() == 1);
+
+                    let leader_block = leader_blocks.first().unwrap();
+
+                    // check for certified links
+                    let decision_blocks = get_blocks_at_round(&committed_blocks, decision_round);
+                    let mut all_votes = HashMap::new();
+                    for decision_block in decision_blocks {
+                        let authority = decision_block.reference().author;
+                        if committer.is_certificate(&decision_block, leader_block, &mut all_votes) {
+                            reputation_scores.add_score(authority, 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update the leader schedule with the new reputation scores
+        self.leader_schedule
+            .update_leader_swap_table(LeaderSwapTable::new(
+                self.context.clone(),
+                max_round,
+                &reputation_scores,
+                self.context
+                    .protocol_config
+                    .consensus_bad_nodes_stake_threshold(),
+            ));
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -494,6 +627,115 @@ impl Core {
     }
 }
 
+fn find_supported_block(
+    leader_slot: Slot,
+    from: &VerifiedBlock,
+    search_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+) -> Option<BlockRef> {
+    if from.round() < leader_slot.round {
+        return None;
+    }
+    for ancestor in from.ancestors() {
+        if Slot::from(*ancestor) == leader_slot {
+            return Some(*ancestor);
+        }
+        // Weak links may point to blocks with lower round numbers than strong links.
+        if ancestor.round <= leader_slot.round {
+            continue;
+        }
+        let ancestor = get_block(search_blocks, ancestor)
+            .unwrap_or_else(|| panic!("Block not found in committed subdag: {:?}", ancestor));
+        if let Some(support) = find_supported_block(leader_slot, &ancestor, search_blocks) {
+            return Some(support);
+        }
+    }
+    None
+}
+
+fn is_vote(
+    potential_vote: &VerifiedBlock,
+    leader_block: &VerifiedBlock,
+    search_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+) -> bool {
+    let reference = leader_block.reference();
+    let leader_slot = Slot::from(reference);
+    find_supported_block(leader_slot, potential_vote, search_blocks) == Some(reference)
+}
+
+fn is_certificate(
+    context: Arc<Context>,
+    potential_certificate: &VerifiedBlock,
+    leader_block: &VerifiedBlock,
+    search_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+    all_votes: &mut HashMap<BlockRef, bool>,
+) -> bool {
+    let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
+    for reference in potential_certificate.ancestors() {
+        let is_vote = if let Some(is_vote) = all_votes.get(reference) {
+            *is_vote
+        } else {
+            let potential_vote = get_block(search_blocks, reference)
+                .unwrap_or_else(|| panic!("Block not found in committed subdags: {:?}", reference));
+            let is_vote = is_vote(&potential_vote, leader_block, search_blocks);
+            all_votes.insert(*reference, is_vote);
+            is_vote
+        };
+
+        if is_vote {
+            tracing::trace!("{reference} is a vote for {leader_block}");
+            if votes_stake_aggregator.add(reference.author, &context.committee) {
+                tracing::trace!(
+                    "{potential_certificate} is a certificate for leader {leader_block}"
+                );
+                return true;
+            }
+        } else {
+            tracing::trace!("{reference} is not a vote for {leader_block}",);
+        }
+    }
+    tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
+    false
+}
+
+fn get_blocks_at_slot(
+    search_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+    slot: Slot,
+) -> Vec<VerifiedBlock> {
+    let mut blocks = vec![];
+    for (_block_ref, block) in search_blocks.range((
+        Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+        Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+    )) {
+        blocks.push(block.clone())
+    }
+    blocks
+}
+
+fn get_blocks_at_round(
+    search_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+    round: Round,
+) -> Vec<VerifiedBlock> {
+    let mut blocks = vec![];
+    for (_block_ref, block) in search_blocks.range((
+        Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
+        Excluded(BlockRef::new(
+            round + 1,
+            AuthorityIndex::ZERO,
+            BlockDigest::MIN,
+        )),
+    )) {
+        blocks.push(block.clone())
+    }
+    blocks
+}
+
+fn get_block(
+    search_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+    block_ref: &BlockRef,
+) -> Option<VerifiedBlock> {
+    search_blocks.get(block_ref).cloned()
+}
+
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
@@ -577,8 +819,7 @@ mod test {
 
     use super::*;
     use crate::{
-        block::genesis_blocks,
-        block::TestBlock,
+        block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI as _,
         storage::{mem_store::MemStore, Store, WriteBatch},

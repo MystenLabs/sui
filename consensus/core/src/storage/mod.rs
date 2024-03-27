@@ -12,9 +12,8 @@ use std::ops::Range;
 use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
 
-use crate::block::Slot;
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::{BlockRef, Round, Slot, VerifiedBlock},
     commit::{CommitIndex, TrustedCommit},
     error::ConsensusResult,
 };
@@ -66,6 +65,7 @@ pub(crate) struct WriteBatch {
     pub(crate) blocks: Vec<VerifiedBlock>,
     pub(crate) commits: Vec<TrustedCommit>,
     pub(crate) last_committed_rounds: Vec<Round>,
+    // TODO(arun): add reputation scores
 }
 
 impl WriteBatch {
@@ -103,4 +103,6 @@ impl WriteBatch {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CommitInfo {
     pub(crate) last_committed_rounds: Vec<Round>,
+    // TODO(arun): add reputation scores
+    // pub(crate) reputation_scores: Vec<u64>,
 }

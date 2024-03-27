@@ -52,7 +52,7 @@ pub(crate) struct BaseCommitter {
     context: Arc<Context>,
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
-    leader_schedule: LeaderSchedule,
+    leader_schedule: Arc<LeaderSchedule>,
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The options used by this committer
@@ -62,7 +62,7 @@ pub(crate) struct BaseCommitter {
 impl BaseCommitter {
     pub fn new(
         context: Arc<Context>,
-        leader_schedule: LeaderSchedule,
+        leader_schedule: Arc<LeaderSchedule>,
         dag_state: Arc<RwLock<DagState>>,
         options: BaseCommitterOptions,
     ) -> Self {
@@ -221,7 +221,7 @@ impl BaseCommitter {
     /// whether a reference is a vote. This is done for efficiency. Bear in mind
     /// that the `all_votes` should refer to votes considered to the same `leader_block`
     /// and it can't be reused for different leaders.
-    fn is_certificate(
+    pub(crate) fn is_certificate(
         &self,
         potential_certificate: &VerifiedBlock,
         leader_block: &VerifiedBlock,
@@ -443,7 +443,7 @@ mod base_committer_builder {
             };
             BaseCommitter::new(
                 self.context.clone(),
-                LeaderSchedule::new(self.context),
+                Arc::new(LeaderSchedule::new(self.context)),
                 self.dag_state,
                 options,
             )
