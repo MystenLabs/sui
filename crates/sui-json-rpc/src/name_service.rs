@@ -107,14 +107,15 @@ impl Domain {
         labels.reverse();
 
         if format == DomainFormat::Dot {
-            return labels.join(&sep);
+            return labels.join(sep);
         };
 
         // SAFETY: This is a safe operation because we only allow a
         // domain's label vector size to be >= 2 (see `Domain::from_str`)
         let _tld = labels.pop();
         let sld = labels.pop().unwrap();
-        return format!("{}{}{}", labels.join(&sep), SUI_NEW_FORMAT_SEPARATOR, sld);
+
+        format!("{}{}{}", labels.join(sep), SUI_NEW_FORMAT_SEPARATOR, sld)
     }
 }
 
