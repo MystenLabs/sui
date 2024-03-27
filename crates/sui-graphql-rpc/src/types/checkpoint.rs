@@ -46,7 +46,7 @@ struct SeqNumKey {
     /// The digest is not used for fetching, but is used as an additional filter, to correctly
     /// implement a request that sets both a sequence number and a digest.
     pub digest: Option<Digest>,
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
 }
 
 /// DataLoader key for fetching a `Checkpoint` by its digest, optionally constrained by a
@@ -54,7 +54,7 @@ struct SeqNumKey {
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct DigestKey {
     pub digest: Digest,
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
 }
 
 #[derive(Clone)]
@@ -64,7 +64,7 @@ pub(crate) struct Checkpoint {
     pub stored: StoredCheckpoint,
     // The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
     // requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<CheckpointCursor>;
@@ -209,7 +209,7 @@ impl Checkpoint {
     pub(crate) async fn query(
         ctx: &Context<'_>,
         filter: CheckpointId,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         match filter {
             CheckpointId {
@@ -244,38 +244,27 @@ impl Checkpoint {
         }
     }
 
-    /// Look up the latest `Checkpoint` from the database, optionally filtered by a consistency
-    /// cursor (querying for a consistency cursor in the past looks for the latest checkpoint as of
-    /// that cursor).
-    async fn query_latest_at(
-        db: &Db,
-        checkpoint_viewed_at: Option<u64>,
-    ) -> Result<Option<Self>, Error> {
+    /// Look up the latest `Checkpoint` from the database, filtered by a consistency cursor
+    /// (querying for a consistency cursor in the past looks for the latest checkpoint as of that
+    /// cursor).
+    async fn query_latest_at(db: &Db, checkpoint_viewed_at: u64) -> Result<Option<Self>, Error> {
         use checkpoints::dsl;
 
-        let (stored, checkpoint_viewed_at): (Option<StoredCheckpoint>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
-
-                let stored = conn
-                    .first(move || {
-                        dsl::checkpoints
-                            .filter(dsl::sequence_number.le(checkpoint_viewed_at as i64))
-                            .order_by(dsl::sequence_number.desc())
-                    })
-                    .optional()?;
-
-                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
+        let stored: Option<StoredCheckpoint> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    dsl::checkpoints
+                        .filter(dsl::sequence_number.le(checkpoint_viewed_at as i64))
+                        .order_by(dsl::sequence_number.desc())
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
 
         Ok(stored.map(|stored| Checkpoint {
             stored,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 
@@ -336,20 +325,15 @@ impl Checkpoint {
         db: &Db,
         page: Page<Cursor>,
         filter: Option<u64>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        let ((prev, next, results), rhs) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
-
-                let result = page.paginate_query::<StoredCheckpoint, _, _, _>(
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredCheckpoint, _, _, _>(
                     conn,
                     checkpoint_viewed_at,
                     move || {
@@ -360,23 +344,18 @@ impl Checkpoint {
                         }
                         query
                     },
-                )?;
-
-                Ok::<_, diesel::result::Error>((result, checkpoint_viewed_at))
+                )
             })
             .await?;
 
-        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
-        // current available range. This sets a consistent upper bound for the nested queries.
         let mut conn = Connection::new(prev, next);
-        let checkpoint_viewed_at = checkpoint_viewed_at.unwrap_or(rhs);
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
                 cursor,
                 Checkpoint {
                     stored,
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                 },
             ));
         }
@@ -463,12 +442,9 @@ impl Loader<SeqNumKey> for Db {
         let checkpoint_ids: BTreeSet<_> = keys
             .iter()
             .filter_map(|key| {
-                if let Some(viewed_at) = key.checkpoint_viewed_at {
-                    // Filter out keys querying for checkpoints after their own consistency cursor.
-                    (viewed_at >= key.sequence_number).then_some(key.sequence_number as i64)
-                } else {
-                    Some(key.sequence_number as i64)
-                }
+                // Filter out keys querying for checkpoints after their own consistency cursor.
+                (key.checkpoint_viewed_at >= key.sequence_number)
+                    .then_some(key.sequence_number as i64)
             })
             .collect();
 
@@ -546,7 +522,7 @@ impl Loader<DigestKey> for Db {
                 // be quite rare that this query actually filters something, but encoding it in SQL
                 // is complicated.
                 let seq_num = checkpoint.stored.sequence_number as u64;
-                if matches!(key.checkpoint_viewed_at, Some(cp) if cp < seq_num) {
+                if key.checkpoint_viewed_at < seq_num {
                     None
                 } else {
                     Some((*key, checkpoint))

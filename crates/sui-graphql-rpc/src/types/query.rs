@@ -262,7 +262,7 @@ impl Query {
     ) -> Result<Option<Checkpoint>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
 
-        Checkpoint::query(ctx, id.unwrap_or_default(), Some(checkpoint_viewed_at))
+        Checkpoint::query(ctx, id.unwrap_or_default(), checkpoint_viewed_at)
             .await
             .extend()
     }
@@ -324,7 +324,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             /* epoch */ None,
-            Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         )
         .await
         .extend()

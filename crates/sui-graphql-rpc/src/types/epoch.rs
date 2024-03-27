@@ -103,7 +103,7 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => Checkpoint::query(ctx, CheckpointId::default(), None)
+            None => Checkpoint::query(ctx, CheckpointId::default(), self.checkpoint_viewed_at)
                 .await
                 .extend()?
                 .map_or(self.stored.first_checkpoint_id as u64, |c| {
