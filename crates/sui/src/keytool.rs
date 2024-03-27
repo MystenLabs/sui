@@ -1078,7 +1078,8 @@ impl KeyToolCommand {
                             "mainnet" | "testnet" => ZkLoginEnv::Prod,
                             _ => return Err(anyhow!("Invalid network")),
                         };
-                        let aux_verify_data = VerifyParams::new(parsed, vec![], env, true, true);
+                        let verify_params =
+                            VerifyParams::new(parsed, vec![], env, true, true, Some(2));
 
                         let (serialized, res) = match IntentScope::try_from(intent_scope)
                             .map_err(|_| anyhow!("Invalid scope"))?
@@ -1093,7 +1094,7 @@ impl KeyToolCommand {
                                     &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
                                     tx_data.execution_parts().1,
                                     Some(curr_epoch.unwrap()),
-                                    &aux_verify_data,
+                                    &verify_params,
                                 );
                                 (serde_json::to_string(&tx_data)?, res)
                             }
@@ -1108,7 +1109,7 @@ impl KeyToolCommand {
                                     &IntentMessage::new(Intent::personal_message(), data.clone()),
                                     (&zk).try_into()?,
                                     Some(curr_epoch.unwrap()),
-                                    &aux_verify_data,
+                                    &verify_params,
                                 );
                                 (serde_json::to_string(&data)?, res)
                             }
