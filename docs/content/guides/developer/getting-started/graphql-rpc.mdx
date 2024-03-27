@@ -190,7 +190,7 @@ query ($address: SuiAddress!) {
 ## Fetching a dynamic field on an object
 
 :::info
-This example uses aliases and [fragments](../../../concepts/graphql-rpc/fragments.mdx).
+This example uses aliases and [fragments](../../../concepts/graphql-rpc.mdx#fragments).
 :::
 
 ```graphql
@@ -245,7 +245,7 @@ fragment MoveValueFields on MoveValue {
 This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the [owner](../../../references/sui-api/sui-graphql/reference/queries/owner.mdx) query, so can be used for iterating over the elements of on-chain data structures, like [Tables and Bags](../../../concepts/dynamic-fields/tables-bags.mdx).
 
 :::info
-This example uses [fragments](../../../concepts/graphql-rpc/fragments.mdx) and [variables](../../../concepts/graphql-rpc/variables.mdx).
+This example uses [fragments](../../../concepts/graphql-rpc/fragments.mdx) and [variables](../../../concepts/graphql-rpc.mdx#variables).
 :::
 
 ```graphql
@@ -299,7 +299,7 @@ Sets up a paginated query, starting at the genesis checkpoint, reading five chec
 
 :::info
 
-This example uses GraphQL [variables](../../../concepts/graphql-rpc/variables.mdx) and [pagination](../../../concepts/graphql-rpc/pagination.mdx).
+This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
 
 :::
 
