@@ -24,6 +24,7 @@ module bridge::treasury {
 
     const EUnsupportedTokenType: u64 = 0;
     const EInvalidUpgradeCap: u64 = 1;
+    const ETokenSupplyNonZero: u64 = 2;
 
     #[test_only]
     const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
@@ -62,7 +63,15 @@ module bridge::treasury {
         native_token: bool
     }
 
+    public struct TokenRegistrationEvent has copy, drop {
+        type_name: TypeName,
+        decimal:u8,
+        native_token: bool
+    }
+
     public fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
+        // Make sure TreasuryCap has not been minted before.
+        assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
         let type_name = type_name::get<T>();
         let coin_address = address::from_ascii_bytes(ascii::as_bytes(&type_name::get_address(&type_name)));
         // Make sure upgrade cap is for the Coin package
@@ -73,7 +82,13 @@ module bridge::treasury {
             decimal: coin::get_decimals(metadata),
         };
         bag::add(&mut self.waiting_room, type_name::into_string(type_name), registration);
-        object_bag::add(&mut self.treasuries, type_name, tc)
+        object_bag::add(&mut self.treasuries, type_name, tc);
+
+        emit(TokenRegistrationEvent{
+            type_name,
+            decimal: coin::get_decimals(metadata),
+            native_token: false
+        });
     }
 
     public fun token_id<T>(self: &BridgeTreasury): u8 {
