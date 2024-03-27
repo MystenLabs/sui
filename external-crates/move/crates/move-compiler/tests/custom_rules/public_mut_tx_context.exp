@@ -1,0 +1,8 @@
+warning[Lint W00001]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/custom_rules/public_mut_tx_context.move:3:28
+  │
+3 │     public fun mint(_ctx: &TxContext) {
+  │                            ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+  │
+  = This warning can be suppressed with '#[allow(lint(public_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
