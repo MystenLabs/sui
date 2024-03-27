@@ -48,7 +48,7 @@ module sui::royalty_policy {
     ) {
         let config: &Config = policy::get_rule(Rule {}, policy);
         let paid = policy::paid(request);
-        let amount = (((paid as u128) * (config.amount_bp as u128) / 10_000) as u64);
+        let amount = (paid as u128 * (config.amount_bp as u128) / 10_000) as u64;
 
         assert!(coin::value(payment) >= amount, EInsufficientAmount);
 

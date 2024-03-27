@@ -325,7 +325,7 @@ Read <code>u64</code> value from bcs-serialized bytes.
 
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u64, 0u8);
     <b>while</b> (i &lt; 64) {
-        <b>let</b> byte = (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64);
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64;
         value = value + (byte &lt;&lt; i);
         i = i + 8;
     };
@@ -359,7 +359,7 @@ Read <code>u128</code> value from bcs-serialized bytes.
 
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u128, 0u8);
     <b>while</b> (i &lt; 128) {
-        <b>let</b> byte = (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u128);
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u128;
         value = value + (byte &lt;&lt; i);
         i = i + 8;
     };
@@ -393,7 +393,7 @@ Read <code>u256</code> value from bcs-serialized bytes.
 
     <b>let</b> (<b>mut</b> value, <b>mut</b> i) = (0u256, 0u16);
     <b>while</b> (i &lt; 256) {
-        <b>let</b> byte = (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u256);
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u256;
         value = value + (byte &lt;&lt; (i <b>as</b> u8));
         i = i + 8;
     };
@@ -430,7 +430,7 @@ See more here: https://en.wikipedia.org/wiki/LEB128
     <b>let</b> (<b>mut</b> total, <b>mut</b> shift, <b>mut</b> len) = (0u64, 0, 0);
     <b>while</b> (<b>true</b>) {
         <b>assert</b>!(len &lt;= 4, <a href="bcs.md#0x2_bcs_ELenOutOfRange">ELenOutOfRange</a>);
-        <b>let</b> byte = (<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64);
+        <b>let</b> byte = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64;
         len = len + 1;
         total = total | ((byte & 0x7f) &lt;&lt; shift);
         <b>if</b> ((byte & 0x80) == 0) {

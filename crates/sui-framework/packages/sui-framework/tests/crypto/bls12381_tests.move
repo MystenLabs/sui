@@ -101,7 +101,7 @@ module sui::bls12381_tests {
         while (i > 0) {
             let curr_byte = round % 0x100;
             let curr_element = &mut round_bytes[i];
-            *curr_element = (curr_byte as u8);
+            *curr_element = curr_byte as u8;
             round = round >> 8;
             i = i - 1;
         };
