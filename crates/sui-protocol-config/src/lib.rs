@@ -2060,7 +2060,7 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
                 42 => {
-                    cfg.feature_flags.zklogin_max_epoch_upper_bound = Some(2);
+                    cfg.feature_flags.zklogin_max_epoch_upper_bound = Some(30);
                 }
                 // Use this template when making changes:
                 //

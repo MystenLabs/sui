@@ -19,7 +19,6 @@ use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-//#[cfg(any(test, feature = "test-utils"))]
 #[cfg(test)]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
 mod zk_login_authenticator_test;

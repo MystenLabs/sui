@@ -2250,10 +2250,6 @@ impl SenderSignedData {
         upper_bound_for_max_epoch: Option<u64>,
     ) -> SuiResult {
         for sig in &self.inner().tx_signatures {
-            tracing::info!(
-                "verify_max_epoch_for_all_sigs tk={:?}",
-                upper_bound_for_max_epoch
-            );
             sig.verify_user_authenticator_epoch(epoch, upper_bound_for_max_epoch)?;
         }
         Ok(())

@@ -360,7 +360,6 @@ impl SignatureVerifier {
         self.signed_data_cache.is_verified(
             signed_tx.full_message_digest(),
             || {
-                signed_tx.verify_epoch(self.committee.epoch())?;
                 signed_tx.verify_max_epoch_for_all_sigs(
                     self.committee.epoch(),
                     self.zk_login_params.zklogin_max_epoch_upper_bound,
