@@ -12,7 +12,7 @@ use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
     query_builder::QueryFragment,
     sql_types::{Binary, Text},
-    AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods, QueryDsl, QuerySource,
+    AppearsOnTable, Expression, ExpressionMethods, QueryDsl, QuerySource,
 };
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};
@@ -66,33 +66,50 @@ pub(crate) enum Error {
     InvalidFormat(&'static str),
 }
 
+/// Trait for a field that can be used in a query.
+pub(crate) trait Field<Type, QS: QuerySource>:
+    ExpressionMethods
+    + Expression<SqlType = Type>
+    + QueryFragment<DieselBackend>
+    + AppearsOnTable<QS>
+    + ValidGrouping<(), IsAggregate = No>
+    + Send
+    + 'static
+{
+}
+
+impl<T, Type, QS: QuerySource> Field<Type, QS> for T where
+    T: ExpressionMethods
+        + Expression<SqlType = Type>
+        + QueryFragment<DieselBackend>
+        + AppearsOnTable<QS>
+        + ValidGrouping<(), IsAggregate = No>
+        + Send
+        + 'static
+{
+}
+
 impl TypeFilter {
     /// Modify `query` to apply this filter to `type_field`, `package_field`, `module_field`
-    /// and `name_field`, where `type_field` stores the full type tag while the rest three
+    /// and `name_field`, where `type_field` stores the full type tag while the rest
     /// store the package, module and name of the type tag respectively. The new query
     /// after applying the filter is returned.
     pub(crate) fn apply<T, P, M, N, QS, ST, GB>(
         &self,
         query: Query<ST, QS, GB>,
+        // Field storing the full type tag, including type parameters.
         type_field: T,
         package_field: P,
         module_field: M,
+        // Name field only includes the name of the struct, like `Coin`, not including type parameters.
         name_field: N,
     ) -> Query<ST, QS, GB>
     where
         Query<ST, QS, GB>: QueryDsl,
-        T: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        N: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        T: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        N: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        T: Send + 'static,
-        P: Send + 'static,
-        M: Send + 'static,
-        N: Send + 'static,
+        T: Field<Text, QS>,
+        P: Field<Binary, QS>,
+        M: Field<Text, QS>,
+        N: Field<Text, QS>,
         QS: QuerySource,
     {
         match self {
@@ -111,17 +128,15 @@ impl TypeFilter {
                 let p = tag.address.to_vec();
                 let m = tag.module.to_string();
                 let n = tag.name.to_string();
-                query.filter(
-                    package_field
-                        .eq(p)
-                        .and(module_field.eq(m))
-                        .and(name_field.eq(n)),
-                )
+                query
+                    .filter(package_field.eq(p))
+                    .filter(module_field.eq(m))
+                    .filter(name_field.eq(n))
             }
 
             TypeFilter::ByType(tag) => {
                 let exact = tag.to_canonical_string(/* with_prefix */ true);
-                // We check against the full type field for an exact match.
+                // We check against the full type field for an exact match, including type parameters.
                 query.filter(type_field.eq(exact))
             }
         }
@@ -250,15 +265,9 @@ impl FqNameFilter {
     ) -> Query<ST, QS, GB>
     where
         Query<ST, QS, GB>: QueryDsl,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        N: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        N: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        P: Send + 'static,
-        M: Send + 'static,
-        N: Send + 'static,
+        P: Field<Binary, QS>,
+        M: Field<Text, QS>,
+        N: Field<Text, QS>,
         QS: QuerySource,
     {
         match self {
@@ -307,12 +316,8 @@ impl ModuleFilter {
     ) -> Query<ST, QS, GB>
     where
         Query<ST, QS, GB>: QueryDsl,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        P: Send + 'static,
-        M: Send + 'static,
+        P: Field<Binary, QS>,
+        M: Field<Text, QS>,
         QS: QuerySource,
     {
         match self {

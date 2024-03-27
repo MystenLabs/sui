@@ -48,10 +48,12 @@ pub struct StoredObject {
     pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
-    /// The type of this object. This and following three fields will be None if the object is a Package
+    /// The full type of this object, including package id, module, name and type parameters.
+    /// This and following three fields will be None if the object is a Package
     pub object_type: Option<String>,
     pub object_type_package: Option<Vec<u8>>,
     pub object_type_module: Option<String>,
+    /// Name of the object type, e.g., "Coin", without type parameters.
     pub object_type_name: Option<String>,
     pub serialized_object: Vec<u8>,
     pub coin_type: Option<String>,

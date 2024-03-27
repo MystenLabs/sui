@@ -177,6 +177,7 @@ pub struct IndexedEvent {
     pub event_type: String,
     pub event_type_package: ObjectID,
     pub event_type_module: String,
+    /// Struct name of the event, without type parameters.
     pub event_type_name: String,
     pub bcs: Vec<u8>,
     pub timestamp_ms: u64,
