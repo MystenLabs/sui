@@ -5,7 +5,7 @@ module a::m {
     use fun foo as u64.f;
 
     fun t() {
-        use fun foo as u64.f;
+        use a::m::foo as f;
     }
 }
 

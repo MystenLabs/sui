@@ -1,12 +1,3 @@
-warning[W09001]: unused alias
-   ┌─ tests/move_2024/typing/all_index_paths.move:11:14
-   │
-11 │     use std::vector;
-   │              ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
-   │
-   = This alias does not shadow the built-in type 'vector' in type annotations.
-   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[E04012]: invalid type for constant
    ┌─ tests/move_2024/typing/all_index_paths.move:46:16
    │

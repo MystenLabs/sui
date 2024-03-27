@@ -8,7 +8,7 @@ module std::vector {
 }
 
 module a::m {
-    use std::vector;
+
 
     fun id_w(w: W): W { w }
     fun id(x: X): X { x }

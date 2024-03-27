@@ -13,7 +13,7 @@ module std::vector {
 // Correct usage
 module a::m {
 
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> }
 
@@ -43,4 +43,3 @@ module a::m {
         t[i].deref();
     }
 }
-

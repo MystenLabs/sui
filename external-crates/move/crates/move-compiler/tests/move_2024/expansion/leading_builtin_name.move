@@ -1,3 +1,4 @@
+#[allow(duplicate_alias)]
 module a::t1 {
     use std::vector;
 

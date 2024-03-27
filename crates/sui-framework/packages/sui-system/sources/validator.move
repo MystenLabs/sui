@@ -10,7 +10,6 @@ module sui_system::validator {
     use sui_system::validator_cap::{Self, ValidatorOperationCap};
     use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
     use std::string::String;
-    use sui::transfer;
     use sui::url::Url;
     use sui::url;
     use sui::event;

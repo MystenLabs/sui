@@ -3,9 +3,7 @@
 
 #[test_only]
 module deepbook::order_query_tests {
-    use std::option;
-    use std::option::{none, some, Option};
-    use std::vector;
+    use std::option::{none, some};
     use sui::clock;
     use deepbook::order_query;
     use deepbook::order_query::iter_bids;

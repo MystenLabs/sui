@@ -3,20 +3,15 @@
 
 #[allow(unused_use)]
 module deepbook::clob {
-    use std::option;
     use std::type_name::{Self, TypeName};
-    use std::vector;
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin, join};
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::object::{Self, UID, ID};
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian::{Self, Custodian, AccountCap};

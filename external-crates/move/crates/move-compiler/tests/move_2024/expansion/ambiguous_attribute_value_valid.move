@@ -1,3 +1,4 @@
+#[allow(duplicate_alias)]
 module a::m {
     use a::m;
 

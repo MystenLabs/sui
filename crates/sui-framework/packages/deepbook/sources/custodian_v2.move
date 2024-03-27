@@ -4,9 +4,7 @@
 module deepbook::custodian_v2 {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
     use sui::table::{Self, Table};
-    use sui::tx_context::TxContext;
 
     /* friend deepbook::clob_v2; */
 
@@ -204,13 +202,9 @@ module deepbook::custodian_v2 {
     #[test_only]
     use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
     #[test_only]
-    use sui::transfer;
-    #[test_only]
     use sui::coin::{mint_for_testing};
     #[test_only]
     use sui::test_utils::{assert_eq, destroy};
-    #[test_only]
-    use sui::tx_context;
 
     #[test_only]
     const ENull: u64 = 0;

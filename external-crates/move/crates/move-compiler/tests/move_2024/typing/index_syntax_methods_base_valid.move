@@ -13,7 +13,7 @@ module std::vector {
 // Correct usage
 module a::valid0 {
 
-    use std::vector;
+
 
     public struct S has drop { t: vector<u64> }
 
@@ -30,7 +30,7 @@ module a::valid0 {
 }
 
 module a::valid1 {
-    use std::vector;
+
 
     public struct S<T> has drop { t: vector<T> }
 
