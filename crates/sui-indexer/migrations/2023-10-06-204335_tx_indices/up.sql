@@ -45,3 +45,10 @@ CREATE TABLE tx_calls (
 CREATE INDEX tx_calls_module ON tx_calls (package, module, tx_sequence_number, cp_sequence_number);
 CREATE INDEX tx_calls_func ON tx_calls (package, module, func, tx_sequence_number, cp_sequence_number);
 CREATE INDEX tx_calls_tx_sequence_number ON tx_calls (tx_sequence_number, cp_sequence_number);
+
+-- un-partitioned table for tx_digest -> (cp_sequence_number, tx_sequence_number) lookup.
+CREATE TABLE tx_digests (
+    tx_digest                   BYTEA        PRIMARY KEY,
+    cp_sequence_number          BIGINT       NOT NULL,
+    tx_sequence_number          BIGINT       NOT NULL
+);
