@@ -143,6 +143,10 @@ mod tests {
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
+
+        async fn get_highest_accepted_rounds(&self) -> Result<Vec<Round>, CoreError> {
+            todo!()
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

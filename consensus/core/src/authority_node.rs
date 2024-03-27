@@ -35,7 +35,7 @@ use crate::{
     storage::rocksdb_store::RocksDBStore,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
-    CommitConsumer,
+    CommitConsumer, Round,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
@@ -358,8 +358,10 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-    ) -> ConsensusResult<Vec<Bytes>> {
+        highest_accepted_rounds: Vec<Round>,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         const MAX_ALLOWED_FETCH_BLOCKS: usize = 200;
+        const MAX_ADDITIONAL_BLOCKS: usize = 10;
 
         if block_refs.len() > MAX_ALLOWED_FETCH_BLOCKS {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
@@ -381,14 +383,35 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // For now ask dag state directly
         let blocks = self.dag_state.read().get_blocks(&block_refs);
 
-        // Return the serialised blocks
+        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
+        // that ancestor blocks up to 10
+        let all_ancestors = blocks
+            .iter()
+            .flatten()
+            .flat_map(|block| block.ancestors().to_vec())
+            .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+            .take(MAX_ADDITIONAL_BLOCKS)
+            .collect::<Vec<_>>();
+
+        let mut ancestor_blocks = vec![];
+        if !all_ancestors.is_empty() {
+            ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+        }
+
+        // Return the serialised blocks & the ancestor blocks
         let result = blocks
             .into_iter()
             .flatten()
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();
 
-        Ok(result)
+        let result_ancestors = ancestor_blocks
+            .into_iter()
+            .flatten()
+            .map(|block| block.serialized().clone())
+            .collect::<Vec<_>>();
+
+        Ok((result, result_ancestors))
     }
 }
 
@@ -451,6 +474,10 @@ mod tests {
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
         }
+
+        async fn get_highest_accepted_rounds(&self) -> Result<Vec<Round>, CoreError> {
+            unimplemented!()
+        }
     }
 
     #[derive(Default)]
@@ -471,8 +498,9 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
             _timeout: Duration,
-        ) -> ConsensusResult<Vec<Bytes>> {
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
     }

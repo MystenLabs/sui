@@ -367,6 +367,19 @@ impl Core {
         self.commit_observer.handle_commit(committed_leaders)
     }
 
+    pub(crate) fn get_highest_accepted_rounds(&self) -> Vec<Round> {
+        let blocks = self
+            .dag_state
+            .read()
+            .get_last_cached_block_per_authority(Round::MAX);
+        assert_eq!(blocks.len(), self.context.committee.size());
+
+        blocks
+            .into_iter()
+            .map(|block| block.round())
+            .collect::<Vec<_>>()
+    }
+
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
         self.block_manager.missing_blocks()
     }

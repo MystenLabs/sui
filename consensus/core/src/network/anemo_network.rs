@@ -8,6 +8,8 @@ use std::{
     time::Duration,
 };
 
+use anemo::rpc::Status;
+use anemo::types::response::StatusCode;
 use anemo::{types::PeerInfo, PeerId, Response};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
@@ -39,6 +41,7 @@ use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
+    Round,
 };
 
 /// Implements Anemo RPC client for Consensus.
@@ -143,8 +146,9 @@ impl NetworkClient for AnemoClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Bytes>> {
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         let mut client = self.get_client(peer, timeout).await?;
         let request = FetchBlocksRequest {
             block_refs: block_refs
@@ -157,12 +161,20 @@ impl NetworkClient for AnemoClient {
                     }
                 })
                 .collect(),
+            highest_accepted_rounds,
         };
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
-        Ok(response.into_body().blocks)
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks timeout: {e:?}"))
+                } else {
+                    ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?;
+        let body = response.into_body();
+        Ok((body.blocks.clone(), body.ancestor_blocks))
     }
 }
 
@@ -233,8 +245,8 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer not found",
             )
         })?;
-        let block_refs = request
-            .into_body()
+        let body = request.into_body();
+        let block_refs = body
             .block_refs
             .into_iter()
             .filter_map(|serialized| match bcs::from_bytes(&serialized) {
@@ -245,9 +257,12 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 }
             })
             .collect();
-        let blocks = self
+
+        let highest_accepted_rounds = body.highest_accepted_rounds;
+
+        let (blocks, ancestor_blocks) = self
             .service
-            .handle_fetch_blocks(*index, block_refs)
+            .handle_fetch_blocks(*index, block_refs, highest_accepted_rounds)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -255,7 +270,10 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                     format!("{e}"),
                 )
             })?;
-        Ok(Response::new(FetchBlocksResponse { blocks }))
+        Ok(Response::new(FetchBlocksResponse {
+            blocks,
+            ancestor_blocks,
+        }))
     }
 }
 
@@ -615,6 +633,7 @@ mod test {
         context::Context,
         error::ConsensusResult,
         network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
+        Round,
     };
 
     struct TestService {
@@ -646,9 +665,10 @@ mod test {
             &self,
             peer: AuthorityIndex,
             block_refs: Vec<BlockRef>,
-        ) -> ConsensusResult<Vec<Bytes>> {
+            _highest_accepted_rounds: Vec<Round>,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             self.lock().handle_fetch_blocks.push((peer, block_refs));
-            Ok(vec![])
+            Ok((vec![], vec![]))
         }
     }
 

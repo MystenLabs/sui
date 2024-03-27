@@ -26,6 +26,8 @@ enum CoreThreadCommand {
     ForceNewBlock(Round, oneshot::Sender<()>),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
+    /// Get the highest accepted rounds per authority
+    GetHighestAcceptedRounds(oneshot::Sender<Vec<Round>>),
 }
 
 #[derive(Error, Debug)]
@@ -44,6 +46,8 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
+
+    async fn get_highest_accepted_rounds(&self) -> Result<Vec<Round>, CoreError>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -83,6 +87,9 @@ impl CoreThread {
                 }
                 CoreThreadCommand::GetMissing(sender) => {
                     sender.send(self.core.get_missing_blocks()).ok();
+                }
+                CoreThreadCommand::GetHighestAcceptedRounds(sender) => {
+                    sender.send(self.core.get_highest_accepted_rounds()).ok();
                 }
             }
         }
@@ -169,6 +176,13 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::GetMissing(sender)).await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn get_highest_accepted_rounds(&self) -> Result<Vec<Round>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::GetHighestAcceptedRounds(sender))
+            .await;
         receiver.await.map_err(Shutdown)
     }
 }

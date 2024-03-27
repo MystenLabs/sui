@@ -37,6 +37,7 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::tonic_gen::consensus_service_server::ConsensusServiceServer,
+    Round,
 };
 
 const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
@@ -94,8 +95,9 @@ impl NetworkClient for TonicClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Bytes>> {
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         let mut client = self.get_client(peer, timeout).await?;
         let mut request = Request::new(FetchBlocksRequest {
             block_refs: block_refs
@@ -108,6 +110,7 @@ impl NetworkClient for TonicClient {
                     }
                 })
                 .collect(),
+            highest_accepted_rounds,
         });
         request.set_timeout(timeout);
         // TODO: remove below after adding authentication.
@@ -118,8 +121,18 @@ impl NetworkClient for TonicClient {
         let response = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
-        Ok(response.into_inner().blocks)
+            .map_err(|e: tonic::Status| {
+                if e.code() == tonic::Code::DeadlineExceeded {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                } else {
+                    ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?;
+        let FetchBlocksResponse {
+            blocks,
+            ancestor_blocks,
+        } = response.into_inner();
+        Ok((blocks, ancestor_blocks))
     }
 }
 
@@ -237,8 +250,8 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::invalid_argument("Invalid authority index"));
         };
-        let block_refs = request
-            .into_inner()
+        let inner = request.into_inner();
+        let block_refs = inner
             .block_refs
             .into_iter()
             .filter_map(|serialized| match bcs::from_bytes(&serialized) {
@@ -249,12 +262,16 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 }
             })
             .collect();
-        let blocks = self
+        let highest_accepted_rounds = inner.highest_accepted_rounds;
+        let (blocks, ancestor_blocks) = self
             .service
-            .handle_fetch_blocks(peer_index, block_refs)
+            .handle_fetch_blocks(peer_index, block_refs, highest_accepted_rounds)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
-        Ok(Response::new(FetchBlocksResponse { blocks }))
+        Ok(Response::new(FetchBlocksResponse {
+            blocks,
+            ancestor_blocks,
+        }))
     }
 }
 
@@ -419,6 +436,7 @@ mod test {
         context::Context,
         error::ConsensusResult,
         network::{tonic_network::TonicManager, NetworkClient, NetworkManager, NetworkService},
+        Round,
     };
 
     struct TestService {
@@ -450,9 +468,10 @@ mod test {
             &self,
             peer: AuthorityIndex,
             block_refs: Vec<BlockRef>,
-        ) -> ConsensusResult<Vec<Bytes>> {
+            _highest_accepted_rounds: Vec<Round>,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             self.lock().handle_fetch_blocks.push((peer, block_refs));
-            Ok(vec![])
+            Ok((vec![], vec![]))
         }
     }
 

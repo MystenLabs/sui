@@ -12,6 +12,7 @@ use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::ConsensusResult,
+    Round,
 };
 
 // Anemo generated stubs for RPCs.
@@ -44,13 +45,15 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         timeout: Duration,
     ) -> ConsensusResult<()>;
 
-    /// Fetches serialized `SignedBlock`s from a peer.
+    /// Fetches serialized `SignedBlock`s from a peer. It also might return additional ancestor blocks
+    /// of the requested blocks according to the provided `highest_accepted_rounds`.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Bytes>>;
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
 
 /// Network service for handling requests from peers.
@@ -63,7 +66,8 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-    ) -> ConsensusResult<Vec<Bytes>>;
+        highest_accepted_rounds: Vec<Round>,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
@@ -102,11 +106,18 @@ pub(crate) struct SendBlockResponse {}
 pub(crate) struct FetchBlocksRequest {
     #[prost(bytes = "vec", repeated, tag = "1")]
     block_refs: Vec<Vec<u8>>,
+    // The highest accepted round per authority. The vector represents the round for each authority
+    // and its length should be the same as the committee size.
+    #[prost(uint32, repeated, tag = "2")]
+    highest_accepted_rounds: Vec<Round>,
 }
 
 #[derive(Clone, Serialize, Deserialize, prost::Message)]
 pub(crate) struct FetchBlocksResponse {
-    // Serialized SignedBlock.
+    // The response of the requested blocks as Serialized SignedBlock.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     blocks: Vec<Bytes>,
+    // Any additional ancestor blocks
+    #[prost(bytes = "bytes", repeated, tag = "2")]
+    ancestor_blocks: Vec<Bytes>,
 }
