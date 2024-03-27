@@ -94,9 +94,6 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         epoch: EpochId,
         upper_bound_max_epoch: Option<EpochId>,
     ) -> SuiResult {
-        tracing::info!("upper_bound_max_epoch: {:?}", upper_bound_max_epoch);
-        tracing::info!("epoch: {:?}", epoch);
-        tracing::info!("get_max_epoch: {:?}", self.get_max_epoch());
         // the checks here ensure that `current_epoch + upper_bound_max_epoch >= self.max_epoch >= current_epoch`.
         // 1. if the config for upper bound is set, ensure that the max epoch in signature is not larger than epoch + upper_bound.
         if let Some(upper_bound) = upper_bound_max_epoch {
