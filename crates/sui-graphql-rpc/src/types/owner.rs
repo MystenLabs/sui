@@ -226,7 +226,7 @@ impl Owner {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
-            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 

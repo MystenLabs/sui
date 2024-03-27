@@ -117,7 +117,7 @@ impl Event {
 
         Ok(Some(Address {
             address: self.native.sender.into(),
-            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         }))
     }
 

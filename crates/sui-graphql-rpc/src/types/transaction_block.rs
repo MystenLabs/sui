@@ -143,7 +143,7 @@ impl TransactionBlock {
 
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
-            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 

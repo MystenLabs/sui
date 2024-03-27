@@ -232,7 +232,7 @@ impl Query {
 
         Ok(Some(Address {
             address,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 
@@ -427,7 +427,7 @@ impl Query {
                 .and_then(|r| r.target_address)
                 .map(|a| Address {
                     address: a.into(),
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                 }),
         )
     }
