@@ -13891,6 +13891,7 @@ dependencies = [
  "nonempty",
  "num-bigint 0.4.4",
  "num-traits",
+ "num_enum 0.6.1",
  "once_cell",
  "prometheus",
  "proptest",
