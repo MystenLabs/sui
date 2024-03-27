@@ -433,7 +433,7 @@ mod tests {
         test_utils::{
             bridge_token, get_test_sui_to_eth_bridge_action, mint_tokens, publish_bridge_package,
         },
-        types::{BridgeActionType, BridgeChainId, SuiToEthBridgeAction, TokenId},
+        types::{BridgeActionType, SuiToEthBridgeAction, TokenId},
     };
     use ethers::{
         abi::Token,
@@ -445,6 +445,7 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use prometheus::Registry;
     use std::{collections::HashSet, str::FromStr};
+    use sui_types::bridge::BridgeChainId;
     use test_cluster::TestClusterBuilder;
 
     use super::*;

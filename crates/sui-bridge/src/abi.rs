@@ -3,7 +3,7 @@
 
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{BridgeAction, EthToSuiBridgeAction};
-use crate::types::{BridgeChainId, EthLog, TokenId};
+use crate::types::{EthLog, TokenId};
 use ethers::{
     abi::RawLog,
     contract::{abigen, EthLogDecode},
@@ -11,6 +11,7 @@ use ethers::{
 };
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
+use sui_types::bridge::BridgeChainId;
 
 // TODO: write a macro to handle variants
 

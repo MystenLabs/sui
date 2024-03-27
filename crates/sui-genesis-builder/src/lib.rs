@@ -22,7 +22,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
-use sui_types::bridge::{BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
+use sui_types::bridge::{BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
@@ -1130,8 +1130,9 @@ pub fn generate_genesis_system_object(
             let bridge_uid = builder
                 .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
                 .unwrap();
-            // Hardcoding chain id to devnet
-            let bridge_chain_id = builder.pure(2u8).unwrap();
+            // TODO(bridge): this needs to be passed in as a parameter for next testnet regenesis
+            // Hardcoding chain id to SuiLocalTest
+            let bridge_chain_id = builder.pure(BridgeChainId::SuiLocalTest).unwrap();
             builder.programmable_move_call(
                 BRIDGE_ADDRESS.into(),
                 BRIDGE_MODULE_NAME.to_owned(),

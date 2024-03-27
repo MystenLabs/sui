@@ -37,8 +37,10 @@ mod checked {
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
     use sui_types::base_types::SequenceNumber;
+    use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
     use sui_types::bridge::{
-        BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME, BRIDGE_MODULE_NAME,
+        BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME,
+        BRIDGE_MODULE_NAME,
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
@@ -1016,11 +1018,12 @@ mod checked {
             .expect("Unable to create Bridge object UID!");
 
         let bridge_chain_id = if chain_id == get_mainnet_chain_identifier() {
-            0u8
+            BridgeChainId::SuiMainnet as u8
         } else if chain_id == get_testnet_chain_identifier() {
-            1u8
+            BridgeChainId::SuiTestnet as u8
         } else {
-            2u8
+            // How do we distinguish devnet from other test envs?
+            BridgeChainId::SuiLocalTest as u8
         };
 
         let bridge_chain_id = builder.pure(bridge_chain_id).unwrap();
@@ -1060,7 +1063,9 @@ mod checked {
         // Hardcoding min stake participation to 75.00%
         // TODO: We need to set a correct value or make this configurable.
         let min_stake_participation_percentage = builder
-            .input(CallArg::Pure(bcs::to_bytes(&7500u64).unwrap()))
+            .input(CallArg::Pure(
+                bcs::to_bytes(&BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER).unwrap(),
+            ))
             .unwrap();
 
         builder.programmable_move_call(

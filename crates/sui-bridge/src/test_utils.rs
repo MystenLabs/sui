@@ -11,7 +11,7 @@ use crate::{
     events::EmittedSuiToEthTokenBridgeV1,
     server::mock_handler::BridgeRequestMockHandler,
     types::{
-        BridgeAction, BridgeAuthority, BridgeChainId, EthToSuiBridgeAction, SignedBridgeAction,
+        BridgeAction, BridgeAuthority, EthToSuiBridgeAction, SignedBridgeAction,
         SuiToEthBridgeAction, TokenId,
     },
 };
@@ -35,6 +35,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
+use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::BridgeInnerDynamicField;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
