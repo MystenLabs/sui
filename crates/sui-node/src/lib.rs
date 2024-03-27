@@ -582,7 +582,8 @@ impl SuiNode {
                 .await?;
 
         // Start uploading state snapshot to remote store
-        let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
+        let state_snapshot_handle =
+            Self::start_state_snapshot(&config, &prometheus_registry, checkpoint_store.clone())?;
 
         // Start uploading db checkpoints to remote store
         let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
@@ -857,6 +858,7 @@ impl SuiNode {
     fn start_state_snapshot(
         config: &NodeConfig,
         prometheus_registry: &Registry,
+        checkpoint_store: Arc<CheckpointStore>,
     ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
         if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
             let snapshot_uploader = StateSnapshotUploader::new(
@@ -865,6 +867,7 @@ impl SuiNode {
                 remote_store_config.clone(),
                 60,
                 prometheus_registry,
+                checkpoint_store,
             )?;
             Ok(Some(snapshot_uploader.start()))
         } else {
