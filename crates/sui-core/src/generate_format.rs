@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
 use rand::rngs::StdRng;
@@ -47,7 +48,6 @@ use sui_types::{
     utils::DEFAULT_ADDRESS_SEED,
 };
 use typed_store::TypedStoreError;
-
 fn get_registry() -> Result<Registry> {
     let config = TracerConfig::default()
         .record_samples_for_structs(true)
@@ -84,8 +84,11 @@ fn get_registry() -> Result<Registry> {
     let kp3: SuiKeyPair =
         SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
     let pk_zklogin = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, DEFAULT_ADDRESS_SEED)
-            .unwrap(),
+        ZkLoginPublicIdentifier::new(
+            &OIDCProvider::Twitch.get_config().iss,
+            &Bn254FrElement::from_str(DEFAULT_ADDRESS_SEED).unwrap(),
+        )
+        .unwrap(),
     );
 
     let multisig_pk = MultiSigPublicKey::new(

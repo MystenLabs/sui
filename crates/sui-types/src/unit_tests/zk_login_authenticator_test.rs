@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use crate::crypto::{PublicKey, SignatureScheme, ZkLoginPublicIdentifier};
 
 use crate::signature::{AuthenticatorTrait, VerifyParams};
@@ -11,9 +13,10 @@ use crate::{
 };
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
-use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
+
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use im::hashmap::HashMap as ImHashMap;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
@@ -44,8 +47,8 @@ fn test_serde_zk_public_identifier() {
     bytes.extend([iss_bytes.len() as u8]);
     bytes.extend(iss_bytes);
     // length here is 31 bytes and left unpadded.
-    let address_seed_bytes = big_int_str_to_bytes(SHORT_ADDRESS_SEED).unwrap();
-    bytes.extend(address_seed_bytes);
+    let address_seed = Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap();
+    bytes.extend(address_seed.unpadded());
 
     let pk1 = PublicKey::ZkLogin(ZkLoginPublicIdentifier(bytes));
     assert_eq!(
@@ -60,8 +63,13 @@ fn test_serde_zk_public_identifier() {
         SuiAddress::from(&pk1)
     );
 
-    let pk2 =
-        PublicKey::ZkLogin(ZkLoginPublicIdentifier::new(&binding.iss, SHORT_ADDRESS_SEED).unwrap());
+    let pk2 = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(
+            &binding.iss,
+            &Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap(),
+        )
+        .unwrap(),
+    );
     assert_eq!(
         pk2.scheme().flag(),
         SignatureScheme::ZkLoginAuthenticator.flag()
