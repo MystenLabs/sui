@@ -4344,7 +4344,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4399,7 +4399,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4408,7 +4408,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4426,7 +4426,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -4781,9 +4781,9 @@ checksum = "efd193069b0ddadc69c46389b740bbccdd97203899b48d09c5f7969591d6bae2"
 
 [[package]]
 name = "futures-timer"
-version = "3.0.2"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
+checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 dependencies = [
  "gloo-timers",
  "send_wrapper 0.4.0",
