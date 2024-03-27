@@ -7,7 +7,6 @@ module bridge::limiter {
     use sui::vec_map::{Self, VecMap};
 
     use bridge::chain_ids::{Self, BridgeRoute};
-    use bridge::treasury;
     use bridge::treasury::BridgeTreasury;
 
     #[test_only]
@@ -15,7 +14,7 @@ module bridge::limiter {
     #[test_only]
     use sui::test_utils::{assert_eq, destroy};
     #[test_only]
-    use bridge::treasury::{BTC, ETH, USDC, USDT};
+    use bridge::treasury::{Self, BTC, ETH, USDC, USDT};
 
     const ELimitNotFoundForRoute: u64 = 0;
 
@@ -107,21 +106,21 @@ module bridge::limiter {
         let route_limit = self.transfer_limits.try_get(&route);
         assert!(route_limit.is_some(), ELimitNotFoundForRoute);
         let route_limit = route_limit.destroy_some();
-        let route_limit_adjusted = (route_limit as u128) * (treasury::decimal_multiplier<T>(treasury) as u128);
+        let route_limit_adjusted = (route_limit as u128) * (treasury.decimal_multiplier<T>() as u128);
 
         // Compute notional amount
         // Upcast to u128 to prevent overflow, to not miss out on small amounts.
-        let value = (self.notional_values[&treasury::token_id<T>()] as u128);
+        let value = (treasury.notional_value<T>() as u128);
         let notional_amount_with_token_multiplier = value * (amount as u128);
 
         // Check if transfer amount exceed limit
         // Upscale them to the token's decimal.
-        if ((record.total_amount as u128) * (treasury::decimal_multiplier<T>(treasury) as u128) + notional_amount_with_token_multiplier > route_limit_adjusted) {
+        if ((record.total_amount as u128) * (treasury.decimal_multiplier<T>() as u128) + notional_amount_with_token_multiplier > route_limit_adjusted) {
             return false
         };
 
         // Now scale down to notional value
-        let notional_amount = notional_amount_with_token_multiplier / (treasury::decimal_multiplier<T>(treasury) as u128);
+        let notional_amount = notional_amount_with_token_multiplier / (treasury.decimal_multiplier<T>() as u128);
         // Should be safe to downcast to u64 after dividing by the decimals
         let notional_amount = (notional_amount as u64);
 
@@ -233,7 +232,7 @@ module bridge::limiter {
         clock.set_for_testing(1706288001377);
 
         // transfer 10000 ETH every hour, the totol should be 10000 * 5
-        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &treasury, &clock, route, 10_000 * treasury::decimal_multiplier<ETH>(&treasury)), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &treasury, &clock, route, 10_000 * treasury.decimal_multiplier<ETH>()), 0);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert!(record.total_amount == 10000 * 5 * USD_VALUE_MULTIPLIER, 0);
@@ -242,7 +241,7 @@ module bridge::limiter {
         let mut i = 0;
         while (i < 50) {
             clock.increment_for_testing(60 * 60 * 1000);
-            assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &treasury, &clock, route, 1_000 * treasury::decimal_multiplier<ETH>(&treasury)), 0);
+            assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &treasury, &clock, route, 1_000 * treasury.decimal_multiplier<ETH>()), 0);
             i = i + 1;
         };
         let record = vec_map::get(&limiter.transfer_records, &route);
@@ -261,7 +260,7 @@ module bridge::limiter {
                     &treasury,
                     &clock,
                     route,
-                    1_000 * treasury::decimal_multiplier<ETH>(&treasury) * (i + 1)
+                    1_000 * treasury.decimal_multiplier<ETH>() * (i + 1)
                 ),
                 0
             );
@@ -618,29 +617,20 @@ module bridge::limiter {
         let ctx = test_scenario::ctx(&mut scenario);
         let mut treasury = treasury::mock_for_test(ctx);
 
-        assert_eq(treasury::notional_value<BTC>(&treasury), (50_000 * USD_VALUE_MULTIPLIER));
-        assert_eq(treasury::notional_value<ETH>(&treasury), (3_000 * USD_VALUE_MULTIPLIER));
-        assert_eq(treasury::notional_value<USDC>(&treasury), (1 * USD_VALUE_MULTIPLIER));
-        assert_eq(treasury::notional_value<USDT>(&treasury), (1 * USD_VALUE_MULTIPLIER));
+        assert_eq(treasury.notional_value<BTC>(), (50_000 * USD_VALUE_MULTIPLIER));
+        assert_eq(treasury.notional_value<ETH>(), (3_000 * USD_VALUE_MULTIPLIER));
+        assert_eq(treasury.notional_value<USDC>(), (1 * USD_VALUE_MULTIPLIER));
+        assert_eq(treasury.notional_value<USDT>(), (1 * USD_VALUE_MULTIPLIER));
         // change usdt price
-        let id = treasury::token_id<USDT>(&treasury);
-        treasury::update_asset_notional_price(&mut treasury, id, 11 * USD_VALUE_MULTIPLIER / 10);
-        assert_eq(treasury::notional_value<USDT>(&treasury), (11 * USD_VALUE_MULTIPLIER / 10));
+        let id = treasury.token_id<USDT>();
+        treasury.update_asset_notional_price(id, 11 * USD_VALUE_MULTIPLIER / 10);
+        assert_eq(treasury.notional_value<USDT>(), (11 * USD_VALUE_MULTIPLIER / 10));
         // other prices do not change
-        assert_eq(treasury::notional_value<BTC>(&treasury), (50_000 * USD_VALUE_MULTIPLIER));
-        assert_eq(treasury::notional_value<ETH>(&treasury), (3_000 * USD_VALUE_MULTIPLIER));
-        assert_eq(treasury::notional_value<USDC>(&treasury), (1 * USD_VALUE_MULTIPLIER));
-        test_scenario::end(scenario);
+        assert_eq(treasury.notional_value<BTC>(), (50_000 * USD_VALUE_MULTIPLIER));
+        assert_eq(treasury.notional_value<ETH>(), (3_000 * USD_VALUE_MULTIPLIER));
+        assert_eq(treasury.notional_value<USDC>(), (1 * USD_VALUE_MULTIPLIER));
+        scenario.end();
         destroy(treasury);
     }
 
-/*    #[test_only]
-    fun initial_notional_values_for_testing(treasury: &BridgeTreasury): VecMap<u8, u64> {
-        let mut notional_values = vec_map::empty();
-        vec_map::insert(&mut notional_values, treasury::token_id<BTC>(treasury), 50_000 * USD_VALUE_MULTIPLIER);
-        vec_map::insert(&mut notional_values, treasury::token_id<ETH>(treasury), 3_000 * USD_VALUE_MULTIPLIER);
-        vec_map::insert(&mut notional_values, treasury::token_id<USDC>(treasury), 1 * USD_VALUE_MULTIPLIER);
-        vec_map::insert(&mut notional_values, treasury::token_id<USDT>(treasury), 1 * USD_VALUE_MULTIPLIER);
-        notional_values
-    }*/
 }

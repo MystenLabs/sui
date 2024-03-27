@@ -11,3 +11,4 @@ SuiSystem = { local = "../sui-system" }
 
 [addresses]
 bridge = "0xb"
+

@@ -202,9 +202,7 @@ title: Module `0xb::message_types`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_sui_token">update_sui_token</a>():u8{
-    <a href="message_types.md#0xb_message_types_UPDATE_SUI_TOKEN">UPDATE_SUI_TOKEN</a>
-}
+<pre><code><b>public</b> <b>fun</b> <a href="message_types.md#0xb_message_types_update_sui_token">update_sui_token</a>(): u8 { <a href="message_types.md#0xb_message_types_UPDATE_SUI_TOKEN">UPDATE_SUI_TOKEN</a> }
 </code></pre>
 
 

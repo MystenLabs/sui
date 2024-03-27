@@ -24,7 +24,9 @@ module bridge::bridge {
     #[test_only]
     use sui::{hex, test_scenario, test_utils::{assert_eq, destroy}};
     #[test_only]
-    use bridge::{btc::BTC, eth::ETH, message::create_blocklist_message};
+    use bridge::treasury::{BTC, ETH};
+    #[test_only]
+    use bridge::message::create_blocklist_message;
 
     const MESSAGE_VERSION: u8 = 1;
 
@@ -195,7 +197,7 @@ module bridge::bridge {
         );
 
         // burn / escrow token, unsupported coins will fail in this step
-        inner.treasury.burn(token, ctx);
+        inner.treasury.burn(token);
 
         // Store pending bridge request
         inner.bridge_records.push_back(message.key(), BridgeRecord {
@@ -461,27 +463,27 @@ module bridge::bridge {
     }
 
     fun execute_update_asset_price(inner: &mut BridgeInner, payload: UpdateAssetPrice) {
-        inner.limiter.update_asset_notional_price(
+        inner.treasury.update_asset_notional_price(
             payload.update_asset_price_payload_token_id(),
             payload.update_asset_price_payload_new_price()
         )
     }
 
     fun execute_update_sui_token(inner: &mut BridgeInner, payload: UpdateSuiToken) {
-        let native_token = message::is_native(&payload);
-        let mut token_ids = message::token_ids(&payload);
-        let mut token_type_names = message::token_type_names(&payload);
-        let mut token_prices = message::token_prices(&payload);
+        let native_token = payload.is_native();
+        let mut token_ids = payload.token_ids();
+        let mut token_type_names = payload.token_type_names();
+        let mut token_prices = payload.token_prices();
 
         // Make sure token data is consistent
-        assert!(vector::length(&token_ids) == vector::length(&token_type_names), EMalformedMessageError);
-        assert!(vector::length(&token_ids) == vector::length(&token_prices), EMalformedMessageError);
+        assert!(token_ids.length() == token_type_names.length(), EMalformedMessageError);
+        assert!(token_ids.length() == token_prices.length(), EMalformedMessageError);
 
         while (vector::length(&token_ids) > 0){
-            let token_id = vector::pop_back(&mut token_ids);
-            let token_type_name = vector::pop_back(&mut token_type_names);
-            let token_price = vector::pop_back(&mut token_prices);
-            treasury::approve_new_token(&mut inner.treasury, token_type_name, token_id, native_token, token_price)
+            let token_id = token_ids.pop_back();
+            let token_type_name = token_type_names.pop_back();
+            let token_price = token_prices.pop_back();
+            inner.treasury.approve_new_token(token_type_name, token_id, native_token, token_price)
         }
     }
 
@@ -646,13 +648,13 @@ module bridge::bridge {
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
-        let inner = load_inner_mut(&mut bridge);
+        let inner = bridge.load_inner_mut();
 
         // Assert the starting limit is a different value
-        assert!(treasury::notional_value<BTC>(&inner.treasury) != 1_001_000_000, 0);
+        assert!(inner.treasury.notional_value<BTC>() != 1_001_000_000, 0);
         // now change it to 100_001_000
         let msg = message::create_update_asset_price_message(
-            treasury::token_id<BTC>(&inner.treasury),
+            inner.treasury.token_id<BTC>(),
             chain_ids::sui_mainnet(),
             0,
             1_001_000_000,
@@ -661,12 +663,12 @@ module bridge::bridge {
         execute_update_asset_price(inner, payload);
 
         // should be 1_001_000_000 now
-        assert_eq(treasury::notional_value<BTC>(&inner.treasury), 1_001_000_000);
+        assert_eq(inner.treasury.notional_value<BTC>(), 1_001_000_000);
         // other assets are not impacted
-        assert!(treasury::notional_value<ETH>(&inner.treasury) != 1_001_000_000, 0);
+        assert!(inner.treasury.notional_value<ETH>() != 1_001_000_000, 0);
 
         destroy(bridge);
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     #[test_only]

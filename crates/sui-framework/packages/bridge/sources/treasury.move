@@ -4,7 +4,6 @@
 module bridge::treasury {
     use std::ascii;
     use std::ascii::String;
-    use std::option;
     use std::type_name;
     use std::type_name::TypeName;
 
@@ -16,11 +15,10 @@ module bridge::treasury {
     use sui::math;
     use sui::object;
     use sui::object_bag::{Self, ObjectBag};
-
-    use bridge::btc::{Self, BTC};
-    use bridge::eth::{Self, ETH};
-    use bridge::usdc::{Self, USDC};
-    use bridge::usdt::{Self, USDT};
+    use sui::package;
+    use sui::package::UpgradeCap;
+    use sui::vec_map;
+    use sui::vec_map::VecMap;
 
     const EUnsupportedTokenType: u64 = 0;
     const EInvalidUpgradeCap: u64 = 1;
@@ -135,7 +133,6 @@ module bridge::treasury {
     }
 
     public(package) fun create(ctx: &mut TxContext): BridgeTreasury {
-        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         BridgeTreasury {
             treasuries: object_bag::new(ctx),
             supported_tokens: vec_map::empty(),
@@ -144,8 +141,7 @@ module bridge::treasury {
         }
     }
 
-    public(package) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>, ctx: &mut TxContext) {
-        create_treasury_if_not_exist<T>(self, ctx);
+    public(package) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>) {
         let treasury = &mut self.treasuries[type_name::get<T>()];
         coin::burn(treasury, token);
     }
@@ -156,10 +152,10 @@ module bridge::treasury {
     }
 
     public(package) fun update_asset_notional_price(self: &mut BridgeTreasury, token_id: u8, new_usd_price: u64) {
-        let type_name = vec_map::try_get(&self.id_token_type_map, &token_id);
-        assert!(option::is_some(&type_name), EUnsupportedTokenType);
-        let type_name = option::destroy_some(type_name);
-        let metadata = vec_map::get_mut(&mut self.supported_tokens, &type_name);
+        let type_name = self.id_token_type_map.try_get(&token_id);
+        assert!(type_name.is_some(), EUnsupportedTokenType);
+        let type_name = type_name.destroy_some();
+        let metadata = self.supported_tokens.get_mut(&type_name);
         metadata.notional_value = new_usd_price;
 
         emit(UpdateTokenPriceEvent {
@@ -170,9 +166,9 @@ module bridge::treasury {
 
     fun get_token_metadata<T>(self: &BridgeTreasury): BridgeTokenMetadata {
         let coin_type = type_name::get<T>();
-        let metadata = vec_map::try_get(&self.supported_tokens, &coin_type);
-        assert!(option::is_some(&metadata), EUnsupportedTokenType);
-        option::destroy_some(metadata)
+        let metadata = self.supported_tokens.try_get(&coin_type);
+        assert!(metadata.is_some(), EUnsupportedTokenType);
+        metadata.destroy_some()
     }
 
     #[test_only]
@@ -188,35 +184,35 @@ module bridge::treasury {
     public fun mock_for_test(ctx: &mut TxContext): BridgeTreasury {
         let mut treasury = create(ctx);
 
-        vec_map::insert(&mut treasury.supported_tokens, type_name::get<BTC>(), BridgeTokenMetadata{
+        treasury.supported_tokens.insert(type_name::get<BTC>(), BridgeTokenMetadata{
             id: 1,
             decimal_multiplier: 100_000_000,
             notional_value: 50_000 * USD_VALUE_MULTIPLIER,
             native_token: false,
         });
-        vec_map::insert(&mut treasury.supported_tokens, type_name::get<ETH>(), BridgeTokenMetadata{
+        treasury.supported_tokens.insert(type_name::get<ETH>(), BridgeTokenMetadata{
             id: 2,
             decimal_multiplier: 100_000_000,
             notional_value: 3_000 * USD_VALUE_MULTIPLIER,
             native_token: false,
         });
-        vec_map::insert(&mut treasury.supported_tokens, type_name::get<USDC>(), BridgeTokenMetadata{
+        treasury.supported_tokens.insert(type_name::get<USDC>(), BridgeTokenMetadata{
             id: 3,
             decimal_multiplier: 1_000_000,
             notional_value: USD_VALUE_MULTIPLIER,
             native_token: false,
         });
-        vec_map::insert(&mut treasury.supported_tokens, type_name::get<USDT>(), BridgeTokenMetadata{
+        treasury.supported_tokens.insert(type_name::get<USDT>(), BridgeTokenMetadata{
             id: 4,
             decimal_multiplier: 1_000_000,
             notional_value: USD_VALUE_MULTIPLIER,
             native_token: false,
         });
 
-        vec_map::insert(&mut treasury.id_token_type_map, 1, type_name::get<BTC>());
-        vec_map::insert(&mut treasury.id_token_type_map, 2, type_name::get<ETH>());
-        vec_map::insert(&mut treasury.id_token_type_map, 3, type_name::get<USDC>());
-        vec_map::insert(&mut treasury.id_token_type_map, 4, type_name::get<USDT>());
+        treasury.id_token_type_map.insert(1, type_name::get<BTC>());
+        treasury.id_token_type_map.insert(2, type_name::get<ETH>());
+        treasury.id_token_type_map.insert(3, type_name::get<USDC>());
+        treasury.id_token_type_map.insert(4, type_name::get<USDT>());
 
         treasury
     }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use enum_dispatch::enum_dispatch;
+use move_binary_format::normalized::Type;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use num_enum::TryFromPrimitive;
@@ -261,13 +262,6 @@ impl BridgeTrait for BridgeInnerV1 {
                 Ok((source, destination, e.value))
             })
             .collect::<SuiResult<Vec<_>>>()?;
-        let notional_values = self
-            .limiter
-            .notional_values
-            .contents
-            .into_iter()
-            .map(|e| Ok((e.key, e.value)))
-            .collect::<SuiResult<Vec<_>>>()?;
         let transfer_records = self
             .limiter
             .transfer_records
@@ -289,7 +283,6 @@ impl BridgeTrait for BridgeInnerV1 {
             .collect::<SuiResult<Vec<_>>>()?;
         let limiter = BridgeLimiterSummary {
             transfer_limit,
-            notional_values,
             transfer_records,
         };
         Ok(BridgeSummary {
@@ -330,6 +323,19 @@ impl BridgeTrait for BridgeInnerV1 {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeTreasury {
     pub treasuries: Bag,
+    pub supported_tokens: VecMap<Type, BridgeTokenMetadata>,
+    // Mapping token id to type name
+    pub id_token_type_map: VecMap<u8, Type>,
+    // Bag for storing potential new token waiting to be approved
+    pub waiting_room: Bag,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BridgeTokenMetadata {
+    pub id: u8,
+    pub decimal_multiplier: u64,
+    pub notional_value: u64,
+    pub native_token: bool,
 }
 
 /// Rust version of the Move committee::BridgeCommittee type.
@@ -364,8 +370,6 @@ pub struct BridgeCommitteeSummary {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeLimiterSummary {
     pub transfer_limit: Vec<(BridgeChainId, BridgeChainId, u64)>,
-    // mapping from token id to notional value
-    pub notional_values: Vec<(u8, u64)>,
     pub transfer_records: Vec<(BridgeChainId, BridgeChainId, MoveTypeBridgeTransferRecord)>,
 }
 
@@ -393,7 +397,6 @@ pub struct MoveTypeBridgeMessageKey {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeTransferLimiter {
     pub transfer_limit: VecMap<MoveTypeBridgeRoute, u64>,
-    pub notional_values: VecMap<u8, u64>,
     pub transfer_records: VecMap<MoveTypeBridgeRoute, MoveTypeBridgeTransferRecord>,
 }
 
