@@ -8,6 +8,7 @@ module bridge::message_types {
     const EMERGENCY_OP: u8 = 2;
     const UPDATE_BRIDGE_LIMIT: u8 = 3;
     const UPDATE_ASSET_PRICE: u8 = 4;
+    const UPDATE_SUI_TOKEN: u8 = 6;
 
     public fun token():u8{
         TOKEN
@@ -27,5 +28,9 @@ module bridge::message_types {
 
     public fun update_asset_price():u8{
         UPDATE_ASSET_PRICE
+    }
+
+    public fun update_sui_token():u8{
+        UPDATE_SUI_TOKEN
     }
 }
