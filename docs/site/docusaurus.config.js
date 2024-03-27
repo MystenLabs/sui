@@ -1,26 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const lightCodeTheme = require("prism-react-renderer/themes/github");
-const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
-const math = require("remark-math");
-const katex = require("rehype-katex");
+import { themes } from "prism-react-renderer";
+import path from "path";
+import math from "remark-math";
+import katex from "rehype-katex";
+
 require("dotenv").config();
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "Sui Documentation",
-  staticDirectories: ["static"],
   tagline:
     "Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
-  favicon: "img/favicon.ico",
+  favicon: "/img/favicon.ico",
+
+  // Set the production url of your site here
   url: "https://docs.sui.io",
+  // Set the /<baseUrl>/ pathname under which your site is served
+  // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: "/",
   customFields: {
     amplitudeKey: process.env.AMPLITUDE_KEY,
   },
+
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "throw",
+  onBrokenMarkdownLinks: "warn",
+
+  // Even if you don't use internationalization, you can use this field to set
+  // useful metadata like html lang. For example, if your site is Chinese, you
+  // may want to replace "en" with "zh-Hans".
   /*  i18n: {
     defaultLocale: "en",
     locales: [
@@ -35,6 +44,7 @@ const config = {
     ],
   },*/
   markdown: {
+    format: "detect",
     mermaid: true,
   },
   plugins: [
@@ -68,6 +78,8 @@ const config = {
         },
       };
     },
+    path.resolve(__dirname, `./src/plugins/descriptions`),
+    path.resolve(__dirname, `./src/plugins/framework`),
   ],
   presets: [
     [
@@ -94,8 +106,10 @@ const config = {
           ],*/
           remarkPlugins: [
             math,
-            require("@docusaurus/remark-plugin-npm2yarn"),
-            { sync: true, converters: ["npm", "yarn", "pnpm"] },
+            [
+              require("@docusaurus/remark-plugin-npm2yarn"),
+              { sync: true, converters: ["yarn", "pnpm"] },
+            ],
           ],
           rehypePlugins: [katex],
         },
@@ -104,9 +118,6 @@ const config = {
             require.resolve("./src/css/fonts.css"),
             require.resolve("./src/css/custom.css"),
           ],
-        },
-        googleTagManager: {
-          containerId: "GTM-TTZ5J8V",
         },
       }),
     ],
@@ -128,7 +139,7 @@ const config = {
       type: "text/css",
     },
   ],
-  themes: ["@docusaurus/theme-mermaid"],
+  themes: ["@docusaurus/theme-mermaid", "docusaurus-theme-frontmatter"],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -213,17 +224,12 @@ const config = {
         style: "dark",
         copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/sui-foundation/sui-docs/blob/main/LICENSE">CC BY 4.0</a>`,
       },
-
-      /**
-       * Syntax Highlighting Configuration
-       * TODO: add better themes like Atom One Dark / Light
-       */
       prism: {
-        theme: lightCodeTheme,
-        darkTheme: darkCodeTheme,
+        theme: themes.github,
+        darkTheme: themes.nightOwl,
         additionalLanguages: ["rust", "typescript", "toml"],
       },
     }),
 };
 
-module.exports = config;
+export default config;

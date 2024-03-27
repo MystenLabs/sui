@@ -232,7 +232,7 @@ fn relocate_docs(prefix: &str, files: &[(String, String)], output: &mut BTreeMap
                 &file_content
                     .replace("../../dependencies/", "../")
                     .replace("dependencies/", "../"),
-                "\n---\ntitle: $1\n---\n",
+                "---\ntitle: $1\n---\n",
             )
             .to_string()
         });

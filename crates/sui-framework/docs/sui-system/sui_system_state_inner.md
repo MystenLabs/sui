@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x3::sui_system_state_inner`
 ---
