@@ -71,12 +71,6 @@ const descriptionPlugin = (context, options) => {
     async contentLoaded({ content, actions }) {
       const { setGlobalData } = actions;
       setGlobalData(content);
-      //const { createData } = actions;
-      // The first parameter is a name that will be used to reference the data in `globalData`
-      //await createData(
-      //'sui-descriptions.json', // This will be available at `globalData.myCustomData`
-      //JSON.stringify(content),
-      //);
     },
   };
 };
