@@ -448,8 +448,8 @@ mod tests {
         events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
         sui_mock_client::SuiMockClient,
         test_utils::{
-            approve_token_bridge_with_validator_secrets, bridge_token,
-            get_test_eth_to_sui_bridge_action, get_test_sui_to_eth_bridge_action,
+            approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
+            get_test_sui_to_eth_bridge_action,
         },
         types::{BridgeActionType, SuiToEthBridgeAction, TokenId},
     };
@@ -620,7 +620,7 @@ mod tests {
 
         // 1. Create a Eth -> Sui Transfer (recipient is sender address), approve with validator secrets and assert its status to be Claimed
         let action = get_test_eth_to_sui_bridge_action(None, Some(usdc_amount), Some(sender));
-        let usdc_object_ref = approve_token_bridge_with_validator_secrets(
+        let usdc_object_ref = approve_action_with_validator_secrets(
             context,
             bridge_object_arg,
             action.clone(),
@@ -674,7 +674,7 @@ mod tests {
         assert_eq!(status, BridgeActionStatus::Pending);
 
         // Approve it and assert its status to be Approved
-        approve_token_bridge_with_validator_secrets(
+        approve_action_with_validator_secrets(
             context,
             bridge_object_arg,
             action.clone(),
