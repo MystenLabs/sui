@@ -941,7 +941,11 @@ impl Object {
     /// Query for a singleton object identified by its type. Note: the object is assumed to be a
     /// singleton (we either find at least one object with this type and then return it, or return
     /// nothing).
-    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
+    pub(crate) async fn query_singleton(
+        db: &Db,
+        type_: TypeTag,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<Object>, Error> {
         use objects::dsl;
 
         let stored_obj: Option<StoredObject> = db
@@ -957,7 +961,7 @@ impl Object {
             .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
 
         stored_obj
-            .map(|obj| Object::try_from_stored_object(obj, None))
+            .map(|obj| Object::try_from_stored_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 

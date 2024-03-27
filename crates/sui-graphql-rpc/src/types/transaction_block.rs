@@ -153,17 +153,15 @@ impl TransactionBlock {
     /// If the owner of the gas object(s) is not the same as the sender, the transaction block is a
     /// sponsored transaction block.
     async fn gas_input(&self) -> Option<GasInput> {
-        let checkpoint_sequence_number = match &self.inner {
-            TransactionBlockInner::Stored { stored_tx, .. } => {
-                Some(stored_tx.checkpoint_sequence_number as u64)
-            }
+        // Note that we only return gas input for stored transactions. Transactions that were just
+        // executed likely use even newer data that have not been indexed yet.
+        match &self.inner {
+            TransactionBlockInner::Stored { .. } => Some(GasInput::from(
+                self.native().gas_data(),
+                self.checkpoint_viewed_at,
+            )),
             _ => None,
-        };
-
-        Some(GasInput::from(
-            self.native().gas_data(),
-            checkpoint_sequence_number,
-        ))
+        }
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the
