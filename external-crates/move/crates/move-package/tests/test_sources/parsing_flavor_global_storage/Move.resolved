@@ -10,7 +10,7 @@ ResolvedGraph {
         always_deps: {
             "name",
         },
-        manifest_digest: "4B5A39F0084184A337A86CB7E44DCB9DC4A42B22E8B9681B495B52A721B0B0B8",
+        manifest_digest: "B5B8F2057333EB3AF19925012010F441EC8A67DEDAF70861A63AF8D314F04268",
         deps_digest: "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
     },
     build_options: BuildConfig {
@@ -50,7 +50,7 @@ ResolvedGraph {
                     ),
                     edition: None,
                     flavor: Some(
-                        GlobalStorage,
+                        Core,
                     ),
                     custom_properties: {},
                 },

@@ -21,9 +21,6 @@
 
 //# publish
 module Test::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
     use sui::coin::Coin;
 
     public struct Object has key, store {

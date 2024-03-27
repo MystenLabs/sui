@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
     public struct A has key, store {
         id: UID,
@@ -54,11 +52,11 @@ module tto::M1 {
 //# view-object 2,2
 
 // Can drop duo
-//# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) 
+//# programmable --inputs object(2,0) receiving(2,1) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2))
 
 // receive the objects and return them. Error since we need to do something with the returned objects
-//# programmable --inputs object(2,0) receiving(2,2) receiving(2,2) 
+//# programmable --inputs object(2,0) receiving(2,2) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2));
 //> 1: tto::M1::receive_duo(Input(0), Result(0));
 

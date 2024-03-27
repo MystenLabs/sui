@@ -101,6 +101,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 pre_compiled_deps,
                 None,
                 Some(compiler_edition),
+                None,
             ),
             default_syntax,
             storage: InMemoryStorage::new(),

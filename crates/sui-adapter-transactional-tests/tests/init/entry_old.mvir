@@ -6,13 +6,20 @@
 //# init --addresses test=0x0 v2=0x0 --protocol-version 6 --accounts A
 
 //# publish --sender A --upgradeable
-module test::m {
-    use sui::tx_context::TxContext;
-    entry fun init(_: &mut TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    entry init(ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
     }
 
-    public fun foo() {}
+    public foo() {
+        label l0:
+        return;
+    }
 }
+
+//# set-address test object(1,0)
 
 //# run test::m::init
 

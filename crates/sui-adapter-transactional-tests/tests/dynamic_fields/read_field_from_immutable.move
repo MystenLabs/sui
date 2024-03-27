@@ -10,8 +10,6 @@
 module a::m {
 
 use sui::dynamic_field::{add, borrow};
-use sui::object;
-use sui::tx_context::TxContext;
 
 public struct Obj has key {
     id: object::UID,

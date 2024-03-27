@@ -3,79 +3,79 @@ processed 20 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-17:
+task 1 'publish'. lines 8-15:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4423200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 19-20:
+task 2 'programmable'. lines 17-18:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<bool> but provided argument's value does not match"), command: Some(0) } }
 
-task 3 'programmable'. lines 22-23:
+task 3 'programmable'. lines 20-21:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u8> but provided argument's value does not match"), command: Some(0) } }
 
-task 4 'programmable'. lines 25-26:
+task 4 'programmable'. lines 23-24:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u16> but provided argument's value does not match"), command: Some(0) } }
 
-task 5 'programmable'. lines 28-29:
+task 5 'programmable'. lines 26-27:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u32> but provided argument's value does not match"), command: Some(0) } }
 
-task 6 'programmable'. lines 31-32:
+task 6 'programmable'. lines 29-30:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u64> but provided argument's value does not match"), command: Some(0) } }
 
-task 7 'programmable'. lines 34-35:
+task 7 'programmable'. lines 32-33:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u128> but provided argument's value does not match"), command: Some(0) } }
 
-task 8 'programmable'. lines 37-38:
+task 8 'programmable'. lines 35-36:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<u256> but provided argument's value does not match"), command: Some(0) } }
 
-task 9 'programmable'. lines 40-41:
+task 9 'programmable'. lines 38-39:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<address> but provided argument's value does not match"), command: Some(0) } }
 
-task 10 'programmable'. lines 43-47:
+task 10 'programmable'. lines 41-45:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<address> but provided argument's value does not match"), command: Some(0) } }
 
-task 11 'programmable'. lines 49-50:
+task 11 'programmable'. lines 47-48:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<bool>> but provided argument's value does not match"), command: Some(0) } }
 
-task 12 'programmable'. lines 52-53:
+task 12 'programmable'. lines 50-51:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<u8>> but provided argument's value does not match"), command: Some(0) } }
 
-task 13 'programmable'. lines 55-56:
+task 13 'programmable'. lines 53-54:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<u16>> but provided argument's value does not match"), command: Some(0) } }
 
-task 14 'programmable'. lines 58-59:
+task 14 'programmable'. lines 56-57:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<u32>> but provided argument's value does not match"), command: Some(0) } }
 
-task 15 'programmable'. lines 61-62:
+task 15 'programmable'. lines 59-60:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<u64>> but provided argument's value does not match"), command: Some(0) } }
 
-task 16 'programmable'. lines 64-65:
+task 16 'programmable'. lines 62-63:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<u128>> but provided argument's value does not match"), command: Some(0) } }
 
-task 17 'programmable'. lines 67-68:
+task 17 'programmable'. lines 65-66:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<u256>> but provided argument's value does not match"), command: Some(0) } }
 
-task 18 'programmable'. lines 70-71:
+task 18 'programmable'. lines 68-69:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<address>> but provided argument's value does not match"), command: Some(0) } }
 
-task 19 'programmable'. lines 73-74:
+task 19 'programmable'. lines 71-72:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::option::Option<vector<address>> but provided argument's value does not match"), command: Some(0) } }

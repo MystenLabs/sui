@@ -11,11 +11,7 @@
 
 //# publish --sender A
 module test::regulated_coin {
-    use std::option;
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
 
     public struct REGULATED_COIN has drop {}
 

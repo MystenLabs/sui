@@ -3,20 +3,20 @@ processed 20 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 19-60:
+task 1 'publish'. lines 19-56:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7014800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 62-62:
+task 2 'run'. lines 58-58:
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'create-checkpoint'. lines 64-64:
+task 3 'create-checkpoint'. lines 60-60:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 66-79:
+task 4 'run-graphql'. lines 62-75:
 Response: {
   "data": {
     "object": {
@@ -34,14 +34,14 @@ Response: {
   }
 }
 
-task 5 'run'. lines 81-81:
+task 5 'run'. lines 77-77:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
 
-task 6 'create-checkpoint'. lines 83-83:
+task 6 'create-checkpoint'. lines 79-79:
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 85-111:
+task 7 'run-graphql'. lines 81-107:
 Response: {
   "data": {
     "latest_version": {
@@ -71,16 +71,16 @@ Response: {
   }
 }
 
-task 8 'run'. lines 113-113:
+task 8 'run'. lines 109-109:
 created: object(8,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2553600,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 9 'create-checkpoint'. lines 115-115:
+task 9 'create-checkpoint'. lines 111-111:
 Checkpoint created: 3
 
-task 10 'run-graphql'. lines 117-143:
+task 10 'run-graphql'. lines 113-139:
 Response: {
   "data": {
     "latest_wrapped": {
@@ -103,16 +103,16 @@ Response: {
   }
 }
 
-task 11 'run'. lines 145-145:
+task 11 'run'. lines 141-141:
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(8,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2528064, non_refundable_storage_fee: 25536
 
-task 12 'create-checkpoint'. lines 147-147:
+task 12 'create-checkpoint'. lines 143-143:
 Checkpoint created: 4
 
-task 13 'run-graphql'. lines 149-187:
+task 13 'run-graphql'. lines 145-183:
 Response: {
   "data": {
     "latest_unwrapped": {
@@ -147,15 +147,15 @@ Response: {
   }
 }
 
-task 14 'run'. lines 189-189:
+task 14 'run'. lines 185-185:
 mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 15 'create-checkpoint'. lines 191-191:
+task 15 'create-checkpoint'. lines 187-187:
 Checkpoint created: 5
 
-task 16 'run-graphql'. lines 193-219:
+task 16 'run-graphql'. lines 189-215:
 Response: {
   "data": {
     "latest_deleted": {
@@ -171,13 +171,13 @@ Response: {
   }
 }
 
-task 17 'force-object-snapshot-catchup'. lines 221-221:
+task 17 'force-object-snapshot-catchup'. lines 217-217:
 Objects snapshot updated to [0 to 5)
 
-task 18 'create-checkpoint'. lines 223-223:
+task 18 'create-checkpoint'. lines 219-219:
 Checkpoint created: 6
 
-task 19 'run-graphql'. lines 225-263:
+task 19 'run-graphql'. lines 221-259:
 Response: {
   "data": {
     "object_within_available_range": {
