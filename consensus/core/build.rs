@@ -42,6 +42,7 @@ fn build_tonic_services(out_dir: &Path) {
                 .input_type("crate::network::tonic_network::FetchBlocksRequest")
                 .output_type("crate::network::tonic_network::FetchBlocksResponse")
                 .codec_path(codec_path)
+                .server_streaming()
                 .build(),
         )
         .build();

@@ -18,6 +18,7 @@ use tokio::{
     sync::oneshot::{self, Sender},
     task::JoinSet,
 };
+use tokio_stream::{iter, Iter};
 use tonic::{
     transport::{Channel, Server},
     Request, Response,
@@ -39,6 +40,12 @@ use crate::{
 };
 
 const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
+
+// Maximum bytes size in a single fetch_blocks()response.
+const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
+// Maximum total bytes fetched in a single fetch_blocks() call, after combining the responses.
+const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 
 // Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
@@ -114,11 +121,44 @@ impl NetworkClient for TonicClient {
             AUTHORITY_INDEX_METADATA_KEY,
             self.context.own_index.value().to_string().parse().unwrap(),
         );
-        let response = client
+        let mut stream = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
-        Ok(response.into_inner().blocks)
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?
+            .into_inner();
+        let mut blocks = vec![];
+        let mut total_fetched_bytes = 0;
+        loop {
+            match stream.message().await {
+                Ok(Some(response)) => {
+                    for b in &response.blocks {
+                        total_fetched_bytes += b.len();
+                    }
+                    blocks.extend(response.blocks);
+                    if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
+                        info!(
+                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
+                            total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
+                        );
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(e) => {
+                    if blocks.is_empty() {
+                        return Err(ConsensusError::NetworkError(format!(
+                            "fetch_blocks failed mid-stream: {e:?}"
+                        )));
+                    } else {
+                        warn!("fetch_blocks failed mid-stream: {e:?}");
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(blocks)
     }
 }
 
@@ -222,10 +262,12 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         Ok(Response::new(SendBlockResponse {}))
     }
 
+    type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
+
     async fn fetch_blocks(
         &self,
         request: Request<FetchBlocksRequest>,
-    ) -> Result<Response<FetchBlocksResponse>, tonic::Status> {
+    ) -> Result<Response<Self::FetchBlocksStream>, tonic::Status> {
         // TODO: switch to using authenticated peer identity.
         let Some(peer_index) = request
             .metadata()
@@ -253,7 +295,14 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_fetch_blocks(peer_index, block_refs)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
-        Ok(Response::new(FetchBlocksResponse { blocks }))
+        let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
+            chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
+                .into_iter()
+                .map(|blocks| Ok(FetchBlocksResponse { blocks }))
+                .collect::<Vec<_>>()
+                .into_iter();
+        let stream = iter(responses);
+        Ok(Response::new(stream))
     }
 }
 
@@ -425,6 +474,26 @@ pub(crate) struct FetchBlocksResponse {
     // Serialized SignedBlock.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     blocks: Vec<Bytes>,
+}
+
+fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
+    let mut chunks = vec![];
+    let mut chunk = vec![];
+    let mut chunk_size = 0;
+    for block in blocks {
+        let block_size = block.len();
+        if !chunk.is_empty() && chunk_size + block_size > chunk_limit {
+            chunks.push(chunk);
+            chunk = vec![];
+            chunk_size = 0;
+        }
+        chunk.push(block);
+        chunk_size += block_size;
+    }
+    if !chunk.is_empty() {
+        chunks.push(chunk);
+    }
+    chunks
 }
 
 // TODO: after supporting peer authentication, using rtest to share the test case with anemo_network.rs
