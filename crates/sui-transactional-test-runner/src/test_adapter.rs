@@ -329,6 +329,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     NumberFormat::Hex,
                 )),
                 Some(Edition::E2024_ALPHA),
+                Some(Flavor::Sui),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,

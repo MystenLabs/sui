@@ -26,7 +26,7 @@ use move_command_line_common::{
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::{Diagnostics, FilesSourceText, WarningFilters},
-    editions::Edition,
+    editions::{Edition, Flavor},
     shared::{NumericalAddress, PackageConfig},
     FullyCompiledProgram,
 };
@@ -56,6 +56,7 @@ pub struct CompiledState {
     pub named_address_mapping: BTreeMap<String, NumericalAddress>,
     default_named_address_mapping: Option<NumericalAddress>,
     edition: Edition,
+    flavor: Flavor,
     modules: BTreeMap<ModuleId, CompiledModule>,
     temp_files: BTreeMap<String, NamedTempFile>,
 }
@@ -405,6 +406,7 @@ impl CompiledState {
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
         default_named_address_mapping: Option<NumericalAddress>,
         compiler_edition: Option<Edition>,
+        flavor: Option<Flavor>,
     ) -> Self {
         let pre_compiled_ids = match pre_compiled_deps.clone() {
             None => BTreeSet::new(),
@@ -427,6 +429,7 @@ impl CompiledState {
             compiled_module_named_address_mapping: BTreeMap::new(),
             named_address_mapping,
             edition: compiler_edition.unwrap_or(Edition::LEGACY),
+            flavor: flavor.unwrap_or(Flavor::Core),
             default_named_address_mapping,
             temp_files: BTreeMap::new(),
         };
@@ -642,6 +645,7 @@ pub fn compile_source_units(
     .set_warning_filter(Some(warning_filter))
     .set_default_config(PackageConfig {
         edition: state.edition,
+        flavor: state.flavor,
         ..PackageConfig::default()
     })
     .run::<PASS_COMPILATION>()?;
