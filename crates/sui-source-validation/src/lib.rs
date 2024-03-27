@@ -384,6 +384,7 @@ fn local_modules(
     }
 
     let root_package = compiled_package.compiled_package_info.package_name;
+    println!("root_package is {}", root_package);
     match source_mode {
         SourceMode::Skip => { /* nop */ }
 
@@ -394,7 +395,7 @@ fn local_modules(
                 let root_compiled_units = compiled_package
                     .root_compiled_units
                     .iter()
-                    .map(|u| ("root".into(), u.clone()))
+                    .map(|u| (root_package.into(), u.clone()))
                     .collect::<Vec<_>>();
 
                 units_for_toolchain(&root_compiled_units).map_err(|e| {
@@ -429,7 +430,7 @@ fn local_modules(
                 let root_compiled_units = compiled_package
                     .root_compiled_units
                     .iter()
-                    .map(|u| ("root".into(), u.clone()))
+                    .map(|u| (root_package.into(), u.clone()))
                     .collect::<Vec<_>>();
 
                 units_for_toolchain(&root_compiled_units).map_err(|e| {
@@ -570,7 +571,12 @@ fn units_for_toolchain(
         if local_units.is_empty() {
             bail!("Expected one or more modules, but none found");
         }
-        let package_root = SourcePackageLayout::try_find_root(&local_units[0].source_path)?;
+
+        let mut package_root = SourcePackageLayout::try_find_root(&local_units[0].source_path)?;
+        if package_root.as_os_str() == "" {
+            package_root = PathBuf::from(".");
+        }
+
         let install_dir = tempfile::tempdir()?; // place compiled packages in this temp dir, don't pollute this packages build dir
         download_and_compile(
             package_root.clone(),
@@ -690,6 +696,7 @@ fn download_and_compile(
         flavor.to_string().as_str(),
         root.display(),
         install_dir.path().display(),
+        //"/tmp/999",
     );
     info!(
         "{} {} (compiler @ {})",
@@ -709,6 +716,7 @@ fn download_and_compile(
             OsStr::new(root.as_path()),
             OsStr::new("--install-dir"),
             OsStr::new(install_dir.path()),
+            // OsStr::new("/tmp/999"),
         ])
         .output()
         .map_err(|e| {
@@ -773,6 +781,19 @@ fn decode_bytecode_file(
     let bytecode_path = Path::new(bytecode_path_str);
     let path_to_file = CompiledPackageLayout::path_to_file_after_category(bytecode_path);
     let bytecode_bytes = std::fs::read(bytecode_path)?;
+    /*
+        let root_path = if let Some(stripped) = root_path.to_str().and_then(|s| s.strip_suffix("root"))
+        {
+            let stripped = String::from(stripped);
+            let path = PathBuf::from(stripped);
+            let package_name = *package_name;
+            let package_name = package_name.as_str();
+            let name = PathBuf::from(package_name);
+            path.join(name)
+        } else {
+            root_path
+    };
+        */
     let source_map = source_map_from_file(
         &root_path
             .join(CompiledPackageLayout::SourceMaps.path())
