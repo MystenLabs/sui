@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anyhow.workspace = true
+async-trait.workspace = true
 bincode.workspace = true
 bcs.workspace = true
 byteorder.workspace = true

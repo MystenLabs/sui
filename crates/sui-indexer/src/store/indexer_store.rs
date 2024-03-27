@@ -1,19 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
-use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::object::ObjectRead;
+use async_trait::async_trait;
 
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
-
 use crate::models::display::StoredDisplay;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -26,22 +20,11 @@ pub enum ObjectChangeToCommit {
 
 #[async_trait]
 pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
-    type ModuleCache: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>
-        + Send
-        + Sync
-        + 'static;
-
     async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError>;
-
-    async fn get_object_read(
-        &self,
-        object_id: ObjectID,
-        version: Option<SequenceNumber>,
-    ) -> Result<ObjectRead, IndexerError>;
 
     async fn persist_objects(
         &self,
@@ -84,8 +67,6 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError>;
-
-    fn module_cache(&self) -> Arc<Self::ModuleCache>;
 
     fn as_any(&self) -> &dyn Any;
 }

@@ -1,73 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::{Arc, Mutex};
+
 use async_trait::async_trait;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
-use std::sync::{Arc, Mutex};
 
 use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::ModuleId;
-use move_core_types::resolver::ModuleResolver;
 use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore};
 use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::move_package::MovePackage;
 use sui_types::object::Object;
 
 use crate::db::PgConnectionPool;
-use crate::errors::{Context, IndexerError};
+use crate::errors::IndexerError;
 use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::metrics::IndexerMetrics;
-use crate::models::packages::StoredPackage;
-use crate::schema::{objects, packages};
+use crate::schema::objects;
 use crate::store::diesel_macro::read_only_blocking;
 use crate::types::IndexedPackage;
 
 /// A package resolver that reads packages from the database.
-pub struct IndexerStorePackageModuleResolver {
+pub struct IndexerStorePackageResolver {
     cp: PgConnectionPool,
 }
 
-impl IndexerStorePackageModuleResolver {
+impl IndexerStorePackageResolver {
     pub fn new(cp: PgConnectionPool) -> Self {
         Self { cp }
     }
 }
 
-impl ModuleResolver for IndexerStorePackageModuleResolver {
-    type Error = IndexerError;
-
-    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = ObjectID::from(*id.address()).to_vec();
-        let module_name = id.name().to_string();
-
-        // Note: this implementation is potentially vulnerable to package upgrade race conditions
-        // for framework packages because they reuse the same package IDs.
-        let stored_package: StoredPackage = read_only_blocking!(&self.cp, |conn| {
-            packages::dsl::packages
-                .filter(packages::dsl::package_id.eq(package_id))
-                .first::<StoredPackage>(conn)
-        })
-        .context("Error reading module.")?;
-
-        let move_package =
-            bcs::from_bytes::<MovePackage>(&stored_package.move_package).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Error deserializing move package. Error: {}",
-                    e
-                ))
-            })?;
-
-        Ok(move_package
-            .serialized_module_map()
-            .get(&module_name)
-            .cloned())
-    }
-}
-
 #[async_trait]
-impl PackageStore for IndexerStorePackageModuleResolver {
+impl PackageStore for IndexerStorePackageResolver {
     async fn version(&self, id: AccountAddress) -> Result<SequenceNumber, PackageResolverError> {
         let version =
             self.get_package_version_from_db(id)
@@ -89,7 +55,7 @@ impl PackageStore for IndexerStorePackageModuleResolver {
     }
 }
 
-impl IndexerStorePackageModuleResolver {
+impl IndexerStorePackageResolver {
     fn get_package_version_from_db(
         &self,
         id: AccountAddress,
@@ -131,14 +97,14 @@ impl IndexerStorePackageModuleResolver {
 }
 
 pub struct InterimPackageResolver {
-    package_db_resolver: IndexerStorePackageModuleResolver,
+    package_db_resolver: IndexerStorePackageResolver,
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
     metrics: IndexerMetrics,
 }
 
 impl InterimPackageResolver {
     pub fn new(
-        package_db_resolver: IndexerStorePackageModuleResolver,
+        package_db_resolver: IndexerStorePackageResolver,
         package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
         new_package_objects: &[(IndexedPackage, Object)],
         metrics: IndexerMetrics,
