@@ -1,10 +1,12 @@
 [package]
 name = "Move2024"
 version = "0.0.1"
-edition = "2024.alpha"
+edition = "2024.beta"
 
+#include Sui as dependency to test that importing it does not crash the symbolicator
 [dependencies]
-MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+Sui = { local = "../../../../../../crates/sui-framework/packages/sui-framework/" }
 
 [addresses]
 Move2024 = "0xCAFE"
+Sui = "0x2"

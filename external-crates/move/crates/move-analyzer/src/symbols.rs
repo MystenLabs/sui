@@ -2574,25 +2574,25 @@ impl<'a> TypingSymbolicator<'a> {
         };
         // insert use of the const's module
         let mod_name = module_ident.value.module;
-        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
-        else {
-            debug_assert!(false);
-            return;
-        };
-        self.use_defs.insert(
-            mod_name_start.line,
-            UseDef::new(
-                self.references,
-                self.alias_lengths,
-                mod_name.loc().file_hash(),
-                mod_name_start,
-                mod_defs.fhash,
-                mod_defs.start,
-                &mod_name.value(),
-                None,
-                mod_defs.doc_comment.clone(),
-            ),
-        );
+        if let Some(mod_name_start) =
+            get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
+        {
+            // a module will not be present if a constant belongs to an implicit module
+            self.use_defs.insert(
+                mod_name_start.line,
+                UseDef::new(
+                    self.references,
+                    self.alias_lengths,
+                    mod_name.loc().file_hash(),
+                    mod_name_start,
+                    mod_defs.fhash,
+                    mod_defs.start,
+                    &mod_name.value(),
+                    None,
+                    mod_defs.doc_comment.clone(),
+                ),
+            );
+        }
 
         let Some(name_start) = get_start_loc(use_pos, self.files, self.file_id_mapping) else {
             debug_assert!(false);
@@ -2645,25 +2645,25 @@ impl<'a> TypingSymbolicator<'a> {
         };
         // insert use of the functions's module
         let mod_name = module_ident.value.module;
-        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
-        else {
-            debug_assert!(false);
-            return;
-        };
-        self.use_defs.insert(
-            mod_name_start.line,
-            UseDef::new(
-                self.references,
-                self.alias_lengths,
-                mod_name.loc().file_hash(),
-                mod_name_start,
-                mod_defs.fhash,
-                mod_defs.start,
-                &mod_name.value(),
-                None,
-                mod_defs.doc_comment.clone(),
-            ),
-        );
+        if let Some(mod_name_start) =
+            get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
+        {
+            // a module will not be present if a function belongs to an implicit module
+            self.use_defs.insert(
+                mod_name_start.line,
+                UseDef::new(
+                    self.references,
+                    self.alias_lengths,
+                    mod_name.loc().file_hash(),
+                    mod_name_start,
+                    mod_defs.fhash,
+                    mod_defs.start,
+                    &mod_name.value(),
+                    None,
+                    mod_defs.doc_comment.clone(),
+                ),
+            );
+        }
 
         if add_fun_use_def(
             fun_def_name,
@@ -2694,25 +2694,25 @@ impl<'a> TypingSymbolicator<'a> {
         };
         // insert use of the struct's module
         let mod_name = module_ident.value.module;
-        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
-        else {
-            debug_assert!(false);
-            return;
-        };
-        self.use_defs.insert(
-            mod_name_start.line,
-            UseDef::new(
-                self.references,
-                self.alias_lengths,
-                mod_name.loc().file_hash(),
-                mod_name_start,
-                mod_defs.fhash,
-                mod_defs.start,
-                &mod_name.value(),
-                None,
-                mod_defs.doc_comment.clone(),
-            ),
-        );
+        if let Some(mod_name_start) =
+            get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
+        {
+            // a module will not be present if a struct belongs to an implicit module
+            self.use_defs.insert(
+                mod_name_start.line,
+                UseDef::new(
+                    self.references,
+                    self.alias_lengths,
+                    mod_name.loc().file_hash(),
+                    mod_name_start,
+                    mod_defs.fhash,
+                    mod_defs.start,
+                    &mod_name.value(),
+                    None,
+                    mod_defs.doc_comment.clone(),
+                ),
+            );
+        }
 
         if add_struct_use_def(
             self.mod_outer_defs,
@@ -3573,12 +3573,14 @@ fn assert_use_def_with_doc_string(
         format!("{}", info)
     );
 
-    assert!(
-        doc_string.map(|s| s.to_string()) == use_def.doc_string,
-        "'{:?}' != '{:?}' for use in column {use_col} of line {use_line} in file {use_file}",
-        doc_string.map(|s| s.to_string()),
-        use_def.doc_string
-    );
+    if doc_string.is_some() {
+        assert!(
+            doc_string.map(|s| s.to_string()) == use_def.doc_string,
+            "'{:?}' != '{:?}' for use in column {use_col} of line {use_line} in file {use_file}",
+            doc_string.map(|s| s.to_string()),
+            use_def.doc_string
+        );
+    }
     match use_def.type_def_loc {
         Some(type_def_loc) => {
             let tdef_line = type_def.unwrap().0;
@@ -6231,4 +6233,71 @@ fn mod_ident_uniform_test() {
     let cpath = dunce::canonicalize(&fpath).unwrap();
 
     symbols.file_use_defs.get(&cpath).unwrap();
+}
+
+#[test]
+/// Tests symbolication of implicit structs and modules.
+fn implicit_uses_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/move-2024");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        &mut BTreeMap::new(),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/implicit_uses.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // implicit struct in field def
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        3,
+        12,
+        "implicit_uses.move",
+        76,
+        18,
+        "object.move",
+        "struct sui::object::UID{\n\tid: sui::object::ID\n}",
+        Some((76, 18, "object.move")),
+    );
+    // implicit struct as parameter type
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        6,
+        29,
+        "implicit_uses.move",
+        20,
+        18,
+        "tx_context.move",
+        "struct sui::tx_context::TxContext{\n\tepoch: u64,\n\tepoch_timestamp_ms: u64,\n\tids_created: u64,\n\tsender: address,\n\ttx_hash: vector<u8>\n}",
+        Some((20, 18, "tx_context.move")),
+    );
+    // implicit module name in function call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        7,
+        18,
+        "implicit_uses.move",
+        4,
+        12,
+        "object.move",
+        "module sui::object",
+        None,
+    );
 }
