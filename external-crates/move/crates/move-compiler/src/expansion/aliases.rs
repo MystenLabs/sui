@@ -29,6 +29,59 @@ pub struct AliasMap {
     previous: Option<Box<AliasMap>>,
 }
 
+trait NamespaceEntry: Copy {
+    fn namespace(m: &AliasMap) -> &UniqueMap<Name, Self>;
+    fn namespace_mut(m: &mut AliasMap) -> &mut UniqueMap<Name, Self>;
+    fn alias_entry(name: Name, entry: Self) -> AliasEntry;
+
+    fn find_custom(
+        m: &mut AliasMap,
+        name: &Name,
+        mut f_entry: impl FnMut(&mut AliasMap, &Name, &Self),
+    ) -> Option<(Name, Self)> {
+        let mut current_scope = Some(m);
+        loop {
+            let Some(scope) = current_scope else {
+                break None;
+            };
+            let Some(entry) = Self::namespace(scope).get(name).copied() else {
+                current_scope = scope.previous.as_mut().map(|x| &mut **x);
+                continue;
+            };
+            let original_name = Self::namespace_mut(scope).get_full_key(&name).unwrap();
+            f_entry(scope, &original_name, &entry);
+            break Some((original_name, entry));
+        }
+    }
+
+    fn find(m: &mut AliasMap, name: &Name) -> Option<(Name, Self)> {
+        Self::find_custom(m, name, |scope, name, entry| {
+            scope.unused.remove(&Self::alias_entry(*name, *entry));
+        })
+    }
+}
+
+macro_rules! namespace_entry {
+    ($ty:ty, .$field:ident) => {
+        impl NamespaceEntry for $ty {
+            fn namespace(m: &AliasMap) -> &UniqueMap<Name, Self> {
+                &m.$field
+            }
+
+            fn namespace_mut(m: &mut AliasMap) -> &mut UniqueMap<Name, Self> {
+                &mut m.$field
+            }
+
+            fn alias_entry(name: Name, entry: Self) -> AliasEntry {
+                (name, entry).into()
+            }
+        }
+    };
+}
+
+namespace_entry!(LeadingAccessEntry, .leading_access);
+namespace_entry!(MemberEntry, .module_members);
+
 impl AliasSet {
     pub fn new() -> Self {
         Self {
@@ -43,51 +96,6 @@ impl AliasSet {
     }
 }
 
-macro_rules! decl_resolve_alias {
-    ($f:ident, $fimpl: ident, .$namespace:ident, $t:ty) => {
-        impl AliasMap {
-            fn $fimpl(
-                &mut self,
-                name: &Name,
-                mut k: impl FnMut(&mut Self, &Name, &$t),
-            ) -> Option<(Name, $t)> {
-                let mut current_scope = Some(self);
-                loop {
-                    let Some(scope) = current_scope else {
-                        break None;
-                    };
-                    let Some(entry) = scope.$namespace.get(name).copied() else {
-                        current_scope = scope.previous.as_mut().map(|x| &mut **x);
-                        continue;
-                    };
-                    let original_name = scope.$namespace.get_full_key(&name).unwrap();
-                    k(scope, &original_name, &entry);
-                    break Some((original_name, entry));
-                }
-            }
-
-            fn $f(&mut self, name: &Name) -> Option<(Name, $t)> {
-                self.$fimpl(name, |scope, name, entry| {
-                    scope.unused.remove(&(*name, *entry).into());
-                })
-            }
-        }
-    };
-}
-
-decl_resolve_alias!(
-    find_alias_leading_access,
-    find_alias_leading_access_impl,
-    .leading_access,
-    LeadingAccessEntry
-);
-decl_resolve_alias!(
-    find_alias_module_member,
-    find_alias_module_member_impl,
-    .module_members,
-    MemberEntry
-);
-
 impl AliasMap {
     pub fn new() -> Self {
         Self {
@@ -99,7 +107,7 @@ impl AliasMap {
     }
 
     pub fn resolve_leading_access(&mut self, name: &Name) -> Option<(Name, LeadingAccessEntry)> {
-        let (name, entry) = self.find_alias_leading_access(name)?;
+        let (name, entry) = LeadingAccessEntry::find(self, name)?;
         match &entry {
             LeadingAccessEntry::Module(_)
             | LeadingAccessEntry::Address(_)
@@ -111,7 +119,7 @@ impl AliasMap {
     }
 
     pub fn resolve_call(&mut self, name: &Name) -> Option<(Name, MemberEntry)> {
-        let (name, entry) = self.find_alias_module_member(name)?;
+        let (name, entry) = MemberEntry::find(self, name)?;
         match &entry {
             MemberEntry::Member(_, _) => Some((name, entry)),
             // For code legacy reasons, don't resolve type parameters, they are just here for
@@ -162,7 +170,7 @@ impl AliasMap {
         for (alias, (entry, is_implicit)) in new_leading_access.key_cloned_iter() {
             if !*is_implicit {
                 unused.insert((alias, *entry).into());
-                self.find_alias_leading_access_impl(&alias, |scope, prev_name, prev_entry| {
+                LeadingAccessEntry::find_custom(self, &alias, |scope, prev_name, prev_entry| {
                     if entry == prev_entry {
                         duplicate.push(UnnecessaryAlias {
                             entry: (alias, *entry).into(),
@@ -176,7 +184,7 @@ impl AliasMap {
         for (alias, (entry, is_implicit)) in new_module_members.key_cloned_iter() {
             if !*is_implicit {
                 unused.insert((alias, *entry).into());
-                self.find_alias_module_member_impl(&alias, |scope, prev_name, prev_entry| {
+                MemberEntry::find_custom(self, &alias, |scope, prev_name, prev_entry| {
                     if entry == prev_entry {
                         duplicate.push(UnnecessaryAlias {
                             entry: (alias, *entry).into(),

@@ -126,40 +126,7 @@ impl<'env, 'map> Context<'env, 'map> {
             .push_alias_scope(loc, new_scope);
         match res {
             Err(diag) => self.env().add_diag(*diag),
-            Ok(unnecessaries) => {
-                for UnnecessaryAlias { entry, prev } in unnecessaries {
-                    let loc = entry.loc();
-                    let (alias, case) = match entry {
-                        AliasEntry::Address(_, _) => {
-                            debug_assert!(false, "ICE cannot manually make address aliases");
-                            continue;
-                        }
-                        AliasEntry::TypeParam(_) => {
-                            debug_assert!(
-                                false,
-                                "ICE cannot manually make type param aliases. \
-                                We do not have nested TypeParam scopes"
-                            );
-                            continue;
-                        }
-                        AliasEntry::Module(n, m) => (n, format!(" for module '{m}'")),
-                        AliasEntry::Member(n, m, mem) => {
-                            (n, format!(" for module member '{m}::{mem}'"))
-                        }
-                    };
-                    let msg = format!("Unnecessary alias '{alias}'{case}. It was already in scope");
-                    let mut diag = diag!(Declarations::DuplicateAlias, (loc, msg));
-                    if prev != Loc::invalid() {
-                        diag.add_secondary_label((
-                            prev,
-                            "The same alias was previously declared here",
-                        ))
-                    } else {
-                        diag.add_note("This alias is provided by default")
-                    }
-                    self.env().add_diag(diag);
-                }
-            }
+            Ok(unnecessaries) => unnecessary_alias_errors(self, unnecessaries),
         }
     }
 
@@ -263,6 +230,46 @@ impl<'env, 'map> Context<'env, 'map> {
             )
         )
     }
+}
+
+fn unnecessary_alias_errors(context: &mut Context, unnecessaries: Vec<UnnecessaryAlias>) {
+    for unnecessary in unnecessaries {
+        unnecessary_alias_error(context, unnecessary)
+    }
+}
+
+fn unnecessary_alias_error(context: &mut Context, unnecessary: UnnecessaryAlias) {
+    let UnnecessaryAlias { entry, prev } = unnecessary;
+    let loc = entry.loc();
+    let is_default = prev == Loc::invalid();
+    let (alias, entry_case) = match entry {
+        AliasEntry::Address(_, _) => {
+            debug_assert!(false, "ICE cannot manually make address aliases");
+            return;
+        }
+        AliasEntry::TypeParam(_) => {
+            debug_assert!(
+                false,
+                "ICE cannot manually make type param aliases. \
+                We do not have nested TypeParam scopes"
+            );
+            return;
+        }
+        AliasEntry::Module(n, m) => (n, format!(" for module '{m}'")),
+        AliasEntry::Member(n, m, mem) => (n, format!(" for module member '{m}::{mem}'")),
+    };
+    let decl_case = if is_default {
+        "This alias is provided by default"
+    } else {
+        "It was already in scope"
+    };
+    let msg = format!("Unnecessary alias '{alias}'{entry_case}. {decl_case}");
+    let mut diag = diag!(Declarations::DuplicateAlias, (loc, msg));
+    if prev != Loc::invalid() {
+        // nothing to point to for the default case
+        diag.add_secondary_label((prev, "The same alias was previously declared here"))
+    }
+    context.env().add_diag(diag);
 }
 
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
