@@ -679,10 +679,11 @@ async fn test_random_zklogin_in_multisig() {
     let test_vectors =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..11];
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(1000)
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
         .build()
         .await;
+    test_cluster.wait_for_authenticator_state_update().await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &test_cluster.wallet;
