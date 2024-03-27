@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["APPLICATION_BCS","APPLICATION_JSON","TEXT_PLAIN_UTF_8"],"mod":["accept","types"],"struct":["CheckpointData","CheckpointTransaction","Client","RestError","RestService"],"type":["Result"]};

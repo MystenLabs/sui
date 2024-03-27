@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["events","events_json"]};

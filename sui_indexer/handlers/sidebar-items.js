@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["checkpoint_handler","committer","objects_snapshot_processor","tx_processor"],"struct":["CheckpointDataToCommit","EpochToCommit","TransactionObjectChangesToCommit"]};

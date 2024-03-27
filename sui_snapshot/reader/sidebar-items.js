@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["LiveObjectIter","ObjectRefIter","StateSnapshotReaderV1"],"type":["DigestByBucketAndPartition","SnapshotChecksums"]};

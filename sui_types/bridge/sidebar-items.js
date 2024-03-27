@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BRIDGE_CREATE_FUNCTION_NAME","BRIDGE_MODULE_NAME","BRIDGE_SUPPORTED_ASSET"],"fn":["get_bridge_obj_initial_shared_version"]};

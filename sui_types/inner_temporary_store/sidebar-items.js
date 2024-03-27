@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["InnerTemporaryStore","TemporaryModuleResolver","TemporaryPackageStore"],"type":["ObjectMap","TxCoins","WrittenObjects"]};

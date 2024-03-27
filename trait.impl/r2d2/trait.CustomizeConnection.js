@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"sui_indexer":[["impl <a class=\"trait\" href=\"https://docs.rs/r2d2/0.8/r2d2/trait.CustomizeConnection.html\" title=\"trait r2d2::CustomizeConnection\">CustomizeConnection</a>&lt;PgConnection, Error&gt; for <a class=\"struct\" href=\"sui_indexer/db/struct.PgConnectionConfig.html\" title=\"struct sui_indexer::db::PgConnectionConfig\">PgConnectionConfig</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_facebook_jwk_bytes","get_google_jwk_bytes","get_twitch_jwk_bytes"],"static":["FACEBOOK_JWK_BYTES","GOOGLE_JWK_BYTES","TWITCH_JWK_BYTES"],"struct":["Envelope","TrustedEnvelope","VerifiedEnvelope"],"trait":["AuthenticatedMessage","Message","UnauthenticatedMessage"]};

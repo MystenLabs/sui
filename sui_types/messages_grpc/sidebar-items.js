@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LayoutGenerationOption","ObjectInfoRequestKind","TransactionStatus"],"struct":["HandleCertificateResponseV2","HandleTransactionResponse","ObjectInfoRequest","ObjectInfoResponse","SubmitCertificateResponse","SystemStateRequest","TransactionInfoRequest","TransactionInfoResponse","VerifiedHandleCertificateResponse","VerifiedObjectInfoResponse"]};

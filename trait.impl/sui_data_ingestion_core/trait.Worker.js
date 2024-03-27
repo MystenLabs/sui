@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"sui_data_ingestion":[["impl Worker for <a class=\"struct\" href=\"sui_data_ingestion/struct.ArchivalWorker.html\" title=\"struct sui_data_ingestion::ArchivalWorker\">ArchivalWorker</a>"],["impl Worker for <a class=\"struct\" href=\"sui_data_ingestion/struct.BlobWorker.html\" title=\"struct sui_data_ingestion::BlobWorker\">BlobWorker</a>"],["impl Worker for <a class=\"struct\" href=\"sui_data_ingestion/struct.KVStoreWorker.html\" title=\"struct sui_data_ingestion::KVStoreWorker\">KVStoreWorker</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

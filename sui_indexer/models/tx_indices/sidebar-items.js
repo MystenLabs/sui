@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["StoredTxCalls","StoredTxChangedObject","StoredTxInputObject","StoredTxRecipients","StoredTxSenders","TxDigest","TxSequenceNumber"]};

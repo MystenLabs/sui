@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["WritePathPendingTransactionLog","WritePathPendingTransactionTableConfigurator","WritePathPendingTransactionTableReadOnly"],"type":["IsFirstRecord"]};

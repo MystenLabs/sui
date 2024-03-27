@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SUI_VALIDATOR_SERVER_NAME"],"struct":["AllowAll","CertVerifier","HashSetAllow","SelfSignedCertificate","TlsAcceptor","TlsConnectionInfo"],"trait":["Allower"],"type":["ValidatorAllowlist"]};

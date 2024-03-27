@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["resolve_lock_file_path"],"struct":["Build"]};

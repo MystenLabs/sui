@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["faucet_batch_request","faucet_request","health","main","request_status","start_faucet"],"struct":["AppState","Args"]};

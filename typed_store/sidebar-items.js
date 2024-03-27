@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TypedStoreError"],"macro":["reopen","retry_transaction","retry_transaction_forever"],"mod":["metrics","rocks","sally","test_db","traits"],"type":["StoreError"]};

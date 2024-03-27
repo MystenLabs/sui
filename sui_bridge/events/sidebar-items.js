@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SuiBridgeEvent"],"fn":["get_bridge_event_struct_tag"],"struct":["EmittedSuiToEthTokenBridgeV1","MoveTokenBridgeEvent"]};

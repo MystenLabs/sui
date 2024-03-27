@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["incidents_cmd","service_cmd"],"mod":["pulumi"],"struct":["IncidentsArgs","ServiceArgs"]};

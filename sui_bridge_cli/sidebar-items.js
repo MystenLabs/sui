@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BridgeValidatorCommand"],"fn":["generate_bridge_authority_key_and_write_to_file","generate_bridge_client_key_and_write_to_file","generate_bridge_node_config_and_write_to_file","main"],"struct":["Args"]};

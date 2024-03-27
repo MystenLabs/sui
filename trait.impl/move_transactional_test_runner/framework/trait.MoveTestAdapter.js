@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"sui_transactional_test_runner":[["impl&lt;'a&gt; MoveTestAdapter&lt;'a&gt; for <a class=\"struct\" href=\"sui_transactional_test_runner/test_adapter/struct.SuiTestAdapter.html\" title=\"struct sui_transactional_test_runner::test_adapter::SuiTestAdapter\">SuiTestAdapter</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

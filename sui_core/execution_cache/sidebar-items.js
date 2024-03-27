@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["passthrough_cache","writeback_cache"],"struct":["ExecutionCacheMetrics","NotifyReadWrapper"],"trait":["CheckpointCache","ExecutionCacheAPI","ExecutionCacheCommit","ExecutionCacheRead","ExecutionCacheReconfigAPI","ExecutionCacheWrite","StateSyncAPI"],"type":["ExecutionCache"]};

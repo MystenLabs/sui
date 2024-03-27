@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PUBLISHED_AT_MANIFEST_FIELD"],"enum":["PublishedAtError"],"fn":["build_from_resolution_graph","check_invalid_dependencies","check_unpublished_dependencies","decorate_warnings","gather_published_ids","published_at_property","set_sui_flavor"],"struct":["BuildConfig","CompiledPackage","PackageDependencies","SuiPackageHooks"]};

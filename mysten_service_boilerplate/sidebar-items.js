@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["hello","main"],"struct":["AppState","MyMetrics"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_transaction","get_bridge_package_id","get_root_bridge_object_arg","get_sui_token_type_tag"]};

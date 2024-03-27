@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SuiClientCommandResult","SuiClientCommands"],"fn":["request_tokens_from_faucet"],"struct":["AddressesOutput","DynamicFieldOutput","GasCoinOutput","NewAddressOutput","ObjectOutput","ObjectsOutput","SwitchResponse"]};

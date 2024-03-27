@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_deleted_objects","get_latest_objects","new_handlers"],"struct":["CheckpointHandler"]};
