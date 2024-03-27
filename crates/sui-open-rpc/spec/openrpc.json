@@ -5317,6 +5317,14 @@
       "BigInt_for_uint64": {
         "type": "string"
       },
+      "Bn254FqElement": {
+        "description": "A struct that stores a Bn254 Fq field element as 32 bytes.",
+        "type": "string"
+      },
+      "Bn254FrElement": {
+        "description": "A struct that stores a Bn254 Fr field element as 32 bytes.",
+        "type": "string"
+      },
       "Checkpoint": {
         "type": "object",
         "required": [
@@ -10923,7 +10931,7 @@
         ],
         "properties": {
           "addressSeed": {
-            "type": "string"
+            "$ref": "#/components/schemas/Bn254FrElement"
           },
           "headerBase64": {
             "type": "string"
@@ -10948,7 +10956,7 @@
           "a": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           },
           "b": {
@@ -10956,14 +10964,14 @@
             "items": {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/components/schemas/Bn254FqElement"
               }
             }
           },
           "c": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           }
         }
