@@ -191,7 +191,7 @@ impl Query {
 
         Ok(Some(Owner {
             address,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 

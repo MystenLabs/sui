@@ -28,9 +28,8 @@ use sui_types::gas_coin::GAS;
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Owners.
@@ -227,7 +226,7 @@ impl Owner {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         })
     }
 
@@ -235,10 +234,7 @@ impl Owner {
         Object::query(
             ctx.data_unchecked(),
             self.address,
-            match self.checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -499,7 +495,7 @@ impl From<&Owner> for OwnerImpl {
     fn from(owner: &Owner) -> Self {
         OwnerImpl {
             address: owner.address,
-            checkpoint_viewed_at: owner.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(owner.checkpoint_viewed_at),
         }
     }
 }
