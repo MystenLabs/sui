@@ -401,19 +401,19 @@ pub fn ptb_description() -> clap::Command {
             "Preview the list of PTB transactions instead of executing them."
         ))
         .arg(arg!(
-            --"summary"
-            "Show only a short summary (digest, execution status, gas cost). \
-            Do not use this flag when you need all the transaction data and the execution effects."
-        ))
-        .arg(arg!(
             --"serialize-unsigned-transaction"
-            "4Instead of executing the transaction, serialize the bcs bytes of the unsigned \
-            transaction data (TransactionData) using base64 encoding."
+            "Instead of executing the transaction, serialize the bcs bytes of the unsigned \
+            transaction data using base64 encoding."
         ))
         .arg(arg!(
             --"serialize-signed-transaction"
             "Instead of executing the transaction, serialize the bcs bytes of the signed \
-            transaction data (Transaction) using base64 encoding."
+            transaction data using base64 encoding."
+        ))
+        .arg(arg!(
+            --"summary"
+            "Show only a short summary (digest, execution status, gas cost). \
+            Do not use this flag when you need all the transaction data and the execution effects."
         ))
         .arg(arg!(
             --"warn-shadows"
