@@ -4,8 +4,8 @@
 
 use crate::support::dummy_procedure_module;
 use move_binary_format::file_format::Bytecode;
-use move_bytecode_verifier::meter::DummyMeter;
 use move_bytecode_verifier::CodeUnitVerifier;
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::vm_status::StatusCode;
 
 #[test]

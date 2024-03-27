@@ -6563,9 +6563,19 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "petgraph 0.5.1",
+]
+
+[[package]]
+name = "move-bytecode-verifier-meter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-config",
 ]
 
 [[package]]
@@ -6575,6 +6585,7 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "petgraph 0.5.1",
@@ -6587,6 +6598,7 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "petgraph 0.5.1",
@@ -6599,6 +6611,7 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "petgraph 0.5.1",
@@ -11656,6 +11669,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-package",
  "move-vm-config",
@@ -11689,6 +11703,7 @@ dependencies = [
  "leb128",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-package",
@@ -11716,6 +11731,7 @@ dependencies = [
  "leb128",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-package",
@@ -11742,6 +11758,7 @@ dependencies = [
  "leb128",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-package",
@@ -12322,6 +12339,7 @@ dependencies = [
  "cargo_metadata 0.15.4",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-bytecode-verifier-v1",
  "move-bytecode-verifier-v2",
@@ -12438,6 +12456,7 @@ name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
  "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-cli",
  "move-package",
  "move-unit-test",
@@ -14002,6 +14021,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
@@ -14023,6 +14043,7 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
@@ -14037,6 +14058,7 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
@@ -14050,6 +14072,7 @@ dependencies = [
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",

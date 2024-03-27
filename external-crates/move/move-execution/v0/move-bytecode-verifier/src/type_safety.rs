@@ -7,7 +7,6 @@
 
 use std::num::NonZeroU64;
 
-use crate::meter::{Meter, Scope};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
@@ -20,6 +19,7 @@ use move_binary_format::{
     },
     safe_unwrap_err,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 struct Locals<'a> {

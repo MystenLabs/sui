@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_bytecode_verifier::meter::{Meter, Scope};
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 
