@@ -825,18 +825,7 @@ impl AuthorityState {
         &self,
         epoch: EpochId,
     ) -> SuiResult<Option<Vec<CheckpointCommitment>>> {
-        let commitments =
-            self.checkpoint_store
-                .get_epoch_last_checkpoint(epoch)?
-                .map(|checkpoint| {
-                    checkpoint
-                        .end_of_epoch_data
-                        .as_ref()
-                        .expect("Last checkpoint of epoch expected to have EndOfEpochData")
-                        .epoch_commitments
-                        .clone()
-                });
-        Ok(commitments)
+        self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
