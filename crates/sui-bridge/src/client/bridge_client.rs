@@ -167,22 +167,22 @@ impl BridgeClient {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::test_utils::run_mock_bridge_server;
     use crate::{
         abi::EthToSuiTokenBridgeV1,
         crypto::BridgeAuthoritySignInfo,
         events::EmittedSuiToEthTokenBridgeV1,
         server::mock_handler::BridgeRequestMockHandler,
         test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action},
-        types::{BridgeChainId, SignedBridgeAction, TokenId},
+        types::{SignedBridgeAction, TokenId},
     };
+    use ethers::types::Address as EthAddress;
+    use ethers::types::TxHash;
     use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-
-    use super::*;
-    use crate::test_utils::run_mock_bridge_server;
-    use ethers::types::Address as EthAddress;
-    use ethers::types::TxHash;
+    use sui_types::bridge::BridgeChainId;
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 
     #[tokio::test]

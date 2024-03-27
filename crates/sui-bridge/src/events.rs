@@ -12,7 +12,6 @@ use crate::error::BridgeError;
 use crate::error::BridgeResult;
 use crate::types::BridgeAction;
 use crate::types::BridgeActionType;
-use crate::types::BridgeChainId;
 use crate::types::SuiToEthBridgeAction;
 use crate::types::TokenId;
 use ethers::types::Address as EthAddress;
@@ -23,6 +22,8 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
+use sui_types::bridge::BridgeChainId;
+
 use sui_types::digests::TransactionDigest;
 use sui_types::BRIDGE_PACKAGE_ID;
 
@@ -196,7 +197,6 @@ pub mod tests {
     use super::MoveTokenBridgeEvent;
     use crate::types::BridgeAction;
     use crate::types::BridgeActionType;
-    use crate::types::BridgeChainId;
     use crate::types::SuiToEthBridgeAction;
     use crate::types::TokenId;
     use ethers::types::Address as EthAddress;
@@ -205,6 +205,7 @@ pub mod tests {
     use sui_json_rpc_types::SuiEvent;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
+    use sui_types::bridge::BridgeChainId;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
     use sui_types::Identifier;

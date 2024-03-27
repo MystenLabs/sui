@@ -19,6 +19,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
+use sui_types::bridge::{
+    BridgeChainId, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
+};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
@@ -53,8 +56,8 @@ pub struct BridgeCommittee {
 impl BridgeCommittee {
     pub fn new(members: Vec<BridgeAuthority>) -> BridgeResult<Self> {
         let mut members_map = BTreeMap::new();
-        let mut total_stake = 0;
         let mut total_blocklisted_stake = 0;
+        let mut total_stake = 0;
         for member in members {
             let public_key = BridgeAuthorityPublicKeyBytes::from(&member.pubkey);
             if members_map.contains_key(&public_key) {
@@ -63,16 +66,21 @@ impl BridgeCommittee {
                 ));
             }
             // TODO: should we disallow identical network addresses?
-            total_stake += member.voting_power;
             if member.is_blocklisted {
                 total_blocklisted_stake += member.voting_power;
             }
+            total_stake += member.voting_power;
             members_map.insert(public_key, member);
         }
-        if total_stake != BRIDGE_AUTHORITY_TOTAL_VOTING_POWER {
-            return Err(BridgeError::InvalidBridgeCommittee(
-                "Total voting power does not equal to 10000".into(),
-            ));
+        if total_stake < BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER {
+            return Err(BridgeError::InvalidBridgeCommittee(format!(
+                "Total voting power is below minimal {BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER}"
+            )));
+        }
+        if total_stake > BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER {
+            return Err(BridgeError::InvalidBridgeCommittee(format!(
+                "Total voting power is above maximal {BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER}"
+            )));
         }
         Ok(Self {
             members: members_map,
@@ -161,19 +169,6 @@ pub const SUI_TX_DIGEST_LENGTH: usize = 32;
 pub const ETH_TX_HASH_LENGTH: usize = 32;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
-#[repr(u8)]
-pub enum BridgeChainId {
-    SuiMainnet = 0,
-    SuiTestnet = 1,
-    SuiDevnet = 2,
-    SuiLocalTest = 3,
-
-    EthMainnet = 10,
-    EthSepolia = 11,
-    EthLocalTest = 12,
-}
 
 #[derive(
     Copy,
@@ -1136,16 +1131,16 @@ mod tests {
 
     #[test]
     fn test_bridge_committee_construction() -> anyhow::Result<()> {
-        let (mut authority, _, _) = get_test_authority_and_key(10000, 9999);
+        let (mut authority, _, _) = get_test_authority_and_key(8000, 9999);
         // This is ok
         let _ = BridgeCommittee::new(vec![authority.clone()]).unwrap();
 
-        // This is not ok - total voting power != 10000
-        authority.voting_power = 9999;
+        // This is not ok - total voting power < BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER
+        authority.voting_power = BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER - 1;
         let _ = BridgeCommittee::new(vec![authority.clone()]).unwrap_err();
 
-        // This is not ok - total voting power != 10000
-        authority.voting_power = 10001;
+        // This is not ok - total voting power > BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER
+        authority.voting_power = BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER + 1;
         let _ = BridgeCommittee::new(vec![authority.clone()]).unwrap_err();
 
         // This is ok
