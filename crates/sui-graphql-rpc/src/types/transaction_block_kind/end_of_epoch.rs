@@ -125,13 +125,9 @@ impl EndOfEpochTransaction {
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(
-            ctx,
-            Some(self.native.epoch),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx, Some(self.native.epoch), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// The protocol version in effect in the new epoch.
@@ -223,13 +219,9 @@ impl ChangeEpochTransaction {
 impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
     async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(
-            ctx,
-            Some(self.native.min_epoch),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx, Some(self.native.min_epoch), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// The initial version that the AuthenticatorStateUpdate was shared at.

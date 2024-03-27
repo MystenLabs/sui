@@ -307,7 +307,7 @@ impl StakedSui {
         Epoch::query(
             ctx,
             Some(self.native.activation_epoch()),
-            Some(self.super_.super_.checkpoint_viewed_at),
+            self.super_.super_.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -318,7 +318,7 @@ impl StakedSui {
         Epoch::query(
             ctx,
             Some(self.native.request_epoch()),
-            Some(self.super_.super_.checkpoint_viewed_at),
+            self.super_.super_.checkpoint_viewed_at,
         )
         .await
         .extend()

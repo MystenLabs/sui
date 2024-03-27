@@ -196,7 +196,7 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Epoch::query(ctx, Some(*id), Some(self.checkpoint_viewed_at))
+        Epoch::query(ctx, Some(*id), self.checkpoint_viewed_at)
             .await
             .extend()
     }

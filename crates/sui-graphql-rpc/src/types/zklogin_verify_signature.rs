@@ -52,7 +52,7 @@ pub(crate) async fn verify_zklogin_signature(
     checkpoint_viewed_at: u64,
 ) -> Result<ZkLoginVerifyResult, Error> {
     // get current epoch from db.
-    let Some(curr_epoch) = Epoch::query(ctx, None, None).await? else {
+    let Some(curr_epoch) = Epoch::query(ctx, None, checkpoint_viewed_at).await? else {
         return Err(Error::Internal(
             "Cannot get current epoch from db".to_string(),
         ));
