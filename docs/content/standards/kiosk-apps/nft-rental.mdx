@@ -84,7 +84,7 @@ The object model of the `nft_rental` module provides the structure of the app, b
 struct Rentables has drop {}
 ```
 
-The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. It is used as the DF key in the borrower's Bag <key, value> entry when an item is actively being borrowed by someone.
+The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. It is used as the DF key in the borrower's `Bag <key, value>` entry when someone is actively borrowing an item.
 
 ```move
 struct Rented has store, copy, drop { 
@@ -92,7 +92,7 @@ struct Rented has store, copy, drop {
 }
 ```
 
-The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object. It is used as the DF key in the renter's Bag <key, value> entry once an item is listed for renting. 
+The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object. It is used as the DF key in the renter's `Bag <key, value>` entry after an item is listed for renting. 
 
 ```move
 struct Listed has store, copy, drop { 
@@ -102,7 +102,7 @@ struct Listed has store, copy, drop {
 
 The `Promise` struct is created for borrowing by value. The `Promise` operates as the [hot potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx) that can only be resolved by returning the item back to the extension's `Bag`.
 The Promise field lacks the `store` ability as it shouldn't be wrapped inside other objects.
-It also lacks the `drop` ability since it can only be consumed by the `return_val` function.
+It also lacks the `drop` ability because only the `return_val` function can consume it.
 
 ```move
 struct Promise {
@@ -116,7 +116,7 @@ struct Promise {
 ```
 
 The `Rentable` struct is as a wrapper object that holds an asset that is being rented. Contains information relevant to the rental period, cost, and renter.
-This struct requires the `store` ability since it stores a value `T` that will definitely also have `store`.
+This struct requires the `store` ability because it stores a value `T` that definitely also has `store`.
 
 ```move
 struct Rentable<T: key + store> has store {
@@ -142,8 +142,8 @@ struct RentalPolicy<phantom T> has key, store {
 }
 ```
 
-The `ProtectedTP` object is a shared object that every creator, that would like to enable renting, mints, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
-A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to be resolved (like lock rule, loyalty rule, etc).
+The `ProtectedTP` object is a shared object that creators mint to enable renting, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
+A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to be resolved (like lock rule, loyalty rule, and so on).
 If the creator desires to enforce royalties on rentals, they can do so via the `RentalPolicy` above.
 
 ```move
@@ -166,7 +166,7 @@ public fun install(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext)
 ```
 
 The `remove` function enables the owner (and only the owner) of the kiosk to remove the extension. The extension storage must be empty for the transaction to succeed.
-The extension storage empties once the user is no longer borrowing or renting any items.
+The extension storage empties after the user is no longer borrowing or renting any items.
 
 ```move
 public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, _ctx: &mut TxContext)
@@ -248,7 +248,7 @@ public fun return_val<T: key + store>(
 ```
 :::note
 
-It is important to note that the `reclaim` functionality is manually invoked and the rental service provider is responsible for ensuring that the renter is reminded to `reclaim`. As such this can cause the borrower to hold the asset for longer than the rental period. This can be mitigated if we modified the current contract by adding an assertion in the `borrow` & `borrow_val` functions to check if the rental period has expired.
+It is important to note that the `reclaim` functionality is manually invoked and the rental service provider is responsible for ensuring that the renter is reminded to `reclaim`. As such, this can cause the borrower to hold the asset for longer than the rental period. This can be mitigated through modification of the current contract by adding an assertion in the `borrow` and `borrow_val` functions to check if the rental period has expired.
 
 :::
 
@@ -277,13 +277,13 @@ This implementation assumes that each creator, as an enabling action, creates a 
 The initialization process is part of the flow but only happens once for each entity:
 
 - For a new type that a creator would like to allow to be rented
-    - Involves invoking `setup_renting` & TransferPolicy creation with optional lock rule
+    - Involves invoking `setup_renting` and `TransferPolicy` creation with optional lock rule
 - For a Borrower that has never borrowed before using this framework
     - If no Kiosk exists for the user, one should be created
-    - Involves installing the Extension in their Kiosk
+    - Involves installing the extension in their Kiosk
 - For a Renter that has never rented before using this framework
     - If no Kiosk exists for the user, one should be created
-    - Involves installing the Extension in their Kiosk
+    - Involves installing the extension in their Kiosk
 
 ```mermaid
 sequenceDiagram
