@@ -1,0 +1,20 @@
+validator:
+  network-address: /ip4/0.0.0.0/tcp/8080/http
+  metrics-address: 0.0.0.0:9184
+  json-rpc-address: 0.0.0.0:9000
+  admin-interface-port: 1337
+  genesis:
+    genesis-file-location: /opt/sui/config/genesis.blob
+  db-path: /opt/sui/db/authorities_db
+  consensus-config:
+    db-path: /opt/sui/db/consensus_db
+    narwhal-config:
+      max_header_delay: 2000ms
+  expensive-safety-check-config:
+    enable-epoch-sui-conservation-check: false
+    enable-deep-per-tx-sui-conservation-check: false
+    force-disable-epoch-sui-conservation-check: false
+    enable-state-consistency-check: false
+    force-disable-state-consistency-check: false
+    enable-move-vm-paranoid-checks: false
+  epoch_duration_ms: 120000
