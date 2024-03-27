@@ -220,8 +220,8 @@ where
                 true
             }
             // Although theoretically a legit SuiToEthBridgeAction should not have
-            // status `RecordNotFound`
-            BridgeActionStatus::Pending | BridgeActionStatus::RecordNotFound => false,
+            // status `NotFound`
+            BridgeActionStatus::Pending | BridgeActionStatus::NotFound => false,
         }
     }
 
@@ -790,6 +790,9 @@ mod tests {
             Some(sui_tx_event_index),
             None,
             None,
+            None,
+            None,
+            None,
         );
         mock_bridge_authority_signing_errors(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -962,6 +965,9 @@ mod tests {
         let action = get_test_sui_to_eth_bridge_action(
             Some(sui_tx_digest),
             Some(sui_tx_event_index),
+            None,
+            None,
+            None,
             None,
             None,
         );

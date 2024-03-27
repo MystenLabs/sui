@@ -192,12 +192,13 @@ pub enum TokenId {
     USDT = 4,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
+#[repr(u8)]
 pub enum BridgeActionStatus {
-    RecordNotFound,
-    Pending,
-    Approved,
-    Claimed,
+    Pending = 0,
+    Approved = 1,
+    Claimed = 2,
+    NotFound = 3,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
