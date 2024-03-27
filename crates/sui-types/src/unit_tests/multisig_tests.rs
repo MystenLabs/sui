@@ -25,7 +25,7 @@ use fastcrypto::{
 };
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use fastcrypto_zkp::circom::Bn254FrElement;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};

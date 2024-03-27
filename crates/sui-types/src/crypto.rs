@@ -36,7 +36,7 @@ pub use fastcrypto::traits::{
     VerifyingKey,
 };
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use fastcrypto_zkp::circom::Bn254FrElement;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;

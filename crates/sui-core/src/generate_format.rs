@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
-use fastcrypto_zkp::circom::Bn254FrElement;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
 use rand::rngs::StdRng;
