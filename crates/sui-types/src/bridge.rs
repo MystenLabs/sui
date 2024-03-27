@@ -51,7 +51,9 @@ pub const APPROVAL_THRESHOLD_LIMIT_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE: u64 = 5001;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
+#[derive(
+    Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, JsonSchema, Hash,
+)]
 #[repr(u8)]
 pub enum BridgeChainId {
     SuiMainnet = 0,
@@ -62,6 +64,29 @@ pub enum BridgeChainId {
     EthMainnet = 10,
     EthSepolia = 11,
     EthLocalTest = 12,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TryFromPrimitive,
+    Hash,
+    Ord,
+    PartialOrd,
+    JsonSchema,
+)]
+#[repr(u8)]
+pub enum TokenId {
+    Sui = 0,
+    BTC = 1,
+    ETH = 2,
+    USDC = 3,
+    USDT = 4,
 }
 
 pub fn get_bridge_obj_initial_shared_version(
@@ -110,7 +135,7 @@ pub trait BridgeTrait {
     fn treasury(&self) -> &MoveTypeBridgeTreasury;
     fn bridge_records(&self) -> &LinkedTable<MoveTypeBridgeMessageKey>;
     fn frozen(&self) -> bool;
-    fn into_bridge_summary(self) -> BridgeSummary;
+    fn try_into_bridge_summary(self) -> SuiResult<BridgeSummary>;
 }
 
 #[serde_as]
@@ -131,10 +156,11 @@ pub struct BridgeSummary {
     pub committee: BridgeCommitteeSummary,
     /// Object ID of bridge Records (dynamic field)
     pub bridge_records_id: ObjectID,
+    /// Summary of the limiter
+    pub limiter: BridgeLimiterSummary,
     /// Whether the bridge is currently frozen or not
     pub is_frozen: bool,
     // TODO: add treasury
-    // TODO: add limiter
 }
 
 pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrapper, SuiError> {
@@ -219,8 +245,64 @@ impl BridgeTrait for BridgeInnerV1 {
         self.frozen
     }
 
-    fn into_bridge_summary(self) -> BridgeSummary {
-        BridgeSummary {
+    fn try_into_bridge_summary(self) -> SuiResult<BridgeSummary> {
+        let transfer_limit = self
+            .limiter
+            .transfer_limit
+            .contents
+            .into_iter()
+            .map(|e| {
+                let source = BridgeChainId::try_from(e.key.source).map_err(|_e| {
+                    SuiError::GenericBridgeError {
+                        error: format!("Unrecognized chain id: {}", e.key.source),
+                    }
+                })?;
+                let destination = BridgeChainId::try_from(e.key.destination).map_err(|_e| {
+                    SuiError::GenericBridgeError {
+                        error: format!("Unrecognized chain id: {}", e.key.destination),
+                    }
+                })?;
+                Ok((source, destination, e.value))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
+        let notional_values = self
+            .limiter
+            .notional_values
+            .contents
+            .into_iter()
+            .map(|e| {
+                let token_id =
+                    TokenId::try_from(e.key).map_err(|_e| SuiError::GenericBridgeError {
+                        error: format!("Unrecognized oken id: {}", e.key),
+                    })?;
+                Ok((token_id, e.value))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
+        let transfer_records = self
+            .limiter
+            .transfer_records
+            .contents
+            .into_iter()
+            .map(|e| {
+                let source = BridgeChainId::try_from(e.key.source).map_err(|_e| {
+                    SuiError::GenericBridgeError {
+                        error: format!("Unrecognized chain id: {}", e.key.source),
+                    }
+                })?;
+                let destination = BridgeChainId::try_from(e.key.destination).map_err(|_e| {
+                    SuiError::GenericBridgeError {
+                        error: format!("Unrecognized chain id: {}", e.key.destination),
+                    }
+                })?;
+                Ok((source, destination, e.value))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
+        let limiter = BridgeLimiterSummary {
+            transfer_limit,
+            notional_values,
+            transfer_records,
+        };
+        Ok(BridgeSummary {
             bridge_version: self.bridge_version,
             message_version: self.message_version,
             chain_id: self.chain_id,
@@ -248,8 +330,9 @@ impl BridgeTrait for BridgeInnerV1 {
                 last_committee_update_epoch: self.committee.last_committee_update_epoch,
             },
             bridge_records_id: self.bridge_records.id,
+            limiter,
             is_frozen: self.frozen,
-        }
+        })
     }
 }
 
@@ -284,6 +367,15 @@ pub struct BridgeCommitteeSummary {
     pub members: Vec<(Vec<u8>, MoveTypeCommitteeMember)>,
     pub member_registration: Vec<(SuiAddress, MoveTypeCommitteeMemberRegistration)>,
     pub last_committee_update_epoch: u64,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeLimiterSummary {
+    pub transfer_limit: Vec<(BridgeChainId, BridgeChainId, u64)>,
+    pub notional_values: Vec<(TokenId, u64)>,
+    pub transfer_records: Vec<(BridgeChainId, BridgeChainId, MoveTypeBridgeTransferRecord)>,
 }
 
 /// Rust version of the Move committee::CommitteeMember type.
@@ -322,7 +414,7 @@ pub struct MoveTypeBridgeRoute {
 }
 
 /// Rust version of the Move limiter::TransferRecord type.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct MoveTypeBridgeTransferRecord {
     hour_head: u64,
     hour_tail: u64,

@@ -195,6 +195,7 @@ impl SuiClientInner for SuiMockClient {
             sequence_nums: vec![],
             bridge_records_id: ObjectID::random(),
             is_frozen: false,
+            limiter: Default::default(),
             committee: Default::default(),
         })
     }
