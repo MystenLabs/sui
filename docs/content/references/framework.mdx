@@ -2,32 +2,34 @@
 title: Sui Framework
 ---
 
-The crate documentation in this section comes from the Rust `cargo doc` process. The content is built from the comments contained in the source code. 
-
-## Source code
-
-You can find the source code in the [crates/sui-framework/packages](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages) directory in the `sui` repository on GitHub.
-
-## Crate documentation
-
-The documentation in this section comes from the `crates/sui-framework/docs` directory of the `sui` repository.
-
-## Build documentation
-
-The most recent documentation is available in the `main` branch of the `sui` repository. You shouldn't need to build the documentation locally, but if the need arises you can:
-
-1. Open a terminal or console to the `sui/crates/sui-framework` directory.
-1. Run `cargo doc --workspace --exclude "sui-benchmark" --no-deps`.
-1. The docs are built to `crates/sui-framework/docs`.
-
-:::info
-
-If the `cargo doc` does not work as expected, try running `cargo clean` before attempting again. 
-
-:::
+The documentation in this section is created from the Rust `cargo doc` process. The process builds the content from comments in the source code.   
 
 ## Framework documentation
 
-**<a href="./framework/sui-framework" data-noBrokenLinkCheck='true'>Sui Framework</a>**: Modules that create the logic for Sui.
+The child pages to this topic describe the module members for the following libraries:
 
-**<a href="./framework/move-stdlib" data-noBrokenLinkCheck='true'>Move Stdlib</a>**: Modules central to the Move language.
+**<a href="./framework/move-stdlib" data-noBrokenLinkCheck='true'>Move Stdlib</a>:** Modules central to the Move language.
+
+**<a href="./framework/sui-framework" data-noBrokenLinkCheck='true'>Sui Framework</a>:** Modules that create the logic for Sui.
+
+## Source code
+
+You can find the source code for these Move modules in the [crates/sui-framework/packages](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages) directory in the `sui` repository on GitHub. As previously mentioned, the comments included in the code provide context for the logic defined.
+
+## Crate documentation
+
+You can review the raw `cargo doc` output of the following documentation in the `sui` repository. The .md files are located in the `crates/sui-framework/docs` directory. Online, they are located at https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs.
+
+## Build documentation locally
+
+The most recent documentation is always available in the `main` branch of the `sui` repository. You shouldn't need to build the documentation locally, but if the need arises you can:
+
+1. Open a terminal or console to the `sui/crates/sui-framework` directory.
+1. Run `cargo doc --workspace --exclude "sui-benchmark" --no-deps`.
+1. The docs are built to `crates/sui-framework/docs` into their respective subdirectories.
+
+:::info
+
+If the `cargo doc` process does not work as expected, try running `cargo clean` before attempting again. 
+
+:::
