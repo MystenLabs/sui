@@ -222,6 +222,7 @@ mod tests {
             get_test_eth_to_sui_bridge_action, get_test_sui_to_eth_bridge_action,
         },
         types::TokenId,
+        BRIDGE_ENABLE_PROTOCOL_VERSION,
     };
     use ethers::types::Address as EthAddress;
     use test_cluster::TestClusterBuilder;
@@ -232,10 +233,11 @@ mod tests {
     async fn test_build_sui_transaction_for_token_transfer() {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version(37.into())
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
             .with_epoch_duration_ms(15000)
             .build_with_bridge()
             .await;
+
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
             .unwrap();
