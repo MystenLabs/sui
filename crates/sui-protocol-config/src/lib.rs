@@ -2034,6 +2034,8 @@ impl ProtocolConfig {
                 }
                 42 => {
                     cfg.feature_flags.zklogin_max_epoch_upper_bound = Some(2);
+                    // enable zklogin in multisig in mainnet.
+                    cfg.feature_flags.accept_zklogin_in_multisig = true;
                 }
                 // Use this template when making changes:
                 //
