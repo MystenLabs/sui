@@ -28,11 +28,6 @@ interface IBridgeLimiter {
     /// @param amount The amount in USD transferred.
     event HourlyTransferAmountUpdated(uint32 hourUpdated, uint256 amount);
 
-    /// @dev Emitted when the asset price is updated.
-    /// @param tokenId The ID of the token.
-    /// @param price The price of the token in USD with 4 decimal places (e.g. 10000 -> $1)
-    event AssetPriceUpdated(uint8 tokenId, uint64 price);
-
     /// @dev Emitted when the total limit is updated.
     /// @param sourceChainID The ID of the source chain.
     /// @param newLimit The new limit in USD with 4 decimal places (e.g. 10000 -> $1)
