@@ -399,7 +399,7 @@ module sui_system::validator_set_tests {
     }
 
     fun create_validator(addr: address, hint: u8, gas_price: u64, is_initial_validator: bool, ctx: &mut TxContext): Validator {
-        let stake_value = (hint as u64) * 100 * MIST_PER_SUI;
+        let stake_value = hint as u64 * 100 * MIST_PER_SUI;
         let name = hint_to_ascii(hint);
         let validator = validator::new_for_testing(
             addr,

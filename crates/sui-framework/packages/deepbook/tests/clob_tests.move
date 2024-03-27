@@ -18,10 +18,10 @@ module deepbook::clob_test {
     use std::option;
 
     const MIN_PRICE: u64 = 0;
-    const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const FLOAT_SCALING: u64 = 1000000000;
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     const FILL_OR_KILL: u8 = 2;
     const POST_OR_ABORT: u8 = 3;
     const CLIENT_ID_ALICE: u64 = 0;

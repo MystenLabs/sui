@@ -127,7 +127,7 @@ title: Module `0x3::stake_subsidy`
 ): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
     // Rate can't be higher than 100%.
     <b>assert</b>!(
-        stake_subsidy_decrease_rate &lt;= (<a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u16),
+        stake_subsidy_decrease_rate &lt;= <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u16,
         <a href="stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>,
     );
 
@@ -175,7 +175,7 @@ Advance the epoch counter and draw down the subsidy for the epoch.
 
     // Decrease the subsidy amount only when the current period ends.
     <b>if</b> (self.distribution_counter % self.stake_subsidy_period_length == 0) {
-        <b>let</b> decrease_amount = (self.current_distribution_amount <b>as</b> u128)
+        <b>let</b> decrease_amount = self.current_distribution_amount <b>as</b> u128
             * (self.stake_subsidy_decrease_rate <b>as</b> u128) / <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
         self.current_distribution_amount = self.current_distribution_amount - (decrease_amount <b>as</b> u64)
     };

@@ -50,7 +50,7 @@ module sui_system::governance_test_utils {
         let mut i = 0;
         let mut validators = vector[];
         while (i < stakes.length()) {
-            let validator = create_validator_for_testing(address::from_u256((i as u256)), stakes[i], ctx);
+            let validator = create_validator_for_testing(address::from_u256(i as u256), stakes[i], ctx);
             validators.push_back(validator);
             i = i + 1
         };
