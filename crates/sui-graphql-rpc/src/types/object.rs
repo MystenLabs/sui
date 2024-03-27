@@ -552,7 +552,7 @@ impl ObjectImpl<'_> {
         TransactionBlock::query(
             ctx.data_unchecked(),
             digest.into(),
-            Some(self.0.checkpoint_viewed_at),
+            self.0.checkpoint_viewed_at,
         )
         .await
         .extend()

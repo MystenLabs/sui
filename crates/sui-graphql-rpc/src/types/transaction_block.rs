@@ -234,30 +234,21 @@ impl TransactionBlock {
         }
     }
 
-    /// Look up a `TransactionBlock` in the database, by its transaction digest. If
-    /// `checkpoint_viewed_at` is provided, the transaction block will inherit the value. Otherwise,
-    /// it will be set to the upper bound of the available range at the time of the query.
+    /// Look up a `TransactionBlock` in the database, by its transaction diges, constrained by the
+    /// checkpoint upper bound set by `checkpoint_viewed_at`.
     pub(crate) async fn query(
         db: &Db,
         digest: Digest,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use transactions::dsl;
 
-        let (stored, checkpoint_viewed_at): (Option<StoredTransaction>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
-
-                let stored = conn
-                    .result(move || {
-                        dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec()))
-                    })
-                    .optional()?;
-
-                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
+        let stored: Option<StoredTransaction> = db
+            .execute(move |conn| {
+                conn.result(move || {
+                    dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec()))
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transaction: {e}")))?;

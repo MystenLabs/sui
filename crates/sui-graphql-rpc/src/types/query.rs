@@ -277,7 +277,7 @@ impl Query {
     ) -> Result<Option<TransactionBlock>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
 
-        TransactionBlock::query(ctx.data_unchecked(), digest, Some(checkpoint_viewed_at))
+        TransactionBlock::query(ctx.data_unchecked(), digest, checkpoint_viewed_at)
             .await
             .extend()
     }
