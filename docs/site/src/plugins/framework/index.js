@@ -17,54 +17,36 @@ const STDLIB_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/move-stdlib",
 );
+const DEEPBOOK_PATH = path.join(
+  __dirname,
+  "../../../../../crates/sui-framework/docs/deepbook",
+);
+const SUISYS_PATH = path.join(
+  __dirname,
+  "../../../../../crates/sui-framework/docs/sui-system",
+);
 const DOCS_PATH = path.join(
   __dirname,
   "../../../../content/references/framework",
 );
-const FRAMEWORK_PARENT_MDX = DOCS_PATH + ".mdx";
-// Clear doc files.
-const clearDirectory = async (directoryPath) => {
-  try {
-    // Check if the directory exists.
-    const stats = await fs.promises.stat(directoryPath);
 
-    if (stats.isDirectory()) {
-      // Read the directory contents.
-      const files = await fs.promises.readdir(directoryPath);
-
-      // Iterate over the contents and remove each item.
-      for (const file of files) {
-        if (file === "index.mdx") {
-          continue;
-        }
-
-        const fullPath = path.join(directoryPath, file);
-        await fs.promises.rm(fullPath, { recursive: true, force: true });
-      }
-
-      console.log(`The directory '${directoryPath}' has been cleared.`);
-    }
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      console.error(`The directory '${directoryPath}' does not exist.`);
-    } else {
-      console.error(
-        `Error while clearing the directory '${directoryPath}':`,
-        error,
-      );
-    }
-  }
-};
-clearDirectory(DOCS_PATH);
-if (!fs.existsSync(DOCS_PATH)) {
-  fs.mkdirSync(DOCS_PATH);
-}
 
 const frameworkPlugin = (context, options) => {
   return {
     name: "sui-framework-plugin",
 
     async loadContent() {
+      // framework folder is added to gitignore, so should only exist locally.
+      // Clearing the folder programmatically messes up the watch dev build,
+      // so only do it when the directory is missing. Should never exist on vercel.
+      if (fs.existsSync(DOCS_PATH)) {
+        console.log(
+          "\n******\nSkipping framework doc build. If you want to rebuild, delete the framework folder before restarting the server.\n******",
+        );
+        return;
+      } else {
+        fs.mkdirSync(DOCS_PATH);
+      }
       const recurseFiles = (dirPath, files = []) => {
         const f = fs.readdirSync(dirPath, { withFileTypes: true });
         // Copy md files from provided directory.
@@ -82,7 +64,14 @@ const frameworkPlugin = (context, options) => {
 
       const frameworkFiles = recurseFiles(FRAMEWORK_PATH);
       const stdlibFiles = recurseFiles(STDLIB_PATH);
-      const allFiles = [frameworkFiles, stdlibFiles];
+      const deepbookFiles = recurseFiles(DEEPBOOK_PATH);
+      const suisysFiles = recurseFiles(SUISYS_PATH);
+      const allFiles = [
+        frameworkFiles,
+        stdlibFiles,
+        deepbookFiles,
+        suisysFiles,
+      ];
       allFiles.forEach((theseFiles) => {
         theseFiles.forEach((file) => {
           const markdown = fs.readFileSync(file, "utf8");
@@ -94,7 +83,10 @@ const frameworkPlugin = (context, options) => {
           // Remove empty code blocks because it looks lame.
           const reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
-            .replace(/(title: .*)Module `0x[1, 2]::(.*)`/g, `$1$2`)
+            .replace(
+              /(title: .*)Module `(0x[1-9a-f]{1,4}::)(.*)`/g,
+              `$1 Module $2$3\nsidebar_label: $3`,
+            )
             .replace(/(?<!<pre>)<code>(.*?)<\/code>/gs, `$1`)
             .replace(/<pre><code><\/code><\/pre>/g, "");
           const filename = file.replace(/.*\/docs\/(.*)$/, `$1`);
@@ -127,7 +119,7 @@ const frameworkPlugin = (context, options) => {
                     link: {
                       type: "generated-index",
                       slug: path.join("/references/framework", part),
-                      description: `Documentation for the modules in the crates/sui-framework/packages/${part} crate. Select a module from the list to see its details.`,
+                      description: `Documentation for the modules in the sui/crates/sui-framework/packages/${part} crate. Select a module from the list to see its details.`,
                     },
                   }),
                   "utf8",
