@@ -5,14 +5,22 @@ use crate::config::BridgeNodeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use anyhow::anyhow;
+use ethers::core::k256::ecdsa::SigningKey;
+use ethers::middleware::SignerMiddleware;
+use ethers::prelude::*;
+use ethers::providers::{Http, Provider};
+use ethers::signers::Wallet;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::path::PathBuf;
+use std::str::FromStr;
 use sui_config::Config;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::SuiKeyPair;
+
+pub type EthSigner = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
 /// Generate Bridge Authority key (Secp256k1KeyPair) and write to a file as base64 encoded `privkey`.
 pub fn generate_bridge_authority_key_and_write_to_file(
@@ -85,4 +93,15 @@ pub fn generate_bridge_node_config_and_write_to_file(
         config.db_path = Some(PathBuf::from("/path/to/your/client_db"));
     }
     config.save(path)
+}
+
+pub async fn get_eth_signer_client(url: &str, private_key_hex: &str) -> anyhow::Result<EthSigner> {
+    let provider = Provider::<Http>::try_from(url)
+        .unwrap()
+        .interval(std::time::Duration::from_millis(2000));
+    let chain_id = provider.get_chainid().await?;
+    let wallet = Wallet::from_str(private_key_hex)
+        .unwrap()
+        .with_chain_id(chain_id.as_u64());
+    Ok(SignerMiddleware::new(provider, wallet))
 }

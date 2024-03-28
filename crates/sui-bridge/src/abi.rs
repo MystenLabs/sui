@@ -4,12 +4,16 @@
 use crate::encoding::{
     BridgeMessageEncoding, ASSET_PRICE_UPDATE_MESSAGE_VERSION, LIMIT_UPDATE_MESSAGE_VERSION,
 };
-use crate::encoding::{COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION};
+use crate::encoding::{
+    COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION,
+    TOKEN_TRANSFER_MESSAGE_VERSION,
+};
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction, BridgeActionType,
-    EmergencyAction, EthLog, EthToSuiBridgeAction, LimitUpdateAction,
+    EmergencyAction, EthLog, EthToSuiBridgeAction, LimitUpdateAction, SuiToEthBridgeAction,
 };
+use ethers::types::Log;
 use ethers::{
     abi::RawLog,
     contract::{abigen, EthLogDecode},
@@ -62,6 +66,20 @@ impl EthBridgeEvent {
         let raw_log = RawLog {
             topics: log.log.topics.clone(),
             data: log.log.data.to_vec(),
+        };
+
+        if let Ok(decoded) = EthSuiBridgeEvents::decode_log(&raw_log) {
+            return Some(EthBridgeEvent::EthSuiBridgeEvents(decoded));
+        }
+
+        // TODO: try other variants
+        None
+    }
+
+    pub fn try_from_log(log: &Log) -> Option<EthBridgeEvent> {
+        let raw_log = RawLog {
+            topics: log.topics.clone(),
+            data: log.data.to_vec(),
         };
 
         if let Ok(decoded) = EthSuiBridgeEvents::decode_log(&raw_log) {
@@ -145,6 +163,18 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
 ////////////////////////////////////////////////////////////////////////
 
 // TODO: add EvmContractUpgradeAction and tests
+
+impl From<SuiToEthBridgeAction> for eth_sui_bridge::Message {
+    fn from(action: SuiToEthBridgeAction) -> Self {
+        eth_sui_bridge::Message {
+            message_type: BridgeActionType::TokenTransfer as u8,
+            version: TOKEN_TRANSFER_MESSAGE_VERSION,
+            nonce: action.sui_bridge_event.nonce,
+            chain_id: action.sui_bridge_event.sui_chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
 
 impl From<EmergencyAction> for eth_sui_bridge::Message {
     fn from(action: EmergencyAction) -> Self {

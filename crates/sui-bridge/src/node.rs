@@ -174,6 +174,7 @@ mod tests {
     use sui_types::crypto::SuiKeyPair;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
+    use tempfile::tempdir;
     use test_cluster::TestClusterBuilder;
 
     const DUMMY_ETH_ADDRESS: &str = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
@@ -184,7 +185,7 @@ mod tests {
         let (test_cluster, anvil_port, _child) = setup().await;
 
         // prepare node config (server only)
-        let tmp_dir = std::env::temp_dir();
+        let tmp_dir = tempdir().unwrap().into_path();
         let authority_key_path = "test_starting_bridge_node_bridge_authority_key";
         let server_listen_port = get_available_port("127.0.0.1");
         let kp = test_cluster.bridge_authority_keys.as_ref().unwrap()[0].copy();
@@ -222,7 +223,7 @@ mod tests {
         let (test_cluster, anvil_port, _child) = setup().await;
 
         // prepare node config (server + client)
-        let tmp_dir = std::env::temp_dir();
+        let tmp_dir = tempdir().unwrap().into_path();
         let db_path = tmp_dir.join("test_starting_bridge_node_with_client_db");
         let authority_key_path = "test_starting_bridge_node_with_client_bridge_authority_key";
         let server_listen_port = get_available_port("127.0.0.1");
@@ -277,7 +278,7 @@ mod tests {
         let (test_cluster, anvil_port, _child) = setup().await;
 
         // prepare node config (server + client)
-        let tmp_dir = std::env::temp_dir();
+        let tmp_dir = tempdir().unwrap().into_path();
         let db_path =
             tmp_dir.join("test_starting_bridge_node_with_client_and_separate_client_key_db");
         let authority_key_path =
@@ -338,7 +339,7 @@ mod tests {
 
     async fn setup() -> (test_cluster::TestCluster, u16, Child) {
         let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .with_epoch_duration_ms(10000)
             .build_with_bridge()
             .await;
