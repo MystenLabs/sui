@@ -5,6 +5,7 @@ use crate::client_ptb::ptb::PTB;
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
+    fs,
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -19,13 +20,14 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 
+use move_binary_format::CompiledModule;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
 use sui_move::build::resolve_lock_file_path;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 use shared_crypto::intent::Intent;
@@ -659,9 +661,18 @@ pub enum SuiClientCommands {
     /// Run the bytecode verifier on the package
     #[clap(name = "verify-bytecode-meter")]
     VerifyBytecodeMeter {
-        /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
-        package_path: PathBuf,
+        /// Path to directory containing a Move package, (defaults to the current directory)
+        #[clap(name = "package", long, global = true)]
+        package_path: Option<PathBuf>,
+
+        /// Protocol version to use for the bytecode verifier (defaults to the latest protocol
+        /// version)
+        #[clap(name = "protocol-version", long)]
+        protocol_version: Option<u64>,
+
+        /// Path to specific pre-compiled module bytecode to verify (instead of an entire package)
+        #[clap(name = "module", long, global = true)]
+        module_path: Option<PathBuf>,
 
         /// Package build options
         #[clap(flatten)]
@@ -1056,20 +1067,49 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::VerifyBytecodeMeter {
+                protocol_version,
+                module_path,
                 package_path,
                 build_config,
             } => {
-                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+                let protocol_version =
+                    protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
+                let protocol_config =
+                    ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
-                let package = compile_package_simple(build_config, package_path)?;
-                let modules: Vec<_> = package.get_modules().cloned().collect();
+                let modules = match (module_path, package_path) {
+                    (Some(_), Some(_)) => {
+                        bail!("Cannot specify both a module path and a package path")
+                    }
+
+                    (Some(module_path), None) => {
+                        let module_bytes =
+                            fs::read(module_path).context("Failed to read module file")?;
+                        let module = CompiledModule::deserialize_with_defaults(&module_bytes)
+                            .context("Failed to deserialize module")?;
+                        vec![module]
+                    }
+
+                    (None, package_path) => {
+                        let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
+                        let package = compile_package_simple(build_config, package_path)?;
+                        package.get_modules().cloned().collect()
+                    }
+                };
 
                 let mut verifier =
                     sui_execution::verifier(&protocol_config, true, &bytecode_verifier_metrics);
                 let overrides = VerifierOverrides::new(None, None);
-                println!("Running bytecode verifier for {} modules", modules.len());
+
+                println!(
+                    "Running bytecode verifier for {} module{}",
+                    modules.len(),
+                    if modules.len() != 1 { "s" } else { "" },
+                );
+
                 let verifier_values = verifier.meter_compiled_modules_with_overrides(
                     &modules,
                     &protocol_config,
