@@ -31,8 +31,8 @@ pub struct SuiMockClient {
     // the top two fields do not change during tests so we don't need them to be Arc<Mutex>>
     chain_identifier: String,
     latest_checkpoint_sequence_number: u64,
-    events: Arc<Mutex<HashMap<(ObjectID, Identifier, EventID), EventPage>>>,
-    past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, EventID)>>>,
+    events: Arc<Mutex<HashMap<(ObjectID, Identifier, Option<EventID>), EventPage>>>,
+    past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, Option<EventID>)>>>,
     events_by_tx_digest:
         Arc<Mutex<HashMap<TransactionDigest, Result<Vec<SuiEvent>, sui_sdk::error::Error>>>>,
     transaction_responses:
@@ -70,7 +70,7 @@ impl SuiMockClient {
         self.events
             .lock()
             .unwrap()
-            .insert((package, module, cursor), events);
+            .insert((package, module, Some(cursor)), events);
     }
 
     pub fn add_events_by_tx_digest(&self, tx_digest: TransactionDigest, events: Vec<SuiEvent>) {
@@ -135,7 +135,7 @@ impl SuiClientInner for SuiMockClient {
     async fn query_events(
         &self,
         query: EventFilter,
-        cursor: EventID,
+        cursor: Option<EventID>,
     ) -> Result<EventPage, Self::Error> {
         let events = self.events.lock().unwrap();
         match query {
