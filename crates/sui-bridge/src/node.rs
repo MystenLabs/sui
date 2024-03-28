@@ -17,6 +17,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use sui_types::bridge::BRIDGE_MODULE_NAME;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -55,39 +56,30 @@ async fn start_client_components(
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
     let store: std::sync::Arc<BridgeOrchestratorTables> =
         BridgeOrchestratorTables::new(&client_config.db_path.join("client"));
-    let stored_module_cursors = store
-        .get_sui_event_cursors(&client_config.sui_bridge_modules)
-        .map_err(|e| anyhow::anyhow!("Unable to get sui event cursors from storage: {e:?}"))?;
+    let module_identifier = BRIDGE_MODULE_NAME.to_owned();
+    let sui_bridge_modules = vec![module_identifier.clone()];
+    let sui_bridge_module_stored_cursor = store
+        .get_sui_event_cursors(&sui_bridge_modules)
+        .map_err(|e| anyhow::anyhow!("Unable to get sui event cursors from storage: {e:?}"))?[0];
     let mut sui_modules_to_watch = HashMap::new();
-    for (module, cursor) in client_config
-        .sui_bridge_modules
-        .iter()
-        .zip(stored_module_cursors)
-    {
-        if client_config
-            .sui_bridge_modules_last_processed_event_id_override
-            .contains_key(module)
-        {
-            sui_modules_to_watch.insert(
-                module.clone(),
-                client_config.sui_bridge_modules_last_processed_event_id_override[module],
-            );
+    match client_config.sui_bridge_module_last_processed_event_id_override {
+        Some(cursor) => {
             info!(
                 "Overriding cursor for sui bridge module {} to {:?}. Stored cursor: {:?}",
-                module,
-                client_config.sui_bridge_modules_last_processed_event_id_override[module],
-                cursor
+                module_identifier, cursor, sui_bridge_module_stored_cursor,
             );
-        } else if let Some(cursor) = cursor {
-            sui_modules_to_watch.insert(module.clone(), cursor);
-        } else {
-            // TODO: for sui the query can start from genesis
-            return Err(anyhow::anyhow!(
-                "No cursor found for sui bridge module {} in storage or config override",
-                module
-            ));
+            sui_modules_to_watch.insert(module_identifier, Some(cursor));
         }
-    }
+        None => {
+            if sui_bridge_module_stored_cursor.is_none() {
+                info!(
+                    "No cursor found for sui bridge module {} in storage or config override",
+                    module_identifier
+                );
+            }
+            sui_modules_to_watch.insert(module_identifier, sui_bridge_module_stored_cursor);
+        }
+    };
 
     let stored_eth_cursors = store
         .get_eth_event_cursors(&client_config.eth_bridge_contracts)
@@ -210,10 +202,9 @@ mod tests {
             run_client: false,
             bridge_client_key_path_base64_sui_key: None,
             bridge_client_gas_object: None,
-            sui_bridge_modules: None,
             db_path: None,
             eth_bridge_contracts_start_block_override: None,
-            sui_bridge_modules_last_processed_event_id_override: None,
+            sui_bridge_module_last_processed_event_id_override: None,
         };
         // Spawn bridge node in memory
         tokio::spawn(async move {
@@ -257,19 +248,15 @@ mod tests {
             run_client: true,
             bridge_client_key_path_base64_sui_key: None,
             bridge_client_gas_object: None,
-            sui_bridge_modules: Some(vec!["bridge".into()]),
             db_path: Some(db_path),
             eth_bridge_contracts_start_block_override: Some(BTreeMap::from_iter(vec![(
                 DUMMY_ETH_ADDRESS.into(),
                 0,
             )])),
-            sui_bridge_modules_last_processed_event_id_override: Some(BTreeMap::from_iter(vec![(
-                "bridge".into(),
-                EventID {
-                    tx_digest: TransactionDigest::random(),
-                    event_seq: 0,
-                },
-            )])),
+            sui_bridge_module_last_processed_event_id_override: Some(EventID {
+                tx_digest: TransactionDigest::random(),
+                event_seq: 0,
+            }),
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
@@ -326,19 +313,15 @@ mod tests {
             run_client: true,
             bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
             bridge_client_gas_object: Some(gas_obj),
-            sui_bridge_modules: Some(vec!["bridge".into()]),
             db_path: Some(db_path),
             eth_bridge_contracts_start_block_override: Some(BTreeMap::from_iter(vec![(
                 DUMMY_ETH_ADDRESS.into(),
                 0,
             )])),
-            sui_bridge_modules_last_processed_event_id_override: Some(BTreeMap::from_iter(vec![(
-                "bridge".into(),
-                EventID {
-                    tx_digest: TransactionDigest::random(),
-                    event_seq: 0,
-                },
-            )])),
+            sui_bridge_module_last_processed_event_id_override: Some(EventID {
+                tx_digest: TransactionDigest::random(),
+                event_seq: 0,
+            }),
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();

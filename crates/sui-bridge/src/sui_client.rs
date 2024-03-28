@@ -116,7 +116,7 @@ where
         package: ObjectID,
         module: Identifier,
         // cursor is exclusive
-        cursor: EventID,
+        cursor: Option<EventID>,
     ) -> BridgeResult<Page<SuiEvent, EventID>> {
         let filter = EventFilter::MoveEventModule {
             package,
@@ -257,7 +257,7 @@ pub trait SuiClientInner: Send + Sync {
     async fn query_events(
         &self,
         query: EventFilter,
-        cursor: EventID,
+        cursor: Option<EventID>,
     ) -> Result<EventPage, Self::Error>;
 
     async fn get_events_by_tx_digest(
@@ -297,10 +297,10 @@ impl SuiClientInner for SuiSdkClient {
     async fn query_events(
         &self,
         query: EventFilter,
-        cursor: EventID,
+        cursor: Option<EventID>,
     ) -> Result<EventPage, Self::Error> {
         self.event_api()
-            .query_events(query, Some(cursor), None, false)
+            .query_events(query, cursor, None, false)
             .await
     }
 
