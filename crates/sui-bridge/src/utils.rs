@@ -75,10 +75,9 @@ pub fn generate_bridge_node_config_and_write_to_file(
         run_client,
         bridge_client_key_path_base64_sui_key: None,
         bridge_client_gas_object: None,
-        sui_bridge_modules: Some(vec!["modules_to_watch".into()]),
         db_path: None,
         eth_bridge_contracts_start_block_override: None,
-        sui_bridge_modules_last_processed_event_id_override: None,
+        sui_bridge_module_last_processed_event_id_override: None,
     };
     if run_client {
         config.bridge_client_key_path_base64_sui_key =

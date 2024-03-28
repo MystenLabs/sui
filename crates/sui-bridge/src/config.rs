@@ -25,7 +25,6 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
 use sui_types::event::EventID;
 use sui_types::object::Owner;
-use sui_types::Identifier;
 use tracing::info;
 
 #[serde_as]
@@ -62,9 +61,6 @@ pub struct BridgeNodeConfig {
     /// Path of the client storage. Required when `run_client` is true.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub db_path: Option<PathBuf>,
-    // TODO: this should be hardcoded and removed from config
-    /// The sui modules of bridge packages for client to watch for. Need to contain at least one item when `run_client` is true.
-    pub sui_bridge_modules: Option<Vec<String>>,
     // TODO: we need to hardcode the starting blocks for eth networks for cold start.
     /// Override the start block number for each eth address. Key must be in `eth_addresses`.
     /// When set, EthSyncer will start from this block number (inclusively) instead of the one in storage.
@@ -72,14 +68,15 @@ pub struct BridgeNodeConfig {
     /// Note: This field should be rarely used. Only use it when you understand how to follow up.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_bridge_contracts_start_block_override: Option<BTreeMap<String, u64>>,
-    /// Override the last processed EventID for each bridge module. Key must be in `sui_bridge_modules`.
+    /// Override the last processed EventID for bridge module `bridge`.
     /// When set, SuiSyncer will start from this cursor (exclusively) instead of the one in storage.
+    /// If the cursor is not found in storage or override, the query will start from genesis.
     /// Key: sui module, Value: last processed EventID (tx_digest, event_seq).
     /// Note 1: This field should be rarely used. Only use it when you understand how to follow up.
     /// Note 2: the EventID needs to be valid, namely it must exist and matches the filter.
     /// Otherwise, it will miss one event because of fullnode Event query semantics.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sui_bridge_modules_last_processed_event_id_override: Option<BTreeMap<String, EventID>>,
+    pub sui_bridge_module_last_processed_event_id_override: Option<EventID>,
     /// A list of approved governance actions. Action in this list will be signed when requested by client.
     pub approved_governance_actions: Vec<BridgeAction>,
 }
@@ -184,44 +181,6 @@ impl BridgeNodeConfig {
             None => {}
         }
 
-        let sui_bridge_modules = match &self.sui_bridge_modules {
-            Some(modules) => {
-                if modules.is_empty() {
-                    return Err(anyhow!(
-                        "`sui_bridge_modules` is required when `run_client` is true"
-                    ));
-                }
-                modules
-                    .iter()
-                    .map(|module| Identifier::from_str(module))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| anyhow!("Error parsing sui module: {:?}", e))?
-            }
-            None => {
-                return Err(anyhow!(
-                    "`sui_bridge_modules` is required when `run_client` is true"
-                ))
-            }
-        };
-
-        let mut sui_bridge_modules_last_processed_event_id_override = BTreeMap::new();
-        match &self.sui_bridge_modules_last_processed_event_id_override {
-            Some(overrides) => {
-                for (module, cursor) in overrides {
-                    let module = Identifier::from_str(module)?;
-                    if sui_bridge_modules.contains(&module) {
-                        sui_bridge_modules_last_processed_event_id_override.insert(module, *cursor);
-                    } else {
-                        return Err(anyhow!(
-                            "Override start tx digest for module {:?} is not in `sui_bridge_modules`",
-                            module
-                        ));
-                    }
-                }
-            }
-            None => {}
-        }
-
         let (gas_coin, gas_object_ref, owner) = sui_client
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await;
@@ -242,9 +201,9 @@ impl BridgeNodeConfig {
             eth_client: eth_client.clone(),
             db_path,
             eth_bridge_contracts,
-            sui_bridge_modules,
             eth_bridge_contracts_start_block_override,
-            sui_bridge_modules_last_processed_event_id_override,
+            sui_bridge_module_last_processed_event_id_override: self
+                .sui_bridge_module_last_processed_event_id_override,
         };
 
         Ok((bridge_server_config, Some(bridge_client_config)))
@@ -271,9 +230,8 @@ pub struct BridgeClientConfig {
     pub eth_client: Arc<EthClient<ethers::providers::Http>>,
     pub db_path: PathBuf,
     pub eth_bridge_contracts: Vec<EthAddress>,
-    pub sui_bridge_modules: Vec<Identifier>,
     pub eth_bridge_contracts_start_block_override: BTreeMap<EthAddress, u64>,
-    pub sui_bridge_modules_last_processed_event_id_override: BTreeMap<Identifier, EventID>,
+    pub sui_bridge_module_last_processed_event_id_override: Option<EventID>,
 }
 
 /// Read Bridge Authority key (Secp256k1KeyPair) from a file.
