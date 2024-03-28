@@ -107,9 +107,9 @@ fn create_rust_service(path: &Path) -> Result<()> {
         .contains("sui/crates");
     debug!("sui service: {:?}", is_sui_service);
     let cargo_toml_path = if is_sui_service {
-        "Cargo.toml"
+        "Cargo-sui.toml"
     } else {
-        "Cargo-external.toml"
+        "Cargo.toml"
     };
     let cargo_toml = PROJECT_DIR.get_file(cargo_toml_path).unwrap();
     let main_rs = PROJECT_DIR.get_file("src/main.rs").unwrap();
