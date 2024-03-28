@@ -91,10 +91,12 @@ pub fn build_sui_transaction(
             action,
             bridge_object_arg,
         ),
-        BridgeAction::AssetPriceUpdateAction(_) => {
-            // TODO: handle this case
-            unimplemented!()
-        }
+        BridgeAction::AssetPriceUpdateAction(_) => build_asset_price_update_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            bridge_object_arg,
+        ),
         BridgeAction::EvmContractUpgradeAction(_) => {
             // It does not need a Sui tranaction to execute EVM contract upgrade
             unreachable!()
@@ -381,6 +383,69 @@ fn build_limit_update_approve_transaction(
         ident_str!("create_update_bridge_limit_message").to_owned(),
         vec![],
         vec![receiving_chain_id, seq_num, sending_chain_id, new_usd_limit],
+    );
+
+    let mut sig_bytes = vec![];
+    for (_, sig) in sigs.signatures {
+        sig_bytes.push(sig.as_bytes().to_vec());
+    }
+    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+        BridgeError::BridgeSerializationError(format!(
+            "Failed to serialize signatures: {:?}. Err: {:?}",
+            sig_bytes, e
+        ))
+    })?;
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("bridge").to_owned(),
+        ident_str!("execute_system_message").to_owned(),
+        vec![],
+        vec![arg_bridge, arg_msg, arg_signatures],
+    );
+
+    let pt = builder.finish();
+
+    Ok(TransactionData::new_programmable(
+        client_address,
+        vec![*gas_object_ref],
+        pt,
+        100_000_000,
+        // TODO: use reference gas price
+        1500,
+    ))
+}
+
+// TODO: pass in gas price
+fn build_asset_price_update_approve_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+    bridge_object_arg: ObjectArg,
+) -> BridgeResult<TransactionData> {
+    let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let (source_chain, seq_num, token_id, new_usd_price) = match bridge_action {
+        BridgeAction::AssetPriceUpdateAction(a) => {
+            (a.chain_id, a.nonce, a.token_id, a.new_usd_price)
+        }
+        _ => unreachable!(),
+    };
+
+    // Unwrap: these should not fail
+    let source_chain = builder.pure(source_chain as u8).unwrap();
+    let seq_num = builder.pure(seq_num).unwrap();
+    let new_price = builder.pure(new_usd_price).unwrap();
+    let arg_bridge = builder.obj(bridge_object_arg).unwrap();
+
+    let arg_msg = builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("message").to_owned(),
+        ident_str!("create_update_asset_price_message").to_owned(),
+        vec![get_sui_token_type_tag(token_id)],
+        vec![source_chain, seq_num, new_price],
     );
 
     let mut sig_bytes = vec![];
@@ -705,6 +770,69 @@ mod tests {
                 assert_eq!(limit.2, 6_666_666 * USD_MULTIPLIER);
             } else {
                 assert_eq!(limit.2, *transfer_limit.get(&(limit.0, limit.1)).unwrap());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_build_sui_transaction_for_price_update() {
+        telemetry_subscribers::init_for_testing();
+        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_epoch_duration_ms(15000)
+            .build_with_bridge()
+            .await;
+        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
+        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+
+        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
+        // is not initialized during the construction of `BridgeCommittee`.
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        if committee.members.is_empty() {
+            test_cluster.wait_for_epoch(None).await;
+        }
+        let notional_values = sui_client
+            .get_bridge_summary()
+            .await
+            .unwrap()
+            .limiter
+            .notional_values
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+        assert_ne!(notional_values[&TokenId::BTC], 69_000 * USD_MULTIPLIER);
+
+        let context = &mut test_cluster.wallet;
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+
+        // update price
+        let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
+            nonce: 0,
+            chain_id: BridgeChainId::SuiLocalTest,
+            token_id: TokenId::BTC,
+            new_usd_price: 69_000 * USD_MULTIPLIER, // $69k USD
+        });
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+        let new_notional_values = sui_client
+            .get_bridge_summary()
+            .await
+            .unwrap()
+            .limiter
+            .notional_values;
+        for (token_id, price) in new_notional_values {
+            if token_id == TokenId::BTC {
+                assert_eq!(price, 69_000 * USD_MULTIPLIER);
+            } else {
+                assert_eq!(price, *notional_values.get(&token_id).unwrap());
             }
         }
     }
