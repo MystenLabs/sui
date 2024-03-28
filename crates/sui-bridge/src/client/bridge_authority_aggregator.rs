@@ -61,6 +61,7 @@ impl BridgeAuthorityAggregator {
         }
     }
 
+    // TODO: change the signature, to remove `threshold`, which can be obtained from `BridgeAction`
     pub async fn request_committee_signatures(
         &self,
         action: BridgeAction,
