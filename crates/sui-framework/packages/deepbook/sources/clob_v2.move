@@ -2016,8 +2016,19 @@ module deepbook::clob_v2 {
 
         if (price_low < price_low_) price_low = price_low_;
         if (price_high > price_high_) price_high = price_high_;
-        price_low = critbit::find_closest_key(&pool.bids, price_low);
-        price_high = critbit::find_closest_key(&pool.bids, price_high);
+        let closest_low = critbit::find_closest_key(&pool.bids, price_low);
+        let closest_high = critbit::find_closest_key(&pool.bids, price_high);
+        if (price_low <= closest_low){
+            price_low = closest_low;
+        } else {
+            (price_low, _) = critbit::next_leaf(&pool.bids, closest_low);
+        };
+        if (price_high >= closest_high){
+            price_high = closest_high;
+        } else {
+            (price_high, _) = critbit::previous_leaf(&pool.bids, closest_high);
+        };
+
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
                 &pool.bids,
@@ -2049,6 +2060,7 @@ module deepbook::clob_v2 {
         let mut depth_vec = vector::empty<u64>();
         if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
+        let (price_high_, _) = critbit::max_leaf(&pool.asks);
 
         // Price_high is less than the lowest leaf in the tree then we return an empty array
         if (price_high < price_low_) {
@@ -2056,10 +2068,20 @@ module deepbook::clob_v2 {
         };
 
         if (price_low < price_low_) price_low = price_low_;
-        let (price_high_, _) = critbit::max_leaf(&pool.asks);
         if (price_high > price_high_) price_high = price_high_;
-        price_low = critbit::find_closest_key(&pool.asks, price_low);
-        price_high = critbit::find_closest_key(&pool.asks, price_high);
+        let closest_low = critbit::find_closest_key(&pool.asks, price_low);
+        let closest_high = critbit::find_closest_key(&pool.asks, price_high);
+        if (price_low <= closest_low){
+            price_low = closest_low;
+        } else {
+            (price_low, _) = critbit::next_leaf(&pool.bids, closest_low);
+        };
+        if (price_high >= closest_high){
+            price_high = closest_high;
+        } else {
+            (price_high, _) = critbit::previous_leaf(&pool.bids, closest_high);
+        };
+
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
                 &pool.asks,
