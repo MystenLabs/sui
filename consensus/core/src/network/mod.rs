@@ -35,6 +35,9 @@ pub(crate) mod tonic_network;
 /// - To bound server resources, server should implement own timeout for incoming requests.
 #[async_trait]
 pub(crate) trait NetworkClient: Send + Sync + 'static {
+    // Whether the network client streams blocks to subscribed peers.
+    const BLOCK_SUBSCRIPTION: bool;
+
     /// Sends a serialized SignedBlock to a peer.
     async fn send_block(
         &self,
@@ -42,6 +45,9 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         block: &VerifiedBlock,
         timeout: Duration,
     ) -> ConsensusResult<()>;
+
+    /// Broadcasts a serialized SignedBlock to all subscribed peers.
+    fn broadcast_block(&self, block: &VerifiedBlock) -> ConsensusResult<()>;
 
     /// Fetches serialized `SignedBlock`s from a peer.
     async fn fetch_blocks(

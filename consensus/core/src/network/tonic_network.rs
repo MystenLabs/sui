@@ -4,24 +4,31 @@
 use std::{
     collections::BTreeMap,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
+    pin::{pin, Pin},
     sync::Arc,
+    task,
     time::Duration,
+    usize,
 };
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use futures::{Future as _, Stream};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use parking_lot::RwLock;
 use tokio::{
-    sync::oneshot::{self, Sender},
+    sync::{
+        broadcast,
+        oneshot::{self, Sender},
+    },
     task::JoinSet,
 };
 use tokio_stream::{iter, Iter};
 use tonic::{
     transport::{Channel, Server},
-    Request, Response,
+    Request, Response, Streaming,
 };
 use tracing::{debug, info, warn};
 
@@ -51,13 +58,18 @@ const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 pub(crate) struct TonicClient {
     context: Arc<Context>,
     channel_pool: Arc<ChannelPool>,
+    tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
 }
 
 impl TonicClient {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(
+        context: Arc<Context>,
+        tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
+    ) -> Self {
         Self {
             context: context.clone(),
             channel_pool: Arc::new(ChannelPool::new(context)),
+            tx_block_broadcaster,
         }
     }
 
@@ -73,6 +85,8 @@ impl TonicClient {
 
 #[async_trait]
 impl NetworkClient for TonicClient {
+    const BLOCK_SUBSCRIPTION: bool = true;
+
     async fn send_block(
         &self,
         peer: AuthorityIndex,
@@ -93,6 +107,13 @@ impl NetworkClient for TonicClient {
             .send_block(request)
             .await
             .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
+        Ok(())
+    }
+
+    fn broadcast_block(&self, block: &VerifiedBlock) -> ConsensusResult<()> {
+        self.tx_block_broadcaster
+            .send(block.clone())
+            .map_err(|_| ConsensusError::Shutdown)?;
         Ok(())
     }
 
@@ -226,15 +247,61 @@ impl ChannelPool {
     }
 }
 
+/// Each subscriber stream manages the subscription state of a peer.
+struct SubscriberStream {
+    peer: AuthorityIndex,
+    receiver: broadcast::Receiver<VerifiedBlock>,
+}
+
+impl Stream for SubscriberStream {
+    type Item = Result<SubscribeBlocksResponse, tonic::Status>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        let peer = self.peer;
+        loop {
+            match pin!(self.receiver.recv()).poll(cx) {
+                task::Poll::Ready(Ok(block)) => {
+                    return task::Poll::Ready(Some(Ok(SubscribeBlocksResponse {
+                        block: block.serialized().clone(),
+                    })));
+                }
+                task::Poll::Ready(Err(broadcast::error::RecvError::Closed)) => {
+                    info!("Block SubscriberStream {} closed", peer);
+                    return task::Poll::Ready(None);
+                }
+                task::Poll::Ready(Err(broadcast::error::RecvError::Lagged(n))) => {
+                    info!("Block SubscriberStream {} lagged by {n} messages", peer);
+                    continue;
+                }
+                task::Poll::Pending => {
+                    return task::Poll::Pending;
+                }
+            }
+        }
+    }
+}
+
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: NetworkService> {
     context: Arc<Context>,
     service: Arc<S>,
+    tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
 }
 
 impl<S: NetworkService> TonicServiceProxy<S> {
-    fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self { context, service }
+    fn new(
+        context: Arc<Context>,
+        service: Arc<S>,
+        tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
+    ) -> Self {
+        Self {
+            context,
+            service,
+            tx_block_broadcaster,
+        }
     }
 }
 
@@ -260,6 +327,29 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
         Ok(Response::new(SendBlockResponse {}))
+    }
+
+    type SubscribeBlocksStream = SubscriberStream;
+
+    async fn subscribe_blocks(
+        &self,
+        request: Request<Streaming<SubscribeBlocksRequest>>,
+    ) -> Result<Response<Self::SubscribeBlocksStream>, tonic::Status> {
+        // TODO: switch to using authenticated peer identity.
+        let Some(peer) = request
+            .metadata()
+            .get(AUTHORITY_INDEX_METADATA_KEY)
+            .and_then(|s| s.to_str().ok())
+            .and_then(|s| s.parse().ok())
+            .and_then(|index| self.context.committee.to_authority_index(index))
+        else {
+            return Err(tonic::Status::invalid_argument("Invalid authority index"));
+        };
+        let stream = SubscriberStream {
+            peer,
+            receiver: self.tx_block_broadcaster.subscribe(),
+        };
+        Ok(Response::new(stream))
     }
 
     type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
@@ -321,9 +411,10 @@ pub(crate) struct TonicManager {
 
 impl TonicManager {
     pub(crate) fn new(context: Arc<Context>) -> Self {
+        let (tx_block_broadcast, _) = broadcast::channel(1000);
         Self {
             context: context.clone(),
-            client: Arc::new(TonicClient::new(context)),
+            client: Arc::new(TonicClient::new(context, tx_block_broadcast)),
             server: JoinSet::new(),
             shutdown: None,
         }
@@ -363,7 +454,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let own_address = to_socket_addr(&own_address).unwrap();
         let (tx, rx) = oneshot::channel::<()>();
         self.shutdown = Some(tx);
-        let service = TonicServiceProxy::new(self.context.clone(), service);
+        let service = TonicServiceProxy::new(
+            self.context.clone(),
+            service,
+            self.client.tx_block_broadcaster.clone(),
+        );
 
         let server = Server::builder()
             .initial_connection_window_size(64 << 20)
@@ -462,6 +557,15 @@ pub(crate) struct SendBlockRequest {
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct SendBlockResponse {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct SubscribeBlocksRequest {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct SubscribeBlocksResponse {
+    #[prost(bytes = "bytes", tag = "1")]
+    block: Bytes,
+}
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct FetchBlocksRequest {

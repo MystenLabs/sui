@@ -122,6 +122,8 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
+    const BLOCK_SUBSCRIPTION: bool = false;
+
     async fn send_block(
         &self,
         peer: AuthorityIndex,
@@ -137,6 +139,10 @@ impl NetworkClient for AnemoClient {
             .await
             .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
+    }
+
+    fn broadcast_block(&self, _block: &VerifiedBlock) -> ConsensusResult<()> {
+        unimplemented!("broadcast_block() is not implemented for AnemoClient!");
     }
 
     async fn fetch_blocks(

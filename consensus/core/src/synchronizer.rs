@@ -565,12 +565,18 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for MockNetworkClient {
+        const BLOCK_SUBSCRIPTION: bool = false;
+
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
             _serialized_block: &VerifiedBlock,
             _timeout: Duration,
         ) -> ConsensusResult<()> {
+            todo!()
+        }
+
+        fn broadcast_block(&self, _block: &VerifiedBlock) -> ConsensusResult<()> {
             todo!()
         }
 

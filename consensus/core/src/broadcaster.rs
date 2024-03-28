@@ -221,6 +221,8 @@ mod test {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
+        const BLOCK_SUBSCRIPTION: bool = false;
+
         async fn send_block(
             &self,
             peer: AuthorityIndex,
@@ -231,6 +233,10 @@ mod test {
             let blocks = blocks_sent.entry(peer).or_default();
             blocks.push(block.serialized().clone());
             Ok(())
+        }
+
+        fn broadcast_block(&self, _block: &VerifiedBlock) -> ConsensusResult<()> {
+            unimplemented!("Unimplemented")
         }
 
         async fn fetch_blocks(
