@@ -21,6 +21,7 @@ pub mod sui_syncer;
 pub mod sui_transaction_builder;
 pub mod tools;
 pub mod types;
+pub mod utils;
 
 #[cfg(test)]
 pub(crate) mod eth_mock_provider;
