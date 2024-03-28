@@ -271,7 +271,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .await
             .unwrap_or_else(|_| panic!("Server eth signing channel is closed"));
         let signed_action = rx
-            .blocking_recv()
+            .await
             .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
         Ok(Json(signed_action))
     }
@@ -291,7 +291,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .await
             .unwrap_or_else(|_| panic!("Server sui signing channel is closed"));
         let signed_action = rx
-            .blocking_recv()
+            .await
             .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
         Ok(Json(signed_action))
     }
@@ -309,7 +309,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .send((action, tx))
             .await
             .unwrap_or_else(|_| panic!("Server governance action signing channel is closed"));
-        let signed_action = rx.blocking_recv().unwrap_or_else(|_| {
+        let signed_action = rx.await.unwrap_or_else(|_| {
             panic!("Server governance action task's oneshot channel is dropped")
         })?;
         Ok(Json(signed_action))

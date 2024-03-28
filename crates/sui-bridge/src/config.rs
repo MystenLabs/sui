@@ -291,3 +291,12 @@ pub fn read_bridge_client_key(path: &PathBuf) -> Result<SuiKeyPair, anyhow::Erro
     SuiKeyPair::decode_base64(contents.as_str().trim())
         .map_err(|e| anyhow!("Error decoding authority key: {:?}", e))
 }
+
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BridgeCommitteeConfig {
+    pub bridge_authority_port_and_key_path: Vec<(u64, PathBuf)>,
+}
+
+impl Config for BridgeCommitteeConfig {}
