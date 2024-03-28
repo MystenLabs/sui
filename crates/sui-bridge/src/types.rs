@@ -19,6 +19,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
+use sui_types::bridge::TokenId;
 use sui_types::bridge::{
     BridgeChainId, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
@@ -175,28 +176,6 @@ pub const SUI_TX_DIGEST_LENGTH: usize = 32;
 pub const ETH_TX_HASH_LENGTH: usize = 32;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TryFromPrimitive,
-    Hash,
-    Ord,
-    PartialOrd,
-)]
-#[repr(u8)]
-pub enum TokenId {
-    Sui = 0,
-    BTC = 1,
-    ETH = 2,
-    USDC = 3,
-    USDT = 4,
-}
 
 #[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
 #[repr(u8)]
@@ -379,6 +358,7 @@ pub struct LimitUpdateAction {
     pub chain_id: BridgeChainId,
     // The sending chain id for the limit update.
     pub sending_chain_id: BridgeChainId,
+    // 4 decimal places, namely 1 USD = 10000
     pub new_usd_limit: u64,
 }
 
@@ -638,9 +618,9 @@ pub struct EthLog {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::get_test_authority_and_key;
     use crate::test_utils::get_test_eth_to_sui_bridge_action;
     use crate::test_utils::get_test_sui_to_eth_bridge_action;
-    use crate::{test_utils::get_test_authority_and_key, types::TokenId};
     use ethers::abi::ParamType;
     use ethers::types::{Address as EthAddress, TxHash};
     use fastcrypto::encoding::Hex;
@@ -651,6 +631,7 @@ mod tests {
     use std::{collections::HashSet, str::FromStr};
     use sui_types::{
         base_types::{SuiAddress, TransactionDigest},
+        bridge::TokenId,
         crypto::get_key_pair,
     };
 

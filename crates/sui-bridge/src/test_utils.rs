@@ -15,7 +15,7 @@ use crate::{
     server::mock_handler::BridgeRequestMockHandler,
     types::{
         BridgeAction, BridgeAuthority, EthToSuiBridgeAction, SignedBridgeAction,
-        SuiToEthBridgeAction, TokenId,
+        SuiToEthBridgeAction,
     },
 };
 use ethers::abi::{long_signature, ParamType};
@@ -37,7 +37,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::bridge::BridgeChainId;
+use sui_types::bridge::{BridgeChainId, TokenId};
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};

@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{BridgeError, BridgeResult};
-use crate::types::{BridgeAction, EthToSuiBridgeAction};
-use crate::types::{EthLog, TokenId};
+use crate::types::{BridgeAction, EthLog, EthToSuiBridgeAction};
 use ethers::{
     abi::RawLog,
     contract::{abigen, EthLogDecode},
@@ -11,7 +10,7 @@ use ethers::{
 };
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::BridgeChainId;
+use sui_types::bridge::{BridgeChainId, TokenId};
 
 // TODO: write a macro to handle variants
 

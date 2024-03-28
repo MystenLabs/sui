@@ -451,7 +451,7 @@ mod tests {
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
             get_test_sui_to_eth_bridge_action,
         },
-        types::{BridgeActionType, SuiToEthBridgeAction, TokenId},
+        types::{BridgeActionType, SuiToEthBridgeAction},
     };
     use ethers::{
         abi::Token,
@@ -465,7 +465,7 @@ mod tests {
     use std::{collections::HashSet, str::FromStr};
     use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
     use sui_sdk::wallet_context;
-    use sui_types::bridge::BridgeChainId;
+    use sui_types::bridge::{BridgeChainId, TokenId};
     use test_cluster::TestClusterBuilder;
 
     use super::*;
