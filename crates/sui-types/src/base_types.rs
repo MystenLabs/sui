@@ -35,6 +35,7 @@ use crate::sui_serde::Readable;
 use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
+use crate::zk_login_authenticator::AddressSeed;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_CLOCK_OBJECT_ID;
@@ -611,7 +612,10 @@ impl SuiAddress {
         let iss_bytes = inputs.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
-        hasher.update(inputs.get_address_seed().unpadded());
+
+        let address_seed = AddressSeed::from_str(inputs.get_address_seed())
+            .map_err(|_| SuiError::InvalidAddress)?;
+        hasher.update(address_seed.unpadded());
         Ok(SuiAddress(hasher.finalize().digest))
     }
 }
