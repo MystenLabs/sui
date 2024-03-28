@@ -175,6 +175,7 @@ mod tests {
     use crate::{config::BridgeNodeConfig, server::APPLICATION_JSON};
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
+    use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_types::base_types::SuiAddress;
     use sui_types::crypto::get_key_pair;
     use sui_types::crypto::EncodeDecodeBase64;
