@@ -13,6 +13,9 @@ outputs:
   isMove:
     description: True when changes happened to the Move code
     value: "${{ steps.diff.outputs.isMove }}"
+  isSolidity:
+    description: True when changes happened to the Solidity code
+    value: "${{ steps.diff.outputs.isSolidity }}"
   isReleaseNotesEligible:
     description: True when changes happened in Release Notes eligible paths
     value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"
@@ -58,6 +61,8 @@ runs:
           - 'Cargo.toml'
           - 'examples/**'
           - 'sui_programmability/**'
+        isSolidity:
+          - 'bridge/evm/**'
         isReleaseNotesEligible:
           - 'consensus/**'
           - 'crates/**'
