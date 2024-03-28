@@ -51,6 +51,13 @@ pub const APPROVAL_THRESHOLD_LIMIT_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE: u64 = 5001;
 
+// const for initial token ids for convenience
+pub const TOKEN_ID_SUI: u8 = 0;
+pub const TOKEN_ID_BTC: u8 = 1;
+pub const TOKEN_ID_ETH: u8 = 2;
+pub const TOKEN_ID_USDC: u8 = 3;
+pub const TOKEN_ID_USDT: u8 = 4;
+
 #[derive(
     Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, JsonSchema, Hash,
 )]
@@ -76,29 +83,6 @@ impl BridgeChainId {
                 | BridgeChainId::SuiLocalTest
         )
     }
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    TryFromPrimitive,
-    Hash,
-    Ord,
-    PartialOrd,
-    JsonSchema,
-)]
-#[repr(u8)]
-pub enum TokenId {
-    Sui = 0,
-    BTC = 1,
-    ETH = 2,
-    USDC = 3,
-    USDT = 4,
 }
 
 pub fn get_bridge_obj_initial_shared_version(
@@ -282,13 +266,7 @@ impl BridgeTrait for BridgeInnerV1 {
             .notional_values
             .contents
             .into_iter()
-            .map(|e| {
-                let token_id =
-                    TokenId::try_from(e.key).map_err(|_e| SuiError::GenericBridgeError {
-                        error: format!("Unrecognized oken id: {}", e.key),
-                    })?;
-                Ok((token_id, e.value))
-            })
+            .map(|e| Ok((e.key, e.value)))
             .collect::<SuiResult<Vec<_>>>()?;
         let transfer_records = self
             .limiter
@@ -386,7 +364,8 @@ pub struct BridgeCommitteeSummary {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeLimiterSummary {
     pub transfer_limit: Vec<(BridgeChainId, BridgeChainId, u64)>,
-    pub notional_values: Vec<(TokenId, u64)>,
+    // mapping from token id to notional value
+    pub notional_values: Vec<(u8, u64)>,
     pub transfer_records: Vec<(BridgeChainId, BridgeChainId, MoveTypeBridgeTransferRecord)>,
 }
 

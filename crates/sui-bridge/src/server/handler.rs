@@ -332,7 +332,7 @@ mod tests {
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
     use sui_json_rpc_types::SuiEvent;
-    use sui_types::bridge::{BridgeChainId, TokenId};
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_USDC};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 
     #[tokio::test]
@@ -419,7 +419,7 @@ mod tests {
             sender_address: SuiAddress::random_for_testing_only().to_vec(),
             target_chain: BridgeChainId::EthLocalTest as u8,
             target_address: EthAddress::random().as_bytes().to_vec(),
-            token_type: TokenId::USDC as u8,
+            token_type: TOKEN_ID_USDC,
             amount_sui_adjusted: 12345,
         };
 

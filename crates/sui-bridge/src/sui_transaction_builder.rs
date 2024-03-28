@@ -1,23 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, str::FromStr};
-
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
 use once_cell::sync::OnceCell;
-use sui_types::bridge::BRIDGE_MODULE_NAME;
-use sui_types::gas_coin::GAS;
+use std::{collections::HashMap, str::FromStr};
+use sui_types::bridge::{
+    BRIDGE_MODULE_NAME, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT,
+};
 use sui_types::transaction::CallArg;
-use sui_types::{Identifier, BRIDGE_PACKAGE_ID};
-
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
-    bridge::TokenId,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, TransactionData},
     TypeTag,
 };
+use sui_types::{Identifier, BRIDGE_PACKAGE_ID};
 
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::{
@@ -25,32 +23,32 @@ use crate::{
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
 };
 
-// TODO: how do we generalize this thing more?
-pub fn get_sui_token_type_tag(token_id: TokenId) -> TypeTag {
-    static TYPE_TAGS: OnceCell<HashMap<TokenId, TypeTag>> = OnceCell::new();
+// FIXME: when the ndoe starts, it queries bridge summary to get all mappings
+// from token id to type tags
+pub fn get_sui_token_type_tag(token_id: u8) -> Option<TypeTag> {
+    static TYPE_TAGS: OnceCell<HashMap<u8, TypeTag>> = OnceCell::new();
     let type_tags = TYPE_TAGS.get_or_init(|| {
         let package_id = BRIDGE_PACKAGE_ID;
         let mut type_tags = HashMap::new();
-        type_tags.insert(TokenId::Sui, GAS::type_tag());
         type_tags.insert(
-            TokenId::BTC,
+            TOKEN_ID_BTC,
             TypeTag::from_str(&format!("{:?}::btc::BTC", package_id)).unwrap(),
         );
         type_tags.insert(
-            TokenId::ETH,
+            TOKEN_ID_ETH,
             TypeTag::from_str(&format!("{:?}::eth::ETH", package_id)).unwrap(),
         );
         type_tags.insert(
-            TokenId::USDC,
+            TOKEN_ID_USDC,
             TypeTag::from_str(&format!("{:?}::usdc::USDC", package_id)).unwrap(),
         );
         type_tags.insert(
-            TokenId::USDT,
+            TOKEN_ID_USDT,
             TypeTag::from_str(&format!("{:?}::usdt::USDT", package_id)).unwrap(),
         );
         type_tags
     });
-    type_tags.get(&token_id).unwrap().clone()
+    type_tags.get(&token_id).cloned()
 }
 
 // TODO: pass in gas price
@@ -161,7 +159,7 @@ fn build_token_bridge_approve_transaction(
             target, e
         ))
     })?;
-    let arg_token_type = builder.pure(token_type as u8).unwrap();
+    let arg_token_type = builder.pure(token_type).unwrap();
     let amount = builder.pure(amount).unwrap();
 
     let arg_msg = builder.programmable_move_call(
@@ -208,7 +206,8 @@ fn build_token_bridge_approve_transaction(
             BRIDGE_PACKAGE_ID,
             sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
             ident_str!("claim_and_transfer_token").to_owned(),
-            vec![get_sui_token_type_tag(token_type)],
+            vec![get_sui_token_type_tag(token_type)
+                .ok_or(BridgeError::UnknownTokenId(token_type))?],
             vec![arg_bridge, arg_clock, source_chain, seq_num],
         );
     }
@@ -446,7 +445,7 @@ fn build_asset_price_update_approve_transaction(
         BRIDGE_PACKAGE_ID,
         ident_str!("message").to_owned(),
         ident_str!("create_update_asset_price_message").to_owned(),
-        vec![get_sui_token_type_tag(token_id)],
+        vec![get_sui_token_type_tag(token_id).ok_or(BridgeError::UnknownTokenId(token_id))?],
         vec![source_chain, seq_num, new_price],
     );
 
@@ -518,7 +517,6 @@ pub fn build_committee_register_transaction(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::sui_client::SuiClient;
     use crate::types::BridgeAction;
     use crate::types::EmergencyAction;
@@ -533,7 +531,8 @@ mod tests {
         BRIDGE_ENABLE_PROTOCOL_VERSION,
     };
     use ethers::types::Address as EthAddress;
-    use sui_types::bridge::{BridgeChainId, TokenId};
+    use std::collections::HashMap;
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDC};
     use sui_types::crypto::ToFromBytes;
     use test_cluster::TestClusterBuilder;
 
@@ -580,7 +579,7 @@ mod tests {
             context,
             EthAddress::random(),
             usdc_object_ref,
-            TokenId::USDC,
+            TOKEN_ID_USDC,
             bridge_object_arg,
         )
         .await;
@@ -592,7 +591,7 @@ mod tests {
             Some(bridge_event.amount_sui_adjusted),
             Some(bridge_event.sui_address),
             Some(bridge_event.eth_address),
-            Some(TokenId::USDC),
+            Some(TOKEN_ID_USDC),
         );
         // `approve_action_with_validator_secrets` covers transaction building
         approve_action_with_validator_secrets(
@@ -838,7 +837,7 @@ mod tests {
             .notional_values
             .into_iter()
             .collect::<HashMap<_, _>>();
-        assert_ne!(notional_values[&TokenId::BTC], 69_000 * USD_MULTIPLIER);
+        assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 
         let context = &mut test_cluster.wallet;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
@@ -847,7 +846,7 @@ mod tests {
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 0,
             chain_id: BridgeChainId::SuiLocalTest,
-            token_id: TokenId::BTC,
+            token_id: TOKEN_ID_BTC,
             new_usd_price: 69_000 * USD_MULTIPLIER, // $69k USD
         });
         // `approve_action_with_validator_secrets` covers transaction building
@@ -866,7 +865,7 @@ mod tests {
             .limiter
             .notional_values;
         for (token_id, price) in new_notional_values {
-            if token_id == TokenId::BTC {
+            if token_id == TOKEN_ID_BTC {
                 assert_eq!(price, 69_000 * USD_MULTIPLIER);
             } else {
                 assert_eq!(price, *notional_values.get(&token_id).unwrap());

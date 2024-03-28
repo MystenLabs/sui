@@ -89,7 +89,7 @@ impl BridgeClient {
             BridgeAction::AssetPriceUpdateAction(a) => {
                 let chain_id = (a.chain_id as u8).to_string();
                 let nonce = a.nonce.to_string();
-                let token_id = (a.token_id as u8).to_string();
+                let token_id = a.token_id.to_string();
                 let new_usd_price = a.new_usd_price.to_string();
                 format!("sign/update_asset_price/{chain_id}/{nonce}/{token_id}/{new_usd_price}")
             }
@@ -182,7 +182,7 @@ mod tests {
     use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use sui_types::bridge::{BridgeChainId, TokenId};
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDT};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 
     #[tokio::test]
@@ -378,7 +378,7 @@ mod tests {
                 sui_address: SuiAddress::random_for_testing_only(),
                 eth_chain_id: BridgeChainId::EthSepolia,
                 eth_address: EthAddress::random(),
-                token_id: TokenId::USDT,
+                token_id: TOKEN_ID_USDT,
                 amount_sui_adjusted: 1,
             },
         });
@@ -401,7 +401,7 @@ mod tests {
                 eth_address: EthAddress::random(),
                 sui_chain_id: BridgeChainId::SuiDevnet,
                 sui_address: SuiAddress::random_for_testing_only(),
-                token_id: TokenId::USDT,
+                token_id: TOKEN_ID_USDT,
                 sui_adjusted_amount: 1,
             },
         });
@@ -473,7 +473,7 @@ mod tests {
         let action = BridgeAction::AssetPriceUpdateAction(crate::types::AssetPriceUpdateAction {
             chain_id: BridgeChainId::SuiDevnet,
             nonce: 8,
-            token_id: TokenId::BTC,
+            token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000_000,
         });
         assert_eq!(

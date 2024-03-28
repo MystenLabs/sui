@@ -190,7 +190,7 @@ mod tests {
     use std::str::FromStr;
     use std::sync::Arc;
     use sui_types::base_types::SuiAddress;
-    use sui_types::bridge::{BridgeChainId, TokenId};
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_ETH};
     use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
 
@@ -342,7 +342,7 @@ mod tests {
                 eth_chain_id: BridgeChainId::EthSepolia,
                 eth_address: EthAddress::from_str("0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96")
                     .unwrap(),
-                token_id: TokenId::ETH,
+                token_id: TOKEN_ID_ETH,
                 amount_sui_adjusted: 100000u64,
             },
         });
