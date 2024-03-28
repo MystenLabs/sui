@@ -83,6 +83,7 @@ use crate::key_identity::{get_identity_address, KeyIdentity};
 #[cfg(test)]
 mod profiler_tests;
 
+#[macro_export]
 macro_rules! serialize_or_execute {
     ($tx_data:expr, $serialize_unsigned:expr, $serialize_signed:expr, $context:expr, $result_variant:ident) => {{
         assert!(
