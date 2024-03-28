@@ -128,6 +128,10 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: cargo test
         run: |
           cargo nextest run --profile ci

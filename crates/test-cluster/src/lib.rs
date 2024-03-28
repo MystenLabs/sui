@@ -43,8 +43,10 @@ use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConf
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
+use sui_types::bridge::get_bridge;
 use sui_types::bridge::get_bridge_obj_initial_shared_version;
 use sui_types::bridge::BridgeSummary;
+use sui_types::bridge::BridgeTrait;
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::get_key_pair;
@@ -486,6 +488,20 @@ impl TestCluster {
         }
     }
 
+    pub async fn wait_for_next_epoch_and_assert_bridge_committee_initialized(&self) {
+        // wait for next epoch
+        self.wait_for_epoch(None).await;
+
+        let bridge = get_bridge(self.fullnode_handle.sui_node.state().get_object_store()).unwrap();
+
+        // Committee should be initiated
+        assert!(bridge.committee().member_registrations.contents.is_empty());
+        assert_eq!(
+            self.swarm.active_validators().count(),
+            bridge.committee().members.contents.len()
+        );
+    }
+
     pub async fn wait_for_authenticator_state_update(&self) {
         timeout(
             Duration::from_secs(60),
@@ -702,6 +718,22 @@ impl TestCluster {
             .await
             .unwrap()
             .unwrap()
+    }
+
+    pub async fn transfer_sui_must_exceeed(&self, receiver: SuiAddress, amount: u64) -> ObjectID {
+        let sender = self.get_address_0();
+        let tx = self
+            .test_transaction_builder_with_sender(sender)
+            .await
+            .transfer_sui(Some(amount), receiver)
+            .build();
+        let effects = self
+            .sign_and_execute_transaction(&tx)
+            .await
+            .effects
+            .unwrap();
+        assert_eq!(&SuiExecutionStatus::Success, effects.status());
+        effects.created().first().unwrap().object_id()
     }
 
     #[cfg(msim)]
@@ -1096,18 +1128,9 @@ impl TestClusterBuilder {
         for node in test_cluster.swarm.active_validators() {
             let validator_address = node.config.sui_address();
             // 1, send some gas to validator
-            let sender = test_cluster.get_address_0();
-            let tx = test_cluster
-                .test_transaction_builder_with_sender(sender)
-                .await
-                .transfer_sui(Some(1000000000), validator_address)
-                .build();
-            let response = test_cluster.sign_and_execute_transaction(&tx).await;
-            assert_eq!(
-                &SuiExecutionStatus::Success,
-                response.effects.unwrap().status()
-            );
-
+            test_cluster
+                .transfer_sui_must_exceeed(validator_address, 1000000000)
+                .await;
             // 2, create committee registration tx
             let coins = test_cluster
                 .sui_client()
