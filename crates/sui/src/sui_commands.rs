@@ -16,6 +16,9 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui_bridge::crypto::BridgeAuthorityKeyPair;
+use sui_bridge::sui_client::SuiBridgeClient;
+use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
@@ -35,7 +38,8 @@ use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORIT
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
-use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{get_key_pair, SignatureScheme, SuiKeyPair};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -148,6 +152,16 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
+    },
+
+    /// Command to initialize the bridge committee, usually used when
+    /// running local bridge cluster.
+    #[clap(name = "bridge-committee-init")]
+    BridgeInitialize {
+        #[clap(long = "network.config")]
+        network_config: Option<PathBuf>,
+        #[clap(long = "client.config")]
+        client_config: Option<PathBuf>,
     },
 
     /// Tool for Fire Drill
@@ -319,6 +333,66 @@ impl SuiCommand {
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::BridgeInitialize {
+                network_config,
+                client_config,
+            } => {
+                // Load the config of the Sui authority.
+                let network_config_path = network_config
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
+                let network_config: NetworkConfig = PersistedConfig::read(&network_config_path)
+                    .map_err(|err| {
+                        err.context(format!(
+                            "Cannot open Sui network config file at {:?}",
+                            network_config_path
+                        ))
+                    })?;
+
+                let config_path =
+                    client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                let mut context = WalletContext::new(&config_path, None, None)?;
+                let rgp = context.get_reference_gas_price().await?;
+                let rpc_url = &context.config.get_active_env()?.rpc;
+                println!("rpc_url: {}", rpc_url);
+                let sui_bridge_client = SuiBridgeClient::new(rpc_url).await?;
+                let bridge_arg = sui_bridge_client
+                    .get_mutable_bridge_object_arg()
+                    .await
+                    .unwrap();
+
+                for node_config in network_config.validator_configs() {
+                    let account_kp = node_config.account_key_pair.keypair();
+                    context.add_account(None, account_kp.copy());
+                }
+
+                let context = context;
+                let mut tasks = vec![];
+                for node_config in network_config.validator_configs() {
+                    let account_kp = node_config.account_key_pair.keypair();
+                    let sui_address = SuiAddress::from(&account_kp.public());
+                    let gas_obj_ref = context
+                        .get_one_gas_object_owned_by_address(sui_address)
+                        .await?
+                        .expect("Validator does not own any gas objects");
+                    // build registration tx
+                    // use ramdom key (at least we don't care about the key now)
+                    let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+                    let tx = build_committee_register_transaction(
+                        sui_address,
+                        &gas_obj_ref,
+                        bridge_arg,
+                        kp,
+                        "bridge_test_url", // dummy
+                        rgp,
+                    )
+                    .unwrap();
+                    let signed_tx = context.sign_transaction(&tx);
+                    tasks.push(context.execute_transaction_must_succeed(signed_tx));
+                }
+                futures::future::join_all(tasks).await;
+                Ok(())
+            }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
         }
     }
