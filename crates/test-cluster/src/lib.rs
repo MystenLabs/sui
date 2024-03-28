@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::traits::ToFromBytes;
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
@@ -11,10 +10,10 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_bridge::crypto::BridgeAuthorityKeyPair;
+use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
@@ -46,7 +45,6 @@ use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::bridge::get_bridge_obj_initial_shared_version;
 use sui_types::bridge::BridgeSummary;
-use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::get_key_pair;
@@ -57,7 +55,6 @@ use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -67,8 +64,6 @@ use sui_types::transaction::{
     CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
     TransactionKind,
 };
-use sui_types::Identifier;
-use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
@@ -1121,42 +1116,22 @@ impl TestClusterBuilder {
                 .await
                 .unwrap();
             let gas = coins.data.first().unwrap();
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let bridge = builder
-                .obj(ObjectArg::SharedObject {
-                    id: SUI_BRIDGE_OBJECT_ID,
-                    initial_shared_version: bridge_shared_version,
-                    mutable: true,
-                })
-                .unwrap();
-            let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+            let bridge_arg = ObjectArg::SharedObject {
+                id: SUI_BRIDGE_OBJECT_ID,
+                initial_shared_version: bridge_shared_version,
+                mutable: true,
+            };
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
-            let pub_key = kp.public().as_bytes().to_vec();
-            bridge_authority_keys.push(kp);
-            let bridge_pubkey = builder
-                .input(CallArg::Pure(bcs::to_bytes(&pub_key).unwrap()))
-                .unwrap();
-            let url = builder
-                .input(CallArg::Pure(
-                    bcs::to_bytes("bridge_test_url".as_bytes()).unwrap(),
-                ))
-                .unwrap();
-
-            builder.programmable_move_call(
-                BRIDGE_PACKAGE_ID,
-                BRIDGE_MODULE_NAME.into(),
-                Identifier::from_str("committee_registration").unwrap(),
-                vec![],
-                vec![bridge, system_state, bridge_pubkey, url],
-            );
-
-            let data = TransactionData::new_programmable(
+            bridge_authority_keys.push(kp.copy());
+            let data = build_committee_register_transaction(
                 validator_address,
-                vec![gas.object_ref()],
-                builder.finish(),
-                1000000000,
+                &gas.object_ref(),
+                bridge_arg,
+                kp,
+                "bridge_test_url",
                 ref_gas_price,
-            );
+            )
+            .unwrap();
 
             let tx = Transaction::from_data_and_signer(
                 data,

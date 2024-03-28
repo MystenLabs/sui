@@ -39,8 +39,10 @@ miette.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
 shlex.workspace = true
+futures.workspace = true
 
 sui-config.workspace = true
+sui-bridge.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true

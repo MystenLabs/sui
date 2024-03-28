@@ -148,6 +148,14 @@ impl SuiKeyPair {
             SuiKeyPair::Secp256r1(kp) => PublicKey::Secp256r1(kp.public().into()),
         }
     }
+
+    pub fn copy(&self) -> Self {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256k1(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256r1(kp) => kp.copy().into(),
+        }
+    }
 }
 
 impl Signer<Signature> for SuiKeyPair {
