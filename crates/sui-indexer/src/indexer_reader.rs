@@ -755,9 +755,9 @@ impl IndexerReader {
         // Translate transaction digest cursor to tx sequence number
         if let Some(cursor_tx_seq) = cursor_tx_seq {
             if is_descending {
-                query = query.filter(transactions::dsl::tx_sequence_number.le(cursor_tx_seq));
+                query = query.filter(transactions::dsl::tx_sequence_number.lt(cursor_tx_seq));
             } else {
-                query = query.filter(transactions::dsl::tx_sequence_number.ge(cursor_tx_seq));
+                query = query.filter(transactions::dsl::tx_sequence_number.gt(cursor_tx_seq));
             }
         }
         if is_descending {
@@ -1322,7 +1322,7 @@ impl IndexerReader {
                 .limit(limit as i64)
                 .into_boxed();
             if let Some(object_cursor) = cursor {
-                query = query.filter(objects::dsl::object_id.ge(object_cursor.to_vec()));
+                query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
             query.load::<StoredObject>(conn)
         })?;
