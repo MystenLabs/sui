@@ -814,7 +814,7 @@ mod tests {
     async fn test_build_sui_transaction_for_price_update() {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .with_epoch_duration_ms(15000)
             .build_with_bridge()
             .await;
@@ -829,13 +829,18 @@ mod tests {
         if committee.members.is_empty() {
             test_cluster.wait_for_epoch(None).await;
         }
-        let notional_values = sui_client
-            .get_bridge_summary()
-            .await
-            .unwrap()
-            .limiter
-            .notional_values
-            .into_iter()
+        let treasury = sui_client.get_bridge_summary().await.unwrap().treasury;
+        let notional_values = treasury
+            .id_token_type_map
+            .iter()
+            .map(|(id, type_name)| {
+                let (_, metadata) = treasury
+                    .supported_tokens
+                    .iter()
+                    .find(|(tn, _)| type_name == tn)
+                    .unwrap();
+                (id, metadata.notional_value)
+            })
             .collect::<HashMap<_, _>>();
         assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 
@@ -858,12 +863,18 @@ mod tests {
             None,
         )
         .await;
-        let new_notional_values = sui_client
-            .get_bridge_summary()
-            .await
-            .unwrap()
-            .limiter
-            .notional_values;
+        let new_notional_values = treasury
+            .id_token_type_map
+            .iter()
+            .map(|(id, type_name)| {
+                let (_, metadata) = treasury
+                    .supported_tokens
+                    .iter()
+                    .find(|(tn, _)| type_name == tn)
+                    .unwrap();
+                (id, metadata.notional_value)
+            })
+            .collect::<HashMap<_, _>>();
         for (token_id, price) in new_notional_values {
             if token_id == TOKEN_ID_BTC {
                 assert_eq!(price, 69_000 * USD_MULTIPLIER);

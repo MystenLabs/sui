@@ -155,6 +155,8 @@ pub struct BridgeSummary {
     pub bridge_records_id: ObjectID,
     /// Summary of the limiter
     pub limiter: BridgeLimiterSummary,
+    /// Summary of the treasury
+    pub treasury: BridgeTreasurySummary,
     /// Whether the bridge is currently frozen or not
     pub is_frozen: bool,
     // TODO: add treasury
@@ -262,6 +264,23 @@ impl BridgeTrait for BridgeInnerV1 {
                 Ok((source, destination, e.value))
             })
             .collect::<SuiResult<Vec<_>>>()?;
+        let supported_tokens = self
+            .treasury
+            .supported_tokens
+            .contents
+            .into_iter()
+            .map(|e| {
+                let token_type = e.key.to_string();
+                Ok((token_type, e.value))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
+        let id_token_type_map = self
+            .treasury
+            .id_token_type_map
+            .contents
+            .into_iter()
+            .map(|e| Ok((e.key, e.value.to_string())))
+            .collect::<SuiResult<Vec<_>>>()?;
         let transfer_records = self
             .limiter
             .transfer_records
@@ -314,6 +333,10 @@ impl BridgeTrait for BridgeInnerV1 {
             },
             bridge_records_id: self.bridge_records.id,
             limiter,
+            treasury: BridgeTreasurySummary {
+                supported_tokens,
+                id_token_type_map,
+            },
             is_frozen: self.frozen,
         })
     }
@@ -330,7 +353,8 @@ pub struct MoveTypeBridgeTreasury {
     pub waiting_room: Bag,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeTokenMetadata {
     pub id: u8,
     pub decimal_multiplier: u64,
@@ -371,6 +395,14 @@ pub struct BridgeCommitteeSummary {
 pub struct BridgeLimiterSummary {
     pub transfer_limit: Vec<(BridgeChainId, BridgeChainId, u64)>,
     pub transfer_records: Vec<(BridgeChainId, BridgeChainId, MoveTypeBridgeTransferRecord)>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTreasurySummary {
+    pub supported_tokens: Vec<(String, BridgeTokenMetadata)>,
+    pub id_token_type_map: Vec<(u8, String)>,
 }
 
 /// Rust version of the Move committee::CommitteeMember type.
