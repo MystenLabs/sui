@@ -586,7 +586,7 @@ pub(crate) async fn update_watermark(
                         return;
                     },
                     _ = tokio::time::sleep(sleep_ms) => {
-                        let new_checkpoint= match Checkpoint::query_latest_at(db, None).await {
+                        let new_checkpoint = match Checkpoint::latest_checkpoint_seq_num_epoch_id(db).await {
                             Ok(checkpoint) => checkpoint,
                             Err(e) => {
                                 error!("{}", e);
@@ -595,8 +595,8 @@ pub(crate) async fn update_watermark(
                             }
                         };
                         if let Some(checkpoint) = new_checkpoint {
-                            checkpoint_viewed_at.0.store(checkpoint.stored.sequence_number as u64, Relaxed);
-                            epoch.0.store(checkpoint.stored.epoch as u64, Relaxed)
+                            checkpoint_viewed_at.0.store(checkpoint.0, Relaxed);
+                            epoch.0.store(checkpoint.1, Relaxed)
                         }
                     }
         }

@@ -414,6 +414,27 @@ impl Checkpoint {
             }
         })
     }
+
+    pub(crate) async fn latest_checkpoint_seq_num_epoch_id(
+        db: &Db,
+    ) -> Result<Option<(u64, u64)>, Error> {
+        use checkpoints::dsl;
+
+        let result: Option<(i64, i64)> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    dsl::checkpoints
+                        .select((dsl::sequence_number, dsl::epoch))
+                        .order(dsl::sequence_number.desc())
+                        .limit(1)
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
+
+        Ok(result.map(|(seq_num, epoch)| (seq_num as u64, epoch as u64)))
+    }
 }
 
 impl Paginated<Cursor> for StoredCheckpoint {
