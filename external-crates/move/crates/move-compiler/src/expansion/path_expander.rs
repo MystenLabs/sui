@@ -8,11 +8,9 @@ use crate::{
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
     expansion::{
-        alias_map_builder::{
-            AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
-        },
+        alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace},
         aliases::{AliasMap, AliasSet},
-        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
+        ast::{self as E, Address, ModuleIdent_},
         legacy_aliases,
         translate::{
             is_valid_struct_or_constant_name, make_address, module_ident, top_level_address,
@@ -21,28 +19,13 @@ use crate::{
     },
     ice, ice_assert,
     parser::{
-        ast::{
-            self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-            ModuleName, NameAccess, NamePath, PathEntry, RootPathEntry, StructName, Type, Var,
-            ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
-        },
+        ast::{self as P, ModuleName, NameAccess, NamePath, PathEntry, Type},
         syntax::make_loc,
     },
-    shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
-    FullyCompiledProgram,
-};
-use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
-use move_core_types::account_address::AccountAddress;
-use move_ir_types::location::*;
-use move_proc_macros::growing_stack;
-use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    iter::IntoIterator,
-    sync::Arc,
+    shared::*,
 };
 
-use self::known_attributes::DiagnosticAttribute;
+use move_ir_types::location::*;
 
 //**************************************************************************************************
 // Definitions
@@ -376,7 +359,8 @@ impl Move2024PathExpander {
                     // the error.
                     result @ NR::ModuleIdent(_, _)
                         if entries.len() == 2
-                            && context.env.edition(context.current_package) == Edition::E2024_MIGRATION
+                            && context.env.edition(context.current_package)
+                                == Edition::E2024_MIGRATION
                             && root.is_macro.is_none()
                             && root.tyargs.is_none() =>
                     {

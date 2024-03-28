@@ -5,28 +5,24 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
-    editions::{self, create_feature_error, Edition, FeatureGate, Flavor},
+    editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
         alias_map_builder::{
-            AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UnnecessaryAlias,
-            UseFunsBuilder,
+            AliasEntry, AliasMapBuilder, ParserExplicitUseFun, UnnecessaryAlias, UseFunsBuilder,
         },
-        aliases::{AliasMap, AliasSet},
+        aliases::AliasSet,
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
-        byte_string, hex_string, legacy_aliases,
-        translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
+        byte_string, hex_string,
         path_expander::{
-            access_result, Access, LegacyPathExpander, Move2024PathExpander, ModuleAccessResult, PathExpander,
+            access_result, Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander,
+            PathExpander,
         },
+        translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
     ice, ice_assert,
-    parser::{
-        ast::{
-            self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-            ModuleName, NameAccess, NamePath, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER,
-            NATIVE_MODIFIER,
-        },
-        syntax::make_loc,
+    parser::ast::{
+        self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
+        ModuleName, NameAccess, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,

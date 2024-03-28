@@ -567,7 +567,10 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
                 Syntax::InvalidName,
                 (
                     *loc,
-                    format!("Macro invocation are disallowed here. Expected {}", item_description())
+                    format!(
+                        "Macro invocation are disallowed here. Expected {}",
+                        item_description()
+                    )
                 )
             ));
             is_macro = None;
@@ -579,7 +582,10 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
                 Syntax::InvalidName,
                 (
                     ty_loc,
-                    format!("Type arguments are disallowed here. Expected {}", item_description())
+                    format!(
+                        "Type arguments are disallowed here. Expected {}",
+                        item_description()
+                    )
                 )
             ));
             tys = None;
@@ -686,7 +692,7 @@ fn parse_macro_opt_and_tyargs_opt(
     // If there is no whitespace after the name or if a macro call has been started,
     //   treat it as the start of a list of type arguments.
     // Otherwise, assume that the '<' is a boolean operator.
-    let start_loc = context.tokens.start_loc();
+    let _start_loc = context.tokens.start_loc();
     if context.tokens.peek() == Tok::Less && (context.at_end(end_loc) || is_macro.is_some()) {
         let start_loc = context.tokens.start_loc();
         let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
@@ -2316,7 +2322,7 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
 
 fn parse_type_(
     context: &mut Context,
-    whitespace_sensitive_ty_args: bool,
+    _whitespace_sensitive_ty_args: bool,
 ) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
