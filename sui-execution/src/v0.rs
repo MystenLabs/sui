@@ -238,7 +238,7 @@ impl<'m> verifier::Verifier for Verifier<'m> {
             self.metrics,
         )?;
         let fun_meter_units_result = self.meter.get_usage(Scope::Function);
-        let mod_meter_units_result = self.meter.get_usage(Scope::Function);
+        let mod_meter_units_result = self.meter.get_usage(Scope::Module);
         Ok(VerifierMeteredValues::new(
             max_per_fun_meter_current,
             max_per_mod_meter_current,
