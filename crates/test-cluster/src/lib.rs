@@ -361,6 +361,19 @@ impl TestCluster {
         .expect("Timed out waiting for cluster to target protocol version")
     }
 
+    pub async fn get_sui_system_state(&self) -> SuiSystemState {
+        self.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_sui_system_state_object_for_testing()
+                .unwrap()
+                .clone()
+        })
+    }
+
+    pub async fn get_epoch_duration(&self) -> Duration {
+        Duration::from_millis(self.get_sui_system_state().await.epoch_duration_ms())
+    }
+
     /// Ask 2f+1 validators to close epoch actively, and wait for the entire network to reach the next
     /// epoch. This requires waiting for both the fullnode and all validators to reach the next epoch.
     pub async fn trigger_reconfiguration(&self) {
@@ -406,6 +419,10 @@ impl TestCluster {
                     let mut retries = 0;
                     loop {
                         let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch > target_epoch {
+                            tracing::warn!("cluster was already at epoch {:?} > target_epoch {:?}", epoch, target_epoch);
+                            break;
+                        }
                         if epoch == target_epoch {
                             if let Some(agg) = node.clone_authority_aggregator() {
                                 // This is a fullnode, we need to wait for its auth aggregator to reconfigure as well.
@@ -437,16 +454,16 @@ impl TestCluster {
     /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
     /// the entire version range.
     pub async fn update_validator_supported_versions(
-        &mut self,
+        &self,
         new_supported_versions: SupportedProtocolVersions,
     ) {
         for authority in self.get_validator_pubkeys() {
             self.stop_node(&authority);
             tokio::time::sleep(Duration::from_millis(1000)).await;
             self.swarm
-                .node_mut(&authority)
+                .node(&authority)
                 .unwrap()
-                .config
+                .config()
                 .supported_protocol_versions = Some(new_supported_versions);
             self.start_node(&authority).await;
             info!("Restarted validator {}", authority);
@@ -975,7 +992,7 @@ impl TestClusterBuilder {
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
-        let json_rpc_address = fullnode.config.json_rpc_address;
+        let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 

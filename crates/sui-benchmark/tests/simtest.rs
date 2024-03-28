@@ -76,7 +76,12 @@ mod test {
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            60,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -88,26 +93,41 @@ mod test {
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
         let test_cluster = build_test_cluster(4, 10000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            60,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 15).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            15,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 0).await);
+        let test_cluster = build_test_cluster(4, 0).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            120,
+        )
+        .await;
     }
 
     #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
@@ -116,13 +136,18 @@ mod test {
         // TODO added to invalidate a failing test seed in CI. Remove me
         tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 1000).await);
+        let test_cluster = build_test_cluster(4, 1000).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            120,
+        )
+        .await;
     }
 
     /// Get a list of nodes that we don't want to kill in the crash recovery tests.
@@ -223,7 +248,12 @@ mod test {
             handle_failpoint_prune_and_compact(node_state.clone(), 0.5)
         });
 
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            60,
+        )
+        .await;
         // The fail point holds a reference to `node_state`, which we need to release before the test ends.
         clear_fail_point("prune-and-compact");
     }
@@ -283,7 +313,12 @@ mod test {
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
 
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            120,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -296,13 +331,23 @@ mod test {
         register_fail_points(&["before-open-new-epoch-store"], move || {
             handle_failpoint(dead_validator.clone(), keep_alive_nodes.clone(), 1.0);
         });
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            120,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
         let test_cluster = build_test_cluster(4, 1000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            30,
+        )
+        .await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
         let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
@@ -322,11 +367,18 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();
-        let test_cluster = init_test_cluster_builder(4, 1000)
-            .with_data_ingestion_dir(path.clone())
-            .build()
-            .await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 10).await;
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(4, 1000)
+                .with_data_ingestion_dir(path.clone())
+                .build()
+                .await,
+        );
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            10,
+        )
+        .await;
 
         let checkpoint_files = std::fs::read_dir(path)
             .map(|entries| {
@@ -353,7 +405,12 @@ mod test {
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
         let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
+        test_simulated_load(
+            test_cluster.clone(),
+            TestInitData::new(&test_cluster).await,
+            30,
+        )
+        .await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
         let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
@@ -402,70 +459,82 @@ mod test {
 
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
-        let mut test_cluster = init_test_cluster_builder(7, 5000)
-            .with_protocol_version(ProtocolVersion::new(starting_version))
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-                starting_version,
-                starting_version,
-            ))
-            .with_fullnode_supported_protocol_versions_config(
-                SupportedProtocolVersions::new_for_testing(starting_version, max_ver),
-            )
-            .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
-            .with_stake_subsidy_start_epoch(10)
-            .build()
-            .await;
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(7, 5000)
+                .with_protocol_version(ProtocolVersion::new(starting_version))
+                .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                    starting_version,
+                    starting_version,
+                ))
+                .with_fullnode_supported_protocol_versions_config(
+                    SupportedProtocolVersions::new_for_testing(starting_version, max_ver),
+                )
+                .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
+                .with_stake_subsidy_start_epoch(10)
+                .build()
+                .await,
+        );
 
         let test_init_data = TestInitData::new(&test_cluster).await;
         let test_init_data_clone = test_init_data.clone();
 
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
-        let _handle = tokio::task::spawn(async move {
-            info!("Running from version {starting_version} to version {max_ver}");
-            for version in starting_version..=max_ver {
-                info!("Targeting protocol version: {version}");
-                test_cluster.wait_for_all_nodes_upgrade_to(version).await;
-                info!("All nodes are at protocol version: {version}");
-                // Let all nodes run for a few epochs at this version.
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                if version == max_ver {
-                    break;
-                }
-                let next_version = version + 1;
-                let new_framework = sui_framework_snapshot::load_bytecode_snapshot(next_version);
-                let new_framework_ref = match &new_framework {
-                    Ok(f) => Some(f.iter().collect::<Vec<_>>()),
-                    Err(_) => {
-                        if next_version == max_ver {
-                            Some(BuiltInFramework::iter_system_packages().collect::<Vec<_>>())
-                        } else {
-                            // Often we want to be able to create multiple protocol config versions
-                            // on main that none have shipped to any production network. In this case,
-                            // some of the protocol versions may not have a framework snapshot.
-                            None
+        let _handle = {
+            let test_cluster = test_cluster.clone();
+            tokio::task::spawn(async move {
+                info!("Running from version {starting_version} to version {max_ver}");
+                for version in starting_version..=max_ver {
+                    info!("Targeting protocol version: {version}");
+                    test_cluster.wait_for_all_nodes_upgrade_to(version).await;
+                    info!("All nodes are at protocol version: {version}");
+                    // Let all nodes run for a few epochs at this version.
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    if version == max_ver {
+                        break;
+                    }
+                    let next_version = version + 1;
+                    let new_framework =
+                        sui_framework_snapshot::load_bytecode_snapshot(next_version);
+                    let new_framework_ref = match &new_framework {
+                        Ok(f) => Some(f.iter().collect::<Vec<_>>()),
+                        Err(_) => {
+                            if next_version == max_ver {
+                                Some(BuiltInFramework::iter_system_packages().collect::<Vec<_>>())
+                            } else {
+                                // Often we want to be able to create multiple protocol config versions
+                                // on main that none have shipped to any production network. In this case,
+                                // some of the protocol versions may not have a framework snapshot.
+                                None
+                            }
                         }
+                    };
+                    if let Some(new_framework_ref) = new_framework_ref {
+                        for package in new_framework_ref {
+                            framework_injection::set_override(
+                                *package.id(),
+                                package.modules().clone(),
+                            );
+                        }
+                        info!("Framework injected for next_version {next_version}");
+                    } else {
+                        info!("No framework snapshot to inject for next_version {next_version}");
                     }
-                };
-                if let Some(new_framework_ref) = new_framework_ref {
-                    for package in new_framework_ref {
-                        framework_injection::set_override(*package.id(), package.modules().clone());
-                    }
-                    info!("Framework injected for next_version {next_version}");
-                } else {
-                    info!("No framework snapshot to inject for next_version {next_version}");
+                    test_cluster
+                        .update_validator_supported_versions(
+                            SupportedProtocolVersions::new_for_testing(
+                                starting_version,
+                                next_version,
+                            ),
+                        )
+                        .await;
+                    info!("Updated validator supported versions to include next_version {next_version}")
                 }
-                test_cluster
-                    .update_validator_supported_versions(
-                        SupportedProtocolVersions::new_for_testing(starting_version, next_version),
-                    )
-                    .await;
-                info!("Updated validator supported versions to include next_version {next_version}")
-            }
-            finished_clone.store(true, Ordering::SeqCst);
-        });
+                finished_clone.store(true, Ordering::SeqCst);
+            })
+        };
 
-        test_simulated_load(test_init_data_clone, 150).await;
+        test_simulated_load(test_cluster, test_init_data_clone, 150).await;
         for _ in 0..150 {
             if finished.load(Ordering::Relaxed) {
                 break;
@@ -479,10 +548,11 @@ mod test {
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
-    ) -> TestCluster {
+    ) -> Arc<TestCluster> {
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
             .build()
             .await
+            .into()
     }
 
     fn init_test_cluster_builder(
@@ -528,13 +598,19 @@ mod test {
         }
     }
 
-    async fn test_simulated_load(init_data: TestInitData, test_duration_secs: u64) {
+    async fn test_simulated_load(
+        test_cluster: Arc<TestCluster>,
+        init_data: TestInitData,
+        test_duration_secs: u64,
+    ) {
         let TestInitData {
             keystore_path,
             genesis,
             primary_gas,
             sender,
         } = init_data;
+
+        let epoch_duration = test_cluster.get_epoch_duration().await;
 
         let ed25519_keypair =
             Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
@@ -612,6 +688,20 @@ mod test {
 
         let driver = BenchDriver::new(5, false);
 
+        /*
+        let reconfig_watcher = {
+            let test_cluster = test_cluster.clone();
+            tokio::task::spawn(async move {
+                loop {
+                    let reconfig_timeout = epoch_duration + Duration::from_secs(60);
+                    test_cluster
+                        .wait_for_epoch_with_timeout(None, reconfig_timeout)
+                        .await;
+                }
+            })
+        };
+        */
+
         // Use 0 for unbounded
         let test_duration_secs = get_var("SIM_STRESS_TEST_DURATION_SECS", test_duration_secs);
         let test_duration = if test_duration_secs == 0 {
@@ -633,6 +723,14 @@ mod test {
             )
             .await
             .unwrap();
+
+        if epoch_duration < Duration::from_secs(120) {
+            test_cluster
+                .wait_for_epoch_with_timeout(Some(3), epoch_duration * 3 + Duration::from_secs(60))
+                .await;
+        }
+
+        //reconfig_watcher.abort();
 
         // TODO: make this stricter (== 0) when we have reliable error retrying on the client.
         tracing::info!("end of test {:?}", benchmark_stats);
