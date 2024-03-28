@@ -30,7 +30,8 @@ use crate::{
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
     network::{
-        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager, NetworkService,
+        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
+        NetworkManager, NetworkService,
     },
     storage::rocksdb_store::RocksDBStore,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -133,7 +134,8 @@ where
     synchronizer: Arc<SynchronizerHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    broadcaster: Broadcaster,
+    // Not started when using block streaming.
+    broadcaster: Option<Broadcaster>,
     network_manager: N,
 }
 
@@ -173,12 +175,19 @@ where
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let mut network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone(), core_signals.block_broadcast_sender());
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster =
-            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
+        let broadcaster = if N::Client::BLOCK_STREAMING {
+            None
+        } else {
+            Some(Broadcaster::new(
+                context.clone(),
+                network_client.clone(),
+                &signals_receivers,
+            ))
+        };
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -247,7 +256,9 @@ where
         );
 
         self.network_manager.stop().await;
-        self.broadcaster.stop();
+        if let Some(mut broadcaster) = self.broadcaster {
+            broadcaster.stop();
+        }
         self.core_thread_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         self.synchronizer.stop().await;
@@ -458,7 +469,7 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
-        const BLOCK_SUBSCRIPTION: bool = false;
+        const BLOCK_STREAMING: bool = false;
 
         async fn send_block(
             &self,

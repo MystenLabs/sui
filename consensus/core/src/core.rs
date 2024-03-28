@@ -526,7 +526,7 @@ impl CoreSignals {
 
     /// Sends a signal to all the waiters that a new block has been produced. The method will return
     /// true if block has reached even one subscriber, false otherwise.
-    pub fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
+    pub(crate) fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
         // When there is only one authority in committee, it is unnecessary to broadcast
         // the block which will fail anyway without subscribers to the signal.
         if self.context.committee.size() > 1 {
@@ -542,8 +542,13 @@ impl CoreSignals {
 
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
     /// threshold clock has advanced to.
-    pub fn new_round(&mut self, round_number: Round) {
+    pub(crate) fn new_round(&mut self, round_number: Round) {
         let _ = self.new_round_sender.send_replace(round_number);
+    }
+
+    /// Returns the channel to broadcast new blocks.
+    pub(crate) fn block_broadcast_sender(&self) -> broadcast::Sender<VerifiedBlock> {
+        self.tx_block_broadcast.clone()
     }
 }
 

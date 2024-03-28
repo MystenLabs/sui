@@ -85,7 +85,7 @@ impl TonicClient {
 
 #[async_trait]
 impl NetworkClient for TonicClient {
-    const BLOCK_SUBSCRIPTION: bool = true;
+    const BLOCK_STREAMING: bool = true;
 
     async fn send_block(
         &self,
@@ -410,8 +410,10 @@ pub(crate) struct TonicManager {
 }
 
 impl TonicManager {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
-        let (tx_block_broadcast, _) = broadcast::channel(1000);
+    pub(crate) fn new(
+        context: Arc<Context>,
+        tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    ) -> Self {
         Self {
             context: context.clone(),
             client: Arc::new(TonicClient::new(context, tx_block_broadcast)),
@@ -424,8 +426,8 @@ impl TonicManager {
 impl<S: NetworkService> NetworkManager<S> for TonicManager {
     type Client = TonicClient;
 
-    fn new(context: Arc<Context>) -> Self {
-        TonicManager::new(context)
+    fn new(context: Arc<Context>, tx_block_broadcast: broadcast::Sender<VerifiedBlock>) -> Self {
+        TonicManager::new(context, tx_block_broadcast)
     }
 
     fn client(&self) -> Arc<Self::Client> {
@@ -609,6 +611,7 @@ mod test {
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
     use parking_lot::Mutex;
+    use tokio::sync::broadcast;
 
     use crate::{
         block::{BlockRef, TestBlock, VerifiedBlock},
@@ -661,7 +664,8 @@ mod test {
                 .clone()
                 .with_authority_index(context.committee.to_authority_index(0).unwrap()),
         );
-        let mut manager_0 = TonicManager::new(context_0.clone());
+        let (tx_block_broadcaster_0, _) = broadcast::channel(100);
+        let mut manager_0 = TonicManager::new(context_0.clone(), tx_block_broadcaster_0);
         let client_0 = <TonicManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
         let service_0 = Arc::new(Mutex::new(TestService::new()));
         manager_0
@@ -673,7 +677,8 @@ mod test {
                 .clone()
                 .with_authority_index(context.committee.to_authority_index(1).unwrap()),
         );
-        let mut manager_1 = TonicManager::new(context_1.clone());
+        let (tx_block_broadcaster_1, _) = broadcast::channel(100);
+        let mut manager_1 = TonicManager::new(context_1.clone(), tx_block_broadcaster_1);
         let client_1 = <TonicManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
         let service_1 = Arc::new(Mutex::new(TestService::new()));
         manager_1

@@ -6,6 +6,7 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use tokio::sync::broadcast;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -36,7 +37,7 @@ pub(crate) mod tonic_network;
 #[async_trait]
 pub(crate) trait NetworkClient: Send + Sync + 'static {
     // Whether the network client streams blocks to subscribed peers.
-    const BLOCK_SUBSCRIPTION: bool;
+    const BLOCK_STREAMING: bool;
 
     /// Sends a serialized SignedBlock to a peer.
     async fn send_block(
@@ -80,7 +81,7 @@ where
     type Client: NetworkClient;
 
     /// Creates a new network manager.
-    fn new(context: Arc<Context>) -> Self;
+    fn new(context: Arc<Context>, tx_block_broadcast: broadcast::Sender<VerifiedBlock>) -> Self;
 
     /// Returns the network client.
     fn client(&self) -> Arc<Self::Client>;

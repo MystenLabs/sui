@@ -565,7 +565,7 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for MockNetworkClient {
-        const BLOCK_SUBSCRIPTION: bool = false;
+        const BLOCK_STREAMING: bool = false;
 
         async fn send_block(
             &self,

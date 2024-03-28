@@ -22,7 +22,7 @@ use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use prometheus::HistogramTimer;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::{self, error::RecvError};
 use tracing::{debug, error, warn};
 
 use super::{
@@ -122,7 +122,7 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
-    const BLOCK_SUBSCRIPTION: bool = false;
+    const BLOCK_STREAMING: bool = false;
 
     async fn send_block(
         &self,
@@ -292,7 +292,7 @@ impl AnemoManager {
 impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     type Client = AnemoClient;
 
-    fn new(context: Arc<Context>) -> Self {
+    fn new(context: Arc<Context>, _tx_block_broadcast: broadcast::Sender<VerifiedBlock>) -> Self {
         AnemoManager::new(context)
     }
 

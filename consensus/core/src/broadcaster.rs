@@ -221,7 +221,7 @@ mod test {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
-        const BLOCK_SUBSCRIPTION: bool = false;
+        const BLOCK_STREAMING: bool = false;
 
         async fn send_block(
             &self,
