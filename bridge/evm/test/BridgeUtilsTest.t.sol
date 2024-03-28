@@ -187,7 +187,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         (uint8 _tokenID, uint64 _newPrice) = BridgeUtils.decodeUpdateTokenPricePayload(payload);
 
         assertEq(_tokenID, 1);
-        assertEq(_newPrice, 100_000_0000);
+        assertEq(_newPrice, 10_00000000);
     }
 
     function testDecodeEmergencyOpPayload() public {

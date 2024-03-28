@@ -478,11 +478,11 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         committee.initialize(_committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
         tokenPrices = new uint64[](5);
-        tokenPrices[0] = 10000; // SUI PRICE
-        tokenPrices[1] = 10000; // BTC PRICE
-        tokenPrices[2] = 10000; // ETH PRICE
-        tokenPrices[3] = 10000; // USDC PRICE
-        tokenPrices[4] = 10000; // USDT PRICE
+        tokenPrices[0] = 1_00000000; // SUI PRICE
+        tokenPrices[1] = 1_00000000; // BTC PRICE
+        tokenPrices[2] = 1_00000000; // ETH PRICE
+        tokenPrices[3] = 1_00000000; // USDC PRICE
+        tokenPrices[4] = 1_00000000; // USDT PRICE
 
         // deploy bridge config with 11 chainID
         address[] memory _supportedTokens = new address[](5);
@@ -504,7 +504,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         skip(2 days);
 
         uint64[] memory totalLimits = new uint64[](1);
-        totalLimits[0] = 1000000;
+        totalLimits[0] = 100_00000000;
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();
@@ -564,11 +564,11 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         committee.initialize(_committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
         tokenPrices = new uint64[](5);
-        tokenPrices[0] = 10000; // SUI PRICE
-        tokenPrices[1] = 10000; // BTC PRICE
-        tokenPrices[2] = 10000; // ETH PRICE
-        tokenPrices[3] = 10000; // USDC PRICE
-        tokenPrices[4] = 10000; // USDT PRICE
+        tokenPrices[0] = 100000000; // SUI PRICE
+        tokenPrices[1] = 100000000; // BTC PRICE
+        tokenPrices[2] = 100000000; // ETH PRICE
+        tokenPrices[3] = 100000000; // USDC PRICE
+        tokenPrices[4] = 100000000; // USDT PRICE
         uint8 _chainID = 3;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
@@ -586,7 +586,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         committee.initializeConfig(address(config));
 
         uint64[] memory totalLimits = new uint64[](1);
-        totalLimits[0] = 1000000;
+        totalLimits[0] = 100_00000000;
         skip(2 days);
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
@@ -637,7 +637,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         vault = new BridgeVault(wETH);
 
         uint64[] memory totalLimits = new uint64[](1);
-        totalLimits[0] = 1000000;
+        totalLimits[0] = 100_00000000;
 
         skip(2 days);
         limiter = new BridgeLimiter();
@@ -733,11 +733,11 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         committee.initialize(_committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
         tokenPrices = new uint64[](5);
-        tokenPrices[0] = 10000; // SUI PRICE
-        tokenPrices[1] = 10000; // BTC PRICE
-        tokenPrices[2] = 10000; // ETH PRICE
-        tokenPrices[3] = 10000; // USDC PRICE
-        tokenPrices[4] = 10000; // USDT PRICE
+        tokenPrices[0] = 100000000; // SUI PRICE
+        tokenPrices[1] = 100000000; // BTC PRICE
+        tokenPrices[2] = 100000000; // ETH PRICE
+        tokenPrices[3] = 100000000; // USDC PRICE
+        tokenPrices[4] = 100000000; // USDT PRICE
         uint8 _chainID = 12;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
@@ -756,7 +756,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
 
         skip(2 days);
         uint64[] memory totalLimits = new uint64[](1);
-        totalLimits[0] = 1000000;
+        totalLimits[0] = 100000000000000;
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();

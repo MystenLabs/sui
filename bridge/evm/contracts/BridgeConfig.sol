@@ -13,7 +13,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
 
     uint8 public chainID;
     mapping(uint8 tokenID => Token) public supportedTokens;
-    // price in USD (4 decimal precision) (e.g. 1 ETH = 2000 USD => 2000_0000)
+    // price in USD (8 decimal precision) (e.g. 1 ETH = 2000 USD => 2000_00000000)
     mapping(uint8 tokenID => uint64 tokenPrice) public tokenPrices;
     mapping(uint8 chainId => bool isSupported) public supportedChains;
 
@@ -22,7 +22,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
     /// @param _committee The address of the BridgeCommittee contract.
     /// @param _chainID The ID of the chain this contract is deployed on.
     /// @param _supportedTokens The addresses of the supported tokens.
-    /// @param _tokenPrices An array of token prices (with 4 decimal precision).
+    /// @param _tokenPrices An array of token prices (with 8 decimal precision).
     /// @param _supportedChains array of supported chain IDs.
     function initialize(
         address _committee,
@@ -121,6 +121,26 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         external
         nonReentrant
         verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_EVM_TOKENS)
+    {
+        // decode the update token payload
+        (
+            bool native,
+            uint8[] memory tokenIDs,
+            address[] memory tokenAddresses,
+            uint8[] memory suiDecimals,
+            uint64[] memory _tokenPrices
+        ) = BridgeUtils.decodeAddTokensPayload(message.payload);
+
+        // update the token
+        for (uint8 i; i < tokenIDs.length; i++) {
+            _addToken(tokenIDs[i], tokenAddresses[i], suiDecimals[i], _tokenPrices[i], native);
+        }
+    }
+
+    function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
+        external
+        nonReentrant
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_TOKENS)
     {
         // decode the update token payload
         (
