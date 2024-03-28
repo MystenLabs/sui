@@ -64,16 +64,16 @@ pub async fn start_test_indexer_impl(
     });
 
     // dynamically set ports instead of all to 9000
-    let base_port = rpc_url
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>()
-        .parse::<u16>()
-        .unwrap();
+    // let base_port = rpc_url
+    // .chars()
+    // .rev()
+    // .take(4)
+    // .collect::<String>()
+    // .chars()
+    // .rev()
+    // .collect::<String>()
+    // .parse::<u16>()
+    // .unwrap();
 
     // Set connection timeout for tests to 1 second
     let mut pool_config = PgConnectionPoolConfig::default();
@@ -86,7 +86,7 @@ pub async fn start_test_indexer_impl(
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
-        rpc_server_port: base_port + 1,
+        // rpc_server_port: base_port + 1,
         ..Default::default()
     };
 

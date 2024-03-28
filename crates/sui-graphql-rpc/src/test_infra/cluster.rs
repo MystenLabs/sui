@@ -319,6 +319,7 @@ impl ExecutorCluster {
         self.cancellation_token.cancel();
         let db_url = self.graphql_connection_config.db_url.clone();
         force_delete_database(db_url).await;
+        let _ = self.graphql_server_join_handle.await;
     }
 
     pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
