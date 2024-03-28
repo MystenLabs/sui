@@ -20,7 +20,7 @@ title: Module `0xb::bridge`
 -  [Function `committee_registration`](#0xb_bridge_committee_registration)
 -  [Function `register_foreign_token`](#0xb_bridge_register_foreign_token)
 -  [Function `send_token`](#0xb_bridge_send_token)
--  [Function `approve_bridge_message`](#0xb_bridge_approve_bridge_message)
+-  [Function `approve_token_transfer`](#0xb_bridge_approve_token_transfer)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
 -  [Function `claim_and_transfer_token`](#0xb_bridge_claim_and_transfer_token)
 -  [Function `load_inner_mut`](#0xb_bridge_load_inner_mut)
@@ -146,7 +146,7 @@ title: Module `0xb::bridge`
 
 </dd>
 <dt>
-<code>bridge_records: <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="message.md#0xb_message_BridgeMessageKey">message::BridgeMessageKey</a>, <a href="bridge.md#0xb_bridge_BridgeRecord">bridge::BridgeRecord</a>&gt;</code>
+<code>token_transfer_records: <a href="../sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="message.md#0xb_message_BridgeMessageKey">message::BridgeMessageKey</a>, <a href="bridge.md#0xb_bridge_BridgeRecord">bridge::BridgeRecord</a>&gt;</code>
 </dt>
 <dd>
 
@@ -506,6 +506,15 @@ title: Module `0xb::bridge`
 
 
 
+<a name="0xb_bridge_EMustBeTokenMessage"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 17;
+</code></pre>
+
+
+
 <a name="0xb_bridge_ETokenAlreadyClaimed"></a>
 
 
@@ -647,7 +656,7 @@ title: Module `0xb::bridge`
         sequence_nums: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
         <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
-        bridge_records: <a href="../sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
+        token_transfer_records: <a href="../sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
         <a href="limiter.md#0xb_limiter">limiter</a>: <a href="limiter.md#0xb_limiter_new">limiter::new</a>(),
         paused: <b>false</b>,
     };
@@ -805,7 +814,7 @@ title: Module `0xb::bridge`
     inner.<a href="treasury.md#0xb_treasury">treasury</a>.burn(token);
 
     // Store pending <a href="bridge.md#0xb_bridge">bridge</a> request
-    inner.bridge_records.push_back(<a href="message.md#0xb_message">message</a>.key(), <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a> {
+    inner.token_transfer_records.push_back(<a href="message.md#0xb_message">message</a>.key(), <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a> {
         <a href="message.md#0xb_message">message</a>,
         verified_signatures: <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(),
         claimed: <b>false</b>,
@@ -829,13 +838,13 @@ title: Module `0xb::bridge`
 
 </details>
 
-<a name="0xb_bridge_approve_bridge_message"></a>
+<a name="0xb_bridge_approve_token_transfer"></a>
 
-## Function `approve_bridge_message`
+## Function `approve_token_transfer`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_approve_bridge_message">approve_bridge_message</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, <a href="message.md#0xb_message">message</a>: <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>, signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_approve_token_transfer">approve_token_transfer</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, <a href="message.md#0xb_message">message</a>: <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>, signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;)
 </code></pre>
 
 
@@ -844,22 +853,29 @@ title: Module `0xb::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_approve_bridge_message">approve_bridge_message</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_approve_token_transfer">approve_token_transfer</a>(
     self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     <a href="message.md#0xb_message">message</a>: BridgeMessage,
     signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ) {
-    // FIXME: need <b>to</b> check pause
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>let</b> message_key = <a href="message.md#0xb_message">message</a>.key();
-    // TODO: test this
-    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.message_version() == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    // verify signatures
+    inner.<a href="committee.md#0xb_committee">committee</a>.verify_signatures(<a href="message.md#0xb_message">message</a>, signatures);
 
+    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.message_type() == <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), <a href="bridge.md#0xb_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>);
+    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.message_version() == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>let</b> token_payload = <a href="message.md#0xb_message">message</a>.extract_token_bridge_payload();
+    <b>let</b> target_chain = token_payload.token_target_chain();
+    <b>assert</b>!(
+        <a href="message.md#0xb_message">message</a>.source_chain() == inner.chain_id || target_chain == inner.chain_id,
+        <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>,
+    );
+
+    <b>let</b> message_key = <a href="message.md#0xb_message">message</a>.key();
     // retrieve pending <a href="message.md#0xb_message">message</a> <b>if</b> source chain is Sui, the initial <a href="message.md#0xb_message">message</a> must exist on chain.
-    <b>if</b> (<a href="message.md#0xb_message">message</a>.message_type() == <a href="message_types.md#0xb_message_types_token">message_types::token</a>() && <a href="message.md#0xb_message_source_chain">message::source_chain</a>(
-        &<a href="message.md#0xb_message">message</a>
-    ) == inner.chain_id) {
-        <b>let</b> record = &<b>mut</b> inner.bridge_records[message_key];
+    <b>if</b> (<a href="message.md#0xb_message">message</a>.source_chain() == inner.chain_id) {
+        <b>let</b> record = &<b>mut</b> inner.token_transfer_records[message_key];
 
         <b>assert</b>!(record.<a href="message.md#0xb_message">message</a> == <a href="message.md#0xb_message">message</a>, <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
         <b>assert</b>!(!record.claimed, <a href="bridge.md#0xb_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>);
@@ -870,21 +886,17 @@ title: Module `0xb::bridge`
             emit(<a href="bridge.md#0xb_bridge_TokenTransferAlreadyApproved">TokenTransferAlreadyApproved</a> { message_key });
             <b>return</b>
         };
-        // verify signatures
-        inner.<a href="committee.md#0xb_committee">committee</a>.verify_signatures(<a href="message.md#0xb_message">message</a>, signatures);
         // Store approval
         record.verified_signatures = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(signatures)
     } <b>else</b> {
-        // At this point, <b>if</b> this <a href="message.md#0xb_message">message</a> is in bridge_records, we know it's already approved
-        // because we only add a <a href="message.md#0xb_message">message</a> <b>to</b> bridge_records after verifying the signatures.
-        <b>if</b> (inner.bridge_records.contains(message_key)) {
+        // At this point, <b>if</b> this <a href="message.md#0xb_message">message</a> is in token_transfer_records, we know it's already approved
+        // because we only add a <a href="message.md#0xb_message">message</a> <b>to</b> token_transfer_records after verifying the signatures.
+        <b>if</b> (inner.token_transfer_records.contains(message_key)) {
             emit(<a href="bridge.md#0xb_bridge_TokenTransferAlreadyApproved">TokenTransferAlreadyApproved</a> { message_key });
             <b>return</b>
         };
-        // verify signatures
-        inner.<a href="committee.md#0xb_committee">committee</a>.verify_signatures(<a href="message.md#0xb_message">message</a>, signatures);
         // Store <a href="message.md#0xb_message">message</a> and approval
-        inner.bridge_records.push_back(message_key, <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a> {
+        inner.token_transfer_records.push_back(message_key, <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a> {
             <a href="message.md#0xb_message">message</a>,
             verified_signatures: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(signatures),
             claimed: <b>false</b>
@@ -1060,10 +1072,10 @@ title: Module `0xb::bridge`
     <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
 
     <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
-    <b>assert</b>!(inner.bridge_records.contains(key), <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>);
+    <b>assert</b>!(inner.token_transfer_records.contains(key), <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>);
 
     // retrieve approved <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
-    <b>let</b> record = &<b>mut</b> inner.bridge_records[key];
+    <b>let</b> record = &<b>mut</b> inner.token_transfer_records[key];
     // ensure this is a token <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
     <b>assert</b>!(&record.<a href="message.md#0xb_message">message</a>.message_type() == <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>);
     // Ensure it's signed
@@ -1366,11 +1378,11 @@ title: Module `0xb::bridge`
         bridge_seq_num
     );
 
-    <b>if</b> (!inner.bridge_records.contains(key)) {
+    <b>if</b> (!inner.token_transfer_records.contains(key)) {
         <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_NOT_FOUND">TRANSFER_STATUS_NOT_FOUND</a>
     };
 
-    <b>let</b> record = &inner.bridge_records[key];
+    <b>let</b> record = &inner.token_transfer_records[key];
     <b>if</b> (record.claimed) {
         <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_CLAIMED">TRANSFER_STATUS_CLAIMED</a>
     };
