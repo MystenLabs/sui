@@ -1432,7 +1432,7 @@ fn parsing_mod_ident_to_map_key(mod_ident: &P::ModuleIdent_) -> String {
 /// It's important that these are consistent between parsing AST and typed AST,
 fn parsing_mod_def_to_map_key(mod_def: &P::ModuleDefinition) -> Option<String> {
     // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
-    // standard practice) and while Move allows another ways of defining modules (i.e., with address
+    // standard practice) and while Move allows other ways of defining modules (i.e., with address
     // preceding a sequence of modules), this method is now deprecated
     //
     // TODO: make this function simply return String when the other way of defining modules is
@@ -2268,9 +2268,12 @@ impl<'a> TypingSymbolicator<'a> {
             for (fpos, fname, (_, t)) in fields {
                 self.add_type_id_use_def(t);
                 if !positional {
-                    // enter self-definition for field name (unwrap safe - done when inserting def),
-                    // but only if the fields are named (positional fields have "fake" locations and
-                    // could make the displayed results confusing)
+                    // Enter self-definition for field name (unwrap safe - done when inserting def),
+                    // but only if the fields are named. Positional fields, introduced in Move 2024
+                    // version of the language, have "fake" locations and could make the displayed
+                    // results confusing. The reason for "fake" locations is that a struct has one
+                    // internal representation in the compiler for both structs with named and
+                    // positional fields (and the latter's fields don't have the actual names).
                     let start = get_start_loc(&fpos, self.files, self.file_id_mapping).unwrap();
                     let field_info = DefInfo::Type(t.clone());
                     let ident_type_def_loc =
