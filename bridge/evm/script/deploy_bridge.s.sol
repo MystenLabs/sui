@@ -16,10 +16,18 @@ contract DeployBridge is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-
         string memory chainID = Strings.toString(block.chainid);
+        bytes32 chainIDHash = keccak256(abi.encode(chainID));
+        bool isLocal = chainIDHash != keccak256(abi.encode("11155111")) && chainIDHash != keccak256(abi.encode("1"));
         string memory root = vm.projectRoot();
         string memory path = string.concat(root, "/deploy_configs/", chainID, ".json");
+        // If this is local deployment, we override the path if OVERRIDE_CONFIG_PATH is set.
+        // This is useful in integration tests where config path is not fixed.
+        if (isLocal) {
+            path = vm.envOr("OVERRIDE_CONFIG_PATH", path);
+        }
+
+        console.log("config path: ", path);
         string memory json = vm.readFile(path);
         bytes memory bytesJson = vm.parseJson(json);
         DeployConfig memory config = abi.decode(bytesJson, (DeployConfig));
@@ -27,7 +35,8 @@ contract DeployBridge is Script {
         // TODO: validate config values before deploying
 
         // if deploying to local network, deploy mock tokens
-        if (keccak256(abi.encode(chainID)) == keccak256(abi.encode("31337"))) {
+        if (isLocal) {
+            console.log("Deploying mock tokens for local network");
             // deploy WETH
             config.WETH = address(new WETH());
 
@@ -53,6 +62,11 @@ contract DeployBridge is Script {
         }
 
         // deploy bridge config
+        // price of Sui (id = 0) should not be included in tokenPrices
+        require(
+            config.supportedTokens.length + 1 == config.tokenPrices.length,
+            "supportedTokens.length + 1 != tokenPrices.length"
+        );
 
         BridgeConfig bridgeConfig =
             new BridgeConfig(uint8(config.sourceChainId), config.supportedTokens, supportedChainIDs);

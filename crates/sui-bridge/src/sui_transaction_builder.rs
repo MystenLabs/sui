@@ -542,7 +542,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .with_epoch_duration_ms(15000)
+            .with_epoch_duration_ms(2000)
             .build_with_bridge()
             .await;
 

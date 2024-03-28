@@ -34,6 +34,10 @@ pub(crate) mod test_utils;
 
 pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
 
+#[cfg(test)]
+mod e2e_tests;
+
+// TODO: can we log the error very time it gets retried?
 #[macro_export]
 macro_rules! retry_with_max_elapsed_time {
     ($func:expr, $max_elapsed_time:expr) => {{
