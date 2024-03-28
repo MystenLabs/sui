@@ -1,5 +1,13 @@
 # @mysten/zksend
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+  - @mysten/wallet-standard@0.11.1
+
 ## 0.4.0
 
 ### Minor Changes
