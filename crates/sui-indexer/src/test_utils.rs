@@ -63,6 +63,7 @@ pub async fn start_test_indexer_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
+    // dynamically set ports instead of all to 9000
     let base_port = rpc_url
         .chars()
         .rev()
