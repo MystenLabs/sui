@@ -12,6 +12,7 @@ use move_compiler::editions::{Edition, Flavor};
 use move_compiler::shared::NumericalAddress;
 use move_package::compilation::package_layout::CompiledPackageLayout;
 use move_package::lock_file::schema::{Header, ToolchainVersion};
+use move_package::lock_file::{self, LockFile};
 use move_package::source_package::layout::SourcePackageLayout;
 use move_package::source_package::parsed_manifest::{FileName, PackageName};
 use std::ffi::OsStr;
@@ -690,10 +691,10 @@ fn download_and_compile(
     }
 
     debug!(
-        "{} move build --default-move-edition {} --default-move-flavor {} -p {} --install-dir {}",
+        "{} move build -p {} --install-dir {}",
         dest_canonical_binary.display(),
-        edition.to_string().as_str(),
-        flavor.to_string().as_str(),
+        // edition.to_string().as_str(),
+        // flavor.to_string().as_str(),
         root.display(),
         install_dir.path().display(),
         //"/tmp/999",
@@ -704,7 +705,17 @@ fn download_and_compile(
         dep_name.as_str(),
         compiler_version.yellow()
     );
-    Command::new(dest_canonical_binary)
+    let lock_file_in_current_directory = root.join(SourcePackageLayout::Lock.path());
+    let current_lock = if lock_file_in_current_directory.exists() {
+        println!("creating existing lock....");
+        Some(LockFile::from(
+            root.clone(),
+            &lock_file_in_current_directory,
+        )?)
+    } else {
+        None
+    };
+    let result = Command::new(dest_canonical_binary)
         .args([
             OsStr::new("move"),
             OsStr::new("build"),
@@ -721,7 +732,12 @@ fn download_and_compile(
         .output()
         .map_err(|e| {
             anyhow!("failed to build package from compiler binary {compiler_version}: {e}",)
-        })?;
+        });
+    if let Some(current_lock) = current_lock {
+        println!("restoring previous lock......");
+        current_lock.commit(lock_file_in_current_directory)?;
+    };
+    result.map(|_| ())?;
     Ok(())
 }
 
