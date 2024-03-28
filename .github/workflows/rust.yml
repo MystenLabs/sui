@@ -45,6 +45,7 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
+      isSolidity: ${{ steps.diff.outputs.isSolidity }}
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
       isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
@@ -108,7 +109,7 @@ jobs:
 
   test:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -225,7 +226,7 @@ jobs:
 
   simtest:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     env:
