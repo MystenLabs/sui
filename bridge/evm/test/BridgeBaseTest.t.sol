@@ -43,7 +43,7 @@ contract BridgeBaseTest is Test {
     uint8[] supportedChains;
 
     uint8 public chainID = 1;
-    uint64 totalLimit = 10000000000;
+    uint64 totalLimit = 1000000;
     uint16 minStakeRequired = 10000;
 
     BridgeCommittee public committee;
@@ -101,7 +101,7 @@ contract BridgeBaseTest is Test {
         supportedTokens[4] = USDT;
         supportedChains = new uint8[](1);
         supportedChains[0] = 0;
-        tokenPrices = new uint256[](5);
+        tokenPrices = new uint64[](5);
         tokenPrices[0] = SUI_PRICE;
         tokenPrices[1] = BTC_PRICE;
         tokenPrices[2] = ETH_PRICE;

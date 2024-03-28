@@ -28,7 +28,7 @@ interface IBridgeConfig {
     /// @notice Returns the price of the token with the given ID.
     /// @param tokenID The ID of the token.
     /// @return price of the provided token.
-    function tokenPriceOf(uint8 tokenID) external view returns (uint256);
+    function tokenPriceOf(uint8 tokenID) external view returns (uint64);
 
     /// @notice Returns the supported status of the token with the given ID.
     /// @param tokenID The ID of the token.

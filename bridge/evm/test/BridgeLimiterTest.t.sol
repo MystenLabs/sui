@@ -281,7 +281,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         committee.initialize(_committee, _stake, minStakeRequired);
 
         // deploy config
-        uint256[] memory tokenPrices = new uint256[](5);
+        tokenPrices = new uint64[](5);
         tokenPrices[0] = 10000; // SUI PRICE
         tokenPrices[1] = 10000; // BTC PRICE
         tokenPrices[2] = 10000; // ETH PRICE
