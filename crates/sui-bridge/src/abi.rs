@@ -21,7 +21,7 @@ use ethers::{
 };
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::{BridgeChainId, TokenId};
+use sui_types::bridge::BridgeChainId;
 
 // TODO: write a macro to handle variants
 
@@ -139,7 +139,7 @@ pub struct EthToSuiTokenBridgeV1 {
     pub eth_chain_id: BridgeChainId,
     pub sui_address: SuiAddress,
     pub eth_address: EthAddress,
-    pub token_id: TokenId,
+    pub token_id: u8,
     pub sui_adjusted_amount: u64,
 }
 
@@ -152,7 +152,7 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
             eth_chain_id: BridgeChainId::try_from(event.source_chain_id)?,
             sui_address: SuiAddress::from_bytes(event.recipient_address.as_ref())?,
             eth_address: event.sender_address,
-            token_id: TokenId::try_from(event.token_id)?,
+            token_id: event.token_id,
             sui_adjusted_amount: event.sui_adjusted_amount,
         })
     }
@@ -232,7 +232,7 @@ mod tests {
         types::{BlocklistType, EmergencyActionType},
     };
     use fastcrypto::encoding::{Encoding, Hex};
-    use sui_types::crypto::ToFromBytes;
+    use sui_types::{bridge::TOKEN_ID_ETH, crypto::ToFromBytes};
 
     #[test]
     fn test_eth_message_conversion_emergency_action_regression() -> anyhow::Result<()> {
@@ -316,7 +316,7 @@ mod tests {
         let action = AssetPriceUpdateAction {
             nonce: 2,
             chain_id: BridgeChainId::EthSepolia,
-            token_id: TokenId::ETH,
+            token_id: TOKEN_ID_ETH,
             new_usd_price: 80000000,
         };
         let message: eth_bridge_limiter::Message = action.into();

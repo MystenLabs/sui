@@ -25,7 +25,7 @@ use fastcrypto::{
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
-use sui_types::bridge::{BridgeChainId, TokenId};
+use sui_types::bridge::BridgeChainId;
 
 pub mod governance_verifier;
 pub mod handler;
@@ -200,9 +200,6 @@ async fn handle_asset_price_update_action(
     let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
         BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
     })?;
-    let token_id = TokenId::try_from(token_id).map_err(|err| {
-        BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
-    })?;
     let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
         chain_id,
         nonce,
@@ -265,6 +262,8 @@ async fn handle_evm_contract_upgrade(
 
 #[cfg(test)]
 mod tests {
+    use sui_types::bridge::TOKEN_ID_BTC;
+
     use super::*;
     use crate::client::bridge_client::BridgeClient;
     use crate::server::mock_handler::BridgeRequestMockHandler;
@@ -321,7 +320,7 @@ mod tests {
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
             chain_id: BridgeChainId::SuiLocalTest,
-            token_id: TokenId::BTC,
+            token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000_0000, // $100k USD
         });
         client.request_sign_bridge_action(action).await.unwrap();

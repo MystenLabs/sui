@@ -21,7 +21,6 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
-use sui_types::bridge::TokenId;
 use sui_types::bridge::{
     BridgeChainId, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
@@ -271,7 +270,7 @@ pub struct LimitUpdateAction {
 pub struct AssetPriceUpdateAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
-    pub token_id: TokenId,
+    pub token_id: u8,
     pub new_usd_price: u64,
 }
 
@@ -431,7 +430,8 @@ mod tests {
     use ethers::types::Address as EthAddress;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashSet;
-    use sui_types::{bridge::TokenId, crypto::get_key_pair};
+    use sui_types::bridge::TOKEN_ID_BTC;
+    use sui_types::crypto::get_key_pair;
 
     use super::*;
 
@@ -539,7 +539,7 @@ mod tests {
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
             chain_id: BridgeChainId::SuiLocalTest,
-            token_id: TokenId::BTC,
+            token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000 * USD_MULTIPLIER,
         });
         assert_eq!(action.approval_threshold(), 5001);
