@@ -521,7 +521,7 @@ pub fn batch_verify_certificates(
         Default::default(),
         true,
         true,
-        Some(2),
+        Some(30),
     );
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],

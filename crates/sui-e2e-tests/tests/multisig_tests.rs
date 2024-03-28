@@ -7,6 +7,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{
@@ -644,12 +645,22 @@ async fn test_expired_epoch_zklogin_in_multisig() {
         .build()
         .await;
     test_cluster.wait_for_epoch(Some(3)).await;
-    let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    // construct tx with max_epoch set to 2.
+    let (tx, legacy_tx) = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+
+    // latest multisig fails for expired epoch.
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
         .unwrap_err()
         .to_string()
         .contains("ZKLogin expired at epoch 2"));
+
+    // legacy multisig also faiils for expired epoch.
+    let res = test_cluster
+        .wallet
+        .execute_transaction_may_fail(legacy_tx)
+        .await;
+    assert!(res.is_err());
 }
 
 #[sim_test]
@@ -666,12 +677,22 @@ async fn test_max_epoch_too_large_fail_zklogin_in_multisig() {
         .build()
         .await;
     test_cluster.wait_for_authenticator_state_update().await;
-    let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    // both tx with max_epoch set to 2.
+    let (tx, legacy_tx) = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+
+    // max epoch at 2 is larger than current epoch (0) + upper bound (1), tx fails.
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
         .unwrap_err()
         .to_string()
         .contains("ZKLogin max epoch too large"));
+
+    // legacy tx fails for the same reason
+    let res = test_cluster
+        .wallet
+        .execute_transaction_may_fail(legacy_tx)
+        .await;
+    assert!(res.is_err());
 }
 
 #[sim_test]
@@ -774,15 +795,25 @@ async fn test_zklogin_inside_multisig_feature_deny() {
         .build()
         .await;
     test_cluster.wait_for_authenticator_state_update().await;
-    let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    let (tx, legacy_tx) = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    // feature flag disabled fails latest multisig tx.
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
         .unwrap_err()
         .to_string()
         .contains("zkLogin sig not supported inside multisig"));
+
+    // legacy multisig fails for the same reason.
+    let res = test_cluster
+        .wallet
+        .execute_transaction_may_fail(legacy_tx)
+        .await;
+    assert!(res.is_err());
 }
 
-async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Transaction {
+async fn construct_simple_zklogin_multisig_tx(
+    test_cluster: &TestCluster,
+) -> (Transaction, Transaction) {
     // construct a multisig address with 1 zklogin pk with threshold = 1.
     let (eph_kp, _eph_pk, zklogin_inputs) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -791,6 +822,8 @@ async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Tra
             .unwrap(),
     );
     let multisig_pk = MultiSigPublicKey::insecure_new(vec![(zklogin_pk.clone(), 1)], 1);
+    let multisig_pk_legacy =
+        MultiSigPublicKeyLegacy::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap();
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let multisig_addr = SuiAddress::from(&multisig_pk);
@@ -807,7 +840,14 @@ async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Tra
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
-    let multisig =
-        GenericSignature::MultiSig(MultiSig::combine(vec![sig_4], multisig_pk.clone()).unwrap());
-    Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig])
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![sig_4.clone()], multisig_pk.clone()).unwrap(),
+    );
+    let multisig_legacy = GenericSignature::MultiSigLegacy(
+        MultiSigLegacy::combine(vec![sig_4.clone()], multisig_pk_legacy.clone()).unwrap(),
+    );
+    (
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]),
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig_legacy]),
+    )
 }
