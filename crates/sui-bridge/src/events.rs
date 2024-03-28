@@ -21,7 +21,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::{BridgeChainId, TokenId};
+use sui_types::bridge::BridgeChainId;
 
 use sui_types::digests::TransactionDigest;
 use sui_types::BRIDGE_PACKAGE_ID;
@@ -47,7 +47,7 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
     pub eth_chain_id: BridgeChainId,
     pub sui_address: SuiAddress,
     pub eth_address: EthAddress,
-    pub token_id: TokenId,
+    pub token_id: u8,
     // The amount of tokens deposited with decimal points on Sui side
     pub amount_sui_adjusted: u64,
 }
@@ -63,13 +63,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
                 event.message_type
             )));
         }
-        let token_id = TokenId::try_from(event.token_type).map_err(|_e| {
-            BridgeError::Generic(format!(
-                "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert token type {} to TokenId",
-                event.token_type,
-            ))
-        })?;
-
+        let token_id = event.token_type;
         let sui_chain_id = BridgeChainId::try_from(event.source_chain).map_err(|_e| {
             BridgeError::Generic(format!(
                 "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert source chain {} to BridgeChainId",
@@ -204,7 +198,8 @@ pub mod tests {
     use sui_json_rpc_types::SuiEvent;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
-    use sui_types::bridge::{BridgeChainId, TokenId};
+    use sui_types::bridge::BridgeChainId;
+    use sui_types::bridge::TOKEN_ID_SUI;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
     use sui_types::Identifier;
@@ -217,7 +212,7 @@ pub mod tests {
             sui_address: SuiAddress::random_for_testing_only(),
             eth_chain_id: BridgeChainId::EthSepolia,
             eth_address: EthAddress::random(),
-            token_id: TokenId::Sui,
+            token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
         };
         let emitted_event = MoveTokenBridgeEvent {
@@ -227,7 +222,7 @@ pub mod tests {
             sender_address: sanitized_event.sui_address.to_vec(),
             target_chain: sanitized_event.eth_chain_id as u8,
             target_address: sanitized_event.eth_address.as_bytes().to_vec(),
-            token_type: sanitized_event.token_id as u8,
+            token_type: sanitized_event.token_id,
             amount_sui_adjusted: sanitized_event.amount_sui_adjusted,
         };
 

@@ -72,7 +72,7 @@ impl BridgeMessageEncoding for SuiToEthBridgeAction {
         bytes.extend_from_slice(e.eth_address.as_bytes());
 
         // Add token id
-        bytes.push(e.token_id as u8);
+        bytes.push(e.token_id);
 
         // Add token amount
         bytes.extend_from_slice(&e.amount_sui_adjusted.to_be_bytes());
@@ -116,7 +116,7 @@ impl BridgeMessageEncoding for EthToSuiBridgeAction {
         bytes.extend_from_slice(&e.sui_address.to_vec());
 
         // Add token id
-        bytes.push(e.token_id as u8);
+        bytes.push(e.token_id);
 
         // Add token amount
         bytes.extend_from_slice(&e.sui_adjusted_amount.to_be_bytes());
@@ -239,7 +239,7 @@ impl BridgeMessageEncoding for AssetPriceUpdateAction {
     fn as_payload_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         // Add token id
-        bytes.push(self.token_id as u8);
+        bytes.push(self.token_id);
         // Add new usd limit
         bytes.extend_from_slice(&self.new_usd_price.to_be_bytes());
         bytes
@@ -302,11 +302,10 @@ mod tests {
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
     use std::str::FromStr;
+    use sui_types::base_types::{SuiAddress, TransactionDigest};
     use sui_types::bridge::BridgeChainId;
-    use sui_types::{
-        base_types::{SuiAddress, TransactionDigest},
-        bridge::TokenId,
-    };
+    use sui_types::bridge::TOKEN_ID_BTC;
+    use sui_types::bridge::TOKEN_ID_USDC;
 
     use super::*;
 
@@ -322,7 +321,7 @@ mod tests {
         let eth_chain_id = BridgeChainId::EthSepolia;
         let sui_address = SuiAddress::random_for_testing_only();
         let eth_address = EthAddress::random();
-        let token_id = TokenId::USDC;
+        let token_id = TOKEN_ID_USDC;
         let amount_sui_adjusted = 1_000_000;
 
         let sui_bridge_event = EmittedSuiToEthTokenBridgeV1 {
@@ -355,7 +354,7 @@ mod tests {
         let eth_address_length_bytes = vec![EthAddress::len_bytes() as u8]; // len: 1
         let eth_address_bytes = eth_address.as_bytes().to_vec(); // len: 20
 
-        let token_id_bytes = vec![token_id as u8]; // len: 1
+        let token_id_bytes = vec![token_id]; // len: 1
         let token_amount_bytes = amount_sui_adjusted.to_be_bytes().to_vec(); // len: 8
 
         let mut combined_bytes = Vec::new();
@@ -401,7 +400,7 @@ mod tests {
         .unwrap();
         let eth_address =
             EthAddress::from_str("0x00000000000000000000000000000000000000c8").unwrap();
-        let token_id = TokenId::USDC;
+        let token_id = TOKEN_ID_USDC;
         let amount_sui_adjusted = 12345;
 
         let sui_bridge_event = EmittedSuiToEthTokenBridgeV1 {
@@ -610,7 +609,7 @@ mod tests {
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
             chain_id: BridgeChainId::SuiLocalTest,
-            token_id: TokenId::BTC,
+            token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000 * USD_MULTIPLIER, // $100k USD
         });
         let bytes = action.to_bytes();
@@ -774,7 +773,7 @@ mod tests {
         .unwrap();
         let eth_address =
             EthAddress::from_str("0x00000000000000000000000000000000000000c8").unwrap();
-        let token_id = TokenId::USDC;
+        let token_id = TOKEN_ID_USDC;
         let sui_adjusted_amount = 12345;
 
         let eth_bridge_event = EthToSuiTokenBridgeV1 {

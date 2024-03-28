@@ -28,7 +28,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::bridge::{
-    BridgeChainId, MoveTypeBridgeMessageKey, MoveTypeBridgeRecord, TokenId, BRIDGE_MODULE_NAME,
+    BridgeChainId, MoveTypeBridgeMessageKey, MoveTypeBridgeRecord, BRIDGE_MODULE_NAME, TOKEN_ID_ETH,
 };
 use sui_types::collection_types::LinkedTableNode;
 use sui_types::committee::TOTAL_VOTING_POWER;
@@ -139,7 +139,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         sui_chain_id,
         amount,
         sui_amount,
-        TokenId::ETH,
+        TOKEN_ID_ETH,
         0,
     )
     .await;
@@ -529,7 +529,7 @@ async fn deposit_eth_to_sui_package(
         BRIDGE_PACKAGE_ID,
         BRIDGE_MODULE_NAME.to_owned(),
         ident_str!("send_token").to_owned(),
-        vec![get_sui_token_type_tag(TokenId::ETH)],
+        vec![get_sui_token_type_tag(TOKEN_ID_ETH).unwrap()],
         vec![arg_bridge, arg_target_chain, arg_target_address, arg_token],
     );
 
@@ -587,7 +587,7 @@ async fn init_eth_to_sui_bridge(
     sui_chain_id: u8,
     amount: u64,
     sui_amount: u64,
-    token_id: TokenId,
+    token_id: u8,
     nonce: u64,
 ) {
     let eth_tx = deposit_native_eth_to_sol_contract(
@@ -615,7 +615,7 @@ async fn init_eth_to_sui_bridge(
     assert_eq!(eth_bridge_event.source_chain_id, eth_chain_id);
     assert_eq!(eth_bridge_event.nonce, nonce);
     assert_eq!(eth_bridge_event.destination_chain_id, sui_chain_id);
-    assert_eq!(eth_bridge_event.token_id, token_id as u8);
+    assert_eq!(eth_bridge_event.token_id, token_id);
     assert_eq!(eth_bridge_event.sui_adjusted_amount, sui_amount);
     assert_eq!(eth_bridge_event.sender_address, eth_address);
     assert_eq!(eth_bridge_event.recipient_address, sui_address.to_vec());
@@ -670,7 +670,7 @@ async fn init_sui_to_eth_bridge(
     );
     assert_eq!(bridge_event.sui_bridge_event.sui_address, sui_address);
     assert_eq!(bridge_event.sui_bridge_event.eth_address, eth_address);
-    assert_eq!(bridge_event.sui_bridge_event.token_id, TokenId::ETH);
+    assert_eq!(bridge_event.sui_bridge_event.token_id, TOKEN_ID_ETH);
     assert_eq!(
         bridge_event.sui_bridge_event.amount_sui_adjusted,
         sui_amount

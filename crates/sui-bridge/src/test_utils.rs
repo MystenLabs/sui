@@ -37,7 +37,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::bridge::{BridgeChainId, TokenId};
+use sui_types::bridge::{BridgeChainId, TOKEN_ID_USDC};
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
@@ -78,7 +78,7 @@ pub fn get_test_sui_to_eth_bridge_action(
     amount_sui_adjusted: Option<u64>,
     sender_address: Option<SuiAddress>,
     recipient_address: Option<EthAddress>,
-    token_id: Option<TokenId>,
+    token_id: Option<u8>,
 ) -> BridgeAction {
     BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
         sui_tx_digest: sui_tx_digest.unwrap_or_else(TransactionDigest::random),
@@ -89,7 +89,7 @@ pub fn get_test_sui_to_eth_bridge_action(
             sui_address: sender_address.unwrap_or_else(SuiAddress::random_for_testing_only),
             eth_chain_id: BridgeChainId::EthLocalTest,
             eth_address: recipient_address.unwrap_or_else(EthAddress::random),
-            token_id: token_id.unwrap_or(TokenId::USDC),
+            token_id: token_id.unwrap_or(TOKEN_ID_USDC),
             amount_sui_adjusted: amount_sui_adjusted.unwrap_or(100_000),
         },
     })
@@ -107,7 +107,7 @@ pub fn get_test_eth_to_sui_bridge_action(
             eth_chain_id: BridgeChainId::EthLocalTest,
             nonce: nonce.unwrap_or_default(),
             sui_chain_id: BridgeChainId::SuiLocalTest,
-            token_id: TokenId::USDC,
+            token_id: TOKEN_ID_USDC,
             sui_adjusted_amount: amount.unwrap_or(100_000),
             sui_address: sui_address.unwrap_or_else(SuiAddress::random_for_testing_only),
             eth_address: EthAddress::random(),
@@ -268,7 +268,7 @@ pub fn get_test_log_and_action(
             eth_chain_id: BridgeChainId::try_from(topic_1[topic_1.len() - 1]).unwrap(),
             nonce: u64::from_be_bytes(log.topics[2].as_ref()[24..32].try_into().unwrap()),
             sui_chain_id: BridgeChainId::try_from(topic_3[topic_3.len() - 1]).unwrap(),
-            token_id: TokenId::try_from(token_id).unwrap(),
+            token_id,
             sui_adjusted_amount,
             sui_address,
             eth_address: source_address,
@@ -281,7 +281,7 @@ pub async fn bridge_token(
     context: &mut WalletContext,
     recv_address: EthAddress,
     token_ref: ObjectRef,
-    token_id: TokenId,
+    token_id: u8,
     bridge_object_arg: ObjectArg,
 ) -> EmittedSuiToEthTokenBridgeV1 {
     let rgp = context.get_reference_gas_price().await.unwrap();
@@ -299,7 +299,7 @@ pub async fn bridge_token(
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(token_ref)),
             ],
         )
-        .with_type_args(vec![get_sui_token_type_tag(token_id)])
+        .with_type_args(vec![get_sui_token_type_tag(token_id).unwrap()])
         .build();
     let signed_tn = context.sign_transaction(&tx);
     let resp = context.execute_transaction_must_succeed(signed_tn).await;

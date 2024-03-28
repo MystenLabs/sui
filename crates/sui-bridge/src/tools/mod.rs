@@ -19,7 +19,7 @@ use sui_config::Config;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::{BridgeChainId, TokenId};
+use sui_types::bridge::BridgeChainId;
 use sui_types::crypto::SuiKeyPair;
 
 use crate::types::BridgeAction;
@@ -137,15 +137,12 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             nonce,
             token_id,
             new_usd_price,
-        } => {
-            let token_id = TokenId::try_from(*token_id).expect("Invalid token id");
-            BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
-                nonce: *nonce,
-                chain_id,
-                token_id,
-                new_usd_price: *new_usd_price,
-            })
-        }
+        } => BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
+            nonce: *nonce,
+            chain_id,
+            token_id: *token_id,
+            new_usd_price: *new_usd_price,
+        }),
     }
 }
 
