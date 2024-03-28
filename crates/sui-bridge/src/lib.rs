@@ -6,6 +6,7 @@ pub mod action_executor;
 pub mod client;
 pub mod config;
 pub mod crypto;
+pub mod encoding;
 pub mod error;
 pub mod eth_client;
 pub mod eth_syncer;
