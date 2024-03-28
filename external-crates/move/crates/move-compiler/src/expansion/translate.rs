@@ -2186,7 +2186,7 @@ fn types(context: &mut Context, pts: Vec<P::Type>) -> Vec<E::Type> {
 fn sp_types(context: &mut Context, pts_opt: Option<Spanned<Vec<P::Type>>>) -> Vec<E::Type> {
     pts_opt
         .map(|pts| pts.value.into_iter().map(|pt| type_(context, pt)).collect())
-        .unwrap_or(vec![])
+        .unwrap_or_default()
 }
 
 fn optional_sp_types(

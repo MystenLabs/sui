@@ -943,7 +943,7 @@ impl PathExpander for LegacyPathExpander {
                             return None;
                         }
                         Some(mident) => {
-                            let n2_name = n2.name.clone();
+                            let n2_name = n2.name;
                             let (tyargs, is_macro) = if !(path.has_tyargs_last()) {
                                 let mut diag = diag!(
                                     Syntax::InvalidName,

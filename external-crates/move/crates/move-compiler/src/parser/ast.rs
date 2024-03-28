@@ -743,6 +743,8 @@ impl NamePath {
     }
 }
 
+// Possibly move this trait out of `ast.rs`?
+#[allow(clippy::len_without_is_empty)]
 pub trait NameAccess {
     fn is_macro(&self) -> Option<&Loc>;
     fn tyargs(&self) -> Option<&Spanned<Vec<Type>>>;
@@ -890,10 +892,8 @@ impl NameAccess for NamePath {
             true
         } else if let Some(last) = self.entries.last() {
             last.tyargs.is_some()
-        } else if self.entries.len() == 0 && self.root.tyargs.is_some() {
-            true
         } else {
-            false
+            self.entries.is_empty() && self.root.tyargs.is_some()
         }
     }
 
