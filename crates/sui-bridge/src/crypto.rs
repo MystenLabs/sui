@@ -63,6 +63,18 @@ impl ToFromBytes for BridgeAuthorityPublicKeyBytes {
     }
 }
 
+/// implement `FromStr` for `BridgeAuthorityPublicKeyBytes`
+/// to convert a hex-string to public key bytes.
+impl std::str::FromStr for BridgeAuthorityPublicKeyBytes {
+    type Err = FastCryptoError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = Hex::decode(s).map_err(|e| {
+            FastCryptoError::GeneralError(format!("Failed to decode hex string: {}", e))
+        })?;
+        Self::from_bytes(&bytes)
+    }
+}
+
 pub struct ConciseBridgeAuthorityPublicKeyBytesRef<'a>(&'a BridgeAuthorityPublicKeyBytes);
 
 impl Debug for ConciseBridgeAuthorityPublicKeyBytesRef<'_> {
