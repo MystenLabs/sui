@@ -67,7 +67,7 @@ module bridge::treasury {
         native_token: bool
     }
 
-    public fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
+    public(package) fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
         // Make sure TreasuryCap has not been minted before.
         assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
         let type_name = type_name::get<T>();

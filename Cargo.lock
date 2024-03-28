@@ -14363,6 +14363,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
+ "sui-move-build",
  "sui-node",
  "sui-protocol-config",
  "sui-sdk",

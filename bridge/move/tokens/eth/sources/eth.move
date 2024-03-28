@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module bridged_eth::token {
+module bridged_eth::eth {
     use std::option;
 
     use sui::coin;
     use sui::transfer;
     use sui::tx_context;
     use sui::tx_context::TxContext;
-
-    friend bridge::treasury;
 
     struct ETH has drop {}
 

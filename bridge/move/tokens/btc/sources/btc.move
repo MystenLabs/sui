@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module bridged_btc::token {
+module bridged_btc::btc {
     use std::option;
 
     use sui::coin;
     use sui::transfer;
     use sui::tx_context;
     use sui::tx_context::TxContext;
-
-    friend bridge::treasury;
 
     struct BTC has drop {}
 

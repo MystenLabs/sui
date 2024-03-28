@@ -18,6 +18,7 @@ title: Module `0xb::bridge`
 -  [Function `create`](#0xb_bridge_create)
 -  [Function `init_bridge_committee`](#0xb_bridge_init_bridge_committee)
 -  [Function `committee_registration`](#0xb_bridge_committee_registration)
+-  [Function `register_foreign_token`](#0xb_bridge_register_foreign_token)
 -  [Function `send_token`](#0xb_bridge_send_token)
 -  [Function `approve_bridge_message`](#0xb_bridge_approve_bridge_message)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
@@ -29,7 +30,7 @@ title: Module `0xb::bridge`
 -  [Function `execute_emergency_op`](#0xb_bridge_execute_emergency_op)
 -  [Function `execute_update_bridge_limit`](#0xb_bridge_execute_update_bridge_limit)
 -  [Function `execute_update_asset_price`](#0xb_bridge_execute_update_asset_price)
--  [Function `execute_update_sui_token`](#0xb_bridge_execute_update_sui_token)
+-  [Function `execute_add_sui_token`](#0xb_bridge_execute_add_sui_token)
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
 -  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 
@@ -43,6 +44,7 @@ title: Module `0xb::bridge`
 <b>use</b> <a href="../sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../sui-framework/linked_table.md#0x2_linked_table">0x2::linked_table</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../sui-framework/package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="../sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -731,6 +733,32 @@ title: Module `0xb::bridge`
 
 </details>
 
+<a name="0xb_bridge_register_foreign_token"></a>
+
+## Function `register_foreign_token`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, tc: <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, uc: <a href="../sui-framework/package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, metadata: &<a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>, tc: TreasuryCap&lt;T&gt;, uc: UpgradeCap, metadata: &CoinMetadata&lt;T&gt;) {
+    <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self)
+        .<a href="treasury.md#0xb_treasury">treasury</a>
+        .<a href="bridge.md#0xb_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(tc, uc, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0xb_bridge_send_token"></a>
 
 ## Function `send_token`
@@ -1132,9 +1160,9 @@ title: Module `0xb::bridge`
     } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
         <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_asset_price();
         <a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner, payload);
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_sui_token">message_types::update_sui_token</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message_extract_update_sui_token">message::extract_update_sui_token</a>(&<a href="message.md#0xb_message">message</a>);
-        <a href="bridge.md#0xb_bridge_execute_update_sui_token">execute_update_sui_token</a>(inner, payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_sui_token">message_types::add_sui_token</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message_extract_add_sui_token">message::extract_add_sui_token</a>(&<a href="message.md#0xb_message">message</a>);
+        <a href="bridge.md#0xb_bridge_execute_add_sui_token">execute_add_sui_token</a>(inner, payload);
     } <b>else</b> {
         <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>
     };
@@ -1241,13 +1269,13 @@ title: Module `0xb::bridge`
 
 </details>
 
-<a name="0xb_bridge_execute_update_sui_token"></a>
+<a name="0xb_bridge_execute_add_sui_token"></a>
 
-## Function `execute_update_sui_token`
+## Function `execute_add_sui_token`
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_sui_token">execute_update_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>, payload: <a href="message.md#0xb_message_UpdateSuiToken">message::UpdateSuiToken</a>)
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_sui_token">execute_add_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>, payload: <a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>)
 </code></pre>
 
 
@@ -1256,7 +1284,7 @@ title: Module `0xb::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_sui_token">execute_update_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: UpdateSuiToken) {
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_sui_token">execute_add_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: AddSuiToken) {
     <b>let</b> native_token = payload.is_native();
     <b>let</b> <b>mut</b> token_ids = payload.token_ids();
     <b>let</b> <b>mut</b> token_type_names = payload.token_type_names();

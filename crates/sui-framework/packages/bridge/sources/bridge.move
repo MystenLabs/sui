@@ -5,9 +5,10 @@ module bridge::bridge {
     use sui::address;
     use sui::balance;
     use sui::clock::Clock;
-    use sui::coin::{Self, Coin};
+    use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
+    use sui::package::UpgradeCap;
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
     use sui_system::sui_system::SuiSystemState;
@@ -16,7 +17,7 @@ module bridge::bridge {
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::limiter::{Self, TransferLimiter};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
-        UpdateBridgeLimit, UpdateSuiToken
+        UpdateBridgeLimit, AddSuiToken
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -166,6 +167,12 @@ module bridge::bridge {
         load_inner_mut(self)
             .committee
             .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
+    }
+
+    public fun register_foreign_token<T>(self: &mut Bridge, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
+        load_inner_mut(self)
+            .treasury
+            .register_foreign_token<T>(tc, uc, metadata)
     }
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved
@@ -425,9 +432,9 @@ module bridge::bridge {
         } else if (message_type == message_types::update_asset_price()) {
             let payload = message.extract_update_asset_price();
             execute_update_asset_price(inner, payload);
-        } else if (message_type == message_types::update_sui_token()) {
-            let payload = message::extract_update_sui_token(&message);
-            execute_update_sui_token(inner, payload);
+        } else if (message_type == message_types::add_sui_token()) {
+            let payload = message::extract_add_sui_token(&message);
+            execute_add_sui_token(inner, payload);
         } else {
             abort EUnexpectedMessageType
         };
@@ -469,7 +476,7 @@ module bridge::bridge {
         )
     }
 
-    fun execute_update_sui_token(inner: &mut BridgeInner, payload: UpdateSuiToken) {
+    fun execute_add_sui_token(inner: &mut BridgeInner, payload: AddSuiToken) {
         let native_token = payload.is_native();
         let mut token_ids = payload.token_ids();
         let mut token_type_names = payload.token_type_names();

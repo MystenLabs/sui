@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::Hex;
+use fastcrypto::hash::Keccak256;
+use fastcrypto::traits::{RecoverableSigner, ToFromBytes};
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
@@ -9,11 +12,13 @@ use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_bridge::crypto::BridgeAuthorityKeyPair;
+use sui_bridge::encoding::{BRIDGE_MESSAGE_PREFIX, TOKEN_TRANSFER_MESSAGE_VERSION};
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
+use sui_bridge::types::BridgeActionType;
 use sui_config::local_ip_utils::get_available_port;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
@@ -42,12 +47,12 @@ use sui_swarm_config::network_config_builder::{
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ConciseableName, SUI_ADDRESS_LENGTH};
 use sui_types::bridge::get_bridge;
-use sui_types::bridge::get_bridge_obj_initial_shared_version;
-use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::BridgeTrait;
+use sui_types::bridge::{get_bridge_obj_initial_shared_version, TokenId, BRIDGE_MODULE_NAME};
+use sui_types::bridge::{BridgeChainId, BridgeSummary};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::get_key_pair;
@@ -58,14 +63,15 @@ use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::{
-    CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
+    CallArg, CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
     TransactionKind,
 };
-use sui_types::SUI_BRIDGE_OBJECT_ID;
+use sui_types::{Identifier, BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info};
@@ -1133,6 +1139,186 @@ impl TestClusterBuilder {
                 .unwrap();
             assert_ne!(bridge_summary.committee.members.len(), 0);
         }
+
+        // Wait until committee is set up
+        test_cluster.wait_for_epoch(None).await;
+
+        // Register tokens
+        let token_packages_dir = [
+            (TokenId::BTC, Path::new("../../bridge/move/tokens/btc")),
+            (TokenId::ETH, Path::new("../../bridge/move/tokens/eth")),
+            (TokenId::USDC, Path::new("../../bridge/move/tokens/usdc")),
+            (TokenId::USDT, Path::new("../../bridge/move/tokens/usdt")),
+        ];
+
+        // publish coin packages
+        let mut published_tokens = vec![];
+        for (token_id, token_package_dir) in token_packages_dir {
+            let sender = test_cluster.get_address_0();
+            let tx = test_cluster
+                .test_transaction_builder_with_sender(sender)
+                .await
+                .publish(token_package_dir.to_path_buf())
+                .build();
+            let response = test_cluster.sign_and_execute_transaction(&tx).await;
+
+            let object_changes = response.object_changes.unwrap();
+
+            let (tc, type_) = object_changes
+                .iter()
+                .find_map(|o| match o {
+                    sui_json_rpc_types::ObjectChange::Created { object_type, .. } => {
+                        if object_type.name.as_str().starts_with("TreasuryCap") {
+                            Some((o, object_type.type_params.first().unwrap().clone()))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                })
+                .unwrap();
+
+            let uc = object_changes
+                .iter()
+                .find(|o| match o {
+                    sui_json_rpc_types::ObjectChange::Created { object_type, .. } => {
+                        object_type.name.as_str().starts_with("UpgradeCap")
+                    }
+                    _ => false,
+                })
+                .unwrap();
+
+            let metadata = object_changes
+                .iter()
+                .find(|o| match o {
+                    sui_json_rpc_types::ObjectChange::Created { object_type, .. } => {
+                        object_type.name.as_str().starts_with("CoinMetadata")
+                    }
+                    _ => false,
+                })
+                .unwrap();
+
+            let bridge = CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_BRIDGE_OBJECT_ID,
+                initial_shared_version: bridge_shared_version,
+                mutable: true,
+            });
+
+            // register with the bridge
+            let tx = test_cluster
+                .test_transaction_builder_with_sender(sender)
+                .await
+                .move_call(
+                    BRIDGE_PACKAGE_ID,
+                    "bridge",
+                    "register_foreign_token",
+                    vec![
+                        bridge,
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(tc.object_ref())),
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(uc.object_ref())),
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(metadata.object_ref())),
+                    ],
+                )
+                .with_type_args(vec![type_.clone()])
+                .build();
+
+            let response = test_cluster.sign_and_execute_transaction(&tx).await;
+            assert_eq!(
+                response.effects.unwrap().status(),
+                &SuiExecutionStatus::Success
+            );
+            published_tokens.push((token_id, type_.to_string()));
+        }
+
+        // Construct new tokens message
+        let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec();
+        let message_type = vec![BridgeActionType::AddSuiToken as u8];
+        let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION];
+        let nonce_bytes = 0u64.to_be_bytes().to_vec();
+        let source_chain_id_bytes = vec![BridgeChainId::SuiLocalTest as u8];
+
+        let native = vec![false as u8];
+        let (token_ids, type_name): (Vec<TokenId>, Vec<String>) =
+            published_tokens.into_iter().unzip();
+        let token_ids_bytes = bcs::to_bytes(&token_ids).unwrap();
+        let type_names_bytes = bcs::to_bytes(&type_name).unwrap();
+        let prices =
+            bcs::to_bytes(&vec![500_000_000u64, 30_000_000u64, 1_000u64, 1_000u64]).unwrap();
+
+        let mut combined_bytes = Vec::new();
+        combined_bytes.extend_from_slice(&prefix_bytes);
+        combined_bytes.extend_from_slice(&message_type);
+        combined_bytes.extend_from_slice(&message_version);
+        combined_bytes.extend_from_slice(&nonce_bytes);
+        combined_bytes.extend_from_slice(&source_chain_id_bytes);
+        combined_bytes.extend_from_slice(&native);
+        combined_bytes.extend_from_slice(&token_ids_bytes);
+        combined_bytes.extend_from_slice(&type_names_bytes);
+        combined_bytes.extend_from_slice(&prices);
+
+        // Get signatures from validators
+        let sigs = bridge_authority_keys
+            .iter()
+            .map(|key| {
+                key.sign_recoverable_with_hash::<Keccak256>(&combined_bytes)
+                    .as_bytes()
+                    .to_vec()
+            })
+            .collect::<Vec<_>>();
+
+        // Submit validator signatures
+        let mut ptb = ProgrammableTransactionBuilder::new();
+        let source_chain = ptb.pure(BridgeChainId::SuiLocalTest as u8).unwrap();
+        let seq_num = ptb.pure(0u64).unwrap();
+        let native_token = ptb.pure(false).unwrap();
+        let token_ids = ptb.pure(token_ids).unwrap();
+        let type_names = ptb.pure(type_name).unwrap();
+        let prices = ptb.pure([100u64, 100u64].to_vec()).unwrap();
+
+        let message = ptb.programmable_move_call(
+            BRIDGE_PACKAGE_ID,
+            Identifier::new("message").unwrap(),
+            Identifier::new("create_add_sui_token_message").unwrap(),
+            vec![],
+            vec![
+                source_chain,
+                seq_num,
+                native_token,
+                token_ids,
+                type_names,
+                prices,
+            ],
+        );
+
+        let bridge = ptb
+            .obj(ObjectArg::SharedObject {
+                id: SUI_BRIDGE_OBJECT_ID,
+                initial_shared_version: bridge_shared_version,
+                mutable: true,
+            })
+            .unwrap();
+
+        let sigs = ptb.pure(sigs).unwrap();
+
+        ptb.programmable_move_call(
+            BRIDGE_PACKAGE_ID,
+            BRIDGE_MODULE_NAME.into(),
+            Identifier::new("execute_system_message").unwrap(),
+            vec![],
+            vec![bridge, message, sigs],
+        );
+
+        let sender = test_cluster.get_address_0();
+        let tx = test_cluster
+            .test_transaction_builder_with_sender(sender)
+            .await
+            .programmable(ptb.finish())
+            .build();
+        let response = test_cluster.sign_and_execute_transaction(&tx).await;
+        assert_eq!(
+            response.effects.unwrap().status(),
+            &SuiExecutionStatus::Success
+        );
 
         test_cluster.bridge_authority_keys = Some(bridge_authority_keys);
         test_cluster.bridge_server_ports = Some(server_ports);
