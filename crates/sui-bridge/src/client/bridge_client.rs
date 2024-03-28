@@ -379,7 +379,7 @@ mod tests {
                 eth_chain_id: BridgeChainId::EthSepolia,
                 eth_address: EthAddress::random(),
                 token_id: TokenId::USDT,
-                amount: 1,
+                amount_sui_adjusted: 1,
             },
         });
         assert_eq!(
@@ -402,7 +402,7 @@ mod tests {
                 sui_chain_id: BridgeChainId::SuiDevnet,
                 sui_address: SuiAddress::random_for_testing_only(),
                 token_id: TokenId::USDT,
-                amount: 1,
+                sui_adjusted_amount: 1,
             },
         });
 

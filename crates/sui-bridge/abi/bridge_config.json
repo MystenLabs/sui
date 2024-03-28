@@ -1,0 +1,203 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "_chainID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address[]",
+        "name": "_supportedTokens",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint8[]",
+        "name": "_supportedChains",
+        "type": "uint8[]"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "chainID",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "convertERC20ToSuiDecimal",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint64",
+        "name": "amount",
+        "type": "uint64"
+      }
+    ],
+    "name": "convertSuiToERC20Decimal",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      }
+    ],
+    "name": "getSuiDecimal",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      }
+    ],
+    "name": "getTokenAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainId",
+        "type": "uint8"
+      }
+    ],
+    "name": "isChainSupported",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      }
+    ],
+    "name": "isTokenSupported",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainId",
+        "type": "uint8"
+      }
+    ],
+    "name": "supportedChains",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "isSupported",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      }
+    ],
+    "name": "supportedTokens",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "tokenAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "uint8",
+        "name": "suiDecimal",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

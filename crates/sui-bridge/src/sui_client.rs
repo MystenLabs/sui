@@ -491,7 +491,7 @@ mod tests {
             eth_chain_id: BridgeChainId::EthSepolia,
             eth_address: Address::random(),
             token_id: TokenId::Sui,
-            amount: 100,
+            amount_sui_adjusted: 100,
         };
         let emitted_event_1 = MoveTokenBridgeEvent {
             message_type: BridgeActionType::TokenTransfer as u8,
@@ -501,7 +501,7 @@ mod tests {
             target_chain: sanitized_event_1.eth_chain_id as u8,
             target_address: sanitized_event_1.eth_address.as_bytes().to_vec(),
             token_type: sanitized_event_1.token_id as u8,
-            amount: sanitized_event_1.amount,
+            amount_sui_adjusted: sanitized_event_1.amount_sui_adjusted,
         };
 
         let mut sui_event_1 = SuiEvent::random_for_testing();
@@ -654,13 +654,13 @@ mod tests {
         assert_eq!(bridge_event.eth_address, eth_recv_address);
         assert_eq!(bridge_event.sui_address, sender);
         assert_eq!(bridge_event.token_id, TokenId::USDC);
-        assert_eq!(bridge_event.amount, usdc_amount);
+        assert_eq!(bridge_event.amount_sui_adjusted, usdc_amount);
 
         let action = get_test_sui_to_eth_bridge_action(
             None,
             None,
             Some(bridge_event.nonce),
-            Some(bridge_event.amount),
+            Some(bridge_event.amount_sui_adjusted),
             Some(bridge_event.sui_address),
             Some(bridge_event.eth_address),
             Some(TokenId::USDC),
