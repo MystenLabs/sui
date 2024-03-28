@@ -53,7 +53,7 @@ sui-package-resolver.workspace = true
 simulacrum.workspace = true
 arrow = { version = "50.0.0"}
 gcp-bigquery-client = "0.18.0"
-snowflake-api = { version = "0.6.0"  }
+snowflake-api = { version = "0.7.0"  }
 tap = { version = "1.0.1", features = [] }
 
 [dev-dependencies]

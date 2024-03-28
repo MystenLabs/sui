@@ -138,6 +138,7 @@ members = [
   "crates/sui-rosetta",
   "crates/sui-rpc-loadgen",
   "crates/sui-sdk",
+  "crates/sui-security-watchdog",
   "crates/sui-simulator",
   "crates/sui-single-node-benchmark",
   "crates/sui-snapshot",
