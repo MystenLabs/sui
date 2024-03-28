@@ -26,10 +26,9 @@ import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type {
 	BuildTransactionBlockOptions,
 	SerializeTransactionBlockOptions,
-	TransactionBlockDataResolver,
 	TransactionBlockStep,
 } from './TransactionBlockDataResolver.js';
-import { SuiClientTransactionBlockDataResolver } from './TransactionBlockDataResolver.js';
+import { TransactionBlockDataResolver } from './TransactionBlockDataResolver.js';
 import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
 
@@ -513,6 +512,8 @@ export class TransactionBlock {
 			}
 		}
 
+		const steps = [...this.#serializationSteps];
+
 		for (const intent of intents) {
 			if (options.supportedIntents?.includes(intent)) {
 				continue;
@@ -522,7 +523,11 @@ export class TransactionBlock {
 				throw new Error(`Missing intent resolver for ${intent}`);
 			}
 
-			await this.#intentResolvers.get(intent)!(this.#blockData, dataResolver);
+			steps.push(this.#intentResolvers.get(intent)!);
+		}
+
+		for (const step of steps) {
+			await step(this.#blockData, dataResolver);
 		}
 	}
 
@@ -532,9 +537,13 @@ export class TransactionBlock {
 			protocolConfig = await options.client.getProtocolConfig();
 		}
 
-		return new SuiClientTransactionBlockDataResolver({
+		const dataResolver = new TransactionBlockDataResolver({
 			...options,
 			protocolConfig,
 		});
+
+		await dataResolver.loadData(this.#blockData);
+
+		return dataResolver;
 	}
 }
