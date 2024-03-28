@@ -55,9 +55,11 @@ pub enum BridgeValidatorCommand {
     /// Client to facilitate and execute Bridge governance actions
     #[clap(name = "client")]
     GovernanceClient {
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+        /// Path of BridgeCliConfig
         #[clap(long = "config-path")]
         config_path: PathBuf,
+        #[clap(long = "chain-id")]
+        chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
     },
