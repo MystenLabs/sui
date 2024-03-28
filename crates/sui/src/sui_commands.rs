@@ -16,7 +16,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use sui_bridge::crypto::BridgeAuthorityKeyPair;
+use sui_bridge::config::{read_bridge_authority_key, BridgeCommitteeConfig};
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
@@ -39,7 +39,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -162,6 +162,8 @@ pub enum SuiCommand {
         network_config: Option<PathBuf>,
         #[clap(long = "client.config")]
         client_config: Option<PathBuf>,
+        #[clap(long = "bridge_committee.config")]
+        bridge_committee_config_path: PathBuf,
     },
 
     /// Tool for Fire Drill
@@ -336,6 +338,7 @@ impl SuiCommand {
             SuiCommand::BridgeInitialize {
                 network_config,
                 client_config,
+                bridge_committee_config_path,
             } => {
                 // Load the config of the Sui authority.
                 let network_config_path = network_config
@@ -345,6 +348,13 @@ impl SuiCommand {
                     .map_err(|err| {
                         err.context(format!(
                             "Cannot open Sui network config file at {:?}",
+                            network_config_path
+                        ))
+                    })?;
+                let bridge_committee_config: BridgeCommitteeConfig =
+                    PersistedConfig::read(&bridge_committee_config_path).map_err(|err| {
+                        err.context(format!(
+                            "Cannot open Bridge Committee config file at {:?}",
                             network_config_path
                         ))
                     })?;
@@ -360,7 +370,12 @@ impl SuiCommand {
                     .get_mutable_bridge_object_arg()
                     .await
                     .unwrap();
-
+                assert_eq!(
+                    network_config.validator_configs().len(),
+                    bridge_committee_config
+                        .bridge_authority_port_and_key_path
+                        .len()
+                );
                 for node_config in network_config.validator_configs() {
                     let account_kp = node_config.account_key_pair.keypair();
                     context.add_account(None, account_kp.copy());
@@ -368,22 +383,25 @@ impl SuiCommand {
 
                 let context = context;
                 let mut tasks = vec![];
-                for node_config in network_config.validator_configs() {
+                for (node_config, (port, key_path)) in network_config
+                    .validator_configs()
+                    .iter()
+                    .zip(bridge_committee_config.bridge_authority_port_and_key_path)
+                {
                     let account_kp = node_config.account_key_pair.keypair();
                     let sui_address = SuiAddress::from(&account_kp.public());
                     let gas_obj_ref = context
                         .get_one_gas_object_owned_by_address(sui_address)
                         .await?
                         .expect("Validator does not own any gas objects");
+                    let kp = read_bridge_authority_key(&key_path)?;
                     // build registration tx
-                    // use ramdom key (at least we don't care about the key now)
-                    let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
                     let tx = build_committee_register_transaction(
                         sui_address,
                         &gas_obj_ref,
                         bridge_arg,
                         kp,
-                        "bridge_test_url", // dummy
+                        &format!("http://127.0.0.1:{port}"),
                         rgp,
                     )
                     .unwrap();
