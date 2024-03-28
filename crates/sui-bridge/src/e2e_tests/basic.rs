@@ -85,7 +85,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let sui_chain_id = BridgeChainId::SuiLocalTest as u8;
     let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(20000)
         .build_with_bridge()
         .await;
     let sui_client = test_cluster.fullnode_handle.sui_client.clone();
