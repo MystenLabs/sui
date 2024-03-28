@@ -662,16 +662,16 @@ pub enum SuiClientCommands {
     #[clap(name = "verify-bytecode-meter")]
     VerifyBytecodeMeter {
         /// Path to directory containing a Move package, (defaults to the current directory)
-        #[clap(name = "package", long, short, global = true)]
+        #[clap(name = "package", long, global = true)]
         package_path: Option<PathBuf>,
 
         /// Protocol version to use for the bytecode verifier (defaults to the latest protocol
         /// version)
-        #[clap(name = "protocol-version", long, short = 'P')]
+        #[clap(name = "protocol-version", long)]
         protocol_version: Option<u64>,
 
         /// Path to specific pre-compiled module bytecode to verify (instead of an entire package)
-        #[clap(name = "module", long, short, global = true)]
+        #[clap(name = "module", long, global = true)]
         module_path: Option<PathBuf>,
 
         /// Package build options
