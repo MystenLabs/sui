@@ -498,6 +498,9 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
+    #[error("Generic Bridge Error: {error:?}")]
+    GenericBridgeError { error: String },
+
     #[error("Failed to dispatch subscription: {error:?}")]
     FailedToDispatchSubscription { error: String },
 

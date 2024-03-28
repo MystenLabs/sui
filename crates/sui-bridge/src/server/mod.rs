@@ -10,7 +10,7 @@ use crate::{
     types::{
         AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, BridgeAction,
         EmergencyAction, EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
-        SignedBridgeAction, TokenId,
+        SignedBridgeAction,
     },
 };
 use axum::{
@@ -25,7 +25,7 @@ use fastcrypto::{
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
-use sui_types::bridge::BridgeChainId;
+use sui_types::bridge::{BridgeChainId, TokenId};
 
 pub mod governance_verifier;
 pub mod handler;
