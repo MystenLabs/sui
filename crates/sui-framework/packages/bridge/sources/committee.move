@@ -36,6 +36,7 @@ module bridge::committee {
     const ESenderNotActiveValidator: u64 = 5;
     const EInvalidPubkeyLength: u64 = 6;
     const ECommitteeAlreadyInitiated: u64 = 7;
+    const EDuplicatePubkey: u64 = 8;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
 
@@ -164,7 +165,31 @@ module bridge::committee {
             registration
         };
 
+        // check uniqueness of the bridge pubkey.
+        // `try_create_next_committee` will abort if bridge_pubkey_bytes are not unique and
+        // that will fail the end of epoch transaction (possibly "forever", well, we
+        // need to deploy proper validator changes to stop end of epoch from failing).
+        check_uniqueness_bridge_keys(self, bridge_pubkey_bytes);
+
         emit(registration)
+    }
+
+    // Assert if `bridge_pubkey_bytes` is duplicated in `member_registrations`.
+    // Dupicate keys would cause `try_create_next_committee` to fail and,
+    // in consequence, an end of epoch transaction to fail (safe mode run).
+    // This check will ensure the creation of the committee is correct.
+    fun check_uniqueness_bridge_keys(self: &BridgeCommittee, bridge_pubkey_bytes: vector<u8>) {
+        let mut count = self.member_registrations.size();
+        // bridge_pubkey_bytes must be found once and once only
+        let mut bridge_key_found = false;
+        while (count > 0) {
+            count = count - 1;
+            let (_, registration) = self.member_registrations.get_entry_by_idx(count);
+            if (registration.bridge_pubkey_bytes == bridge_pubkey_bytes) {
+                assert!(!bridge_key_found, EDuplicatePubkey);
+                bridge_key_found = true; // bridge_pubkey_bytes found, we must not have another one
+            }
+        };
     }
 
     // This method will try to create the next committee using the registration and system state,
@@ -400,6 +425,32 @@ module bridge::committee {
 
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xD, 0));
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EDuplicatePubkey)]
+    fun test_init_committee_dup_pubkey() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xC, 0));
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
