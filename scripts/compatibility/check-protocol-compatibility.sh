@@ -46,13 +46,26 @@ echo "Checking protocol compatibility with $NETWORK ($ORIGIN_COMMIT)"
 
 git fetch -q || exit 1
 
-# expand $ORIGIN_COMMIT to full sha
-ORIGIN_COMMIT=$(git rev-parse $ORIGIN_COMMIT) || exit 1
+if [ "$NETWORK" == "mainnet" ]; then
+  # expand $ORIGIN_COMMIT to full sha
+  ORIGIN_COMMIT=$(git rev-parse "$ORIGIN_COMMIT") || exit 1
 
-# HACK: a commit was released with broken snapshot tests. Substitute the commit with the
-# tests fixed.
-if [ "$ORIGIN_COMMIT" == 5fd1242217d68ff726f9eab1fb7b1a1edac3ce48 -o "$ORIGIN_COMMIT" == cdd690331047d8c19eccc784e1d27ba42a0ed428 ]; then
-  ORIGIN_COMMIT="d951895b90014b58cfd7734e3a5a25d7a37ee9b7"
+  # HACK: a commit was released with broken snapshot tests. Substitute the commit with the
+  # tests fixed.
+  if [ "$ORIGIN_COMMIT" == 5fd1242217d68ff726f9eab1fb7b1a1edac3ce48 -o "$ORIGIN_COMMIT" == cdd690331047d8c19eccc784e1d27ba42a0ed428 ]; then
+    ORIGIN_COMMIT="d951895b90014b58cfd7734e3a5a25d7a37ee9b7"
+  fi
+fi
+
+if [ "$NETWORK" == "testnet" ]; then
+  # expand $ORIGIN_COMMIT to full sha
+  ORIGIN_COMMIT=$(git rev-parse "$ORIGIN_COMMIT") || exit 1
+
+  # HACK: a commit was released with broken snapshot tests. Substitute the commit with the
+  # tests fixed.
+  if [ "$ORIGIN_COMMIT" == 10da1ccdde8b12e700a7bc22dddf2992f532bd00 ]; then
+    ORIGIN_COMMIT="bf41cca24aa65b1a94aef25bc916678ca00f3017"
+  fi
 fi
 
 # put code to check if git client is clean into function
