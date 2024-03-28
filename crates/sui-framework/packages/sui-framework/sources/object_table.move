@@ -6,15 +6,12 @@
 /// for the objects to still exist within in storage, which may be important for external tools.
 /// The difference is otherwise not observable from within Move.
 module sui::object_table {
-    use std::option::Option;
-    use sui::object::{Self, ID, UID};
     use sui::dynamic_object_field as ofield;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
 
-    struct ObjectTable<phantom K: copy + drop + store, phantom V: key + store> has key, store {
+    public struct ObjectTable<phantom K: copy + drop + store, phantom V: key + store> has key, store {
         /// the ID of this table
         id: UID,
         /// the number of key-value pairs in the table
@@ -37,6 +34,7 @@ module sui::object_table {
         table.size = table.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutable borrows the value associated with the key in the table `table: &ObjectTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -44,6 +42,7 @@ module sui::object_table {
         ofield::borrow(&table.id, k)
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the table `table: &mut ObjectTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -84,7 +83,7 @@ module sui::object_table {
     public fun destroy_empty<K: copy + drop + store, V: key + store>(table: ObjectTable<K, V>) {
         let ObjectTable { id, size } = table;
         assert!(size == 0, ETableNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 
     /// Returns the ID of the object associated with the key if the table has an entry with key `k: K`

@@ -12,21 +12,7 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'GraphQL for Sui RPC',
-				link: {
-					type: 'doc',
-					id: 'concepts/graphql-rpc',
-				},
-				items: [
-					'concepts/graphql-rpc/headers',
-					'concepts/graphql-rpc/variables',
-					'concepts/graphql-rpc/fragments',
-					'concepts/graphql-rpc/pagination',
-					'concepts/graphql-rpc/limits',
-				],
-			},
+			'concepts/graphql-rpc',
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -86,7 +72,7 @@ const concepts = [
 					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
-						label: 'Packages',
+						label: 'Package Upgrades',
 						link: {
 							type: 'doc',
 							id: 'concepts/sui-move-concepts/packages',

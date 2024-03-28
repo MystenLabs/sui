@@ -1335,15 +1335,35 @@ export const RPC_METHODS: {
 			max_type_arguments: 'u32',
 			move_binary_format_version: 'u32',
 			random_beacon_reduction_allowed_delta: 'u16',
+			random_beacon_dkg_timeout_round: 'u32',
+			random_beacon_reduction_lower_bound: 'u32',
 			scoring_decision_cutoff_value: 'f64',
 			scoring_decision_mad_divisor: 'f64',
 			group_ops_bls12381_msm_max_len: 'u32',
+			binary_module_handles: 'u16',
+			binary_struct_handles: 'u16',
+			binary_function_handles: 'u16',
+			binary_function_instantiations: 'u16',
+			binary_signatures: 'u16',
+			binary_constant_pool: 'u16',
+			binary_identifiers: 'u16',
+			binary_address_identifiers: 'u16',
+			binary_struct_defs: 'u16',
+			binary_struct_def_instantiations: 'u16',
+			binary_function_defs: 'u16',
+			binary_field_handles: 'u16',
+			binary_field_instantiations: 'u16',
+			binary_friend_decls: 'u16',
+			max_package_dependencies: 'u32',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
-			attributes[key] = {
-				[configTypeMap[key] ?? 'u64']: value,
-			} as ProtocolConfigValue;
+			attributes[key] =
+				value === null
+					? null
+					: ({
+							[configTypeMap[key] ?? 'u64']: value,
+					  } as ProtocolConfigValue);
 		}
 
 		for (const { key, value } of protocolConfig.featureFlags) {

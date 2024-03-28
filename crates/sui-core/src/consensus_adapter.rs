@@ -679,11 +679,13 @@ impl ConsensusAdapter {
         };
 
         let transaction_key = transaction.key();
-        // Log warnings for capability or end of publish transactions that fail to get sequenced
+        // Log warnings for administrative transactions that fail to get sequenced
         let _monitor = if matches!(
             transaction.kind,
             ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
+                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
         ) {
             let transaction_key = transaction_key.clone();
             Some(CancelOnDrop(spawn_monitored_task!(async {
@@ -731,11 +733,11 @@ impl ConsensusAdapter {
                     .await
                 {
                     // This can happen during Narwhal reconfig, or when the Narwhal worker has
-                    // full internal buffers and needs to back pressure, so retry a few times.
-                    if retries > 3 {
+                    // full internal buffers and needs to back pressure, so retry a few times
+                    // before logging warnings.
+                    if retries > 30 || (retries > 3 && !transaction.kind.is_dkg()) {
                         warn!(
-                            "Failed to submit transaction {:?} to own narwhal worker: {:?}. Retry #{}",
-                            transaction_key, e, retries,
+                            "Failed to submit transaction {transaction_key:?} to own narwhal worker: {e:?}. Retry #{retries}"
                         );
                     }
                     self.metrics
@@ -743,7 +745,14 @@ impl ConsensusAdapter {
                         .with_label_values(&[tx_type])
                         .inc();
                     retries += 1;
-                    time::sleep(Duration::from_secs(10)).await;
+
+                    if transaction.kind.is_dkg() {
+                        // Shorter delay for DKG messages, which are time-sensitive and happen at
+                        // start-of-epoch when submit errors due to active reconfig are likely.
+                        time::sleep(Duration::from_millis(100)).await;
+                    } else {
+                        time::sleep(Duration::from_secs(10)).await;
+                    };
                 }
 
                 // we want to record the num of retries when reporting latency but to avoid label

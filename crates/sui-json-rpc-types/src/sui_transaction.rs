@@ -272,7 +272,7 @@ impl Display for SuiTransactionBlockResponse {
         }
 
         if let Some(e) = &self.events {
-            write!(writer, "{}", e)?;
+            writeln!(writer, "{}", e)?;
         }
 
         if let Some(object_changes) = &self.object_changes {
@@ -488,7 +488,7 @@ impl SuiTransactionBlockKind {
             TransactionKind::RandomnessStateUpdate(update) => {
                 Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
                     epoch: update.epoch,
-                    randomness_round: update.randomness_round,
+                    randomness_round: update.randomness_round.0,
                     random_bytes: update.random_bytes,
                 })
             }

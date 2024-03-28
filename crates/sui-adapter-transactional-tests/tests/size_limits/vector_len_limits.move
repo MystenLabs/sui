@@ -9,7 +9,6 @@
 
 /// Test vector length limits enforced
 module Test::M1 {
-    use std::vector;
 
     public entry fun push_n_items(n: u64) {
         let mut v: vector<u64> = vector::empty();

@@ -12,6 +12,7 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{astar as petgraph_astar, tarjan_scc as petgraph_scc},
@@ -217,6 +218,7 @@ fn sequence_item(context: &mut Context, item: &T::SequenceItem) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, e: &T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {
@@ -229,6 +231,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
         | E::Continue(_)
+        | E::ErrorConstant(_)
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => {

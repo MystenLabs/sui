@@ -3,20 +3,15 @@
 
 #[allow(unused_use)]
 module deepbook::clob {
-    use std::option;
     use std::type_name::{Self, TypeName};
-    use std::vector;
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin, join};
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::object::{Self, UID, ID};
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian::{Self, Custodian, AccountCap};
@@ -63,9 +58,9 @@ module deepbook::clob {
     const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
-    const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
     #[test_only]
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     #[test_only]
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
 
@@ -75,7 +70,7 @@ module deepbook::clob {
 
     #[allow(unused_field)]
     /// Emitted when a new pool is created
-    struct PoolCreated has copy, store, drop {
+    public struct PoolCreated has copy, store, drop {
         /// object ID of the newly created pool
         pool_id: ID,
         base_asset: TypeName,
@@ -88,7 +83,7 @@ module deepbook::clob {
     }
 
     /// Emitted when a maker order is injected into the order book.
-    struct OrderPlacedV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    public struct OrderPlacedV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -102,7 +97,7 @@ module deepbook::clob {
     }
 
     /// Emitted when a maker order is canceled.
-    struct OrderCanceled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    public struct OrderCanceled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -115,7 +110,7 @@ module deepbook::clob {
     }
 
     /// Emitted only when a maker order is filled.
-    struct OrderFilledV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    public struct OrderFilledV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -132,7 +127,7 @@ module deepbook::clob {
     }
     // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
 
-    struct Order has store, drop {
+    public struct Order has store, drop {
         // For each pool, order id is incremental and unique for each opening order.
         // Orders that are submitted earlier has lower order ids.
         // 64 bits are sufficient for order ids whereas 32 bits are not.
@@ -149,7 +144,7 @@ module deepbook::clob {
         expire_timestamp: u64,
     }
 
-    struct TickLevel has store {
+    public struct TickLevel has store {
         price: u64,
         // The key is order order id.
         open_orders: LinkedTable<u64, Order>,
@@ -157,7 +152,7 @@ module deepbook::clob {
     }
 
     #[allow(unused_field)]
-    struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
+    public struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
         // The key to the following Critbit Tree are order prices.
         id: UID,
         // All open bid orders.
@@ -362,24 +357,24 @@ module deepbook::clob {
         // Base balance received by taker, taking into account of taker commission.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
         let pool_id = *object::uid_as_inner(&pool.id);
-        let taker_quote_quantity_remaining = quantity;
-        let base_balance_filled = balance::zero<BaseAsset>();
-        let quote_balance_left = quote_balance;
+        let mut taker_quote_quantity_remaining = quantity;
+        let mut base_balance_filled = balance::zero<BaseAsset>();
+        let mut quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
         if (critbit::is_empty(all_open_orders)) {
             return (base_balance_filled, quote_balance_left)
         };
-        let (tick_price, tick_index) = min_leaf(all_open_orders);
-        let terminate_loop = false;
+        let (mut tick_price, mut tick_index) = min_leaf(all_open_orders);
+        let mut terminate_loop = false;
 
         while (!is_empty<TickLevel>(all_open_orders) && tick_price <= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
-            let order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
+            let mut order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
 
             while (!linked_table::is_empty(&tick_level.open_orders)) {
                 let maker_order = linked_table::borrow(&tick_level.open_orders, order_id);
-                let maker_base_quantity = maker_order.quantity;
-                let skip_order = false;
+                let mut maker_base_quantity = maker_order.quantity;
+                let mut skip_order = false;
 
                 if (maker_order.expire_timestamp <= current_timestamp) {
                     skip_order = true;
@@ -391,7 +386,7 @@ module deepbook::clob {
                         maker_base_quantity,
                         maker_order.price
                     );
-                    let (is_round_down, taker_commission)  = clob_math::unsafe_mul_round(
+                    let (is_round_down, mut taker_commission)  = clob_math::unsafe_mul_round(
                         maker_quote_quantity_without_commission,
                         pool.taker_fee_rate
                     );
@@ -400,12 +395,12 @@ module deepbook::clob {
                     let maker_quote_quantity = maker_quote_quantity_without_commission + taker_commission;
 
                     // Total base quantity filled.
-                    let filled_base_quantity: u64;
+                    let mut filled_base_quantity: u64;
                     // Total quote quantity filled, excluding commission and rebate.
-                    let filled_quote_quantity: u64;
+                    let mut filled_quote_quantity: u64;
                     // Total quote quantity paid by taker.
                     // filled_quote_quantity_without_commission * (FLOAT_SCALING + taker_fee_rate) = filled_quote_quantity
-                    let filled_quote_quantity_without_commission: u64;
+                    let mut filled_quote_quantity_without_commission: u64;
                     if (taker_quote_quantity_remaining > maker_quote_quantity) {
                         filled_quote_quantity = maker_quote_quantity;
                         filled_quote_quantity_without_commission = maker_quote_quantity_without_commission;
@@ -430,7 +425,7 @@ module deepbook::clob {
                             maker_order.price
                         );
                         // if taker_commission = 0 due to underflow, round it up to 1
-                        let (round_down, taker_commission) = clob_math::unsafe_mul_round(
+                        let (round_down, mut taker_commission) = clob_math::unsafe_mul_round(
                             filled_quote_quantity_without_commission,
                             pool.taker_fee_rate
                         );
@@ -454,7 +449,7 @@ module deepbook::clob {
                         filled_base_quantity
                     );
 
-                    let quote_balance_filled = balance::split(
+                    let mut quote_balance_filled = balance::split(
                         &mut quote_balance_left,
                         filled_quote_quantity,
                     );
@@ -526,23 +521,23 @@ module deepbook::clob {
         let pool_id = *object::uid_as_inner(&pool.id);
         // Base balance received by taker.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
-        let taker_base_quantity_remaining = quantity;
-        let base_balance_filled = balance::zero<BaseAsset>();
-        let quote_balance_left = quote_balance;
+        let mut taker_base_quantity_remaining = quantity;
+        let mut base_balance_filled = balance::zero<BaseAsset>();
+        let mut quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
         if (critbit::is_empty(all_open_orders)) {
             return (base_balance_filled, quote_balance_left)
         };
-        let (tick_price, tick_index) = min_leaf(all_open_orders);
+        let (mut tick_price, mut tick_index) = min_leaf(all_open_orders);
 
         while (!is_empty<TickLevel>(all_open_orders) && tick_price <= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
-            let order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
+            let mut order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
 
             while (!linked_table::is_empty(&tick_level.open_orders)) {
                 let maker_order = linked_table::borrow(&tick_level.open_orders, order_id);
-                let maker_base_quantity = maker_order.quantity;
-                let skip_order = false;
+                let mut maker_base_quantity = maker_order.quantity;
+                let mut skip_order = false;
 
                 if (maker_order.expire_timestamp <= current_timestamp) {
                     skip_order = true;
@@ -558,7 +553,7 @@ module deepbook::clob {
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                     // if taker_commission = 0 due to underflow, round it up to 1
-                    let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
+                    let (is_round_down, mut taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity,
                         pool.taker_fee_rate
                     );
@@ -573,7 +568,7 @@ module deepbook::clob {
                         maker_order.owner,
                         filled_base_quantity
                     );
-                    let taker_commission_balance = balance::split(
+                    let mut taker_commission_balance = balance::split(
                         &mut quote_balance_left,
                         taker_commission,
                     );
@@ -646,21 +641,21 @@ module deepbook::clob {
         base_balance: Balance<BaseAsset>,
     ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
         let pool_id = *object::uid_as_inner(&pool.id);
-        let base_balance_left = base_balance;
+        let mut base_balance_left = base_balance;
         // Base balance received by taker, taking into account of taker commission.
-        let quote_balance_filled = balance::zero<QuoteAsset>();
+        let mut quote_balance_filled = balance::zero<QuoteAsset>();
         let all_open_orders = &mut pool.bids;
         if (critbit::is_empty(all_open_orders)) {
             return (base_balance_left, quote_balance_filled)
         };
-        let (tick_price, tick_index) = max_leaf(all_open_orders);
+        let (mut tick_price, mut tick_index) = max_leaf(all_open_orders);
         while (!is_empty<TickLevel>(all_open_orders) && tick_price >= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
-            let order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
+            let mut order_id = *option::borrow(linked_table::front(&tick_level.open_orders));
             while (!linked_table::is_empty(&tick_level.open_orders)) {
                 let maker_order = linked_table::borrow(&tick_level.open_orders, order_id);
-                let maker_base_quantity = maker_order.quantity;
-                let skip_order = false;
+                let mut maker_base_quantity = maker_order.quantity;
+                let mut skip_order = false;
 
                 if (maker_order.expire_timestamp <= current_timestamp) {
                     skip_order = true;
@@ -678,7 +673,7 @@ module deepbook::clob {
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                     // if taker_commission = 0 due to underflow, round it up to 1
-                    let (is_round_down, taker_commission) = clob_math::unsafe_mul_round(
+                    let (is_round_down, mut taker_commission) = clob_math::unsafe_mul_round(
                         filled_quote_quantity,
                         pool.taker_fee_rate
                     );
@@ -686,12 +681,12 @@ module deepbook::clob {
 
                     maker_base_quantity = maker_base_quantity - filled_base_quantity;
                     // maker in bid side, decrease maker's locked quote asset, increase maker's available base asset
-                    let locked_quote_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
+                    let mut locked_quote_balance = custodian::decrease_user_locked_balance<QuoteAsset>(
                         &mut pool.quote_custodian,
                         maker_order.owner,
                         filled_quote_quantity
                     );
-                    let taker_commission_balance = balance::split(
+                    let mut taker_commission_balance = balance::split(
                         &mut locked_quote_balance,
                         taker_commission,
                     );
@@ -762,8 +757,8 @@ module deepbook::clob {
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         quantity: u64,
         is_bid: bool,
-        base_coin: Coin<BaseAsset>,
-        quote_coin: Coin<QuoteAsset>,
+        mut base_coin: Coin<BaseAsset>,
+        mut quote_coin: Coin<QuoteAsset>,
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
@@ -849,7 +844,7 @@ module deepbook::clob {
             owner: user,
             expire_timestamp,
         };
-        let (tick_exists, tick_index) = find_leaf(open_orders, price);
+        let (tick_exists, mut tick_index) = find_leaf(open_orders, price);
         if (!tick_exists) {
             tick_index = insert_leaf(
                 open_orders,
@@ -1150,10 +1145,10 @@ module deepbook::clob {
         // retrieve and remove the order from open orders of the PriceLevel.
         let user = object::id(account_cap);
         assert!(contains(&pool.usr_open_orders, user), 0);
-        let tick_index: u64 = 0;
-        let tick_price: u64 = 0;
+        let mut tick_index: u64 = 0;
+        let mut tick_price: u64 = 0;
         let n_order = vector::length(&order_ids);
-        let i_order = 0;
+        let mut i_order = 0;
         let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, user);
         while (i_order < n_order) {
             let order_id = *vector::borrow(&order_ids, i_order);
@@ -1193,8 +1188,8 @@ module deepbook::clob {
     ): vector<Order> {
         let user = object::id(account_cap);
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
-        let open_orders = vector::empty<Order>();
-        let order_id = linked_table::front(usr_open_order_ids);
+        let mut open_orders = vector::empty<Order>();
+        let mut order_id = linked_table::front(usr_open_order_ids);
         while (!option::is_none(order_id)) {
             let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
             let tick_level =
@@ -1241,8 +1236,8 @@ module deepbook::clob {
     /// The latter is the corresponding depth list
     public fun get_level2_book_status_bid_side<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
-        price_low: u64,
-        price_high: u64,
+        mut price_low: u64,
+        mut price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
@@ -1251,8 +1246,8 @@ module deepbook::clob {
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.bids, price_low);
         price_high = critbit::find_closest_key(&pool.bids, price_high);
-        let price_vec = vector::empty<u64>();
-        let depth_vec = vector::empty<u64>();
+        let mut price_vec = vector::empty<u64>();
+        let mut depth_vec = vector::empty<u64>();
         if (price_low == 0) { return (price_vec, depth_vec) };
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
@@ -1275,8 +1270,8 @@ module deepbook::clob {
     /// The latter is the corresponding depth list
     public fun get_level2_book_status_ask_side<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
-        price_low: u64,
-        price_high: u64,
+        mut price_low: u64,
+        mut price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
@@ -1285,8 +1280,8 @@ module deepbook::clob {
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.asks, price_low);
         price_high = critbit::find_closest_key(&pool.asks, price_high);
-        let price_vec = vector::empty<u64>();
-        let depth_vec = vector::empty<u64>();
+        let mut price_vec = vector::empty<u64>();
+        let mut depth_vec = vector::empty<u64>();
         if (price_low == 0) { return (price_vec, depth_vec) };
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
@@ -1311,9 +1306,9 @@ module deepbook::clob {
     ): u64 {
         let tick_level = critbit::borrow_leaf_by_key(open_orders, price);
         let tick_open_orders = &tick_level.open_orders;
-        let depth = 0;
-        let order_id = linked_table::front(tick_open_orders);
-        let order: &Order;
+        let mut depth = 0;
+        let mut order_id = linked_table::front(tick_open_orders);
+        let mut order: &Order;
         while (!option::is_none(order_id)) {
             order = linked_table::borrow(tick_open_orders, *option::borrow(order_id));
             if (order.expire_timestamp > time_stamp) depth = depth + order.quantity;
@@ -1348,7 +1343,7 @@ module deepbook::clob {
 
     #[test_only] const E_NULL: u64 = 0;
 
-    #[test_only] struct USD {}
+    #[test_only] public struct USD {}
 
     #[test_only]
     public fun setup_test_with_tick_lot(
@@ -1429,9 +1424,9 @@ module deepbook::clob {
         assert!(tick_exists, E_NULL);
         let tick_level = borrow_leaf_by_index(tree, tick_index);
         assert!(tick_level.price == price, E_NULL);
-        let total_quote_amount: u64 = 0;
+        let mut total_quote_amount: u64 = 0;
         assert!(linked_table::length(&tick_level.open_orders) == vector::length(open_orders), E_NULL);
-        let i_order = 0;
+        let mut i_order = 0;
         while (i_order < vector::length(open_orders)) {
             let order = vector::borrow(open_orders, i_order);
             total_quote_amount = total_quote_amount + order.quantity;
@@ -1628,7 +1623,7 @@ module deepbook::clob {
         usr_open_orders_cmp: &vector<u64>,
     ) {
         assert!(2 * linked_table::length(usr_open_orders) == vector::length(usr_open_orders_cmp), 0);
-        let i_order = 0;
+        let mut i_order = 0;
         while (i_order < vector::length(usr_open_orders_cmp)) {
             let order_id = *vector::borrow(usr_open_orders_cmp, i_order);
             i_order = i_order + 1;
@@ -1672,7 +1667,7 @@ module deepbook::clob {
     // === Deprecated ===
     #[allow(unused_field)]
     /// Deprecated since v1.0.0, use `OrderPlacedV2` instead.
-    struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    public struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -1686,7 +1681,7 @@ module deepbook::clob {
 
     #[allow(unused_field)]
     /// Deprecated since v1.0.0, use `OrderFilledV2` instead.
-    struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    public struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool

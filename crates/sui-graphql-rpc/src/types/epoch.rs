@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
@@ -14,6 +16,7 @@ use super::system_state_summary::SystemStateSummary;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
+use async_graphql::dataloader::{DataLoader, Loader};
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
@@ -21,8 +24,17 @@ use sui_indexer::models::epoch::QueryableEpochInfo;
 use sui_indexer::schema::epochs;
 use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
 
+#[derive(Clone)]
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
+    pub checkpoint_viewed_at: Option<u64>,
+}
+
+/// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
+/// cursor.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct EpochKey {
+    pub epoch_id: u64,
     pub checkpoint_viewed_at: Option<u64>,
 }
 
@@ -93,7 +105,7 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default(), None)
+            None => Checkpoint::query(ctx, CheckpointId::default(), None)
                 .await
                 .extend()?
                 .map_or(self.stored.first_checkpoint_id as u64, |c| {
@@ -259,13 +271,31 @@ impl Epoch {
     /// Look up an `Epoch` in the database, optionally filtered by its Epoch ID. If no ID is
     /// supplied, defaults to fetching the latest epoch.
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         filter: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        if let Some(epoch_id) = filter {
+            let dl: &DataLoader<Db> = ctx.data_unchecked();
+            dl.load_one(EpochKey {
+                epoch_id,
+                checkpoint_viewed_at,
+            })
+            .await
+        } else {
+            Self::query_latest_at(ctx.data_unchecked(), checkpoint_viewed_at).await
+        }
+    }
+
+    /// Look up the latest `Epoch` from the database, optionally filtered by a consistency cursor
+    /// (querying for a consistency cursor in the past looks for the latest epoch as of that
+    /// cursor).
+    pub(crate) async fn query_latest_at(
+        db: &Db,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Self>, Error> {
         use epochs::dsl;
 
-        let id = filter.map(|id| id as i64);
         let (stored, checkpoint_viewed_at): (Option<QueryableEpochInfo>, u64) = db
             .execute_repeatable(move |conn| {
                 let checkpoint_viewed_at = match checkpoint_viewed_at {
@@ -287,10 +317,6 @@ impl Epoch {
                             .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
                             .order_by(dsl::first_checkpoint_id.desc());
 
-                        if let Some(id) = id {
-                            query = query.filter(dsl::epoch.eq(id));
-                        }
-
                         query
                     })
                     .optional()?;
@@ -304,5 +330,54 @@ impl Epoch {
             stored,
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
         }))
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<EpochKey> for Db {
+    type Value = Epoch;
+    type Error = Error;
+
+    async fn load(&self, keys: &[EpochKey]) -> Result<HashMap<EpochKey, Epoch>, Error> {
+        use epochs::dsl;
+
+        let epoch_ids: BTreeSet<_> = keys.iter().map(|key| key.epoch_id as i64).collect();
+        let epochs: Vec<QueryableEpochInfo> = self
+            .execute_repeatable(move |conn| {
+                conn.results(move || {
+                    dsl::epochs
+                        .select(QueryableEpochInfo::as_select())
+                        .filter(dsl::epoch.eq_any(epoch_ids.iter().cloned()))
+                })
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch epochs: {e}")))?;
+
+        let epoch_id_to_stored: BTreeMap<_, _> = epochs
+            .into_iter()
+            .map(|stored| (stored.epoch as u64, stored))
+            .collect();
+
+        Ok(keys
+            .iter()
+            .filter_map(|key| {
+                let stored = epoch_id_to_stored.get(&key.epoch_id).cloned()?;
+                let epoch = Epoch {
+                    stored,
+                    checkpoint_viewed_at: key.checkpoint_viewed_at,
+                };
+
+                // We filter by checkpoint viewed at in memory because it should be quite rare that
+                // this query actually filters something (only in edge cases), and not trying to
+                // encode it in the SQL query makes the query much simpler and therefore easier for
+                // the DB to plan.
+                let start = epoch.stored.first_checkpoint_id as u64;
+                if matches!(key.checkpoint_viewed_at, Some(cp) if cp < start) {
+                    None
+                } else {
+                    Some((*key, epoch))
+                }
+            })
+            .collect())
     }
 }

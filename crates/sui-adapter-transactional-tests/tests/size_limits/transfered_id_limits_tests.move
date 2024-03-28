@@ -10,9 +10,6 @@
 /// Test transferred id limits enforced
 /// Right now, we should never be able to hit the transfer limit because we will hit the create limit first
 module Test::M1 {
-    use sui::tx_context::{TxContext, Self};
-    use sui::object::{Self, UID};
-    use sui::transfer;
 
     public struct Obj has key, store {
         id: UID

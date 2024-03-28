@@ -718,12 +718,9 @@ impl GlobalEnv {
     /// TODO: move-compiler should use FileId as well so we don't need this here. There is already
     /// a todo in their code to remove the current use of `&'static str` for file names in Loc.
     pub fn to_loc(&self, loc: &MoveIrLoc) -> Loc {
-        let file_id = self.get_file_id(loc.file_hash()).unwrap_or_else(|| {
-            panic!(
-                "Unable to find source file '{}' in the environment",
-                loc.file_hash()
-            )
-        });
+        let Some(file_id) = self.get_file_id(loc.file_hash()) else {
+            return self.unknown_loc();
+        };
         Loc {
             file_id,
             span: Span::new(loc.start(), loc.end()),
@@ -1888,7 +1885,8 @@ impl<'env> ModuleEnv<'env> {
                     .expect("undefined struct");
                 Type::Struct(declaring_module_env.data.id, struct_env.get_id(), vec![])
             }
-            SignatureToken::StructInstantiation(handle_idx, args) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (handle_idx, args) = &**struct_inst;
                 let struct_view = StructHandleView::new(
                     &self.data.module,
                     self.data.module.struct_handle_at(*handle_idx),

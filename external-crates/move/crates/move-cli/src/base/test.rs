@@ -22,6 +22,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::ExitStatus,
+    sync::Arc,
 };
 // if windows
 #[cfg(target_family = "windows")]
@@ -170,7 +171,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
                 .map(|fname| {
                     let contents = fs::read_to_string(Path::new(fname.as_str())).unwrap();
                     let fhash = FileHash::new(&contents);
-                    (fhash, (*fname, contents))
+                    (fhash, (*fname, Arc::from(contents)))
                 })
                 .collect::<HashMap<_, _>>()
         })
@@ -185,14 +186,14 @@ pub fn run_move_unit_tests<W: Write + Send>(
     build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
-            diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
+            diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
-            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
+            diagnostics::unwrap_or_report_pass_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings.clone());
         let named_units: Vec<_> = units
             .clone()

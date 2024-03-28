@@ -16,6 +16,7 @@ use sui_indexer::indexer_reader::IndexerReader;
 
 use tracing::error;
 
+#[derive(Clone)]
 pub(crate) struct PgExecutor {
     pub inner: IndexerReader,
     pub limits: Limits,
@@ -57,9 +58,8 @@ impl QueryExecutor for PgExecutor {
             .inner
             .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await;
-        let elapsed = instant.elapsed();
         self.metrics
-            .observe_db_data(elapsed.as_secs(), result.is_ok());
+            .observe_db_data(instant.elapsed(), result.is_ok());
         if let Err(e) = &result {
             error!("DB query error: {e:?}");
         }
@@ -80,9 +80,8 @@ impl QueryExecutor for PgExecutor {
             .inner
             .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await;
-        let elapsed = instant.elapsed();
         self.metrics
-            .observe_db_data(elapsed.as_secs(), result.is_ok());
+            .observe_db_data(instant.elapsed(), result.is_ok());
         if let Err(e) = &result {
             error!("DB query error: {e:?}");
         }

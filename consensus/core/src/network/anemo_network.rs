@@ -1,33 +1,47 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, panic, sync::Arc, thread::sleep, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    panic,
+    sync::Arc,
+    time::Duration,
+};
 
 use anemo::{types::PeerInfo, PeerId, Response};
-use anemo_tower::auth::{AllowedPeers, RequireAuthorizationLayer};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
+    set_header::{SetRequestHeaderLayer, SetResponseHeaderLayer},
+    trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
+};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use bytes::Bytes;
+use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use fastcrypto::traits::KeyPair as _;
+use prometheus::HistogramTimer;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use super::{
     anemo_gen::{
         consensus_rpc_client::ConsensusRpcClient,
         consensus_rpc_server::{ConsensusRpc, ConsensusRpcServer},
     },
+    connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
+    epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
+    metrics::NetworkRouteMetrics,
     FetchBlocksRequest, FetchBlocksResponse, NetworkClient, NetworkManager, NetworkService,
     SendBlockRequest, SendBlockResponse,
 };
 use crate::{
-    block::BlockRef,
+    block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
 };
 
-/// Implements RPC client for Consensus.
+/// Implements Anemo RPC client for Consensus.
 pub(crate) struct AnemoClient {
     context: Arc<Context>,
     network: Arc<ArcSwapOption<anemo::Network>>,
@@ -35,10 +49,7 @@ pub(crate) struct AnemoClient {
 
 impl AnemoClient {
     const GET_CLIENT_INTERVAL: Duration = Duration::from_millis(10);
-    const SEND_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
-    const FETCH_BLOCK_TIMEOUT: Duration = Duration::from_secs(15);
 
-    #[allow(unused)]
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context,
@@ -50,7 +61,7 @@ impl AnemoClient {
         self.network.store(Some(Arc::new(network)));
     }
 
-    async fn get_anemo_client(
+    async fn get_client(
         &self,
         peer: AuthorityIndex,
         timeout: Duration,
@@ -64,7 +75,7 @@ impl AnemoClient {
         };
 
         let authority = self.context.committee.authority(peer);
-        let peer_id = PeerId(authority.network_key.0.into());
+        let peer_id = PeerId(authority.network_key.to_bytes());
         if let Some(peer) = network.peer(peer_id) {
             return Ok(ConsensusRpcClient::new(peer));
         };
@@ -111,17 +122,20 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
-    async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
-        let mut client = self
-            .get_anemo_client(peer, Self::SEND_BLOCK_TIMEOUT)
-            .await?;
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()> {
+        let mut client = self.get_client(peer, timeout).await?;
         let request = SendBlockRequest {
-            block: block.clone(),
+            block: block.serialized().clone(),
         };
         client
-            .send_block(anemo::Request::new(request).with_timeout(Self::SEND_BLOCK_TIMEOUT))
+            .send_block(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
     }
 
@@ -129,20 +143,30 @@ impl NetworkClient for AnemoClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self
-            .get_anemo_client(peer, Self::FETCH_BLOCK_TIMEOUT)
-            .await?;
-        let request = FetchBlocksRequest { block_refs };
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = FetchBlocksRequest {
+            block_refs: block_refs
+                .iter()
+                .filter_map(|r| match bcs::to_bytes(r) {
+                    Ok(serialized) => Some(serialized),
+                    Err(e) => {
+                        debug!("Failed to serialize block ref {:?}: {e:?}", r);
+                        None
+                    }
+                })
+                .collect(),
+        };
         let response = client
-            .fetch_blocks(anemo::Request::new(request).with_timeout(Self::FETCH_BLOCK_TIMEOUT))
+            .fetch_blocks(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
         Ok(response.into_body().blocks)
     }
 }
 
-/// Proxies Anemo RPC handlers to AnemoService.
+/// Proxies Anemo requests to NetworkService with actual handler implementation.
 struct AnemoServiceProxy<S: NetworkService> {
     peer_map: BTreeMap<PeerId, AuthorityIndex>,
     service: Arc<S>,
@@ -154,7 +178,7 @@ impl<S: NetworkService> AnemoServiceProxy<S> {
             .committee
             .authorities()
             .map(|(index, authority)| {
-                let peer_id = PeerId(authority.network_key.0.into());
+                let peer_id = PeerId(authority.network_key.to_bytes());
                 (peer_id, index)
             })
             .collect();
@@ -209,7 +233,18 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer not found",
             )
         })?;
-        let block_refs = request.into_body().block_refs;
+        let block_refs = request
+            .into_body()
+            .block_refs
+            .into_iter()
+            .filter_map(|serialized| match bcs::from_bytes(&serialized) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    debug!("Failed to deserialize block ref {:?}: {e:?}", serialized);
+                    None
+                }
+            })
+            .collect();
         let blocks = self
             .service
             .handle_fetch_blocks(*index, block_refs)
@@ -234,6 +269,7 @@ pub(crate) struct AnemoManager {
     context: Arc<Context>,
     client: Arc<AnemoClient>,
     network: Arc<ArcSwapOption<anemo::Network>>,
+    connection_monitor_handle: Option<ConnectionMonitorHandle>,
 }
 
 impl AnemoManager {
@@ -242,6 +278,7 @@ impl AnemoManager {
             context: context.clone(),
             client: Arc::new(AnemoClient::new(context)),
             network: Arc::new(ArcSwapOption::default()),
+            connection_monitor_handle: None,
         }
     }
 }
@@ -257,24 +294,79 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         self.client.clone()
     }
 
-    fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>) {
+    async fn install_service(&mut self, network_keypair: NetworkKeyPair, service: Arc<S>) {
+        self.context
+            .metrics
+            .network_metrics
+            .network_type
+            .with_label_values(&["anemo"])
+            .set(1);
+
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
-        let address = authority.address.clone();
+        // Bind to localhost in unit tests since only local networking is needed.
+        // Bind to the unspecified address to allow the actual address to be assigned,
+        // in simtest and production.
+        cfg_if!(
+            if #[cfg(test)] {
+                let own_address = authority.address.with_localhost_ip();
+            } else {
+                let own_address = authority.address.with_zero_ip();
+            }
+        );
+        let epoch_string: String = self.context.committee.epoch().to_string();
+        let inbound_network_metrics =
+            Arc::new(self.context.metrics.network_metrics.inbound.clone());
+        let outbound_network_metrics =
+            Arc::new(self.context.metrics.network_metrics.outbound.clone());
+        let quinn_connection_metrics = self.context.metrics.quinn_connection_metrics.clone();
         let all_peer_ids = self
             .context
             .committee
             .authorities()
-            .map(|(_i, authority)| PeerId(authority.network_key.0.to_bytes()));
-        // TODO: add layers for metrics and additional filters.
+            .map(|(_i, authority)| PeerId(authority.network_key.to_bytes()));
+
         let routes = anemo::Router::new()
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
                 all_peer_ids,
             )))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )))
             .add_rpc_service(server);
-        let service = tower::ServiceBuilder::new().service(routes);
 
-        // TODO: instrument with metrics and failpoints.
+        // TODO: instrument with failpoints.
+        let service = tower::ServiceBuilder::new()
+            .layer(
+                TraceLayer::new_for_server_errors()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
+            )
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                inbound_network_metrics,
+                self.context.parameters.anemo.excessive_message_size(),
+            )))
+            .layer(SetResponseHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string.clone(),
+            ))
+            .service(routes);
+
+        let outbound_layer = tower::ServiceBuilder::new()
+            .layer(
+                TraceLayer::new_for_client_and_server_errors()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
+            )
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                outbound_network_metrics,
+                self.context.parameters.anemo.excessive_message_size(),
+            )))
+            .layer(SetRequestHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string,
+            ))
+            .into_inner();
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
@@ -310,15 +402,16 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         };
 
         let mut retries_left = 90;
-        let addr = address
+        let addr = own_address
             .to_anemo_address()
-            .unwrap_or_else(|op| panic!("{op}: {address}"));
+            .unwrap_or_else(|op| panic!("{op}: {own_address}"));
+        let private_key_bytes = network_keypair.private_key_bytes();
         let network = loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("consensus")
-                .private_key(network_keypair.copy().private().0.to_bytes())
+                .private_key(private_key_bytes)
                 .config(anemo_config.clone())
-                // TODO: add outbound request layer
+                .outbound_request_layer(outbound_layer.clone())
                 .start(service.clone());
             match network_result {
                 Ok(n) => {
@@ -330,51 +423,195 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
                     if retries_left <= 0 {
                         panic!("Failed to initialize AnemoNetwork at {addr}! Last error: {e:#?}");
                     }
-                    error!(
-                        "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
+                    warn!(
+                        "Address {addr} should be available for the Consensus service, retrying in one second: {e:#?}",
                     );
-                    sleep(Duration::from_secs(1));
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
         };
 
+        let mut known_peer_ids = HashMap::new();
         for (_i, authority) in self.context.committee.authorities() {
-            let peer_id = PeerId(authority.network_key.0.to_bytes());
-            let address = authority.address.to_anemo_address().unwrap();
+            let peer_id = PeerId(authority.network_key.to_bytes());
+            let peer_address = match authority.address.to_anemo_address() {
+                Ok(addr) => addr,
+                // Validations are performed on addresses so this failure should not happen.
+                // But it is possible if supported anemo address formats are updated without a
+                // feature flag.
+                Err(e) => {
+                    error!(
+                        "Failed to convert {:?} to anemo address: {:?}",
+                        authority.address, e
+                    );
+                    continue;
+                }
+            };
             let peer_info = PeerInfo {
                 peer_id,
                 affinity: anemo::types::PeerAffinity::High,
-                address: vec![address.clone()],
+                address: vec![peer_address.clone()],
             };
             network.known_peers().insert(peer_info);
+            known_peer_ids.insert(peer_id, authority.hostname.clone());
         }
 
+        let connection_monitor_handle = AnemoConnectionMonitor::spawn(
+            network.downgrade(),
+            quinn_connection_metrics,
+            known_peer_ids,
+        );
+
+        self.connection_monitor_handle = Some(connection_monitor_handle);
         self.client.set_network(network.clone());
         self.network.store(Some(Arc::new(network)));
     }
 
-    async fn stop(&self) {
+    async fn stop(&mut self) {
         if let Some(network) = self.network.load_full() {
             if let Err(e) = network.shutdown().await {
                 warn!("Failure when shutting down AnemoNetwork: {e:?}");
             }
             self.network.store(None);
         }
+
+        if let Some(connection_monitor_handle) = self.connection_monitor_handle.take() {
+            connection_monitor_handle.stop().await;
+        }
+
+        self.context
+            .metrics
+            .network_metrics
+            .network_type
+            .with_label_values(&["anemo"])
+            .set(0);
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct MetricsMakeCallbackHandler {
+    metrics: Arc<NetworkRouteMetrics>,
+    /// Size in bytes above which a request or response message is considered excessively large
+    excessive_message_size: usize,
+}
+
+impl MetricsMakeCallbackHandler {
+    pub fn new(metrics: Arc<NetworkRouteMetrics>, excessive_message_size: usize) -> Self {
+        Self {
+            metrics,
+            excessive_message_size,
+        }
+    }
+}
+
+impl MakeCallbackHandler for MetricsMakeCallbackHandler {
+    type Handler = MetricsResponseHandler;
+
+    fn make_handler(&self, request: &anemo::Request<bytes::Bytes>) -> Self::Handler {
+        let route = request.route().to_owned();
+
+        self.metrics.requests.with_label_values(&[&route]).inc();
+        self.metrics
+            .inflight_requests
+            .with_label_values(&[&route])
+            .inc();
+        let body_len = request.body().len();
+        self.metrics
+            .request_size
+            .with_label_values(&[&route])
+            .observe(body_len as f64);
+        if body_len > self.excessive_message_size {
+            warn!(
+                "Saw excessively large request with size {body_len} for {route} with peer {:?}",
+                request.peer_id()
+            );
+            self.metrics
+                .excessive_size_requests
+                .with_label_values(&[&route])
+                .inc();
+        }
+
+        let timer = self
+            .metrics
+            .request_latency
+            .with_label_values(&[&route])
+            .start_timer();
+
+        MetricsResponseHandler {
+            metrics: self.metrics.clone(),
+            timer,
+            route,
+            excessive_message_size: self.excessive_message_size,
+        }
+    }
+}
+
+pub(crate) struct MetricsResponseHandler {
+    metrics: Arc<NetworkRouteMetrics>,
+    // The timer is held on to and "observed" once dropped
+    #[allow(unused)]
+    timer: HistogramTimer,
+    route: String,
+    excessive_message_size: usize,
+}
+
+impl ResponseHandler for MetricsResponseHandler {
+    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
+        let body_len = response.body().len();
+        self.metrics
+            .response_size
+            .with_label_values(&[&self.route])
+            .observe(body_len as f64);
+        if body_len > self.excessive_message_size {
+            warn!(
+                "Saw excessively large response with size {body_len} for {} with peer {:?}",
+                self.route,
+                response.peer_id()
+            );
+            self.metrics
+                .excessive_size_responses
+                .with_label_values(&[&self.route])
+                .inc();
+        }
+
+        if !response.status().is_success() {
+            let status = response.status().to_u16().to_string();
+            self.metrics
+                .errors
+                .with_label_values(&[&self.route, &status])
+                .inc();
+        }
+    }
+
+    fn on_error<E>(self, _error: &E) {
+        self.metrics
+            .errors
+            .with_label_values(&[&self.route, "unknown"])
+            .inc();
+    }
+}
+
+impl Drop for MetricsResponseHandler {
+    fn drop(&mut self) {
+        self.metrics
+            .inflight_requests
+            .with_label_values(&[&self.route])
+            .dec();
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
-    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
+    use tokio::time::sleep;
 
     use crate::{
-        block::BlockRef,
+        block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
         network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
@@ -416,7 +653,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_basics() {
+    async fn anemo_basics() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(
@@ -424,40 +661,60 @@ mod test {
                 .clone()
                 .with_authority_index(context.committee.to_authority_index(0).unwrap()),
         );
-        let manager_0 = AnemoManager::new(context_0.clone());
+        let mut manager_0 = AnemoManager::new(context_0.clone());
         let client_0 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
         let service_0 = Arc::new(Mutex::new(TestService::new()));
-        manager_0.install_service(keys[0].0.copy(), service_0.clone());
+        manager_0
+            .install_service(keys[0].0.clone(), service_0.clone())
+            .await;
 
         let context_1 = Arc::new(
             context
                 .clone()
                 .with_authority_index(context.committee.to_authority_index(1).unwrap()),
         );
-        let manager_1 = AnemoManager::new(context_1.clone());
+        let mut manager_1 = AnemoManager::new(context_1.clone());
         let client_1 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
         let service_1 = Arc::new(Mutex::new(TestService::new()));
-        manager_1.install_service(keys[1].0.copy(), service_1.clone());
+        manager_1
+            .install_service(keys[1].0.clone(), service_1.clone())
+            .await;
+
+        // Wait for anemo to initialize.
+        sleep(Duration::from_secs(5)).await;
 
         // Test that servers can receive client RPCs.
+        let test_block_0 = VerifiedBlock::new_for_test(TestBlock::new(9, 0).build());
         client_0
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
-                &Bytes::from_static(b"msg 0"),
+                &test_block_0,
+                Duration::from_secs(5),
             )
             .await
             .unwrap();
+        let test_block_1 = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
         client_1
             .send_block(
                 context.committee.to_authority_index(0).unwrap(),
-                &Bytes::from_static(b"msg 1"),
+                &test_block_1,
+                Duration::from_secs(5),
             )
             .await
             .unwrap();
+
         assert_eq!(service_0.lock().handle_send_block.len(), 1);
         assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
+        assert_eq!(
+            service_0.lock().handle_send_block[0].1,
+            test_block_1.serialized(),
+        );
         assert_eq!(service_1.lock().handle_send_block.len(), 1);
         assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
+        assert_eq!(
+            service_1.lock().handle_send_block[0].1,
+            test_block_0.serialized(),
+        );
 
         // `Committee` is generated with the same random seed in Context::new_for_test(),
         // so the first 4 authorities are the same.
@@ -467,24 +724,30 @@ mod test {
                 .clone()
                 .with_authority_index(context_4.committee.to_authority_index(4).unwrap()),
         );
-        let manager_4 = AnemoManager::new(context_4.clone());
+        let mut manager_4 = AnemoManager::new(context_4.clone());
         let client_4 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_4);
         let service_4 = Arc::new(Mutex::new(TestService::new()));
-        manager_4.install_service(keys_4[4].0.copy(), service_4.clone());
+        manager_4
+            .install_service(keys_4[4].0.clone(), service_4.clone())
+            .await;
 
         // client_4 should not be able to reach service_0 or service_1, because of the
         // AllowedPeers filter.
+        let test_block_2 = VerifiedBlock::new_for_test(TestBlock::new(9, 2).build());
         assert!(client_4
             .send_block(
                 context.committee.to_authority_index(0).unwrap(),
-                &Bytes::from_static(b"msg 2"),
+                &test_block_2,
+                Duration::from_secs(5),
             )
             .await
             .is_err());
+        let test_block_3 = VerifiedBlock::new_for_test(TestBlock::new(9, 3).build());
         assert!(client_4
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
-                &Bytes::from_static(b"msg 3"),
+                &test_block_3,
+                Duration::from_secs(5),
             )
             .await
             .is_err());

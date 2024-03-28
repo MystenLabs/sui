@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
+    expansion::ast::Mutability,
     hlir::ast::{FunctionSignature, SingleType, Value, Var},
     parser,
     shared::unique_map::UniqueMap,
@@ -13,7 +14,7 @@ use std::collections::BTreeSet;
 /// returns true if anything changed
 pub fn optimize(
     signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<parser::ast::ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -47,6 +48,8 @@ fn count(signature: &FunctionSignature, cfg: &MutForwardCFG) -> BTreeSet<Var> {
 }
 
 mod count {
+    use move_proc_macros::growing_stack;
+
     use crate::{
         hlir::ast::{FunctionSignature, *},
         parser::ast::{BinOp, UnaryOp},
@@ -64,7 +67,7 @@ mod count {
                 assigned: BTreeMap::new(),
                 used: BTreeMap::new(),
             };
-            for (v, _) in &signature.parameters {
+            for (_, v, _) in &signature.parameters {
                 ctx.assign(v, false);
             }
             ctx
@@ -108,10 +111,11 @@ mod count {
         }
     }
 
+    #[growing_stack]
     pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 exp(context, e);
                 let substitutable_rvalues = can_subst_exp(ls.len(), e);
                 lvalues(context, ls, substitutable_rvalues);
@@ -141,14 +145,19 @@ mod count {
         use LValue_ as L;
         match l_ {
             L::Ignore | L::Unpack(_, _, _) => (),
-            L::Var(v, _) => context.assign(v, substitutable),
+            L::Var { var, .. } => context.assign(var, substitutable),
         }
     }
 
+    #[growing_stack]
     fn exp(context: &mut Context, parent_e: &Exp) {
         use UnannotatedExp_ as E;
         match &parent_e.exp.value {
-            E::Unit { .. } | E::Value(_) | E::Constant(_) | E::UnresolvedError => (),
+            E::Unit { .. }
+            | E::Value(_)
+            | E::Constant(_)
+            | E::UnresolvedError
+            | E::ErrorConstant(_) => (),
 
             E::BorrowLocal(_, var) => context.used(var, false),
 
@@ -198,6 +207,7 @@ mod count {
         use UnannotatedExp_ as E;
         match &parent_e.exp.value {
             E::UnresolvedError
+            | E::ErrorConstant(_)
             | E::BorrowLocal(_, _)
             | E::Copy { .. }
             | E::Freeze(_)
@@ -251,6 +261,7 @@ fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
 mod eliminate {
     use crate::hlir::ast::{self as H, *};
     use move_ir_types::location::*;
+    use move_proc_macros::growing_stack;
     use std::collections::{BTreeMap, BTreeSet};
 
     pub struct Context {
@@ -271,10 +282,11 @@ mod eliminate {
         }
     }
 
+    #[growing_stack]
     pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 exp(context, e);
                 let eliminated = lvalues(context, ls);
                 remove_eliminated(context, eliminated, e)
@@ -315,17 +327,29 @@ mod eliminate {
         use LValue_ as L;
         match l_ {
             l_ @ L::Ignore | l_ @ L::Unpack(_, _, _) => LRes::Same(sp(loc, l_)),
-            L::Var(v, t) => {
-                let contained = context.ssa_temps.remove(&v);
+            L::Var {
+                var,
+                ty,
+                unused_assignment,
+            } => {
+                let contained = context.ssa_temps.remove(&var);
                 if contained {
-                    LRes::Elim(v)
+                    LRes::Elim(var)
                 } else {
-                    LRes::Same(sp(loc, L::Var(v, t)))
+                    LRes::Same(sp(
+                        loc,
+                        L::Var {
+                            var,
+                            ty,
+                            unused_assignment,
+                        },
+                    ))
                 }
             }
         }
     }
 
+    #[growing_stack]
     fn exp(context: &mut Context, parent_e: &mut Exp) {
         use UnannotatedExp_ as E;
         match &mut parent_e.exp.value {
@@ -339,6 +363,7 @@ mod eliminate {
             | E::Value(_)
             | E::Constant(_)
             | E::UnresolvedError
+            | E::ErrorConstant(_)
             | E::BorrowLocal(_, _) => (),
 
             E::ModuleCall(mcall) => {

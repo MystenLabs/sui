@@ -91,6 +91,7 @@ pub enum Tok {
     Match,
     BlockLabel,
     MinusGreater,
+    For,
 }
 
 impl fmt::Display for Tok {
@@ -172,6 +173,7 @@ impl fmt::Display for Tok {
             Match => "match",
             BlockLabel => "'[Identifier]",
             MinusGreater => "->",
+            For => "for",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -210,6 +212,10 @@ impl<'input> Lexer<'input> {
 
     pub fn content(&self) -> &'input str {
         &self.text[self.cur_start..self.cur_end]
+    }
+
+    pub fn loc_contents(&self, loc: Loc) -> &'input str {
+        &self.text[loc.start() as usize..loc.end() as usize]
     }
 
     pub fn file_hash(&self) -> FileHash {
@@ -883,6 +889,7 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
             "enum" => Tok::Enum,
             "type" => Tok::Type,
             "match" => Tok::Match,
+            "for" => Tok::For,
             _ => Tok::Identifier,
         },
         _ => Tok::Identifier,

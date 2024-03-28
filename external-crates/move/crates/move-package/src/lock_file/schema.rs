@@ -7,11 +7,15 @@
 
 use std::io::{Read, Seek, Write};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
-use toml_edit::{Item::Value as EItem, Value as EValue};
+use toml_edit::{
+    ArrayOfTables,
+    Item::{self, Value as EItem},
+    Value as EValue,
+};
 
 use move_compiler::editions::{Edition, Flavor};
 
@@ -21,8 +25,18 @@ use super::LockFile;
 /// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
 /// (the compiler will fail to read lock files at newer versions).
 ///
-/// TODO(amnn): Set to version 1 when stabilised.
-pub const VERSION: u64 = 0;
+/// V0: Base version.
+/// V1: Adds toolchain versioning support.
+pub const VERSION: u64 = 1;
+
+/// Table for storing package info under an environment.
+const ENV_TABLE_NAME: &str = "env";
+
+/// Table keys in environment for managing published packages.
+const ORIGINAL_PUBLISHED_ID_KEY: &str = "original-published-id";
+const LATEST_PUBLISHED_ID_KEY: &str = "latest-published-id";
+const PUBLISHED_VERSION_KEY: &str = "published-version";
+const CHAIN_ID_KEY: &str = "chain-id";
 
 #[derive(Deserialize)]
 pub struct Packages {
@@ -183,7 +197,56 @@ pub(crate) fn write_prologue(
     })?;
 
     write!(file, "{}", prologue)?;
+    Ok(())
+}
 
+pub fn update_dependency_graph(
+    file: &mut LockFile,
+    manifest_digest: String,
+    deps_digest: String,
+    dependencies: Option<toml_edit::Value>,
+    dev_dependencies: Option<toml_edit::Value>,
+    packages: Option<ArrayOfTables>,
+) -> Result<()> {
+    use toml_edit::value;
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let move_table = toml
+        .entry("move")
+        .or_insert(Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create move table in Move.lock"))?;
+
+    // Update `manifest_digest` and `deps_digest` in `[move]` table section.
+    move_table["manifest_digest"] = value(manifest_digest);
+    move_table["deps_digest"] = value(deps_digest);
+
+    // Update `dependencies = [ ... ]` in `[move]` table section.
+    if let Some(dependencies) = dependencies {
+        move_table["dependencies"] = Item::Value(dependencies.clone());
+    } else {
+        move_table.remove("dependencies");
+    }
+
+    // Update `dev-dependencies = [ ... ]` in `[move]` table section.
+    if let Some(dev_dependencies) = dev_dependencies {
+        move_table["dev-dependencies"] = Item::Value(dev_dependencies.clone());
+    } else {
+        move_table.remove("dev-dependencies");
+    }
+
+    // Update the [[move.package]] Array of Tables.
+    if let Some(packages) = packages {
+        toml["move"]["package"] = Item::ArrayOfTables(packages.clone());
+    } else if let Some(packages_table) = toml["move"]["package"].as_table_mut() {
+        packages_table.remove("package");
+    }
+
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
     Ok(())
 }
 
@@ -236,4 +299,67 @@ fn to_toml_edit_value(value: &toml::Value) -> toml_edit::Item {
             toml_edit::Item::Table(toml_edit_table)
         }
     }
+}
+
+pub enum ManagedAddressUpdate {
+    Published {
+        original_id: String,
+        chain_id: String,
+    },
+    Upgraded {
+        latest_id: String,
+        version: u64,
+    },
+}
+
+/// Saves published or upgraded package addresses in the lock file.
+pub fn update_managed_address(
+    file: &mut LockFile,
+    environment: &str,
+    managed_address_update: ManagedAddressUpdate,
+) -> Result<()> {
+    use toml_edit::{value, Document, Table};
+
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<Document>()?;
+
+    let env_table = toml
+        .entry(ENV_TABLE_NAME)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create 'env' table in Move.lock"))?
+        .entry(environment)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create {environment} table in Move.lock"))?;
+
+    match managed_address_update {
+        ManagedAddressUpdate::Published {
+            original_id,
+            chain_id,
+        } => {
+            env_table[CHAIN_ID_KEY] = value(chain_id);
+            env_table[ORIGINAL_PUBLISHED_ID_KEY] = value(&original_id);
+            env_table[LATEST_PUBLISHED_ID_KEY] = value(original_id);
+            env_table[PUBLISHED_VERSION_KEY] = value("1");
+        }
+        ManagedAddressUpdate::Upgraded { latest_id, version } => {
+            if !env_table.contains_key(CHAIN_ID_KEY) {
+                bail!("Move.lock violation: attempted address update for package upgrade when no {CHAIN_ID_KEY} exists")
+            }
+            if !env_table.contains_key(ORIGINAL_PUBLISHED_ID_KEY) {
+                bail!("Move.lock violation: attempted address update for package upgrade when no {ORIGINAL_PUBLISHED_ID_KEY} exists")
+            }
+            env_table[LATEST_PUBLISHED_ID_KEY] = value(latest_id);
+            env_table[PUBLISHED_VERSION_KEY] = value(version.to_string());
+        }
+    }
+
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
+    file.rewind()?;
+    Ok(())
 }

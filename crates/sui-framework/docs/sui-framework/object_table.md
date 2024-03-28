@@ -1,7 +1,6 @@
-
-<a name="0x2_object_table"></a>
-
-# Module `0x2::object_table`
+---
+title: Module `0x2::object_table`
+---
 
 Similar to <code>sui::table</code>, an <code><a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a>&lt;K, V&gt;</code> is a map-like collection. But unlike
 <code>sui::table</code>, the values bound to these dynamic fields _must_ be objects themselves. This allows
@@ -23,7 +22,7 @@ The difference is otherwise not observable from within Move.
 -  [Function `value_id`](#0x2_object_table_value_id)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field">0x2::dynamic_object_field</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -316,7 +315,7 @@ Aborts with <code><a href="object_table.md#0x2_object_table_ETableNotEmpty">ETab
 <pre><code><b>public</b> <b>fun</b> <a href="object_table.md#0x2_object_table_destroy_empty">destroy_empty</a>&lt;K: <b>copy</b> + drop + store, V: key + store&gt;(<a href="table.md#0x2_table">table</a>: <a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a>&lt;K, V&gt;) {
     <b>let</b> <a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a> { id, size } = <a href="table.md#0x2_table">table</a>;
     <b>assert</b>!(size == 0, <a href="object_table.md#0x2_object_table_ETableNotEmpty">ETableNotEmpty</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 
@@ -332,7 +331,7 @@ Returns the ID of the object associated with the key if the table has an entry w
 Returns none otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_table.md#0x2_object_table_value_id">value_id</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">object_table::ObjectTable</a>&lt;K, V&gt;, k: K): <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="object_table.md#0x2_object_table_value_id">value_id</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">object_table::ObjectTable</a>&lt;K, V&gt;, k: K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>&gt;
 </code></pre>
 
 

@@ -7,8 +7,8 @@ use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
-    ToFromBytes,
+    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
+    SuiSignatureInner, ToFromBytes,
 };
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
@@ -38,6 +38,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::iter::once;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -241,7 +242,7 @@ pub struct RandomnessStateUpdate {
     /// Epoch of the randomness state update transaction
     pub epoch: u64,
     /// Randomness round of the update
-    pub randomness_round: u64,
+    pub randomness_round: RandomnessRound,
     /// Updated random bytes
     pub random_bytes: Vec<u8>,
     /// The initial version of the randomness object that it was shared at.
@@ -754,6 +755,12 @@ impl ProgrammableMoveCall {
         );
         Ok(())
     }
+
+    fn is_input_arg_used(&self, arg: u16) -> bool {
+        self.arguments
+            .iter()
+            .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
+    }
 }
 
 impl Command {
@@ -847,7 +854,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules, _) | Command::Upgrade(modules, _, _, _) => {
+            Command::Publish(modules, deps) | Command::Upgrade(modules, deps, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -857,9 +864,38 @@ impl Command {
                         value: config.max_modules_in_publish().to_string()
                     }
                 );
+                if let Some(max_package_dependencies) = config.max_package_dependencies_as_option()
+                {
+                    fp_ensure!(
+                        deps.len() < max_package_dependencies as usize,
+                        UserInputError::SizeLimitExceeded {
+                            limit: "maximum package dependencies".to_string(),
+                            value: max_package_dependencies.to_string()
+                        }
+                    );
+                };
             }
         };
         Ok(())
+    }
+
+    fn is_input_arg_used(&self, input_arg: u16) -> bool {
+        match self {
+            Command::MoveCall(c) => c.is_input_arg_used(input_arg),
+            Command::TransferObjects(args, arg)
+            | Command::MergeCoins(arg, args)
+            | Command::SplitCoins(arg, args) => args
+                .iter()
+                .chain(once(arg))
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
+            Command::MakeMoveVec(_, args) => args
+                .iter()
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
+            Command::Upgrade(_, _, _, arg) => {
+                matches!(arg, Argument::Input(inp) if *inp == input_arg)
+            }
+            Command::Publish(_, _) => false,
+        }
     }
 }
 
@@ -945,6 +981,27 @@ impl ProgrammableTransaction {
         }
         for command in commands {
             command.validity_check(config)?;
+        }
+
+        // A command that uses Random can only be followed by TransferObjects or MergeCoins.
+        if let Some(random_index) = inputs.iter().position(|obj| {
+            matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+        }) {
+            let mut used_random_object = false;
+            let random_index = random_index.try_into().unwrap();
+            for command in commands {
+                if !used_random_object {
+                    used_random_object = command.is_input_arg_used(random_index);
+                } else {
+                    fp_ensure!(
+                        matches!(
+                            command,
+                            Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
+                        ),
+                        UserInputError::PostRandomCommandRestrictions
+                    );
+                }
+            }
         }
 
         Ok(())
@@ -2359,12 +2416,41 @@ impl<S> Envelope<SenderSignedData, S> {
             .into_iter()
     }
 
+    // Returns the primary key for this transaction.
+    pub fn key(&self) -> TransactionKey {
+        match &self.data().intent_message().value.kind() {
+            TransactionKind::RandomnessStateUpdate(rsu) => {
+                TransactionKey::RandomnessRound(rsu.epoch, rsu.randomness_round)
+            }
+            _ => TransactionKey::Digest(*self.digest()),
+        }
+    }
+
+    // Returns non-Digest keys that could be used to refer to this transaction.
+    //
+    // At the moment this returns a single Option for efficiency, but if more key types are added,
+    // the return type could change to Vec<TransactionKey>.
+    pub fn non_digest_key(&self) -> Option<TransactionKey> {
+        match &self.data().intent_message().value.kind() {
+            TransactionKind::RandomnessStateUpdate(rsu) => Some(TransactionKey::RandomnessRound(
+                rsu.epoch,
+                rsu.randomness_round,
+            )),
+            _ => None,
+        }
+    }
+
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
     }
 
     pub fn is_sponsored_tx(&self) -> bool {
         self.data().intent_message().value.is_sponsored_tx()
+    }
+
+    pub fn is_randomness_reader(&self) -> bool {
+        self.shared_input_objects()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 }
 
@@ -2499,7 +2585,7 @@ impl VerifiedTransaction {
 
     pub fn new_randomness_state_update(
         epoch: u64,
-        randomness_round: u64,
+        randomness_round: RandomnessRound,
         random_bytes: Vec<u8>,
         randomness_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
@@ -3046,5 +3132,23 @@ impl Display for CertifiedTransaction {
         )?;
         write!(writer, "{}", &self.data().intent_message().value.kind())?;
         write!(f, "{}", writer)
+    }
+}
+
+/// TransactionKey uniquely identifies a transaction across all epochs.
+/// Note that a single transaction may have multiple keys, for example a RandomnessStateUpdate
+/// could be identified by both `Digest` and `RandomnessRound`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum TransactionKey {
+    Digest(TransactionDigest),
+    RandomnessRound(EpochId, RandomnessRound),
+}
+
+impl TransactionKey {
+    pub fn unwrap_digest(&self) -> &TransactionDigest {
+        match self {
+            TransactionKey::Digest(d) => d,
+            _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
+        }
     }
 }

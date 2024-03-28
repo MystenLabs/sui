@@ -1,8 +1,8 @@
 warning[W09005]: dead or unreachable code
-  ┌─ tests/move_check/typing/return_any_type.move:5:13
+  ┌─ tests/move_check/typing/return_any_type.move:5:14
   │
 5 │         0 + (return ());
-  │             ^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │              ^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration, time::Instant, vec};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+    vec,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -25,19 +29,33 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{anemo_network::AnemoManager, NetworkManager, NetworkService},
+    network::{
+        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager, NetworkService,
+    },
     storage::rocksdb_store::RocksDBStore,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     CommitConsumer,
 };
 
-// This type is used by Sui as part of starting consensus via MysticetiManager.
-// It hides the details of the types.
-pub struct ConsensusAuthority(AuthorityNode<AnemoManager>);
+/// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
+/// It hides the details of the implementation from the caller, MysticetiManager.
+#[allow(private_interfaces)]
+pub enum ConsensusAuthority {
+    WithAnemo(AuthorityNode<AnemoManager>),
+    WithTonic(AuthorityNode<TonicManager>),
+}
+
+// Type of network used by the authority node.
+#[derive(Clone, Copy)]
+pub enum NetworkType {
+    Anemo,
+    Tonic,
+}
 
 impl ConsensusAuthority {
     pub async fn start(
+        network_type: NetworkType,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -48,27 +66,60 @@ impl ConsensusAuthority {
         commit_consumer: CommitConsumer,
         registry: Registry,
     ) -> Self {
-        let authority_node = AuthorityNode::start(
-            own_index,
-            committee,
-            parameters,
-            protocol_config,
-            protocol_keypair,
-            network_keypair,
-            transaction_verifier,
-            commit_consumer,
-            registry,
-        )
-        .await;
-        Self(authority_node)
+        match network_type {
+            NetworkType::Anemo => {
+                let authority = AuthorityNode::start(
+                    own_index,
+                    committee,
+                    parameters,
+                    protocol_config,
+                    protocol_keypair,
+                    network_keypair,
+                    transaction_verifier,
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                Self::WithAnemo(authority)
+            }
+            NetworkType::Tonic => {
+                let authority = AuthorityNode::start(
+                    own_index,
+                    committee,
+                    parameters,
+                    protocol_config,
+                    protocol_keypair,
+                    network_keypair,
+                    transaction_verifier,
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                Self::WithTonic(authority)
+            }
+        }
     }
 
     pub async fn stop(self) {
-        self.0.stop().await;
+        match self {
+            Self::WithAnemo(authority) => authority.stop().await,
+            Self::WithTonic(authority) => authority.stop().await,
+        }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
-        self.0.transaction_client()
+        match self {
+            Self::WithAnemo(authority) => authority.transaction_client(),
+            Self::WithTonic(authority) => authority.transaction_client(),
+        }
+    }
+
+    #[cfg(test)]
+    fn context(&self) -> &Arc<Context> {
+        match self {
+            Self::WithAnemo(authority) => &authority.context,
+            Self::WithTonic(authority) => &authority.context,
+        }
     }
 }
 
@@ -120,9 +171,9 @@ where
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        let (core_signals, signals_receivers) = CoreSignals::new();
+        let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
@@ -131,14 +182,17 @@ where
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
-        let commit_observer = CommitObserver::new(
+
+        let block_verifier = Arc::new(SignedBlockVerifier::new(
             context.clone(),
-            commit_consumer.sender,
-            commit_consumer.last_processed_index,
-            dag_state.clone(),
-            store.clone(),
-        );
+            transaction_verifier,
+        ));
+
+        let block_manager =
+            BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
+
+        let commit_observer =
+            CommitObserver::new(context.clone(), commit_consumer, dag_state.clone(), store);
 
         let core = Core::new(
             context.clone(),
@@ -148,7 +202,6 @@ where
             core_signals,
             protocol_keypair,
             dag_state.clone(),
-            store,
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -157,10 +210,6 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
-        let block_verifier = Arc::new(SignedBlockVerifier::new(
-            context.clone(),
-            transaction_verifier,
-        ));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -175,7 +224,9 @@ where
             synchronizer: synchronizer.clone(),
             dag_state,
         });
-        network_manager.install_service(network_keypair, network_service);
+        network_manager
+            .install_service(network_keypair, network_service)
+            .await;
 
         Self {
             context,
@@ -197,7 +248,7 @@ where
 
         self.network_manager.stop().await;
         self.broadcaster.stop();
-        self.core_thread_handle.stop();
+        self.core_thread_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         self.synchronizer.stop().await;
 
@@ -343,28 +394,28 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
+    use std::{collections::BTreeSet, sync::Arc};
 
     use async_trait::async_trait;
     use consensus_config::{local_committee_and_keys, Parameters};
-    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
     use prometheus::Registry;
+    use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::sync::mpsc::unbounded_channel;
-    use tokio::time::sleep;
+    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
 
     use super::*;
-    use crate::authority_node::AuthorityService;
-    use crate::block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock};
-    use crate::block_verifier::NoopBlockVerifier;
-    use crate::context::Context;
-    use crate::core_thread::{CoreError, CoreThreadDispatcher};
-    use crate::network::NetworkClient;
-    use crate::storage::mem_store::MemStore;
-    use crate::transaction::NoopTransactionVerifier;
+    use crate::{
+        authority_node::AuthorityService,
+        block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock},
+        block_verifier::NoopBlockVerifier,
+        context::Context,
+        core_thread::{CoreError, CoreThreadDispatcher},
+        network::NetworkClient,
+        storage::mem_store::MemStore,
+        transaction::NoopTransactionVerifier,
+    };
 
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -410,7 +461,8 @@ mod tests {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
-            _serialized_block: &Bytes,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
             unimplemented!("Unimplemented")
         }
@@ -419,13 +471,17 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_authority_start_and_stop() {
+    async fn test_authority_start_and_stop(
+        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+    ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
 
@@ -437,15 +493,14 @@ mod tests {
         let txn_verifier = NoopTransactionVerifier {};
 
         let own_index = committee.to_authority_index(0).unwrap();
-        let protocol_keypair = keypairs[own_index].1.copy();
-        let network_keypair = keypairs[own_index].0.copy();
+        let protocol_keypair = keypairs[own_index].1.clone();
+        let network_keypair = keypairs[own_index].0.clone();
 
         let (sender, _receiver) = unbounded_channel();
-        let commit_consumer = CommitConsumer::new(
-            sender, 0, // last_processed_index
-        );
+        let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
+            network_type,
             own_index,
             committee,
             parameters,
@@ -458,9 +513,9 @@ mod tests {
         )
         .await;
 
-        assert_eq!(authority.0.context.own_index, own_index);
-        assert_eq!(authority.0.context.committee.epoch(), 0);
-        assert_eq!(authority.0.context.committee.size(), 1);
+        assert_eq!(authority.context().own_index, own_index);
+        assert_eq!(authority.context().committee.epoch(), 0);
+        assert_eq!(authority.context().committee.size(), 1);
 
         authority.stop().await;
     }
@@ -516,8 +571,11 @@ mod tests {
     }
 
     // TODO: build AuthorityFixture.
+    #[rstest]
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_authority_committee() {
+    async fn test_authority_committee(
+        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+    ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let mut output_receivers = vec![];
         let mut authorities = vec![];
@@ -531,16 +589,15 @@ mod tests {
             };
             let txn_verifier = NoopTransactionVerifier {};
 
-            let protocol_keypair = keypairs[index].1.copy();
-            let network_keypair = keypairs[index].0.copy();
+            let protocol_keypair = keypairs[index].1.clone();
+            let network_keypair = keypairs[index].0.clone();
 
             let (sender, receiver) = unbounded_channel();
-            let commit_consumer = CommitConsumer::new(
-                sender, 0, // last_processed_index
-            );
+            let commit_consumer = CommitConsumer::new(sender, 0, 0);
             output_receivers.push(receiver);
 
             let authority = ConsensusAuthority::start(
+                network_type,
                 index,
                 committee.clone(),
                 parameters,

@@ -22,6 +22,7 @@ use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
+use sui_archival::{read_manifest_as_json, write_manifest_from_json};
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
@@ -163,6 +164,20 @@ pub enum ToolCommand {
         download_concurrency: usize,
     },
 
+    /// Tool to print the archive manifest
+    #[command(name = "print-archive-manifest")]
+    PrintArchiveManifest {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+    },
+    /// Tool to update the archive manifest
+    #[command(name = "update-archive-manifest")]
+    UpdateArchiveManifest {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[arg(long = "archive-path")]
+        archive_json_path: PathBuf,
+    },
     /// Tool to verify the archive store by comparing file checksums
     #[command(name = "verify-archive-from-checksums")]
     VerifyArchiveByChecksum {
@@ -947,6 +962,17 @@ impl ToolCommand {
                 download_concurrency,
             } => {
                 verify_archive(&genesis, object_store_config, download_concurrency, true).await?;
+            }
+            ToolCommand::PrintArchiveManifest {
+                object_store_config,
+            } => {
+                println!("{}", read_manifest_as_json(object_store_config).await?);
+            }
+            ToolCommand::UpdateArchiveManifest {
+                object_store_config,
+                archive_json_path,
+            } => {
+                write_manifest_from_json(object_store_config, archive_json_path).await?;
             }
             ToolCommand::VerifyArchiveByChecksum {
                 object_store_config,

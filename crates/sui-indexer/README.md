@@ -5,7 +5,7 @@ Sui indexer is an off-fullnode service to serve data from Sui protocol, includin
 
 ## Steps to run locally
 ### Prerequisites
-- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgresql@version` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc:
+- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgresql@15` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc:
 ```sh
 export LDFLAGS="-L/opt/homebrew/opt/postgresql@15/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@15/include"

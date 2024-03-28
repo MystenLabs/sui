@@ -10,10 +10,9 @@ use sui_graphql_rpc::config::{
     ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
 };
 use sui_graphql_rpc::server::builder::export_schema;
-use sui_graphql_rpc::server::graphiql_server::{
-    start_graphiql_server, start_graphiql_server_from_cfg_path,
-};
-use tracing::error;
+use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
 // WARNING!!!
 //
@@ -24,36 +23,33 @@ const GIT_REVISION: &str = {
         revision
     } else {
         git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
+            args = ["--always", "--abbrev=40", "--dirty", "--exclude", "*"],
             fallback = "DIRTY"
         )
     }
 };
 
 // VERSION mimics what other sui binaries use for the same const
-static VERSION: Version = Version(const_str::concat!(
-    env!("CARGO_PKG_VERSION"),
-    "-",
-    GIT_REVISION
-));
+static VERSION: Version = Version {
+    year: env!("CARGO_PKG_VERSION_MAJOR"),
+    month: env!("CARGO_PKG_VERSION_MINOR"),
+    patch: env!("CARGO_PKG_VERSION_PATCH"),
+    sha: GIT_REVISION,
+    full: const_str::concat!(
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_PATCH"),
+        "-",
+        GIT_REVISION
+    ),
+};
 
 #[tokio::main]
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
-        Command::GenerateConfig { path } => {
-            let cfg = ServerConfig::default();
-            if let Some(file) = path {
-                println!("Write config to file: {:?}", file);
-                cfg.to_yaml_file(file)
-                    .expect("Failed writing config to file");
-            } else {
-                println!(
-                    "{}",
-                    &cfg.to_yaml().expect("Failed serializing config to yaml")
-                );
-            }
-        }
         Command::GenerateDocsExamples => {
             let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             // we are looking to put examples content in
@@ -102,6 +98,8 @@ async fn main() {
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
                 .init();
+            let tracker = TaskTracker::new();
+            let cancellation_token = CancellationToken::new();
 
             println!("Starting server...");
             let server_config = ServerConfig {
@@ -112,19 +110,31 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config, &VERSION)
-                .await
-                .unwrap();
-        }
-        Command::FromConfig { path } => {
-            println!("Starting server...");
-            start_graphiql_server_from_cfg_path(path.to_str().unwrap(), &VERSION)
-                .await
-                .map_err(|x| {
-                    error!("Error: {:?}", x);
-                    x
-                })
-                .unwrap();
+            let cancellation_token_clone = cancellation_token.clone();
+            let graphql_service_handle = tracker.spawn(async move {
+                start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
+                    .await
+                    .unwrap();
+            });
+
+            // Wait for shutdown signal
+            tokio::select! {
+                result = graphql_service_handle => {
+                    if let Err(e) = result {
+                        println!("GraphQL service crashed or exited with error: {:?}", e);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    println!("Ctrl+C signal received.");
+                },
+            }
+
+            println!("Shutting down...");
+
+            // Send shutdown signal to application
+            cancellation_token.cancel();
+            tracker.close();
+            tracker.wait().await;
         }
     }
 }

@@ -7,14 +7,15 @@ use anyhow::{bail, format_err, Result};
 use move_binary_format::{
     file_format::{
         Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
-        FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle, Signature,
-        SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
+        ConstantPoolIndex, FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle,
+        Signature, SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
         StructHandleIndex, StructTypeParameter, TableIndex, TypeParameterIndex, TypeSignature,
         Visibility,
     },
     file_format_common::VERSION_MAX,
 };
 use move_bytecode_source_map::source_map::SourceMap;
+use move_command_line_common::error_bitset::ErrorBitsetBuilder;
 use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
@@ -310,6 +311,18 @@ fn verify_module(module: &ModuleDefinition) -> Result<()> {
     Ok(())
 }
 
+fn constant_name_as_constant_value_index(
+    context: &mut Context,
+    const_name: &ConstantName,
+) -> Result<ConstantPoolIndex> {
+    let name_constant = compile_constant(
+        context,
+        Type::Vector(Box::new(Type::U8)),
+        MoveValue::vector_u8(const_name.to_string().into_bytes()),
+    )?;
+    context.constant_index(name_constant)
+}
+
 /// Compile a module.
 pub fn compile_module<'a>(
     module: ModuleDefinition,
@@ -351,6 +364,16 @@ pub fn compile_module<'a>(
     }
 
     for ir_constant in module.constants {
+        // If the constant is an error constant in the source, then add the error constant's name
+        // look up the constant's name, as a constant valeu -- this may be present already,
+        // e.g., in the case of something like `const Foo: vector<u8> = b"Foo"` in which case the
+        // new index will not be added and the previous index will be used.
+        if ir_constant.is_error_constant {
+            // Will add if not present, and will return the index, or will just return
+            // index if already present.
+            constant_name_as_constant_value_index(&mut context, &ir_constant.name)?;
+        }
+
         let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
         context.declare_constant(ir_constant.name.clone(), constant.clone())?;
         let const_idx = context.constant_index(constant)?;
@@ -596,7 +619,7 @@ fn compile_type(
                 SignatureToken::Struct(sh_idx)
             } else {
                 let tokens = compile_types(context, type_parameters, tys)?;
-                SignatureToken::StructInstantiation(sh_idx, tokens)
+                SignatureToken::StructInstantiation(Box::new((sh_idx, tokens)))
             }
         }
         Type::TypeParameter(ty_var) => {
@@ -1034,11 +1057,11 @@ fn compile_expression(
                 function_frame.push()?;
             }
             CopyableVal_::U128(i) => {
-                push_instr!(exp.loc, Bytecode::LdU128(i));
+                push_instr!(exp.loc, Bytecode::LdU128(Box::new(i)));
                 function_frame.push()?;
             }
             CopyableVal_::U256(i) => {
-                push_instr!(exp.loc, Bytecode::LdU256(i));
+                push_instr!(exp.loc, Bytecode::LdU256(Box::new(i)));
                 function_frame.push()?;
             }
             CopyableVal_::ByteArray(buf) => {
@@ -1484,8 +1507,8 @@ fn compile_bytecode(
         IRBytecode_::LdU16(u) => Bytecode::LdU16(u),
         IRBytecode_::LdU32(u) => Bytecode::LdU32(u),
         IRBytecode_::LdU64(u) => Bytecode::LdU64(u),
-        IRBytecode_::LdU128(u) => Bytecode::LdU128(u),
-        IRBytecode_::LdU256(u) => Bytecode::LdU256(u),
+        IRBytecode_::LdU128(u) => Bytecode::LdU128(Box::new(u)),
+        IRBytecode_::LdU256(u) => Bytecode::LdU256(Box::new(u)),
         IRBytecode_::CastU8 => Bytecode::CastU8,
         IRBytecode_::CastU16 => Bytecode::CastU16,
         IRBytecode_::CastU32 => Bytecode::CastU32,
@@ -1659,6 +1682,27 @@ fn compile_bytecode(
             let tokens = compile_type(context, function_frame.type_parameters(), &ty)?;
             let sig = Signature(vec![tokens]);
             Bytecode::VecSwap(context.signature_index(sig)?)
+        }
+        IRBytecode_::ErrorConstant {
+            line_number,
+            constant,
+        } => {
+            let mut bitset_builder = ErrorBitsetBuilder::new(line_number);
+
+            if let Some(const_name) = constant {
+                // look up the constant's value
+                let constant_value_index = context.named_constant_index(&const_name)?.0;
+                bitset_builder.with_constant_index(constant_value_index);
+
+                // All error constant names will be inserted in bulk when adding constants to the
+                // module, so we can just use the index of the constant name here and don't need to add
+                // anything.
+                let constant_name_value_index =
+                    constant_name_as_constant_value_index(context, &const_name)?;
+                bitset_builder.with_identifier_index(constant_name_value_index.0);
+            }
+
+            Bytecode::LdU64(bitset_builder.build().bits)
         }
     };
     push_instr!(loc, ff_instr);

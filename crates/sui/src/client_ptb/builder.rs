@@ -14,8 +14,8 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use miette::Severity;
 use move_binary_format::{
-    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
-    file_format_common::VERSION_MAX,
+    access::ModuleAccess, binary_config::BinaryConfig, binary_views::BinaryIndexedView,
+    file_format::SignatureToken,
 };
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
@@ -447,7 +447,8 @@ impl<'a> PTBBuilder<'a> {
         // Otherwise it's ambiguous what the value should be, and we need to turn to the signature
         // to determine it.
         let mut is_receiving = false;
-        let mut is_mutable = false;
+        // A value is mutable by default.
+        let mut is_mutable = true;
 
         // traverse the types in the signature to see if the argument is an object argument or not,
         // and also determine if it's a receiving argument or not.
@@ -461,7 +462,11 @@ impl<'a> PTBBuilder<'a> {
                         error!(loc, "Not enough type parameters supplied for Move call");
                     }
                 }
+                SignatureToken::Reference(_) => {
+                    is_mutable = false;
+                }
                 SignatureToken::MutableReference(_) => {
+                    // Not strictly needed, but for clarity
                     is_mutable = true;
                 }
                 SignatureToken::Bool
@@ -473,8 +478,9 @@ impl<'a> PTBBuilder<'a> {
                 | SignatureToken::Vector(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
-                | SignatureToken::U256
-                | SignatureToken::Reference(_) => {}
+                | SignatureToken::U256 => {
+                    is_mutable = false;
+                }
             }
         }
 
@@ -496,7 +502,7 @@ impl<'a> PTBBuilder<'a> {
         package_name_loc: Span,
     ) -> PTBResult<Vec<Tx::Argument>> {
         let module = package
-            .deserialize_module(module_name, VERSION_MAX, true)
+            .deserialize_module(module_name, &BinaryConfig::standard())
             .map_err(|e| {
                 let help_message = if package.serialized_module_map().is_empty() {
                     Some("No modules found in this package".to_string())
@@ -781,7 +787,7 @@ impl<'a> PTBBuilder<'a> {
     ) -> PTBResult<()> {
         // let sp!(cmd_span, tok) = &command.name;
         match command {
-            ParsedPTBCommand::TransferObjects(to_address, obj_args) => {
+            ParsedPTBCommand::TransferObjects(obj_args, to_address) => {
                 let to_arg = self.resolve(to_address, ToPure).await?;
                 let mut transfer_args = vec![];
                 for o in obj_args.value.into_iter() {
@@ -1023,7 +1029,7 @@ pub fn to_ordinal_contraction(num: usize) -> String {
     format!("{}{}", num, suffix)
 }
 
-fn find_did_you_means<'a>(
+pub(crate) fn find_did_you_means<'a>(
     needle: &str,
     haystack: impl IntoIterator<Item = &'a str>,
 ) -> Vec<&'a str> {
@@ -1049,7 +1055,9 @@ fn find_did_you_means<'a>(
     results
 }
 
-fn display_did_you_mean(possibles: Vec<&str>) -> Option<String> {
+pub(crate) fn display_did_you_mean<S: AsRef<str> + std::fmt::Display>(
+    possibles: Vec<S>,
+) -> Option<String> {
     if possibles.is_empty() {
         return None;
     }

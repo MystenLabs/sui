@@ -25,15 +25,11 @@ impl CommitteeThreshold for ValidityThreshold {
     }
 }
 
-#[allow(unused)]
-
 pub(crate) struct StakeAggregator<T> {
     votes: HashSet<AuthorityIndex>,
     stake: Stake,
     _phantom: PhantomData<T>,
 }
-
-#[allow(unused)]
 
 impl<T: CommitteeThreshold> StakeAggregator<T> {
     pub(crate) fn new() -> Self {
@@ -51,6 +47,10 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
         if self.votes.insert(vote) {
             self.stake += committee.stake(vote);
         }
+        T::is_threshold(committee, self.stake)
+    }
+
+    pub(crate) fn reached_threshold(&self, committee: &Committee) -> bool {
         T::is_threshold(committee, self.stake)
     }
 

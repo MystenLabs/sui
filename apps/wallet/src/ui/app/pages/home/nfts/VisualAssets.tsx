@@ -3,6 +3,7 @@
 
 import { ErrorBoundary } from '_components/error-boundary';
 import { ampli } from '_src/shared/analytics/ampli';
+import { useBuyNLargeAsset } from '_src/ui/app/components/buynlarge/useBuyNLargeAsset';
 import { NFTDisplayCard } from '_src/ui/app/components/nft-display';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { getKioskIdFromOwnerCap, isKioskOwnerToken } from '@mysten/core';
@@ -16,6 +17,8 @@ import { useHiddenAssets } from '../hidden-assets/HiddenAssetsProvider';
 export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 	const { hideAsset } = useHiddenAssets();
 	const kioskClient = useKioskClient();
+	const { objectType } = useBuyNLargeAsset();
+
 	return (
 		<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
 			{items.map((object) => (
@@ -40,7 +43,7 @@ export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 				>
 					<div className="group">
 						<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
-							{!isKioskOwnerToken(kioskClient.network, object) ? (
+							{!isKioskOwnerToken(kioskClient.network, object) && object.type !== objectType ? (
 								<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
 									<Button
 										variant="hidden"
@@ -60,7 +63,13 @@ export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 							) : null}
 						</div>
 						<ErrorBoundary>
-							<NFTDisplayCard objectId={object.objectId} size="lg" animateHover borderRadius="xl" />
+							<NFTDisplayCard
+								hideLabel={object.type === objectType}
+								objectId={object.objectId}
+								size="lg"
+								animateHover
+								borderRadius="xl"
+							/>
 						</ErrorBoundary>
 					</div>
 				</Link>

@@ -25,7 +25,6 @@ mod pipelined_committer_tests;
 /// A universal committer uses a collection of committers to commit a sequence of leaders.
 /// It can be configured to use a combination of different commit strategies, including
 /// multi-leaders, backup leaders, and pipelines.
-#[allow(unused)]
 pub(crate) struct UniversalCommitter {
     /// The per-epoch configuration of this authority.
     context: Arc<Context>,
@@ -121,7 +120,7 @@ impl UniversalCommitter {
         self.context
             .metrics
             .node_metrics
-            .decided_leaders_total
+            .committed_leaders_total
             .with_label_values(&[&authority, &status])
             .inc();
     }
@@ -129,7 +128,6 @@ impl UniversalCommitter {
 
 /// A builder for a universal committer. By default, the builder creates a single
 /// base committer, that is, a single leader and no pipeline.
-#[allow(unused)]
 pub(crate) mod universal_committer_builder {
     use super::*;
     use crate::{
@@ -159,6 +157,7 @@ pub(crate) mod universal_committer_builder {
             }
         }
 
+        #[allow(unused)]
         pub(crate) fn with_wave_length(mut self, wave_length: Round) -> Self {
             self.wave_length = wave_length;
             self

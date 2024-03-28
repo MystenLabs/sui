@@ -9,11 +9,14 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata,
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
-use consensus_config::{Authority, Committee as ConsensusCommittee};
+use consensus_config::{
+    Authority, AuthorityPublicKey, Committee as ConsensusCommittee, NetworkPublicKey,
+    ProtocolPublicKey,
+};
 use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
-use tracing::warn;
+use tracing::{error, warn};
 
 #[enum_dispatch]
 pub trait EpochStartSystemStateTrait {
@@ -167,7 +170,6 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         Committee::new(self.epoch, voting_rights)
     }
 
-    #[allow(clippy::mutable_key_type)]
     fn get_narwhal_committee(&self) -> NarwhalCommittee {
         let mut committee_builder = CommitteeBuilder::new(self.epoch as narwhal_config::Epoch);
 
@@ -184,7 +186,6 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         committee_builder.build()
     }
 
-    #[allow(clippy::mutable_key_type)]
     fn get_mysticeti_committee(&self) -> ConsensusCommittee {
         let mut authorities = vec![];
         for validator in self.active_validators.iter() {
@@ -193,9 +194,27 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                 // TODO(mysticeti): Add EpochStartValidatorInfoV2 with new field for mysticeti address.
                 address: validator.narwhal_primary_address.clone(),
                 hostname: validator.hostname.clone(),
-                network_key: validator.narwhal_network_pubkey.clone(),
-                protocol_key: validator.protocol_pubkey.clone(),
+                authority_key: AuthorityPublicKey::new(validator.protocol_pubkey.clone()),
+                protocol_key: ProtocolPublicKey::new(validator.narwhal_worker_pubkey.clone()),
+                network_key: NetworkPublicKey::new(validator.narwhal_network_pubkey.clone()),
             });
+        }
+
+        // Sort the authorities by their protocol (public) key in ascending order, same as the order
+        // in the Sui committee returned from get_sui_committee().
+        authorities.sort_by(|a1, a2| a1.authority_key.cmp(&a2.authority_key));
+
+        for ((i, mysticeti_authority), sui_authority_name) in authorities
+            .iter()
+            .enumerate()
+            .zip(self.get_sui_committee().names())
+        {
+            if sui_authority_name.0 != mysticeti_authority.authority_key.to_bytes() {
+                error!(
+                    "Mismatched authority order between Sui and Mysticeti! Index {}, Mysticeti authority {:?}\nSui authority name {}",
+                    i, mysticeti_authority, sui_authority_name
+                );
+            }
         }
 
         ConsensusCommittee::new(self.epoch as consensus_config::Epoch, authorities)
@@ -296,5 +315,89 @@ pub struct EpochStartValidatorInfoV1 {
 impl EpochStartValidatorInfoV1 {
     pub fn authority_name(&self) -> AuthorityName {
         (&self.protocol_pubkey).into()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::base_types::SuiAddress;
+    use crate::committee::CommitteeTrait;
+    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use crate::sui_system_state::epoch_start_sui_system_state::{
+        EpochStartSystemStateTrait, EpochStartSystemStateV1, EpochStartValidatorInfoV1,
+    };
+    use fastcrypto::traits::KeyPair;
+    use mysten_network::Multiaddr;
+    use narwhal_crypto::NetworkKeyPair;
+    use rand::thread_rng;
+    use sui_protocol_config::ProtocolVersion;
+
+    #[test]
+    fn test_sui_and_mysticeti_committee_are_same() {
+        // GIVEN
+        let mut active_validators = vec![];
+
+        for i in 0..10 {
+            let (sui_address, protocol_key): (SuiAddress, AuthorityKeyPair) = get_key_pair();
+            let narwhal_network_key = NetworkKeyPair::generate(&mut thread_rng());
+
+            active_validators.push(EpochStartValidatorInfoV1 {
+                sui_address,
+                protocol_pubkey: protocol_key.public().clone(),
+                narwhal_network_pubkey: narwhal_network_key.public().clone(),
+                narwhal_worker_pubkey: narwhal_network_key.public().clone(),
+                sui_net_address: Multiaddr::empty(),
+                p2p_address: Multiaddr::empty(),
+                narwhal_primary_address: Multiaddr::empty(),
+                narwhal_worker_address: Multiaddr::empty(),
+                voting_power: 1_000,
+                hostname: format!("host-{i}").to_string(),
+            })
+        }
+
+        let state = EpochStartSystemStateV1 {
+            epoch: 10,
+            protocol_version: ProtocolVersion::MAX.as_u64(),
+            reference_gas_price: 0,
+            safe_mode: false,
+            epoch_start_timestamp_ms: 0,
+            epoch_duration_ms: 0,
+            active_validators,
+        };
+
+        // WHEN
+        let sui_committee = state.get_sui_committee();
+        let mysticeti_committee = state.get_mysticeti_committee();
+
+        // THEN
+        // assert the validators details
+        assert_eq!(sui_committee.num_members(), 10);
+        assert_eq!(sui_committee.num_members(), mysticeti_committee.size());
+        assert_eq!(
+            sui_committee.validity_threshold(),
+            mysticeti_committee.validity_threshold()
+        );
+        assert_eq!(
+            sui_committee.quorum_threshold(),
+            mysticeti_committee.quorum_threshold()
+        );
+        assert_eq!(state.epoch, mysticeti_committee.epoch());
+
+        for (authority_index, mysticeti_authority) in mysticeti_committee.authorities() {
+            let sui_authority_name = sui_committee
+                .authority_by_index(authority_index.value() as u32)
+                .unwrap();
+
+            assert_eq!(
+                mysticeti_authority.authority_key.to_bytes(),
+                sui_authority_name.0,
+                "Mysten & SUI committee member of same index correspond to different public key"
+            );
+            assert_eq!(
+                mysticeti_authority.stake,
+                sui_committee.weight(sui_authority_name),
+                "Mysten & SUI committee member stake differs"
+            );
+        }
     }
 }

@@ -5,6 +5,7 @@ use crate::client_ptb::ptb::PTB;
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
+    fs,
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -19,13 +20,14 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 
+use move_binary_format::CompiledModule;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
 use sui_move::build::resolve_lock_file_path;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 use shared_crypto::intent::Intent;
@@ -81,6 +83,7 @@ use crate::key_identity::{get_identity_address, KeyIdentity};
 #[cfg(test)]
 mod profiler_tests;
 
+#[macro_export]
 macro_rules! serialize_or_execute {
     ($tx_data:expr, $serialize_unsigned:expr, $serialize_signed:expr, $context:expr, $result_variant:ident) => {{
         assert!(
@@ -182,6 +185,10 @@ pub enum SuiClientCommands {
         /// Gas budget for this call
         #[clap(long)]
         gas_budget: u64,
+
+        /// Optional gas price for this call. Currently use only for testing and not in production enviroments.
+        #[clap(hide = true)]
+        gas_price: Option<u64>,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
         /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
@@ -655,9 +662,18 @@ pub enum SuiClientCommands {
     /// Run the bytecode verifier on the package
     #[clap(name = "verify-bytecode-meter")]
     VerifyBytecodeMeter {
-        /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
-        package_path: PathBuf,
+        /// Path to directory containing a Move package, (defaults to the current directory)
+        #[clap(name = "package", long, global = true)]
+        package_path: Option<PathBuf>,
+
+        /// Protocol version to use for the bytecode verifier (defaults to the latest protocol
+        /// version)
+        #[clap(name = "protocol-version", long)]
+        protocol_version: Option<u64>,
+
+        /// Path to specific pre-compiled module bytecode to verify (instead of an entire package)
+        #[clap(name = "module", long, global = true)]
+        module_path: Option<PathBuf>,
 
         /// Package build options
         #[clap(flatten)]
@@ -1052,20 +1068,49 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::VerifyBytecodeMeter {
+                protocol_version,
+                module_path,
                 package_path,
                 build_config,
             } => {
-                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+                let protocol_version =
+                    protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
+                let protocol_config =
+                    ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
-                let package = compile_package_simple(build_config, package_path)?;
-                let modules: Vec<_> = package.get_modules().cloned().collect();
+                let modules = match (module_path, package_path) {
+                    (Some(_), Some(_)) => {
+                        bail!("Cannot specify both a module path and a package path")
+                    }
+
+                    (Some(module_path), None) => {
+                        let module_bytes =
+                            fs::read(module_path).context("Failed to read module file")?;
+                        let module = CompiledModule::deserialize_with_defaults(&module_bytes)
+                            .context("Failed to deserialize module")?;
+                        vec![module]
+                    }
+
+                    (None, package_path) => {
+                        let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
+                        let package = compile_package_simple(build_config, package_path)?;
+                        package.get_modules().cloned().collect()
+                    }
+                };
 
                 let mut verifier =
                     sui_execution::verifier(&protocol_config, true, &bytecode_verifier_metrics);
                 let overrides = VerifierOverrides::new(None, None);
-                println!("Running bytecode verifier for {} modules", modules.len());
+
+                println!(
+                    "Running bytecode verifier for {} module{}",
+                    modules.len(),
+                    if modules.len() != 1 { "s" } else { "" },
+                );
+
                 let verifier_values = verifier.meter_compiled_modules_with_overrides(
                     &modules,
                     &protocol_config,
@@ -1128,12 +1173,14 @@ impl SuiClientCommands {
                 type_args,
                 gas,
                 gas_budget,
+                gas_price,
                 args,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
                 let tx_data = construct_move_call_transaction(
-                    package, &module, &function, type_args, gas, gas_budget, args, context,
+                    package, &module, &function, type_args, gas, gas_budget, gas_price, args,
+                    context,
                 )
                 .await?;
                 serialize_or_execute!(
@@ -1803,6 +1850,7 @@ impl Display for SuiClientCommandResult {
                     1,
                     TableStyle::modern().get_horizontal(),
                 )]));
+                table.with(tabled::settings::style::BorderSpanCorrection);
                 write!(f, "{}", table)?;
             }
             SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
@@ -1829,11 +1877,12 @@ impl Display for SuiClientCommandResult {
                 }
 
                 let mut builder = TableBuilder::default();
-                builder.set_header(vec!["gasCoinId", "gasBalance"]);
+                builder.set_header(vec!["gasCoinId", "mistBalance (MIST)", "suiBalance (SUI)"]);
                 for coin in &gas_coins {
                     builder.push_record(vec![
                         coin.gas_coin_id.to_string(),
-                        coin.gas_balance.to_string(),
+                        coin.mist_balance.to_string(),
+                        coin.sui_balance.to_string(),
                     ]);
                 }
                 let mut table = builder.build();
@@ -2068,6 +2117,7 @@ async fn construct_move_call_transaction(
     type_args: Vec<TypeTag>,
     gas: Option<ObjectID>,
     gas_budget: u64,
+    gas_price: Option<u64>,
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
 ) -> Result<TransactionData, anyhow::Error> {
@@ -2088,7 +2138,7 @@ async fn construct_move_call_transaction(
     client
         .transaction_builder()
         .move_call(
-            sender, package, module, function, type_args, args, gas, gas_budget,
+            sender, package, module, function, type_args, args, gas, gas_budget, gas_price,
         )
         .await
 }
@@ -2236,14 +2286,16 @@ impl From<&SuiObjectData> for ObjectOutput {
 #[serde(rename_all = "camelCase")]
 pub struct GasCoinOutput {
     pub gas_coin_id: ObjectID,
-    pub gas_balance: u64,
+    pub mist_balance: u64,
+    pub sui_balance: String,
 }
 
 impl From<&GasCoin> for GasCoinOutput {
     fn from(gas_coin: &GasCoin) -> Self {
         Self {
             gas_coin_id: *gas_coin.id(),
-            gas_balance: gas_coin.value(),
+            mist_balance: gas_coin.value(),
+            sui_balance: format_balance(gas_coin.value() as u128, 9, 2, None),
         }
     }
 }
@@ -2392,43 +2444,129 @@ fn pretty_print_balance(
     builder: &mut TableBuilder,
     with_coins: bool,
 ) {
+    let format_decmials = 2;
     let mut table_builder = TableBuilder::default();
+    if !with_coins {
+        table_builder.set_header(vec!["coin", "balance (raw)", "balance", ""]);
+    }
     for (metadata, coins) in coins_by_type {
-        let name = metadata
-            .as_ref()
-            .map(|x| x.name.as_str())
-            .unwrap_or_else(|| "unknown");
+        let (name, symbol, coin_decimals) = if let Some(metadata) = metadata {
+            (
+                metadata.name.as_str(),
+                metadata.symbol.as_str(),
+                metadata.decimals,
+            )
+        } else {
+            ("unknown", "unknown_symbol", 9)
+        };
+
+        let balance = coins.iter().map(|x| x.balance as u128).sum::<u128>();
+        let mut inner_table = TableBuilder::default();
+        inner_table.set_header(vec!["coinId", "balance (raw)", "balance", ""]);
+
         if with_coins {
             let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
-            builder.push_record(vec![format!(
-                "{}: {} {coin_numbers}, Balance: {}\n ┌",
+            let balance_formatted = format!(
+                "({} {})",
+                format_balance(balance, coin_decimals, format_decmials, Some(symbol)),
+                symbol
+            );
+            let summary = format!(
+                "{}: {} {coin_numbers}, Balance: {} {}",
                 name,
                 coins.len(),
-                coins.iter().map(|x| x.balance as u128).sum::<u128>(),
-            )]);
-
-            let mut table_builder = TableBuilder::default();
+                balance,
+                balance_formatted
+            );
             for c in coins {
-                table_builder.push_record(vec![
-                    "│",
+                inner_table.push_record(vec![
                     c.coin_object_id.to_string().as_str(),
-                    format!("{}", c.balance).as_str(),
+                    c.balance.to_string().as_str(),
+                    format_balance(
+                        c.balance as u128,
+                        coin_decimals,
+                        format_decmials,
+                        Some(symbol),
+                    )
+                    .as_str(),
                 ]);
             }
-            builder.push_record(vec![table_builder
-                .build()
-                .with(TableStyle::empty())
-                .to_string()]);
-            builder.push_record(vec![format!(" └")]);
+            let mut table = inner_table.build();
+            table.with(TablePanel::header(summary));
+            table.with(
+                TableStyle::rounded()
+                    .horizontals([
+                        HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
+                        HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+                    ])
+                    .remove_vertical(),
+            );
+            table.with(tabled::settings::style::BorderSpanCorrection);
+            builder.push_record(vec![table.to_string()]);
         } else {
             table_builder.push_record(vec![
                 name,
-                format!("{}", coins.iter().map(|x| x.balance as u128).sum::<u128>()).as_str(),
+                balance.to_string().as_str(),
+                format_balance(balance, coin_decimals, format_decmials, Some(symbol)).as_str(),
             ]);
         }
     }
-    builder.push_record(vec![table_builder
-        .build()
-        .with(TableStyle::blank())
-        .to_string()]);
+
+    let mut table = table_builder.build();
+    table.with(
+        TableStyle::rounded()
+            .horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )])
+            .remove_vertical(),
+    );
+    table.with(tabled::settings::style::BorderSpanCorrection);
+    builder.push_record(vec![table.to_string()]);
+}
+
+fn divide(value: u128, divisor: u128) -> (u128, u128) {
+    let integer_part = value / divisor;
+    let fractional_part = value % divisor;
+    (integer_part, fractional_part)
+}
+
+fn format_balance(
+    value: u128,
+    coin_decimals: u8,
+    format_decimals: usize,
+    symbol: Option<&str>,
+) -> String {
+    let mut suffix = if let Some(symbol) = symbol {
+        format!(" {symbol}")
+    } else {
+        "".to_string()
+    };
+
+    let mut coin_decimals = coin_decimals as u32;
+    let billions = 10u128.pow(coin_decimals + 9);
+    let millions = 10u128.pow(coin_decimals + 6);
+    let thousands = 10u128.pow(coin_decimals + 3);
+    let units = 10u128.pow(coin_decimals);
+
+    let (whole, fractional) = if value > billions {
+        coin_decimals += 9;
+        suffix = format!("B{suffix}");
+        divide(value, billions)
+    } else if value > millions {
+        coin_decimals += 6;
+        suffix = format!("M{suffix}");
+        divide(value, millions)
+    } else if value > thousands {
+        coin_decimals += 3;
+        suffix = format!("K{suffix}");
+        divide(value, thousands)
+    } else {
+        divide(value, units)
+    };
+
+    let mut fractional = format!("{fractional:0width$}", width = coin_decimals as usize);
+    fractional.truncate(format_decimals);
+
+    format!("{whole}.{fractional}{suffix}")
 }

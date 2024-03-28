@@ -7,19 +7,17 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, Round, VerifiedBlock},
-    commit::{Commit, CommitIndex, CommittedSubDag},
+    commit::{Commit, CommitIndex, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
 };
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
-#[allow(unused)]
 #[derive(Clone)]
 pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
 }
 
-#[allow(unused)]
 impl Linearizer {
     pub(crate) fn new(dag_state: Arc<RwLock<DagState>>) -> Self {
         Self { dag_state }
@@ -89,7 +87,8 @@ impl Linearizer {
         for leader_block in committed_leaders {
             // Grab latest commit state from dag state
             let dag_state = self.dag_state.read();
-            let mut last_commit_index = dag_state.last_commit_index();
+            let last_commit_index = dag_state.last_commit_index();
+            let last_commit_digest = dag_state.last_commit_digest();
             let mut last_committed_rounds = dag_state.last_committed_rounds();
             drop(dag_state);
 
@@ -103,11 +102,12 @@ impl Linearizer {
             // [Optional] sort the sub-dag using a deterministic algorithm.
             sub_dag.sort();
 
-            // Update last commit in dag state
-            let commit = Commit {
-                index: sub_dag.commit_index,
-                leader: sub_dag.leader,
-                blocks: sub_dag
+            // Buffer commit in dag state for persistence later.
+            let commit = Commit::new(
+                sub_dag.commit_index,
+                last_commit_digest,
+                sub_dag.leader,
+                sub_dag
                     .blocks
                     .iter()
                     .map(|block| {
@@ -115,9 +115,12 @@ impl Linearizer {
                         last_committed_rounds[block_ref.author.value()] = block_ref.round;
                         block_ref
                     })
-                    .collect::<Vec<_>>(),
-                last_committed_rounds,
-            };
+                    .collect(),
+            );
+            let serialized = commit
+                .serialize()
+                .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
+            let commit = TrustedCommit::new_trusted(commit, serialized);
             self.dag_state.write().add_commit(commit.clone());
             committed_sub_dags.push(sub_dag);
         }
@@ -137,7 +140,7 @@ impl Linearizer {
 mod tests {
     use super::*;
     use crate::{
-        commit::DEFAULT_WAVE_LENGTH,
+        commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
         context::Context,
         leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
@@ -191,7 +194,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as u64 + 1);
+            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
         }
     }
 
@@ -247,12 +250,12 @@ mod tests {
 
         let first_leader = leaders[0].clone();
         let mut last_commit_index = 1;
-        let first_commit_data = Commit {
-            index: last_commit_index,
-            leader: first_leader.reference(),
-            blocks: blocks.clone(),
-            last_committed_rounds,
-        };
+        let first_commit_data = TrustedCommit::new_for_test(
+            last_commit_index,
+            CommitDigest::MIN,
+            first_leader.reference(),
+            blocks.clone(),
+        );
         dag_state.write().add_commit(first_commit_data);
 
         blocks.clear();
@@ -298,12 +301,12 @@ mod tests {
 
         last_commit_index += 1;
         let second_leader = leaders[1].clone();
-        let expected_second_commit_data = Commit {
-            index: last_commit_index,
-            leader: second_leader.reference(),
-            blocks: blocks.clone(),
-            last_committed_rounds: vec![],
-        };
+        let expected_second_commit = TrustedCommit::new_for_test(
+            last_commit_index,
+            CommitDigest::MIN,
+            second_leader.reference(),
+            blocks.clone(),
+        );
 
         let commit = linearizer.handle_commit(vec![second_leader.clone()]);
         assert_eq!(commit.len(), 1);
@@ -312,7 +315,7 @@ mod tests {
         tracing::info!("{subdag:?}");
         assert_eq!(subdag.leader, second_leader.reference());
         assert_eq!(subdag.timestamp_ms, second_leader.timestamp_ms());
-        assert_eq!(subdag.commit_index, expected_second_commit_data.index);
+        assert_eq!(subdag.commit_index, expected_second_commit.index());
 
         // Using the same sorting as used in CommittedSubDag::sort
         blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
@@ -326,7 +329,7 @@ mod tests {
             blocks
         );
         for block in subdag.blocks.iter() {
-            assert!(block.round() <= expected_second_commit_data.leader.round);
+            assert!(block.round() <= expected_second_commit.leader().round);
         }
     }
 }

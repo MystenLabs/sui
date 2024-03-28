@@ -868,7 +868,7 @@ pub enum SignatureToken {
     Vector(Box<SignatureToken>),
     /// User defined type
     Struct(StructHandleIndex),
-    StructInstantiation(StructHandleIndex, Vec<SignatureToken>),
+    StructInstantiation(Box<(StructHandleIndex, Vec<SignatureToken>)>),
     /// Reference to a type.
     Reference(Box<SignatureToken>),
     /// Mutable reference to a type.
@@ -904,7 +904,8 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIter<'a> {
                         self.stack.push(inner_tok)
                     }
 
-                    StructInstantiation(_, inner_toks) => {
+                    StructInstantiation(struct_inst) => {
+                        let (_, inner_toks) = &**struct_inst;
                         self.stack.extend(inner_toks.iter().rev())
                     }
 
@@ -937,9 +938,12 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
                         self.stack.push((inner_tok, depth + 1))
                     }
 
-                    StructInstantiation(_, inner_toks) => self
-                        .stack
-                        .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev()),
+                    StructInstantiation(struct_inst) => {
+                        let (_, inner_toks) = &**struct_inst;
+                        self
+                            .stack
+                            .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev())
+                    },
 
                     Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Struct(_)
                     | TypeParameter(_) => (),
@@ -1002,7 +1006,8 @@ impl std::fmt::Debug for SignatureToken {
             SignatureToken::Signer => write!(f, "Signer"),
             SignatureToken::Vector(boxed) => write!(f, "Vector({:?})", boxed),
             SignatureToken::Struct(idx) => write!(f, "Struct({:?})", idx),
-            SignatureToken::StructInstantiation(idx, types) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (idx, types) = &**struct_inst;
                 write!(f, "StructInstantiation({:?}, {:?})", idx, types)
             }
             SignatureToken::Reference(boxed) => write!(f, "Reference({:?})", boxed),
@@ -1033,7 +1038,7 @@ impl SignatureToken {
             | Address
             | Signer
             | Struct(_)
-            | StructInstantiation(_, _)
+            | StructInstantiation(_)
             | Vector(_) => SignatureTokenKind::Value,
             // TODO: This is a temporary hack to please the verifier. SignatureTokenKind will soon
             // be completely removed. `SignatureTokenView::kind()` should be used instead.
@@ -1051,7 +1056,7 @@ impl SignatureToken {
             | Signer
             | Vector(_)
             | Struct(_)
-            | StructInstantiation(_, _)
+            | StructInstantiation(_)
             | Reference(_)
             | MutableReference(_)
             | TypeParameter(_) => false,
@@ -1089,7 +1094,7 @@ impl SignatureToken {
             Vector(inner) => inner.is_valid_for_constant(),
             Signer
             | Struct(_)
-            | StructInstantiation(_, _)
+            | StructInstantiation(_)
             | Reference(_)
             | MutableReference(_)
             | TypeParameter(_) => false,
@@ -1102,7 +1107,7 @@ impl SignatureToken {
     pub fn debug_set_sh_idx(&mut self, sh_idx: StructHandleIndex) {
         match self {
             SignatureToken::Struct(ref mut wrapped) => *wrapped = sh_idx,
-            SignatureToken::StructInstantiation(ref mut wrapped, _) => *wrapped = sh_idx,
+            SignatureToken::StructInstantiation(ref mut struct_inst) => Box::as_mut(struct_inst).0 = sh_idx,
             SignatureToken::Reference(ref mut token)
             | SignatureToken::MutableReference(ref mut token) => token.debug_set_sh_idx(sh_idx),
             other => panic!(
@@ -1215,7 +1220,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., u128_value```
-    LdU128(u128),
+    LdU128(Box<u128>),
     /// Convert the value at the top of the stack into u8.
     ///
     /// Stack transition:
@@ -1589,7 +1594,7 @@ pub enum Bytecode {
     /// Stack transition:
     ///
     /// ```... -> ..., u256_value```
-    LdU256(move_core_types::u256::U256),
+    LdU256(Box<move_core_types::u256::U256>),
     /// Convert the value at the top of the stack into u16.
     ///
     /// Stack transition:

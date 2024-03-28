@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::{BufRead, Seek, SeekFrom, Write},
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
@@ -36,6 +36,7 @@ use crate::{
     lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
+use move_compiler::linters::LintLevel;
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(about)]
@@ -100,9 +101,64 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
+    #[clap(flatten)]
+    pub lint_flag: LintFlag,
+}
+
+#[derive(
+    Parser, Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default,
+)]
+pub struct LintFlag {
     /// If `true`, disable linters
-    #[clap(long, global = true)]
-    pub no_lint: bool,
+    #[clap(
+        name = "no-lint",
+        long = "no-lint",
+        global = true,
+        group = "lint-level"
+    )]
+    no_lint: bool,
+
+    /// If `true`, enables extra linters
+    #[clap(name = "lint", long = "lint", global = true, group = "lint-level")]
+    lint: bool,
+}
+
+impl LintFlag {
+    pub const LEVEL_NONE: Self = Self {
+        no_lint: true,
+        lint: false,
+    };
+    pub const LEVEL_DEFAULT: Self = Self {
+        no_lint: false,
+        lint: false,
+    };
+    pub const LEVEL_ALL: Self = Self {
+        no_lint: false,
+        lint: true,
+    };
+
+    pub fn get(self) -> LintLevel {
+        match self {
+            Self::LEVEL_NONE => LintLevel::None,
+            Self::LEVEL_DEFAULT => LintLevel::Default,
+            Self::LEVEL_ALL => LintLevel::All,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn set(&mut self, level: LintLevel) {
+        *self = level.into();
+    }
+}
+
+impl From<LintLevel> for LintFlag {
+    fn from(level: LintLevel) -> Self {
+        match level {
+            LintLevel::None => Self::LEVEL_NONE,
+            LintLevel::Default => Self::LEVEL_DEFAULT,
+            LintLevel::All => Self::LEVEL_ALL,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -161,11 +217,14 @@ impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn migrate_package<W: Write, R: BufRead>(
-        self,
+        mut self,
         path: &Path,
         writer: &mut W,
         reader: &mut R,
     ) -> Result<()> {
+        // we set test and dev mode to migrate all the code
+        self.test_mode = true;
+        self.dev_mode = true;
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
@@ -212,7 +271,8 @@ impl BuildConfig {
         let path = SourcePackageLayout::try_find_root(path)?;
         let manifest_string =
             std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
-        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let lock_path = path.join(SourcePackageLayout::Lock.path());
+        let lock_string = std::fs::read_to_string(lock_path.clone()).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
         let install_dir_set = self.install_dir.is_some();
@@ -233,7 +293,7 @@ impl BuildConfig {
         if modified || install_dir_set {
             // (1) Write the Move.lock file if the existing one is `modified`, or
             // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
-            let lock = dependency_graph.write_to_lock(install_dir)?;
+            let lock = dependency_graph.write_to_lock(install_dir, Some(lock_path))?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
             }
@@ -274,7 +334,6 @@ impl BuildConfig {
         };
         let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
         let mut lock = LockFile::from(install_dir, lock_file)?;
-        lock.seek(SeekFrom::Start(0))?;
         update_compiler_toolchain(
             &mut lock,
             compiler_version,

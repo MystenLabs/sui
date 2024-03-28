@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --simulator
+//# init --protocol-version 39 --simulator
 
 //# run-graphql
 {
@@ -20,7 +20,7 @@
     digest
     sequenceNumber
   }
-  
+
   last: checkpoint {
     digest
     sequenceNumber
@@ -50,10 +50,9 @@
     digest
     sequenceNumber
   }
-  
+
   last: checkpoint {
     digest
     sequenceNumber
   }
 }
-

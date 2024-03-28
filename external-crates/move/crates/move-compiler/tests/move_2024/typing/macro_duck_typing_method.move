@@ -15,7 +15,8 @@ module a::m {
     // this is "duck typing" in the sense that this macro can be called only by those
     // types that "walk and talk like a duck"
     macro fun call_foo<$T>($x: $T) {
-        $x.foo()
+        let x = $x;
+        x.foo()
     }
 
     fun t() {

@@ -45,7 +45,6 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
-use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
@@ -612,11 +611,7 @@ impl SuiAddress {
         let iss_bytes = inputs.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
-        // this converts an address seed from bigint to bytes, length can be shorter than 32 bytes and left unpadded.
-        hasher.update(
-            big_int_str_to_bytes(inputs.get_address_seed())
-                .map_err(|_| SuiError::InvalidAddress)?,
-        );
+        hasher.update(inputs.get_address_seed().unpadded());
         Ok(SuiAddress(hasher.finalize().digest))
     }
 }

@@ -8,11 +8,16 @@ use tracing::{info, warn};
 
 use crate::metrics::IndexerMetrics;
 
+pub struct CheckpointDownloadData {
+    pub size: usize,
+    pub data: CheckpointData,
+}
+
 pub struct CheckpointFetcher {
     client: Client,
     last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
     highest_known_checkpoint: CheckpointSequenceNumber,
-    sender: mysten_metrics::metered_channel::Sender<CheckpointData>,
+    sender: mysten_metrics::metered_channel::Sender<CheckpointDownloadData>,
     metrics: IndexerMetrics,
 }
 
@@ -23,7 +28,7 @@ impl CheckpointFetcher {
     pub fn new(
         client: Client,
         last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
-        sender: mysten_metrics::metered_channel::Sender<CheckpointData>,
+        sender: mysten_metrics::metered_channel::Sender<CheckpointDownloadData>,
         metrics: IndexerMetrics,
     ) -> Self {
         Self {
@@ -100,8 +105,12 @@ impl CheckpointFetcher {
             self.metrics
                 .checkpoint_download_bytes_size
                 .set(checkpoint_bytes_size as i64);
+            let cp_download_data = CheckpointDownloadData {
+                size: checkpoint_bytes_size,
+                data: checkpoint,
+            };
             self.sender
-                .send(checkpoint)
+                .send(cp_download_data)
                 .await
                 .expect("channel shouldn't be closed");
         }

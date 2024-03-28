@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{error::Elapsed, sleep, sleep_until, timeout, Instant};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::block::{BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
@@ -24,6 +24,7 @@ use crate::context::Context;
 use crate::core_thread::CoreThreadDispatcher;
 use crate::error::{ConsensusError, ConsensusResult};
 use crate::network::NetworkClient;
+use crate::BlockAPI;
 use consensus_config::AuthorityIndex;
 
 /// The number of concurrent fetch blocks requests per authority
@@ -43,7 +44,6 @@ enum Command {
     },
 }
 
-#[allow(dead_code)]
 pub(crate) struct SynchronizerHandle {
     commands_sender: Sender<Command>,
     tasks: Mutex<JoinSet<()>>,
@@ -75,7 +75,6 @@ impl SynchronizerHandle {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
@@ -238,6 +237,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         }
                     }
+                },
+                else => {
+                    info!("Fetching blocks from authority {peer_index} task will now abort.");
+                    break;
                 }
             }
         }
@@ -271,7 +274,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&peer_index.to_string(), "synchronizer"])
+                    .with_label_values(&[&signed_block.author().to_string(), "synchronizer"])
                     .inc();
                 warn!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
@@ -315,7 +318,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let start = Instant::now();
         let resp = timeout(
             request_timeout,
-            network_client.fetch_blocks(peer, block_refs.clone().into_iter().collect::<Vec<_>>()),
+            network_client.fetch_blocks(
+                peer,
+                block_refs.clone().into_iter().collect::<Vec<_>>(),
+                request_timeout,
+            ),
         )
         .await;
 
@@ -561,7 +568,8 @@ mod tests {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
-            _serialized_block: &Bytes,
+            _serialized_block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
             todo!()
         }
@@ -570,6 +578,7 @@ mod tests {
             &self,
             peer: AuthorityIndex,
             block_refs: Vec<BlockRef>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             let mut lock = self.fetch_blocks_requests.lock().await;
             let response = lock

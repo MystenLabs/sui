@@ -3,9 +3,6 @@ title: Install Sui
 description: Install the Sui framework and required prerequisites on your system, including the Sui command line interface to interact with the Sui network.
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 The quickest way to install Sui is using the binaries delivered with every release. If you require more control over the install process, you can install from source. To take advantage of containerization, you can utilize the Docker images in the `docker` folder of the sui repository.
 
 ## Supported operating systems {#supported-operating-systems}
@@ -16,13 +13,31 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey
 - Microsoft Windows - Windows 10 and 11
 
-## Install using Homebrew {#install-homebrew}
+## Quick install using Homebrew or Chocolatey {#install-homebrew}
 
-If you use [Homebrew](https://brew.sh/), you can install Sui with the following command:
+Use one of the following commands for [Homebrew](https://brew.sh/) (MacOS, Linux, or Windows Subsystem for Linux) or [Chocolatey](https://chocolatey.org/) (Windows) to install Sui.
+
+<Tabs groupId="operating-systems">
+
+<TabItem label="Homebrew" value="mac">
 
 ```bash
 brew install sui
 ```
+
+</TabItem>
+
+<TabItem label="Chocolatey" value="win">
+
+```shell
+choco install sui
+```
+
+Find more [versions of Sui for Windows](https://community.chocolatey.org/packages/sui) on the Chocolatey community website.
+
+</TabItem>
+
+</Tabs>
 
 ## Install from binaries {#install-binaries}
 
@@ -119,12 +134,10 @@ sudo apt-get update
 ```
 
 #### All Linux prerequisites
-
+ 
 Reference the relevant sections that follow to install each prerequisite individually, or run the following to install them all at once:
 
-```bash
-sudo apt-get install curl git-all cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
-```
+{@include: ../../../snippets/linux-deps.mdx}
 
 #### cURL {#curl}
 
@@ -245,9 +258,7 @@ If you used the commands in the [Install using Homebrew](#install-homebrew) sect
 
 With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
 
-```bash
-brew install curl cmake libpq git
-```
+{@include: ../../../snippets/macos-deps.mdx}
 
 
 #### cURL {#curl-1}

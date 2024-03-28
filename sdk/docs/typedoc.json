@@ -1,0 +1,18 @@
+{
+	"entryPoints": [
+		"../bcs",
+		"../dapp-kit",
+		"../deepbook",
+		"../enoki",
+		"../graphql-transport",
+		"../kiosk",
+		"../typescript",
+		"../zklogin",
+		"../zksend"
+	],
+	"excludeInternal": true,
+	"excludePrivate": true,
+	"intentionallyNotExported": [],
+	"out": "public/typedoc",
+	"entryPointStrategy": "packages"
+}

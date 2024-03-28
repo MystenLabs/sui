@@ -7,10 +7,7 @@
 
 //# publish --sender A
 module test::fake {
-    use std::option;
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     public struct FAKE has drop {}
 

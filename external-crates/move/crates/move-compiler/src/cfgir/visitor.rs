@@ -19,6 +19,7 @@ use crate::{
     shared::CompilationEnv,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 
@@ -181,7 +182,7 @@ pub trait SimpleAbsIntConstructor: Sized {
                 (v, unassigned)
             })
             .collect::<BTreeMap<_, _>>();
-        for (param, _) in &context.signature.parameters {
+        for (_, param, _) in &context.signature.parameters {
             locals.insert(
                 *param,
                 LocalState::Available(
@@ -244,7 +245,7 @@ pub trait SimpleAbsInt: Sized {
         }
         let sp!(_, cmd_) = cmd;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
                 self.lvalues(context, state, ls, values);
             }
@@ -303,7 +304,7 @@ pub trait SimpleAbsInt: Sized {
         let sp!(loc, l_) = l;
         match l_ {
             L::Ignore => (),
-            L::Var(v, _) => {
+            L::Var { var: v, .. } => {
                 let locals = state.locals_mut();
                 locals.insert(*v, LocalState::Available(*loc, value));
             }
@@ -336,6 +337,7 @@ pub trait SimpleAbsInt: Sized {
     ) -> Option<Vec<<Self::State as SimpleDomain>::Value>> {
         None
     }
+    #[growing_stack]
     fn exp(
         &self,
         context: &mut Self::ExecutionContext,
@@ -401,7 +403,9 @@ pub trait SimpleAbsInt: Sized {
             }
 
             E::Unit { .. } => vec![],
-            E::Value(_) | E::Constant(_) | E::UnresolvedError => default_values(1),
+            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => {
+                default_values(1)
+            }
 
             E::BinopExp(e1, _, e2) => {
                 self.exp(context, state, e1);

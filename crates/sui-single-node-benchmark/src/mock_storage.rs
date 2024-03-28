@@ -9,16 +9,14 @@ use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
-use sui_types::base_types::{
-    EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest, VersionNumber,
-};
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
     PackageObject, ParentSync,
 };
-use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult};
+use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult, TransactionKey};
 
 // TODO: We won't need a special purpose InMemoryObjectStore once the InMemoryCache is ready.
 #[derive(Clone)]
@@ -46,7 +44,7 @@ impl InMemoryObjectStore {
     pub(crate) fn read_objects_for_execution(
         &self,
         shared_locks: &dyn GetSharedLocks,
-        tx_digest: &TransactionDigest,
+        tx_key: &TransactionKey,
         input_object_kinds: &[InputObjectKind],
     ) -> SuiResult<InputObjects> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
@@ -61,45 +59,15 @@ impl InMemoryObjectStore {
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            shared_locks
-                                .get_shared_locks(tx_digest)?
-                                .into_iter()
-                                .collect(),
+                            shared_locks.get_shared_locks(tx_key)?.into_iter().collect(),
                         )
                     })?;
                     let version = shared_locks.get(id).unwrap_or_else(|| {
-                        panic!(
-                            "Shared object locks should have been set. tx_digest: {:?}, obj id: {:?}",
-                            tx_digest, id
-                        )
+                        panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });
 
                     self.get_object_by_key(id, *version)?
                 }
-            };
-
-            input_objects.push(ObjectReadResult::new(
-                *kind,
-                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
-            ));
-        }
-
-        Ok(input_objects.into())
-    }
-
-    pub(crate) fn read_objects_for_synchronous_execution(
-        &self,
-        input_object_kinds: &[InputObjectKind],
-    ) -> SuiResult<InputObjects> {
-        let mut input_objects = Vec::new();
-        for kind in input_object_kinds {
-            let obj: Option<Object> = match kind {
-                InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
-                }
-
-                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id)?,
             };
 
             input_objects.push(ObjectReadResult::new(
@@ -192,7 +160,7 @@ impl ParentSync for InMemoryObjectStore {
 impl GetSharedLocks for InMemoryObjectStore {
     fn get_shared_locks(
         &self,
-        _transaction_digest: &TransactionDigest,
+        _key: &TransactionKey,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
         unreachable!()
     }

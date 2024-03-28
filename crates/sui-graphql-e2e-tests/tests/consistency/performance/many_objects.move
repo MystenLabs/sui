@@ -7,14 +7,10 @@
 // criteria are then invalidated by a newer version of the matched object. We set `last: 1` but
 // transfer the last 3 objects because we increase the limit by 2 behind the scenes.
 
-//# init --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-
     public struct Object has key, store {
         id: UID,
         value: u64,

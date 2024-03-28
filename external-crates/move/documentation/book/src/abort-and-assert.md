@@ -3,7 +3,7 @@
 [`return`](./functions.md) and `abort` are two control flow constructs that end execution, one for
 the current function and one for the entire transaction.
 
-More information on [`return` can be found in the linked section](./functions.md)
+More information on [`return` can be found in the linked section](./functions.md#return-expression)
 
 ## `abort`
 
@@ -13,14 +13,16 @@ More information on [`return` can be found in the linked section](./functions.md
 abort 42
 ```
 
-The `abort` expression halts execution the current function and reverts all changes made to global
-state by the current transaction. There is no mechanism for "catching" or otherwise handling an
-`abort`.
+The `abort` expression halts execution the current function and reverts all changes made to state by
+the current transaction (note though that this guarantee must be upheld by the adapter of the
+specific deployment of Move). There is no mechanism for "catching" or otherwise handling an `abort`.
 
-Luckily, in Move transactions are all or nothing, meaning any changes to global storage are made all
-at once only if the transaction succeeds. Because of this transactional commitment of changes, after
-an abort there is no need to worry about backing out changes. While this approach is lacking in
-flexibility, it is incredibly simple and predictable.
+Luckily, in Move transactions are all or nothing, meaning any changes to storage are made all at
+once only if the transaction succeeds. For Sui, this means no objects are modified.
+
+Because of this transactional commitment of changes, after an abort there is no need to worry about
+backing out changes. While this approach is lacking in flexibility, it is incredibly simple and
+predictable.
 
 Similar to [`return`](./functions.md), `abort` is useful for exiting control flow when some
 condition cannot be met.
@@ -32,7 +34,6 @@ vector does not have two items
 use std::vector;
 fun pop_twice<T>(v: &mut vector<T>): (T, T) {
     if (vector::length(v) < 2) abort 42;
-
     (vector::pop_back(v), vector::pop_back(v))
 }
 ```
@@ -55,7 +56,7 @@ fun check_vec(v: &vector<u64>, bound: u64) {
 
 ### `assert`
 
-`assert` is a builtin, macro-like operation provided by the Move compiler. It takes two arguments, a
+`assert` is a builtin, macro operation provided by the Move compiler. It takes two arguments, a
 condition of type `bool` and a code of type `u64`
 
 ```move
@@ -77,7 +78,6 @@ rewritten using `assert`
 use std::vector;
 fun pop_twice<T>(v: &mut vector<T>): (T, T) {
     assert!(vector::length(v) >= 2, 42); // Now uses 'assert'
-
     (vector::pop_back(v), vector::pop_back(v))
 }
 ```
@@ -116,34 +116,32 @@ So the arithmetic expression is never evaluated!
 
 When using `abort`, it is important to understand how the `u64` code will be used by the VM.
 
-Normally, after successful execution, the Move VM produces a change-set for the changes made to
-global storage (added/removed resources, updates to existing resources, etc).
+Normally, after successful execution, the Move VM, and the adapter for the specific deployment,
+determine the changes made to storage.
 
 If an `abort` is reached, the VM will instead indicate an error. Included in that error will be two
 pieces of information:
 
-- The module that produced the abort (address and name)
+- The module that produced the abort (package/address value and module name)
 - The abort code.
 
 For example
 
 ```move=
-address 0x2 {
-module example {
+module 0x2::example {
     public fun aborts() {
         abort 42
     }
 }
-}
 
-script {
-    fun always_aborts() {
+module 0x3::invoker {
+    public fun always_aborts() {
         0x2::example::aborts()
     }
 }
 ```
 
-If a transaction, such as the script `always_aborts` above, calls `0x2::example::aborts`, the VM
+If a transaction, such as the function `always_aborts` above, calls `0x2::example::aborts`, the VM
 would produce an error that indicated the module `0x2::example` and the code `42`.
 
 This can be useful for having multiple aborts being grouped together inside a module.
@@ -151,21 +149,20 @@ This can be useful for having multiple aborts being grouped together inside a mo
 In this example, the module has two separate error codes used in multiple functions
 
 ```move=
-address 0x42 {
-module example {
+module 0x42::example {
 
     use std::vector;
 
-    const EMPTY_VECTOR: u64 = 0;
-    const INDEX_OUT_OF_BOUNDS: u64 = 1;
+    const EEmptyVector: u64 = 0;
+    const EIndexOutOfBounds: u64 = 1;
 
     // move i to j, move j to k, move k to i
     public fun rotate_three<T>(v: &mut vector<T>, i: u64, j: u64, k: u64) {
         let n = vector::length(v);
-        assert!(n > 0, EMPTY_VECTOR);
-        assert!(i < n, INDEX_OUT_OF_BOUNDS);
-        assert!(j < n, INDEX_OUT_OF_BOUNDS);
-        assert!(k < n, INDEX_OUT_OF_BOUNDS);
+        assert!(n > 0, EEmptyVector);
+        assert!(i < n, EIndexOutOfBounds);
+        assert!(j < n, EIndexOutOfBounds);
+        assert!(k < n, EIndexOutOfBounds);
 
         vector::swap(v, i, k);
         vector::swap(v, j, k);
@@ -173,14 +170,13 @@ module example {
 
     public fun remove_twice<T>(v: &mut vector<T>, i: u64, j: u64): (T, T) {
         let n = vector::length(v);
-        assert!(n > 0, EMPTY_VECTOR);
-        assert!(i < n, INDEX_OUT_OF_BOUNDS);
-        assert!(j < n, INDEX_OUT_OF_BOUNDS);
-        assert!(i > j, INDEX_OUT_OF_BOUNDS);
+        assert!(n > 0, EEmptyVector);
+        assert!(i < n, EIndexOutOfBounds);
+        assert!(j < n, EIndexOutOfBounds);
+        assert!(i > j, EIndexOutOfBounds);
 
         (vector::remove<T>(v, i), vector::remove<T>(v, j))
     }
-}
 }
 ```
 

@@ -6,12 +6,8 @@
 //# publish --sender A
 
 module test::coin_in_vec {
-    use std::vector;
     use sui::coin::Coin;
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     public struct Wrapper has key {
         id: UID,

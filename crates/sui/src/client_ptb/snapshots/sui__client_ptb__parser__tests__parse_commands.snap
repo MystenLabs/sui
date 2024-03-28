@@ -27,6 +27,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -62,6 +64,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -106,6 +110,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -129,22 +135,13 @@ expression: parsed
                         Spanned {
                             span: Span {
                                 start: 19,
-                                end: 20,
-                            },
-                            value: Identifier(
-                                "a",
-                            ),
-                        },
-                        Spanned {
-                            span: Span {
-                                start: 21,
-                                end: 27,
+                                end: 25,
                             },
                             value: [
                                 Spanned {
                                     span: Span {
-                                        start: 22,
-                                        end: 23,
+                                        start: 20,
+                                        end: 21,
                                     },
                                     value: Identifier(
                                         "b",
@@ -152,14 +149,23 @@ expression: parsed
                                 },
                                 Spanned {
                                     span: Span {
-                                        start: 25,
-                                        end: 26,
+                                        start: 23,
+                                        end: 24,
                                     },
                                     value: Identifier(
                                         "c",
                                     ),
                                 },
                             ],
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 26,
+                                end: 27,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
                         },
                     ),
                 },
@@ -169,6 +175,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -192,28 +200,28 @@ expression: parsed
                         Spanned {
                             span: Span {
                                 start: 19,
-                                end: 20,
-                            },
-                            value: Identifier(
-                                "a",
-                            ),
-                        },
-                        Spanned {
-                            span: Span {
-                                start: 21,
-                                end: 24,
+                                end: 22,
                             },
                             value: [
                                 Spanned {
                                     span: Span {
-                                        start: 22,
-                                        end: 23,
+                                        start: 20,
+                                        end: 21,
                                     },
                                     value: Identifier(
                                         "b",
                                     ),
                                 },
                             ],
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 23,
+                                end: 24,
+                            },
+                            value: Identifier(
+                                "a",
+                            ),
                         },
                     ),
                 },
@@ -223,6 +231,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -248,41 +258,41 @@ expression: parsed
                                 start: 19,
                                 end: 22,
                             },
-                            value: VariableAccess(
-                                Spanned {
-                                    span: Span {
-                                        start: 19,
-                                        end: 20,
-                                    },
-                                    value: "a",
-                                },
-                                [
-                                    Spanned {
-                                        span: Span {
-                                            start: 21,
-                                            end: 22,
-                                        },
-                                        value: "0",
-                                    },
-                                ],
-                            ),
-                        },
-                        Spanned {
-                            span: Span {
-                                start: 23,
-                                end: 26,
-                            },
                             value: [
                                 Spanned {
                                     span: Span {
-                                        start: 24,
-                                        end: 25,
+                                        start: 20,
+                                        end: 21,
                                     },
                                     value: Identifier(
                                         "b",
                                     ),
                                 },
                             ],
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 23,
+                                end: 26,
+                            },
+                            value: VariableAccess(
+                                Spanned {
+                                    span: Span {
+                                        start: 23,
+                                        end: 24,
+                                    },
+                                    value: "a",
+                                },
+                                [
+                                    Spanned {
+                                        span: Span {
+                                            start: 25,
+                                            end: 26,
+                                        },
+                                        value: "0",
+                                    },
+                                ],
+                            ),
                         },
                     ),
                 },
@@ -292,6 +302,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -355,6 +367,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -409,6 +423,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -472,6 +488,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -526,6 +544,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -568,6 +588,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -629,6 +651,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -737,6 +761,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -822,6 +848,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -907,6 +935,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -943,6 +973,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1004,6 +1036,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1050,6 +1084,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1096,6 +1132,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1170,6 +1208,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1222,6 +1262,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1278,6 +1320,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1297,6 +1341,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: Some(
                 Spanned {
                     span: Span {
@@ -1324,6 +1370,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: true,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1343,6 +1391,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: true,
             gas_budget: Spanned {
@@ -1362,6 +1412,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: true,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {
@@ -1381,6 +1433,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
             gas_budget: Spanned {

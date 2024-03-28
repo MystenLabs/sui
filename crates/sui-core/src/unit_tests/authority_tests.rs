@@ -4729,7 +4729,6 @@ async fn test_shared_object_transaction_shared_locks_not_set() {
 async fn test_shared_object_transaction_ok() {
     let (authority, certificate, shared_object_id) =
         prepare_authority_and_shared_object_cert().await;
-    let transaction_digest = certificate.digest();
 
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;
@@ -4737,7 +4736,7 @@ async fn test_shared_object_transaction_ok() {
     // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
         .epoch_store_for_testing()
-        .get_shared_locks(transaction_digest)
+        .get_shared_locks(&certificate.key())
         .expect("Reading shared locks should not fail")
         .into_iter()
         .find_map(|(object_id, version)| {

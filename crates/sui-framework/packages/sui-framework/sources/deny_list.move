@@ -5,15 +5,11 @@
 /// instances of certain core types from being used as inputs by specified addresses in the deny
 /// list.
 module sui::deny_list {
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context;
     use sui::table::{Self, Table};
     use sui::bag::{Self, Bag};
     use sui::vec_set::{Self, VecSet};
 
-    friend sui::coin;
+    /* friend sui::coin; */
 
     /// Trying to create a deny list object when not called by the system address.
     const ENotSystemAddress: u64 = 0;
@@ -24,14 +20,14 @@ module sui::deny_list {
     const COIN_INDEX: u64 = 0;
 
     /// A shared object that stores the addresses that are blocked for a given core type.
-    struct DenyList has key {
+    public struct DenyList has key {
         id: UID,
         /// The individual deny lists.
         lists: Bag,
     }
 
     /// Stores the addresses that are denied for a given core type.
-    struct PerTypeList has key, store {
+    public struct PerTypeList has key, store {
         id: UID,
         /// Number of object types that have been banned for a given address.
         /// Used to quickly skip checks for most addresses.
@@ -46,95 +42,96 @@ module sui::deny_list {
     /// from interacting with instances of that type as an input to a transaction. For coins,
     /// the type specified is the type of the coin, not the coin type itself. For example,
     /// "00...0123::my_coin::MY_COIN" would be the type, not "00...02::coin::Coin".
-    public(friend) fun add(
+    public(package) fun add(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        type: vector<u8>,
+        `type`: vector<u8>,
         addr: address,
     ) {
-        per_type_list_add(bag::borrow_mut(&mut deny_list.lists, per_type_index), type, addr)
+        let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
+        bag_entry.per_type_list_add(`type`, addr)
     }
 
     fun per_type_list_add(
         list: &mut PerTypeList,
-        type: vector<u8>,
+        `type`: vector<u8>,
         addr: address,
     ) {
-        if (!table::contains(&list.denied_addresses, type)) {
-            table::add(&mut list.denied_addresses, type, vec_set::empty());
+        if (!list.denied_addresses.contains(`type`)) {
+            list.denied_addresses.add(`type`, vec_set::empty());
         };
-        let denied_addresses = table::borrow_mut(&mut list.denied_addresses, type);
-        let already_denied = vec_set::contains(denied_addresses, &addr);
+        let denied_addresses = &mut list.denied_addresses[`type`];
+        let already_denied = denied_addresses.contains(&addr);
         if (already_denied) return;
 
-        vec_set::insert(denied_addresses, addr);
-        if (!table::contains(&list.denied_count, addr)) {
-            table::add(&mut list.denied_count, addr, 0);
+        denied_addresses.insert(addr);
+        if (!list.denied_count.contains(addr)) {
+            list.denied_count.add(addr, 0);
         };
-        let denied_count = table::borrow_mut(&mut list.denied_count, addr);
+        let denied_count = &mut list.denied_count[addr];
         *denied_count = *denied_count + 1;
     }
 
     /// Removes a previously denied address from the list.
     /// Aborts with `ENotDenied` if the address is not on the list.
-    public(friend) fun remove(
+    public(package) fun remove(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        type: vector<u8>,
+        `type`: vector<u8>,
         addr: address,
     ) {
-        per_type_list_remove(bag::borrow_mut(&mut deny_list.lists, per_type_index), type, addr)
+        per_type_list_remove(&mut deny_list.lists[per_type_index], `type`, addr)
     }
 
     fun per_type_list_remove(
         list: &mut PerTypeList,
-        type: vector<u8>,
+        `type`: vector<u8>,
         addr: address,
     ) {
-        let denied_addresses = table::borrow_mut(&mut list.denied_addresses, type);
-        assert!(vec_set::contains(denied_addresses, &addr), ENotDenied);
-        vec_set::remove(denied_addresses, &addr);
-        let denied_count = table::borrow_mut(&mut list.denied_count, addr);
+        let denied_addresses = &mut list.denied_addresses[`type`];
+        assert!(denied_addresses.contains(&addr), ENotDenied);
+        denied_addresses.remove(&addr);
+        let denied_count = &mut list.denied_count[addr];
         *denied_count = *denied_count - 1;
         if (*denied_count == 0) {
-            table::remove(&mut list.denied_count, addr);
+            list.denied_count.remove(addr);
         }
     }
 
     /// Returns true iff the given address is denied for the given type.
-    public(friend) fun contains(
+    public(package) fun contains(
         deny_list: &DenyList,
         per_type_index: u64,
-        type: vector<u8>,
+        `type`: vector<u8>,
         addr: address,
     ): bool {
-        per_type_list_contains(bag::borrow(&deny_list.lists, per_type_index), type, addr)
+        per_type_list_contains(&deny_list.lists[per_type_index], `type`, addr)
     }
 
     fun per_type_list_contains(
         list: &PerTypeList,
-        type: vector<u8>,
+        `type`: vector<u8>,
         addr: address,
     ): bool {
-        if (!table::contains(&list.denied_count, addr)) return false;
+        if (!list.denied_count.contains(addr)) return false;
 
-        let denied_count = table::borrow(&list.denied_count, addr);
+        let denied_count = &list.denied_count[addr];
         if (*denied_count == 0) return false;
 
-        if (!table::contains(&list.denied_addresses, type)) return false;
+        if (!list.denied_addresses.contains(`type`)) return false;
 
-        let denied_addresses = table::borrow(&list.denied_addresses, type);
-        vec_set::contains(denied_addresses, &addr)
+        let denied_addresses = &list.denied_addresses[`type`];
+        denied_addresses.contains(&addr)
     }
 
     #[allow(unused_function)]
     /// Creation of the deny list object is restricted to the system address
     /// via a system transaction.
     fun create(ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
-        let lists = bag::new(ctx);
-        bag::add(&mut lists, COIN_INDEX, per_type_list(ctx));
+        let mut lists = bag::new(ctx);
+        lists.add(COIN_INDEX, per_type_list(ctx));
         let deny_list_object = DenyList {
             id: object::sui_deny_list_object_id(),
             lists,
@@ -159,8 +156,8 @@ module sui::deny_list {
     /// Creates and returns a new DenyList object for testing purposes. It
     /// doesn't matter which object ID the list has in this kind of test.
     public fun new_for_testing(ctx: &mut TxContext): DenyList {
-        let lists = bag::new(ctx);
-        bag::add(&mut lists, COIN_INDEX, per_type_list(ctx));
+        let mut lists = bag::new(ctx);
+        lists.add(COIN_INDEX, per_type_list(ctx));
         DenyList {
             id: object::new(ctx),
             lists,

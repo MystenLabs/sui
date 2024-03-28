@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
     public struct A has key, store {
         id: UID,
@@ -45,5 +43,5 @@ module tto::M1 {
 
 //# view-object 2,1
 
-// Make sure that we cannot receive it again at the old version number 
+// Make sure that we cannot receive it again at the old version number
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)@3

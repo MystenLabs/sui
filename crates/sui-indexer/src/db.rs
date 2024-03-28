@@ -23,8 +23,8 @@ pub struct PgConnectionPoolConfig {
 
 impl PgConnectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
-    const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
-    const DEFAULT_STATEMENT_TIMEOUT: u64 = 30;
+    const DEFAULT_CONNECTION_TIMEOUT: u64 = 3600;
+    const DEFAULT_STATEMENT_TIMEOUT: u64 = 3600;
 
     fn connection_config(&self) -> PgConnectionConfig {
         PgConnectionConfig {
@@ -101,6 +101,14 @@ pub fn new_pg_connection_pool(
     pool_size: Option<u32>,
 ) -> Result<PgConnectionPool, IndexerError> {
     let pool_config = PgConnectionPoolConfig::default();
+    new_pg_connection_pool_with_config(db_url, pool_size, pool_config)
+}
+
+pub fn new_pg_connection_pool_with_config(
+    db_url: &str,
+    pool_size: Option<u32>,
+    pool_config: PgConnectionPoolConfig,
+) -> Result<PgConnectionPool, IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
 
     let pool_size = pool_size.unwrap_or(pool_config.pool_size);

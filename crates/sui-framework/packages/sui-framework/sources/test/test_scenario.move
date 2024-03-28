@@ -3,9 +3,6 @@
 
 #[test_only]
 module sui::test_scenario {
-    use std::option::{Self, Option};
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::VecMap;
 
     #[allow(unused_const)]
@@ -60,13 +57,13 @@ module sui::test_scenario {
     /// ... // more txes
     /// test_scenario::end(scenario);
     /// ```
-    struct Scenario {
+    public struct Scenario {
         txn_number: u64,
         ctx: TxContext,
     }
 
     /// The effects of a transaction
-    struct TransactionEffects has drop {
+    public struct TransactionEffects has drop {
         /// The objects created this transaction
         created: vector<ID>,
         /// The objects written/modified this transaction
@@ -105,8 +102,8 @@ module sui::test_scenario {
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
         scenario.txn_number = scenario.txn_number + 1;
-        let epoch = tx_context::epoch(&scenario.ctx);
-        let epoch_timestamp_ms = tx_context::epoch_timestamp_ms(&scenario.ctx);
+        let epoch = scenario.ctx.epoch();
+        let epoch_timestamp_ms = scenario.ctx.epoch_timestamp_ms();
         scenario.ctx = tx_context::new_from_hint(
             sender,
             scenario.txn_number,
@@ -121,7 +118,7 @@ module sui::test_scenario {
     /// Advance the scenario to a new epoch and end the transaction
     /// See `next_tx` for further details
     public fun next_epoch(scenario: &mut Scenario, sender: address): TransactionEffects {
-        tx_context::increment_epoch_number(&mut scenario.ctx);
+        scenario.ctx.increment_epoch_number();
         next_tx(scenario, sender)
     }
 
@@ -133,7 +130,7 @@ module sui::test_scenario {
         delta_ms: u64,
         sender: address,
     ): TransactionEffects {
-        tx_context::increment_epoch_timestamp(&mut scenario.ctx, delta_ms);
+        scenario.ctx.increment_epoch_timestamp(delta_ms);
         next_epoch(scenario, sender)
     }
 
@@ -160,7 +157,7 @@ module sui::test_scenario {
 
     /// Return the sender of the current tx in this `scenario`
     public fun sender(scenario: &Scenario): address {
-        tx_context::sender(&scenario.ctx)
+        scenario.ctx.sender()
     }
 
     /// Return the number of concluded transactions in this scenario.
@@ -232,15 +229,15 @@ module sui::test_scenario {
 
     /// helper that returns true iff `most_recent_id_for_address` returns some
     public fun has_most_recent_for_address<T: key>(account: address): bool {
-        option::is_some(&most_recent_id_for_address<T>(account))
+        most_recent_id_for_address<T>(account).is_some()
     }
 
     /// Helper combining `take_from_address_by_id` and `most_recent_id_for_address`
     /// Aborts if there is no object of type `T` in the inventory of `account`
     public fun take_from_address<T: key>(scenario: &Scenario, account: address): T {
         let id_opt = most_recent_id_for_address<T>(account);
-        assert!(option::is_some(&id_opt), EEmptyInventory);
-        take_from_address_by_id(scenario, account, option::destroy_some(id_opt))
+        assert!(id_opt.is_some(), EEmptyInventory);
+        take_from_address_by_id(scenario, account, id_opt.destroy_some())
     }
 
     /// Return `t` to the inventory of the `account`. `transfer` can be used directly instead,
@@ -269,7 +266,7 @@ module sui::test_scenario {
 
     /// helper that returns true iff `most_recent_id_for_sender` returns some
     public fun has_most_recent_for_sender<T: key>(scenario: &Scenario): bool {
-        option::is_some(&most_recent_id_for_address<T>(sender(scenario)))
+        most_recent_id_for_address<T>(sender(scenario)).is_some()
     }
 
     /// helper for `take_from_address` that operates over the transaction sender
@@ -303,15 +300,15 @@ module sui::test_scenario {
 
     /// helper that returns true iff `most_recent_immutable_id` returns some
     public fun has_most_recent_immutable<T: key>(): bool {
-        option::is_some(&most_recent_immutable_id<T>())
+        most_recent_immutable_id<T>().is_some()
     }
 
     /// Helper combining `take_immutable_by_id` and `most_recent_immutable_id`
     /// Aborts if there is no immutable object of type `T` in the global inventory
     public fun take_immutable<T: key>(scenario: &Scenario): T {
         let id_opt = most_recent_immutable_id<T>();
-        assert!(option::is_some(&id_opt), EEmptyInventory);
-        take_immutable_by_id(scenario, option::destroy_some(id_opt))
+        assert!(id_opt.is_some(), EEmptyInventory);
+        take_immutable_by_id(scenario, id_opt.destroy_some())
     }
 
     /// Return `t` to the global inventory
@@ -335,15 +332,15 @@ module sui::test_scenario {
 
     /// helper that returns true iff `most_recent_id_shared` returns some
     public fun has_most_recent_shared<T: key>(): bool {
-        option::is_some(&most_recent_id_shared<T>())
+        most_recent_id_shared<T>().is_some()
     }
 
     /// Helper combining `take_shared_by_id` and `most_recent_id_shared`
     /// Aborts if there is no shared object of type `T` in the global inventory
     public fun take_shared<T: key>(scenario: &Scenario): T {
         let id_opt = most_recent_id_shared<T>();
-        assert!(option::is_some(&id_opt), EEmptyInventory);
-        take_shared_by_id(scenario, option::destroy_some(id_opt))
+        assert!(id_opt.is_some(), EEmptyInventory);
+        take_shared_by_id(scenario, id_opt.destroy_some())
     }
 
     /// Return `t` to the global inventory

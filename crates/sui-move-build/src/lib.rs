@@ -19,10 +19,9 @@ use move_binary_format::{
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{
-        report_diagnostics_to_color_buffer, report_warnings, Diagnostics, FilesSourceText,
-    },
-    sui_mode::linters::LINT_WARNING_PREFIX,
+    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
+    editions::Edition,
+    linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -86,7 +85,10 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
-        build_config.config.no_lint = true;
+        build_config
+            .config
+            .lint_flag
+            .set(move_compiler::linters::LintLevel::None);
         build_config
     }
 
@@ -138,7 +140,8 @@ impl BuildConfig {
                     // with errors present don't even try decorating warnings output to avoid
                     // clutter
                     assert!(!error_diags.is_empty());
-                    let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
+                    let diags_buf =
+                        report_diagnostics_to_buffer(&files, error_diags, /* color */ true);
                     if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
                     }
@@ -621,6 +624,9 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
+        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+            return Err(Edition::DEVELOPMENT.unknown_edition_error());
+        }
         Ok(manifest.package.name)
     }
 

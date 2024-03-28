@@ -78,7 +78,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tracing::{info, instrument};
 
 use super::ExecutionCacheAPI;
@@ -147,7 +147,7 @@ struct UncommittedData {
     /// This table may contain both live and dead objects, since we flush both live and dead
     /// objects to the db in order to support past object queries on fullnodes.
     ///
-    /// Further, we only remove objects in FIFO order, which ensures that the the cached
+    /// Further, we only remove objects in FIFO order, which ensures that the cached
     /// sequence of objects has no gaps. In other words, if we have versions 4, 8, 13 of
     /// an object, we can deduce that version 9 does not exist. This also makes child object
     /// reads efficient. `object_cache` cannot contain a more recent version of an object than
@@ -774,10 +774,12 @@ impl ExecutionCacheRead for WritebackCache {
     ) -> Result<Vec<Option<Object>>, SuiError> {
         do_fallback_lookup(
             object_keys,
-            |key| match self.get_object_by_key_cache_only(&key.0, key.1) {
-                CacheResult::Hit(maybe_object) => CacheResult::Hit(Some(maybe_object)),
-                CacheResult::NegativeHit => CacheResult::NegativeHit,
-                CacheResult::Miss => CacheResult::Miss,
+            |key| {
+                Ok(match self.get_object_by_key_cache_only(&key.0, key.1) {
+                    CacheResult::Hit(maybe_object) => CacheResult::Hit(Some(maybe_object)),
+                    CacheResult::NegativeHit => CacheResult::NegativeHit,
+                    CacheResult::Miss => CacheResult::Miss,
+                })
             },
             |remaining| {
                 self.store
@@ -802,10 +804,12 @@ impl ExecutionCacheRead for WritebackCache {
     fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<bool>> {
         do_fallback_lookup(
             object_keys,
-            |key| match self.get_object_by_key_cache_only(&key.0, key.1) {
-                CacheResult::Hit(_) => CacheResult::Hit(true),
-                CacheResult::NegativeHit => CacheResult::Hit(false),
-                CacheResult::Miss => CacheResult::Miss,
+            |key| {
+                Ok(match self.get_object_by_key_cache_only(&key.0, key.1) {
+                    CacheResult::Hit(_) => CacheResult::Hit(true),
+                    CacheResult::NegativeHit => CacheResult::Hit(false),
+                    CacheResult::Miss => CacheResult::Miss,
+                })
             },
             |remaining| self.store.multi_object_exists_by_key(remaining),
         )
@@ -903,11 +907,13 @@ impl ExecutionCacheRead for WritebackCache {
         do_fallback_lookup(
             digests,
             |digest| {
-                if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
-                    CacheResult::Hit(Some(tx.transaction.clone()))
-                } else {
-                    CacheResult::Miss
-                }
+                Ok(
+                    if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
+                        CacheResult::Hit(Some(tx.transaction.clone()))
+                    } else {
+                        CacheResult::Miss
+                    },
+                )
             },
             |remaining| {
                 self.store
@@ -924,11 +930,13 @@ impl ExecutionCacheRead for WritebackCache {
         do_fallback_lookup(
             digests,
             |digest| {
-                if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
-                    CacheResult::Hit(Some(*digest))
-                } else {
-                    CacheResult::Miss
-                }
+                Ok(
+                    if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
+                        CacheResult::Hit(Some(*digest))
+                    } else {
+                        CacheResult::Miss
+                    },
+                )
             },
             |remaining| self.store.multi_get_executed_effects_digests(remaining),
         )
@@ -941,11 +949,13 @@ impl ExecutionCacheRead for WritebackCache {
         do_fallback_lookup(
             digests,
             |digest| {
-                if let Some(effects) = self.dirty.transaction_effects.get(digest) {
-                    CacheResult::Hit(Some(effects.clone()))
-                } else {
-                    CacheResult::Miss
-                }
+                Ok(
+                    if let Some(effects) = self.dirty.transaction_effects.get(digest) {
+                        CacheResult::Hit(Some(effects.clone()))
+                    } else {
+                        CacheResult::Miss
+                    },
+                )
             },
             |remaining| self.store.multi_get_effects(remaining.iter()),
         )
@@ -983,11 +993,13 @@ impl ExecutionCacheRead for WritebackCache {
         do_fallback_lookup(
             event_digests,
             |digest| {
-                if let Some(events) = self.dirty.transaction_events.get(digest) {
-                    CacheResult::Hit(Some(events.1.clone()))
-                } else {
-                    CacheResult::Miss
-                }
+                Ok(
+                    if let Some(events) = self.dirty.transaction_events.get(digest) {
+                        CacheResult::Hit(Some(events.1.clone()))
+                    } else {
+                        CacheResult::Miss
+                    },
+                )
             },
             |digests| self.store.multi_get_events(digests),
         )
@@ -1024,7 +1036,11 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    fn get_lock(&self, _obj_ref: ObjectRef, _epoch_id: EpochId) -> SuiLockResult {
+    fn get_lock(
+        &self,
+        _obj_ref: ObjectRef,
+        _epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiLockResult {
         todo!()
     }
 
@@ -1041,9 +1057,9 @@ impl ExecutionCacheWrite for WritebackCache {
     #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
-        _epoch_id: EpochId,
+        _epoch_store: &AuthorityPerEpochStore,
         _owned_input_objects: &'a [ObjectRef],
-        _tx_digest: TransactionDigest,
+        _tx_digest: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
         todo!()
     }
@@ -1153,7 +1169,7 @@ impl ExecutionCacheWrite for WritebackCache {
 /// via the get_cached_key and multiget_fallback functions.
 fn do_fallback_lookup<K: Copy, V: Default + Clone>(
     keys: &[K],
-    get_cached_key: impl Fn(&K) -> CacheResult<V>,
+    get_cached_key: impl Fn(&K) -> SuiResult<CacheResult<V>>,
     multiget_fallback: impl Fn(&[K]) -> SuiResult<Vec<V>>,
 ) -> SuiResult<Vec<V>> {
     let mut results = vec![V::default(); keys.len()];
@@ -1161,7 +1177,7 @@ fn do_fallback_lookup<K: Copy, V: Default + Clone>(
     let mut fallback_indices = Vec::with_capacity(keys.len());
 
     for (i, key) in keys.iter().enumerate() {
-        match get_cached_key(key) {
+        match get_cached_key(key)? {
             CacheResult::Miss => {
                 fallback_keys.push(*key);
                 fallback_indices.push(i);

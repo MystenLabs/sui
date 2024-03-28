@@ -30,6 +30,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs,
     path::Path,
+    sync::Arc,
 };
 
 pub mod on_disk_state_view;
@@ -144,7 +145,7 @@ pub(crate) fn explain_publish_error(
         file_hash,
         (
             FileName::from(unit.source_path.to_string_lossy()),
-            file_contents,
+            Arc::from(file_contents),
         ),
     );
 

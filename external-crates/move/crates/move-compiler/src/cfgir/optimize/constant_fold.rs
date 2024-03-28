@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::cfg::MutForwardCFG,
+    expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value, Value_, Var,
@@ -13,12 +14,13 @@ use crate::{
     shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::convert::TryFrom;
 
 /// returns true if anything changed
 pub fn optimize(
     _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -48,13 +50,14 @@ pub fn optimize(
 
 // Some(changed) to keep
 // None to remove the cmd
+#[growing_stack]
 fn optimize_cmd(
     consts: &UniqueMap<ConstantName, Value>,
     sp!(_, cmd_): &mut Command,
 ) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
-        C::Assign(_ls, e) => optimize_exp(consts, e),
+        C::Assign(_, _ls, e) => optimize_exp(consts, e),
         C::Mutate(el, er) => {
             let c1 = optimize_exp(consts, er);
             let c2 = optimize_exp(consts, el);
@@ -78,6 +81,7 @@ fn optimize_cmd(
     })
 }
 
+#[growing_stack]
 fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
     let optimize_exp = |e| optimize_exp(consts, e);
@@ -91,6 +95,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         | E::BorrowLocal(_, _)
         | E::Move { .. }
         | E::Copy { .. }
+        | E::ErrorConstant(_)
         | E::Unreachable => false,
 
         e_ @ E::Constant(_) => {

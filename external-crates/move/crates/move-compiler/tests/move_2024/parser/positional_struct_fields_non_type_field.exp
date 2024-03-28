@@ -1,7 +1,7 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/positional_struct_fields_non_type_field.move:4:27
+  ┌─ tests/move_2024/parser/positional_struct_fields_non_type_field.move:3:27
   │
-4 │     public struct Foo(Not a type)
+3 │     public struct Foo(Not a type)
   │                      -    ^ Expected ')'
   │                      │     
   │                      To match this '('

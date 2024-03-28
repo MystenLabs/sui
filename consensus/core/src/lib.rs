@@ -28,7 +28,7 @@ mod threshold_clock;
 mod transaction;
 mod universal_committer;
 
-pub use authority_node::ConsensusAuthority;
-pub use block::BlockAPI;
-pub use commit::{CommitConsumer, CommittedSubDag};
+pub use authority_node::{ConsensusAuthority, NetworkType};
+pub use block::{BlockAPI, Round};
+pub use commit::{CommitConsumer, CommitIndex, CommittedSubDag};
 pub use transaction::{TransactionClient, TransactionVerifier, ValidationError};
