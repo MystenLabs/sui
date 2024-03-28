@@ -223,7 +223,7 @@ impl SuiToEthBridgeAction {
         bytes.push(e.token_id as u8);
 
         // Add token amount
-        bytes.extend_from_slice(&e.amount.to_be_bytes());
+        bytes.extend_from_slice(&e.amount_sui_adjusted.to_be_bytes());
 
         bytes
     }
@@ -266,7 +266,7 @@ impl EthToSuiBridgeAction {
         bytes.push(e.token_id as u8);
 
         // Add token amount
-        bytes.extend_from_slice(&e.amount.to_be_bytes());
+        bytes.extend_from_slice(&e.sui_adjusted_amount.to_be_bytes());
 
         bytes
     }
@@ -650,7 +650,7 @@ mod tests {
         let sui_address = SuiAddress::random_for_testing_only();
         let eth_address = EthAddress::random();
         let token_id = TokenId::USDC;
-        let amount = 1_000_000;
+        let amount_sui_adjusted = 1_000_000;
 
         let sui_bridge_event = EmittedSuiToEthTokenBridgeV1 {
             nonce,
@@ -659,7 +659,7 @@ mod tests {
             sui_address,
             eth_address,
             token_id,
-            amount,
+            amount_sui_adjusted,
         };
 
         let encoded_bytes = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
@@ -683,7 +683,7 @@ mod tests {
         let eth_address_bytes = eth_address.as_bytes().to_vec(); // len: 20
 
         let token_id_bytes = vec![token_id as u8]; // len: 1
-        let token_amount_bytes = amount.to_be_bytes().to_vec(); // len: 8
+        let token_amount_bytes = amount_sui_adjusted.to_be_bytes().to_vec(); // len: 8
 
         let mut combined_bytes = Vec::new();
         combined_bytes.extend_from_slice(&prefix_bytes);
@@ -729,7 +729,7 @@ mod tests {
         let eth_address =
             EthAddress::from_str("0x00000000000000000000000000000000000000c8").unwrap();
         let token_id = TokenId::USDC;
-        let amount = 12345;
+        let amount_sui_adjusted = 12345;
 
         let sui_bridge_event = EmittedSuiToEthTokenBridgeV1 {
             nonce,
@@ -738,7 +738,7 @@ mod tests {
             sui_address,
             eth_address,
             token_id,
-            amount,
+            amount_sui_adjusted,
         };
         let encoded_bytes = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest,
@@ -1102,7 +1102,7 @@ mod tests {
         let eth_address =
             EthAddress::from_str("0x00000000000000000000000000000000000000c8").unwrap();
         let token_id = TokenId::USDC;
-        let amount = 12345;
+        let sui_adjusted_amount = 12345;
 
         let eth_bridge_event = EthToSuiTokenBridgeV1 {
             nonce,
@@ -1111,7 +1111,7 @@ mod tests {
             sui_address,
             eth_address,
             token_id,
-            amount,
+            sui_adjusted_amount,
         };
         let encoded_bytes = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
             eth_tx_hash,

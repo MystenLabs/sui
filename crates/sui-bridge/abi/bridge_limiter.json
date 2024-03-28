@@ -28,16 +28,6 @@
   },
   {
     "inputs": [],
-    "name": "EnforcedPause",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ExpectedPause",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "FailedInnerCall",
     "type": "error"
   },
@@ -49,6 +39,28 @@
   {
     "inputs": [],
     "name": "NotInitializing",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableUnauthorizedAccount",
     "type": "error"
   },
   {
@@ -77,6 +89,44 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "uint8",
+        "name": "tokenId",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "price",
+        "type": "uint64"
+      }
+    ],
+    "name": "AssetPriceUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "hourUpdated",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "HourlyTransferAmountUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint64",
         "name": "version",
         "type": "uint64"
@@ -90,61 +140,18 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
-    ],
-    "name": "Paused",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "uint8",
         "name": "sourceChainID",
         "type": "uint8"
       },
       {
-        "indexed": true,
+        "indexed": false,
         "internalType": "uint64",
-        "name": "nonce",
+        "name": "newLimit",
         "type": "uint64"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint8",
-        "name": "destinationChainID",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "tokenID",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "erc20AdjustedAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes",
-        "name": "senderAddress",
-        "type": "bytes"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "recipientAddress",
-        "type": "address"
       }
     ],
-    "name": "TokensClaimed",
+    "name": "LimitUpdated",
     "type": "event"
   },
   {
@@ -152,61 +159,18 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "uint8",
-        "name": "sourceChainID",
-        "type": "uint8"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint64",
-        "name": "nonce",
-        "type": "uint64"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint8",
-        "name": "destinationChainID",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "tokenID",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "suiAdjustedAmount",
-        "type": "uint64"
-      },
-      {
-        "indexed": false,
         "internalType": "address",
-        "name": "senderAddress",
+        "name": "previousOwner",
         "type": "address"
       },
       {
-        "indexed": false,
-        "internalType": "bytes",
-        "name": "recipientAddress",
-        "type": "bytes"
-      }
-    ],
-    "name": "TokensDeposited",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
+        "indexed": true,
         "internalType": "address",
-        "name": "account",
+        "name": "newOwner",
         "type": "address"
       }
     ],
-    "name": "Unpaused",
+    "name": "OwnershipTransferred",
     "type": "event"
   },
   {
@@ -246,39 +210,74 @@
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
-      },
-      {
-        "internalType": "bytes",
-        "name": "recipientAddress",
-        "type": "bytes"
-      },
-      {
-        "internalType": "uint8",
-        "name": "destinationChainID",
-        "type": "uint8"
       }
     ],
-    "name": "bridgeERC20",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "name": "calculateAmountInUSD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
       {
-        "internalType": "bytes",
-        "name": "recipientAddress",
-        "type": "bytes"
-      },
-      {
         "internalType": "uint8",
-        "name": "destinationChainID",
+        "name": "chainID",
         "type": "uint8"
       }
     ],
-    "name": "bridgeETH",
-    "outputs": [],
-    "stateMutability": "payable",
+    "name": "calculateWindowAmount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "total",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "chainHourTimestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "chainHourlyTransferAmount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "totalAmountBridged",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainID",
+        "type": "uint8"
+      }
+    ],
+    "name": "chainLimits",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "totalLimit",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -295,48 +294,40 @@
     "type": "function"
   },
   {
-    "inputs": [
+    "inputs": [],
+    "name": "currentHour",
+    "outputs": [
       {
-        "internalType": "bytes[]",
-        "name": "signatures",
-        "type": "bytes[]"
-      },
-      {
-        "components": [
-          {
-            "internalType": "uint8",
-            "name": "messageType",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint8",
-            "name": "version",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint64",
-            "name": "nonce",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint8",
-            "name": "chainID",
-            "type": "uint8"
-          },
-          {
-            "internalType": "bytes",
-            "name": "payload",
-            "type": "bytes"
-          }
-        ],
-        "internalType": "struct BridgeMessage.Message",
-        "name": "message",
-        "type": "tuple"
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
       }
     ],
-    "name": "executeEmergencyOpWithSignatures",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint32",
+        "name": "hourTimestamp",
+        "type": "uint32"
+      }
+    ],
+    "name": "getChainHourTimestampKey",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -347,56 +338,24 @@
         "type": "address"
       },
       {
-        "internalType": "address",
-        "name": "_vault",
-        "type": "address"
+        "internalType": "uint256[]",
+        "name": "_tokenPrices",
+        "type": "uint256[]"
       },
       {
-        "internalType": "address",
-        "name": "_limiter",
-        "type": "address"
+        "internalType": "uint8[]",
+        "name": "chainIDs",
+        "type": "uint8[]"
       },
       {
-        "internalType": "address",
-        "name": "_wETH",
-        "type": "address"
+        "internalType": "uint64[]",
+        "name": "_totalLimits",
+        "type": "uint64[]"
       }
     ],
     "name": "initialize",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint64",
-        "name": "nonce",
-        "type": "uint64"
-      }
-    ],
-    "name": "isTransferProcessed",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "isProcessed",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "limiter",
-    "outputs": [
-      {
-        "internalType": "contract IBridgeLimiter",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -419,13 +378,32 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "paused",
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainID",
+        "type": "uint8"
+      }
+    ],
+    "name": "oldestChainTimestamp",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "uint32",
+        "name": "oldestHourTimestamp",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
         "name": "",
-        "type": "bool"
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -442,6 +420,68 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "recordBridgeTransfers",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      }
+    ],
+    "name": "tokenPrices",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "tokenPrice",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -484,7 +524,52 @@
         "type": "tuple"
       }
     ],
-    "name": "transferBridgedTokensWithSignatures",
+    "name": "updateLimitWithSignatures",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes[]",
+        "name": "signatures",
+        "type": "bytes[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "messageType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "version",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint64",
+            "name": "nonce",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint8",
+            "name": "chainID",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes",
+            "name": "payload",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct BridgeMessage.Message",
+        "name": "message",
+        "type": "tuple"
+      }
+    ],
+    "name": "updateTokenPriceWithSignatures",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -553,26 +638,53 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "vault",
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "tokenID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "willAmountExceedLimit",
     "outputs": [
       {
-        "internalType": "contract IBridgeVault",
+        "internalType": "bool",
         "name": "",
-        "type": "address"
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "wETH",
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "chainID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "willUSDAmountExceedLimit",
     "outputs": [
       {
-        "internalType": "contract IWETH9",
+        "internalType": "bool",
         "name": "",
-        "type": "address"
+        "type": "bool"
       }
     ],
     "stateMutability": "view",

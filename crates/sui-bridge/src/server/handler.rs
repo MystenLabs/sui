@@ -420,7 +420,7 @@ mod tests {
             target_chain: BridgeChainId::EthLocalTest as u8,
             target_address: EthAddress::random().as_bytes().to_vec(),
             token_type: TokenId::USDC as u8,
-            amount: 12345,
+            amount_sui_adjusted: 12345,
         };
 
         init_all_struct_tags();

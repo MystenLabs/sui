@@ -36,7 +36,7 @@ pub struct MoveTokenBridgeEvent {
     pub target_chain: u8,
     pub target_address: Vec<u8>,
     pub token_type: u8,
-    pub amount: u64,
+    pub amount_sui_adjusted: u64,
 }
 
 // Sanitized version of MoveTokenBridgeEvent
@@ -48,7 +48,8 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
     pub sui_address: SuiAddress,
     pub eth_address: EthAddress,
     pub token_id: TokenId,
-    pub amount: u64,
+    // The amount of tokens deposited with decimal points on Sui side
+    pub amount_sui_adjusted: u64,
 }
 
 impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
@@ -116,7 +117,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
             sui_address,
             eth_address,
             token_id,
-            amount: event.amount,
+            amount_sui_adjusted: event.amount_sui_adjusted,
         })
     }
 }
@@ -217,7 +218,7 @@ pub mod tests {
             eth_chain_id: BridgeChainId::EthSepolia,
             eth_address: EthAddress::random(),
             token_id: TokenId::Sui,
-            amount: 100,
+            amount_sui_adjusted: 100,
         };
         let emitted_event = MoveTokenBridgeEvent {
             message_type: BridgeActionType::TokenTransfer as u8,
@@ -227,7 +228,7 @@ pub mod tests {
             target_chain: sanitized_event.eth_chain_id as u8,
             target_address: sanitized_event.eth_address.as_bytes().to_vec(),
             token_type: sanitized_event.token_id as u8,
-            amount: sanitized_event.amount,
+            amount_sui_adjusted: sanitized_event.amount_sui_adjusted,
         };
 
         let tx_digest = TransactionDigest::random();
