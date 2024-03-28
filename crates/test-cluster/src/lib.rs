@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_bridge::crypto::BridgeAuthorityKeyPair;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
+use sui_config::local_ip_utils::get_available_port;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
@@ -112,6 +113,7 @@ pub struct TestCluster {
     pub fullnode_handle: FullNodeHandle,
 
     pub bridge_authority_keys: Option<Vec<BridgeAuthorityKeyPair>>,
+    pub bridge_server_ports: Option<Vec<u16>>,
 }
 
 impl TestCluster {
@@ -1105,6 +1107,7 @@ impl TestClusterBuilder {
             wallet,
             fullnode_handle,
             bridge_authority_keys: None,
+            bridge_server_ports: None,
         }
     }
 
@@ -1122,8 +1125,7 @@ impl TestClusterBuilder {
         .unwrap();
 
         let mut bridge_authority_keys = vec![];
-
-        // Register bridge authorities
+        let mut server_ports = vec![];
         let mut tasks = vec![];
         for node in test_cluster.swarm.active_validators() {
             let validator_address = node.config.sui_address();
@@ -1146,12 +1148,15 @@ impl TestClusterBuilder {
             };
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_authority_keys.push(kp.copy());
+            let server_port = get_available_port("127.0.0.1");
+            let server_url = format!("http://127.0.0.1:{}", server_port);
+            server_ports.push(server_port);
             let data = build_committee_register_transaction(
                 validator_address,
                 &gas.object_ref(),
                 bridge_arg,
                 kp,
-                "bridge_test_url",
+                &server_url,
                 ref_gas_price,
             )
             .unwrap();
@@ -1192,6 +1197,7 @@ impl TestClusterBuilder {
         }
 
         test_cluster.bridge_authority_keys = Some(bridge_authority_keys);
+        test_cluster.bridge_server_ports = Some(server_ports);
         test_cluster
     }
 
