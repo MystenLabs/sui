@@ -22,7 +22,7 @@ use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionDigest, BridgeActionStatus};
+use crate::types::{BridgeAction, BridgeActionStatus};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -39,7 +39,7 @@ pub struct SuiMockClient {
         Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
     wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<SuiTransactionBlockResponse>>>>,
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
-    onchain_status: Arc<Mutex<HashMap<BridgeActionDigest, BridgeActionStatus>>>,
+    onchain_status: Arc<Mutex<HashMap<(u8, u64), BridgeActionStatus>>>,
 
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
 }
@@ -102,7 +102,7 @@ impl SuiMockClient {
         self.onchain_status
             .lock()
             .unwrap()
-            .insert(action.digest(), status);
+            .insert((action.chain_id() as u8, action.seq_number()), status);
     }
 
     pub fn set_wildcard_transaction_response(
@@ -203,13 +203,14 @@ impl SuiClientInner for SuiMockClient {
     async fn get_token_transfer_action_onchain_status(
         &self,
         _bridge_object_arg: ObjectArg,
-        action: &BridgeAction,
+        source_chain_id: u8,
+        seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError> {
         Ok(self
             .onchain_status
             .lock()
             .unwrap()
-            .get(&action.digest())
+            .get(&(source_chain_id, seq_number))
             .cloned()
             .unwrap_or(BridgeActionStatus::Pending))
     }

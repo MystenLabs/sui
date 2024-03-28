@@ -126,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
                 .get_eth_signer_client()
                 .await
                 .expect("Failed to get eth signer client");
+            println!("Using Eth address: {:?}", eth_signer_client.address());
             // Create BridgeAction
             let eth_action = make_action(chain_id, &cmd);
             println!("Action to execute on Eth: {:?}", eth_action);

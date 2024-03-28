@@ -77,7 +77,12 @@ pub type SuiBridgeClient = SuiClient<SuiSdkClient>;
 
 impl SuiBridgeClient {
     pub async fn new(rpc_url: &str) -> anyhow::Result<Self> {
-        let inner = SuiClientBuilder::default().build(rpc_url).await?;
+        let inner = SuiClientBuilder::default()
+            .build(rpc_url)
+            .await
+            .map_err(|e| {
+                anyhow!("Can't establish connection with Sui Rpc {rpc_url}. Error: {e}")
+            })?;
         let self_ = Self { inner };
         self_.describe().await?;
         Ok(self_)
@@ -216,7 +221,8 @@ where
 
     pub async fn get_token_transfer_action_onchain_status_until_success(
         &self,
-        action: &BridgeAction,
+        source_chain_id: u8,
+        seq_number: u64,
     ) -> BridgeActionStatus {
         loop {
             let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
@@ -228,12 +234,18 @@ where
                 continue;
             };
             let Ok(Ok(status)) = retry_with_max_elapsed_time!(
-                self.inner
-                    .get_token_transfer_action_onchain_status(bridge_object_arg, action),
+                self.inner.get_token_transfer_action_onchain_status(
+                    bridge_object_arg,
+                    source_chain_id,
+                    seq_number
+                ),
                 Duration::from_secs(30)
             ) else {
                 // TODO: add metrics and fire alert
-                error!("Failed to get action onchain status for: {:?}", action);
+                error!(
+                    source_chain_id,
+                    seq_number, "Failed to get token transfer action onchain status"
+                );
                 continue;
             };
             return status;
@@ -281,7 +293,8 @@ pub trait SuiClientInner: Send + Sync {
     async fn get_token_transfer_action_onchain_status(
         &self,
         bridge_object_arg: ObjectArg,
-        action: &BridgeAction,
+        source_chain_id: u8,
+        seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError>;
 
     async fn get_gas_data_panic_if_not_gas(
@@ -337,16 +350,18 @@ impl SuiClientInner for SuiSdkClient {
         self.http().get_latest_bridge().await.map_err(|e| e.into())
     }
 
+    // FIXME: pass in source chain id and seq number instead of the entire action
     async fn get_token_transfer_action_onchain_status(
         &self,
         bridge_object_arg: ObjectArg,
-        action: &BridgeAction,
+        source_chain_id: u8,
+        seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError> {
         let pt = ProgrammableTransaction {
             inputs: vec![
                 CallArg::Object(bridge_object_arg),
-                CallArg::Pure(bcs::to_bytes(&(action.chain_id() as u8)).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&action.seq_number()).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
             ],
             commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package: BRIDGE_PACKAGE_ID,
@@ -632,7 +647,11 @@ mod tests {
 
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
+            .get_token_transfer_action_onchain_status(
+                bridge_object_arg,
+                action.chain_id() as u8,
+                action.seq_number(),
+            )
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::Claimed);
@@ -667,7 +686,11 @@ mod tests {
         );
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
+            .get_token_transfer_action_onchain_status(
+                bridge_object_arg,
+                action.chain_id() as u8,
+                action.seq_number(),
+            )
             .await
             .unwrap();
         // At this point, the record is created and the status is Pending
@@ -685,7 +708,11 @@ mod tests {
 
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
+            .get_token_transfer_action_onchain_status(
+                bridge_object_arg,
+                action.chain_id() as u8,
+                action.seq_number(),
+            )
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::Approved);
@@ -695,7 +722,11 @@ mod tests {
             get_test_sui_to_eth_bridge_action(None, None, Some(100), None, None, None, None);
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(bridge_object_arg, &action)
+            .get_token_transfer_action_onchain_status(
+                bridge_object_arg,
+                action.chain_id() as u8,
+                action.seq_number(),
+            )
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::NotFound);

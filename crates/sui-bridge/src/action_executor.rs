@@ -203,7 +203,10 @@ where
         store: &Arc<BridgeOrchestratorTables>,
     ) -> bool {
         let status = sui_client
-            .get_token_transfer_action_onchain_status_until_success(action)
+            .get_token_transfer_action_onchain_status_until_success(
+                action.chain_id() as u8,
+                action.seq_number(),
+            )
             .await;
         match status {
             BridgeActionStatus::Approved | BridgeActionStatus::Claimed => {
