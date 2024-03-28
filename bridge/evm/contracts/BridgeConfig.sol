@@ -119,7 +119,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
     function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_TOKENS)
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_EVM_TOKENS)
     {
         // decode the update token payload
         (
@@ -170,7 +170,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         supportedTokens[tokenID] = Token(tokenAddress, suiDecimal, native);
         tokenPrices[tokenID] = tokenPrice;
 
-        emit TokenUpdated(tokenID, tokenAddress, suiDecimal, tokenPrice);
+        emit TokenAdded(tokenID, tokenAddress, suiDecimal, tokenPrice);
     }
 
     /* ========== MODIFIERS ========== */

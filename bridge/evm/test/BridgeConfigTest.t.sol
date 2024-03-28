@@ -68,7 +68,7 @@ contract BridgeConfigTest is BridgeBaseTest {
 
         // Create transfer message
         BridgeUtils.Message memory message = BridgeUtils.Message({
-            messageType: BridgeUtils.ADD_TOKENS,
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
             version: 1,
             nonce: 0,
             chainID: 1,
@@ -297,7 +297,7 @@ contract BridgeConfigTest is BridgeBaseTest {
 
         // Create update token price message
         BridgeUtils.Message memory message = BridgeUtils.Message({
-            messageType: BridgeUtils.ADD_TOKENS,
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
             version: 1,
             nonce: 266,
             chainID: 3,
