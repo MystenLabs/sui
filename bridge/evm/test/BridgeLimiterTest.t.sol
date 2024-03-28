@@ -193,6 +193,72 @@ contract BridgeLimiterTest is BridgeBaseTest {
         assertEq(limiter.calculateWindowAmount(12), 11000000000);
     }
 
+    // An e2e update limit regression test covering message ser/de
+    function testUpdateLimitRegressionTest() public {
+        address[] memory _committee = new address[](4);
+        uint16[] memory _stake = new uint16[](4);
+        uint8 chainID = 11;
+        uint8[] memory _supportedChains = new uint8[](1);
+        uint8 sendingChainID = 1;
+        _supportedChains[0] = sendingChainID;
+        uint8[] memory _supportedDestinationChains = new uint8[](1);
+        _supportedDestinationChains[0] = sendingChainID;
+        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        _stake[0] = 2500;
+        _stake[1] = 2500;
+        _stake[2] = 2500;
+        _stake[3] = 2500;
+        committee = new BridgeCommittee();
+        committee.initialize(_committee, _stake, minStakeRequired);
+
+        // deploy config
+        tokenPrices = new uint64[](5);
+        tokenPrices[0] = 10000; // SUI PRICE
+        tokenPrices[1] = 10000; // BTC PRICE
+        tokenPrices[2] = 10000; // ETH PRICE
+        tokenPrices[3] = 10000; // USDC PRICE
+        tokenPrices[4] = 10000; // USDT PRICE
+        config = new BridgeConfig();
+        config.initialize(
+            address(committee), chainID, supportedTokens, tokenPrices, _supportedChains
+        );
+
+        // initialize config in the bridge committee
+        committee.initializeConfig(address(config));
+
+        vault = new BridgeVault(wETH);
+
+        skip(2 days);
+        uint64[] memory totalLimits = new uint64[](1);
+        totalLimits[0] = 1000000;
+
+        limiter = new BridgeLimiter();
+        limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
+        bridge = new SuiBridge();
+        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        vault.transferOwnership(address(bridge));
+        limiter.transferOwnership(address(bridge));
+
+        bytes memory payload = hex"0c00000002540be400";
+
+        // Create update bridge limit message
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPDATE_BRIDGE_LIMIT,
+            version: 1,
+            nonce: 15,
+            chainID: 3,
+            payload: payload
+        });
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
+        bytes memory expectedEncodedMessage =
+            hex"5355495f4252494447455f4d4553534147450301000000000000000f030c00000002540be400";
+
+        assertEq(encodedMessage, expectedEncodedMessage);
+    }
+
     // An e2e update limit regression test covering message ser/de and signature verification
     function testUpdateLimitRegressionTestWithSigVerficiation() public {
         address[] memory _committee = new address[](4);

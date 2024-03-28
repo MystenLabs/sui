@@ -48,9 +48,9 @@ library BridgeUtils {
     uint8 public constant BLOCKLIST = 1;
     uint8 public constant EMERGENCY_OP = 2;
     uint8 public constant UPDATE_BRIDGE_LIMIT = 3;
-    uint8 public constant UPDATE_TOKEN_PRICES = 4;
+    uint8 public constant UPDATE_TOKEN_PRICE = 4;
     uint8 public constant UPGRADE = 5;
-    uint8 public constant ADD_TOKENS = 7;
+    uint8 public constant ADD_EVM_TOKENS = 7;
 
     // Message type stake requirements
     uint32 public constant TRANSFER_STAKE_REQUIRED = 3334;
@@ -59,8 +59,8 @@ library BridgeUtils {
     uint32 public constant UPGRADE_STAKE_REQUIRED = 5001;
     uint16 public constant BLOCKLIST_STAKE_REQUIRED = 5001;
     uint32 public constant BRIDGE_LIMIT_STAKE_REQUIRED = 5001;
-    uint32 public constant UPDATE_TOKEN_PRICES_STAKE_REQUIRED = 5001;
-    uint32 public constant ADD_TOKENS_STAKE_REQUIRED = 5001;
+    uint32 public constant UPDATE_TOKEN_PRICE_STAKE_REQUIRED = 5001;
+    uint32 public constant ADD_EVM_TOKENS_STAKE_REQUIRED = 5001;
 
     // token Ids
     uint8 public constant SUI = 0;
@@ -106,12 +106,12 @@ library BridgeUtils {
             return UNFREEZING_STAKE_REQUIRED;
         } else if (_message.messageType == UPDATE_BRIDGE_LIMIT) {
             return BRIDGE_LIMIT_STAKE_REQUIRED;
-        } else if (_message.messageType == UPDATE_TOKEN_PRICES) {
-            return UPDATE_TOKEN_PRICES_STAKE_REQUIRED;
+        } else if (_message.messageType == UPDATE_TOKEN_PRICE) {
+            return UPDATE_TOKEN_PRICE_STAKE_REQUIRED;
         } else if (_message.messageType == UPGRADE) {
             return UPGRADE_STAKE_REQUIRED;
-        } else if (_message.messageType == ADD_TOKENS) {
-            return ADD_TOKENS_STAKE_REQUIRED;
+        } else if (_message.messageType == ADD_EVM_TOKENS) {
+            return ADD_EVM_TOKENS_STAKE_REQUIRED;
         } else {
             revert("BridgeUtils: Invalid message type");
         }
@@ -349,42 +349,23 @@ library BridgeUtils {
     /// @notice Decodes an update token price payload from bytes to a token ID and a new price.
     /// @dev The function will revert if the payload length is invalid.
     ///     Update token price payload is 9 bytes.
-    ///     byte 0           : number of tokens
-    ///     bytes 1-n        : token IDs
-    ///     byte n + 1       : number of prices
-    ///     bytes n + 2 -> i : prices (uint64)
+    ///     byte 0       : token ID
+    ///     bytes 1-8    : new price
     /// @param _payload The payload to be decoded.
-    /// @return tokenIDs the token ID to update the price of.
-    /// @return tokenPrices the new price of the token.
-    function decodeUpdateTokenPricesPayload(bytes memory _payload)
+    /// @return tokenID the token ID to update the price of.
+    /// @return tokenPrice the new price of the token.
+    function decodeUpdateTokenPricePayload(bytes memory _payload)
         internal
         pure
-        returns (uint8[] memory tokenIDs, uint64[] memory tokenPrices)
+        returns (uint8 tokenID, uint64 tokenPrice)
     {
-        uint8 tokenCount = uint8(_payload[0]);
+        require(_payload.length == 9, "BridgeMessage: Invalid payload length");
+        tokenID = uint8(_payload[0]);
 
-        // Calculate the starting index for each token ID
-        uint8 offset = 1;
-        tokenIDs = new uint8[](tokenCount);
-        for (uint8 i; i < tokenCount; i++) {
-            tokenIDs[i] = uint8(_payload[offset++]);
+        // Extracts the uint64 value by loading 32 bytes starting just after the first byte.
+        // Position uint64 to the least significant bits by shifting it 192 bits to the right.
+        assembly {
+            tokenPrice := shr(192, mload(add(add(_payload, 0x20), 1)))
         }
-
-        uint8 priceCount = uint8(_payload[offset++]);
-        tokenPrices = new uint64[](priceCount);
-
-        for (uint8 i; i < priceCount; i++) {
-            // Calculate the starting index for each price
-            offset += i * 8;
-            uint64 tokenPrice;
-            // Extract each price
-            assembly {
-                tokenPrice := shr(192, mload(add(add(_payload, 0x20), offset)))
-            }
-            // Store the extracted price
-            tokenPrices[i] = tokenPrice;
-        }
-
-        return (tokenIDs, tokenPrices);
     }
 }

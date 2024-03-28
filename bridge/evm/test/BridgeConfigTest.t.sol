@@ -40,20 +40,18 @@ contract BridgeConfigTest is BridgeBaseTest {
         assertEq(config.tokenSuiDecimalOf(1), 8);
     }
 
-    function testUpdateTokenPricesWithSignatures() public {
+    function testUpdateTokenPriceWithSignatures() public {
         // Create update tokens payload
-        uint8 _numTokenIDs = 1;
-        uint8 tokenID1 = BridgeUtils.ETH;
-        uint8 _numPrices = 1;
-        uint64 price1 = 100_000_0000;
+        uint8 tokenID = BridgeUtils.ETH;
+        uint64 price = 100_000_0000;
 
-        bytes memory payload = abi.encodePacked(_numTokenIDs, tokenID1, _numPrices, price1);
+        bytes memory payload = abi.encodePacked(tokenID, price);
 
         console.logBytes(payload);
 
         // Create transfer message
         BridgeUtils.Message memory message = BridgeUtils.Message({
-            messageType: BridgeUtils.UPDATE_TOKEN_PRICES,
+            messageType: BridgeUtils.UPDATE_TOKEN_PRICE,
             version: 1,
             nonce: 0,
             chainID: 1,
@@ -73,11 +71,10 @@ contract BridgeConfigTest is BridgeBaseTest {
 
         // test ETH price
         assertEq(config.tokenPriceOf(BridgeUtils.ETH), ETH_PRICE);
-        config.updateTokenPricesWithSignatures(signatures, message);
+        config.updateTokenPriceWithSignatures(signatures, message);
         assertEq(config.tokenPriceOf(BridgeUtils.ETH), 100_000_0000);
     }
 
-    // TODO: update regression test with @lu
     // An e2e update token price regression test covering message ser/de
     function testUpdateTokenPricesRegressionTest() public {
         address[] memory _committee = new address[](4);
@@ -107,16 +104,11 @@ contract BridgeConfigTest is BridgeBaseTest {
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
-        // Fill vault with WETH
-        changePrank(deployer);
-        IWETH9(wETH).deposit{value: 10 ether}();
-        IERC20(wETH).transfer(address(vault), 10 ether);
-
         bytes memory payload = hex"01000000003b9aca00";
 
         // Create update token price message
         BridgeUtils.Message memory message = BridgeUtils.Message({
-            messageType: BridgeUtils.UPDATE_TOKEN_PRICES,
+            messageType: BridgeUtils.UPDATE_TOKEN_PRICE,
             version: 1,
             nonce: 266,
             chainID: 3,

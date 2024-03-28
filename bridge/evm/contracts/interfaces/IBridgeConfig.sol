@@ -43,6 +43,6 @@ interface IBridgeConfig {
     /// @notice Returns the chain ID of the bridge.
     function chainID() external view returns (uint8);
 
-    event TokenUpdated(uint8 tokenID, address tokenAddress, uint8 suiDecimal, uint64 tokenPrice);
+    event TokenAdded(uint8 tokenID, address tokenAddress, uint8 suiDecimal, uint64 tokenPrice);
     event TokenPriceUpdated(uint8 tokenID, uint64 tokenPrice);
 }

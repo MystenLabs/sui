@@ -182,13 +182,12 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(newLimit, 1_000_000_0000);
     }
 
-    function testDecodeUpdateTokenPricesPayload() public {
-        bytes memory payload = hex"010101000000003b9aca00";
-        (uint8[] memory _tokenIDs, uint64[] memory _newPrices) =
-            BridgeUtils.decodeUpdateTokenPricesPayload(payload);
+    function testDecodeUpdateTokenPricePayload() public {
+        bytes memory payload = hex"01000000003b9aca00";
+        (uint8 _tokenID, uint64 _newPrice) = BridgeUtils.decodeUpdateTokenPricePayload(payload);
 
-        assertEq(_tokenIDs[0], 1);
-        assertEq(_newPrices[0], 100_000_0000);
+        assertEq(_tokenID, 1);
+        assertEq(_newPrice, 100_000_0000);
     }
 
     function testDecodeEmergencyOpPayload() public {
