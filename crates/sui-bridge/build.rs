@@ -23,8 +23,13 @@ fn main() -> Result<(), ExitStatus> {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false);
-    if !forge_installed {
-        eprintln!("Installing forge");
+    let anvil_installed = Command::new("which")
+        .arg("anvil")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+    if !forge_installed || !anvil_installed {
+        eprintln!("Installing forge and/or anvil");
         // Also print the path where foundryup is installed
         let install_cmd = "curl -L https://foundry.paradigm.xyz | { cat; echo 'echo foundryup-path=\"$FOUNDRY_BIN_DIR/foundryup\"'; } | bash";
 
@@ -32,7 +37,7 @@ fn main() -> Result<(), ExitStatus> {
             .arg("-c")
             .arg(install_cmd)
             .output()
-            .expect("Failed to install Forge");
+            .expect("Failed to fetch foundryup");
 
         // extract foundryup path
         let output_str = String::from_utf8_lossy(&output.stdout);
@@ -44,7 +49,7 @@ fn main() -> Result<(), ExitStatus> {
             }
         }
         if foundryup_path.is_none() {
-            eprintln!("Error installing forge: expect a foundry path in output");
+            eprintln!("Error installing forge/anvil: expect a foundry path in output");
             exit(1);
         }
         let foundryup_path = foundryup_path.unwrap();
