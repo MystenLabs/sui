@@ -88,17 +88,13 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
 
             (signer,,) = ECDSA.tryRecover(BridgeUtils.computeHash(message), v, r, s);
 
-            // skip if signer is block listed or has no stake
-            if (blocklist[signer] || committeeStake[signer] == 0) continue;
+            require(!blocklist[signer], "BridgeCommittee: Signer is blocklisted");
+            require(committeeStake[signer] > 0, "BridgeCommittee: Signer has no stake");
 
             uint8 index = committeeIndex[signer];
             uint256 mask = 1 << index;
-            if (bitmap & mask == 0) {
-                bitmap |= mask;
-            } else {
-                // skip if duplicate signature
-                continue;
-            }
+            require(bitmap & mask == 0, "BridgeCommittee: Duplicate signature provided");
+            bitmap |= mask;
 
             approvalStake += committeeStake[signer];
         }
