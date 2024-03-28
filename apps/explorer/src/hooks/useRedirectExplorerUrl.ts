@@ -124,7 +124,6 @@ function useRedirectObject() {
 	const { data, isError } = useGetObject(id);
 	const resp = data && !isError ? translate(data) : null;
 	const isPackage = resp ? resp.objType === 'Move Package' : false;
-
 	return useRedirectUrl(isPackage);
 }
 
