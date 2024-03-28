@@ -652,9 +652,10 @@ mod test {
                 "tests",
                 "move_building_blocks",
             ]);
-            let results = sui_surfer::run::<DefaultSurfStrategy>(
+            let results = sui_surfer::run_with_test_cluster::<DefaultSurfStrategy>(
                 Duration::from_secs(test_duration_secs),
                 vec![path],
+                test_cluster,
             )
             .await;
             assert!(results.num_successful_transactions > 0);
