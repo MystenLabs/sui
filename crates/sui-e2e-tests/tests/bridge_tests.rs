@@ -76,24 +76,9 @@ async fn test_committee_registration() {
         bridge.committee().member_registrations.contents.len()
     );
 
-    // wait for next epoch
-    test_cluster.wait_for_epoch(None).await;
-
-    let bridge = get_bridge(
-        test_cluster
-            .fullnode_handle
-            .sui_node
-            .state()
-            .get_object_store(),
-    )
-    .unwrap();
-
-    // Committee should be initiated
-    assert!(bridge.committee().member_registrations.contents.is_empty());
-    assert_eq!(
-        test_cluster.swarm.active_validators().count(),
-        bridge.committee().members.contents.len()
-    );
+    test_cluster
+        .wait_for_next_epoch_and_assert_bridge_committee_initialized()
+        .await;
 }
 
 #[tokio::test]
