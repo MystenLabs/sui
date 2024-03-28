@@ -134,6 +134,19 @@ impl TypeFilter {
                     .filter(name_field.eq(n))
             }
 
+            TypeFilter::ByType(TypeTag::Struct(tag)) => {
+                let p = tag.address.to_vec();
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                let exact = tag.to_canonical_string(/* with_prefix */ true);
+                // We check against the full type field for an exact match, including type parameters.
+                query
+                    .filter(package_field.eq(p))
+                    .filter(module_field.eq(m))
+                    .filter(name_field.eq(n))
+                    .filter(type_field.eq(exact))
+            }
+
             TypeFilter::ByType(tag) => {
                 let exact = tag.to_canonical_string(/* with_prefix */ true);
                 // We check against the full type field for an exact match, including type parameters.
@@ -188,6 +201,24 @@ impl TypeFilter {
                 query = filter!(query, statement, m);
                 let statement = name_field.to_string() + " = {}";
                 query = filter!(query, statement, n);
+            }
+
+            TypeFilter::ByType(TypeTag::Struct(tag)) => {
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(tag.address.to_vec())
+                );
+                query = filter!(query, statement);
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
+                let statement = name_field.to_string() + " = {}";
+                query = filter!(query, statement, n);
+                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
+                let statement = type_field.to_string() + " = {}";
+                query = filter!(query, statement, exact_pattern);
             }
 
             TypeFilter::ByType(tag) => {
