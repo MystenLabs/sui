@@ -38,7 +38,7 @@ impl<'a> CodeUnitVerifier<'a> {
     pub fn verify_module(
         verifier_config: &VerifierConfig,
         module: &'a CompiledModule,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> VMResult<()> {
         Self::verify_module_impl(verifier_config, module, meter)
             .map_err(|e| e.finish(Location::Module(module.self_id())))
@@ -47,7 +47,7 @@ impl<'a> CodeUnitVerifier<'a> {
     fn verify_module_impl(
         verifier_config: &VerifierConfig,
         module: &CompiledModule,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         let mut name_def_map = HashMap::new();
         for (idx, func_def) in module.function_defs().iter().enumerate() {
@@ -79,7 +79,7 @@ impl<'a> CodeUnitVerifier<'a> {
     pub fn verify_script(
         verifier_config: &VerifierConfig,
         module: &'a CompiledScript,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> VMResult<()> {
         Self::verify_script_impl(verifier_config, module, meter)
             .map_err(|e| e.finish(Location::Script))
@@ -88,7 +88,7 @@ impl<'a> CodeUnitVerifier<'a> {
     fn verify_script_impl(
         verifier_config: &VerifierConfig,
         script: &'a CompiledScript,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         // create `FunctionView` and `BinaryIndexedView`
         let function_view = control_flow::verify_script(verifier_config, script)?;
@@ -123,7 +123,7 @@ impl<'a> CodeUnitVerifier<'a> {
         function_definition: &FunctionDefinition,
         module: &CompiledModule,
         name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<usize> {
         meter.enter_scope(
             module
@@ -182,7 +182,7 @@ impl<'a> CodeUnitVerifier<'a> {
     fn verify_common(
         &self,
         verifier_config: &VerifierConfig,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         StackUsageVerifier::verify(verifier_config, &self.resolver, &self.function_view, meter)?;
         type_safety::verify(&self.resolver, &self.function_view, meter)?;

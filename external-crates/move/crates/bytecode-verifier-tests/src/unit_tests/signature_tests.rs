@@ -218,7 +218,7 @@ fn big_signature_test() {
 
     let res = verify_module_with_config_for_test(
         "big_signature_test",
-        &production_config(),
+        &production_config().0,
         &module,
         &mut DummyMeter,
     )

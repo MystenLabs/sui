@@ -139,7 +139,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
         meter.add_items(

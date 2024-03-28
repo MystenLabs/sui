@@ -49,7 +49,7 @@ use sui_types::{
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
-use sui_verifier::{default_verifier_config, verifier as sui_bytecode_verifier};
+use sui_verifier::verifier as sui_bytecode_verifier;
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
@@ -242,20 +242,16 @@ pub fn build_from_resolution_graph(
     };
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
+        let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
+            .verifier_config(/* for_signing */ false);
+
         for m in compiled_modules.iter_modules() {
             move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
                 SuiError::ModuleVerificationFailure {
                     error: err.to_string(),
                 }
             })?;
-            sui_bytecode_verifier::sui_verify_module_unmetered(
-                m,
-                &fn_info,
-                &default_verifier_config(
-                    &ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown),
-                    false,
-                ),
-            )?;
+            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info, &verifier_config)?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }

@@ -16,7 +16,7 @@ use move_bytecode_verifier_meter::{dummy::DummyMeter, Meter};
 pub fn sui_verify_module_metered(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> Result<(), ExecutionError> {
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
@@ -32,7 +32,7 @@ pub fn sui_verify_module_metered(
 pub fn sui_verify_module_metered_check_timeout_only(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> Result<(), ExecutionError> {
     // Checks if the error counts as a Sui verifier timeout
     if let Err(error) = sui_verify_module_metered(module, fn_info_map, meter) {

@@ -63,3 +63,18 @@ pub trait Meter {
         Ok(())
     }
 }
+
+/// Convenience trait implementation to support static dispatch against a trait object.
+impl Meter for &mut dyn Meter {
+    fn enter_scope(&mut self, name: &str, scope: Scope) {
+        (*self).enter_scope(name, scope)
+    }
+
+    fn transfer(&mut self, from: Scope, to: Scope, factor: f32) -> PartialVMResult<()> {
+        (*self).transfer(from, to, factor)
+    }
+
+    fn add(&mut self, scope: Scope, units: u128) -> PartialVMResult<()> {
+        (*self).add(scope, units)
+    }
+}

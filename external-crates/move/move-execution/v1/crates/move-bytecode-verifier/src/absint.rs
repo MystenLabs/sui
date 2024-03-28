@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 /// Trait for finite-height abstract domains. Infinite height domains would require a more complex
 /// trait with widening and a partial order.
 pub trait AbstractDomain: Clone + Sized {
-    fn join(&mut self, other: &Self, meter: &mut impl Meter) -> PartialVMResult<JoinResult>;
+    fn join(&mut self, other: &Self, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<JoinResult>;
 }
 
 #[derive(Debug)]
@@ -62,7 +62,7 @@ pub trait TransferFunctions {
         instr: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()>;
 }
 
@@ -72,7 +72,7 @@ pub trait AbstractInterpreter: TransferFunctions {
         &mut self,
         initial_state: Self::State,
         function_view: &FunctionView,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         meter.add(Scope::Function, ANALYZE_FUNCTION_BASE_COST)?;
         let mut inv_map = InvariantMap::new();
@@ -147,7 +147,7 @@ pub trait AbstractInterpreter: TransferFunctions {
         block_id: BlockId,
         pre_state: &Self::State,
         function_view: &FunctionView,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Self::State> {
         meter.add(Scope::Function, EXECUTE_BLOCK_BASE_COST)?;
         let mut state_acc = pre_state.clone();

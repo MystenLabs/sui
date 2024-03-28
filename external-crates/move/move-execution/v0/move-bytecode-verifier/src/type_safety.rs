@@ -85,7 +85,7 @@ impl<'a> TypeSafetyChecker<'a> {
         )
     }
 
-    fn push(&mut self, meter: &mut impl Meter, ty: SignatureToken) -> PartialVMResult<()> {
+    fn push(&mut self, meter: &mut (impl Meter + ?Sized), ty: SignatureToken) -> PartialVMResult<()> {
         self.charge_ty(meter, &ty)?;
         safe_unwrap_err!(self.stack.push(ty));
         Ok(())
@@ -93,7 +93,7 @@ impl<'a> TypeSafetyChecker<'a> {
 
     fn push_n(
         &mut self,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
         ty: SignatureToken,
         n: u64,
     ) -> PartialVMResult<()> {
@@ -102,13 +102,13 @@ impl<'a> TypeSafetyChecker<'a> {
         Ok(())
     }
 
-    fn charge_ty(&mut self, meter: &mut impl Meter, ty: &SignatureToken) -> PartialVMResult<()> {
+    fn charge_ty(&mut self, meter: &mut (impl Meter + ?Sized), ty: &SignatureToken) -> PartialVMResult<()> {
         self.charge_ty_(meter, ty, 1)
     }
 
     fn charge_ty_(
         &mut self,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
         ty: &SignatureToken,
         n: u64,
     ) -> PartialVMResult<()> {
@@ -121,7 +121,7 @@ impl<'a> TypeSafetyChecker<'a> {
 
     fn charge_tys(
         &mut self,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
         tys: &[SignatureToken],
     ) -> PartialVMResult<()> {
         for ty in tys {
@@ -134,7 +134,7 @@ impl<'a> TypeSafetyChecker<'a> {
 pub(crate) fn verify<'a>(
     resolver: &'a BinaryIndexedView<'a>,
     function_view: &'a FunctionView<'a>,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let verifier = &mut TypeSafetyChecker::new(resolver, function_view);
 
@@ -151,7 +151,7 @@ pub(crate) fn verify<'a>(
 // helper for both `ImmBorrowField` and `MutBorrowField`
 fn borrow_field(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     mut_: bool,
     field_handle_index: FieldHandleIndex,
@@ -200,7 +200,7 @@ fn borrow_field(
 // helper for both `ImmBorrowLoc` and `MutBorrowLoc`
 fn borrow_loc(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     mut_: bool,
     idx: LocalIndex,
@@ -224,7 +224,7 @@ fn borrow_loc(
 
 fn borrow_global(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     mut_: bool,
     idx: StructDefinitionIndex,
@@ -256,7 +256,7 @@ fn borrow_global(
 
 fn call(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     function_handle: &FunctionHandle,
     type_actuals: &Signature,
@@ -278,7 +278,7 @@ fn call(
 
 fn type_fields_signature(
     verifier: &mut TypeSafetyChecker,
-    _meter: &mut impl Meter, // TODO: metering
+    _meter: &mut (impl Meter + ?Sized), // TODO: metering
     offset: CodeOffset,
     struct_def: &StructDefinition,
     type_args: &Signature,
@@ -300,7 +300,7 @@ fn type_fields_signature(
 
 fn pack(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     struct_def: &StructDefinition,
     type_args: &Signature,
@@ -320,7 +320,7 @@ fn pack(
 
 fn unpack(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     struct_def: &StructDefinition,
     type_args: &Signature,
@@ -343,7 +343,7 @@ fn unpack(
 
 fn exists(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     struct_def: &StructDefinition,
     type_args: &Signature,
@@ -371,7 +371,7 @@ fn exists(
 
 fn move_from(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     struct_def: &StructDefinition,
     type_args: &Signature,
@@ -419,7 +419,7 @@ fn move_to(
 
 fn borrow_vector_element(
     verifier: &mut TypeSafetyChecker,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     declared_element_type: &SignatureToken,
     offset: CodeOffset,
     mut_ref_only: bool,
@@ -451,7 +451,7 @@ fn verify_instr(
     verifier: &mut TypeSafetyChecker,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     match bytecode {
         Bytecode::Pop => {

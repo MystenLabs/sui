@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::PartialVMResult;
 use crate::{Meter, Scope};
+use move_binary_format::errors::PartialVMResult;
 
 /// Meter that does nothing.
 pub struct DummyMeter;

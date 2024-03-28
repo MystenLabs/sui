@@ -71,7 +71,7 @@ fn test_max_number_of_bytecode() {
     let module = dummy_procedure_module(nops);
 
     let result =
-        CodeUnitVerifier::verify_module(&VerifierConfig::unbounded(), &module, &mut DummyMeter);
+        CodeUnitVerifier::verify_module(&VerifierConfig::default(), &module, &mut DummyMeter);
     assert!(result.is_ok());
 }
 

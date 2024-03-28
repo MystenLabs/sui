@@ -1,10 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{Meter, Scope};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
-use move_vm_config::verifier::VerifierConfig;
-use crate::{Meter, Scope};
+use move_vm_config::verifier::MeterConfig;
 
 /// Module and function level metering.
 pub struct BoundMeter {
@@ -55,7 +55,7 @@ impl Bounds {
 }
 
 impl BoundMeter {
-    pub fn new(config: &VerifierConfig) -> Self {
+    pub fn new(config: MeterConfig) -> Self {
         Self {
             mod_bounds: Bounds {
                 name: "<unknown>".to_string(),

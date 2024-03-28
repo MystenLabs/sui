@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
+use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
@@ -2078,6 +2079,48 @@ impl ProtocolConfig {
             }
         }
         cfg
+    }
+
+    // Extract the bytecode verifier config from this protocol config. `for_signing` indicates
+    // whether this config is used for verification during signing or execution.
+    pub fn verifier_config(&self, for_signing: bool) -> VerifierConfig {
+        let (max_back_edges_per_function, max_back_edges_per_module) = if for_signing {
+            (
+                Some(self.max_back_edges_per_function() as usize),
+                Some(self.max_back_edges_per_module() as usize),
+            )
+        } else {
+            (None, None)
+        };
+
+        VerifierConfig {
+            max_loop_depth: Some(self.max_loop_depth() as usize),
+            max_generic_instantiation_length: Some(self.max_generic_instantiation_length() as usize),
+            max_function_parameters: Some(self.max_function_parameters() as usize),
+            max_basic_blocks: Some(self.max_basic_blocks() as usize),
+            max_value_stack_size: self.max_value_stack_size() as usize,
+            max_type_nodes: Some(self.max_type_nodes() as usize),
+            max_push_size: Some(self.max_push_size() as usize),
+            max_dependency_depth: Some(self.max_dependency_depth() as usize),
+            max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
+            max_function_definitions: Some(self.max_function_definitions() as usize),
+            max_struct_definitions: Some(self.max_struct_definitions() as usize),
+            max_constant_vector_len: Some(self.max_move_vector_len()),
+            max_back_edges_per_function,
+            max_back_edges_per_module,
+            max_basic_blocks_in_script: None,
+            max_idenfitier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            allow_receiving_object_id: self.allow_receiving_object_id(),
+            reject_mutable_random_on_entry_functions: self
+                .reject_mutable_random_on_entry_functions(),
+        }
+    }
+
+    pub fn meter_config(&self) -> MeterConfig {
+        MeterConfig {
+            max_per_fun_meter_units: Some(self.max_verifier_meter_ticks_per_function() as u128),
+            max_per_mod_meter_units: Some(self.max_meter_ticks_per_module() as u128),
+        }
     }
 
     /// Override one or more settings in the config, for testing.

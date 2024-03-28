@@ -121,12 +121,15 @@ impl AbstractValue {
 
 pub fn verify_module(
     module: &CompiledModule,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> Result<(), ExecutionError> {
     verify_id_leak(module, meter)
 }
 
-fn verify_id_leak(module: &CompiledModule, meter: &mut impl Meter) -> Result<(), ExecutionError> {
+fn verify_id_leak(
+    module: &CompiledModule,
+    meter: &mut (impl Meter + ?Sized),
+) -> Result<(), ExecutionError> {
     let binary_view = BinaryIndexedView::Module(module);
     for (index, func_def) in module.function_defs.iter().enumerate() {
         let code = match func_def.code.as_ref() {
@@ -195,7 +198,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> Result<JoinResult, PartialVMError> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
         meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, state.locals.len())?;
@@ -281,7 +284,7 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> Result<(), PartialVMError> {
         execute_inner(self, state, bytecode, index, meter)?;
         // invariant: the stack should be empty at the end of the block
@@ -381,7 +384,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> Result<(), PartialVMError> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     // TODO: Better diagnostics with location
