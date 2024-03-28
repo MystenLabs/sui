@@ -14,6 +14,7 @@ title: Module `0xb::committee`
 -  [Function `create`](#0xb_committee_create)
 -  [Function `verify_signatures`](#0xb_committee_verify_signatures)
 -  [Function `register`](#0xb_committee_register)
+-  [Function `check_uniqueness_bridge_keys`](#0xb_committee_check_uniqueness_bridge_keys)
 -  [Function `try_create_next_committee`](#0xb_committee_try_create_next_committee)
 -  [Function `execute_blocklist`](#0xb_committee_execute_blocklist)
 -  [Function `committee_members`](#0xb_committee_committee_members)
@@ -271,6 +272,15 @@ title: Module `0xb::committee`
 
 
 
+<a name="0xb_committee_EDuplicatePubkey"></a>
+
+
+
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EDuplicatePubkey">EDuplicatePubkey</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="0xb_committee_EDuplicatedSignature"></a>
 
 
@@ -457,7 +467,47 @@ title: Module `0xb::committee`
         registration
     };
 
+    // check uniqueness of the <a href="bridge.md#0xb_bridge">bridge</a> pubkey.
+    // `try_create_next_committee` will <b>abort</b> <b>if</b> bridge_pubkey_bytes are not unique and
+    // that will fail the end of epoch transaction (possibly "forever", well, we
+    // need <b>to</b> deploy proper <a href="../sui-system/validator.md#0x3_validator">validator</a> changes <b>to</b> stop end of epoch from failing).
+    <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self, bridge_pubkey_bytes);
+
     emit(registration)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_committee_check_uniqueness_bridge_keys"></a>
+
+## Function `check_uniqueness_bridge_keys`
+
+
+
+<pre><code><b>fun</b> <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+    <b>let</b> <b>mut</b> count = self.member_registrations.size();
+    // bridge_pubkey_bytes must be found once and once only
+    <b>let</b> <b>mut</b> bridge_key_found = <b>false</b>;
+    <b>while</b> (count &gt; 0) {
+        count = count - 1;
+        <b>let</b> (_, registration) = self.member_registrations.get_entry_by_idx(count);
+        <b>if</b> (registration.bridge_pubkey_bytes == bridge_pubkey_bytes) {
+            <b>assert</b>!(!bridge_key_found, <a href="committee.md#0xb_committee_EDuplicatePubkey">EDuplicatePubkey</a>);
+            bridge_key_found = <b>true</b>; // bridge_pubkey_bytes found, we must not have another one
+        }
+    };
 }
 </code></pre>
 
