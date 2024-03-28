@@ -480,7 +480,7 @@ mod tests {
     use std::{collections::HashSet, str::FromStr};
     use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
     use sui_sdk::wallet_context;
-    use sui_types::bridge::{BridgeChainId, TokenId};
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_SUI, TOKEN_ID_USDC};
     use test_cluster::TestClusterBuilder;
 
     use super::*;
@@ -505,7 +505,7 @@ mod tests {
             sui_address: SuiAddress::random_for_testing_only(),
             eth_chain_id: BridgeChainId::EthSepolia,
             eth_address: Address::random(),
-            token_id: TokenId::Sui,
+            token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
         };
         let emitted_event_1 = MoveTokenBridgeEvent {
@@ -515,7 +515,7 @@ mod tests {
             sender_address: sanitized_event_1.sui_address.to_vec(),
             target_chain: sanitized_event_1.eth_chain_id as u8,
             target_address: sanitized_event_1.eth_address.as_bytes().to_vec(),
-            token_type: sanitized_event_1.token_id as u8,
+            token_type: sanitized_event_1.token_id,
             amount_sui_adjusted: sanitized_event_1.amount_sui_adjusted,
         };
 
@@ -663,7 +663,7 @@ mod tests {
             context,
             eth_recv_address,
             usdc_object_ref,
-            TokenId::USDC,
+            TOKEN_ID_USDC,
             bridge_object_arg,
         )
         .await;
@@ -672,7 +672,7 @@ mod tests {
         assert_eq!(bridge_event.eth_chain_id, BridgeChainId::EthLocalTest);
         assert_eq!(bridge_event.eth_address, eth_recv_address);
         assert_eq!(bridge_event.sui_address, sender);
-        assert_eq!(bridge_event.token_id, TokenId::USDC);
+        assert_eq!(bridge_event.token_id, TOKEN_ID_USDC);
         assert_eq!(bridge_event.amount_sui_adjusted, usdc_amount);
 
         let action = get_test_sui_to_eth_bridge_action(
@@ -682,7 +682,7 @@ mod tests {
             Some(bridge_event.amount_sui_adjusted),
             Some(bridge_event.sui_address),
             Some(bridge_event.eth_address),
-            Some(TokenId::USDC),
+            Some(TOKEN_ID_USDC),
         );
         let status = sui_client
             .inner
