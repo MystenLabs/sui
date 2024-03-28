@@ -66,6 +66,18 @@ pub enum BridgeChainId {
     EthLocalTest = 12,
 }
 
+impl BridgeChainId {
+    pub fn is_sui_chain(&self) -> bool {
+        matches!(
+            self,
+            BridgeChainId::SuiMainnet
+                | BridgeChainId::SuiTestnet
+                | BridgeChainId::SuiDevnet
+                | BridgeChainId::SuiLocalTest
+        )
+    }
+}
+
 #[derive(
     Copy,
     Clone,
