@@ -26,11 +26,11 @@ Service owners are entities like restaurants that list their services on the pla
 
 ### Reviewers
 
-Reviewers are consumers of services that use the review system. Reviewers provide feedback in the form of comments that detail specific aspects of the service as well as a star rating to inform others. The reviews are rated, with the most effective reviews getting the highest rating. Service owners award the 10 highest rated reviews for their service. How often the rewards are distributed is up to the service owner; it can be on a regular or rolling basis.
+Reviewers are consumers of services that use the review system. Reviewers provide feedback in the form of comments that detail specific aspects of the service as well as a star rating to inform others. The reviews are rated, with the most effective reviews getting the highest rating. Service owners award the 10 highest rated reviews for their service. How often the rewards are distributed is up to the service owner; it can be distributed once a day or once a month.
 
 ### Review readers
 
-Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting awarded. 
+Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting awarded.
 
 ### Moderators
 
@@ -54,7 +54,7 @@ Total Score = (IS + ES) * VM
 
 ## Smart contracts
 
-There are several modules that create the backend logic for the example. 
+There are several modules that create the backend logic for the example.
 
 ### dashboard.move
 
@@ -86,9 +86,9 @@ struct Service has key, store {
 }
 ```
 
-All the submitted reviews are stored in `reviews` field, which has `MultiMap<ID>` type. The [multimap module](#multimap) defines the type. 
+All the submitted reviews are stored in `reviews` field, which has `MultiMap<ID>` type. The [multimap module](#multimap) defines the type.
 
-The `reward_pool` and `reward` fields store the available reward information.  
+The `reward_pool` and `reward` fields store the available reward information.
 
 ```move
 struct AdminCap has key, store {
@@ -100,7 +100,7 @@ struct Moderator has key {
   service_id: ID,
 }
 ```
-`SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` to allow them to perform privileged operations.
+`SERVICE OWNERS` are given `AdminCap`, and `MODERATORS` are given `Moderator` to allow them to perform privileged operations.
 
 ### multimap.move {#multimap}
 
@@ -176,6 +176,10 @@ struct Review has key, store {
 ```
 
 In addition to the content of a review, all the elements that are required to compute total score are stored in a `Review` object.
+
+## Deployment
+
+Navigate to the [setup folder](https://github.com/MystenLabs/reviews-ratings-poc/tree/main/setup) of the repository and execute the `publish.sh` script. Refer to the [README instructions](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/README.md) for deploying the smart contracts.
 
 ## Frontend
 The frontend module is written in React, and is structured to provide a responsive user experience for interacting with a review rating platform.
