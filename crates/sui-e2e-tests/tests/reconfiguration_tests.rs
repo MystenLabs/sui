@@ -127,7 +127,10 @@ async fn test_transaction_expiration() {
 // may not always be tested.
 #[sim_test]
 async fn reconfig_with_revert_end_to_end_test() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_random_num_validators()
+        .build()
+        .await;
     let authorities = test_cluster.swarm.validator_node_handles();
     let rgp = test_cluster.get_reference_gas_price().await;
     let (sender, mut gas_objects) = test_cluster.wallet.get_one_account().await.unwrap();

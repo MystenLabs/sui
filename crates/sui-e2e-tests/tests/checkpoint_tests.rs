@@ -14,7 +14,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_random_num_validators()
+        .build()
+        .await;
     let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let digest = *tx.digest();
     test_cluster.execute_transaction(tx).await;
