@@ -198,6 +198,7 @@ mod test {
     use crate::{
         block::{BlockRef, TestBlock},
         core::CoreSignals,
+        network::BlockStream,
         Round,
     };
 
@@ -236,15 +237,11 @@ mod test {
             Ok(())
         }
 
-        async fn subscribe_block_stream(
+        async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
             _last_received: Round,
-        ) -> ConsensusResult<()> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
+        ) -> ConsensusResult<BlockStream> {
             unimplemented!("Unimplemented")
         }
 

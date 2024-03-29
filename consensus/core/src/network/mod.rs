@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use futures::Stream;
 use tokio::sync::broadcast;
 
 use crate::{
@@ -30,6 +31,9 @@ pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 pub(crate) mod tonic_network;
 
+/// A stream of serialized blocks returned over the network.
+pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send + Sync>>;
+
 /// Network client for communicating with peers.
 ///
 /// NOTE: the timeout parameters help saving resources at client and potentially server.
@@ -49,14 +53,11 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
     ) -> ConsensusResult<()>;
 
     /// Subscribes to blocks from a peer after last_received round.
-    async fn subscribe_block_stream(
+    async fn subscribe_blocks(
         &self,
         peer: AuthorityIndex,
         last_received: Round,
-    ) -> ConsensusResult<()>;
-
-    /// Unsubscribe the block stream from a peer.
-    async fn unsubscribe_block_stream(&self, peer: AuthorityIndex) -> ConsensusResult<()>;
+    ) -> ConsensusResult<BlockStream>;
 
     /// Fetches serialized `SignedBlock`s from a peer.
     async fn fetch_blocks(
@@ -73,6 +74,11 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
 #[async_trait]
 pub(crate) trait NetworkService: Send + Sync + 'static {
     async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
+    async fn handle_subscribe_blocks(
+        &self,
+        peer: AuthorityIndex,
+        last_received: Round,
+    ) -> ConsensusResult<BlockStream>;
     async fn handle_fetch_blocks(
         &self,
         peer: AuthorityIndex,

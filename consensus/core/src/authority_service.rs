@@ -1,13 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    pin::{pin, Pin},
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use futures::{ready, stream, task, Future as _, Stream, StreamExt};
 use parking_lot::RwLock;
-use tokio::time::sleep;
+use tokio::{sync::broadcast, time::sleep};
 use tracing::{info, warn};
 
 use crate::{
@@ -17,16 +22,20 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::NetworkService,
+    network::{BlockStream, NetworkService},
     synchronizer::SynchronizerHandle,
+    Round,
 };
+
+const MAX_PAST_BLOCKS: usize = 1000;
 
 /// Authority's network interface.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
-    core_dispatcher: Arc<C>,
     synchronizer: Arc<SynchronizerHandle>,
+    core_dispatcher: Arc<C>,
+    tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
     dag_state: Arc<RwLock<DagState>>,
 }
 
@@ -34,15 +43,17 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
-        core_dispatcher: Arc<C>,
         synchronizer: Arc<SynchronizerHandle>,
+        core_dispatcher: Arc<C>,
+        tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         Self {
             context,
             block_verifier,
-            core_dispatcher,
             synchronizer,
+            core_dispatcher,
+            tx_block_broadcaster,
             dag_state,
         }
     }
@@ -137,6 +148,25 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         self.handle_received_block(peer, serialized_block).await
     }
 
+    async fn handle_subscribe_blocks(
+        &self,
+        peer: AuthorityIndex,
+        last_received: Round,
+    ) -> ConsensusResult<BlockStream> {
+        let dag_state = self.dag_state.read();
+        let missed_blocks = stream::iter(
+            dag_state
+                .get_cached_blocks(peer, last_received + 1, MAX_PAST_BLOCKS)
+                .into_iter()
+                .map(|block| block.serialized().clone()),
+        );
+        let broadcasted_blocks = BroadcastedBlockStream {
+            peer,
+            receiver: self.tx_block_broadcaster.subscribe(),
+        };
+        Ok(Box::pin(missed_blocks.chain(broadcasted_blocks)))
+    }
+
     async fn handle_fetch_blocks(
         &self,
         peer: AuthorityIndex,
@@ -172,5 +202,40 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .collect::<Vec<_>>();
 
         Ok(result)
+    }
+}
+
+/// Each broadcasted block stream wraps a broadcast receiver for blocks.
+/// It yields serialized blocks that are broadcasted after the stream is created.
+struct BroadcastedBlockStream {
+    peer: AuthorityIndex,
+    receiver: broadcast::Receiver<VerifiedBlock>,
+}
+
+impl Stream for BroadcastedBlockStream {
+    type Item = Bytes;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        let peer = self.peer;
+        loop {
+            let block = match ready!(pin!(self.receiver.recv()).poll(cx)) {
+                Ok(block) => Some(block.serialized().clone()),
+                Err(broadcast::error::RecvError::Closed) => {
+                    info!("Block BroadcastedBlockStream {} closed", peer);
+                    None
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    info!(
+                        "Block BroadcastedBlockStream {} lagged by {n} messages",
+                        peer
+                    );
+                    continue;
+                }
+            };
+            return task::Poll::Ready(block);
+        }
     }
 }

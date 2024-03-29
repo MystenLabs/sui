@@ -326,6 +326,31 @@ impl DagState {
         genesis_block.clone()
     }
 
+    /// Returns cached recent blocks from the input authority, starting from round `start`,
+    /// and up to `max_count` of blocks.
+    pub(crate) fn get_cached_blocks(
+        &self,
+        authority: AuthorityIndex,
+        start: Round,
+        max_count: usize,
+    ) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![];
+        for block_ref in self.recent_refs[authority].range((
+            Included(BlockRef::new(start, authority, BlockDigest::MIN)),
+            Unbounded,
+        )) {
+            if blocks.len() >= max_count {
+                break;
+            }
+            let block = self
+                .recent_blocks
+                .get(block_ref)
+                .expect("Block should exist in recent blocks");
+            blocks.push(block.clone());
+        }
+        blocks
+    }
+
     /// Returns the last block proposed per authority with `round < end_round`.
     /// The method is guaranteed to return results only when the `end_round` is not earlier of the
     /// available cached data for each authority, otherwise the method will panic - it's the caller's

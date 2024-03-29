@@ -37,7 +37,7 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    NetworkClient, NetworkManager, NetworkService,
+    BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -111,15 +111,11 @@ impl NetworkClient for TonicClient {
         Ok(())
     }
 
-    async fn subscribe_block_stream(
+    async fn subscribe_blocks(
         &self,
         _peer: AuthorityIndex,
         _last_received: Round,
-    ) -> ConsensusResult<()> {
-        unimplemented!("Unimplemented")
-    }
-
-    async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
+    ) -> ConsensusResult<BlockStream> {
         unimplemented!("Unimplemented")
     }
 
@@ -339,14 +335,8 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         Ok(Response::new(SendBlockResponse {}))
     }
 
-    type SubscribeBlocksStream = Pin<
-        Box<
-            dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>>
-                + Send
-                + Sync
-                + 'static,
-        >,
-    >;
+    type SubscribeBlocksStream =
+        Pin<Box<dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>> + Send + Sync>>;
 
     async fn subscribe_blocks(
         &self,
@@ -637,7 +627,10 @@ mod test {
         block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
-        network::{tonic_network::TonicManager, NetworkClient, NetworkManager, NetworkService},
+        network::{
+            tonic_network::TonicManager, BlockStream, NetworkClient, NetworkManager, NetworkService,
+        },
+        Round,
     };
 
     struct TestService {
@@ -663,6 +656,14 @@ mod test {
         ) -> ConsensusResult<()> {
             self.lock().handle_send_block.push((peer, block));
             Ok(())
+        }
+
+        async fn handle_subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+        ) -> ConsensusResult<BlockStream> {
+            unimplemented!()
         }
 
         async fn handle_fetch_blocks(

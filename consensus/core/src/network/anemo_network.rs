@@ -33,7 +33,7 @@ use super::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
     metrics::NetworkRouteMetrics,
-    NetworkClient, NetworkManager, NetworkService,
+    BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -142,15 +142,11 @@ impl NetworkClient for AnemoClient {
         Ok(())
     }
 
-    async fn subscribe_block_stream(
+    async fn subscribe_blocks(
         &self,
         _peer: AuthorityIndex,
         _last_received: Round,
-    ) -> ConsensusResult<()> {
-        unimplemented!("Unimplemented")
-    }
-
-    async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
+    ) -> ConsensusResult<BlockStream> {
         unimplemented!("Unimplemented")
     }
 
@@ -650,7 +646,10 @@ mod test {
         block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
-        network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
+        network::{
+            anemo_network::AnemoManager, BlockStream, NetworkClient, NetworkManager, NetworkService,
+        },
+        Round,
     };
 
     struct TestService {
@@ -676,6 +675,14 @@ mod test {
         ) -> ConsensusResult<()> {
             self.lock().handle_send_block.push((peer, block));
             Ok(())
+        }
+
+        async fn handle_subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+        ) -> ConsensusResult<BlockStream> {
+            unimplemented!()
         }
 
         async fn handle_fetch_blocks(

@@ -166,6 +166,7 @@ where
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
+        let tx_block_broadcast = core_signals.block_broadcast_sender();
 
         let mut network_manager = N::new(context.clone(), core_signals.block_broadcast_sender());
         let network_client = network_manager.client();
@@ -221,8 +222,9 @@ where
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            core_dispatcher,
             synchronizer.clone(),
+            core_dispatcher,
+            tx_block_broadcast,
             dag_state,
         ));
         network_manager
@@ -279,7 +281,10 @@ mod tests {
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
+    use tokio::{
+        sync::{broadcast, mpsc::unbounded_channel},
+        time::sleep,
+    };
 
     use super::*;
     use crate::{
@@ -289,7 +294,7 @@ mod tests {
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         error::ConsensusResult,
-        network::NetworkClient,
+        network::{BlockStream, NetworkClient},
         storage::mem_store::MemStore,
         transaction::NoopTransactionVerifier,
     };
@@ -346,15 +351,11 @@ mod tests {
             unimplemented!("Unimplemented")
         }
 
-        async fn subscribe_block_stream(
+        async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
             _last_received: Round,
-        ) -> ConsensusResult<()> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
+        ) -> ConsensusResult<BlockStream> {
             unimplemented!("Unimplemented")
         }
 
@@ -417,6 +418,7 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (tx_block_broadcast, _rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
@@ -429,8 +431,9 @@ mod tests {
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            core_dispatcher.clone(),
             synchronizer,
+            core_dispatcher.clone(),
+            tx_block_broadcast,
             dag_state,
         ));
 
