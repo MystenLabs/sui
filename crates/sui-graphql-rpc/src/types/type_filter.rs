@@ -485,7 +485,7 @@ mod tests {
         .into_iter();
 
         let filters: Vec<_> = inputs
-            .map(|i| TypeFilter::from_str(i).unwrap().to_string())
+            .map(|i| ExactTypeFilter::from_str(i).unwrap().to_string())
             .collect();
 
         let expect = expect![[r#"
@@ -502,15 +502,10 @@ mod tests {
     #[test]
     fn test_valid_type_filters() {
         let inputs = [
-            "u8",
-            "address",
-            "bool",
             "0x2",
             "0x2::coin",
             "0x2::coin::Coin",
             "0x2::coin::Coin<0x2::sui::SUI>",
-            "vector<u256>",
-            "vector<0x3::staking_pool::StakedSui>",
         ]
         .into_iter();
 
@@ -519,15 +514,10 @@ mod tests {
             .collect();
 
         let expect = expect![[r#"
-            u8
-            address
-            bool
             0x0000000000000000000000000000000000000000000000000000000000000002::
             0x0000000000000000000000000000000000000000000000000000000000000002::coin::
             0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin
-            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>
-            vector<u256>
-            vector<0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui>"#]];
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"#]];
         expect.assert_eq(&filters.join("\n"))
     }
 
@@ -629,25 +619,12 @@ mod tests {
 
     #[test]
     fn test_type_intersection() {
-        let address = TypeFilter::from_str("address").unwrap();
-        let vec_u8 = TypeFilter::from_str("vector<u8>").unwrap();
-
         let sui = TypeFilter::from_str("0x2").unwrap();
         let coin_mod = TypeFilter::from_str("0x2::coin").unwrap();
         let coin_typ = TypeFilter::from_str("0x2::coin::Coin").unwrap();
         let coin_sui = TypeFilter::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
         let coin_usd = TypeFilter::from_str("0x2::coin::Coin<0x3::usd::USD>").unwrap();
         let std_utf8 = TypeFilter::from_str("0x1::string::String").unwrap();
-
-        assert_eq!(
-            address.clone().intersect(address.clone()),
-            Some(address.clone())
-        );
-
-        assert_eq!(
-            vec_u8.clone().intersect(vec_u8.clone()),
-            Some(vec_u8.clone())
-        );
 
         assert_eq!(
             sui.clone().intersect(coin_mod.clone()),
@@ -664,8 +641,7 @@ mod tests {
             Some(coin_sui.clone())
         );
 
-        assert_eq!(sui.clone().intersect(vec_u8.clone()), None);
-        assert_eq!(coin_typ.clone().intersect(address.clone()), None);
+        assert_eq!(sui.clone().intersect(std_utf8.clone()), None);
         assert_eq!(coin_sui.clone().intersect(coin_usd.clone()), None);
         assert_eq!(coin_typ.clone().intersect(std_utf8.clone()), None);
         assert_eq!(coin_sui.clone().intersect(std_utf8.clone()), None);
