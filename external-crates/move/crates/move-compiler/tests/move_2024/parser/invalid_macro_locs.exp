@@ -1,36 +1,73 @@
-error[E03004]: unbound type
-  ┌─ tests/move_2024/parser/invalid_macro_locs.move:5:37
+error[E04001]: restricted visibility
+  ┌─ tests/move_2024/parser/invalid_macro_locs.move:6:9
   │
-5 │     public macro fun make_s<$T>($u: T): S<T> {
-  │                                     ^ Unbound type 'T' in current scope
+6 │         S{ u: $u }
+  │         ^^^^^^^^^^ Invalid instantiation of 'a::m::S'.
+All structs can only be constructed in the module in which they are declared
 
-error[E03004]: unbound type
-  ┌─ tests/move_2024/parser/invalid_macro_locs.move:5:43
-  │
-5 │     public macro fun make_s<$T>($u: T): S<T> {
-  │                                           ^ Unbound type 'T' in current scope
-
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:10:11
+error[E04029]: invalid function call
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:13:9
    │
- 1 │ module a::m {
-   │           - Module previously defined here, with 'a::m'
+ 5 │     public macro fun make_s<$T>($u: $T): S<$T> {
+   │            ----- 'macro' function is declared here
    ·
-10 │ module a::m {
-   │           ^ Duplicate definition for module 'a::m'
+13 │         a!::m::make_s<u64>(0u64)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^ 'make_s' is a macro function and must be called with a `!`. Try replacing with 'make_s!'
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:13:13
+   │
+13 │         a!::m::make_s<u64>(0u64)
+   │          -  ^ A macro call cannot have name access entries after it
+   │          │   
+   │          Macro invocation given here
+
+error[E04029]: invalid function call
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:17:9
+   │
+ 5 │     public macro fun make_s<$T>($u: $T): S<$T> {
+   │            ----- 'macro' function is declared here
+   ·
+17 │         a::m!::make_s<u64>(0u64)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^ 'make_s' is a macro function and must be called with a `!`. Try replacing with 'make_s!'
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:17:16
+   │
+17 │         a::m!::make_s<u64>(0u64)
+   │             -  ^^^^^^ A macro call cannot have name access entries after it
+   │             │   
+   │             Macro invocation given here
+
+error[E04029]: invalid function call
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:21:9
+   │
+ 5 │     public macro fun make_s<$T>($u: $T): S<$T> {
+   │            ----- 'macro' function is declared here
+   ·
+21 │         a!::m!::make_s<u64>(0u64)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^ 'make_s' is a macro function and must be called with a `!`. Try replacing with 'make_s!'
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:21:13
    │
-21 │         a!::m::make_s<u64>(0u64)
+21 │         a!::m!::make_s<u64>(0u64)
    │          -  ^ A macro call cannot have name access entries after it
    │          │   
    │          Macro invocation given here
 
 error[E01016]: invalid name
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:21:17
+   │
+21 │         a!::m!::make_s<u64>(0u64)
+   │              -  ^^^^^^ A macro call cannot have name access entries after it
+   │              │   
+   │              Macro invocation given here
+
+error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:25:16
    │
-25 │         a::m!::make_s<u64>(0u64)
+25 │         a::m!::make_s!<u64>(0u64)
    │             -  ^^^^^^ A macro call cannot have name access entries after it
    │             │   
    │             Macro invocation given here
@@ -38,7 +75,7 @@ error[E01016]: invalid name
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:29:13
    │
-29 │         a!::m!::make_s<u64>(0u64)
+29 │         a!::m!::make_s!<u64>(0u64)
    │          -  ^ A macro call cannot have name access entries after it
    │          │   
    │          Macro invocation given here
@@ -46,91 +83,65 @@ error[E01016]: invalid name
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:29:17
    │
-29 │         a!::m!::make_s<u64>(0u64)
+29 │         a!::m!::make_s!<u64>(0u64)
    │              -  ^^^^^^ A macro call cannot have name access entries after it
    │              │   
    │              Macro invocation given here
-
-error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:32:23
-   │
-32 │     fun test04(): a::m<u64>::S {
-   │                       ^^^^^ Cannot use type parameters for a module
-
-error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:33:13
-   │
-33 │         a!::m!::make_s!<u64>(0u64)
-   │          -  ^ A macro call cannot have name access entries after it
-   │          │   
-   │          Macro invocation given here
-
-error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:33:17
-   │
-33 │         a!::m!::make_s!<u64>(0u64)
-   │              -  ^^^^^^ A macro call cannot have name access entries after it
-   │              │   
-   │              Macro invocation given here
-
-error[E03004]: unbound type
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:42:37
-   │
-42 │     public macro fun make_s<$T>($u: T): S<T> {
-   │                                     ^ Unbound type 'T' in current scope
-
-error[E03004]: unbound type
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:42:43
-   │
-42 │     public macro fun make_s<$T>($u: T): S<T> {
-   │                                           ^ Unbound type 'T' in current scope
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:43:9
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:39:9
    │
-43 │         S{ u: $u }
+39 │         S{ u: $u }
    │         ^^^^^^^^^^ Invalid instantiation of '0x42::m::S'.
 All structs can only be constructed in the module in which they are declared
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:58:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:46:13
    │
-58 │         0x42!::m::make_s<u64>(0u64)
+46 │         0x42!::m::make_s<u64>(0u64)
    │             ^
    │             │
    │             Unexpected '!'
    │             Expected ';'
 
 error[E04029]: invalid function call
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:9
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:50:9
    │
-42 │     public macro fun make_s<$T>($u: T): S<T> {
+38 │     public macro fun make_s<$T>($u: $T): S<$T> {
    │            ----- 'macro' function is declared here
    ·
-62 │         0x42::m!::make_s<u64>(0u64)
+50 │         0x42::m!::make_s<u64>(0u64)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'make_s' is a macro function and must be called with a `!`. Try replacing with 'make_s!'
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:19
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:50:19
    │
-62 │         0x42::m!::make_s<u64>(0u64)
+50 │         0x42::m!::make_s<u64>(0u64)
    │                -  ^^^^^^ A macro call cannot have name access entries after it
    │                │   
    │                Macro invocation given here
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:66:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:54:13
    │
-66 │         0x42!::m!::make_s<u64>(0u64)
+54 │         0x42!::m!::make_s<u64>(0u64)
    │             ^
    │             │
    │             Unexpected '!'
    │             Expected ';'
 
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:70:13
+error[E01016]: invalid name
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:58:19
    │
-70 │         0x42!::m!::make_s!<u64>(0u64)
+58 │         0x42::m!::make_s!<u64>(0u64)
+   │                -  ^^^^^^ A macro call cannot have name access entries after it
+   │                │   
+   │                Macro invocation given here
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:13
+   │
+62 │         0x42!::m!::make_s!<u64>(0u64)
    │             ^
    │             │
    │             Unexpected '!'

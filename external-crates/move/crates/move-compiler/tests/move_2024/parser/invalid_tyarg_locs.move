@@ -7,11 +7,7 @@ module a::m {
     }
 }
 
-module a::m {
-
-    fun valid(): a::m::S<u64> {
-        a::m::make_s<u64>(0u64)
-    }
+module a::n {
 
     fun test00(): a::m<u64>::S {
         a::m<u64>::make_s(0u64)
@@ -29,7 +25,7 @@ module a::m {
         a::m<u64>::make_s<u64>(0u64)
     }
 
-    fun test04(): a::m<u64>::S<u64> {
+    fun test04(): a<u64>::m<u64>::S<u64> {
         a<u64>::m<u64>::make_s<u64>(0u64)
     }
 
@@ -47,10 +43,6 @@ module 0x42::m {
 
 module 0x42::n {
 
-    fun valid(): 0x42::m::S<u64> {
-        0x42::m::make_s<u64>(0u64)
-    }
-
     fun test00(): 0x42::m<u64>::S {
         0x42::m<u64>::make_s(0u64)
     }
@@ -67,7 +59,7 @@ module 0x42::n {
         0x42::m<u64>::make_s<u64>(0u64)
     }
 
-    fun test04(): 0x42::m<u64>::S<u64> {
+    fun test04(): 0x42<u64>::m<u64>::S<u64> {
         0x42<u64>::m<u64>::make_s<u64>(0u64)
     }
 

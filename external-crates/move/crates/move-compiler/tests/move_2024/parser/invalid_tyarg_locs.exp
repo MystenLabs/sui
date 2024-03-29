@@ -1,46 +1,55 @@
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:10:11
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:12:19
    │
- 1 │ module a::m {
-   │           - Module previously defined here, with 'a::m'
-   ·
-10 │ module a::m {
-   │           ^ Duplicate definition for module 'a::m'
+12 │     fun test00(): a::m<u64>::S {
+   │                   ^^^^^^^^^^^^ Invalid instantiation of 'a::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:16:23
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:12:23
    │
-16 │     fun test00(): a::m<u64>::S {
+12 │     fun test00(): a::m<u64>::S {
    │                       ^^^^^ Cannot use type parameters for a module
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:17:13
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:13:13
    │
-17 │         a::m<u64>::make_s(0u64)
+13 │         a::m<u64>::make_s(0u64)
    │             ^^^^^ Cannot use type parameters for a module
+
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:16:19
+   │
+16 │     fun test01(): a<u64>::m::S {
+   │                   ^^^^^^^^^^^^ Invalid instantiation of 'a::m::S'. Expected 1 type argument(s) but got 0
+
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:16:20
+   │
+16 │     fun test01(): a<u64>::m::S {
+   │                    ^^^^^ Cannot use type parameters for an address
+
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:17:10
+   │
+17 │         a<u64>::m::make_s(0u64)
+   │          ^^^^^ Cannot use type parameters for an address
+
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:20:19
+   │
+20 │     fun test02(): a<u64>::m<u64>::S {
+   │                   ^^^^^^^^^^^^^^^^^ Invalid instantiation of 'a::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:20:20
    │
-20 │     fun test01(): a<u64>::m::S {
-   │                    ^^^^^ Cannot use type parameters for an address
-
-error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:21:10
-   │
-21 │         a<u64>::m::make_s(0u64)
-   │          ^^^^^ Cannot use type parameters for an address
-
-error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:20
-   │
-24 │     fun test02(): a<u64>::m<u64>::S {
+20 │     fun test02(): a<u64>::m<u64>::S {
    │                    ^^^^^ Cannot use type parameters for an address
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:28
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:20:28
    │
-24 │     fun test02(): a<u64>::m<u64>::S {
+20 │     fun test02(): a<u64>::m<u64>::S {
    │                    -----   ^^^^^ Paths cannot include type arguments more than once
    │                    │        
    │                    Previous type arguments appeared here
@@ -48,31 +57,37 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:25:10
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:21:10
    │
-25 │         a<u64>::m<u64>::make_s(0u64)
+21 │         a<u64>::m<u64>::make_s(0u64)
    │          ^^^^^ Cannot use type parameters for an address
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:25:18
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:21:18
    │
-25 │         a<u64>::m<u64>::make_s(0u64)
+21 │         a<u64>::m<u64>::make_s(0u64)
    │          -----   ^^^^^ Paths cannot include type arguments more than once
    │          │        
    │          Previous type arguments appeared here
    │
    = Type arguments should only appear on module members
 
-error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:23
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:19
    │
-28 │     fun test03(): a::m<u64>::S<u64> {
+24 │     fun test03(): a::m<u64>::S<u64> {
+   │                   ^^^^^^^^^^^^^^^^^ Invalid instantiation of 'a::m::S'. Expected 1 type argument(s) but got 0
+
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:23
+   │
+24 │     fun test03(): a::m<u64>::S<u64> {
    │                       ^^^^^ Cannot use type parameters for a module
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:31
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:31
    │
-28 │     fun test03(): a::m<u64>::S<u64> {
+24 │     fun test03(): a::m<u64>::S<u64> {
    │                       -----   ^^^^^ Paths cannot include type arguments more than once
    │                       │        
    │                       Previous type arguments appeared here
@@ -80,47 +95,63 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:13
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:25:13
    │
-29 │         a::m<u64>::make_s<u64>(0u64)
+25 │         a::m<u64>::make_s<u64>(0u64)
    │             ^^^^^ Cannot use type parameters for a module
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:26
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:25:26
    │
-29 │         a::m<u64>::make_s<u64>(0u64)
+25 │         a::m<u64>::make_s<u64>(0u64)
    │             -----        ^^^^^ Paths cannot include type arguments more than once
    │             │             
    │             Previous type arguments appeared here
    │
    = Type arguments should only appear on module members
 
-error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:32:23
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:19
    │
-32 │     fun test04(): a::m<u64>::S<u64> {
-   │                       ^^^^^ Cannot use type parameters for a module
+28 │     fun test04(): a<u64>::m<u64>::S<u64> {
+   │                   ^^^^^^^^^^^^^^^^^^^^^^ Invalid instantiation of 'a::m::S'. Expected 1 type argument(s) but got 0
+
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:20
+   │
+28 │     fun test04(): a<u64>::m<u64>::S<u64> {
+   │                    ^^^^^ Cannot use type parameters for an address
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:32:31
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:28
    │
-32 │     fun test04(): a::m<u64>::S<u64> {
-   │                       -----   ^^^^^ Paths cannot include type arguments more than once
-   │                       │        
-   │                       Previous type arguments appeared here
+28 │     fun test04(): a<u64>::m<u64>::S<u64> {
+   │                    -----   ^^^^^ Paths cannot include type arguments more than once
+   │                    │        
+   │                    Previous type arguments appeared here
+   │
+   = Type arguments should only appear on module members
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:36
+   │
+28 │     fun test04(): a<u64>::m<u64>::S<u64> {
+   │                    -----           ^^^^^ Paths cannot include type arguments more than once
+   │                    │                
+   │                    Previous type arguments appeared here
    │
    = Type arguments should only appear on module members
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:33:10
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:10
    │
-33 │         a<u64>::m<u64>::make_s<u64>(0u64)
+29 │         a<u64>::m<u64>::make_s<u64>(0u64)
    │          ^^^^^ Cannot use type parameters for an address
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:33:18
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:18
    │
-33 │         a<u64>::m<u64>::make_s<u64>(0u64)
+29 │         a<u64>::m<u64>::make_s<u64>(0u64)
    │          -----   ^^^^^ Paths cannot include type arguments more than once
    │          │        
    │          Previous type arguments appeared here
@@ -128,9 +159,9 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:33:31
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:31
    │
-33 │         a<u64>::m<u64>::make_s<u64>(0u64)
+29 │         a<u64>::m<u64>::make_s<u64>(0u64)
    │          -----                ^^^^^ Paths cannot include type arguments more than once
    │          │                     
    │          Previous type arguments appeared here
@@ -138,91 +169,91 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E03008]: too few type arguments
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:19
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:46:19
    │
-54 │     fun test00(): 0x42::m<u64>::S {
+46 │     fun test00(): 0x42::m<u64>::S {
    │                   ^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:26
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:46:26
    │
-54 │     fun test00(): 0x42::m<u64>::S {
+46 │     fun test00(): 0x42::m<u64>::S {
    │                          ^^^^^ Cannot use type parameters for a module
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:16
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:47:16
    │
-55 │         0x42::m<u64>::make_s(0u64)
+47 │         0x42::m<u64>::make_s(0u64)
    │                ^^^^^ Cannot use type parameters for a module
 
 error[E03008]: too few type arguments
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:19
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:50:19
    │
-58 │     fun test01(): 0x42<u64>::m::S {
+50 │     fun test01(): 0x42<u64>::m::S {
    │                   ^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:23
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:50:23
    │
-58 │     fun test01(): 0x42<u64>::m::S {
+50 │     fun test01(): 0x42<u64>::m::S {
    │                       ^^^^^ Cannot use type parameters for an address
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:9
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:9
    │
-59 │         0x42<u64>::m::make_s(0u64)
+51 │         0x42<u64>::m::make_s(0u64)
    │         ^^^^^^^^
    │         │
    │         Invalid argument to '>'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:9
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:9
    │
-58 │     fun test01(): 0x42<u64>::m::S {
+50 │     fun test01(): 0x42<u64>::m::S {
    │                   --------------- Expected: '0x42::m::S<_>'
-59 │         0x42<u64>::m::make_s(0u64)
+51 │         0x42<u64>::m::make_s(0u64)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │
    │         Invalid return expression
    │         Given: 'bool'
 
 error[E03009]: unbound variable
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:14
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:14
    │
-59 │         0x42<u64>::m::make_s(0u64)
+51 │         0x42<u64>::m::make_s(0u64)
    │              ^^^ Unbound variable 'u64'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:18
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:18
    │
-59 │         0x42<u64>::m::make_s(0u64)
+51 │         0x42<u64>::m::make_s(0u64)
    │         -------- ^^^^^^^^^^^^^^^^^ Invalid argument to '>'
    │         │         
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:20
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:20
    │
-59 │         0x42<u64>::m::make_s(0u64)
+51 │         0x42<u64>::m::make_s(0u64)
    │                    ^ Could not resolve the name 'm'
 
 error[E03008]: too few type arguments
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:19
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:19
    │
-62 │     fun test02(): 0x42<u64>::m<u64>::S {
+54 │     fun test02(): 0x42<u64>::m<u64>::S {
    │                   ^^^^^^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:23
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:23
    │
-62 │     fun test02(): 0x42<u64>::m<u64>::S {
+54 │     fun test02(): 0x42<u64>::m<u64>::S {
    │                       ^^^^^ Cannot use type parameters for an address
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:31
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:31
    │
-62 │     fun test02(): 0x42<u64>::m<u64>::S {
+54 │     fun test02(): 0x42<u64>::m<u64>::S {
    │                       -----   ^^^^^ Paths cannot include type arguments more than once
    │                       │        
    │                       Previous type arguments appeared here
@@ -230,61 +261,61 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:9
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:9
    │
-63 │         0x42<u64>::m<u64>::make_s(0u64)
+55 │         0x42<u64>::m<u64>::make_s(0u64)
    │         ^^^^^^^^
    │         │
    │         Invalid argument to '>'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:9
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:9
    │
-62 │     fun test02(): 0x42<u64>::m<u64>::S {
+54 │     fun test02(): 0x42<u64>::m<u64>::S {
    │                   -------------------- Expected: '0x42::m::S<_>'
-63 │         0x42<u64>::m<u64>::make_s(0u64)
+55 │         0x42<u64>::m<u64>::make_s(0u64)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │
    │         Invalid return expression
    │         Given: 'bool'
 
 error[E03009]: unbound variable
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:14
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:14
    │
-63 │         0x42<u64>::m<u64>::make_s(0u64)
+55 │         0x42<u64>::m<u64>::make_s(0u64)
    │              ^^^ Unbound variable 'u64'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:18
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:18
    │
-63 │         0x42<u64>::m<u64>::make_s(0u64)
+55 │         0x42<u64>::m<u64>::make_s(0u64)
    │         -------- ^^^^^^^^^^^^^^^^^^^^^^ Invalid argument to '>'
    │         │         
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:20
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:20
    │
-63 │         0x42<u64>::m<u64>::make_s(0u64)
+55 │         0x42<u64>::m<u64>::make_s(0u64)
    │                    ^ Could not resolve the name 'm'
 
 error[E03008]: too few type arguments
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:66:19
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:19
    │
-66 │     fun test03(): 0x42::m<u64>::S<u64> {
+58 │     fun test03(): 0x42::m<u64>::S<u64> {
    │                   ^^^^^^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:66:26
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:26
    │
-66 │     fun test03(): 0x42::m<u64>::S<u64> {
+58 │     fun test03(): 0x42::m<u64>::S<u64> {
    │                          ^^^^^ Cannot use type parameters for a module
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:66:34
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:34
    │
-66 │     fun test03(): 0x42::m<u64>::S<u64> {
+58 │     fun test03(): 0x42::m<u64>::S<u64> {
    │                          -----   ^^^^^ Paths cannot include type arguments more than once
    │                          │        
    │                          Previous type arguments appeared here
@@ -292,15 +323,15 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:67:16
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:16
    │
-67 │         0x42::m<u64>::make_s<u64>(0u64)
+59 │         0x42::m<u64>::make_s<u64>(0u64)
    │                ^^^^^ Cannot use type parameters for a module
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:67:29
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:29
    │
-67 │         0x42::m<u64>::make_s<u64>(0u64)
+59 │         0x42::m<u64>::make_s<u64>(0u64)
    │                -----        ^^^^^ Paths cannot include type arguments more than once
    │                │             
    │                Previous type arguments appeared here
@@ -308,71 +339,81 @@ error[E01016]: invalid name
    = Type arguments should only appear on module members
 
 error[E03008]: too few type arguments
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:70:19
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:19
    │
-70 │     fun test04(): 0x42::m<u64>::S<u64> {
-   │                   ^^^^^^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::m::S'. Expected 1 type argument(s) but got 0
+62 │     fun test04(): 0x42<u64>::m<u64>::S<u64> {
+   │                   ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid instantiation of '0x42::m::S'. Expected 1 type argument(s) but got 0
 
 error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:70:26
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:23
    │
-70 │     fun test04(): 0x42::m<u64>::S<u64> {
-   │                          ^^^^^ Cannot use type parameters for a module
+62 │     fun test04(): 0x42<u64>::m<u64>::S<u64> {
+   │                       ^^^^^ Cannot use type parameters for an address
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:70:34
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:31
    │
-70 │     fun test04(): 0x42::m<u64>::S<u64> {
-   │                          -----   ^^^^^ Paths cannot include type arguments more than once
-   │                          │        
-   │                          Previous type arguments appeared here
+62 │     fun test04(): 0x42<u64>::m<u64>::S<u64> {
+   │                       -----   ^^^^^ Paths cannot include type arguments more than once
+   │                       │        
+   │                       Previous type arguments appeared here
+   │
+   = Type arguments should only appear on module members
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:39
+   │
+62 │     fun test04(): 0x42<u64>::m<u64>::S<u64> {
+   │                       -----           ^^^^^ Paths cannot include type arguments more than once
+   │                       │                
+   │                       Previous type arguments appeared here
    │
    = Type arguments should only appear on module members
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:71:9
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:9
    │
-71 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
+63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │         ^^^^^^^^
    │         │
    │         Invalid argument to '>'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:71:9
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:9
    │
-70 │     fun test04(): 0x42::m<u64>::S<u64> {
-   │                   -------------------- Expected: '0x42::m::S<_>'
-71 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
+62 │     fun test04(): 0x42<u64>::m<u64>::S<u64> {
+   │                   ------------------------- Expected: '0x42::m::S<_>'
+63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │
    │         Invalid return expression
    │         Given: 'bool'
 
 error[E03009]: unbound variable
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:71:14
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:14
    │
-71 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
+63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │              ^^^ Unbound variable 'u64'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:71:18
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:18
    │
-71 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
+63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │         -------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid argument to '>'
    │         │         
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:71:20
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:20
    │
-71 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
+63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │                    ^ Could not resolve the name 'm'
 
 error[E01016]: invalid name
-   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:71:34
+   ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:34
    │
-71 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
+63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │                     -----        ^^^^^ Paths cannot include type arguments more than once
    │                     │             
    │                     Previous type arguments appeared here
