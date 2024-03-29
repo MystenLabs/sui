@@ -502,7 +502,6 @@ pub enum Exp_ {
     Copy(Loc, Box<Exp>),
     // [m::]n[<t1, .., tn>]
     Name(NameAccessChain),
-    // Name(NameAccessChain, Option<Vec<Type>>),
 
     // f(earg,*)
     // f!(earg,*)
