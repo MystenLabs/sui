@@ -169,7 +169,7 @@ contract DeployBridge is Script {
     }
 
     // used to ignore for forge coverage
-    function test() public {}
+    function testSkip() public {}
 }
 
 /// check the following for guidelines on updating deploy_configs and references:

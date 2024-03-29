@@ -1,7 +1,7 @@
 [profile.default]
 src = 'contracts'
 test = 'test'
-no_match_test = "testMock"
+no_match_test = "testSkip"
 out = 'out'
 libs = ['lib']
 solc = "0.8.20"

@@ -18,7 +18,7 @@ contract MockWBTC is ERC20 {
         return 8;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }
 
 contract MockUSDC is ERC20 {
@@ -36,7 +36,7 @@ contract MockUSDC is ERC20 {
         return 6;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }
 
 contract MockUSDT is ERC20 {
@@ -54,7 +54,7 @@ contract MockUSDT is ERC20 {
         return 6;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }
 
 contract WETH {
@@ -112,5 +112,5 @@ contract WETH {
         return true;
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 }
