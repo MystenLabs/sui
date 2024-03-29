@@ -14,9 +14,7 @@ use crate::digests::Digest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{
-    Envelope, Message, TrustedEnvelope, UnauthenticatedMessage, VerifiedEnvelope,
-};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::signature::GenericSignature;
 use crate::storage::ReadStore;
 use crate::sui_serde::AsProtocolVersion;
@@ -197,20 +195,7 @@ impl Message for CheckpointSummary {
     fn digest(&self) -> Self::DigestType {
         CheckpointDigest::new(default_hash(self))
     }
-
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
-        fp_ensure!(
-            self.epoch == epoch,
-            SuiError::WrongEpoch {
-                expected_epoch: epoch,
-                actual_epoch: self.epoch,
-            }
-        );
-        Ok(())
-    }
 }
-
-impl UnauthenticatedMessage for CheckpointSummary {}
 
 impl CheckpointSummary {
     pub fn new(
@@ -237,6 +222,17 @@ impl CheckpointSummary {
             version_specific_data: Vec::new(),
             checkpoint_commitments: Default::default(),
         }
+    }
+
+    pub fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+        fp_ensure!(
+            self.epoch == epoch,
+            SuiError::WrongEpoch {
+                expected_epoch: epoch,
+                actual_epoch: self.epoch,
+            }
+        );
+        Ok(())
     }
 
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {

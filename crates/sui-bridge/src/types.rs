@@ -20,14 +20,13 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::SuiAddress;
+use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use sui_types::collection_types::{Bag, LinkedTable, LinkedTableNode, VecMap};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::dynamic_field::Field;
-use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
-use sui_types::{base_types::SUI_ADDRESS_LENGTH, committee::EpochId};
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
@@ -617,10 +616,6 @@ impl Message for BridgeAction {
     // this is not used today
     fn digest(&self) -> Self::DigestType {
         unreachable!("BridgeEventDigest is not used today")
-    }
-
-    fn verify_epoch(&self, _epoch: EpochId) -> SuiResult {
-        Ok(())
     }
 }
 

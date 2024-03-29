@@ -15,9 +15,7 @@ use crate::event::Event;
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{
-    Envelope, Message, TrustedEnvelope, UnauthenticatedMessage, VerifiedEnvelope,
-};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
 use crate::storage::WriteKind;
 use crate::transaction::VersionedProtocolMessage;
@@ -96,15 +94,7 @@ impl Message for TransactionEffects {
     fn digest(&self) -> Self::DigestType {
         TransactionEffectsDigest::new(default_hash(self))
     }
-
-    fn verify_epoch(&self, _: EpochId) -> SuiResult {
-        // Authorities are allowed to re-sign effects from prior epochs, so we do not verify the
-        // epoch here.
-        Ok(())
-    }
 }
-
-impl UnauthenticatedMessage for TransactionEffects {}
 
 // TODO: Get rid of this and use TestEffectsBuilder instead.
 impl Default for TransactionEffects {

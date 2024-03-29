@@ -13,14 +13,13 @@ use crate::crypto::{
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
 use crate::execution::SharedInput;
-use crate::message_envelope::{
-    AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
-};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
+use crate::signature::GenericSignature;
+use crate::signature_verification::verify_sender_signed_data_user_input;
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
@@ -2100,6 +2099,26 @@ pub struct SenderSignedTransaction {
     pub tx_signatures: Vec<GenericSignature>,
 }
 
+impl SenderSignedTransaction {
+    pub(crate) fn get_signer_sig_mapping(
+        &self,
+        verify_legacy_zklogin_address: bool,
+    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+        let mut mapping = BTreeMap::new();
+        for sig in &self.tx_signatures {
+            if verify_legacy_zklogin_address {
+                // Try deriving the address from the legacy padded way.
+                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
+                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
+                };
+            }
+            let address = sig.try_into()?;
+            mapping.insert(address, sig);
+        }
+        Ok(mapping)
+    }
+}
+
 impl SenderSignedData {
     pub fn new(
         tx_data: TransactionData,
@@ -2110,6 +2129,10 @@ impl SenderSignedData {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signatures,
         }])
+    }
+
+    pub(crate) fn inner_transactions(&self) -> &[SenderSignedTransaction] {
+        &self.0
     }
 
     pub fn new_from_sender_signature(
@@ -2149,22 +2172,12 @@ impl SenderSignedData {
         self.inner_mut().tx_signatures.push(new_signature.into());
     }
 
-    fn get_signer_sig_mapping(
+    pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
     ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
-        let mut mapping = BTreeMap::new();
-        for sig in &self.inner().tx_signatures {
-            if verify_legacy_zklogin_address {
-                // Try deriving the address from the legacy padded way.
-                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
-                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
-                };
-            }
-            let address = sig.try_into()?;
-            mapping.insert(address, sig);
-        }
-        Ok(mapping)
+        self.inner()
+            .get_signer_sig_mapping(verify_legacy_zklogin_address)
     }
 
     pub fn transaction_data(&self) -> &TransactionData {
@@ -2231,23 +2244,7 @@ impl SenderSignedData {
             }
         );
 
-        fp_ensure!(
-            self.0.len() == 1,
-            SuiError::UserInputError {
-                error: UserInputError::Unsupported(
-                    "SenderSignedData must contain exactly one transaction".to_string()
-                )
-            }
-        );
-        let tx_data = &self.intent_message().value;
-        fp_ensure!(
-            !tx_data.is_system_tx(),
-            SuiError::UserInputError {
-                error: UserInputError::Unsupported(
-                    "SenderSignedData must not contain system transaction".to_string()
-                )
-            }
-        );
+        verify_sender_signed_data_user_input(self)?;
 
         let tx_data = self.transaction_data();
         tx_data
@@ -2257,17 +2254,6 @@ impl SenderSignedData {
             .validity_check(config)
             .map_err(Into::<SuiError>::into)?;
 
-        Ok(())
-    }
-
-    pub fn verify_max_epoch_for_all_sigs(
-        &self,
-        epoch: EpochId,
-        upper_bound_for_max_epoch: Option<u64>,
-    ) -> SuiResult {
-        for sig in &self.inner().tx_signatures {
-            sig.verify_user_authenticator_epoch(epoch, upper_bound_for_max_epoch)?;
-        }
         Ok(())
     }
 }
@@ -2311,68 +2297,6 @@ impl Message for SenderSignedData {
 
     fn digest(&self) -> Self::DigestType {
         TransactionDigest::new(default_hash(&self.intent_message().value))
-    }
-
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
-        for sig in &self.inner().tx_signatures {
-            // the upper bound is checked for SenderSignedData only via verify_max_epoch_for_all_sigs
-            sig.verify_user_authenticator_epoch(epoch, None)?;
-        }
-        Ok(())
-    }
-}
-
-impl AuthenticatedMessage for SenderSignedData {
-    // Checks that are required to be done outside cache.
-    fn verify_uncached_checks(&self, verify_params: &VerifyParams) -> SuiResult {
-        for (signer, signature) in
-            self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?
-        {
-            signature.verify_uncached_checks(self.intent_message(), signer, verify_params)?;
-        }
-        Ok(())
-    }
-
-    fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult {
-        fp_ensure!(
-            self.0.len() == 1,
-            SuiError::UserInputError {
-                error: UserInputError::Unsupported(
-                    "SenderSignedData must contain exactly one transaction".to_string()
-                )
-            }
-        );
-        if self.intent_message().value.is_system_tx() {
-            return Ok(());
-        }
-
-        // Verify signatures. Steps are ordered in asc complexity order to minimize abuse.
-        let signers = self.intent_message().value.signers();
-        // Signature number needs to match
-        fp_ensure!(
-            self.inner().tx_signatures.len() == signers.len(),
-            SuiError::SignerSignatureNumberMismatch {
-                actual: self.inner().tx_signatures.len(),
-                expected: signers.len()
-            }
-        );
-        // All required signers need to be sign.
-        let present_sigs =
-            self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
-        for s in signers {
-            if !present_sigs.contains_key(&s) {
-                return Err(SuiError::SignerSignatureAbsent {
-                    expected: s.to_string(),
-                    actual: present_sigs.keys().map(|s| s.to_string()).collect(),
-                });
-            }
-        }
-
-        // Verify all present signatures.
-        for (signer, signature) in present_sigs {
-            signature.verify_claims(self.intent_message(), signer, verify_params)?;
-        }
-        Ok(())
     }
 }
 

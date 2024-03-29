@@ -573,7 +573,6 @@ impl ValidatorService {
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-
         // The call to digest() assumes the transaction is valid, so we need to verify it first.
         certificate.validity_check(epoch_store.protocol_config())?;
 
@@ -590,7 +589,6 @@ impl ValidatorService {
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-
         // The call to digest() assumes the transaction is valid, so we need to verify it first.
         certificate.validity_check(epoch_store.protocol_config())?;
 
