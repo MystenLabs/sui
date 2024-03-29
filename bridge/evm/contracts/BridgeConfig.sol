@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./utils/CommitteeUpgradeable.sol";
 import "./interfaces/IBridgeConfig.sol";
 
@@ -166,6 +167,9 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         require(tokenAddress != address(0), "BridgeConfig: Invalid token address");
         require(suiDecimal > 0, "BridgeConfig: Invalid Sui decimal");
         require(tokenPrice > 0, "BridgeConfig: Invalid token price");
+
+        uint8 erc20Decimals = IERC20Metadata(tokenAddress).decimals();
+        require(erc20Decimals >= suiDecimal, "BridgeConfig: Invalid Sui decimal");
 
         supportedTokens[tokenID] = Token(tokenAddress, suiDecimal, native);
         tokenPrices[tokenID] = tokenPrice;
