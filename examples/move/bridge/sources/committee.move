@@ -3,12 +3,9 @@
 
 #[allow(unused_use)]
 module bridge::committee {
-    use std::vector;
-
     use sui::address;
     use sui::ecdsa_k1;
     use sui::hex;
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
 

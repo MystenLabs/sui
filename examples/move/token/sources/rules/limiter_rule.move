@@ -6,7 +6,6 @@
 module examples::limiter_rule {
     use std::string::String;
     use sui::vec_map::{Self, VecMap};
-    use sui::tx_context::TxContext;
     use sui::token::{
         Self,
         TokenPolicy,

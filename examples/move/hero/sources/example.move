@@ -7,12 +7,8 @@ module hero::example {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::event;
-    use sui::object::{Self, ID, UID};
     use sui::math;
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use std::option::{Self, Option};
 
     /// Our hero!
     public struct Hero has key, store {

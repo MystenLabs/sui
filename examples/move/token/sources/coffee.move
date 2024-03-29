@@ -4,11 +4,10 @@
 /// This example illustrates how to use the `Token` without a `TokenPolicy`. And
 /// only rely on `TreasuryCap` for minting and burning tokens.
 module examples::coffee {
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{sender};
     use sui::coin::{Self, TreasuryCap, Coin};
     use sui::balance::{Self, Balance};
     use sui::token::{Self, Token};
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
 
     /// Error code for incorrect amount.

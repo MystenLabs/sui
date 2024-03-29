@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module color_object::example {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct ColorObject has key, store {
         id: UID,
         red: u8,
@@ -56,8 +53,6 @@ module color_object::example {
 
     // === Tests ===
     #[test_only] use sui::test_scenario as ts;
-    #[test_only] use sui::transfer;
-    #[test_only] use sui::tx_context;
 
     // === Tests covered in Chapter 1 ===
 

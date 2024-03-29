@@ -14,10 +14,7 @@
 /// - the current implementation is not optimized for a large number of records
 /// and the final one will feature better collection type;
 module examples::denylist_rule {
-    use std::option;
-    use std::vector;
     use sui::bag::{Self, Bag};
-    use sui::tx_context::TxContext;
     use sui::token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest};
 
     /// Trying to `verify` but the sender or the recipient is on the denylist.

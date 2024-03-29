@@ -3,10 +3,6 @@
 
 /// Demonstrates wrapping objects using the `Option` type.
 module simple_warrior::example {
-    use std::option::{Self, Option};
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct Sword has key, store {
         id: UID,
         strength: u8,

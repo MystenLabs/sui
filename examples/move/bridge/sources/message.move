@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::message {
-    use std::vector;
-
     use sui::bcs;
     use sui::bcs::BCS;
 

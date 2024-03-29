@@ -4,10 +4,8 @@
 /// Create a simple Token with Denylist for every action; all four default
 /// actions are allowed as long as the user is not on the denylist.
 module examples::simple_token {
-    use std::option;
-    use sui::transfer;
     use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{sender};
 
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
 
@@ -64,8 +62,6 @@ module examples::simple_token {
         transfer::public_freeze_object(metadata);
         treasury_cap
     }
-
-    /* #[test_only] */ /* friend examples::simple_token_tests; */
 }
 
 #[test_only]
@@ -74,7 +70,6 @@ module examples::simple_token {
 /// on a test currency.
 module examples::simple_token_tests {
     use sui::coin;
-    use sui::tx_context::TxContext;
 
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
     use sui::token_test_utils::{Self as test, TEST};

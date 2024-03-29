@@ -3,7 +3,6 @@
 
 module dynamic_fields::example {
     use sui::dynamic_object_field as ofield;
-    use sui::object::{Self, UID};
 
     public struct Parent has key {
         id: UID,

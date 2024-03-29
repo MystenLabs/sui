@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module locked_stake::locked_stake {
-    use sui::tx_context::TxContext;
     use sui::coin;
     use sui::balance::{Self, Balance};
-    use sui::object::{Self, ID, UID};
     use sui::vec_map::{Self, VecMap};
     use sui::sui::SUI;
     use sui_system::staking_pool::StakedSui;

@@ -25,11 +25,9 @@
 ///
 /// - KYC in this example is represented by an allowlist rule
 module examples::regulated_token {
-    use std::option;
     use sui::vec_map;
-    use sui::transfer;
     use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{sender};
 
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
 
@@ -108,8 +106,6 @@ module examples::regulated_token {
         transfer::public_freeze_object(metadata);
         treasury_cap
     }
-
-    /* #[test_only] */ /* friend examples::regulated_token_tests; */
 }
 
 #[test_only]
@@ -118,7 +114,6 @@ module examples::regulated_token {
 /// on a test currency.
 module examples::regulated_token_tests {
     use sui::coin;
-    use sui::tx_context::TxContext;
 
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
     use sui::token_test_utils::{Self as test, TEST};

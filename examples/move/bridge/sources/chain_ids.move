@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::chain_ids {
-
-    use std::vector;
-
     // Chain IDs
     const SuiMainnet: u8 = 0;
     const SuiTestnet: u8 = 1;

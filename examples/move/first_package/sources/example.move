@@ -2,10 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module first_package::example {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     public struct Sword has key, store {
         id: UID,
         magic: u64,

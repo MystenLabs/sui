@@ -6,7 +6,6 @@ module bridge::treasury {
 
     use sui::coin::{Self, Coin};
     use sui::object_bag::{Self, ObjectBag};
-    use sui::tx_context::TxContext;
 
     use bridge::btc::BTC;
     use bridge::eth::ETH;

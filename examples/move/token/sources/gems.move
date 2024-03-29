@@ -5,9 +5,6 @@
 /// that sells swords for Gems. Gems are an in-game currency that can be bought
 /// with SUI.
 module examples::sword {
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
-
     use sui::token::{Self, Token, ActionRequest};
     use examples::gem::GEM;
 
@@ -38,10 +35,8 @@ module examples::gem {
     use std::option::none;
     use std::string::{Self, String};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::object::{Self, UID};
     use sui::balance::{Self, Balance};
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{sender};
     use sui::coin::{Self, Coin, TreasuryCap};
 
     use sui::token::{Self, Token, ActionRequest};

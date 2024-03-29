@@ -2,17 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::bridge {
-    use std::option;
-    use std::option::{none, Option, some};
-    use sui::object::{Self, UID};
+    use std::option::{none, some};
     use sui::address;
     use sui::balance;
     use sui::coin::{Self, Coin};
     use sui::coin::TreasuryCap;
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
 

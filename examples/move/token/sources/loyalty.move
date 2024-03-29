@@ -8,12 +8,7 @@
 /// Actions:
 /// - spend - spend the token in the shop
 module examples::loyalty {
-    use std::option;
-    use sui::transfer;
-    use sui::object::{Self, UID};
     use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{Self, TxContext};
-
     use sui::token::{Self, ActionRequest, Token};
 
     /// Token amount does not match the `GIFT_PRICE`.

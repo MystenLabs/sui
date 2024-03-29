@@ -7,7 +7,6 @@ module locked_stake::locked_stake_tests {
     use sui_system::governance_test_utils::{advance_epoch, set_up_sui_system_state};
     use sui_system::sui_system::{Self, SuiSystemState};
     use sui::coin;
-    use sui::tx_context;
     use sui::test_scenario;
     use sui::test_utils::{assert_eq, destroy};
     use sui::vec_map;
