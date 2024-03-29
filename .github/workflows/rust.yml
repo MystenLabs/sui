@@ -453,6 +453,7 @@ jobs:
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Check Bridge EVM Unit Tests
         shell: bash
+        working-directory: bridge/evm
         run: |
           forge clean
           forge test --ffi
