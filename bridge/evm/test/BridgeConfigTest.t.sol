@@ -122,7 +122,7 @@ contract BridgeConfigTest is BridgeBaseTest {
             price1
         );
 
-        // Create transfer message
+        // Create Add evm token message
         BridgeUtils.Message memory message = BridgeUtils.Message({
             messageType: BridgeUtils.ADD_EVM_TOKENS,
             version: 1,
@@ -142,6 +142,7 @@ contract BridgeConfigTest is BridgeBaseTest {
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
 
+        // address should fail because the address supplied in the message is 0
         vm.expectRevert(bytes("BridgeConfig: Invalid token address"));
         config.addTokensWithSignatures(signatures, message);
     }
@@ -149,7 +150,7 @@ contract BridgeConfigTest is BridgeBaseTest {
     function testAddTokensSuiDecimalFailure() public {
         MockUSDC _newToken = new MockUSDC();
 
-        // Create update tokens payload
+        // Create add tokens payload
         bool _isNative = true;
         uint8 _numTokenIDs = 1;
         uint8 tokenID1 = 10;
@@ -192,6 +193,7 @@ contract BridgeConfigTest is BridgeBaseTest {
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
 
+        // add token shoudl fail because the sui decimal is greater than the eth decimal
         vm.expectRevert(bytes("BridgeConfig: Invalid Sui decimal"));
         config.addTokensWithSignatures(signatures, message);
     }
