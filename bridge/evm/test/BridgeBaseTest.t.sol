@@ -134,7 +134,7 @@ contract BridgeBaseTest is Test {
         limiter.transferOwnership(address(bridge));
     }
 
-    function testMock() public {}
+    function testSkip() public {}
 
     // Helper function to get the signature components from an address
     function getSignature(bytes32 digest, uint256 privateKey) public pure returns (bytes memory) {

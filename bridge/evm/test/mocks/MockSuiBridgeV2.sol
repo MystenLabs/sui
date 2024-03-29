@@ -21,5 +21,5 @@ contract MockSuiBridgeV2 is SuiBridge {
     }
 
     // used to ignore for forge coverage
-    function test() external view {}
+    function testSkip() external view {}
 }
