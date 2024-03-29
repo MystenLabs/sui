@@ -367,6 +367,11 @@ impl ExecutionCacheCommit for PassthroughCache {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
         async { Ok(()) }.boxed()
     }
+
+    fn commit_transactions(&self, _digests: &[TransactionDigest]) -> BoxFuture<'_, SuiResult> {
+        // Nothing needs to be done since they were already committed in write_transaction_outputs
+        async { Ok(()) }.boxed()
+    }
 }
 
 implement_passthrough_traits!(PassthroughCache);
