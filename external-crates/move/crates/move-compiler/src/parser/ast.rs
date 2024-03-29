@@ -776,15 +776,7 @@ impl NameAccess for PathEntry {
 
 impl NameAccess for NamePath {
     fn is_macro(&self) -> Option<&Loc> {
-        if let Some(loc) = &self.root.is_macro {
-            return Some(loc);
-        }
-        for entry in self.entries.iter() {
-            if let Some(loc) = &entry.is_macro {
-                return Some(loc);
-            }
-        }
-        None
+        self.root.is_macro.as_ref().or_else(|| self.entries.iter().find_map(|e| e.is_macro.as_ref()))
     }
 
     fn tyargs(&self) -> Option<&Spanned<Vec<Type>>> {
