@@ -355,6 +355,7 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _last_received: Round,
+            _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
             unimplemented!("Unimplemented")
         }

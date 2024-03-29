@@ -15,7 +15,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use futures::{Future as _, Stream};
+use futures::{stream, Future as _, Stream, StreamExt};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use parking_lot::RwLock;
 use tokio::{
@@ -113,10 +113,34 @@ impl NetworkClient for TonicClient {
 
     async fn subscribe_blocks(
         &self,
-        _peer: AuthorityIndex,
-        _last_received: Round,
+        peer: AuthorityIndex,
+        last_received: Round,
+        timeout: Duration,
     ) -> ConsensusResult<BlockStream> {
-        unimplemented!("Unimplemented")
+        let mut client = self.get_client(peer, timeout).await?;
+        // TODO: add sampled block acknowledgments for latency measurements.
+        let request = Request::new(stream::once(async move {
+            SubscribeBlocksRequest {
+                last_received_round: last_received,
+            }
+        }));
+        let response = client
+            .subscribe_blocks(request)
+            .await
+            .map_err(|e| ConsensusError::NetworkError(format!("subscribe_blocks failed: {e:?}")))?;
+        let stream = response
+            .into_inner()
+            .filter_map(move |b| async move {
+                match b {
+                    Ok(response) => Some(response.block),
+                    Err(e) => {
+                        debug!("Network error received from {}: {e:?}", peer);
+                        None
+                    }
+                }
+            })
+            .boxed();
+        Ok(stream)
     }
 
     async fn fetch_blocks(
@@ -249,47 +273,6 @@ impl ChannelPool {
     }
 }
 
-/// Each broadcasted block stream wraps a broadcast receiver for blocks.
-/// It yields blocks broadcasted after the stream is created.
-struct BroadcastedBlockStream {
-    peer: AuthorityIndex,
-    receiver: broadcast::Receiver<VerifiedBlock>,
-}
-
-impl Stream for BroadcastedBlockStream {
-    type Item = Result<SubscribeBlocksResponse, tonic::Status>;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut task::Context<'_>,
-    ) -> task::Poll<Option<Self::Item>> {
-        let peer = self.peer;
-        loop {
-            match pin!(self.receiver.recv()).poll(cx) {
-                task::Poll::Ready(Ok(block)) => {
-                    return task::Poll::Ready(Some(Ok(SubscribeBlocksResponse {
-                        block: block.serialized().clone(),
-                    })));
-                }
-                task::Poll::Ready(Err(broadcast::error::RecvError::Closed)) => {
-                    info!("Block BroadcastedBlockStream {} closed", peer);
-                    return task::Poll::Ready(None);
-                }
-                task::Poll::Ready(Err(broadcast::error::RecvError::Lagged(n))) => {
-                    info!(
-                        "Block BroadcastedBlockStream {} lagged by {n} messages",
-                        peer
-                    );
-                    continue;
-                }
-                task::Poll::Pending => {
-                    return task::Poll::Pending;
-                }
-            }
-        }
-    }
-}
-
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: NetworkService> {
     context: Arc<Context>,
@@ -336,7 +319,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
     }
 
     type SubscribeBlocksStream =
-        Pin<Box<dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>> + Send + Sync>>;
+        Pin<Box<dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>> + Send>>;
 
     async fn subscribe_blocks(
         &self,
@@ -352,11 +335,25 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::invalid_argument("Invalid authority index"));
         };
-        let stream = BroadcastedBlockStream {
-            peer,
-            receiver: self.tx_block_broadcaster.subscribe(),
+        let mut reuqest_stream = request.into_inner();
+        let first_request = match reuqest_stream.next().await {
+            Some(Ok(r)) => r,
+            Some(Err(e)) => {
+                debug!("subscribe_blocks() request from {} failed: {e:?}", peer);
+                return Err(tonic::Status::invalid_argument("Request error"));
+            }
+            None => {
+                return Err(tonic::Status::invalid_argument("Missing request"));
+            }
         };
-        Ok(Response::new(Box::pin(stream)))
+        let stream = self
+            .service
+            .handle_subscribe_blocks(peer, first_request.last_received_round)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
+            .map(|block| Ok(SubscribeBlocksResponse { block }))
+            .boxed();
+        Ok(Response::new(stream))
     }
 
     type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;

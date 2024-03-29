@@ -32,7 +32,7 @@ pub(crate) mod metrics;
 pub(crate) mod tonic_network;
 
 /// A stream of serialized blocks returned over the network.
-pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send + Sync>>;
+pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send>>;
 
 /// Network client for communicating with peers.
 ///
@@ -57,6 +57,7 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
         last_received: Round,
+        timeout: Duration,
     ) -> ConsensusResult<BlockStream>;
 
     /// Fetches serialized `SignedBlock`s from a peer.
