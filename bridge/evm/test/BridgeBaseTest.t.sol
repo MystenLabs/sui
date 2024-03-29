@@ -35,11 +35,11 @@ contract BridgeBaseTest is Test {
 
     address USDCWhale = 0x51eDF02152EBfb338e03E30d65C15fBf06cc9ECC;
 
-    uint256 SUI_PRICE = 1_28000000;
-    uint256 BTC_PRICE = 43251_89000000;
-    uint256 ETH_PRICE = 2596_96000000;
-    uint256 USDC_PRICE = 1_00000000;
-    uint256[] tokenPrices;
+    uint64 SUI_PRICE = 1_28000000;
+    uint64 BTC_PRICE = 43251_89000000;
+    uint64 ETH_PRICE = 2596_96000000;
+    uint64 USDC_PRICE = 1_00000000;
+    uint64[] tokenPrices;
     address[] supportedTokens;
     uint8[] supportedChains;
 

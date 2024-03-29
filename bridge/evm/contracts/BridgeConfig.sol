@@ -137,26 +137,6 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         }
     }
 
-    function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
-        external
-        nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_TOKENS)
-    {
-        // decode the update token payload
-        (
-            bool native,
-            uint8[] memory tokenIDs,
-            address[] memory tokenAddresses,
-            uint8[] memory suiDecimals,
-            uint64[] memory _tokenPrices
-        ) = BridgeUtils.decodeAddTokensPayload(message.payload);
-
-        // update the token
-        for (uint8 i; i < tokenIDs.length; i++) {
-            _addToken(tokenIDs[i], tokenAddresses[i], suiDecimals[i], _tokenPrices[i], native);
-        }
-    }
-
     /* ========== PRIVATE FUNCTIONS ========== */
 
     /// @notice Updates the price of the token with the provided ID.
