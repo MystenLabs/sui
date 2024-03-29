@@ -1,4 +1,3 @@
-
 ---
 title: Module `0xdee9::clob_v2`
 ---
@@ -3830,8 +3829,19 @@ The latter is the corresponding depth list
 
     <b>if</b> (price_low &lt; price_low_) price_low = price_low_;
     <b>if</b> (price_high &gt; price_high_) price_high = price_high_;
-    price_low = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.bids, price_low);
-    price_high = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.bids, price_high);
+    <b>let</b> closest_low = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.bids, price_low);
+    <b>let</b> closest_high = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.bids, price_high);
+    <b>if</b> (price_low &lt;= closest_low){
+        price_low = closest_low;
+    } <b>else</b> {
+        (price_low, _) = <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(&pool.bids, closest_low);
+    };
+    <b>if</b> (price_high &gt;= closest_high){
+        price_high = closest_high;
+    } <b>else</b> {
+        (price_high, _) = <a href="critbit.md#0xdee9_critbit_previous_leaf">critbit::previous_leaf</a>(&pool.bids, closest_high);
+    };
+
     <b>while</b> (price_low &lt;= price_high) {
         <b>let</b> depth = <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status">get_level2_book_status</a>(
             &pool.bids,
@@ -3883,6 +3893,7 @@ The latter is the corresponding depth list
     <b>let</b> <b>mut</b> depth_vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u64&gt;();
     <b>if</b> (<a href="critbit.md#0xdee9_critbit_is_empty">critbit::is_empty</a>(&pool.asks)) { <b>return</b> (price_vec, depth_vec) };
     <b>let</b> (price_low_, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.asks);
+    <b>let</b> (price_high_, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.asks);
 
     // Price_high is less than the lowest leaf in the tree then we <b>return</b> an empty array
     <b>if</b> (price_high &lt; price_low_) {
@@ -3890,10 +3901,20 @@ The latter is the corresponding depth list
     };
 
     <b>if</b> (price_low &lt; price_low_) price_low = price_low_;
-    <b>let</b> (price_high_, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.asks);
     <b>if</b> (price_high &gt; price_high_) price_high = price_high_;
-    price_low = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.asks, price_low);
-    price_high = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.asks, price_high);
+    <b>let</b> closest_low = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.asks, price_low);
+    <b>let</b> closest_high = <a href="critbit.md#0xdee9_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.asks, price_high);
+    <b>if</b> (price_low &lt;= closest_low){
+        price_low = closest_low;
+    } <b>else</b> {
+        (price_low, _) = <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(&pool.bids, closest_low);
+    };
+    <b>if</b> (price_high &gt;= closest_high){
+        price_high = closest_high;
+    } <b>else</b> {
+        (price_high, _) = <a href="critbit.md#0xdee9_critbit_previous_leaf">critbit::previous_leaf</a>(&pool.bids, closest_high);
+    };
+
     <b>while</b> (price_low &lt;= price_high) {
         <b>let</b> depth = <a href="clob_v2.md#0xdee9_clob_v2_get_level2_book_status">get_level2_book_status</a>(
             &pool.asks,

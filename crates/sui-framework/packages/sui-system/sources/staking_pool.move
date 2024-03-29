@@ -413,10 +413,10 @@ module sui_system::staking_pool {
         if (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
             return token_amount
         };
-        let res = (exchange_rate.sui_amount as u128)
+        let res = exchange_rate.sui_amount as u128
                 * (token_amount as u128)
                 / (exchange_rate.pool_token_amount as u128);
-        (res as u64)
+        res as u64
     }
 
     fun get_token_amount(exchange_rate: &PoolTokenExchangeRate, sui_amount: u64): u64 {
@@ -425,10 +425,10 @@ module sui_system::staking_pool {
         if (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
             return sui_amount
         };
-        let res = (exchange_rate.pool_token_amount as u128)
+        let res = exchange_rate.pool_token_amount as u128
                 * (sui_amount as u128)
                 / (exchange_rate.sui_amount as u128);
-        (res as u64)
+        res as u64
     }
 
     fun initial_exchange_rate(): PoolTokenExchangeRate {

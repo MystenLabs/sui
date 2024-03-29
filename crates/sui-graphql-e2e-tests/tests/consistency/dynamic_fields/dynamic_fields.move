@@ -13,9 +13,6 @@
 module Test::M1 {
     use sui::dynamic_object_field as ofield;
     use sui::dynamic_field as field;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
     use std::string::{String, utf8};
 
     public struct Parent has key, store {

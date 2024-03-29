@@ -6,9 +6,6 @@
 //# publish
 module Test::M {
     use std::ascii;
-    use sui::tx_context::TxContext;
-    use std::vector;
-
 
     public entry fun ascii_arg(s: ascii::String, _: &mut TxContext) {
         assert!(ascii::length(&s) == 10, 0);

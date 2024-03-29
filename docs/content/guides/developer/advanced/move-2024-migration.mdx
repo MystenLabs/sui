@@ -300,6 +300,17 @@ use sui_system::sui_system;
 
 The migration script attempts to remediate naming errors using global qualification when possible.
 
-### Follow along
+## Follow along
 
-The beta release of Move 2024 comes with some powerful new features beyond the breaking changes described here. There are also more on the horizon. Join the [Sui developer newsletter](https://sui.io/developers#newsletter) to learn about new, exciting features coming to Move this year, including syntactic macros, enums with pattern matching, and other user-defined syntax extensions.
+The beta release of Move 2024 comes with some powerful new features in addition to the breaking changes described here. There are also more on the horizon. Join the [Sui developer newsletter](https://sui.io/developers#newsletter) to learn about new, exciting features coming to Move this year, including syntactic macros, enums with pattern matching, and other user-defined syntax extensions.
+
+### `alpha` and `beta` guidance
+
+- `beta` (specified via `edition = "2024.beta"`) is the recommended edition. It includes all the new
+  features mentioned above and all breaking changes. While there is the risk of breaking changes or
+  bugs in `beta`, you should feel comfortable using it in your projects. As new features are added
+  and tested, they will be included in the `beta` edition. The `beta` edition will end after _all_
+  features for the year have been added and finalized.
+- `alpha` (specified via `edition = "2024.alpha"`) will get new features and changes as they are
+  developed. Breaking changes to features in `alpha` should be expected. As such, take caution when
+  using`alpha` in your projects.

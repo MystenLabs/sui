@@ -1,4 +1,3 @@
-
 ---
 title: Module `0xdee9::math`
 ---
@@ -94,11 +93,11 @@ scaling setting for float
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
-    <b>let</b> x = (x <b>as</b> u128);
-    <b>let</b> y = (y <b>as</b> u128);
+    <b>let</b> x = x <b>as</b> u128;
+    <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * y) % <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
-    (is_round_down, ((x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64))
+    (is_round_down, (x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64)
 }
 </code></pre>
 
@@ -199,11 +198,11 @@ scaling setting for float
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
-    <b>let</b> x = (x <b>as</b> u128);
-    <b>let</b> y = (y <b>as</b> u128);
+    <b>let</b> x = x <b>as</b> u128;
+    <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
-    (is_round_down, ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64))
+    (is_round_down, (x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64)
 }
 </code></pre>
 

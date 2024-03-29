@@ -4344,7 +4344,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4399,7 +4399,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4408,7 +4408,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4426,7 +4426,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=6dbb0cebe949859069296b5746c08967fcffd87b#6dbb0cebe949859069296b5746c08967fcffd87b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=52d00a506a965883f0904ee64bbd5fb9471c42b3#52d00a506a965883f0904ee64bbd5fb9471c42b3"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -11507,7 +11507,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11700,7 +11700,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11753,7 +11753,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -12301,7 +12301,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12524,7 +12524,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12805,7 +12805,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12847,7 +12847,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12987,7 +12987,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -13037,7 +13037,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13073,7 +13073,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13309,7 +13309,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13338,7 +13338,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13458,7 +13458,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13584,7 +13584,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13725,7 +13725,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "anemo",
  "anemo-cli",

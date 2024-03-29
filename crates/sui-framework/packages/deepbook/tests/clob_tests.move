@@ -5,8 +5,6 @@
 /// Tests for the pool module.
 /// They are sequential and based on top of each other.
 module deepbook::clob_test {
-    use std::vector;
-
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, mint_for_testing, burn_for_testing};
     use sui::sui::SUI;
@@ -15,13 +13,12 @@ module deepbook::clob_test {
     use deepbook::clob_v2::{Self as clob, Pool, PoolOwnerCap, WrappedPool, Order, USD, account_balance, get_pool_stat,
         order_id_for_test, list_open_orders, mint_account_cap_transfer, borrow_mut_pool};
     use deepbook::custodian_v2::{Self as custodian, AccountCap, account_owner};
-    use std::option;
 
     const MIN_PRICE: u64 = 0;
-    const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const FLOAT_SCALING: u64 = 1000000000;
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     const FILL_OR_KILL: u8 = 2;
     const POST_OR_ABORT: u8 = 3;
     const CLIENT_ID_ALICE: u64 = 0;

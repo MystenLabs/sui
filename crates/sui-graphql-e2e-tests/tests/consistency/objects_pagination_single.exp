@@ -3,29 +3,29 @@ processed 15 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 10-31:
+task 1 'publish'. lines 10-27:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5456800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 33-33:
+task 2 'run'. lines 29-29:
 created: object(2,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 35-35:
+task 3 'run'. lines 31-31:
 created: object(3,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'run'. lines 37-37:
+task 4 'run'. lines 33-33:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
 
-task 5 'create-checkpoint'. lines 39-39:
+task 5 'create-checkpoint'. lines 35-35:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 41-69:
+task 6 'run-graphql'. lines 37-65:
 Response: {
   "data": {
     "after_obj_3_0": {
@@ -54,14 +54,14 @@ Response: {
   }
 }
 
-task 7 'run'. lines 71-71:
+task 7 'run'. lines 67-67:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 8 'create-checkpoint'. lines 73-73:
+task 8 'create-checkpoint'. lines 69-69:
 Checkpoint created: 2
 
-task 9 'run-graphql'. lines 75-104:
+task 9 'run-graphql'. lines 71-100:
 Response: {
   "data": {
     "after_obj_3_0_chkpt_1": {
@@ -90,7 +90,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 106-181:
+task 10 'run-graphql'. lines 102-177:
 Response: {
   "data": {
     "address": {
@@ -181,14 +181,14 @@ Response: {
   }
 }
 
-task 11 'run'. lines 183-183:
+task 11 'run'. lines 179-179:
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 12 'create-checkpoint'. lines 185-185:
+task 12 'create-checkpoint'. lines 181-181:
 Checkpoint created: 3
 
-task 13 'run-graphql'. lines 187-250:
+task 13 'run-graphql'. lines 183-246:
 Response: {
   "data": {
     "after_obj_3_0_chkpt_2": {
@@ -249,7 +249,7 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 252-327:
+task 14 'run-graphql'. lines 248-323:
 Response: {
   "data": {
     "address": {

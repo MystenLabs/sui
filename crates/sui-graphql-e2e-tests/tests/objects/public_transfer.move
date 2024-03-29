@@ -5,10 +5,6 @@
 
 //# publish
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     public struct Foo has key, store {
         id: UID,
     }

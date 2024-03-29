@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x3::staking_pool`
 ---
@@ -1317,10 +1316,10 @@ Returns true if the provided staking pool is preactive at the provided epoch.
     <b>if</b> (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
         <b>return</b> token_amount
     };
-    <b>let</b> res = (exchange_rate.sui_amount <b>as</b> u128)
+    <b>let</b> res = exchange_rate.sui_amount <b>as</b> u128
             * (token_amount <b>as</b> u128)
             / (exchange_rate.pool_token_amount <b>as</b> u128);
-    (res <b>as</b> u64)
+    res <b>as</b> u64
 }
 </code></pre>
 
@@ -1349,10 +1348,10 @@ Returns true if the provided staking pool is preactive at the provided epoch.
     <b>if</b> (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
         <b>return</b> sui_amount
     };
-    <b>let</b> res = (exchange_rate.pool_token_amount <b>as</b> u128)
+    <b>let</b> res = exchange_rate.pool_token_amount <b>as</b> u128
             * (sui_amount <b>as</b> u128)
             / (exchange_rate.sui_amount <b>as</b> u128);
-    (res <b>as</b> u64)
+    res <b>as</b> u64
 }
 </code></pre>
 

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::critbit {
-    use sui::tx_context::TxContext;
     use sui::table::{Self, Table};
     use deepbook::math::{count_leading_zeros};
 
@@ -172,7 +171,7 @@ module deepbook::critbit {
         assert!(closest_key != key, EKeyAlreadyExist);
 
         // Note that we reserve count_leading_zeros of form u128 for future use
-        let critbit = 64 - (count_leading_zeros(((closest_key ^ key) as u128) ) -64);
+        let critbit = 64 - (count_leading_zeros((closest_key ^ key) as u128) - 64);
         let new_mask = 1u64 << (critbit - 1);
 
         let new_internal_node= InternalNode {
@@ -385,8 +384,6 @@ module deepbook::critbit {
         table::borrow(&tree.internal_nodes, parent_index).left_child == index
     }
 
-    #[test_only]
-    use std::vector;
     /* #[test_only] */
     /* friend deepbook::critbit_test; */
 

@@ -3,20 +3,15 @@
 
 #[allow(unused_use)]
 module deepbook::clob {
-    use std::option;
     use std::type_name::{Self, TypeName};
-    use std::vector;
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin, join};
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::object::{Self, UID, ID};
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian::{Self, Custodian, AccountCap};
@@ -63,9 +58,9 @@ module deepbook::clob {
     const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
-    const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
     #[test_only]
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     #[test_only]
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
 

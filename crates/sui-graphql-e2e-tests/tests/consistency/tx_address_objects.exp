@@ -3,39 +3,39 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 17-38:
+task 1 'publish'. lines 17-34:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5479600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 40-41:
+task 2 'programmable'. lines 36-37:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 43-43:
+task 3 'create-checkpoint'. lines 39-39:
 Checkpoint created: 1
 
-task 4 'programmable'. lines 45-48:
+task 4 'programmable'. lines 41-44:
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 4932400,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 5 'create-checkpoint'. lines 50-50:
+task 5 'create-checkpoint'. lines 46-46:
 Checkpoint created: 2
 
-task 6 'programmable'. lines 52-56:
+task 6 'programmable'. lines 48-52:
 created: object(6,0), object(6,1), object(6,2)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 7 'create-checkpoint'. lines 58-58:
+task 7 'create-checkpoint'. lines 54-54:
 Checkpoint created: 3
 
-task 9 'create-checkpoint'. lines 62-62:
+task 9 'create-checkpoint'. lines 58-58:
 Checkpoint created: 4
 
-task 10 'run-graphql'. lines 64-138:
+task 10 'run-graphql'. lines 60-134:
 Response: {
   "data": {
     "address_at_latest_checkpoint_4": {
@@ -360,7 +360,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 140-184:
+task 11 'run-graphql'. lines 136-180:
 Response: {
   "data": {
     "all_transactions": {
@@ -783,13 +783,13 @@ Response: {
   }
 }
 
-task 12 'force-object-snapshot-catchup'. lines 186-186:
+task 12 'force-object-snapshot-catchup'. lines 182-182:
 Objects snapshot updated to [0 to 3)
 
-task 13 'create-checkpoint'. lines 188-188:
+task 13 'create-checkpoint'. lines 184-184:
 Checkpoint created: 5
 
-task 14 'run-graphql'. lines 190-264:
+task 14 'run-graphql'. lines 186-260:
 Response: {
   "data": {
     "address_at_latest_checkpoint_4": {
@@ -1114,10 +1114,10 @@ Response: {
   }
 }
 
-task 15 'create-checkpoint'. lines 266-266:
+task 15 'create-checkpoint'. lines 262-262:
 Checkpoint created: 6
 
-task 16 'run-graphql'. lines 268-303:
+task 16 'run-graphql'. lines 264-299:
 Response: {
   "data": {
     "all_transactions": {

@@ -31,6 +31,8 @@ pub const GAS_BUDGET: &str = "gas-budget";
 pub const SUMMARY: &str = "summary";
 pub const GAS_COIN: &str = "gas-coin";
 pub const JSON: &str = "json";
+pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
+pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
 
 // Types
 pub const U8: &str = "u8";
@@ -67,6 +69,8 @@ pub const COMMANDS: &[&str] = &[
     SUMMARY,
     GAS_COIN,
     JSON,
+    SERIALIZE_UNSIGNED,
+    SERIALIZE_SIGNED,
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -97,6 +101,8 @@ pub struct Program {
 pub struct ProgramMetadata {
     pub preview_set: bool,
     pub summary_set: bool,
+    pub serialize_unsigned_set: bool,
+    pub serialize_signed_set: bool,
     pub gas_object_id: Option<Spanned<ObjectID>>,
     pub json_set: bool,
     pub gas_budget: Spanned<u64>,

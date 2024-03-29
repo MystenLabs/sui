@@ -212,6 +212,7 @@ codes!(
         UnknownAttribute: { msg: "unknown attribute", severity: Warning },
         InvalidSyntaxMethod: { msg: "invalid 'syntax' method type", severity: NonblockingError },
         MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
+        DuplicateAlias: { msg: "duplicate alias", severity: Warning },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [

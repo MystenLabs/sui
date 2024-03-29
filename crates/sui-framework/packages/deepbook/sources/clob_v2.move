@@ -2,21 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::clob_v2 {
-    use std::option;
     use std::type_name::{Self, TypeName};
-    use std::vector;
-    use std::option::{Option};
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin, join};
     use sui::event;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::object::{Self, UID, ID};
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
@@ -64,9 +58,9 @@ module deepbook::clob_v2 {
     const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
-    const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
     #[test_only]
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
     const REFERENCE_MAKER_REBATE_RATE: u64 = 1_500_000;
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
@@ -2022,8 +2016,19 @@ module deepbook::clob_v2 {
 
         if (price_low < price_low_) price_low = price_low_;
         if (price_high > price_high_) price_high = price_high_;
-        price_low = critbit::find_closest_key(&pool.bids, price_low);
-        price_high = critbit::find_closest_key(&pool.bids, price_high);
+        let closest_low = critbit::find_closest_key(&pool.bids, price_low);
+        let closest_high = critbit::find_closest_key(&pool.bids, price_high);
+        if (price_low <= closest_low){
+            price_low = closest_low;
+        } else {
+            (price_low, _) = critbit::next_leaf(&pool.bids, closest_low);
+        };
+        if (price_high >= closest_high){
+            price_high = closest_high;
+        } else {
+            (price_high, _) = critbit::previous_leaf(&pool.bids, closest_high);
+        };
+
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
                 &pool.bids,
@@ -2055,6 +2060,7 @@ module deepbook::clob_v2 {
         let mut depth_vec = vector::empty<u64>();
         if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
+        let (price_high_, _) = critbit::max_leaf(&pool.asks);
 
         // Price_high is less than the lowest leaf in the tree then we return an empty array
         if (price_high < price_low_) {
@@ -2062,10 +2068,20 @@ module deepbook::clob_v2 {
         };
 
         if (price_low < price_low_) price_low = price_low_;
-        let (price_high_, _) = critbit::max_leaf(&pool.asks);
         if (price_high > price_high_) price_high = price_high_;
-        price_low = critbit::find_closest_key(&pool.asks, price_low);
-        price_high = critbit::find_closest_key(&pool.asks, price_high);
+        let closest_low = critbit::find_closest_key(&pool.asks, price_low);
+        let closest_high = critbit::find_closest_key(&pool.asks, price_high);
+        if (price_low <= closest_low){
+            price_low = closest_low;
+        } else {
+            (price_low, _) = critbit::next_leaf(&pool.bids, closest_low);
+        };
+        if (price_high >= closest_high){
+            price_high = closest_high;
+        } else {
+            (price_high, _) = critbit::previous_leaf(&pool.bids, closest_high);
+        };
+
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
                 &pool.asks,
@@ -2146,14 +2162,14 @@ module deepbook::clob_v2 {
         matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
         (
-            matched_order_metadata.pool_id, 
+            matched_order_metadata.pool_id,
             matched_order_metadata.order_id,
-            matched_order_metadata.is_bid, 
+            matched_order_metadata.is_bid,
             matched_order_metadata.taker_address,
-            matched_order_metadata.maker_address, 
+            matched_order_metadata.maker_address,
             matched_order_metadata.base_asset_quantity_filled,
-            matched_order_metadata.price, 
-            matched_order_metadata.taker_commission, 
+            matched_order_metadata.price,
+            matched_order_metadata.taker_commission,
             matched_order_metadata.maker_rebates
         )
     }

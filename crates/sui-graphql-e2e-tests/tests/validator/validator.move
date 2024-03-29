@@ -11,9 +11,6 @@
 
 //# publish --sender A --gas-budget 9999999999
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{sender, TxContext};
-
     public struct Big has key, store {
         id: UID,
         weight: vector<u8>,
@@ -34,7 +31,7 @@ module P0::m {
         let w = weight();
         sui::transfer::public_transfer(
             Big { id, weight: w },
-            sender(ctx)
+            ctx.sender()
         )
     }
 }

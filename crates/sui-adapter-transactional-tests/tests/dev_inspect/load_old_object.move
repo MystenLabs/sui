@@ -8,9 +8,6 @@
 //# publish
 
 module test::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct S has key, store {
         id: UID,
         value: u64

@@ -211,11 +211,12 @@ mod tests {
     };
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use shared_crypto::intent::Intent;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::crypto::RandomnessRound;
     use sui_types::digests::ObjectDigest;
+    use sui_types::effects::TestEffectsBuilder;
     use sui_types::executable_transaction::{
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
@@ -347,6 +348,67 @@ mod tests {
                     // It is critical that the randomness object version is updated before the assignment.
                     vec![(SUI_RANDOMNESS_STATE_OBJECT_ID, next_randomness_obj_version)]
                 ),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_assign_versions_from_effects() {
+        let shared_object = Object::shared_for_testing();
+        let id = shared_object.id();
+        let init_shared_version = match shared_object.owner {
+            Owner::Shared {
+                initial_shared_version,
+                ..
+            } => initial_shared_version,
+            _ => panic!("expected shared object"),
+        };
+        let authority = TestAuthorityBuilder::new()
+            .with_starting_objects(&[shared_object.clone()])
+            .build()
+            .await;
+        let certs = vec![
+            generate_shared_obj_tx_with_gas_version(id, init_shared_version, true, 3),
+            generate_shared_obj_tx_with_gas_version(id, init_shared_version, false, 5),
+            generate_shared_obj_tx_with_gas_version(id, init_shared_version, true, 9),
+            generate_shared_obj_tx_with_gas_version(id, init_shared_version, true, 11),
+        ];
+        let effects = vec![
+            TestEffectsBuilder::new(certs[0].data()).build(),
+            TestEffectsBuilder::new(certs[1].data())
+                .with_shared_input_versions(BTreeMap::from([(id, SequenceNumber::from_u64(4))]))
+                .build(),
+            TestEffectsBuilder::new(certs[2].data())
+                .with_shared_input_versions(BTreeMap::from([(id, SequenceNumber::from_u64(4))]))
+                .build(),
+            TestEffectsBuilder::new(certs[3].data())
+                .with_shared_input_versions(BTreeMap::from([(id, SequenceNumber::from_u64(10))]))
+                .build(),
+        ];
+        let epoch_store = authority.epoch_store_for_testing();
+        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
+            certs
+                .iter()
+                .zip(effects.iter())
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &epoch_store,
+            authority.get_cache_reader().as_ref(),
+        )
+        .await
+        .unwrap();
+        // Check that the shared object's next version is always initialized in the epoch store.
+        assert_eq!(
+            epoch_store.get_next_object_version(&id).unwrap(),
+            init_shared_version
+        );
+        assert_eq!(
+            assigned_versions,
+            vec![
+                (certs[0].key(), vec![(id, init_shared_version),]),
+                (certs[1].key(), vec![(id, SequenceNumber::from_u64(4)),]),
+                (certs[2].key(), vec![(id, SequenceNumber::from_u64(4)),]),
+                (certs[3].key(), vec![(id, SequenceNumber::from_u64(10)),]),
             ]
         );
     }
