@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use futures::Stream;
-use tokio::sync::broadcast;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
@@ -96,7 +95,7 @@ where
     type Client: NetworkClient;
 
     /// Creates a new network manager.
-    fn new(context: Arc<Context>, tx_block_broadcast: broadcast::Sender<VerifiedBlock>) -> Self;
+    fn new(context: Arc<Context>) -> Self;
 
     /// Returns the network client.
     fn client(&self) -> Arc<Self::Client>;

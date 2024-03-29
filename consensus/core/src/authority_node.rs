@@ -168,7 +168,7 @@ where
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
         let tx_block_broadcast = core_signals.block_broadcast_sender();
 
-        let mut network_manager = N::new(context.clone(), core_signals.block_broadcast_sender());
+        let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
