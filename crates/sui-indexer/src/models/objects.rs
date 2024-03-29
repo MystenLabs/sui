@@ -51,8 +51,13 @@ pub struct StoredObject {
     pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
-    /// The type of this object. This will be None if the object is a Package
+    /// The full type of this object, including package id, module, name and type parameters.
+    /// This and following three fields will be None if the object is a Package
     pub object_type: Option<String>,
+    pub object_type_package: Option<Vec<u8>>,
+    pub object_type_module: Option<String>,
+    /// Name of the object type, e.g., "Coin", without type parameters.
+    pub object_type_name: Option<String>,
     pub serialized_object: Vec<u8>,
     pub coin_type: Option<String>,
     // TODO deal with overflow
@@ -138,6 +143,9 @@ pub struct StoredHistoryObject {
     pub owner_type: Option<i16>,
     pub owner_id: Option<Vec<u8>>,
     pub object_type: Option<String>,
+    pub object_type_package: Option<Vec<u8>>,
+    pub object_type_module: Option<String>,
+    pub object_type_name: Option<String>,
     pub serialized_object: Option<Vec<u8>>,
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
@@ -158,6 +166,9 @@ impl From<StoredObject> for StoredHistoryObject {
             owner_type: Some(o.owner_type),
             owner_id: o.owner_id,
             object_type: o.object_type,
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
             serialized_object: Some(o.serialized_object),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance,
@@ -220,6 +231,9 @@ impl From<IndexedObject> for StoredObject {
                 .object
                 .type_()
                 .map(|t| t.to_canonical_string(/* with_prefix */ true)),
+            object_type_package: o.object.type_().map(|t| t.address().to_vec()),
+            object_type_module: o.object.type_().map(|t| t.module().to_string()),
+            object_type_name: o.object.type_().map(|t| t.name().to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),

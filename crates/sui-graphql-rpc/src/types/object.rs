@@ -1166,7 +1166,13 @@ impl ObjectFilter {
         }
 
         if let Some(type_) = &self.type_ {
-            return type_.apply_raw(query, "object_type");
+            return type_.apply_raw(
+                query,
+                "object_type",
+                "object_type_package",
+                "object_type_module",
+                "object_type_name",
+            );
         }
 
         query

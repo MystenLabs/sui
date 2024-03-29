@@ -10,6 +10,10 @@ CREATE TABLE objects (
     owner_id                    bytea,
     -- Object type
     object_type                 text,
+    -- Components of the StructTag: package, module, name (name of the struct, without type parameters)
+    object_type_package         bytea,
+    object_type_module          text,
+    object_type_name            text,
     -- bcs serialized Object
     serialized_object           bytea         NOT NULL,
     -- Non-null when the object is a coin.
@@ -33,7 +37,8 @@ CREATE TABLE objects (
 CREATE INDEX objects_owner ON objects (owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_coin ON objects (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_checkpoint_sequence_number ON objects (checkpoint_sequence_number);
-CREATE INDEX objects_type ON objects (object_type);
+CREATE INDEX objects_package_module_name_full_type ON objects (object_type_package, object_type_module, object_type_name, object_type);
+CREATE INDEX objects_owner_package_module_name_full_type ON objects (owner_id, object_type_package, object_type_module, object_type_name, object_type);
 
 -- similar to objects table, except that
 -- 1. the primary key to store multiple object versions and partitions by checkpoint_sequence_number
@@ -48,6 +53,9 @@ CREATE TABLE objects_history (
     owner_type                  smallint,
     owner_id                    bytea,
     object_type                 text,
+    object_type_package         bytea,
+    object_type_module          text,
+    object_type_name            text,
     serialized_object           bytea,
     coin_type                   text,
     coin_balance                bigint,
@@ -60,6 +68,8 @@ CREATE TABLE objects_history (
 CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_history_coin ON objects_history (checkpoint_sequence_number, owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_history_type ON objects_history (checkpoint_sequence_number, object_type);
+CREATE INDEX objects_history_package_module_name_full_type ON objects_history (checkpoint_sequence_number, object_type_package, object_type_module, object_type_name, object_type);
+CREATE INDEX objects_history_owner_package_module_name_full_type ON objects_history (checkpoint_sequence_number, owner_id, object_type_package, object_type_module, object_type_name, object_type);
 -- init with first partition of the history table
 CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
 
@@ -75,6 +85,9 @@ CREATE TABLE objects_snapshot (
     owner_type                  smallint,
     owner_id                    bytea,
     object_type                 text,
+    object_type_package         bytea,
+    object_type_module          text,
+    object_type_name            text,
     serialized_object           bytea,
     coin_type                   text,
     coin_balance                bigint,
@@ -86,4 +99,5 @@ CREATE TABLE objects_snapshot (
 CREATE INDEX objects_snapshot_checkpoint_sequence_number ON objects_snapshot (checkpoint_sequence_number);
 CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id, object_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_snapshot_coin ON objects_snapshot (owner_id, coin_type, object_id) WHERE coin_type IS NOT NULL AND owner_type = 1;
-CREATE INDEX objects_snapshot_type ON objects_snapshot (object_type, object_id);
+CREATE INDEX objects_snapshot_package_module_name_full_type ON objects_snapshot (object_type_package, object_type_module, object_type_name, object_type);
+CREATE INDEX objects_snapshot_owner_package_module_name_full_type ON objects_snapshot (owner_id, object_type_package, object_type_module, object_type_name, object_type);
