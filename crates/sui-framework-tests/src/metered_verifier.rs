@@ -90,18 +90,7 @@ fn test_metered_move_bytecode_verifier() {
         bytecode_verifier_metrics
             .verifier_timeout_metrics
             .with_label_values(&[
-                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
-                BytecodeVerifierMetrics::TIMEOUT_TAG,
-            ])
-            .get(),
-    );
-
-    assert_eq!(
-        0,
-        bytecode_verifier_metrics
-            .verifier_timeout_metrics
-            .with_label_values(&[
-                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::OVERALL_TAG,
                 BytecodeVerifierMetrics::TIMEOUT_TAG,
             ])
             .get(),
@@ -177,18 +166,7 @@ fn test_metered_move_bytecode_verifier() {
         bytecode_verifier_metrics
             .verifier_timeout_metrics
             .with_label_values(&[
-                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
-                BytecodeVerifierMetrics::TIMEOUT_TAG,
-            ])
-            .get(),
-    );
-    // Sui verifier did not fail
-    assert_eq!(
-        0,
-        bytecode_verifier_metrics
-            .verifier_timeout_metrics
-            .with_label_values(&[
-                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::OVERALL_TAG,
                 BytecodeVerifierMetrics::TIMEOUT_TAG,
             ])
             .get(),
@@ -227,7 +205,7 @@ fn test_metered_move_bytecode_verifier() {
     // Check if the same meter is indeed used multiple invocations of the verifier
     let mut meter = SuiVerifierMeter::new(meter_config);
     for modules in &packages {
-        let prev_meter = meter.get_usage(Scope::Module) + meter.get_usage(Scope::Function);
+        let prev_meter = meter.get_usage(Scope::Package);
 
         run_metered_move_bytecode_verifier(
             modules,
@@ -237,7 +215,7 @@ fn test_metered_move_bytecode_verifier() {
         )
         .expect("Verification should not timeout");
 
-        let curr_meter = meter.get_usage(Scope::Module) + meter.get_usage(Scope::Function);
+        let curr_meter = meter.get_usage(Scope::Package);
         assert!(curr_meter > prev_meter);
     }
 }
@@ -275,17 +253,7 @@ fn test_meter_system_packages() {
         bytecode_verifier_metrics
             .verifier_timeout_metrics
             .with_label_values(&[
-                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
-                BytecodeVerifierMetrics::TIMEOUT_TAG,
-            ])
-            .get(),
-    );
-    assert_eq!(
-        0,
-        bytecode_verifier_metrics
-            .verifier_timeout_metrics
-            .with_label_values(&[
-                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::OVERALL_TAG,
                 BytecodeVerifierMetrics::TIMEOUT_TAG,
             ])
             .get(),

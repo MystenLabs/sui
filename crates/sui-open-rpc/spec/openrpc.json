@@ -1761,6 +1761,7 @@
                 "max_meter_ticks_per_module": {
                   "u64": "6000000"
                 },
+                "max_meter_ticks_per_package": null,
                 "max_modules_in_publish": {
                   "u32": "128"
                 },
