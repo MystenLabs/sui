@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "./BridgeBaseTest.t.sol";
+import "./mocks/MockTokens.sol";
 
 contract BridgeConfigTest is BridgeBaseTest {
     function setUp() public {
@@ -41,14 +42,16 @@ contract BridgeConfigTest is BridgeBaseTest {
     }
 
     function testAddTokensWithSignatures() public {
+        MockUSDC _newToken = new MockUSDC();
+
         // Create update tokens payload
         bool _isNative = true;
         uint8 _numTokenIDs = 1;
         uint8 tokenID1 = 10;
         uint8 _numAddresses = 1;
-        address address1 = address(10101);
+        address address1 = address(_newToken);
         uint8 _numSuiDecimals = 1;
-        uint8 suiDecimal1 = 8;
+        uint8 suiDecimal1 = 6;
         uint8 _numPrices = 1;
         uint64 price1 = 100_000_0000;
 
@@ -63,8 +66,6 @@ contract BridgeConfigTest is BridgeBaseTest {
             _numPrices,
             price1
         );
-
-        console.logBytes(payload);
 
         // Create transfer message
         BridgeUtils.Message memory message = BridgeUtils.Message({
@@ -90,9 +91,161 @@ contract BridgeConfigTest is BridgeBaseTest {
         assertFalse(config.isTokenSupported(10));
         config.addTokensWithSignatures(signatures, message);
         assertTrue(config.isTokenSupported(10));
-        assertEq(config.tokenAddressOf(10), address(10101));
-        assertEq(config.tokenSuiDecimalOf(10), 8);
+        assertEq(config.tokenAddressOf(10), address1);
+        assertEq(config.tokenSuiDecimalOf(10), 6);
         assertEq(config.tokenPriceOf(10), 100_000_0000);
+    }
+
+    function testAddTokensAddressFailure() public {
+        MockUSDC _newToken = new MockUSDC();
+
+        // Create update tokens payload
+        bool _isNative = true;
+        uint8 _numTokenIDs = 1;
+        uint8 tokenID1 = 10;
+        uint8 _numAddresses = 1;
+        address address1 = address(0);
+        uint8 _numSuiDecimals = 1;
+        uint8 suiDecimal1 = 6;
+        uint8 _numPrices = 1;
+        uint64 price1 = 100_000_00000000;
+
+        bytes memory payload = abi.encodePacked(
+            _isNative,
+            _numTokenIDs,
+            tokenID1,
+            _numAddresses,
+            address1,
+            _numSuiDecimals,
+            suiDecimal1,
+            _numPrices,
+            price1
+        );
+
+        // Create Add evm token message
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
+            version: 1,
+            nonce: 0,
+            chainID: 1,
+            payload: payload
+        });
+
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
+
+        bytes32 messageHash = keccak256(encodedMessage);
+
+        bytes[] memory signatures = new bytes[](4);
+
+        signatures[0] = getSignature(messageHash, committeeMemberPkA);
+        signatures[1] = getSignature(messageHash, committeeMemberPkB);
+        signatures[2] = getSignature(messageHash, committeeMemberPkC);
+        signatures[3] = getSignature(messageHash, committeeMemberPkD);
+
+        // address should fail because the address supplied in the message is 0
+        vm.expectRevert(bytes("BridgeConfig: Invalid token address"));
+        config.addTokensWithSignatures(signatures, message);
+    }
+
+    function testAddTokensSuiDecimalFailure() public {
+        MockUSDC _newToken = new MockUSDC();
+
+        // Create add tokens payload
+        bool _isNative = true;
+        uint8 _numTokenIDs = 1;
+        uint8 tokenID1 = 10;
+        uint8 _numAddresses = 1;
+        address address1 = address(_newToken);
+        uint8 _numSuiDecimals = 1;
+        uint8 suiDecimal1 = 10;
+        uint8 _numPrices = 1;
+        uint64 price1 = 100_000_00000000;
+
+        bytes memory payload = abi.encodePacked(
+            _isNative,
+            _numTokenIDs,
+            tokenID1,
+            _numAddresses,
+            address1,
+            _numSuiDecimals,
+            suiDecimal1,
+            _numPrices,
+            price1
+        );
+
+        // Create transfer message
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
+            version: 1,
+            nonce: 0,
+            chainID: 1,
+            payload: payload
+        });
+
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
+
+        bytes32 messageHash = keccak256(encodedMessage);
+
+        bytes[] memory signatures = new bytes[](4);
+
+        signatures[0] = getSignature(messageHash, committeeMemberPkA);
+        signatures[1] = getSignature(messageHash, committeeMemberPkB);
+        signatures[2] = getSignature(messageHash, committeeMemberPkC);
+        signatures[3] = getSignature(messageHash, committeeMemberPkD);
+
+        // add token shoudl fail because the sui decimal is greater than the eth decimal
+        vm.expectRevert(bytes("BridgeConfig: Invalid Sui decimal"));
+        config.addTokensWithSignatures(signatures, message);
+    }
+
+    function testAddTokensPriceFailure() public {
+        MockUSDC _newToken = new MockUSDC();
+
+        // Create update tokens payload
+        bool _isNative = true;
+        uint8 _numTokenIDs = 1;
+        uint8 tokenID1 = 10;
+        uint8 _numAddresses = 1;
+        address address1 = address(_newToken);
+        uint8 _numSuiDecimals = 1;
+        uint8 suiDecimal1 = 10;
+        uint8 _numPrices = 1;
+        uint64 price1 = 0;
+
+        bytes memory payload = abi.encodePacked(
+            _isNative,
+            _numTokenIDs,
+            tokenID1,
+            _numAddresses,
+            address1,
+            _numSuiDecimals,
+            suiDecimal1,
+            _numPrices,
+            price1
+        );
+
+        // Create transfer message
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
+            version: 1,
+            nonce: 0,
+            chainID: 1,
+            payload: payload
+        });
+
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
+
+        bytes32 messageHash = keccak256(encodedMessage);
+
+        bytes[] memory signatures = new bytes[](4);
+
+        signatures[0] = getSignature(messageHash, committeeMemberPkA);
+        signatures[1] = getSignature(messageHash, committeeMemberPkB);
+        signatures[2] = getSignature(messageHash, committeeMemberPkC);
+        signatures[3] = getSignature(messageHash, committeeMemberPkD);
+
+        vm.expectRevert(bytes("BridgeConfig: Invalid token price"));
+        config.addTokensWithSignatures(signatures, message);
     }
 
     function testUpdateTokenPriceWithSignatures() public {
@@ -101,8 +254,6 @@ contract BridgeConfigTest is BridgeBaseTest {
         uint64 price = 100_000_0000;
 
         bytes memory payload = abi.encodePacked(tokenID, price);
-
-        console.logBytes(payload);
 
         // Create transfer message
         BridgeUtils.Message memory message = BridgeUtils.Message({

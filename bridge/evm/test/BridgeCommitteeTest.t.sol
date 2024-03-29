@@ -159,7 +159,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         signatures[3] = getSignature(messageHash, committeeMemberPkC);
 
         // Call the verifySignatures function and expect it to revert
-        vm.expectRevert(bytes("BridgeCommittee: Insufficient stake amount"));
+        vm.expectRevert(bytes("BridgeCommittee: Duplicate signature provided"));
         committee.verifySignatures(signatures, message);
     }
 
@@ -271,8 +271,6 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
         assertTrue(committee.blocklist(committeeMemberA));
 
-        // verify CommitteeMemberA's signature is no longer valid
-        vm.expectRevert(bytes("BridgeCommittee: Insufficient stake amount"));
         // update message
         message.nonce = 1;
         // reconstruct signatures
@@ -282,6 +280,8 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         signatures[1] = getSignature(messageHash, committeeMemberPkB);
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
+        // verify CommitteeMemberA's signature is no longer valid
+        vm.expectRevert(bytes("BridgeCommittee: Signer is blocklisted"));
         // re-verify signatures
         committee.verifySignatures(signatures, message);
     }
@@ -311,7 +311,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkF);
 
-        vm.expectRevert(bytes("BridgeCommittee: Insufficient stake amount"));
+        vm.expectRevert(bytes("BridgeCommittee: Signer has no stake"));
         committee.verifySignatures(signatures, message);
     }
 
@@ -460,7 +460,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         signatures[2] =
             hex"62b36dab0d2c10f74d84b5f9838435c396cca1f3c4939eb4df82d1c72430e7ec2a030a980a9514beaeda6dffdc5e177b7edbd18543979f488d8fd09dba753a5500";
 
-        vm.expectRevert(bytes("BridgeCommittee: Insufficient stake amount"));
+        vm.expectRevert(bytes("BridgeCommittee: Signer is blocklisted"));
         committee.verifySignatures(signatures, message);
 
         // use sig from a unblocklisted validator
