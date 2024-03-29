@@ -153,7 +153,7 @@ async fn start_client_components(
     let orchestrator =
         BridgeOrchestrator::new(sui_client, sui_events_rx, eth_events_rx, store.clone());
 
-    all_handles.extend(orchestrator.run(bridge_action_executor));
+    all_handles.extend(orchestrator.run(bridge_action_executor).await);
     Ok(all_handles)
 }
 

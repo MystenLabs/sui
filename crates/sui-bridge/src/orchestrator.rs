@@ -48,7 +48,7 @@ where
         }
     }
 
-    pub fn run(
+    pub async fn run(
         self,
         bridge_action_executor: impl BridgeActionExecutorTrait,
     ) -> Vec<JoinHandle<()>> {
@@ -66,11 +66,24 @@ where
             self.sui_events_rx,
         )));
         let store_clone = self.store.clone();
+
+        // Re-submit pending actions to executor
+        let actions = store_clone
+            .get_all_pending_actions()
+            .into_values()
+            .collect::<Vec<_>>();
+        for action in actions {
+            submit_to_executor(&executor_sender, action)
+                .await
+                .expect("Submit to executor should not fail");
+        }
+
         task_handles.push(spawn_logged_monitored_task!(Self::run_eth_watcher(
             store_clone,
             executor_sender,
             self.eth_events_rx,
         )));
+
         // TODO: spawn bridge committee change watcher task
         task_handles
     }
@@ -197,12 +210,16 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_utils::get_test_log_and_action, types::BridgeActionDigest};
+    use crate::{
+        test_utils::{get_test_eth_to_sui_bridge_action, get_test_log_and_action},
+        types::BridgeActionDigest,
+    };
     use ethers::types::{Address as EthAddress, TxHash};
     use prometheus::Registry;
     use std::str::FromStr;
 
     use super::*;
+    use crate::test_utils::get_test_sui_to_eth_bridge_action;
     use crate::{events::tests::get_test_sui_event_and_action, sui_mock_client::SuiMockClient};
 
     #[tokio::test]
@@ -221,7 +238,8 @@ mod tests {
             eth_events_rx,
             store.clone(),
         )
-        .run(executor);
+        .run(executor)
+        .await;
 
         let identifier = Identifier::from_str("test_sui_watcher_task").unwrap();
         let (sui_event, bridge_action) = get_test_sui_event_and_action(identifier.clone());
@@ -237,7 +255,7 @@ mod tests {
             bridge_action.digest()
         );
         loop {
-            let actions = store.get_all_pending_actions().unwrap();
+            let actions = store.get_all_pending_actions();
             if actions.is_empty() {
                 if start.elapsed().as_secs() > 5 {
                     panic!("Timed out waiting for action to be written to WAL");
@@ -272,7 +290,8 @@ mod tests {
             eth_events_rx,
             store.clone(),
         )
-        .run(executor);
+        .run(executor)
+        .await;
         let address = EthAddress::random();
         let (log, bridge_action) = get_test_log_and_action(address, TxHash::random(), 10);
         let log_index_in_tx = 10;
@@ -297,7 +316,7 @@ mod tests {
         );
         let start = std::time::Instant::now();
         loop {
-            let actions = store.get_all_pending_actions().unwrap();
+            let actions = store.get_all_pending_actions();
             if actions.is_empty() {
                 if start.elapsed().as_secs() > 5 {
                     panic!("Timed out waiting for action to be written to WAL");
@@ -314,6 +333,47 @@ mod tests {
             );
             break;
         }
+    }
+
+    #[tokio::test]
+    /// Test that when orchestrator starts, all pending actions are sent to executor
+    async fn test_resume_actions_in_pending_logs() {
+        let (_sui_events_tx, sui_events_rx, _eth_events_tx, eth_events_rx, sui_client, store) =
+            setup();
+        let (executor, mut executor_requested_action_rx) = MockExecutor::new();
+
+        let action1 = get_test_sui_to_eth_bridge_action(
+            None,
+            Some(0),
+            Some(99),
+            Some(10000),
+            None,
+            None,
+            None,
+        );
+
+        let action2 = get_test_eth_to_sui_bridge_action(None, None, None);
+        store
+            .insert_pending_actions(&vec![action1.clone(), action2.clone()])
+            .unwrap();
+
+        // start orchestrator
+        let _handles = BridgeOrchestrator::new(
+            Arc::new(sui_client),
+            sui_events_rx,
+            eth_events_rx,
+            store.clone(),
+        )
+        .run(executor)
+        .await;
+
+        // Executor should have received the action
+        let mut digests = std::collections::HashSet::new();
+        digests.insert(executor_requested_action_rx.recv().await.unwrap());
+        digests.insert(executor_requested_action_rx.recv().await.unwrap());
+        assert!(digests.contains(&action1.digest()));
+        assert!(digests.contains(&action2.digest()));
+        assert_eq!(digests.len(), 2);
     }
 
     #[allow(clippy::type_complexity)]

@@ -524,7 +524,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -535,7 +535,7 @@ mod tests {
 
         // Expect to see the transaction to be requested and successfully executed hence removed from WAL
         tx_subscription.recv().await.unwrap();
-        assert!(store.get_all_pending_actions().unwrap().is_empty());
+        assert!(store.get_all_pending_actions().is_empty());
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////// Test execution failure ///////////////////////////////////
@@ -569,7 +569,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -582,7 +582,7 @@ mod tests {
         tx_subscription.recv().await.unwrap();
         // The action is not removed from WAL because the transaction failed
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -614,7 +614,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -630,7 +630,6 @@ mod tests {
         // The retry is still going on, action still in WAL
         assert!(store
             .get_all_pending_actions()
-            .unwrap()
             .contains_key(&action.digest()));
 
         // Now let it succeed
@@ -646,7 +645,6 @@ mod tests {
         // The action is successful and should be removed from WAL now
         assert!(!store
             .get_all_pending_actions()
-            .unwrap()
             .contains_key(&action.digest()));
     }
 
@@ -697,7 +695,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -722,7 +720,7 @@ mod tests {
         );
         // Still in WAL
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -761,7 +759,6 @@ mod tests {
         // The action is removed from WAL
         assert!(!store
             .get_all_pending_actions()
-            .unwrap()
             .contains_key(&action.digest()));
     }
 
@@ -802,7 +799,7 @@ mod tests {
         );
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -816,20 +813,13 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         tx_subscription.try_recv().unwrap_err();
         // And the action is still in WAL
-        assert!(store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest));
+        assert!(store.get_all_pending_actions().contains_key(&action_digest));
 
         sui_client_mock.set_action_onchain_status(&action, BridgeActionStatus::Approved);
 
         // The next retry will see the action is already processed on chain and remove it from WAL
         let now = std::time::Instant::now();
-        while store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest)
-        {
+        while store.get_all_pending_actions().contains_key(&action_digest) {
             if now.elapsed().as_secs() > 10 {
                 panic!("Timeout waiting for action to be removed from WAL");
             }
@@ -890,7 +880,7 @@ mod tests {
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
+            store.get_all_pending_actions()[&action.digest()],
             action.clone()
         );
 
@@ -909,11 +899,7 @@ mod tests {
         // The next retry will see the action is already processed on chain and remove it from WAL
         let now = std::time::Instant::now();
         let action_digest = action.digest();
-        while store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest)
-        {
+        while store.get_all_pending_actions().contains_key(&action_digest) {
             if now.elapsed().as_secs() > 10 {
                 panic!("Timeout waiting for action to be removed from WAL");
             }

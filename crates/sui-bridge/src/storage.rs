@@ -108,10 +108,8 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
-    pub fn get_all_pending_actions(
-        &self,
-    ) -> BridgeResult<HashMap<BridgeActionDigest, BridgeAction>> {
-        Ok(self.pending_actions.unbounded_iter().collect())
+    pub fn get_all_pending_actions(&self) -> HashMap<BridgeActionDigest, BridgeAction> {
+        self.pending_actions.unbounded_iter().collect()
     }
 
     pub fn get_sui_event_cursors(
@@ -172,7 +170,7 @@ mod tests {
         );
 
         // in the beginning it's empty
-        let actions = store.get_all_pending_actions().unwrap();
+        let actions = store.get_all_pending_actions();
         assert!(actions.is_empty());
 
         // remove non existing entry is ok
@@ -182,7 +180,7 @@ mod tests {
             .insert_pending_actions(&vec![action1.clone(), action2.clone()])
             .unwrap();
 
-        let actions = store.get_all_pending_actions().unwrap();
+        let actions = store.get_all_pending_actions();
         assert_eq!(
             actions,
             HashMap::from_iter(vec![
@@ -193,7 +191,7 @@ mod tests {
 
         // insert an existing action is ok
         store.insert_pending_actions(&[action1.clone()]).unwrap();
-        let actions = store.get_all_pending_actions().unwrap();
+        let actions = store.get_all_pending_actions();
         assert_eq!(
             actions,
             HashMap::from_iter(vec![
@@ -204,7 +202,7 @@ mod tests {
 
         // remove action 2
         store.remove_pending_actions(&[action2.digest()]).unwrap();
-        let actions = store.get_all_pending_actions().unwrap();
+        let actions = store.get_all_pending_actions();
         assert_eq!(
             actions,
             HashMap::from_iter(vec![(action1.digest(), action1.clone())])
@@ -212,7 +210,7 @@ mod tests {
 
         // remove action 1
         store.remove_pending_actions(&[action1.digest()]).unwrap();
-        let actions = store.get_all_pending_actions().unwrap();
+        let actions = store.get_all_pending_actions();
         assert!(actions.is_empty());
 
         // update eth event cursor
