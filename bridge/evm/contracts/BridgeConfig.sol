@@ -116,6 +116,26 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         _updateTokenPrice(tokenID, price);
     }
 
+    function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
+        external
+        nonReentrant
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_EVM_TOKENS)
+    {
+        // decode the update token payload
+        (
+            bool native,
+            uint8[] memory tokenIDs,
+            address[] memory tokenAddresses,
+            uint8[] memory suiDecimals,
+            uint64[] memory _tokenPrices
+        ) = BridgeUtils.decodeAddTokensPayload(message.payload);
+
+        // update the token
+        for (uint8 i; i < tokenIDs.length; i++) {
+            _addToken(tokenIDs[i], tokenAddresses[i], suiDecimals[i], _tokenPrices[i], native);
+        }
+    }
+
     /* ========== PRIVATE FUNCTIONS ========== */
 
     /// @notice Updates the price of the token with the provided ID.
@@ -128,6 +148,29 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         tokenPrices[tokenID] = tokenPrice;
 
         emit TokenPriceUpdated(tokenID, tokenPrice);
+    }
+
+    /// @notice Updates the token with the provided ID.
+    /// @param tokenID The ID of the token to update.
+    /// @param tokenAddress The address of the token.
+    /// @param suiDecimal The decimal places of the token.
+    /// @param tokenPrice The price of the token.
+    /// @param native Whether the token is native to the chain.
+    function _addToken(
+        uint8 tokenID,
+        address tokenAddress,
+        uint8 suiDecimal,
+        uint64 tokenPrice,
+        bool native
+    ) private {
+        require(tokenAddress != address(0), "BridgeConfig: Invalid token address");
+        require(suiDecimal > 0, "BridgeConfig: Invalid Sui decimal");
+        require(tokenPrice > 0, "BridgeConfig: Invalid token price");
+
+        supportedTokens[tokenID] = Token(tokenAddress, suiDecimal, native);
+        tokenPrices[tokenID] = tokenPrice;
+
+        emit TokenAdded(tokenID, tokenAddress, suiDecimal, tokenPrice);
     }
 
     /* ========== MODIFIERS ========== */

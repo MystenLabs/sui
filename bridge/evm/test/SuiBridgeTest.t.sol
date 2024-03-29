@@ -684,16 +684,16 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
 
         assertEq(encodedMessage, expectedEncodedMessage);
 
-        bytes[] memory signatures2 = new bytes[](3);
+        signatures = new bytes[](3);
 
-        signatures2[0] =
+        signatures[0] =
             hex"de5ca964c5aa1aa323cc480cd6de46eae980a1670a5fe8e12e31f724d0bcec6516e54b516737bb6ed6ccad775370c14d46f2e10100e9d16851d2050bf2349c6401";
-        signatures2[1] =
+        signatures[1] =
             hex"fe8006e2013eaa7b8af0e5ac9f2890c2b2bd375d343684b2604ac6acd4142ccf5c9ec1914bce53a005232ef880bf0f597eed319d41d80e92d035c8314e1198ff00";
-        signatures2[2] =
+        signatures[2] =
             hex"f5749ac37e11f22da0622082c9e63a91dc7b5c59cfdaa86438d9f6a53bbacf6b763126f1a20a826d7dff73252cf2fd68da67b9caec4d3c24a07fbd566a7a6bec00";
 
-        bridge.executeEmergencyOpWithSignatures(signatures2, message);
+        bridge.executeEmergencyOpWithSignatures(signatures, message);
         assertFalse(bridge.paused());
 
         // reusing the sig from nonce 0 will revert
