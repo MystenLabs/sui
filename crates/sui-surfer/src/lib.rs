@@ -49,16 +49,14 @@ pub async fn run<S: SurfStrategy + Default>(
         VALIDATOR_COUNT,
         epoch_duration.as_millis()
     );
-    run_with_test_cluster::<S>(run_duration, package_paths, cluster).await
+    run_with_test_cluster::<S>(run_duration, package_paths, cluster.into()).await
 }
 
 pub async fn run_with_test_cluster<S: SurfStrategy + Default>(
     run_duration: Duration,
     package_paths: Vec<PathBuf>,
-    test_cluster: TestCluster,
+    cluster: Arc<TestCluster>,
 ) -> SurfStatistics {
-    let cluster = Arc::new(test_cluster);
-
     let seed = rand::thread_rng().gen::<u64>();
     info!("Initial Seed: {:?}", seed);
     let mut rng = StdRng::seed_from_u64(seed);
