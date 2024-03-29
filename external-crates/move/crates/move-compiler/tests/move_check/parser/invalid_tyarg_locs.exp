@@ -4,7 +4,7 @@ error[E01016]: invalid name
 6 │         a<u64>::m::S { u: 0 }
   │          ^^^^^ Invalid type argument position
   │
-  = Diagnostics must appear at the end of a name access path
+  = Type arguments may only be used with module members
 
 error[E01016]: invalid name
    ┌─ tests/move_check/parser/invalid_tyarg_locs.move:10:13
@@ -12,7 +12,7 @@ error[E01016]: invalid name
 10 │         a::m<u64>::S { u: 0 }
    │             ^^^^^ Invalid type argument position
    │
-   = Diagnostics must appear at the end of a name access path
+   = Type arguments may only be used with module members
 
 error[E01016]: invalid name
    ┌─ tests/move_check/parser/invalid_tyarg_locs.move:14:10
@@ -20,7 +20,7 @@ error[E01016]: invalid name
 14 │         a<u64>::m<u64>::S { u: 0 }
    │          ^^^^^ Invalid type argument position
    │
-   = Diagnostics must appear at the end of a name access path
+   = Type arguments may only be used with module members
 
 error[E01016]: invalid name
    ┌─ tests/move_check/parser/invalid_tyarg_locs.move:14:18
@@ -47,7 +47,7 @@ error[E01016]: invalid name
 28 │         0x42::m<u64>::S { u: 0 }
    │                ^^^^^ Invalid type argument position
    │
-   = Diagnostics must appear at the end of a name access path
+   = Type arguments may only be used with module members
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/parser/invalid_tyarg_locs.move:32:18

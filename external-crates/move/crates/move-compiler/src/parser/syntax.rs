@@ -343,15 +343,6 @@ where
 // Helper for location blocks
 
 macro_rules! ok_with_loc {
-    ($context:expr, $body:block) => {{
-        let start_loc = $context.tokens.start_loc();
-        let result = $body;
-        let end_loc = $context.tokens.previous_end_loc();
-        Ok(sp(
-            make_loc($context.tokens.file_hash(), start_loc, end_loc),
-            result,
-        ))
-    }};
     ($context:expr, $body:expr) => {{
         let start_loc = $context.tokens.start_loc();
         let result = $body;
@@ -623,7 +614,9 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
                 )
             )
         );
-        diag.add_note("Access chains that start with '::' must be multi-part");
+        if matches!(ln.value, LN::GlobalAddress(_)) {
+            diag.add_note("Access chains that start with '::' must be multi-part");
+        }
         return Err(Box::new(diag));
     }
 

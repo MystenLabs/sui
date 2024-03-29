@@ -950,7 +950,7 @@ impl PathExpander for LegacyPathExpander {
                                     (path.tyargs_loc().unwrap(), "Invalid type argument position")
                                 );
                                 diag.add_note(
-                                    "Diagnostics must appear at the end of a name access path",
+                                    "Type arguments may only be used with module members",
                                 );
                                 context.env.add_diag(diag);
                                 (None, path.is_macro())
@@ -980,7 +980,7 @@ impl PathExpander for LegacyPathExpander {
                                 (path.tyargs_loc().unwrap(), "Invalid type argument position")
                             );
                             diag.add_note(
-                                "Diagnostics must appear at the end of a name access path",
+                                "Type arguments may only be used with module members",
                             );
                             context.env.add_diag(diag);
                             (None, path.is_macro())
@@ -989,17 +989,16 @@ impl PathExpander for LegacyPathExpander {
                         };
                         make_access_result(sp(loc, access), tyargs, is_macro.copied())
                     }
-                    _ if path.entries.len() > 2 => {
-                        let mut diag = diag!(Syntax::InvalidName, (loc, "Too many name segments"));
-                        diag.add_note("Names may only have 0, 1, or 2 segments separated by '::'");
+                    (_ln, []) => {
+                        let diag = ice!(
+                            (loc, "Found a root path with no additional entries")
+                        );
                         context.env.add_diag(diag);
                         return None;
                     }
-                    _ => {
-                        let diag = diag!(
-                            Syntax::InvalidName,
-                            (loc, "This name has an unexpected format")
-                        );
+                    (_ln, [_n1, _n2, ..]) => {
+                        let mut diag = diag!(Syntax::InvalidName, (loc, "Too many name segments"));
+                        diag.add_note("Names may only have 0, 1, or 2 segments separated by '::'");
                         context.env.add_diag(diag);
                         return None;
                     }

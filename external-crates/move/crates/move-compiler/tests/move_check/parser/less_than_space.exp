@@ -5,6 +5,4 @@ error[E01002]: unexpected token
   │              - ^^ Expected '::' after the anonymous address in this module access chain
   │              │  
   │              Perhaps you need a blank space before this '<' operator?
-  │
-  = Access chains that start with '::' must be multi-part
 

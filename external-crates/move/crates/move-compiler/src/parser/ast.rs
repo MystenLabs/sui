@@ -303,28 +303,8 @@ pub struct Constant {
 }
 
 //**************************************************************************************************
-// Types
+// Names
 //**************************************************************************************************
-
-// MName = Name <TyArgs>
-//       | Leading <TyArgs> :: Name
-//       | Leading :: Name <TyArgs>
-//       | Leading :: Name <TyArgs> :: Name
-//       | Leading :: Name :: Name <TyArgs>
-//       | Leading :: Name :: Name <TyArgs> :: Name
-//
-// VName = MName <TyArgs> :: Name
-
-// A ModuleAccess references a local or global name or something from a module,
-// either a struct type or a function.
-// The boolean flag indicates if a name was pushed on after tyarg parsing, which we use in
-// expansion to determine if the variant form was valid.
-// FIXME(cswords): We should eventually rewrite all of this to be `NamePath`s that hold tyargs:
-//    pub enum NamePath {
-//        Base { name: Name, tyargs: Option<Vec<Type>> },
-//        Leading { name: LeadingNameAccess },
-//        Ext { base: Box<NamePath>, name: Name, tyargs: Option<Vec<Type>> },
-//    }
 
 // A single name with optional type arguments that may be a macro call.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -335,7 +315,7 @@ pub struct PathEntry {
 }
 
 // A path root.
-// For now these should hever have tyargs or macro call set (though the type arguments will be
+// For now these should never have tyargs or macro call set (though the type arguments will be
 // used for enums).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootPathEntry {
@@ -357,16 +337,12 @@ pub struct NamePath {
 pub enum NameAccessChain_ {
     Single(PathEntry),
     Path(NamePath),
-    // // <Name>
-    // One(Name),
-    // // (<Name>|<Num>)::<Name>, bool indicates last name was pushed on
-    // Two(LeadingNameAccess, Name, bool),
-    // // (<Name>|<Num>)::<Name>::<Name>, bool indicates last name was pushed on
-    // Three(Spanned<(LeadingNameAccess, Name)>, Name, bool),
-    // // (<Name>|<Num>)::<Name>::<Name>::<Name>, bool indicates last name was pushed on
-    // Four(Spanned<(LeadingNameAccess, Name)>, Name, Name, bool),
 }
 pub type NameAccessChain = Spanned<NameAccessChain_>;
+
+//**************************************************************************************************
+// Types
+//**************************************************************************************************
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Ability_ {
