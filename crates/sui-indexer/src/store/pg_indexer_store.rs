@@ -77,8 +77,8 @@ const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
 const UPDATE_OBJECTS_SNAPSHOT_QUERY: &str = r"
-INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
-SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
+INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, object_type_package, object_type_module, object_type_name, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
+SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, object_type_package, object_type_module, object_type_name, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
 FROM (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY object_version DESC) as rn
@@ -94,6 +94,9 @@ SET object_version = EXCLUDED.object_version,
     owner_type = EXCLUDED.owner_type,
     owner_id = EXCLUDED.owner_id,
     object_type = EXCLUDED.object_type,
+    object_type_package = EXCLUDED.object_type_package,
+    object_type_module = EXCLUDED.object_type_module,
+    object_type_name = EXCLUDED.object_type_name,
     serialized_object = EXCLUDED.serialized_object,
     coin_type = EXCLUDED.coin_type,
     coin_balance = EXCLUDED.coin_balance,
@@ -147,6 +150,16 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 
     pub fn blocking_cp(&self) -> ConnectionPool<T> {
         self.blocking_cp.clone()
+    }
+
+    pub fn get_latest_epoch_id(&self) -> Result<Option<u64>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select(max(epochs::epoch))
+                .first::<Option<i64>>(conn)
+                .map(|v| v.map(|v| v as u64))
+        })
+        .context("Failed reading latest epoch id from PostgresDB")
     }
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
