@@ -5709,7 +5709,7 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
     objects
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_per_object_congestion_control() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
@@ -5801,7 +5801,7 @@ async fn test_per_object_congestion_control() {
         .get_highest_pending_checkpoint_height();
     let deferred_txns = authority
         .epoch_store_for_testing()
-        .get_all_deferred_transactions()
+        .get_all_deferred_transactions_for_test()
         .unwrap();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 3);
@@ -5861,7 +5861,7 @@ async fn test_per_object_congestion_control() {
 
     let deferred_txns = authority
         .epoch_store_for_testing()
-        .get_all_deferred_transactions()
+        .get_all_deferred_transactions_for_test()
         .unwrap();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 1);
@@ -5889,7 +5889,7 @@ async fn test_per_object_congestion_control() {
     assert_eq!(scheduled_txns.len(), 1);
     assert!(authority
         .epoch_store_for_testing()
-        .get_all_deferred_transactions()
+        .get_all_deferred_transactions_for_test()
         .unwrap()
         .is_empty());
 }

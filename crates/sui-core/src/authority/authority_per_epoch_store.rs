@@ -48,9 +48,7 @@ use typed_store::{
 
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
-use crate::authority::authority_per_epoch_store_util::{
-    bump_object_execution_cost, should_defer_due_to_object_congestion,
-};
+use super::process_consensus_transaction_util::ObjectExecutionCost;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
@@ -1652,7 +1650,7 @@ impl AuthorityPerEpochStore {
         Ok(txns)
     }
 
-    pub fn get_all_deferred_transactions(
+    pub fn get_all_deferred_transactions_for_test(
         &self,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         Ok(self
@@ -1668,7 +1666,7 @@ impl AuthorityPerEpochStore {
         commit_round: Round,
         dkg_closed: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
-        object_execution_cost: &mut HashMap<ObjectID, u64>,
+        object_execution_cost: &ObjectExecutionCost,
     ) -> Option<(DeferralKey, DeferralReason)> {
         // Defer transaction if it uses randomness but DKG has not yet closed.
         if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
@@ -1682,9 +1680,8 @@ impl AuthorityPerEpochStore {
         match self.protocol_config().per_object_congestion_control_mode() {
             PerObjectCongestionControlMode::None => None,
             PerObjectCongestionControlMode::TotalGasBudget => {
-                if let Some((deferral_key, congested_objects)) =
-                    should_defer_due_to_object_congestion(
-                        object_execution_cost,
+                if let Some((deferral_key, congested_objects)) = object_execution_cost
+                    .should_defer_due_to_object_congestion(
                         cert,
                         self.protocol_config()
                             .max_accumulated_txn_cost_per_object_in_checkpoint(),
@@ -1708,27 +1705,17 @@ impl AuthorityPerEpochStore {
     fn update_object_execution_cost(
         &self,
         cert: &VerifiedExecutableTransaction,
-        object_execution_cost: &mut HashMap<ObjectID, u64>,
+        object_execution_cost: &mut ObjectExecutionCost,
     ) {
-        // Return early if per object congestion control is disabled.
-        if let PerObjectCongestionControlMode::None =
-            self.protocol_config().per_object_congestion_control_mode()
-        {
-            return;
+        match self.protocol_config().per_object_congestion_control_mode() {
+            PerObjectCongestionControlMode::None => {}
+            PerObjectCongestionControlMode::TotalGasBudget => {
+                object_execution_cost.bump_object_execution_cost(
+                    &cert.shared_input_objects().collect::<Vec<_>>(),
+                    cert.gas_budget(),
+                );
+            }
         }
-
-        // There is only one PerObjectCongestionControlMode other than None for now.
-        assert!(
-            PerObjectCongestionControlMode::TotalGasBudget
-                == self.protocol_config().per_object_congestion_control_mode()
-        );
-
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
-        bump_object_execution_cost(
-            object_execution_cost,
-            &shared_input_objects,
-            cert.gas_budget(),
-        );
     }
 
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
@@ -2851,20 +2838,10 @@ impl AuthorityPerEpochStore {
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
             BTreeMap::new();
 
-        // object_execution_cost stores the accumulated cost of executing transactions on an object, for
-        // all transactions in a consensus commit.
-        //
-        // Cost is an indication of transaction execution latency. When transactions are scheduled by
-        // the consensus handler, each scheduled transaction adds cost (execution latency) to all the objects it
-        // reads or writes.
-        //
-        // The goal of this data structure is to capture the critical path of transaction execution latency on each
-        // objects.
-        //
-        // The map stores per object execution cost for this consensus commit. One for regular transactions and one for
-        // transactions using randomness.
-        let mut object_execution_cost: HashMap<ObjectID, u64> = HashMap::new();
-        let mut object_using_randomness_execution_cost: HashMap<ObjectID, u64> = HashMap::new();
+        // We track transaction execution cost separately for regular transactions and transactions using randomness, since
+        // they will be in different checkpoints.
+        let mut object_execution_cost: ObjectExecutionCost = Default::default();
+        let mut object_using_randomness_execution_cost: ObjectExecutionCost = Default::default();
 
         let mut randomness_state_updated = false;
         for tx in transactions {
@@ -3075,7 +3052,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generating_randomness: bool,
-        object_execution_cost: &mut HashMap<ObjectID, u64>,
+        object_execution_cost: &mut ObjectExecutionCost,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
