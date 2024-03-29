@@ -324,6 +324,7 @@ pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000;
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
+        println!("-");
         let execute_certificate_latency = register_histogram_vec_with_registry!(
             "authority_state_execute_certificate_latency",
             "Latency of executing certificates, including waiting for inputs",
