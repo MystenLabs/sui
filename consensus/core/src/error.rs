@@ -8,7 +8,10 @@ use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
-use crate::block::{BlockRef, BlockTimestampMs, Round};
+use crate::{
+    block::{BlockRef, BlockTimestampMs, Round},
+    commit::CommitRange,
+};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[derive(Clone, Debug, Error)]
@@ -93,6 +96,14 @@ pub enum ConsensusError {
     BlockTooFarInFuture {
         block_timestamp: BlockTimestampMs,
         forward_time_drift: Duration,
+    },
+
+    #[error(
+        "Storage failure: Overlapping commit range, existing range {existing:?} & inserting range {inserting:?}"
+    )]
+    OverlappingCommitRange {
+        existing: CommitRange,
+        inserting: CommitRange,
     },
 
     #[error("RocksDB failure: {0}")]

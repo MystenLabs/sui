@@ -12,12 +12,16 @@ use std::{
 use consensus_config::AuthorityIndex;
 use tracing::error;
 
-use crate::block::GENESIS_ROUND;
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
 use crate::{
-    block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRef, TrustedCommit},
+    block::{
+        genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock, GENESIS_ROUND,
+    },
+    commit::{
+        load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
+        CommitRange, CommitRef, CommittedSubDag, TrustedCommit,
+    },
     context::Context,
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
 };
 
@@ -51,6 +55,12 @@ pub(crate) struct DagState {
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
+    // TODO(arun): move unscored subdags from core to here
+    /// The list of committed subdags that have been sequenced by the universal
+    /// committer but have yet to be used to calculate reputation scores for the
+    /// next leader schedule. Until then we consider it as "unscored" subdags.
+    unscored_committed_subdags: Vec<CommittedSubDag>,
+
     // Commits to be voted on in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
     commits_to_vote: VecDeque<CommitRef>,
@@ -58,6 +68,10 @@ pub(crate) struct DagState {
     // Data to be flushed to storage.
     blocks_to_write: Vec<VerifiedBlock>,
     commits_to_write: Vec<TrustedCommit>,
+    // TODO(arun): Buffer the reputation scores to then be flushed with the next
+    // dag state flush. This is okay because we can recover the reputation scores
+    // from the commits
+    commit_info_to_write: Vec<(CommitRange, CommitInfo)>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -80,12 +94,47 @@ impl DagState {
         let last_commit = store
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+
+        let mut unscored_committed_subdags = Vec::new();
+
         let last_committed_rounds = {
             let commit_info = store
                 .read_last_commit_info()
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-            if let Some(commit_info) = commit_info {
-                commit_info.last_committed_rounds
+            if let Some((commit_range, commit_info)) = commit_info {
+                let mut last_committed_rounds = commit_info.last_committed_rounds;
+                //  1. read_last_commit() to get last commit index
+                let last_commit = store
+                    .read_last_commit()
+                    .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
+                    .expect("There exists commit info, so the last commit should exist as well.");
+
+                if last_commit.index() > commit_range.end() {
+                    //  2. commit range is commit_range.end() + 1 .. last_commit_index
+                    let commit_range =
+                        CommitRange::new(commit_range.end() + 1..last_commit.index());
+                    //  3. scan commits (range from #2)
+                    //  4. Vec<TrustedCommits> -> Vec<CommittedSubdags>
+                    //  using commit::load_committed_subdag_from_store
+                    let committed_blocks = store
+                        .scan_commits(commit_range)
+                        .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
+                        .iter()
+                        .flat_map(|commit| {
+                            let committed_subdag =
+                                load_committed_subdag_from_store(store.as_ref(), commit.clone());
+                            unscored_committed_subdags.push(committed_subdag.clone());
+                            committed_subdag.blocks
+                        })
+                        .collect::<Vec<_>>();
+                    //  5. Updates last_committed_rounds after cycling through commited blocks
+                    for block in committed_blocks {
+                        last_committed_rounds[block.author()] =
+                            max(last_committed_rounds[block.author()], block.round());
+                    }
+                }
+
+                last_committed_rounds
             } else {
                 vec![0; num_authorities]
             }
@@ -102,6 +151,8 @@ impl DagState {
             commits_to_vote: VecDeque::new(),
             blocks_to_write: vec![],
             commits_to_write: vec![],
+            commit_info_to_write: vec![],
+            unscored_committed_subdags,
             store,
             cached_rounds,
         };
@@ -473,6 +524,18 @@ impl DagState {
         self.commits_to_write.push(commit);
     }
 
+    pub(crate) fn add_commit_info(
+        &mut self,
+        commit_range: CommitRange,
+        reputation_scores: Vec<u64>,
+    ) {
+        let commit_info = CommitInfo {
+            reputation_scores,
+            last_committed_rounds: self.last_committed_rounds.clone(),
+        };
+        self.commit_info_to_write.push((commit_range, commit_info));
+    }
+
     pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitRef> {
         let mut votes = Vec::new();
         while !self.commits_to_vote.is_empty() && votes.len() < limit {
@@ -529,16 +592,12 @@ impl DagState {
         // Flush buffered data to storage.
         let blocks = std::mem::take(&mut self.blocks_to_write);
         let commits = std::mem::take(&mut self.commits_to_write);
+        let commit_info_to_write = std::mem::take(&mut self.commit_info_to_write);
         if blocks.is_empty() && commits.is_empty() {
             return;
         }
         self.store
-            .write(WriteBatch::new(
-                blocks,
-                commits,
-                // TODO: limit to write at most once per commit round with multi-leader.
-                self.last_committed_rounds.clone(),
-            ))
+            .write(WriteBatch::new(blocks, commits, commit_info_to_write))
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
         self.context
             .metrics
@@ -588,8 +647,35 @@ impl DagState {
         panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
     }
 
+    pub(crate) fn last_reputation_scores_from_store(&self) -> Option<(CommitRange, Vec<u64>)> {
+        let commit_info = self
+            .store
+            .read_last_commit_info()
+            .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+        if let Some((commit_range, commit_info)) = commit_info {
+            Some((commit_range, commit_info.reputation_scores))
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
         self.genesis.values().cloned().collect()
+    }
+
+    pub(crate) fn unscored_committed_subdags_count(&self) -> u64 {
+        self.unscored_committed_subdags.len() as u64
+    }
+
+    pub(crate) fn add_unscored_committed_subdags(
+        &mut self,
+        committed_subdags: Vec<CommittedSubDag>,
+    ) {
+        self.unscored_committed_subdags.extend(committed_subdags);
+    }
+
+    pub(crate) fn take_unscored_committed_subdags(&mut self) -> Vec<CommittedSubDag> {
+        std::mem::take(&mut self.unscored_committed_subdags)
     }
 
     /// Highest round where a block is committed, which is last commit's leader round.
@@ -617,14 +703,15 @@ impl DagState {
 
 #[cfg(test)]
 mod test {
-    use parking_lot::RwLock;
     use std::vec;
 
+    use parking_lot::RwLock;
+
     use super::*;
-    use crate::test_dag::build_dag;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
+        test_dag::build_dag,
     };
 
     #[test]

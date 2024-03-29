@@ -205,6 +205,8 @@ async fn scan_blocks(
 async fn read_and_scan_commits(
     #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
 ) {
+    use crate::commit::CommitRange;
+
     let store = test_store.store();
 
     {
@@ -258,14 +260,14 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits(20..25)
+            .scan_commits(CommitRange::new(20..25))
             .expect("Scan commits should not fail");
         assert!(scanned_commits.is_empty(), "{:?}", scanned_commits);
     }
 
     {
         let scanned_commits = store
-            .scan_commits(3..5)
+            .scan_commits(CommitRange::new(3..5))
             .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 2, "{:?}", scanned_commits);
         assert_eq!(
@@ -276,7 +278,7 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits(0..3)
+            .scan_commits(CommitRange::new(0..3))
             .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 2, "{:?}", scanned_commits);
         assert_eq!(
@@ -287,7 +289,7 @@ async fn read_and_scan_commits(
 
     {
         let scanned_commits = store
-            .scan_commits(0..5)
+            .scan_commits(CommitRange::new(0..5))
             .expect("Scan commits should not fail");
         assert_eq!(scanned_commits.len(), 4, "{:?}", scanned_commits);
         assert_eq!(scanned_commits, written_commits,);

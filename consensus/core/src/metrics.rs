@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 
-use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
+
+use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 
 const SCOPE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05,
@@ -94,7 +95,9 @@ pub(crate) struct NodeMetrics {
     pub last_decided_leader_round: IntGauge,
     pub leader_timeout_total: IntCounter,
     pub missing_blocks_total: IntGauge,
+    pub num_of_bad_nodes: IntGauge,
     pub quorum_receive_latency: Histogram,
+    pub reputation_scores: IntGaugeVec,
     pub scope_processing_time: HistogramVec,
     pub sub_dags_per_commit_count: Histogram,
     pub suspended_blocks: IntCounterVec,
@@ -205,10 +208,21 @@ impl NodeMetrics {
                 "Total number of missing blocks",
                 registry,
             ).unwrap(),
+            num_of_bad_nodes: register_int_gauge_with_registry!(
+                "num_of_bad_nodes",
+                "The number of bad nodes in the new leader schedule",
+                registry
+            ).unwrap(),
             quorum_receive_latency: register_histogram_with_registry!(
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            reputation_scores: register_int_gauge_vec_with_registry!(
+                "reputation_scores",
+                "Reputation scores for each authority",
+                &["authority"],
+                registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(
                 "scope_processing_time",

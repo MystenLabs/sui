@@ -1,23 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::VecDeque;
-use std::ops::Range;
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::Bound::{Excluded, Included},
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    ops::Bound::{Excluded, Included, Unbounded},
 };
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use super::{CommitInfo, Store, WriteBatch};
-use crate::block::Slot;
-use crate::commit::{CommitAPI as _, TrustedCommit};
+use super::{Store, WriteBatch};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, VerifiedBlock},
-    commit::{CommitDigest, CommitIndex},
-    error::ConsensusResult,
+    block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRange, TrustedCommit},
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// In-memory storage for testing.
@@ -30,7 +26,7 @@ struct Inner {
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
     commits: BTreeMap<(CommitIndex, CommitDigest), TrustedCommit>,
     commit_votes: BTreeSet<(CommitIndex, CommitDigest, BlockRef)>,
-    commit_info: BTreeMap<(CommitIndex, CommitDigest), CommitInfo>,
+    commit_info: BTreeMap<CommitRange, CommitInfo>,
 }
 
 impl MemStore {
@@ -69,18 +65,31 @@ impl Store for MemStore {
                     .insert((commit.index, commit.digest, block_ref));
             }
         }
-        if let Some(last_commit) = write_batch.commits.last().cloned() {
-            for commit in write_batch.commits {
-                inner
-                    .commits
-                    .insert((commit.index(), commit.digest()), commit);
-            }
-            let commit_info = CommitInfo {
-                last_committed_rounds: write_batch.last_committed_rounds,
-            };
+
+        for commit in write_batch.commits {
             inner
+                .commits
+                .insert((commit.index(), commit.digest()), commit);
+        }
+
+        for (commit_range, commit_info) in write_batch.commit_ranges_with_commit_info {
+            let overlapping_range = inner
                 .commit_info
-                .insert((last_commit.index(), last_commit.digest()), commit_info);
+                .range((
+                    Included(&CommitRange::new(
+                        commit_range.start()..commit_range.start(),
+                    )),
+                    Unbounded,
+                ))
+                .find(|(existing_range, _)| commit_range.range_overlaps(existing_range));
+
+            if let Some((existing_range, _)) = overlapping_range {
+                return Err(ConsensusError::OverlappingCommitRange {
+                    existing: existing_range.clone(),
+                    inserting: commit_range,
+                });
+            }
+            inner.commit_info.insert(commit_range, commit_info);
         }
         Ok(())
     }
@@ -180,20 +189,23 @@ impl Store for MemStore {
             .map(|(_, commit)| commit.clone()))
     }
 
-    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>> {
+    fn scan_commits(&self, range: CommitRange) -> ConsensusResult<Vec<TrustedCommit>> {
         let inner = self.inner.read();
         let mut commits = vec![];
         for (_, commit) in inner.commits.range((
-            Included((range.start, CommitDigest::MIN)),
-            Excluded((range.end, CommitDigest::MIN)),
+            Included((range.start(), CommitDigest::MIN)),
+            Excluded((range.end(), CommitDigest::MIN)),
         )) {
             commits.push(commit.clone());
         }
         Ok(commits)
     }
 
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRange, CommitInfo)>> {
         let inner = self.inner.read();
-        Ok(inner.commit_info.last_key_value().map(|(_k, v)| v.clone()))
+        Ok(inner
+            .commit_info
+            .last_key_value()
+            .map(|(k, v)| (k.clone(), v.clone())))
     }
 }

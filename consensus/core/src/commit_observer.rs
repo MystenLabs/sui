@@ -6,16 +6,17 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::commit::CommitAPI;
-use crate::error::{ConsensusError, ConsensusResult};
-use crate::CommitConsumer;
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
-    commit::{load_committed_subdag_from_store, CommitIndex, CommittedSubDag},
+    commit::{
+        load_committed_subdag_from_store, CommitAPI, CommitIndex, CommitRange, CommittedSubDag,
+    },
     context::Context,
     dag_state::DagState,
+    error::{ConsensusError, ConsensusResult},
     linearizer::Linearizer,
     storage::Store,
+    CommitConsumer,
 };
 
 /// Role of CommitObserver
@@ -64,6 +65,14 @@ impl CommitObserver {
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["CommitObserver::handle_commit"])
+            .start_timer();
+
         let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         let mut sent_sub_dags = vec![];
 
@@ -107,7 +116,9 @@ impl CommitObserver {
         // We should not send the last processed commit again, so last_processed_commit_index+1
         let unsent_commits = self
             .store
-            .scan_commits((last_processed_commit_index + 1)..CommitIndex::MAX)
+            .scan_commits(CommitRange::new(
+                (last_processed_commit_index + 1)..CommitIndex::MAX,
+            ))
             .expect("Scanning commits should not fail");
 
         // Resend all the committed subdags to the consensus output channel
@@ -175,7 +186,7 @@ mod tests {
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         dag_state::DagState,
-        leader_schedule::LeaderSchedule,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         test_dag::{build_dag, get_all_leader_blocks},
     };
@@ -190,7 +201,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -264,7 +275,9 @@ mod tests {
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(last_commit.index(), commits.last().unwrap().commit_index);
-        let all_stored_commits = mem_store.scan_commits(0..CommitIndex::MAX).unwrap();
+        let all_stored_commits = mem_store
+            .scan_commits(CommitRange::new(0..CommitIndex::MAX))
+            .unwrap();
         assert_eq!(all_stored_commits.len(), leaders.len());
         let blocks_existence = mem_store.contains_blocks(&expected_stored_refs).unwrap();
         assert!(blocks_existence.iter().all(|exists| *exists));
@@ -280,7 +293,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -417,7 +430,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();

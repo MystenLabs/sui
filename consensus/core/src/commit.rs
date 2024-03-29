@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Range},
     sync::Arc,
 };
 
@@ -431,6 +432,55 @@ impl Display for LeaderStatus {
             Self::Skip(leader) => write!(f, "Skip({leader})"),
             Self::Undecided(leader) => write!(f, "Undecided({leader})"),
         }
+    }
+}
+
+/// Per-commit properties that can be derived and do not need to be part of the Commit struct.
+/// Only the latest version is needed for CommitInfo, but more versions are stored for
+/// debugging and potential recovery.
+// TODO: version this struct.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct CommitInfo {
+    pub(crate) last_committed_rounds: Vec<Round>,
+    pub(crate) reputation_scores: Vec<u64>,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CommitRange(Range<CommitIndex>);
+
+impl CommitRange {
+    pub(crate) fn new(range: Range<CommitIndex>) -> Self {
+        Self(range)
+    }
+
+    pub(crate) fn start(&self) -> CommitIndex {
+        self.0.start
+    }
+
+    pub(crate) fn end(&self) -> CommitIndex {
+        self.0.end
+    }
+
+    pub(crate) fn range_overlaps(&self, other: &Self) -> bool {
+        let self_range = &self.0;
+        let other_range = &other.0;
+
+        self_range.start < other_range.end && self_range.end > other_range.start
+    }
+}
+
+impl Ord for CommitRange {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .start
+            .cmp(&other.0.start)
+            .then_with(|| self.0.end.cmp(&other.0.end))
+    }
+}
+
+impl PartialOrd for CommitRange {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
