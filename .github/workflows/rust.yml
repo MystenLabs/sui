@@ -451,6 +451,8 @@ jobs:
         run: |
           curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
+      - name: Install Dependencies
+        run: cargo build -p sui-bridge
       - name: Check Bridge EVM Unit Tests
         shell: bash
         working-directory: bridge/evm
