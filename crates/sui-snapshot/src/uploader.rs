@@ -5,7 +5,10 @@ use crate::writer::StateSnapshotWriterV1;
 use anyhow::Result;
 use bytes::Bytes;
 use object_store::DynObjectStore;
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
+};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,6 +26,7 @@ use tracing::{debug, error, info};
 
 pub struct StateSnapshotUploaderMetrics {
     pub first_missing_state_snapshot_epoch: IntGauge,
+    pub state_snapshot_upload_err: IntCounter,
 }
 
 impl StateSnapshotUploaderMetrics {
@@ -31,6 +35,12 @@ impl StateSnapshotUploaderMetrics {
             first_missing_state_snapshot_epoch: register_int_gauge_with_registry!(
                 "first_missing_state_snapshot_epoch",
                 "First epoch for which we have no state snapshot in remote store",
+                registry
+            )
+            .unwrap(),
+            state_snapshot_upload_err: register_int_counter_with_registry!(
+                "state_snapshot_upload_err",
+                "Track upload errors we can alert on",
                 registry
             )
             .unwrap(),
@@ -150,6 +160,7 @@ impl StateSnapshotUploader {
                         let first_missing_epoch = epochs.first().cloned().unwrap_or(0);
                         self.metrics.first_missing_state_snapshot_epoch.set(first_missing_epoch as i64);
                         if let Err(err) = self.upload_state_snapshot_to_object_store(epochs).await {
+                            self.metrics.state_snapshot_upload_err.inc();
                             error!("Failed to upload state snapshot to remote store with err: {:?}", err);
                         } else {
                             debug!("Successfully completed snapshot upload loop");
