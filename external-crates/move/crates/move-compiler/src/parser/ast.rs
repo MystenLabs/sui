@@ -505,16 +505,10 @@ pub enum Exp_ {
 
     // f(earg,*)
     // f!(earg,*)
-    Call(
-        NameAccessChain,
-        Spanned<Vec<Exp>>,
-    ),
+    Call(NameAccessChain, Spanned<Vec<Exp>>),
 
     // tn {f1: e1, ... , f_n: e_n }
-    Pack(
-        NameAccessChain,
-        Vec<(Field, Exp)>,
-    ),
+    Pack(NameAccessChain, Vec<(Field, Exp)>),
 
     // vector [ e1, ..., e_n ]
     // vector<t> [e1, ..., en ]

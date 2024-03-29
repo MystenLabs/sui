@@ -554,16 +554,13 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
     let (mut is_macro, mut tys) = parse_macro_opt_and_tyargs_opt(context, ln.loc)?;
     if let Some(loc) = &is_macro {
         if !macros_allowed {
-            context.env.add_diag(diag!(
-                Syntax::InvalidName,
-                (
-                    *loc,
-                    format!(
-                        "Macro invocation are disallowed here. Expected {}",
-                        item_description()
-                    )
-                )
-            ));
+            let msg = format!(
+                "Macro invocation are disallowed here. Expected {}",
+                item_description()
+            );
+            context
+                .env
+                .add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
             is_macro = None;
         }
     }
