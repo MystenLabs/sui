@@ -368,4 +368,79 @@ library BridgeUtils {
             tokenPrice := shr(192, mload(add(add(_payload, 0x20), 1)))
         }
     }
+
+    /// @notice Decodes an add token payload from bytes to a token ID, a token address, and a token price.
+    /// @dev The function will revert if the payload length is invalid.
+    ///     Add token payload is 5 + 2n + 20n + 8n bytes (assuming all arrays are of length n).
+    ///     byte 0           : is native
+    ///     byte 1           : number of token IDs
+    ///     byte 2 -> n      : token IDs
+    ///     byte n + 1       : number of addresses
+    ///     bytes n + 2 -> m : addresses
+    ///     byte m + 1       : number of sui decimals
+    ///     bytes m + 2 -> i : sui decimals
+    ///     byte i + 1       : number of prices
+    ///     bytes i + 2 -> j : prices (uint64)
+    /// @param _payload The payload to be decoded.
+    /// @return native whether the token is native to the chain.
+    /// @return tokenIDs the token ID to be added.
+    /// @return tokenAddresses the address of the token to be added.
+    /// @return suiDecimals the Sui decimal places of the tokens to be added.
+    /// @return tokenPrices the price of the tokens to be added.
+    function decodeAddTokensPayload(bytes memory _payload)
+        internal
+        pure
+        returns (
+            bool native,
+            uint8[] memory tokenIDs,
+            address[] memory tokenAddresses,
+            uint8[] memory suiDecimals,
+            uint64[] memory tokenPrices
+        )
+    {
+        native = _payload[0] != bytes1(0);
+
+        uint8 tokenCount = uint8(_payload[1]);
+
+        // Calculate the starting index for each token ID
+        uint8 offset = 2;
+        tokenIDs = new uint8[](tokenCount);
+        for (uint8 i; i < tokenCount; i++) {
+            tokenIDs[i] = uint8(_payload[offset++]);
+        }
+
+        uint8 addressCount = uint8(_payload[offset++]);
+        tokenAddresses = new address[](addressCount);
+        for (uint8 i; i < addressCount; i++) {
+            // Calculate the starting index for each address
+            address tokenAddress;
+            // Extract each address
+            assembly {
+                tokenAddress := mload(add(add(_payload, 20), offset))
+            }
+            offset += 20;
+            // Store the extracted address
+            tokenAddresses[i] = tokenAddress;
+        }
+
+        uint8 decimalCount = uint8(_payload[offset++]);
+        suiDecimals = new uint8[](decimalCount);
+        for (uint8 i; i < decimalCount; i++) {
+            suiDecimals[i] = uint8(_payload[offset++]);
+        }
+
+        uint8 priceCount = uint8(_payload[offset++]);
+        tokenPrices = new uint64[](priceCount);
+        for (uint8 i; i < priceCount; i++) {
+            // Calculate the starting index for each price
+            uint64 tokenPrice;
+            // Extract each price
+            assembly {
+                tokenPrice := shr(192, mload(add(add(_payload, 0x20), offset)))
+            }
+            offset += 8;
+            // Store the extracted price
+            tokenPrices[i] = tokenPrice;
+        }
+    }
 }
