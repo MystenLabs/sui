@@ -2,12 +2,12 @@ module a::m {
 
     public struct S<T> { u: T }
 
-    public macro fun make_s<$T>($u: T): S<T> {
+    public macro fun make_s<$T>($u: $T): S<$T> {
         S{ u: $u }
     }
 }
 
-module a::m {
+module a::n {
 
     fun valid(): a::m::S<u64> {
         a::m::make_s!<u64>(0u64)
@@ -39,7 +39,7 @@ module 0x42::m {
 
     public struct S<T> { u: T }
 
-    public macro fun make_s<$T>($u: T): S<T> {
+    public macro fun make_s<$T>($u: $T): S<$T> {
         S{ u: $u }
     }
 }

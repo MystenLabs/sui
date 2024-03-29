@@ -358,7 +358,6 @@ pub enum Type_ {
     // N
     // N<t1, ... , tn>
     Apply(Box<NameAccessChain>),
-    // Apply(Box<NameAccessChain>, Vec<Type>),
     // &t
     // &mut t
     Ref(bool, Box<Type>),
@@ -397,7 +396,6 @@ pub enum Bind_ {
     // T ( b1, ... bn )
     // T<t1, ... , tn> ( b1, ... bn )
     Unpack(Box<NameAccessChain>, FieldBindings),
-    // Unpack(Box<NameAccessChain>, Option<Vec<Type>>, FieldBindings),
 }
 pub type Bind = Spanned<Bind_>;
 // b1, ..., bn
@@ -510,15 +508,12 @@ pub enum Exp_ {
     // f!(earg,*)
     Call(
         NameAccessChain,
-        // Option<Loc>,
-        // Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
 
     // tn {f1: e1, ... , f_n: e_n }
     Pack(
         NameAccessChain,
-        // Option<Vec<Type>>,
         Vec<(Field, Exp)>,
     ),
 
