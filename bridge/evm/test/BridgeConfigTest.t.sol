@@ -92,7 +92,7 @@ contract BridgeConfigTest is BridgeBaseTest {
         config.addTokensWithSignatures(signatures, message);
         assertTrue(config.isTokenSupported(10));
         assertEq(config.tokenAddressOf(10), address1);
-        assertEq(config.tokenSuiDecimalOf(10), 8);
+        assertEq(config.tokenSuiDecimalOf(10), 6);
         assertEq(config.tokenPriceOf(10), 100_000_0000);
     }
 
