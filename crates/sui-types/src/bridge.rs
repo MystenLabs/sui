@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use enum_dispatch::enum_dispatch;
-use move_binary_format::normalized::Type;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use num_enum::TryFromPrimitive;
@@ -40,7 +39,8 @@ pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_brid
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 
-pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 7500; // out of 10000 (75%)
+pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 7500;
+// out of 10000 (75%)
 pub const BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER: u64 = 10000; // (100%)
 
 // Threshold for action to be approved by the committee (our of 10000)
@@ -151,12 +151,12 @@ pub struct BridgeSummary {
     #[serde_as(as = "Vec<(_, Readable<BigInt<u64>, _>)>")]
     pub sequence_nums: Vec<(u8, u64)>,
     pub committee: BridgeCommitteeSummary,
+    /// Summary of the treasury
+    pub treasury: BridgeTreasurySummary,
     /// Object ID of bridge Records (dynamic field)
     pub bridge_records_id: ObjectID,
     /// Summary of the limiter
     pub limiter: BridgeLimiterSummary,
-    /// Summary of the treasury
-    pub treasury: BridgeTreasurySummary,
     /// Whether the bridge is currently frozen or not
     pub is_frozen: bool,
     // TODO: add treasury
@@ -269,18 +269,15 @@ impl BridgeTrait for BridgeInnerV1 {
             .supported_tokens
             .contents
             .into_iter()
-            .map(|e| {
-                let token_type = e.key.to_string();
-                Ok((token_type, e.value))
-            })
-            .collect::<SuiResult<Vec<_>>>()?;
+            .map(|e| (e.key, e.value))
+            .collect::<Vec<_>>();
         let id_token_type_map = self
             .treasury
             .id_token_type_map
             .contents
             .into_iter()
-            .map(|e| Ok((e.key, e.value.to_string())))
-            .collect::<SuiResult<Vec<_>>>()?;
+            .map(|e| (e.key, e.value))
+            .collect::<Vec<_>>();
         let transfer_records = self
             .limiter
             .transfer_records
@@ -346,9 +343,9 @@ impl BridgeTrait for BridgeInnerV1 {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeTreasury {
     pub treasuries: Bag,
-    pub supported_tokens: VecMap<Type, BridgeTokenMetadata>,
+    pub supported_tokens: VecMap<String, BridgeTokenMetadata>,
     // Mapping token id to type name
-    pub id_token_type_map: VecMap<u8, Type>,
+    pub id_token_type_map: VecMap<u8, String>,
     // Bag for storing potential new token waiting to be approved
     pub waiting_room: Bag,
 }

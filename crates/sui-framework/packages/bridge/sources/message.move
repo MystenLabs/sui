@@ -893,6 +893,13 @@ module bridge::message {
             vector[ascii::string(b"0x28ac483b6f2b62dd58abdf0bbc3f86900d86bbdc710c704ba0b33b7f1c4b43c8::btc::BTC"), ascii::string(b"0xbd69a54e7c754a332804f325307c6627c06631dc41037239707e3242bc542e99::eth::ETH")],
             vector[100, 100]
         );
+        let payload = extract_add_sui_token(&add_sui_token_message);
+        assert!(payload == AddSuiToken {
+            native_token: false,
+            token_ids: vector[treasury.token_id<BTC>(), treasury.token_id<ETH>()],
+            token_type_names: vector[ascii::string(b"0x28ac483b6f2b62dd58abdf0bbc3f86900d86bbdc710c704ba0b33b7f1c4b43c8::btc::BTC"), ascii::string(b"0xbd69a54e7c754a332804f325307c6627c06631dc41037239707e3242bc542e99::eth::ETH")],
+            token_prices: vector[100, 100],
+        }, 0);
         // Test message serialization
         let message = serialize_message(add_sui_token_message);
         let expected_msg = hex::decode(
@@ -901,6 +908,57 @@ module bridge::message {
         assert_eq(message, expected_msg);
         assert!(add_sui_token_message == deserialize_message_test_only(message), 0);
 
+        destroy(treasury);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_add_sui_token_message_serialization_2() {
+        let mut scenario = test_scenario::begin(@0x1);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let treasury = treasury::mock_for_test(ctx);
+
+        let add_sui_token_message = create_add_sui_token_message(
+            chain_ids::sui_local_test(),
+            0, // seq_num
+            false, // native_token
+            vector[1, 2, 3, 4],
+            vector[
+                ascii::string(b"0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC"),
+                ascii::string(b"0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH"),
+                ascii::string(b"0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC"),
+                ascii::string(b"0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT")
+            ],
+            vector[500_000_000, 30_000_000, 1_000, 1_000]
+        );
+        let payload = extract_add_sui_token(&add_sui_token_message);
+        assert!(payload == AddSuiToken {
+            native_token: false,
+            token_ids: vector[1, 2, 3, 4],
+            token_type_names: vector[
+                ascii::string(b"0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC"),
+                ascii::string(b"0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH"),
+                ascii::string(b"0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC"),
+                ascii::string(b"0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT")
+            ],
+            token_prices: vector[500_000_000, 30_000_000, 1_000, 1_000]
+        }, 0);
+        // Test message serialization
+        let message = serialize_message(add_sui_token_message);
+        let expected_msg = hex::decode(
+            b"0601000000000000000003000401020304044c3078396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434c3078373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484e3078353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434e3078343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
+        );
+        assert_eq(message, expected_msg);
+        assert!(add_sui_token_message == deserialize_message_test_only(message), 0);
+
+        let mut message_bytes = b"SUI_BRIDGE_MESSAGE";
+        message_bytes.append(message);
+
+        let pubkey = sui::ecdsa_k1::secp256k1_ecrecover(
+            &x"732e92696bff86a94997f51242fae9c73033f4bc37e24d11dbb4bcd5036a05f727a62f9257ce5235542acb8ada5375c746e284ba2f2291a85bd86e46865051c601"
+            , &message_bytes, 0);
+
+        assert_eq(pubkey, x"02d247165672cf02f5ca4ae6b521461af22f06f2344f0ac0f584632d58e693d087");
         destroy(treasury);
         test_scenario::end(scenario);
     }

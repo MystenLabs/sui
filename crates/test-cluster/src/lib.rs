@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Hex;
 use fastcrypto::hash::Keccak256;
 use fastcrypto::traits::{RecoverableSigner, ToFromBytes};
 use futures::{future::join_all, StreamExt};
@@ -47,11 +46,11 @@ use sui_swarm_config::network_config_builder::{
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
-use sui_types::base_types::{ConciseableName, SUI_ADDRESS_LENGTH};
-use sui_types::bridge::get_bridge;
 use sui_types::bridge::BridgeTrait;
-use sui_types::bridge::{get_bridge_obj_initial_shared_version, TokenId, BRIDGE_MODULE_NAME};
+use sui_types::bridge::{get_bridge, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
+use sui_types::bridge::{get_bridge_obj_initial_shared_version, BRIDGE_MODULE_NAME};
 use sui_types::bridge::{BridgeChainId, BridgeSummary};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
@@ -313,13 +312,13 @@ impl TestCluster {
             }
             unreachable!("Broken reconfig channel");
         })
-        .await
-        .unwrap_or_else(|_| {
-            if let Some(state) = state {
-                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
-            }
-            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
-        })
+            .await
+            .unwrap_or_else(|_| {
+                if let Some(state) = state {
+                    panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
+                }
+                panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
+            })
     }
 
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {
@@ -351,8 +350,8 @@ impl TestCluster {
                 },
             }
         })
-        .await
-        .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
+            .await
+            .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
     }
 
     pub async fn wait_for_protocol_version(
@@ -1145,10 +1144,10 @@ impl TestClusterBuilder {
 
         // Register tokens
         let token_packages_dir = [
-            (TokenId::BTC, Path::new("../../bridge/move/tokens/btc")),
-            (TokenId::ETH, Path::new("../../bridge/move/tokens/eth")),
-            (TokenId::USDC, Path::new("../../bridge/move/tokens/usdc")),
-            (TokenId::USDT, Path::new("../../bridge/move/tokens/usdt")),
+            (TOKEN_ID_BTC, Path::new("../../bridge/move/tokens/btc")),
+            (TOKEN_ID_ETH, Path::new("../../bridge/move/tokens/eth")),
+            (TOKEN_ID_USDC, Path::new("../../bridge/move/tokens/usdc")),
+            (TOKEN_ID_USDT, Path::new("../../bridge/move/tokens/usdt")),
         ];
 
         // publish coin packages
@@ -1227,7 +1226,7 @@ impl TestClusterBuilder {
                 response.effects.unwrap().status(),
                 &SuiExecutionStatus::Success
             );
-            published_tokens.push((token_id, type_.to_string()));
+            published_tokens.push((token_id, type_.to_canonical_string(false)));
         }
 
         // Construct new tokens message
@@ -1238,8 +1237,7 @@ impl TestClusterBuilder {
         let source_chain_id_bytes = vec![BridgeChainId::SuiLocalTest as u8];
 
         let native = vec![false as u8];
-        let (token_ids, type_name): (Vec<TokenId>, Vec<String>) =
-            published_tokens.into_iter().unzip();
+        let (token_ids, type_name): (Vec<u8>, Vec<String>) = published_tokens.into_iter().unzip();
         let token_ids_bytes = bcs::to_bytes(&token_ids).unwrap();
         let type_names_bytes = bcs::to_bytes(&type_name).unwrap();
         let prices =
@@ -1260,7 +1258,7 @@ impl TestClusterBuilder {
         let sigs = bridge_authority_keys
             .iter()
             .map(|key| {
-                key.sign_recoverable_with_hash::<Keccak256>(&combined_bytes)
+                key.sign_recoverable_with_hash::<Keccak256>(&combined_bytes.clone())
                     .as_bytes()
                     .to_vec()
             })
@@ -1273,7 +1271,9 @@ impl TestClusterBuilder {
         let native_token = ptb.pure(false).unwrap();
         let token_ids = ptb.pure(token_ids).unwrap();
         let type_names = ptb.pure(type_name).unwrap();
-        let prices = ptb.pure([100u64, 100u64].to_vec()).unwrap();
+        let prices = ptb
+            .pure([500_000_000u64, 30_000_000u64, 1_000u64, 1_000u64].to_vec())
+            .unwrap();
 
         let message = ptb.programmable_move_call(
             BRIDGE_PACKAGE_ID,

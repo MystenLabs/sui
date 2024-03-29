@@ -213,7 +213,6 @@ module bridge::treasury {
         treasury.id_token_type_map.insert(2, type_name::get<ETH>());
         treasury.id_token_type_map.insert(3, type_name::get<USDC>());
         treasury.id_token_type_map.insert(4, type_name::get<USDT>());
-
         treasury
     }
 }

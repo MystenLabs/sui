@@ -876,7 +876,7 @@ mod tests {
             })
             .collect::<HashMap<_, _>>();
         for (token_id, price) in new_notional_values {
-            if token_id == TOKEN_ID_BTC {
+            if token_id == &TOKEN_ID_BTC {
                 assert_eq!(price, 69_000 * USD_MULTIPLIER);
             } else {
                 assert_eq!(price, *notional_values.get(&token_id).unwrap());
