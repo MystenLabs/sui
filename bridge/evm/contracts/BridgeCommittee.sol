@@ -18,20 +18,18 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     mapping(address committeeMember => bool isBlocklisted) public blocklist;
     IBridgeConfig public config;
 
-    /* ========== INITIALIZER ========== */
+    /* ========== INITIALIZERS ========== */
 
     /// @notice Initializes the contract with the provided parameters.
     /// @dev should be called directly after deployment (see OpenZeppelin upgradeable standards).
     /// the provided arrays must have the same length and the total stake provided must equal 10000.
-    /// @param _config The address of the BridgeConfig contract.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
-    function initialize(
-        address _config,
-        address[] memory committee,
-        uint16[] memory stake,
-        uint16 minStakeRequired
-    ) external initializer {
+    /// @param minStakeRequired minimum stake required for the committee.
+    function initialize(address[] memory committee, uint16[] memory stake, uint16 minStakeRequired)
+        external
+        initializer
+    {
         __CommitteeUpgradeable_init(address(this));
         __UUPSUpgradeable_init();
 
@@ -41,8 +39,6 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
             _committeeLength == stake.length,
             "BridgeCommittee: Committee and stake arrays must be of the same length"
         );
-
-        config = IBridgeConfig(_config);
 
         uint16 totalStake;
         for (uint16 i; i < _committeeLength; i++) {
@@ -57,19 +53,28 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
         require(totalStake >= minStakeRequired, "BridgeCommittee: total stake is less than minimum"); // 10000 == 100%
     }
 
+    /// @notice Initializes the contract with the provided parameters.
+    /// @dev This function should be called directly after config deployment. The config contract address
+    /// provided should be verified before bridging any assets.
+    /// @param _config The address of the BridgeConfig contract.
+    function initializeConfig(address _config) external {
+        require(address(config) == address(0), "BridgeCommittee: Config already initialized");
+        config = IBridgeConfig(_config);
+    }
+
     /* ========== EXTERNAL FUNCTIONS ========== */
 
     /// @notice Verifies the provided signatures for the given message by aggregating and validating the
     /// stake of each signer against the required stake of the given message type.
     /// @dev The function will revert if the total stake of the signers is less than the required stake.
     /// @param signatures The array of signatures to be verified.
-    /// @param message The `BridgeMessage.Message` to be verified.
-    function verifySignatures(bytes[] memory signatures, BridgeMessage.Message memory message)
+    /// @param message The `BridgeUtils.Message` to be verified.
+    function verifySignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
         external
         view
         override
     {
-        uint32 requiredStake = BridgeMessage.requiredStake(message);
+        uint32 requiredStake = BridgeUtils.requiredStake(message);
 
         uint16 approvalStake;
         address signer;
@@ -81,7 +86,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
             // recover the signer from the signature
             (bytes32 r, bytes32 s, uint8 v) = splitSignature(signature);
 
-            (signer,,) = ECDSA.tryRecover(BridgeMessage.computeHash(message), v, r, s);
+            (signer,,) = ECDSA.tryRecover(BridgeUtils.computeHash(message), v, r, s);
 
             // skip if signer is block listed or has no stake
             if (blocklist[signer] || committeeStake[signer] == 0) continue;
@@ -103,18 +108,18 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
 
     /// @notice Updates the blocklist status of the provided addresses if provided signatures are valid.
     /// @param signatures The array of signatures to validate the message.
-    /// @param message BridgeMessage containing the update blocklist payload.
+    /// @param message BridgeUtils containing the update blocklist payload.
     function updateBlocklistWithSignatures(
         bytes[] memory signatures,
-        BridgeMessage.Message memory message
+        BridgeUtils.Message memory message
     )
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeMessage.BLOCKLIST)
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.BLOCKLIST)
     {
         // decode the blocklist payload
         (bool isBlocklisted, address[] memory _blocklist) =
-            BridgeMessage.decodeBlocklistPayload(message.payload);
+            BridgeUtils.decodeBlocklistPayload(message.payload);
 
         // update the blocklist
         _updateBlocklist(_blocklist, isBlocklisted);
