@@ -40,6 +40,61 @@ contract BridgeConfigTest is BridgeBaseTest {
         assertEq(config.tokenSuiDecimalOf(1), 8);
     }
 
+    function testAddTokensWithSignatures() public {
+        // Create update tokens payload
+        bool _isNative = true;
+        uint8 _numTokenIDs = 1;
+        uint8 tokenID1 = 10;
+        uint8 _numAddresses = 1;
+        address address1 = address(10101);
+        uint8 _numSuiDecimals = 1;
+        uint8 suiDecimal1 = 8;
+        uint8 _numPrices = 1;
+        uint64 price1 = 100_000_0000;
+
+        bytes memory payload = abi.encodePacked(
+            _isNative,
+            _numTokenIDs,
+            tokenID1,
+            _numAddresses,
+            address1,
+            _numSuiDecimals,
+            suiDecimal1,
+            _numPrices,
+            price1
+        );
+
+        console.logBytes(payload);
+
+        // Create transfer message
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
+            version: 1,
+            nonce: 0,
+            chainID: 1,
+            payload: payload
+        });
+
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
+
+        bytes32 messageHash = keccak256(encodedMessage);
+
+        bytes[] memory signatures = new bytes[](4);
+
+        signatures[0] = getSignature(messageHash, committeeMemberPkA);
+        signatures[1] = getSignature(messageHash, committeeMemberPkB);
+        signatures[2] = getSignature(messageHash, committeeMemberPkC);
+        signatures[3] = getSignature(messageHash, committeeMemberPkD);
+
+        // test token ID 10 is not supported
+        assertFalse(config.isTokenSupported(10));
+        config.addTokensWithSignatures(signatures, message);
+        assertTrue(config.isTokenSupported(10));
+        assertEq(config.tokenAddressOf(10), address(10101));
+        assertEq(config.tokenSuiDecimalOf(10), 8);
+        assertEq(config.tokenPriceOf(10), 100_000_0000);
+    }
+
     function testUpdateTokenPriceWithSignatures() public {
         // Create update tokens payload
         uint8 tokenID = BridgeUtils.ETH;
@@ -192,5 +247,79 @@ contract BridgeConfigTest is BridgeBaseTest {
 
         config.updateTokenPriceWithSignatures(signatures, message);
         assertEq(config.tokenPrices(BridgeUtils.BTC), 600_000_000);
+    }
+
+    // TODO: @lu
+    function testAddTokensRegressionTest() public {
+        address[] memory _committee = new address[](4);
+        uint16[] memory _stake = new uint16[](4);
+        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        _stake[0] = 2500;
+        _stake[1] = 2500;
+        _stake[2] = 2500;
+        _stake[3] = 2500;
+        committee = new BridgeCommittee();
+        committee.initialize(_committee, _stake, minStakeRequired);
+        committee.initializeConfig(address(config));
+        vault = new BridgeVault(wETH);
+
+        uint64[] memory totalLimits = new uint64[](1);
+        totalLimits[0] = 1000000;
+        uint8[] memory _supportedDestinationChains = new uint8[](1);
+        _supportedDestinationChains[0] = 0;
+        skip(2 days);
+        limiter = new BridgeLimiter();
+        limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
+        bridge = new SuiBridge();
+        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        vault.transferOwnership(address(bridge));
+        limiter.transferOwnership(address(bridge));
+
+        // TODO: get payload from the bridge node
+        bytes memory payload = hex"01000000003b9aca00";
+
+        // (
+        //     bool native,
+        //     uint8[] memory tokenIDs,
+        //     address[] memory tokenAddresses,
+        //     uint8[] memory suiDecimals,
+        //     uint64[] memory tokenPrices
+        // ) = BridgeUtils.decodeAddTokensPayload(payload);
+
+        // assertTrue(native, "token should be native");
+        // assertTrue(tokenIDs.length > 0, "tokenIDs length should be greater than 0");
+        // assertTrue(tokenAddresses.length > 0, "tokenAddresses length should be greater than 0");
+        // assertTrue(suiDecimals.length > 0, "suiDecimals length should be greater than 0");
+        // assertTrue(tokenPrices.length > 0, "tokenPrices length should be greater than 0");
+
+        // Create update token price message
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.ADD_EVM_TOKENS,
+            version: 1,
+            nonce: 266,
+            chainID: 3,
+            payload: payload
+        });
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
+        // TODO: update expected encoded message with actual payload
+        // bytes memory expectedEncodedMessage =
+        //     hex"5355495f4252494447455f4d4553534147450401000000000000010a0301000000003b9aca00";
+
+        // assertEq(encodedMessage, expectedEncodedMessage);
+
+        // bytes[] memory signatures = new bytes[](4);
+
+        // // TODO: get signatures from bridge client
+        // signatures[0];
+        // signatures[1];
+        // signatures[2];
+        // signatures[3];
+
+        // config.addTokensWithSignatures(signatures, message);
+
+        // assertEq(config.tokenPriceOf(1), 100_000_0000);
     }
 }
