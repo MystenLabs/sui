@@ -17,7 +17,8 @@ use diesel::{
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};
 use sui_types::{
-    parse_sui_address, parse_sui_fq_name, parse_sui_module_id, parse_sui_type_tag, TypeTag,
+    parse_sui_address, parse_sui_fq_name, parse_sui_module_id, parse_sui_struct_tag,
+    parse_sui_type_tag, TypeTag,
 };
 
 /// A GraphQL scalar containing a filter on types that requires an exact match.
@@ -30,14 +31,14 @@ pub(crate) enum TypeFilter {
     /// Filter the type by the package or module it's from.
     ByModule(ModuleFilter),
 
-    /// If the type tag has type parameters, treat it as an exact filter on that instantiation,
+    /// If the struct tag has type parameters, treat it as an exact filter on that instantiation,
     /// otherwise treat it as either a filter on all generic instantiations of the type, or an exact
     /// match on the type with no type parameters. E.g.
     ///
     ///  0x2::coin::Coin
     ///
     /// would match both 0x2::coin::Coin and 0x2::coin::Coin<0x2::sui::SUI>.
-    ByType(TypeTag),
+    ByType(StructTag),
 }
 
 /// GraphQL scalar containing a filter on fully-qualified names.
@@ -124,7 +125,7 @@ impl TypeFilter {
             // A type filter without type parameters is interpreted as either an exact match, or a
             // match for all generic instantiations of the type so we check against only package, module
             // and name fields.
-            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+            TypeFilter::ByType(tag) if tag.type_params.is_empty() => {
                 let p = tag.address.to_vec();
                 let m = tag.module.to_string();
                 let n = tag.name.to_string();
@@ -134,7 +135,7 @@ impl TypeFilter {
                     .filter(name_field.eq(n))
             }
 
-            TypeFilter::ByType(TypeTag::Struct(tag)) => {
+            TypeFilter::ByType(tag) => {
                 let p = tag.address.to_vec();
                 let m = tag.module.to_string();
                 let n = tag.name.to_string();
@@ -145,12 +146,6 @@ impl TypeFilter {
                     .filter(module_field.eq(m))
                     .filter(name_field.eq(n))
                     .filter(type_field.eq(exact))
-            }
-
-            TypeFilter::ByType(tag) => {
-                let exact = tag.to_canonical_string(/* with_prefix */ true);
-                // We check against the full type field for an exact match, including type parameters.
-                query.filter(type_field.eq(exact))
             }
         }
     }
@@ -188,7 +183,7 @@ impl TypeFilter {
 
             // A type filter without type parameters is interpreted as either an exact match, or a
             // match for all generic instantiations of the type.
-            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+            TypeFilter::ByType(tag) if tag.type_params.is_empty() => {
                 let m = tag.module.to_string();
                 let n = tag.name.to_string();
                 let statement = format!(
@@ -201,27 +196,21 @@ impl TypeFilter {
                 query = filter!(query, statement, m);
                 let statement = name_field.to_string() + " = {}";
                 query = filter!(query, statement, n);
-            }
-
-            TypeFilter::ByType(TypeTag::Struct(tag)) => {
-                let m = tag.module.to_string();
-                let n = tag.name.to_string();
-                let statement = format!(
-                    "{} = '\\x{}'::bytea",
-                    package_field,
-                    hex::encode(tag.address.to_vec())
-                );
-                query = filter!(query, statement);
-                let statement = module_field.to_string() + " = {}";
-                query = filter!(query, statement, m);
-                let statement = name_field.to_string() + " = {}";
-                query = filter!(query, statement, n);
-                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
-                let statement = type_field.to_string() + " = {}";
-                query = filter!(query, statement, exact_pattern);
             }
 
             TypeFilter::ByType(tag) => {
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(tag.address.to_vec())
+                );
+                query = filter!(query, statement);
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
+                let statement = name_field.to_string() + " = {}";
+                query = filter!(query, statement, n);
                 let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
                 let statement = type_field.to_string() + " = {}";
                 query = filter!(query, statement, exact_pattern);
@@ -238,47 +227,42 @@ impl TypeFilter {
     pub(crate) fn intersect(self, other: Self) -> Option<Self> {
         use ModuleFilter as M;
         use TypeFilter as T;
-        use TypeTag as TT;
 
         match (&self, &other) {
             (T::ByModule(m), T::ByModule(n)) => m.clone().intersect(n.clone()).map(T::ByModule),
 
-            (T::ByType(TT::Struct(s)), T::ByType(TT::Struct(t))) if s.type_params.is_empty() => {
+            (T::ByType(s), T::ByType(t)) if s.type_params.is_empty() => {
                 ((&s.address, &s.module, &s.name) == (&t.address, &t.module, &t.name))
                     .then_some(other)
             }
 
-            (T::ByType(TT::Struct(s)), T::ByType(TT::Struct(t))) if t.type_params.is_empty() => {
+            (T::ByType(s), T::ByType(t)) if t.type_params.is_empty() => {
                 ((&s.address, &s.module, &s.name) == (&t.address, &t.module, &t.name))
                     .then_some(self)
             }
 
             // If both sides are type filters, then at this point, we know that if they are both
-            // struct tags, neither has empty type parameters and otherwise, at least one of them is
-            // a primitive type. In either case we can treat both filters as exact type queries
-            // which must be equal to each other to intersect.
+            // struct tags, neither has empty type parameters so we can treat both filters as exact
+            // type queries which must be equal to each other to intersect.
             (T::ByType(_), T::ByType(_)) => (self == other).then_some(self),
 
-            (T::ByType(TT::Struct(s)), T::ByModule(M::ByPackage(q))) => {
+            (T::ByType(s), T::ByModule(M::ByPackage(q))) => {
                 (SuiAddress::from(s.address) == *q).then_some(self)
             }
 
-            (T::ByType(TT::Struct(s)), T::ByModule(M::ByModule(q, n))) => {
+            (T::ByType(s), T::ByModule(M::ByModule(q, n))) => {
                 ((SuiAddress::from(s.address), s.module.as_str()) == (*q, n.as_str()))
                     .then_some(self)
             }
 
-            (T::ByModule(M::ByPackage(p)), T::ByType(TT::Struct(t))) => {
+            (T::ByModule(M::ByPackage(p)), T::ByType(t)) => {
                 (SuiAddress::from(t.address) == *p).then_some(other)
             }
 
-            (T::ByModule(M::ByModule(p, m)), T::ByType(TT::Struct(t))) => {
+            (T::ByModule(M::ByModule(p, m)), T::ByType(t)) => {
                 ((SuiAddress::from(t.address), t.module.as_str()) == (*p, m.as_str()))
                     .then_some(other)
             }
-
-            // Intersecting a module-level filter with a primitive type, which will never work.
-            (T::ByType(_), T::ByModule(_)) | (T::ByModule(_), T::ByType(_)) => None,
         }
     }
 }
@@ -396,7 +380,7 @@ impl FromStr for ExactTypeFilter {
 impl FromStr for TypeFilter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Error> {
-        if let Ok(tag) = parse_sui_type_tag(s) {
+        if let Ok(tag) = parse_sui_struct_tag(s) {
             Ok(TypeFilter::ByType(tag))
         } else if let Ok(filter) = ModuleFilter::from_str(s) {
             Ok(TypeFilter::ByModule(filter))
@@ -476,15 +460,9 @@ impl fmt::Display for ExactTypeFilter {
     }
 }
 
-impl From<TypeTag> for TypeFilter {
-    fn from(tag: TypeTag) -> Self {
-        TypeFilter::ByType(tag)
-    }
-}
-
 impl From<StructTag> for TypeFilter {
     fn from(tag: StructTag) -> Self {
-        TypeFilter::ByType(tag.into())
+        TypeFilter::ByType(tag)
     }
 }
 
