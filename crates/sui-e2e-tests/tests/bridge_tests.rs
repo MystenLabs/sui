@@ -56,7 +56,7 @@ async fn test_committee_registration() {
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
         .with_epoch_duration_ms(20000)
-        .build_with_bridge()
+        .build_with_bridge(false)
         .await;
 
     let bridge = get_bridge(

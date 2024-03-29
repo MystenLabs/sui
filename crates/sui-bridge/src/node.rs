@@ -341,7 +341,7 @@ mod tests {
         let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .with_epoch_duration_ms(10000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
 
         test_cluster
