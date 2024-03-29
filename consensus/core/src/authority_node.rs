@@ -172,7 +172,7 @@ where
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster = if N::Client::BLOCK_STREAMING {
+        let broadcaster = if N::Client::SUPPORT_STREAMING {
             None
         } else {
             Some(Broadcaster::new(
@@ -340,7 +340,7 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
-        const BLOCK_STREAMING: bool = false;
+        const SUPPORT_STREAMING: bool = false;
 
         async fn send_block(
             &self,

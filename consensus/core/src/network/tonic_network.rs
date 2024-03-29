@@ -77,7 +77,7 @@ impl TonicClient {
 
 #[async_trait]
 impl NetworkClient for TonicClient {
-    const BLOCK_STREAMING: bool = true;
+    const SUPPORT_STREAMING: bool = false;
 
     async fn send_block(
         &self,

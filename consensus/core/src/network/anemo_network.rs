@@ -123,7 +123,7 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
-    const BLOCK_STREAMING: bool = false;
+    const SUPPORT_STREAMING: bool = false;
 
     async fn send_block(
         &self,
