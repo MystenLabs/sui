@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
@@ -736,6 +737,107 @@ impl CheckpointStore {
         self.delete_highest_executed_checkpoint_test_only()?;
         self.watermarks.rocksdb.flush()?;
         Ok(())
+    }
+
+    /// Re-executes all transactions from all local, uncertified checkpoints for crash recovery.
+    /// All transactions thus re-executed are guaranteed to not have any missing dependencies,
+    /// because we start from the highest executed checkpoint, and proceed through checkpoints in
+    /// order.
+    #[instrument(level = "debug", skip_all)]
+    pub async fn reexecute_local_checkpoints(
+        &self,
+        state: &AuthorityState,
+        epoch_store: &AuthorityPerEpochStore,
+    ) {
+        info!("rexecuting locally computed checkpoints for crash recovery");
+        let epoch = epoch_store.epoch();
+        let highest_executed = self
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("get_highest_executed_checkpoint_seq_number should not fail")
+            .unwrap_or(0);
+
+        let Some(highest_built) = self.get_latest_locally_computed_checkpoint() else {
+            info!("no locally built checkpoints to verify");
+            return;
+        };
+
+        for seq in highest_executed + 1..=*highest_built.sequence_number() {
+            info!(?seq, "Re-executing locally computed checkpoint");
+            let Some(checkpoint) = self
+                .get_locally_computed_checkpoint(seq)
+                .expect("get_locally_computed_checkpoint should not fail")
+            else {
+                panic!("locally computed checkpoint {:?} not found", seq);
+            };
+
+            let Some(contents) = self
+                .get_checkpoint_contents(&checkpoint.content_digest)
+                .expect("get_checkpoint_contents should not fail")
+            else {
+                panic!("checkpoint contents not found for locally computed checkpoint {:?} (digest: {:?})", seq, checkpoint.content_digest);
+            };
+
+            let cache = state.get_cache_reader();
+
+            let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
+            let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
+            let txns = cache
+                .multi_get_transaction_blocks(&tx_digests)
+                .expect("multi_get_transaction_blocks should not fail");
+            for (tx, digest) in txns.iter().zip(tx_digests.iter()) {
+                if tx.is_none() {
+                    panic!("transaction {:?} not found", digest);
+                }
+            }
+
+            let txns: Vec<_> = txns
+                .into_iter()
+                .map(|tx| tx.unwrap())
+                // end of epoch transaction can only be executed by CheckpointExecutor
+                .filter(|tx| !tx.data().transaction_data().is_end_of_epoch_tx())
+                .zip(fx_digests.into_iter())
+                .map(|(tx, fx)| {
+                    (
+                        VerifiedExecutableTransaction::new_from_checkpoint(
+                            (*tx).clone(),
+                            epoch,
+                            seq,
+                        ),
+                        fx,
+                    )
+                })
+                .collect();
+
+            info!(
+                ?seq,
+                ?tx_digests,
+                "Re-executing transactions for locally built checkpoint"
+            );
+            // this will panic if any re-execution diverges from the previously recorded effects digest
+            state.enqueue_with_expected_effects_digest(txns, epoch_store);
+
+            // a task that logs every so often until it is cancelled
+            // This should normally finish very quickly, so seeing this log more than once or twice is
+            // likely a sign of a problem.
+            let waiting_logger = tokio::task::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                loop {
+                    interval.tick().await;
+                    warn!(?seq, "Still waiting for re-execution to complete");
+                }
+            });
+
+            cache
+                .notify_read_executed_effects_digests(&tx_digests)
+                .await
+                .expect("notify_read_executed_effects_digests should not fail");
+
+            waiting_logger.abort();
+            waiting_logger.await.ok();
+            info!(?seq, "Re-execution completed for locally built checkpoint");
+        }
+
+        info!("Re-execution of locally built checkpoints completed");
     }
 }
 
