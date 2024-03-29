@@ -2541,7 +2541,6 @@ fn parse_struct_type_parameters(
 //          "fun"
 //          <FunctionDefName> "(" Comma<Parameter> ")"
 //          (":" <Type>)?
-//          ("acquires" <NameAccessChain> ("," <NameAccessChain>)*)?
 //          ("{" <Sequence> "}" | ";")
 //
 fn parse_function_decl(
@@ -2577,30 +2576,6 @@ fn parse_function_decl(
     } else {
         sp(name.loc(), Type_::Unit)
     };
-
-    // FIXME: we don't use these
-    // ("acquires" (<NameAccessChain> ",")* <NameAccessChain> ","?
-    let mut acquires = vec![];
-    if match_token(context.tokens, Tok::Acquires)? {
-        let follows_acquire = |tok| matches!(tok, Tok::Semicolon | Tok::LBrace);
-        loop {
-            let an = parse_name_access_chain(
-                context,
-                /* macros */ false,
-                /* tyargs */ false,
-                || "a resource struct name",
-            )?;
-            acquires.push(an);
-            if follows_acquire(context.tokens.peek()) {
-                println!("breaking");
-                break;
-            }
-            consume_token(context.tokens, Tok::Comma)?;
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-        }
-    }
 
     let body = match native {
         Some(loc) => {

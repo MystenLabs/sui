@@ -979,9 +979,7 @@ impl PathExpander for LegacyPathExpander {
                                 Syntax::InvalidName,
                                 (path.tyargs_loc().unwrap(), "Invalid type argument position")
                             );
-                            diag.add_note(
-                                "Type arguments may only be used with module members",
-                            );
+                            diag.add_note("Type arguments may only be used with module members");
                             context.env.add_diag(diag);
                             (None, path.is_macro())
                         } else {
@@ -990,9 +988,7 @@ impl PathExpander for LegacyPathExpander {
                         make_access_result(sp(loc, access), tyargs, is_macro.copied())
                     }
                     (_ln, []) => {
-                        let diag = ice!(
-                            (loc, "Found a root path with no additional entries")
-                        );
+                        let diag = ice!((loc, "Found a root path with no additional entries"));
                         context.env.add_diag(diag);
                         return None;
                     }

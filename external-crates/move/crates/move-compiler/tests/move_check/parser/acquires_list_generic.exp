@@ -1,6 +1,0 @@
-error[E01016]: invalid name
-  ┌─ tests/move_check/parser/acquires_list_generic.move:6:25
-  │
-6 │     fun foo() acquires B<CupC<R>> {
-  │                         ^^^^^^^^^ Type arguments are disallowed here. Expected a resource struct name
-
