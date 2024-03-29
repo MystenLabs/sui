@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_types::error::SuiObjectResponseError;
@@ -11,11 +12,11 @@ use sui_types::object::ObjectRead;
 use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
+use sui_json_rpc_api::{ReadApiClient, ReadApiServer, QUERY_MAX_RESULT_LIMIT};
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, SuiTxObjectInfo,
 };
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -28,11 +29,15 @@ use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 #[derive(Clone)]
 pub(crate) struct ReadApi {
     inner: IndexerReader,
+    fullnode_client: HttpClient,
 }
 
 impl ReadApi {
-    pub fn new(inner: IndexerReader) -> Self {
-        Self { inner }
+    pub fn new(inner: IndexerReader, fullnode_client: HttpClient) -> Self {
+        Self {
+            inner,
+            fullnode_client,
+        }
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
@@ -130,6 +135,15 @@ impl ReadApiServer for ReadApi {
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    async fn multi_get_object_info_for_tx_building(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> RpcResult<Vec<SuiTxObjectInfo>> {
+        self.fullnode_client
+            .multi_get_object_info_for_tx_building(object_ids)
+            .await
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {

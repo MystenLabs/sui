@@ -233,11 +233,11 @@ impl IndexerReader {
         object_id: &ObjectID,
         version: Option<VersionNumber>,
     ) -> Result<Option<Object>, IndexerError> {
-        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
+        let Some(stored_object) = self.get_object_from_db(object_id, version)? else {
             return Ok(None);
         };
 
-        let object = stored_package.try_into()?;
+        let object = stored_object.try_into()?;
         Ok(Some(object))
     }
 
@@ -849,7 +849,7 @@ impl IndexerReader {
                     ),
                     (None, Some(_)) => {
                         return Err(IndexerError::InvalidArgumentError(
-                            "Function cannot be present wihtout Module.".into(),
+                            "Function cannot be present without Module.".into(),
                         ));
                     }
                     (None, None) => (

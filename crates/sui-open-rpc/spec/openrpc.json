@@ -2154,6 +2154,37 @@
       ]
     },
     {
+      "name": "sui_multiGetObjectInfoForTxBuilding",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Given a list of object IDs, return the information of each object needed for transaction building. If any object does not exist, it will return an error. If any object is an object-owned object, which cannot be used as transaction input, it will return an error. If an object exists, the corresponding entry will be an enum of object information. For shared object, the entry will contain the init shared version; For owned object, the entry will contain the latest version, digest and owner address. For immutable object, the entry will contain the latest version and digest. It is guaranteed that the returned list will have the same length as the input list.",
+      "params": [
+        {
+          "name": "object_ids",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiTxObjectInfo>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectInfo"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_multiGetObjects",
       "tags": [
         {
@@ -7250,6 +7281,83 @@
       },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
+      },
+      "ObjectInfo": {
+        "description": "A struct that contains basic information of an input object of a transaction. This is needed when building a transaction, returned by multi_get_object_info_for_tx_building RPC call.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "addressOwned"
+            ],
+            "properties": {
+              "addressOwned": {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "owner",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "owner": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "immutable"
+            ],
+            "properties": {
+              "immutable": {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "shared"
+            ],
+            "properties": {
+              "shared": {
+                "type": "object",
+                "required": [
+                  "initial_shared_version"
+                ],
+                "properties": {
+                  "initial_shared_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "ObjectRead": {
         "oneOf": [

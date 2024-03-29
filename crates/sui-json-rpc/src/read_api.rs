@@ -28,7 +28,7 @@ use sui_json_rpc_types::{
     ObjectChange, ProtocolConfigResponse, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct,
     SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseOptions, SuiTxObjectInfo,
 };
 use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
@@ -40,12 +40,12 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiObjectResponseError};
+use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
     CheckpointTimestamp,
 };
-use sui_types::object::{Object, ObjectRead, PastObjectRead};
+use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
@@ -577,6 +577,69 @@ impl ReadApiServer for ReadApi {
                     QUERY_MAX_RESULT_LIMIT.to_string(),
                 ))?
             }
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn multi_get_object_info_for_tx_building(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> RpcResult<Vec<SuiTxObjectInfo>> {
+        // 2048 is the maximum number of input objects allowed in a transaction.
+        // Setting it as the limit so that one can always use one query to get all the latest versions
+        // of a given transaction.
+        const MAX_OBJECT_IDS: usize = 2048;
+        with_tracing!(async move {
+            if object_ids.len() > MAX_OBJECT_IDS {
+                return Err(SuiRpcInputError::SizeLimitExceeded(MAX_OBJECT_IDS.to_string()).into());
+            }
+            let state = self.state.clone();
+            let mut results = vec![];
+            for object_id in &object_ids {
+                let object = state.get_object(object_id).await?;
+                let Some(object) = object else {
+                    return Err(
+                        SuiRpcInputError::UserInputError(UserInputError::ObjectNotFound {
+                            object_id: *object_id,
+                            version: None,
+                        })
+                        .into(),
+                    );
+                };
+                let info = match object.owner {
+                    Owner::Shared {
+                        initial_shared_version,
+                    } => SuiTxObjectInfo::Shared {
+                        initial_shared_version,
+                    },
+                    Owner::Immutable => {
+                        let oref = object.compute_object_reference();
+                        SuiTxObjectInfo::Immutable {
+                            version: oref.1,
+                            digest: oref.2,
+                        }
+                    }
+                    Owner::AddressOwner(owner) => {
+                        let oref = object.compute_object_reference();
+                        SuiTxObjectInfo::AddressOwned {
+                            version: oref.1,
+                            digest: oref.2,
+                            owner,
+                        }
+                    }
+                    Owner::ObjectOwner(parent) => {
+                        return Err(SuiRpcInputError::UserInputError(
+                            UserInputError::InvalidChildObjectArgument {
+                                child_id: *object_id,
+                                parent_id: parent.into(),
+                            },
+                        )
+                        .into());
+                    }
+                };
+                results.push(info);
+            }
+            Ok(results)
         })
     }
 

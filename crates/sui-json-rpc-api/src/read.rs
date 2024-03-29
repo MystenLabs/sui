@@ -7,7 +7,7 @@ use jsonrpsee::proc_macros::rpc;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseOptions, SuiTxObjectInfo,
 };
 use sui_json_rpc_types::{ProtocolConfigResponse, SuiLoadedChildObjectsResponse};
 use sui_open_rpc_macros::open_rpc;
@@ -58,6 +58,20 @@ pub trait ReadApi {
         /// options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>>;
+
+    /// Given a list of object IDs, return the information of each object needed for transaction building.
+    /// If any object does not exist, it will return an error.
+    /// If any object is an object-owned object, which cannot be used as transaction input, it will return an error.
+    /// If an object exists, the corresponding entry will be an enum of object information.
+    /// For shared object, the entry will contain the init shared version;
+    /// For owned object, the entry will contain the latest version, digest and owner address.
+    /// For immutable object, the entry will contain the latest version and digest.
+    /// It is guaranteed that the returned list will have the same length as the input list.
+    #[method(name = "multiGetObjectInfoForTxBuilding")]
+    async fn multi_get_object_info_for_tx_building(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> RpcResult<Vec<SuiTxObjectInfo>>;
 
     /// Note there is no software-level guarantee/SLA that objects with past versions
     /// can be retrieved by this API, even if the object and version exists/existed.

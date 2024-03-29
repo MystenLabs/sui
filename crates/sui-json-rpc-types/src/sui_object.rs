@@ -1246,3 +1246,29 @@ impl SuiObjectResponseQuery {
         }
     }
 }
+
+/// A struct that contains basic information of an input object of a transaction.
+/// This is needed when building a transaction, returned by multi_get_object_info_for_tx_building RPC call.
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "ObjectInfo", rename_all = "camelCase")]
+pub enum SuiTxObjectInfo {
+    AddressOwned {
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        version: SequenceNumber,
+        digest: ObjectDigest,
+        owner: SuiAddress,
+    },
+    Immutable {
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        version: SequenceNumber,
+        digest: ObjectDigest,
+    },
+    Shared {
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        initial_shared_version: SequenceNumber,
+    },
+}
