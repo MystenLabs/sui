@@ -29,26 +29,29 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         _stake[3] = 2002;
         _stake[4] = 4998;
 
-        address[] memory _supportedTokens = new address[](4);
-        _supportedTokens[0] = wBTC;
-        _supportedTokens[1] = wETH;
-        _supportedTokens[2] = USDC;
-        _supportedTokens[3] = USDT;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
-        BridgeConfig _config =
-            new BridgeConfig(_chainID, _supportedTokens, _supportedDestinationChains);
 
         // deploy bridge committee
         address _committee = Upgrades.deployUUPSProxy(
             "BridgeCommittee.sol",
             abi.encodeCall(
-                BridgeCommittee.initialize,
-                (address(_config), _committeeMembers, _stake, minStakeRequired)
+                BridgeCommittee.initialize, (_committeeMembers, _stake, minStakeRequired)
             )
         );
 
         committee = BridgeCommittee(_committee);
+
+        // deploy bridge config
+        address _config = Upgrades.deployUUPSProxy(
+            "BridgeConfig.sol",
+            abi.encodeCall(
+                BridgeConfig.initialize,
+                (_committee, _chainID, supportedTokens, tokenPrices, _supportedDestinationChains)
+            )
+        );
+
+        committee.initializeConfig(_config);
 
         // deploy sui bridge
         address _bridge = Upgrades.deployUUPSProxy(
@@ -65,14 +68,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes memory payload = abi.encode(address(bridge), address(bridgeV2), initializer);
 
         // Create upgrade message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
             payload: payload
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(encodedMessage);
         bytes[] memory signatures = new bytes[](4);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
@@ -91,14 +94,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes memory payload = abi.encode(address(bridge), address(bridgeV2), initializer);
 
         // Create upgrade message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
             payload: payload
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(encodedMessage);
         bytes[] memory signatures = new bytes[](2);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
@@ -108,14 +111,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
     }
 
     function testUpgradeWithSignaturesMessageDoesNotMatchType() public {
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.TOKEN_TRANSFER,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.TOKEN_TRANSFER,
             version: 1,
             nonce: 0,
             chainID: _chainID,
             payload: abi.encode(0)
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(encodedMessage);
         bytes[] memory signatures = new bytes[](4);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
@@ -127,14 +130,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
     }
 
     function testUpgradeWithSignaturesInvalidNonce() public {
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 10,
             chainID: _chainID,
             payload: abi.encode(0)
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(encodedMessage);
         bytes[] memory signatures = new bytes[](4);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
@@ -149,14 +152,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes memory initializer = abi.encodeCall(MockSuiBridgeV2.initializeV2, ());
         bytes memory payload = abi.encode(address(bridge), address(this), initializer);
 
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
             payload: payload
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(encodedMessage);
         bytes[] memory signatures = new bytes[](4);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
@@ -176,14 +179,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes memory initializer = abi.encodeCall(MockSuiBridgeV2.initializeV2, ());
         bytes memory payload = abi.encode(address(this), address(bridgeV2), initializer);
 
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
             payload: payload
         });
-        bytes memory encodedMessage = BridgeMessage.encodeMessage(message);
+        bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(encodedMessage);
         bytes[] memory signatures = new bytes[](4);
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
@@ -210,8 +213,8 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes32 messageHash = keccak256(encodedMessage);
 
         // Create upgrade message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
@@ -245,8 +248,8 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes32 messageHash = keccak256(encodedMessage);
 
         // Create upgrade message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
@@ -281,8 +284,8 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes32 messageHash = keccak256(encodedMessage);
 
         // Create upgrade message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,
@@ -318,8 +321,8 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         bytes32 messageHash = keccak256(encodedMessage);
 
         // Create upgrade message
-        BridgeMessage.Message memory message = BridgeMessage.Message({
-            messageType: BridgeMessage.UPGRADE,
+        BridgeUtils.Message memory message = BridgeUtils.Message({
+            messageType: BridgeUtils.UPGRADE,
             version: 1,
             nonce: 0,
             chainID: _chainID,

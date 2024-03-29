@@ -6,5 +6,5 @@
   "supportedChainIDs": [1, 2, 3],
   "supportedChainLimitsInDollars": [1000000000000000, 1000000000000000, 1000000000000000],
   "supportedTokens": [],
-  "tokenPrices": [12800, 432518900, 25969600, 10000]
+  "tokenPrices": [12800, 432518900, 25969600, 10000, 10000]
 }
