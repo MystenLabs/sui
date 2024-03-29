@@ -12,8 +12,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
 
     uint8 public chainID;
     mapping(uint8 tokenID => Token) public supportedTokens;
-    // price in USD (4 decimal precision) (e.g. 1 ETH = 2000 USD => 20000000)
-    mapping(uint8 tokenID => uint256 tokenPrice) public tokenPrices;
+    // price in USD (4 decimal precision) (e.g. 1 ETH = 2000 USD => 2000_0000)
+    mapping(uint8 tokenID => uint64 tokenPrice) public tokenPrices;
     mapping(uint8 chainId => bool isSupported) public supportedChains;
 
     /// @notice Constructor function for the BridgeConfig contract.
@@ -27,7 +27,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         address _committee,
         uint8 _chainID,
         address[] memory _supportedTokens,
-        uint256[] memory _tokenPrices,
+        uint64[] memory _tokenPrices,
         uint8[] memory _supportedChains
     ) external initializer {
         __CommitteeUpgradeable_init(_committee);
@@ -79,7 +79,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
     /// @notice Returns the price of the token with the given ID.
     /// @param tokenID The ID of the token.
     /// @return price of the provided token.
-    function tokenPriceOf(uint8 tokenID) public view override returns (uint256) {
+    function tokenPriceOf(uint8 tokenID) public view override returns (uint64) {
         return tokenPrices[tokenID];
     }
 

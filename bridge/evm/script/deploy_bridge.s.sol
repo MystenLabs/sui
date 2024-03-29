@@ -93,6 +93,12 @@ contract DeployBridge is Script {
 
         // deploy bridge config =====================================================================
 
+        // convert token prices from uint256 to uint64
+        uint64[] memory tokenPrices = new uint64[](deployConfig.tokenPrices.length);
+        for (uint256 i; i < deployConfig.tokenPrices.length; i++) {
+            tokenPrices[i] = uint64(deployConfig.tokenPrices[i]);
+        }
+
         address bridgeConfig = Upgrades.deployUUPSProxy(
             "BridgeConfig.sol",
             abi.encodeCall(
@@ -101,7 +107,7 @@ contract DeployBridge is Script {
                     address(bridgeCommittee),
                     uint8(deployConfig.sourceChainId),
                     deployConfig.supportedTokens,
-                    deployConfig.tokenPrices,
+                    tokenPrices,
                     supportedChainIDs
                 )
             )
