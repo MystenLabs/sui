@@ -13,12 +13,15 @@ use std::{
 use sui_framework::BuiltInFramework;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::effects::TestEffectsBuilder;
 use sui_types::{
     base_types::{random_object_ref, SuiAddress},
     crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
+};
+use sui_types::{
+    effects::{TestEffectsBuilder, TransactionEffectsAPI},
+    event::Event,
 };
 use tempfile::tempdir;
 
@@ -162,12 +165,16 @@ impl Scenario {
             .build_and_sign(&keypair);
 
         let tx = VerifiedTransaction::new_unchecked(tx);
-        let effects = TestEffectsBuilder::new(tx.inner()).build();
+        let events: TransactionEvents = Default::default();
+
+        let effects = TestEffectsBuilder::new(tx.inner())
+            .with_events_digest(events.digest())
+            .build();
 
         TransactionOutputs {
             transaction: Arc::new(tx),
             effects,
-            events: Default::default(),
+            events,
             markers: Default::default(),
             wrapped: Default::default(),
             deleted: Default::default(),
@@ -248,6 +255,17 @@ impl Scenario {
             self.outputs.written.insert(id, object.clone());
             self.objects.insert(id, object).assert_inserted();
         }
+    }
+
+    fn with_events(&mut self) {
+        let mut events: TransactionEvents = Default::default();
+        events.data.push(Event::random_for_testing());
+
+        let effects = TestEffectsBuilder::new(self.outputs.transaction.inner())
+            .with_events_digest(events.digest())
+            .build();
+        self.outputs.events = events;
+        self.outputs.effects = effects;
     }
 
     fn with_packages(&mut self, short_ids: &[u32]) {
@@ -614,6 +632,61 @@ async fn test_received() {
 
         s.assert_received(&[1]);
         s.assert_live(&[1, 2]);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_extra_outputs() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        // make sure that events, effects, transactions are all
+        // returned correctly no matter the cache state.
+        s.with_created(&[1, 2]);
+        s.with_events();
+
+        let tx = s.do_tx().await;
+
+        s.cache.get_transaction_block(&tx).unwrap().unwrap();
+        let fx = s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        let events_digest = fx.events_digest().unwrap();
+        s.cache.get_events(events_digest).unwrap().unwrap();
+
+        s.commit(tx).await.unwrap();
+
+        s.cache.get_transaction_block(&tx).unwrap().unwrap();
+        s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        s.cache.get_events(events_digest).unwrap().unwrap();
+
+        // clear cache
+        s.reset_cache();
+
+        s.cache.get_transaction_block(&tx).unwrap().unwrap();
+        s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        s.cache.get_events(events_digest).unwrap().unwrap();
+
+        s.with_created(&[3]);
+        let tx = s.do_tx().await;
+
+        // when Events is empty, it should be treated as None
+        let fx = s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        let events_digest = fx.events_digest().unwrap();
+        assert!(
+            s.cache.get_events(events_digest).unwrap().is_none(),
+            "empty events should be none"
+        );
+
+        s.commit(tx).await.unwrap();
+        assert!(
+            s.cache.get_events(events_digest).unwrap().is_none(),
+            "empty events should be none"
+        );
+
+        s.reset_cache();
+        assert!(
+            s.cache.get_events(events_digest).unwrap().is_none(),
+            "empty events should be none"
+        );
     })
     .await;
 }
