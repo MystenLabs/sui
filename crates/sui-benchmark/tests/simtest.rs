@@ -623,18 +623,27 @@ mod test {
 
         let surfer_task = tokio::spawn(async move {
             // now do a sui-surfer test
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.extend([
+            let mut test_packages_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            test_packages_dir.extend([
                 "..",
                 "..",
                 "crates",
                 "sui-surfer",
                 "tests",
-                "move_building_blocks",
+                // "move_building_blocks",
             ]);
+            let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
+                .unwrap()
+                .flat_map(|entry| {
+                    let entry = entry.unwrap();
+                    entry.metadata().unwrap().is_dir().then_some(entry.path())
+                })
+                .collect();
+            info!("using sui_surfer test packages: {test_package_paths:?}");
+
             let results = sui_surfer::run_with_test_cluster::<DefaultSurfStrategy>(
                 test_duration,
-                vec![path],
+                test_package_paths,
                 test_cluster,
             )
             .await;
