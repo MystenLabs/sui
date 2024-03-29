@@ -2744,6 +2744,15 @@ impl AuthorityState {
             .enqueue_certificates(certs, epoch_store)
     }
 
+    pub(crate) fn enqueue_with_expected_effects_digest(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) {
+        self.transaction_manager
+            .enqueue_with_expected_effects_digest(certs, epoch_store)
+    }
+
     fn create_owner_index_if_empty(
         &self,
         genesis_objects: &[Object],
