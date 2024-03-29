@@ -2100,6 +2100,26 @@ pub struct SenderSignedTransaction {
     pub tx_signatures: Vec<GenericSignature>,
 }
 
+impl SenderSignedTransaction {
+    pub(crate) fn get_signer_sig_mapping(
+        &self,
+        verify_legacy_zklogin_address: bool,
+    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+        let mut mapping = BTreeMap::new();
+        for sig in &self.inner().tx_signatures {
+            if verify_legacy_zklogin_address {
+                // Try deriving the address from the legacy padded way.
+                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
+                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
+                };
+            }
+            let address = sig.try_into()?;
+            mapping.insert(address, sig);
+        }
+        Ok(mapping)
+    }
+}
+
 impl SenderSignedData {
     pub fn new(
         tx_data: TransactionData,
@@ -2110,6 +2130,10 @@ impl SenderSignedData {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signatures,
         }])
+    }
+
+    pub(crate) fn inner_transactions(&self) -> &[SenderSignedTransaction] {
+        &self.0
     }
 
     pub fn new_from_sender_signature(
@@ -2149,22 +2173,12 @@ impl SenderSignedData {
         self.inner_mut().tx_signatures.push(new_signature.into());
     }
 
-    fn get_signer_sig_mapping(
+    pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
     ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
-        let mut mapping = BTreeMap::new();
-        for sig in &self.inner().tx_signatures {
-            if verify_legacy_zklogin_address {
-                // Try deriving the address from the legacy padded way.
-                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
-                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
-                };
-            }
-            let address = sig.try_into()?;
-            mapping.insert(address, sig);
-        }
-        Ok(mapping)
+        self.inner()
+            .get_signer_sig_mapping(verify_legacy_zklogin_address)
     }
 
     pub fn transaction_data(&self) -> &TransactionData {
