@@ -23,7 +23,7 @@ use tokio::{
         broadcast,
         oneshot::{self, Sender},
     },
-    task::{JoinHandle, JoinSet},
+    task::JoinSet,
 };
 use tokio_stream::{iter, Iter};
 use tonic::{
@@ -280,7 +280,10 @@ impl Stream for BroadcastedBlockStream {
                     return task::Poll::Ready(None);
                 }
                 task::Poll::Ready(Err(broadcast::error::RecvError::Lagged(n))) => {
-                    info!("Block BroadcastedBlockStream {} lagged by {n} messages", peer);
+                    info!(
+                        "Block BroadcastedBlockStream {} lagged by {n} messages",
+                        peer
+                    );
                     continue;
                 }
                 task::Poll::Pending => {

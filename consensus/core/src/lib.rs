@@ -22,11 +22,13 @@ mod network;
 mod stake_aggregator;
 mod storage;
 mod synchronizer;
-#[cfg(test)]
-mod test_dag;
 mod threshold_clock;
 mod transaction;
 mod universal_committer;
+
+mod authority_service;
+#[cfg(test)]
+mod test_dag;
 
 pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, Round};
