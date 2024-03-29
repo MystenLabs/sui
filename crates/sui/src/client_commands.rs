@@ -678,9 +678,11 @@ pub enum SuiClientCommands {
         #[clap(name = "protocol-version", long)]
         protocol_version: Option<u64>,
 
-        /// Path to specific pre-compiled module bytecode to verify (instead of an entire package)
-        #[clap(name = "module", long, global = true)]
-        module_path: Option<PathBuf>,
+        /// Paths to specific pre-compiled module bytecode to verify (instead of an entire package).
+        /// Multiple modules can be verified by passing multiple --module flags. They will be
+        /// treated as if they were one package (subject to the overall package limit).
+        #[clap(name = "module", long, action = clap::ArgAction::Append, global = true)]
+        module_paths: Vec<PathBuf>,
 
         /// Package build options
         #[clap(flatten)]
@@ -1116,7 +1118,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::VerifyBytecodeMeter {
                 protocol_version,
-                module_path,
+                module_paths,
                 package_path,
                 build_config,
             } => {
@@ -1128,20 +1130,24 @@ impl SuiClientCommands {
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
-                let (pkg_name, modules) = match (module_path, package_path) {
-                    (Some(_), Some(_)) => {
+                let (pkg_name, modules) = match (module_paths, package_path) {
+                    (paths, Some(_)) if !paths.is_empty() => {
                         bail!("Cannot specify both a module path and a package path")
                     }
 
-                    (Some(module_path), None) => {
-                        let module_bytes =
-                            fs::read(module_path).context("Failed to read module file")?;
-                        let module = CompiledModule::deserialize_with_defaults(&module_bytes)
-                            .context("Failed to deserialize module")?;
-                        ("<unknown>".to_string(), vec![module])
+                    (paths, None) if !paths.is_empty() => {
+                        let mut modules = Vec::with_capacity(paths.len());
+                        for path in paths {
+                            let module_bytes =
+                                fs::read(path).context("Failed to read module file")?;
+                            let module = CompiledModule::deserialize_with_defaults(&module_bytes)
+                                .context("Failed to deserialize module")?;
+                            modules.push(module);
+                        }
+                        ("<unknown>".to_string(), modules)
                     }
 
-                    (None, package_path) => {
+                    (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
                         let package = compile_package_simple(build_config, package_path)?;
                         let name = package
