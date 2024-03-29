@@ -2,10 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module entry_functions::example {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     public struct Foo has key {
         id: UID,
         bar: u64,
