@@ -439,3 +439,20 @@ jobs:
        env:
          POSTGRES_HOST: localhost
          POSTGRES_PORT: 5432
+
+  bridge-evm:
+    name: bridge-evm-tests
+    needs: diff
+    if: needs.diff.outputs.isSolidity == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - name: Install Foundry 
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
+      - name: Check Bridge EVM Unit Tests
+        shell: bash
+        run: |
+          forge clean
+          forge test --ffi
