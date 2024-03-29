@@ -39,6 +39,7 @@ use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
+    Round,
 };
 
 /// Implements Anemo RPC client for Consensus.
@@ -141,8 +142,16 @@ impl NetworkClient for AnemoClient {
         Ok(())
     }
 
-    fn broadcast_block(&self, _block: &VerifiedBlock) -> ConsensusResult<()> {
-        unimplemented!("broadcast_block() is not implemented for AnemoClient!");
+    async fn subscribe_block_stream(
+        &self,
+        _peer: AuthorityIndex,
+        _last_received: Round,
+    ) -> ConsensusResult<()> {
+        unimplemented!("Unimplemented")
+    }
+
+    async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
+        unimplemented!("Unimplemented")
     }
 
     async fn fetch_blocks(

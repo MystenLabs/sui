@@ -12,6 +12,7 @@ use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::ConsensusResult,
+    Round,
 };
 
 // Anemo generated stubs for RPCs.
@@ -47,8 +48,15 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         timeout: Duration,
     ) -> ConsensusResult<()>;
 
-    /// Broadcasts a serialized SignedBlock to all subscribed peers.
-    fn broadcast_block(&self, block: &VerifiedBlock) -> ConsensusResult<()>;
+    /// Subscribes to blocks from a peer after last_received round.
+    async fn subscribe_block_stream(
+        &self,
+        peer: AuthorityIndex,
+        last_received: Round,
+    ) -> ConsensusResult<()>;
+
+    /// Unsubscribe the block stream from a peer.
+    async fn unsubscribe_block_stream(&self, peer: AuthorityIndex) -> ConsensusResult<()>;
 
     /// Fetches serialized `SignedBlock`s from a peer.
     async fn fetch_blocks(

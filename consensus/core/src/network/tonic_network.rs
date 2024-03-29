@@ -23,7 +23,7 @@ use tokio::{
         broadcast,
         oneshot::{self, Sender},
     },
-    task::JoinSet,
+    task::{JoinHandle, JoinSet},
 };
 use tokio_stream::{iter, Iter};
 use tonic::{
@@ -44,6 +44,7 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::tonic_gen::consensus_service_server::ConsensusServiceServer,
+    Round,
 };
 
 const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
@@ -110,11 +111,16 @@ impl NetworkClient for TonicClient {
         Ok(())
     }
 
-    fn broadcast_block(&self, block: &VerifiedBlock) -> ConsensusResult<()> {
-        self.tx_block_broadcaster
-            .send(block.clone())
-            .map_err(|_| ConsensusError::Shutdown)?;
-        Ok(())
+    async fn subscribe_block_stream(
+        &self,
+        _peer: AuthorityIndex,
+        _last_received: Round,
+    ) -> ConsensusResult<()> {
+        unimplemented!("Unimplemented")
+    }
+
+    async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
+        unimplemented!("Unimplemented")
     }
 
     async fn fetch_blocks(
@@ -247,13 +253,14 @@ impl ChannelPool {
     }
 }
 
-/// Each subscriber stream manages the subscription state of a peer.
-struct SubscriberStream {
+/// Each broadcasted block stream wraps a broadcast receiver for blocks.
+/// It yields blocks broadcasted after the stream is created.
+struct BroadcastedBlockStream {
     peer: AuthorityIndex,
     receiver: broadcast::Receiver<VerifiedBlock>,
 }
 
-impl Stream for SubscriberStream {
+impl Stream for BroadcastedBlockStream {
     type Item = Result<SubscribeBlocksResponse, tonic::Status>;
 
     fn poll_next(
@@ -269,11 +276,11 @@ impl Stream for SubscriberStream {
                     })));
                 }
                 task::Poll::Ready(Err(broadcast::error::RecvError::Closed)) => {
-                    info!("Block SubscriberStream {} closed", peer);
+                    info!("Block BroadcastedBlockStream {} closed", peer);
                     return task::Poll::Ready(None);
                 }
                 task::Poll::Ready(Err(broadcast::error::RecvError::Lagged(n))) => {
-                    info!("Block SubscriberStream {} lagged by {n} messages", peer);
+                    info!("Block BroadcastedBlockStream {} lagged by {n} messages", peer);
                     continue;
                 }
                 task::Poll::Pending => {
@@ -329,7 +336,14 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         Ok(Response::new(SendBlockResponse {}))
     }
 
-    type SubscribeBlocksStream = SubscriberStream;
+    type SubscribeBlocksStream = Pin<
+        Box<
+            dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>>
+                + Send
+                + Sync
+                + 'static,
+        >,
+    >;
 
     async fn subscribe_blocks(
         &self,
@@ -345,11 +359,11 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::invalid_argument("Invalid authority index"));
         };
-        let stream = SubscriberStream {
+        let stream = BroadcastedBlockStream {
             peer,
             receiver: self.tx_block_broadcaster.subscribe(),
         };
-        Ok(Response::new(stream))
+        Ok(Response::new(Box::pin(stream)))
     }
 
     type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
@@ -561,7 +575,10 @@ pub(crate) struct SendBlockRequest {
 pub(crate) struct SendBlockResponse {}
 
 #[derive(Clone, prost::Message)]
-pub(crate) struct SubscribeBlocksRequest {}
+pub(crate) struct SubscribeBlocksRequest {
+    #[prost(uint32, tag = "1")]
+    last_received_round: Round,
+}
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct SubscribeBlocksResponse {

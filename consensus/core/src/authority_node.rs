@@ -480,7 +480,15 @@ mod tests {
             unimplemented!("Unimplemented")
         }
 
-        fn broadcast_block(&self, _block: &VerifiedBlock) -> ConsensusResult<()> {
+        async fn subscribe_block_stream(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+        ) -> ConsensusResult<()> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn unsubscribe_block_stream(&self, _peer: AuthorityIndex) -> ConsensusResult<()> {
             unimplemented!("Unimplemented")
         }
 
