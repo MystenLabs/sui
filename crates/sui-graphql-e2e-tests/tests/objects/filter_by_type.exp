@@ -474,9 +474,19 @@ Response: {
 
 task 16 'run-graphql'. lines 180-196:
 Response: {
-  "data": {
-    "objects": {
-      "edges": []
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"ObjectFilter\")",
+      "locations": [
+        {
+          "line": 3,
+          "column": 19
+        }
+      ],
+      "path": [
+        "objects"
+      ]
     }
-  }
+  ]
 }
