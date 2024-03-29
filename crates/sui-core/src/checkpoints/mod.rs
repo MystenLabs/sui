@@ -999,17 +999,20 @@ impl CheckpointBuilder {
     async fn write_checkpoints(
         &self,
         height: CheckpointHeight,
-        new_checkpoint: Vec<(CheckpointSummary, CheckpointContents)>,
+        new_checkpoints: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
         let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
         let mut batch = self.tables.checkpoint_content.batch();
-        for (summary, contents) in &new_checkpoint {
+        let mut all_tx_digests =
+            Vec::with_capacity(new_checkpoints.iter().map(|(_, c)| c.size()).sum());
+        for (summary, contents) in &new_checkpoints {
             debug!(
                 checkpoint_commit_height = height,
                 checkpoint_seq = summary.sequence_number,
                 contents_digest = ?contents.digest(),
                 "writing checkpoint",
             );
+            all_tx_digests.extend(contents.iter().map(|digests| digests.transaction));
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store)
                 .await?;
@@ -1032,9 +1035,15 @@ impl CheckpointBuilder {
                 [(sequence_number, summary)],
             )?;
         }
+
+        self.state
+            .get_cache_commit()
+            .commit_transactions(&all_tx_digests)
+            .await?;
+
         batch.write()?;
 
-        for (local_checkpoint, _) in &new_checkpoint {
+        for (local_checkpoint, _) in &new_checkpoints {
             if let Some(certified_checkpoint) = self
                 .tables
                 .certified_checkpoints
@@ -1047,7 +1056,7 @@ impl CheckpointBuilder {
 
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_pending_checkpoint(height, new_checkpoint)?;
+            .process_pending_checkpoint(height, new_checkpoints)?;
         Ok(())
     }
 

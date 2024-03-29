@@ -957,6 +957,23 @@ impl AuthorityStore {
         Ok(())
     }
 
+    /// Commits transactions only to the db. Called by checkpoint builder. See
+    /// ExecutionCache::commit_transactions for more info
+    pub(crate) fn commit_transactions(
+        &self,
+        transactions: &[(TransactionDigest, VerifiedTransaction)],
+    ) -> SuiResult {
+        let mut batch = self.perpetual_tables.transactions.batch();
+        batch.insert_batch(
+            &self.perpetual_tables.transactions,
+            transactions
+                .iter()
+                .map(|(digest, tx)| (*digest, tx.serializable_ref())),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
     pub(crate) async fn acquire_transaction_locks(
         &self,
         epoch_store: &AuthorityPerEpochStore,

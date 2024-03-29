@@ -768,6 +768,31 @@ impl WritebackCache {
         }
     }
 
+    async fn commit_transactions(&self, digests: &[TransactionDigest]) -> SuiResult {
+        let mut txns = Vec::with_capacity(digests.len());
+        for tx_digest in digests {
+            let Some(tx) = self
+                .dirty
+                .pending_transaction_writes
+                .get(tx_digest)
+                .map(|o| o.transaction.clone())
+            else {
+                // tx should exist in the db if it is not in dirty set.
+                debug_assert!(self
+                    .store
+                    .get_transaction_block(tx_digest)
+                    .unwrap()
+                    .is_some());
+                // if the transaction is not in dirty, it either does not exist or does not need to be committed.
+                continue;
+            };
+
+            txns.push((*tx_digest, (*tx).clone()));
+        }
+
+        self.store.commit_transactions(&txns)
+    }
+
     // Move the oldest/least entry from the dirty queue to the cache queue.
     // This is called after the entry is committed to the db.
     fn move_version_from_dirty_to_cache<K, V>(
@@ -893,6 +918,13 @@ impl ExecutionCacheCommit for WritebackCache {
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult> {
         WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
+    }
+
+    fn commit_transactions<'a>(
+        &'a self,
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult> {
+        WritebackCache::commit_transactions(self, digests).boxed()
     }
 }
 
