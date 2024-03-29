@@ -55,7 +55,6 @@ pub(crate) struct DagState {
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
-    // TODO(arun): move unscored subdags from core to here
     /// The list of committed subdags that have been sequenced by the universal
     /// committer but have yet to be used to calculate reputation scores for the
     /// next leader schedule. Until then we consider it as "unscored" subdags.
@@ -68,9 +67,9 @@ pub(crate) struct DagState {
     // Data to be flushed to storage.
     blocks_to_write: Vec<VerifiedBlock>,
     commits_to_write: Vec<TrustedCommit>,
-    // TODO(arun): Buffer the reputation scores to then be flushed with the next
-    // dag state flush. This is okay because we can recover the reputation scores
-    // from the commits
+    // Buffer the reputation scores & last_committed_rounds to be flushed with the
+    // next dag state flush. This is okay because we can recover reputation scores
+    // & last_committed_rounds from the commits if needed.
     commit_info_to_write: Vec<(CommitRange, CommitInfo)>,
 
     // Persistent storage for blocks, commits and other consensus data.
@@ -103,19 +102,14 @@ impl DagState {
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
             if let Some((commit_range, commit_info)) = commit_info {
                 let mut last_committed_rounds = commit_info.last_committed_rounds;
-                //  1. read_last_commit() to get last commit index
                 let last_commit = store
                     .read_last_commit()
                     .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
                     .expect("There exists commit info, so the last commit should exist as well.");
 
                 if last_commit.index() > commit_range.end() {
-                    //  2. commit range is commit_range.end() + 1 .. last_commit_index
                     let commit_range =
                         CommitRange::new(commit_range.end() + 1..last_commit.index());
-                    //  3. scan commits (range from #2)
-                    //  4. Vec<TrustedCommits> -> Vec<CommittedSubdags>
-                    //  using commit::load_committed_subdag_from_store
                     let committed_blocks = store
                         .scan_commits(commit_range)
                         .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
@@ -127,7 +121,7 @@ impl DagState {
                             committed_subdag.blocks
                         })
                         .collect::<Vec<_>>();
-                    //  5. Updates last_committed_rounds after cycling through commited blocks
+
                     for block in committed_blocks {
                         last_committed_rounds[block.author()] =
                             max(last_committed_rounds[block.author()], block.round());

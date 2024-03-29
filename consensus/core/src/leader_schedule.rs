@@ -39,7 +39,7 @@ pub(crate) struct LeaderSchedule {
 impl LeaderSchedule {
     /// The window where the schedule change takes place in consensus. It represents
     /// number of committed sub dags.
-    /// TODO(arun): move this to protocol config
+    /// TODO: move this to protocol config
     const CONSENSUS_COMMITS_PER_SCHEDULE: u64 = 300;
 
     pub(crate) fn new(context: Arc<Context>, leader_swap_table: LeaderSwapTable) -> Self {
@@ -351,11 +351,8 @@ impl Debug for LeaderSwapTable {
                 .map(|(idx, _auth)| idx.to_owned())
                 .collect::<Vec<AuthorityIndex>>(),
             self.good_nodes.iter().map(|(_idx, auth)| auth.stake).sum::<Stake>(),
-            self.bad_nodes
-                .iter()
-                .map(|(idx, _auth)| idx.to_owned())
-                .collect::<Vec<AuthorityIndex>>(),
-            self.bad_nodes.iter().map(|(_idx, auth)| auth.stake).sum::<Stake>(),
+            self.bad_nodes.keys().map(|idx| idx.to_owned()),
+            self.bad_nodes.values().map(|auth| auth.stake).sum::<Stake>(),
         ))
     }
 }
@@ -403,9 +400,7 @@ impl<'a> ReputationScoreCalculator<'a> {
 
     pub(crate) fn calculate(&mut self) -> ReputationScores {
         assert!(!self.unscored_blocks.is_empty(), "Attempted to calculate scores with no blocks from unscored subdags");
-        let rounds = self.unscored_blocks
-            .iter()
-            .map(|(block_ref, _)| block_ref.round);
+        let rounds = self.unscored_blocks.keys().map(|block_ref| block_ref.round);
         let min_round = rounds.clone().min().unwrap();
         let max_round = rounds.max().unwrap();
 
@@ -470,7 +465,7 @@ impl<'a> ReputationScoreCalculator<'a> {
         authority_idx: AuthorityIndex, 
         score: u64
     ) {
-        self.scores_per_authority[authority_idx] = self.scores_per_authority[authority_idx] + score;
+        self.scores_per_authority[authority_idx] += score;
     }
 
     fn find_supported_block(
@@ -489,10 +484,14 @@ impl<'a> ReputationScoreCalculator<'a> {
             if ancestor.round <= leader_slot.round {
                 continue;
             }
-            let ancestor = self.get_block(ancestor)
-                .unwrap_or_else(|| panic!("Block not found in committed subdag: {:?}", ancestor));
-            if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
-                return Some(support);
+            if let Some(ancestor) = self.get_block(ancestor) {
+                if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
+                    return Some(support);
+                }
+            } else {
+                // TODO(arun): Add unit test for this case.
+                tracing::warn!("Potential vote's ancestor block not found in unscored committed subdags: {:?}", ancestor);
+                return None;
             }
         }
         None
@@ -519,11 +518,15 @@ impl<'a> ReputationScoreCalculator<'a> {
             let is_vote = if let Some(is_vote) = all_votes.get(reference) {
                 *is_vote
             } else {
-                let potential_vote = self.get_block(reference)
-                    .unwrap_or_else(|| panic!("Block not found in committed subdags: {:?}", reference));
-                let is_vote = self.is_vote(&potential_vote, leader_block);
-                all_votes.insert(*reference, is_vote);
-                is_vote
+                if let Some(potential_vote) = self.get_block(reference) {
+                    let is_vote = self.is_vote(&potential_vote, leader_block);
+                    all_votes.insert(*reference, is_vote);
+                    is_vote
+                } else {
+                    // TODO(arun): Add unit test for this case.
+                    tracing::warn!("Potential vote not found in unscored committed subdags: {:?}", reference);
+                    false
+                }
             };
 
             if is_vote {
