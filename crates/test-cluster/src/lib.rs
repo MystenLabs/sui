@@ -357,7 +357,7 @@ impl TestCluster {
             }
         })
             .await
-            .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
+            .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node.")
     }
 
     pub async fn wait_for_protocol_version(
