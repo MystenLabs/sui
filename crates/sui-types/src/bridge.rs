@@ -40,7 +40,7 @@ pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_brid
 pub const BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME: &IdentStr =
     ident_str!("register_foreign_token");
 pub const BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME: &IdentStr =
-    ident_str!("create_add_sui_token_message");
+    ident_str!("create_add_tokens_on_sui_message");
 pub const BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME: &IdentStr =
     ident_str!("execute_system_message");
 
