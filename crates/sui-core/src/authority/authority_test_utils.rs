@@ -401,6 +401,34 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         .unwrap();
 }
 
+pub async fn send_batch_consensus_no_execution(
+    authority: &AuthorityState,
+    certificates: &[VerifiedCertificate],
+) -> Vec<VerifiedExecutableTransaction> {
+    let transactions = certificates
+        .iter()
+        .map(|cert| {
+            SequencedConsensusTransaction::new_test(ConsensusTransaction::new_certificate_message(
+                &authority.name,
+                cert.clone().into_inner(),
+            ))
+        })
+        .collect();
+
+    // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+    // This allows testing cert execution independently.
+    authority
+        .epoch_store_for_testing()
+        .process_consensus_transactions_for_tests(
+            transactions,
+            &Arc::new(CheckpointServiceNoop {}),
+            authority.get_cache_reader().as_ref(),
+            &authority.metrics.skipped_consensus_txns,
+        )
+        .await
+        .unwrap()
+}
+
 pub fn build_test_modules_with_dep_addr(
     path: PathBuf,
     dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
