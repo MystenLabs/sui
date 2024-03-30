@@ -8,9 +8,9 @@ use crate::{
     error::BridgeError,
     server::handler::{BridgeRequestHandler, BridgeRequestHandlerTrait},
     types::{
-        AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, BridgeAction,
-        EmergencyAction, EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
-        SignedBridgeAction,
+        AddTokensOnSuiAction, AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType,
+        BridgeAction, EmergencyAction, EmergencyActionType, EvmContractUpgradeAction,
+        LimitUpdateAction, SignedBridgeAction,
     },
 };
 use axum::{
@@ -23,9 +23,9 @@ use fastcrypto::{
     encoding::{Encoding, Hex},
     traits::ToFromBytes,
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
-use sui_types::bridge::BridgeChainId;
+use std::{net::SocketAddr, str::FromStr};
+use sui_types::{bridge::BridgeChainId, TypeTag};
 
 pub mod governance_verifier;
 pub mod handler;
@@ -260,6 +260,70 @@ async fn handle_evm_contract_upgrade(
     Ok(sig)
 }
 
+async fn handle_sui_tokens_inclusion(
+    Path((chain_id, nonce, native, token_ids, token_type_names, token_prices)): Path<(
+        u8,
+        u64,
+        u8,
+        String,
+        String,
+        String,
+    )>,
+    State(handler): State<Arc<impl BridgeRequestHandlerTrait + Sync + Send>>,
+) -> Result<Json<SignedBridgeAction>, BridgeError> {
+    let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+        BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+    })?;
+
+    let native = match native {
+        1 => true,
+        0 => false,
+        _ => {
+            return Err(BridgeError::InvalidBridgeClientRequest(format!(
+                "Invalid native flag: {}",
+                native
+            )))
+        }
+    };
+    let token_ids = token_ids
+        .split(',')
+        .map(|s| {
+            s.parse::<u8>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_type_names = token_type_names
+        .split(',')
+        .map(|s| {
+            TypeTag::from_str(s).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!(
+                    "Invalid token type name: {:?}",
+                    err
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_prices = token_prices
+        .split(',')
+        .map(|s| {
+            s.parse::<u64>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token price: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+        chain_id,
+        nonce,
+        native,
+        token_ids,
+        token_type_names,
+        token_prices,
+    });
+    let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+    Ok(sig)
+}
+
 #[cfg(test)]
 mod tests {
     use sui_types::bridge::TOKEN_ID_BTC;
@@ -345,6 +409,25 @@ mod tests {
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![12, 34, 56],
+        });
+        client.request_sign_bridge_action(action).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_bridge_server_handle_sui_tokens_inclusion_actgion_path() {
+        let client = setup();
+
+        let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+            nonce: 266,
+            chain_id: BridgeChainId::SuiLocalTest,
+            native: false,
+            token_ids: vec![100, 101, 102],
+            token_type_names: vec![
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").uhwrap(),
+            ],
+            token_prices: vec![100_000_0000, 200_000_0000, 300_000_0000],
         });
         client.request_sign_bridge_action(action).await.unwrap();
     }

@@ -49,7 +49,7 @@ impl BridgeClient {
         self.committee = committee;
     }
 
-    // Important: the paths need to match the ones in mod.rs
+    // Important: the paths need to match the ones in server/mod.rs
     fn bridge_action_to_path(event: &BridgeAction) -> String {
         match event {
             BridgeAction::SuiToEthBridgeAction(e) => format!(
@@ -107,6 +107,33 @@ impl BridgeClient {
                     let call_data = Hex::encode(a.call_data.clone());
                     format!("{}/{}", path, call_data)
                 }
+            }
+            BridgeAction::AddTokensOnSuiAction(a) => {
+                // FIXME: uni test
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let native = if a.native { "1" } else { "0" };
+                let token_ids = a
+                    .token_ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_type_names = a
+                    .token_type_names
+                    .iter()
+                    .map(|name| name.to_canonical_string(true))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_prices = a
+                    .token_prices
+                    .iter()
+                    .map(|price| price.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(
+                    "sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}"
+                )
             }
         }
     }

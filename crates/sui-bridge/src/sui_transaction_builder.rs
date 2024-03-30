@@ -101,6 +101,9 @@ pub fn build_sui_transaction(
             // It does not need a Sui tranaction to execute EVM contract upgrade
             unreachable!()
         }
+        BridgeAction::AddTokensOnSuiAction(_) => {
+            todo!()
+        }
     }
 }
 
