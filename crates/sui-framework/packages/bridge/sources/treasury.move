@@ -12,6 +12,7 @@ module bridge::treasury {
     use sui::bag::Bag;
     use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
     use sui::event::emit;
+    use sui::hex;
     use sui::math;
     use sui::object;
     use sui::object_bag::{Self, ObjectBag};
@@ -73,7 +74,8 @@ module bridge::treasury {
         // Make sure TreasuryCap has not been minted before.
         assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
         let type_name = type_name::get<T>();
-        let coin_address = address::from_ascii_bytes(ascii::as_bytes(&type_name::get_address(&type_name)));
+        let address_bytes = hex::decode(ascii::into_bytes(type_name::get_address(&type_name)));
+        let coin_address = address::from_bytes(address_bytes);
         // Make sure upgrade cap is for the Coin package
         assert!(object::id_to_address(&package::upgrade_package(&uc)) == coin_address, EInvalidUpgradeCap);
         let registration = ForeignTokenRegistration {
