@@ -21,10 +21,7 @@ use crate::{
     dag_state::DagState,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{
-        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
-        NetworkManager,
-    },
+    network::{anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager},
     storage::rocksdb_store::RocksDBStore,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
@@ -126,7 +123,7 @@ where
     synchronizer: Arc<SynchronizerHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    // Not started when using block streaming.
+    // Not created when using block streaming.
     broadcaster: Option<Broadcaster>,
     network_manager: N,
 }
@@ -172,15 +169,11 @@ where
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster = if N::Client::SUPPORT_STREAMING {
-            None
-        } else {
-            Some(Broadcaster::new(
-                context.clone(),
-                network_client.clone(),
-                &signals_receivers,
-            ))
-        };
+        let broadcaster = Some(Broadcaster::new(
+            context.clone(),
+            network_client.clone(),
+            &signals_receivers,
+        ));
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));

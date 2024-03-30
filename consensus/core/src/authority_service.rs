@@ -27,9 +27,7 @@ use crate::{
     Round,
 };
 
-const MAX_PAST_BLOCKS: usize = 1000;
-
-/// Authority's network interface.
+/// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
@@ -58,6 +56,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         }
     }
 
+    /// Handling the block sent from the peer via either unicast RPC or subscription stream.
     pub(crate) async fn handle_received_block(
         &self,
         peer: AuthorityIndex,
@@ -154,9 +153,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         last_received: Round,
     ) -> ConsensusResult<BlockStream> {
         let dag_state = self.dag_state.read();
+        // Find recent own blocks that have not been received by the peer.
+        // If last_received is a valid and more blocks have been proposed since then, this call is
+        // guaranteed to return at least some recent blocks, which will help with liveness.
         let missed_blocks = stream::iter(
             dag_state
-                .get_cached_blocks(peer, last_received + 1, MAX_PAST_BLOCKS)
+                .get_cached_blocks(self.context.own_index, last_received + 1)
                 .into_iter()
                 .map(|block| block.serialized().clone()),
         );

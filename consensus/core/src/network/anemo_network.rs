@@ -697,7 +697,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn anemo_basics() {
+    async fn anemo_send_block() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(

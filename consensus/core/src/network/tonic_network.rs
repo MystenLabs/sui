@@ -7,14 +7,13 @@ use std::{
     pin::Pin,
     sync::Arc,
     time::Duration,
-    usize,
 };
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, Stream, StreamExt as _};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use parking_lot::RwLock;
 use tokio::{
@@ -110,11 +109,16 @@ impl NetworkClient for TonicClient {
     ) -> ConsensusResult<BlockStream> {
         let mut client = self.get_client(peer, timeout).await?;
         // TODO: add sampled block acknowledgments for latency measurements.
-        let request = Request::new(stream::once(async move {
+        let mut request = Request::new(stream::once(async move {
             SubscribeBlocksRequest {
                 last_received_round: last_received,
             }
         }));
+        // TODO: remove below after adding authentication.
+        request.metadata_mut().insert(
+            AUTHORITY_INDEX_METADATA_KEY,
+            self.context.own_index.value().to_string().parse().unwrap(),
+        );
         let response = client
             .subscribe_blocks(request)
             .await
@@ -592,6 +596,7 @@ mod test {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use futures::{stream, StreamExt};
     use parking_lot::Mutex;
 
     use crate::{
@@ -607,15 +612,27 @@ mod test {
     struct TestService {
         handle_send_block: Vec<(AuthorityIndex, Bytes)>,
         handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
+        handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
+        own_blocks: Vec<Bytes>,
     }
 
     impl TestService {
         pub(crate) fn new() -> Self {
+            let mut own_blocks = vec![];
+            for i in 0..100u8 {
+                own_blocks.push(block_for_round(i as Round));
+            }
             Self {
                 handle_send_block: Vec::new(),
                 handle_fetch_blocks: Vec::new(),
+                handle_subscribe_blocks: Vec::new(),
+                own_blocks,
             }
         }
+    }
+
+    fn block_for_round(round: Round) -> Bytes {
+        Bytes::from(vec![round as u8; 16])
     }
 
     #[async_trait]
@@ -631,10 +648,19 @@ mod test {
 
         async fn handle_subscribe_blocks(
             &self,
-            _peer: AuthorityIndex,
-            _last_received: Round,
+            peer: AuthorityIndex,
+            last_received: Round,
         ) -> ConsensusResult<BlockStream> {
-            unimplemented!()
+            let mut state = self.lock();
+            state.handle_subscribe_blocks.push((peer, last_received));
+            let own_blocks = state
+                .own_blocks
+                .iter()
+                // Let index in own_blocks be the round, and skip blocks <= last_received round.
+                .skip(last_received as usize + 1)
+                .cloned()
+                .collect::<Vec<_>>();
+            Ok(Box::pin(stream::iter(own_blocks)))
         }
 
         async fn handle_fetch_blocks(
@@ -648,7 +674,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn tonic_basics() {
+    async fn tonic_send_block() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(
@@ -709,5 +735,61 @@ mod test {
             service_1.lock().handle_send_block[0].1,
             test_block_0.serialized(),
         );
+    }
+
+    #[tokio::test]
+    async fn tonic_subscribe_blocks() {
+        let (context, keys) = Context::new_for_test(4);
+
+        let context_0 = Arc::new(
+            context
+                .clone()
+                .with_authority_index(context.committee.to_authority_index(0).unwrap()),
+        );
+        let mut manager_0 = TonicManager::new(context_0.clone());
+        let client_0 = <TonicManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
+        let service_0 = Arc::new(Mutex::new(TestService::new()));
+        manager_0
+            .install_service(keys[0].0.clone(), service_0.clone())
+            .await;
+
+        let context_1 = Arc::new(
+            context
+                .clone()
+                .with_authority_index(context.committee.to_authority_index(1).unwrap()),
+        );
+        let mut manager_1 = TonicManager::new(context_1.clone());
+        let client_1 = <TonicManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
+        let service_1 = Arc::new(Mutex::new(TestService::new()));
+        manager_1
+            .install_service(keys[1].0.clone(), service_1.clone())
+            .await;
+
+        let client_0_round = 50;
+        let receive_stream_0 = client_0
+            .subscribe_blocks(
+                context_0.committee.to_authority_index(1).unwrap(),
+                client_0_round,
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+        receive_stream_0
+            .enumerate()
+            .for_each_concurrent(None, |(i, item)| async move {
+                assert_eq!(item, block_for_round(client_0_round + i as Round + 1));
+            })
+            .await;
+
+        let client_1_round = 100;
+        let mut receive_stream_1 = client_1
+            .subscribe_blocks(
+                context_1.committee.to_authority_index(0).unwrap(),
+                client_1_round,
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+        assert!(receive_stream_1.next().await.is_none());
     }
 }
