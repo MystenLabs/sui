@@ -8,7 +8,7 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::SharedInputObject;
 
-// ObjectExecutionCost stores the accumulated cost of executing transactions on an object, for
+// SharedObjectCongestionTracker stores the accumulated cost of executing transactions on an object, for
 // all transactions in a consensus commit.
 //
 // Cost is an indication of transaction execution latency. When transactions are scheduled by
@@ -18,11 +18,11 @@ use sui_types::transaction::SharedInputObject;
 // The goal of this data structure is to capture the critical path of transaction execution latency on each
 // objects.
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
-pub struct ObjectExecutionCost {
+pub struct SharedObjectCongestionTracker {
     object_execution_cost: HashMap<ObjectID, u64>,
 }
 
-impl ObjectExecutionCost {
+impl SharedObjectCongestionTracker {
     pub fn new_with_initial_value_for_test(init_values: &[(ObjectID, u64)]) -> Self {
         let mut object_execution_cost = HashMap::new();
         for (object_id, total_cost) in init_values {
@@ -69,6 +69,11 @@ impl ObjectExecutionCost {
         // object A, it may be shown up as congested objects.
         let mut congested_objects = vec![];
         for obj in shared_input_objects {
+            // TODO: right now, we only return objects that are on the execution critical path in this consensus commit.
+            // However, for objects that are no on the critical path, they may potentially also be congested (e.g., an
+            // object has start cost == start_cost - 1, and adding the gas budget will exceed the limit). We don't
+            // return them for now because it's unclear how they can be used to return suggested gas price for the
+            // user. We need to revisit this later once we have a clear idea of how to determine the suggested gas price.
             if &start_cost == self.object_execution_cost.get(&obj.id).unwrap_or(&0) {
                 congested_objects.push(obj.id);
             }
@@ -136,41 +141,42 @@ mod object_cost_tests {
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
 
-        let object_execution_cost = ObjectExecutionCost::new_with_initial_value_for_test(&[
-            (object_id_0, 5),
-            (object_id_1, 10),
-        ]);
+        let shared_object_congestion_tracker =
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
+                (object_id_0, 5),
+                (object_id_1, 10),
+            ]);
 
         let shared_input_objects = construct_shared_input_objects(&[(object_id_0, false)]);
         assert_eq!(
-            object_execution_cost.compute_tx_start_at_cost(&shared_input_objects),
+            shared_object_congestion_tracker.compute_tx_start_at_cost(&shared_input_objects),
             5
         );
 
         let shared_input_objects = construct_shared_input_objects(&[(object_id_1, true)]);
         assert_eq!(
-            object_execution_cost.compute_tx_start_at_cost(&shared_input_objects),
+            shared_object_congestion_tracker.compute_tx_start_at_cost(&shared_input_objects),
             10
         );
 
         let shared_input_objects =
             construct_shared_input_objects(&[(object_id_0, false), (object_id_1, false)]);
         assert_eq!(
-            object_execution_cost.compute_tx_start_at_cost(&shared_input_objects),
+            shared_object_congestion_tracker.compute_tx_start_at_cost(&shared_input_objects),
             10
         );
 
         let shared_input_objects =
             construct_shared_input_objects(&[(object_id_0, true), (object_id_1, true)]);
         assert_eq!(
-            object_execution_cost.compute_tx_start_at_cost(&shared_input_objects),
+            shared_object_congestion_tracker.compute_tx_start_at_cost(&shared_input_objects),
             10
         );
 
         // Test tx that touch object for the first time, which should start from 0.
         let shared_input_objects = construct_shared_input_objects(&[(object_id_2, true)]);
         assert_eq!(
-            object_execution_cost.compute_tx_start_at_cost(&shared_input_objects),
+            shared_object_congestion_tracker.compute_tx_start_at_cost(&shared_input_objects),
             0
         );
     }
@@ -222,15 +228,16 @@ mod object_cost_tests {
         //                1     10
         // object 0:            |
         // object 1:      |
-        let object_execution_cost = ObjectExecutionCost::new_with_initial_value_for_test(&[
-            (shared_obj_0, 10),
-            (shared_obj_1, 1),
-        ]);
+        let shared_object_congestion_tracker =
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
+                (shared_obj_0, 10),
+                (shared_obj_1, 1),
+            ]);
 
         // Read/write to object 0 should be deferred.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_0, *mutable)]);
-            if let Some((_, congested_objects)) = object_execution_cost
+            if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
                     max_accumulated_txn_cost_per_object_in_checkpoint,
@@ -248,7 +255,7 @@ mod object_cost_tests {
         // Read/write to object 0 should be deferred.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_1, *mutable)]);
-            assert!(object_execution_cost
+            assert!(shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
                     max_accumulated_txn_cost_per_object_in_checkpoint,
@@ -263,7 +270,7 @@ mod object_cost_tests {
             for mutable_1 in [true, false].iter() {
                 let tx =
                     build_transaction(&[(shared_obj_0, *mutable_0), (shared_obj_1, *mutable_1)]);
-                if let Some((_, congested_objects)) = object_execution_cost
+                if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
                         max_accumulated_txn_cost_per_object_in_checkpoint,
@@ -286,7 +293,7 @@ mod object_cost_tests {
         let tx = build_transaction(&[(shared_obj_0, true)]);
         // Make should_defer_due_to_object_congestion always defer transactions.
         let max_accumulated_txn_cost_per_object_in_checkpoint = 1;
-        let object_execution_cost: ObjectExecutionCost = Default::default();
+        let shared_object_congestion_tracker: SharedObjectCongestionTracker = Default::default();
 
         // Insert a random pre-existing transaction.
         let mut previously_deferred_tx_digests = HashMap::new();
@@ -305,7 +312,7 @@ mod object_cost_tests {
                 deferred_from_round,
             },
             _,
-        )) = object_execution_cost.should_defer_due_to_object_congestion(
+        )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &previously_deferred_tx_digests,
@@ -332,7 +339,7 @@ mod object_cost_tests {
                 deferred_from_round,
             },
             _,
-        )) = object_execution_cost.should_defer_due_to_object_congestion(
+        )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &previously_deferred_tx_digests,
@@ -360,7 +367,7 @@ mod object_cost_tests {
                 deferred_from_round,
             },
             _,
-        )) = object_execution_cost.should_defer_due_to_object_congestion(
+        )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
             max_accumulated_txn_cost_per_object_in_checkpoint,
             &previously_deferred_tx_digests,
@@ -379,18 +386,19 @@ mod object_cost_tests {
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
 
-        let mut object_execution_cost = ObjectExecutionCost::new_with_initial_value_for_test(&[
-            (object_id_0, 5),
-            (object_id_1, 10),
-        ]);
+        let mut shared_object_congestion_tracker =
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
+                (object_id_0, 5),
+                (object_id_1, 10),
+            ]);
 
         // Read two objects should not change the object execution cost.
         let shared_input_objects =
             construct_shared_input_objects(&[(object_id_0, false), (object_id_1, false)]);
-        object_execution_cost.bump_object_execution_cost(&shared_input_objects, 10);
+        shared_object_congestion_tracker.bump_object_execution_cost(&shared_input_objects, 10);
         assert_eq!(
-            object_execution_cost,
-            ObjectExecutionCost::new_with_initial_value_for_test(&[
+            shared_object_congestion_tracker,
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
                 (object_id_0, 5),
                 (object_id_1, 10)
             ])
@@ -399,10 +407,10 @@ mod object_cost_tests {
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
         let shared_input_objects =
             construct_shared_input_objects(&[(object_id_0, true), (object_id_1, false)]);
-        object_execution_cost.bump_object_execution_cost(&shared_input_objects, 10);
+        shared_object_congestion_tracker.bump_object_execution_cost(&shared_input_objects, 10);
         assert_eq!(
-            object_execution_cost,
-            ObjectExecutionCost::new_with_initial_value_for_test(&[
+            shared_object_congestion_tracker,
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
                 (object_id_0, 20),
                 (object_id_1, 10)
             ])
@@ -414,10 +422,10 @@ mod object_cost_tests {
             (object_id_1, true),
             (object_id_2, true),
         ]);
-        object_execution_cost.bump_object_execution_cost(&shared_input_objects, 10);
+        shared_object_congestion_tracker.bump_object_execution_cost(&shared_input_objects, 10);
         assert_eq!(
-            object_execution_cost,
-            ObjectExecutionCost::new_with_initial_value_for_test(&[
+            shared_object_congestion_tracker,
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
                 (object_id_0, 30),
                 (object_id_1, 30),
                 (object_id_2, 30)

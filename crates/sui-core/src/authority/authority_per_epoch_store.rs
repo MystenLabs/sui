@@ -48,7 +48,7 @@ use typed_store::{
 
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
-use super::process_consensus_transaction_util::ObjectExecutionCost;
+use super::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
@@ -1666,7 +1666,7 @@ impl AuthorityPerEpochStore {
         commit_round: Round,
         dkg_closed: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
-        object_execution_cost: &ObjectExecutionCost,
+        shared_object_congestion_tracker: &SharedObjectCongestionTracker,
     ) -> Option<(DeferralKey, DeferralReason)> {
         // Defer transaction if it uses randomness but DKG has not yet closed.
         if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
@@ -1680,7 +1680,7 @@ impl AuthorityPerEpochStore {
         match self.protocol_config().per_object_congestion_control_mode() {
             PerObjectCongestionControlMode::None => None,
             PerObjectCongestionControlMode::TotalGasBudget => {
-                if let Some((deferral_key, congested_objects)) = object_execution_cost
+                if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         cert,
                         self.protocol_config()
@@ -1705,12 +1705,12 @@ impl AuthorityPerEpochStore {
     fn update_object_execution_cost(
         &self,
         cert: &VerifiedExecutableTransaction,
-        object_execution_cost: &mut ObjectExecutionCost,
+        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
     ) {
         match self.protocol_config().per_object_congestion_control_mode() {
             PerObjectCongestionControlMode::None => {}
             PerObjectCongestionControlMode::TotalGasBudget => {
-                object_execution_cost.bump_object_execution_cost(
+                shared_object_congestion_tracker.bump_object_execution_cost(
                     &cert.shared_input_objects().collect::<Vec<_>>(),
                     cert.gas_budget(),
                 );
@@ -2840,8 +2840,10 @@ impl AuthorityPerEpochStore {
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different checkpoints.
-        let mut object_execution_cost: ObjectExecutionCost = Default::default();
-        let mut object_using_randomness_execution_cost: ObjectExecutionCost = Default::default();
+        let mut shared_object_congestion_tracker: SharedObjectCongestionTracker =
+            Default::default();
+        let mut shared_object_using_randomness_congestion_tracker: SharedObjectCongestionTracker =
+            Default::default();
 
         let mut randomness_state_updated = false;
         for tx in transactions {
@@ -2851,9 +2853,9 @@ impl AuthorityPerEpochStore {
                 .0
                 .is_user_tx_with_randomness(self.randomness_state_enabled())
             {
-                &mut object_using_randomness_execution_cost
+                &mut shared_object_using_randomness_congestion_tracker
             } else {
-                &mut object_execution_cost
+                &mut shared_object_congestion_tracker
             };
             match self
                 .process_consensus_transaction(
@@ -3052,7 +3054,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generating_randomness: bool,
-        object_execution_cost: &mut ObjectExecutionCost,
+        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -3112,7 +3114,7 @@ impl AuthorityPerEpochStore {
                     commit_round,
                     dkg_closed,
                     previously_deferred_tx_digests,
-                    object_execution_cost,
+                    shared_object_congestion_tracker,
                 );
 
                 if let Some((deferral_key, _)) = deferral_info {
@@ -3138,7 +3140,10 @@ impl AuthorityPerEpochStore {
 
                 // This certificate will be scheduled. Update object execution cost.
                 if certificate.contains_shared_object() {
-                    self.update_object_execution_cost(&certificate, object_execution_cost);
+                    self.update_object_execution_cost(
+                        &certificate,
+                        shared_object_congestion_tracker,
+                    );
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))
