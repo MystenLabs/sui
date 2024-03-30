@@ -184,6 +184,8 @@ codes!(
         InvalidMoveOrCopy: { msg: "invalid 'move' or 'copy'", severity: NonblockingError },
         InvalidLabel: { msg: "invalid expression label", severity: NonblockingError },
         AmbiguousCast: { msg: "ambiguous 'as'", severity: NonblockingError },
+        InvalidName: { msg: "invalid name", severity: BlockingError },
+        InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -233,6 +235,7 @@ codes!(
         UnboundLabel: { msg: "unbound label", severity: BlockingError },
         InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
         InvalidMacroParameter: { msg: "invalid macro parameter", severity: NonblockingError },
+        InvalidTypeParameter: { msg: "invalid type parameter", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

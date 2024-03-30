@@ -8,7 +8,7 @@ module 0x42::M {
     fun move_from(): u64 { 0 }
     fun freeze(): u64 { 0 }
 
-    fun t(account: &signer) acquires Self::R {
+    fun t(account: &signer) {
         let _ : u64 = exists();
         let _ : bool = ::exists<Self::R>(0x0);
 

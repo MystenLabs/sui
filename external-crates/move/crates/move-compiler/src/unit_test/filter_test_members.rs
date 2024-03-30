@@ -8,7 +8,7 @@ use move_symbol_pool::Symbol;
 use crate::{
     diag,
     parser::{
-        ast as P,
+        ast::{self as P, NamePath, PathEntry},
         filter::{filter_program, FilterContext},
     },
     shared::{known_attributes, CompilationEnv},
@@ -159,16 +159,32 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
     );
 
     let mod_name = sp(mloc, UNIT_TEST_MODULE_NAME);
-    let mod_addr_name = sp(mloc, (leading_name_access, mod_name));
     let fn_name = sp(mloc, "create_signers_for_testing".into());
+    let name_path = NamePath {
+        root: P::RootPathEntry {
+            name: leading_name_access,
+            tyargs: None,
+            is_macro: None,
+        },
+        entries: vec![
+            PathEntry {
+                name: mod_name,
+                tyargs: None,
+                is_macro: None,
+            },
+            PathEntry {
+                name: fn_name,
+                tyargs: None,
+                is_macro: None,
+            },
+        ],
+    };
     let args_ = vec![sp(
         mloc,
         P::Exp_::Value(sp(mloc, P::Value_::Num("0".into()))),
     )];
     let nop_call = P::Exp_::Call(
-        sp(mloc, P::NameAccessChain_::Three(mod_addr_name, fn_name)),
-        None,
-        None,
+        sp(mloc, P::NameAccessChain_::Path(name_path)),
         sp(mloc, args_),
     );
 

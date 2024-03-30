@@ -1814,28 +1814,33 @@ impl<'a> ParsingSymbolicator<'a> {
         }
     }
 
+    fn path_entry_symbols(&mut self, path: &P::PathEntry) {
+        let P::PathEntry { name: _, tyargs, is_macro: _ } = path;
+        if let Some(sp!(_, tyargs)) = tyargs {
+            tyargs.iter().for_each(|t| self.type_symbols(t));
+        }
+    }
+
+    fn root_path_entry_symbols(&mut self, path: &P::RootPathEntry) {
+        let P::RootPathEntry { name: _, tyargs, is_macro: _ } = path;
+        if let Some(sp!(_, tyargs)) = tyargs {
+            tyargs.iter().for_each(|t| self.type_symbols(t));
+        }
+    }
+
     /// Get symbols for an expression
     fn exp_symbols(&mut self, sp!(_, exp): &P::Exp) {
         use P::Exp_ as E;
         match exp {
-            E::Name(chain, vo) => {
+            E::Name(chain) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
             }
-            E::Call(chain, _, vo, v) => {
+            E::Call(chain, v) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
                 v.value.iter().for_each(|e| self.exp_symbols(e));
             }
-            E::Pack(chain, vo, v) => {
+            E::Pack(chain, v) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
                 v.iter().for_each(|(_, e)| self.exp_symbols(e));
             }
             E::Vector(_, vo, v) => {
@@ -2067,9 +2072,8 @@ impl<'a> ParsingSymbolicator<'a> {
     fn type_symbols(&mut self, sp!(_, t): &P::Type) {
         use P::Type_ as T;
         match t {
-            T::Apply(chain, v) => {
+            T::Apply(chain) => {
                 self.chain_symbols(chain);
-                v.iter().for_each(|t| self.type_symbols(t));
             }
             T::Ref(_, t) => self.type_symbols(t),
             T::Fun(v, t) => {
@@ -2085,11 +2089,8 @@ impl<'a> ParsingSymbolicator<'a> {
     fn bind_symbols(&mut self, sp!(_, bind): &P::Bind) {
         use P::Bind_ as B;
         match bind {
-            B::Unpack(chain, vo, bindings) => {
+            B::Unpack(chain, bindings) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
                 match bindings {
                     P::FieldBindings::Named(v) => {
                         v.iter().for_each(|(_, bind)| self.bind_symbols(bind))
@@ -2109,16 +2110,25 @@ impl<'a> ParsingSymbolicator<'a> {
         // record the length of an identifier representing a potentially
         // aliased module, struct or function  name in an access chain,
         let no = match chain {
-            NA::One(n) => Some(*n), // this can be an aliased struct or function
-            NA::Two(leading_name, _) => {
-                // the only thing aliased here coud be a module
-                if let P::LeadingNameAccess_::Name(n) = leading_name.value {
-                    Some(n)
+            NA::Single(entry) => {
+                self.path_entry_symbols(entry);
+                Some(entry.name)
+            },
+            NA::Path(path) => {
+                let P::NamePath { root, entries } = path;
+                self.root_path_entry_symbols(root);
+                entries.iter().for_each(|entry| self.path_entry_symbols(entry));
+                // FIXME: this is a hack that will break when we add enums
+                if entries.len() < 2 {
+                    if let P::LeadingNameAccess_::Name(n) = root.name.value {
+                        Some(n)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
             }
-            NA::Three(..) => None,
         };
         let Some(n) = no else {
             return;
