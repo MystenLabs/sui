@@ -12,21 +12,21 @@ title: Module `0xb::message`
 -  [Struct `Blocklist`](#0xb_message_Blocklist)
 -  [Struct `UpdateBridgeLimit`](#0xb_message_UpdateBridgeLimit)
 -  [Struct `UpdateAssetPrice`](#0xb_message_UpdateAssetPrice)
--  [Struct `AddSuiToken`](#0xb_message_AddSuiToken)
+-  [Struct `AddTokenOnSui`](#0xb_message_AddTokenOnSui)
 -  [Constants](#@Constants_0)
 -  [Function `extract_token_bridge_payload`](#0xb_message_extract_token_bridge_payload)
 -  [Function `extract_emergency_op_payload`](#0xb_message_extract_emergency_op_payload)
 -  [Function `extract_blocklist_payload`](#0xb_message_extract_blocklist_payload)
 -  [Function `extract_update_bridge_limit`](#0xb_message_extract_update_bridge_limit)
 -  [Function `extract_update_asset_price`](#0xb_message_extract_update_asset_price)
--  [Function `extract_add_sui_token`](#0xb_message_extract_add_sui_token)
+-  [Function `extract_add_tokens_on_sui`](#0xb_message_extract_add_tokens_on_sui)
 -  [Function `serialize_message`](#0xb_message_serialize_message)
 -  [Function `create_token_bridge_message`](#0xb_message_create_token_bridge_message)
 -  [Function `create_emergency_op_message`](#0xb_message_create_emergency_op_message)
 -  [Function `create_blocklist_message`](#0xb_message_create_blocklist_message)
 -  [Function `create_update_bridge_limit_message`](#0xb_message_create_update_bridge_limit_message)
 -  [Function `create_update_asset_price_message`](#0xb_message_create_update_asset_price_message)
--  [Function `create_add_sui_token_message`](#0xb_message_create_add_sui_token_message)
+-  [Function `create_add_tokens_on_sui_message`](#0xb_message_create_add_tokens_on_sui_message)
 -  [Function `create_key`](#0xb_message_create_key)
 -  [Function `key`](#0xb_message_key)
 -  [Function `message_version`](#0xb_message_message_version)
@@ -338,13 +338,13 @@ title: Module `0xb::message`
 
 </details>
 
-<a name="0xb_message_AddSuiToken"></a>
+<a name="0xb_message_AddTokenOnSui"></a>
 
-## Struct `AddSuiToken`
+## Struct `AddTokenOnSui`
 
 
 
-<pre><code><b>struct</b> <a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a> <b>has</b> drop
+<pre><code><b>struct</b> <a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a> <b>has</b> drop
 </code></pre>
 
 
@@ -654,13 +654,13 @@ Emergency op payload is just a single byte
 
 </details>
 
-<a name="0xb_message_extract_add_sui_token"></a>
+<a name="0xb_message_extract_add_tokens_on_sui"></a>
 
-## Function `extract_add_sui_token`
+## Function `extract_add_tokens_on_sui`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_add_sui_token">extract_add_sui_token</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>): <a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>): <a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>
 </code></pre>
 
 
@@ -669,7 +669,7 @@ Emergency op payload is just a single byte
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_add_sui_token">extract_add_sui_token</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_add_tokens_on_sui">extract_add_tokens_on_sui</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a> {
     <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
     <b>let</b> native_token = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_bool();
     <b>let</b> token_ids = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_u8();
@@ -683,7 +683,7 @@ Emergency op payload is just a single byte
         n = n + 1;
     };
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
-    <a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a> {
+    <a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a> {
         native_token,
         token_ids,
         token_type_names,
@@ -1009,9 +1009,9 @@ Update asset price message
 
 </details>
 
-<a name="0xb_message_create_add_sui_token_message"></a>
+<a name="0xb_message_create_add_tokens_on_sui_message"></a>
 
-## Function `create_add_sui_token_message`
+## Function `create_add_tokens_on_sui_message`
 
 Update Sui token message
 [message_type:u8]
@@ -1024,7 +1024,7 @@ Update Sui token message
 [token_prices:vector<u64>]
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_add_sui_token_message">create_add_sui_token_message</a>(source_chain: u8, seq_num: u64, native_token: bool, token_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, type_names: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>&gt;, token_prices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;): <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(source_chain: u8, seq_num: u64, native_token: bool, token_ids: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, type_names: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>&gt;, token_prices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;): <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>
 </code></pre>
 
 
@@ -1033,7 +1033,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_add_sui_token_message">create_add_sui_token_message</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_add_tokens_on_sui_message">create_add_tokens_on_sui_message</a>(
     source_chain: u8,
     seq_num: u64,
     native_token: bool,
@@ -1047,7 +1047,7 @@ Update Sui token message
     payload.append(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&type_names));
     payload.append(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&token_prices));
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-        message_type: <a href="message_types.md#0xb_message_types_add_sui_token">message_types::add_sui_token</a>(),
+        message_type: <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>(),
         message_version: <a href="message.md#0xb_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
         seq_num,
         source_chain,
@@ -1498,7 +1498,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_is_native">is_native</a>(self: &<a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_is_native">is_native</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>): bool
 </code></pre>
 
 
@@ -1507,7 +1507,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_is_native">is_native</a>(self: &<a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_is_native">is_native</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a>): bool {
     self.native_token
 }
 </code></pre>
@@ -1522,7 +1522,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_ids">token_ids</a>(self: &<a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_ids">token_ids</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -1531,7 +1531,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_ids">token_ids</a>(self: &<a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_ids">token_ids</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     self.token_ids
 }
 </code></pre>
@@ -1546,7 +1546,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type_names">token_type_names</a>(self: &<a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type_names">token_type_names</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>&gt;
 </code></pre>
 
 
@@ -1555,7 +1555,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type_names">token_type_names</a>(self: &<a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type_names">token_type_names</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt; {
     self.token_type_names
 }
 </code></pre>
@@ -1570,7 +1570,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_prices">token_prices</a>(self: &<a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_prices">token_prices</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;
 </code></pre>
 
 
@@ -1579,7 +1579,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_prices">token_prices</a>(self: &<a href="message.md#0xb_message_AddSuiToken">AddSuiToken</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_prices">token_prices</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
     self.token_prices
 }
 </code></pre>
@@ -1672,7 +1672,7 @@ Return the required signature threshold for the message, values are voting power
         5001
     } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>()) {
         5001
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_sui_token">message_types::add_sui_token</a>()) {
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
         5001
     } <b>else</b> {
         <b>abort</b> <a href="message.md#0xb_message_EInvalidMessageType">EInvalidMessageType</a>

@@ -28,7 +28,7 @@ module bridge::treasury {
     const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
 
     public struct BridgeTreasury has store {
-        // token treasuries, values are TreasuryCaps for native bridge V1, it can also store Vaults for native tokens in future release.
+        // token treasuries, values are TreasuryCaps for native bridge V1.
         treasuries: ObjectBag,
         supported_tokens: VecMap<TypeName, BridgeTokenMetadata>,
         // Mapping token id to type name
@@ -58,12 +58,14 @@ module bridge::treasury {
     public struct NewTokenEvent has copy, drop {
         token_id: u8,
         type_name: TypeName,
-        native_token: bool
+        native_token: bool,
+        decimal_multiplier: u64,
+        notional_value: u64
     }
 
     public struct TokenRegistrationEvent has copy, drop {
         type_name: TypeName,
-        decimal:u8,
+        decimal: u8,
         native_token: bool
     }
 
@@ -104,16 +106,17 @@ module bridge::treasury {
         metadata.notional_value
     }
 
-    public(package) fun approve_new_token(self: &mut BridgeTreasury, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
+    public(package) fun add_new_token(self: &mut BridgeTreasury, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
         if (!native_token){
             let ForeignTokenRegistration{
                 type_name,
                 uc,
                 decimal,
             } = bag::remove<String, ForeignTokenRegistration>(&mut self.waiting_room, token_name);
+            let decimal_multiplier = math::pow(10, decimal);
             vec_map::insert(&mut self.supported_tokens, type_name, BridgeTokenMetadata{
                 id: token_id,
-                decimal_multiplier: math::pow(10, decimal),
+                decimal_multiplier,
                 notional_value,
                 native_token
             });
@@ -125,7 +128,9 @@ module bridge::treasury {
             emit(NewTokenEvent{
                 token_id,
                 type_name,
-                native_token
+                native_token,
+                decimal_multiplier,
+                notional_value
             })
         } else {
             // Not implemented for V1

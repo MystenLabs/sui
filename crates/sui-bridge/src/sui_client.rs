@@ -187,6 +187,31 @@ where
             .collect()
     }
 
+    pub async fn get_notional_values(&self) -> BridgeResult<HashMap<u8, u64>> {
+        let bridge_summary = self.get_bridge_summary().await?;
+        bridge_summary
+            .treasury
+            .id_token_type_map
+            .iter()
+            .map(|(id, type_name)| {
+                bridge_summary
+                    .treasury
+                    .supported_tokens
+                    .iter()
+                    .find_map(|(tn, metadata)| {
+                        if type_name == tn {
+                            Some((*id, metadata.notional_value))
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or(BridgeError::InternalError(
+                        "Error encountered when retrieving token notional values.".into(),
+                    ))
+            })
+            .collect()
+    }
+
     // TODO: cache this
     pub async fn get_bridge_record_id(&self) -> BridgeResult<ObjectID> {
         self.inner

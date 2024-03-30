@@ -34,8 +34,15 @@ pub type BridgeRecordDyanmicField = Field<
 >;
 
 pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
+pub const BRIDGE_MESSAGE_MODULE_NAME: &IdentStr = ident_str!("message");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
+pub const BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME: &IdentStr =
+    ident_str!("register_foreign_token");
+pub const BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME: &IdentStr =
+    ident_str!("create_add_sui_token_message");
+pub const BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME: &IdentStr =
+    ident_str!("execute_system_message");
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 

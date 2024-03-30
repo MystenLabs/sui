@@ -30,7 +30,7 @@ title: Module `0xb::bridge`
 -  [Function `execute_emergency_op`](#0xb_bridge_execute_emergency_op)
 -  [Function `execute_update_bridge_limit`](#0xb_bridge_execute_update_bridge_limit)
 -  [Function `execute_update_asset_price`](#0xb_bridge_execute_update_asset_price)
--  [Function `execute_add_sui_token`](#0xb_bridge_execute_add_sui_token)
+-  [Function `execute_add_tokens_on_sui`](#0xb_bridge_execute_add_tokens_on_sui)
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
 -  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 
@@ -1160,9 +1160,9 @@ title: Module `0xb::bridge`
     } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
         <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_asset_price();
         <a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner, payload);
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_sui_token">message_types::add_sui_token</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message_extract_add_sui_token">message::extract_add_sui_token</a>(&<a href="message.md#0xb_message">message</a>);
-        <a href="bridge.md#0xb_bridge_execute_add_sui_token">execute_add_sui_token</a>(inner, payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message_extract_add_tokens_on_sui">message::extract_add_tokens_on_sui</a>(&<a href="message.md#0xb_message">message</a>);
+        <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner, payload);
     } <b>else</b> {
         <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>
     };
@@ -1269,13 +1269,13 @@ title: Module `0xb::bridge`
 
 </details>
 
-<a name="0xb_bridge_execute_add_sui_token"></a>
+<a name="0xb_bridge_execute_add_tokens_on_sui"></a>
 
-## Function `execute_add_sui_token`
+## Function `execute_add_tokens_on_sui`
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_sui_token">execute_add_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>, payload: <a href="message.md#0xb_message_AddSuiToken">message::AddSuiToken</a>)
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>, payload: <a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>)
 </code></pre>
 
 
@@ -1284,7 +1284,7 @@ title: Module `0xb::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_sui_token">execute_add_sui_token</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: AddSuiToken) {
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: AddTokenOnSui) {
     <b>let</b> native_token = payload.is_native();
     <b>let</b> <b>mut</b> token_ids = payload.token_ids();
     <b>let</b> <b>mut</b> token_type_names = payload.token_type_names();
@@ -1294,11 +1294,11 @@ title: Module `0xb::bridge`
     <b>assert</b>!(token_ids.length() == token_type_names.length(), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
     <b>assert</b>!(token_ids.length() == token_prices.length(), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
 
-    <b>while</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) &gt; 0){
+    <b>while</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) &gt; 0) {
         <b>let</b> token_id = token_ids.pop_back();
         <b>let</b> token_type_name = token_type_names.pop_back();
         <b>let</b> token_price = token_prices.pop_back();
-        inner.<a href="treasury.md#0xb_treasury">treasury</a>.approve_new_token(token_type_name, token_id, native_token, token_price)
+        inner.<a href="treasury.md#0xb_treasury">treasury</a>.add_new_token(token_type_name, token_id, native_token, token_price)
     }
 }
 </code></pre>

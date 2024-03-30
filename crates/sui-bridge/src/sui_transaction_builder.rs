@@ -816,19 +816,7 @@ mod tests {
         if committee.members.is_empty() {
             test_cluster.wait_for_epoch(None).await;
         }
-        let treasury = sui_client.get_bridge_summary().await.unwrap().treasury;
-        let notional_values = treasury
-            .id_token_type_map
-            .iter()
-            .map(|(id, type_name)| {
-                let (_, metadata) = treasury
-                    .supported_tokens
-                    .iter()
-                    .find(|(tn, _)| type_name == tn)
-                    .unwrap();
-                (id, metadata.notional_value)
-            })
-            .collect::<HashMap<_, _>>();
+        let notional_values = sui_client.get_notional_values().await.unwrap();
         assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 
         let context = &mut test_cluster.wallet;
@@ -852,21 +840,9 @@ mod tests {
             &id_token_map,
         )
         .await;
-        let treasury = sui_client.get_bridge_summary().await.unwrap().treasury;
-        let new_notional_values = treasury
-            .id_token_type_map
-            .iter()
-            .map(|(id, type_name)| {
-                let (_, metadata) = treasury
-                    .supported_tokens
-                    .iter()
-                    .find(|(tn, _)| type_name == tn)
-                    .unwrap();
-                (id, metadata.notional_value)
-            })
-            .collect::<HashMap<_, _>>();
+        let new_notional_values = sui_client.get_notional_values().await.unwrap();
         for (token_id, price) in new_notional_values {
-            if token_id == &TOKEN_ID_BTC {
+            if token_id == TOKEN_ID_BTC {
                 assert_eq!(price, 69_000 * USD_MULTIPLIER);
             } else {
                 assert_eq!(price, *notional_values.get(&token_id).unwrap());

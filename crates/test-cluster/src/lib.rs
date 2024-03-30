@@ -48,10 +48,16 @@ use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConf
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
-use sui_types::bridge::BridgeTrait;
-use sui_types::bridge::{get_bridge, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
+use sui_types::bridge::{
+    get_bridge, BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME, TOKEN_ID_BTC, TOKEN_ID_ETH,
+    TOKEN_ID_USDC, TOKEN_ID_USDT,
+};
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, BRIDGE_MODULE_NAME};
 use sui_types::bridge::{BridgeChainId, BridgeSummary};
+use sui_types::bridge::{
+    BridgeTrait, BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME, BRIDGE_MESSAGE_MODULE_NAME,
+    BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME,
+};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::get_key_pair;
@@ -70,7 +76,7 @@ use sui_types::transaction::{
     CallArg, CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
     TransactionKind,
 };
-use sui_types::{Identifier, BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
+use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info};
@@ -1210,8 +1216,8 @@ impl TestClusterBuilder {
                     .await
                     .move_call(
                         BRIDGE_PACKAGE_ID,
-                        "bridge",
-                        "register_foreign_token",
+                        BRIDGE_MODULE_NAME.as_str(),
+                        BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME.as_str(),
                         vec![
                             bridge,
                             CallArg::Object(ObjectArg::ImmOrOwnedObject(tc.object_ref())),
@@ -1232,7 +1238,7 @@ impl TestClusterBuilder {
 
             // Construct new tokens message
             let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec();
-            let message_type = vec![BridgeActionType::AddSuiToken as u8];
+            let message_type = vec![BridgeActionType::AddTokensOnSui as u8];
             let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION];
             let nonce_bytes = 0u64.to_be_bytes().to_vec();
             let source_chain_id_bytes = vec![BridgeChainId::SuiLocalTest as u8];
@@ -1279,8 +1285,8 @@ impl TestClusterBuilder {
 
             let message = ptb.programmable_move_call(
                 BRIDGE_PACKAGE_ID,
-                Identifier::new("message").unwrap(),
-                Identifier::new("create_add_sui_token_message").unwrap(),
+                BRIDGE_MESSAGE_MODULE_NAME.into(),
+                BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME.into(),
                 vec![],
                 vec![
                     source_chain,
@@ -1305,7 +1311,7 @@ impl TestClusterBuilder {
             ptb.programmable_move_call(
                 BRIDGE_PACKAGE_ID,
                 BRIDGE_MODULE_NAME.into(),
-                Identifier::new("execute_system_message").unwrap(),
+                BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME.into(),
                 vec![],
                 vec![bridge, message, sigs],
             );

@@ -17,7 +17,7 @@ module bridge::bridge {
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::limiter::{Self, TransferLimiter};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
-        UpdateBridgeLimit, AddSuiToken
+        UpdateBridgeLimit, AddTokenOnSui
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -432,9 +432,9 @@ module bridge::bridge {
         } else if (message_type == message_types::update_asset_price()) {
             let payload = message.extract_update_asset_price();
             execute_update_asset_price(inner, payload);
-        } else if (message_type == message_types::add_sui_token()) {
-            let payload = message::extract_add_sui_token(&message);
-            execute_add_sui_token(inner, payload);
+        } else if (message_type == message_types::add_tokens_on_sui()) {
+            let payload = message::extract_add_tokens_on_sui(&message);
+            execute_add_tokens_on_sui(inner, payload);
         } else {
             abort EUnexpectedMessageType
         };
@@ -476,7 +476,7 @@ module bridge::bridge {
         )
     }
 
-    fun execute_add_sui_token(inner: &mut BridgeInner, payload: AddSuiToken) {
+    fun execute_add_tokens_on_sui(inner: &mut BridgeInner, payload: AddTokenOnSui) {
         let native_token = payload.is_native();
         let mut token_ids = payload.token_ids();
         let mut token_type_names = payload.token_type_names();
@@ -486,11 +486,11 @@ module bridge::bridge {
         assert!(token_ids.length() == token_type_names.length(), EMalformedMessageError);
         assert!(token_ids.length() == token_prices.length(), EMalformedMessageError);
 
-        while (vector::length(&token_ids) > 0){
+        while (vector::length(&token_ids) > 0) {
             let token_id = token_ids.pop_back();
             let token_type_name = token_type_names.pop_back();
             let token_price = token_prices.pop_back();
-            inner.treasury.approve_new_token(token_type_name, token_id, native_token, token_price)
+            inner.treasury.add_new_token(token_type_name, token_id, native_token, token_price)
         }
     }
 

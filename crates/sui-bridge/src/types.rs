@@ -172,7 +172,7 @@ pub enum BridgeActionType {
     LimitUpdate = 3,
     AssetPriceUpdate = 4,
     EvmContractUpgrade = 5,
-    AddSuiToken = 6,
+    AddTokensOnSui = 6,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
@@ -328,7 +328,7 @@ impl BridgeAction {
             BridgeActionType::LimitUpdate => true,
             BridgeActionType::AssetPriceUpdate => true,
             BridgeActionType::EvmContractUpgrade => true,
-            BridgeActionType::AddSuiToken => true,
+            BridgeActionType::AddTokensOnSui => true,
         }
     }
 

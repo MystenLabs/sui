@@ -375,40 +375,6 @@ module bridge::limiter {
     }
 
     #[test]
-    fun test_initial_limiter_setting() {
-        // default routes, default notion values
-        let limiter = new();
-        let mut scenario = test_scenario::begin(@0x1);
-        let ctx = test_scenario::ctx(&mut scenario);
-        let treasury = treasury::mock_for_test(ctx);
-
-        assert_eq(
-            treasury::notional_value<BTC>(&treasury),
-            (50_000 * USD_VALUE_MULTIPLIER)
-        );
-        assert_eq(
-            treasury::notional_value<ETH>(&treasury),
-            (3_000 * USD_VALUE_MULTIPLIER)
-        );
-
-        assert_eq(treasury::notional_value<USDC>(&treasury), (1 * USD_VALUE_MULTIPLIER));
-        assert_eq(treasury::notional_value<USDT>(&treasury), (1 * USD_VALUE_MULTIPLIER));
-
-        assert_eq(
-            *vec_map::get(
-                &limiter.transfer_limits,
-                &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
-            ),
-            5_000_000 * USD_VALUE_MULTIPLIER,
-        );
-
-        assert!(vec_map::is_empty(&limiter.transfer_records), 0);
-        destroy(limiter);
-        destroy(treasury);
-        test_scenario::end(scenario);
-    }
-
-    #[test]
     #[expected_failure(abort_code = ELimitNotFoundForRoute)]
     fun test_limiter_does_not_limit_receiving_transfers() {
         let mut limiter = new();

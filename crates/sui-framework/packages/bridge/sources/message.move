@@ -74,7 +74,7 @@ module bridge::message {
         new_price: u64
     }
 
-    public struct AddSuiToken has drop {
+    public struct AddTokenOnSui has drop {
         native_token: bool,
         token_ids: vector<u8>,
         token_type_names: vector<String>,
@@ -170,7 +170,7 @@ module bridge::message {
         }
     }
 
-    public fun extract_add_sui_token(message: &BridgeMessage): AddSuiToken {
+    public fun extract_add_tokens_on_sui(message: &BridgeMessage): AddTokenOnSui {
         let mut bcs = bcs::new(message.payload);
         let native_token = bcs.peel_bool();
         let token_ids = bcs.peel_vec_u8();
@@ -184,7 +184,7 @@ module bridge::message {
             n = n + 1;
         };
         assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
-        AddSuiToken {
+        AddTokenOnSui {
             native_token,
             token_ids,
             token_type_names,
@@ -394,7 +394,7 @@ module bridge::message {
     /// [token_ids:vector<u8>]
     /// [token_type_name:vector<String>]
     /// [token_prices:vector<u64>]
-    public fun create_add_sui_token_message(
+    public fun create_add_tokens_on_sui_message(
         source_chain: u8,
         seq_num: u64,
         native_token: bool,
@@ -408,7 +408,7 @@ module bridge::message {
         payload.append(bcs::to_bytes(&type_names));
         payload.append(bcs::to_bytes(&token_prices));
         BridgeMessage {
-            message_type: message_types::add_sui_token(),
+            message_type: message_types::add_tokens_on_sui(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
             source_chain,
@@ -490,19 +490,19 @@ module bridge::message {
         self.new_price
     }
 
-    public fun is_native(self: &AddSuiToken): bool {
+    public fun is_native(self: &AddTokenOnSui): bool {
         self.native_token
     }
 
-    public fun token_ids(self: &AddSuiToken): vector<u8> {
+    public fun token_ids(self: &AddTokenOnSui): vector<u8> {
         self.token_ids
     }
 
-    public fun token_type_names(self: &AddSuiToken): vector<String> {
+    public fun token_type_names(self: &AddTokenOnSui): vector<String> {
         self.token_type_names
     }
 
-    public fun token_prices(self: &AddSuiToken): vector<u64> {
+    public fun token_prices(self: &AddTokenOnSui): vector<u64> {
         self.token_prices
     }
 
@@ -535,7 +535,7 @@ module bridge::message {
             5001
         } else if (message_type == message_types::update_bridge_limit()) {
             5001
-        } else if (message_type == message_types::add_sui_token()) {
+        } else if (message_type == message_types::add_tokens_on_sui()) {
             5001
         } else {
             abort EInvalidMessageType
@@ -880,12 +880,12 @@ module bridge::message {
     }
 
     #[test]
-    fun test_add_sui_token_message_serialization() {
+    fun test_add_tokens_on_sui_message_serialization() {
         let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
         let treasury = treasury::mock_for_test(ctx);
 
-        let add_sui_token_message = create_add_sui_token_message(
+        let add_tokens_on_sui_message = create_add_tokens_on_sui_message(
             chain_ids::sui_local_test(),
             1, // seq_num
             false, // native_token
@@ -893,32 +893,32 @@ module bridge::message {
             vector[ascii::string(b"0x28ac483b6f2b62dd58abdf0bbc3f86900d86bbdc710c704ba0b33b7f1c4b43c8::btc::BTC"), ascii::string(b"0xbd69a54e7c754a332804f325307c6627c06631dc41037239707e3242bc542e99::eth::ETH")],
             vector[100, 100]
         );
-        let payload = extract_add_sui_token(&add_sui_token_message);
-        assert!(payload == AddSuiToken {
+        let payload = extract_add_tokens_on_sui(&add_tokens_on_sui_message);
+        assert!(payload == AddTokenOnSui {
             native_token: false,
             token_ids: vector[treasury.token_id<BTC>(), treasury.token_id<ETH>()],
             token_type_names: vector[ascii::string(b"0x28ac483b6f2b62dd58abdf0bbc3f86900d86bbdc710c704ba0b33b7f1c4b43c8::btc::BTC"), ascii::string(b"0xbd69a54e7c754a332804f325307c6627c06631dc41037239707e3242bc542e99::eth::ETH")],
             token_prices: vector[100, 100],
         }, 0);
         // Test message serialization
-        let message = serialize_message(add_sui_token_message);
+        let message = serialize_message(add_tokens_on_sui_message);
         let expected_msg = hex::decode(
             b"060100000000000000010300020102024c3078323861633438336236663262363264643538616264663062626333663836393030643836626264633731306337303462613062333362376631633462343363383a3a6274633a3a4254434c3078626436396135346537633735346133333238303466333235333037633636323763303636333164633431303337323339373037653332343262633534326539393a3a6574683a3a4554480264000000000000006400000000000000",
         );
         assert_eq(message, expected_msg);
-        assert!(add_sui_token_message == deserialize_message_test_only(message), 0);
+        assert!(add_tokens_on_sui_message == deserialize_message_test_only(message), 0);
 
         destroy(treasury);
         test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_add_sui_token_message_serialization_2() {
+    fun test_add_tokens_on_sui_message_serialization_2() {
         let mut scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
         let treasury = treasury::mock_for_test(ctx);
 
-        let add_sui_token_message = create_add_sui_token_message(
+        let add_tokens_on_sui_message = create_add_tokens_on_sui_message(
             chain_ids::sui_local_test(),
             0, // seq_num
             false, // native_token
@@ -931,8 +931,8 @@ module bridge::message {
             ],
             vector[500_000_000, 30_000_000, 1_000, 1_000]
         );
-        let payload = extract_add_sui_token(&add_sui_token_message);
-        assert!(payload == AddSuiToken {
+        let payload = extract_add_tokens_on_sui(&add_tokens_on_sui_message);
+        assert!(payload == AddTokenOnSui {
             native_token: false,
             token_ids: vector[1, 2, 3, 4],
             token_type_names: vector[
@@ -944,12 +944,12 @@ module bridge::message {
             token_prices: vector[500_000_000, 30_000_000, 1_000, 1_000]
         }, 0);
         // Test message serialization
-        let message = serialize_message(add_sui_token_message);
+        let message = serialize_message(add_tokens_on_sui_message);
         let expected_msg = hex::decode(
             b"0601000000000000000003000401020304044c3078396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434c3078373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484e3078353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434e3078343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
         );
         assert_eq(message, expected_msg);
-        assert!(add_sui_token_message == deserialize_message_test_only(message), 0);
+        assert!(add_tokens_on_sui_message == deserialize_message_test_only(message), 0);
 
         let mut message_bytes = b"SUI_BRIDGE_MESSAGE";
         message_bytes.append(message);

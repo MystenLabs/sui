@@ -16,7 +16,7 @@ title: Module `0xb::treasury`
 -  [Function `token_id`](#0xb_treasury_token_id)
 -  [Function `decimal_multiplier`](#0xb_treasury_decimal_multiplier)
 -  [Function `notional_value`](#0xb_treasury_notional_value)
--  [Function `approve_new_token`](#0xb_treasury_approve_new_token)
+-  [Function `add_new_token`](#0xb_treasury_add_new_token)
 -  [Function `create`](#0xb_treasury_create)
 -  [Function `burn`](#0xb_treasury_burn)
 -  [Function `mint`](#0xb_treasury_mint)
@@ -238,6 +238,18 @@ title: Module `0xb::treasury`
 <dd>
 
 </dd>
+<dt>
+<code>decimal_multiplier: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>notional_value: u64</code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -431,13 +443,13 @@ title: Module `0xb::treasury`
 
 </details>
 
-<a name="0xb_treasury_approve_new_token"></a>
+<a name="0xb_treasury_add_new_token"></a>
 
-## Function `approve_new_token`
+## Function `add_new_token`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_approve_new_token">approve_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, token_name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, token_id: u8, native_token: bool, notional_value: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, token_name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, token_id: u8, native_token: bool, notional_value: u64)
 </code></pre>
 
 
@@ -446,16 +458,17 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_approve_new_token">approve_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
     <b>if</b> (!native_token){
         <b>let</b> <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>{
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
             uc,
             decimal,
         } = <a href="../sui-framework/bag.md#0x2_bag_remove">bag::remove</a>&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(&<b>mut</b> self.waiting_room, token_name);
+        <b>let</b> decimal_multiplier = <a href="../sui-framework/math.md#0x2_math_pow">math::pow</a>(10, decimal);
         <a href="../sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.supported_tokens, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>, <a href="treasury.md#0xb_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a>{
             id: token_id,
-            decimal_multiplier: <a href="../sui-framework/math.md#0x2_math_pow">math::pow</a>(10, decimal),
+            decimal_multiplier,
             notional_value,
             native_token
         });
@@ -467,7 +480,9 @@ title: Module `0xb::treasury`
         emit(<a href="treasury.md#0xb_treasury_NewTokenEvent">NewTokenEvent</a>{
             token_id,
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
-            native_token
+            native_token,
+            decimal_multiplier,
+            notional_value
         })
     } <b>else</b> {
         // Not implemented for V1
