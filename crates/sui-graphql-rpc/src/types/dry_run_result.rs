@@ -93,6 +93,7 @@ impl TryFrom<SuiExecutionResult> for DryRunEffect {
 impl TryFrom<DevInspectResults> for DryRunResult {
     type Error = crate::error::Error;
     fn try_from(dev_inspect_results: DevInspectResults) -> Result<Self, Self::Error> {
+        tracing::error!("dev_inspect_results: {:?}", dev_inspect_results);
         // Results might be None in the event of a transaction failure.
         let results = if let Some(results) = dev_inspect_results.results {
             Some(

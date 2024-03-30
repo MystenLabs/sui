@@ -4,7 +4,7 @@
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::sui_transaction::GenericSignature::Signature;
-use crate::{Filter, Page, SuiEvent, SuiObjectRef};
+use crate::{Filter, Page, SuiEvent, SuiObjectData, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
@@ -18,6 +18,8 @@ use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sui_types::inner_temporary_store::WrittenObjects;
+use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::authenticator_state::ActiveJwk;
@@ -1076,6 +1078,9 @@ pub struct DevInspectResults {
     /// The raw effects of the transaction that was dev inspected.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub raw_effects: Vec<u8>,
+    /// The objects written in this dev inspected transaction, including both package and other objects.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub written_objects: Option<BTreeMap<ObjectID, SuiObjectData>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1102,6 +1107,8 @@ impl DevInspectResults {
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         raw_txn_data: Vec<u8>,
         raw_effects: Vec<u8>,
+        written_objects: WrittenObjects,
+        show_raw_txn_data_and_effects: bool,
         resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
@@ -1131,6 +1138,15 @@ impl DevInspectResults {
                 )
             }
         };
+        let written_objects = if show_raw_txn_data_and_effects {
+            Some(written_objects
+            .into_iter()
+            .map(|(id, object)| object.try_into().map(|o| (id, o)))
+            .collect::<Result<BTreeMap<_, _>, _>>().map_err(|_| SuiError::ObjectSerializationError { error: "Failed to collect dev inspect written objects".to_string() })?)
+        } else {
+            None
+        };
+
         Ok(Self {
             effects: effects.try_into()?,
             events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
@@ -1138,6 +1154,7 @@ impl DevInspectResults {
             error,
             raw_txn_data,
             raw_effects,
+            written_objects,
         })
     }
 }
