@@ -866,7 +866,7 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_objects<I: IntoIterator<Item=Object>>(mut self, objects: I) -> Self {
+    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
         self.additional_objects.extend(objects);
         self
     }
@@ -953,7 +953,7 @@ impl TestClusterBuilder {
 
     pub fn with_validator_candidates(
         mut self,
-        addresses: impl IntoIterator<Item=SuiAddress>,
+        addresses: impl IntoIterator<Item = SuiAddress>,
     ) -> Self {
         self.get_or_init_genesis_config()
             .accounts
