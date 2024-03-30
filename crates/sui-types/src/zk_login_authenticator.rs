@@ -91,17 +91,19 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
     fn verify_user_authenticator_epoch(
         &self,
         epoch: EpochId,
-        upper_bound_max_epoch: Option<EpochId>,
+        max_epoch_upper_bound_delta: Option<u64>,
     ) -> SuiResult {
-        // the checks here ensure that `current_epoch + upper_bound_max_epoch >= self.max_epoch >= current_epoch`.
+        // the checks here ensure that `current_epoch + max_epoch_upper_bound_delta >= self.max_epoch >= current_epoch`.
         // 1. if the config for upper bound is set, ensure that the max epoch in signature is not larger than epoch + upper_bound.
-        if let Some(upper_bound) = upper_bound_max_epoch {
-            if self.get_max_epoch() > epoch + upper_bound {
+        if let Some(delta) = max_epoch_upper_bound_delta {
+            let max_epoch_upper_bound = epoch + delta;
+            if self.get_max_epoch() > max_epoch_upper_bound {
                 return Err(SuiError::InvalidSignature {
                     error: format!(
-                        "ZKLogin max epoch too large {}, current epoch {}",
+                        "ZKLogin max epoch too large {}, current epoch {}, max accepted: {}",
                         self.get_max_epoch(),
-                        epoch
+                        epoch,
+                        max_epoch_upper_bound
                     ),
                 });
             }

@@ -121,7 +121,7 @@ struct ZkLoginParams {
     // Flag to determine whether zkLogin inside multisig is accepted.
     pub accept_zklogin_in_multisig: bool,
     /// Value that sets the upper bound for max_epoch in zkLogin signature.
-    pub zklogin_max_epoch_upper_bound: Option<u64>,
+    pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 impl SignatureVerifier {
@@ -133,7 +133,7 @@ impl SignatureVerifier {
         env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
-        zklogin_max_epoch_upper_bound: Option<u64>,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
             committee,
@@ -160,7 +160,7 @@ impl SignatureVerifier {
                 env,
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
-                zklogin_max_epoch_upper_bound,
+                zklogin_max_epoch_upper_bound_delta,
             },
         }
     }
@@ -172,7 +172,7 @@ impl SignatureVerifier {
         zklogin_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
-        zklogin_max_epoch_upper_bound: Option<u64>,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -182,7 +182,7 @@ impl SignatureVerifier {
             zklogin_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
-            zklogin_max_epoch_upper_bound,
+            zklogin_max_epoch_upper_bound_delta,
         )
     }
 
@@ -362,7 +362,7 @@ impl SignatureVerifier {
             || {
                 signed_tx.verify_max_epoch_for_all_sigs(
                     self.committee.epoch(),
-                    self.zk_login_params.zklogin_max_epoch_upper_bound,
+                    self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 )?;
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(
@@ -371,7 +371,7 @@ impl SignatureVerifier {
                     self.zk_login_params.env,
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
-                    self.zk_login_params.zklogin_max_epoch_upper_bound,
+                    self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 );
                 signed_tx.verify_message_signature(&verify_params)
             },
