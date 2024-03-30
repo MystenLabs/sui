@@ -439,6 +439,15 @@ title: Module `0xb::bridge`
 
 
 
+<a name="0xb_bridge_EInvalidBridgeRoute"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 16;
+</code></pre>
+
+
+
 <a name="0xb_bridge_EBridgeAlreadyPaused"></a>
 
 
@@ -744,6 +753,7 @@ title: Module `0xb::bridge`
 ) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
     <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(inner.chain_id, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
     <b>let</b> amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="../sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     <b>let</b> bridge_seq_num = <a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(inner, <a href="message_types.md#0xb_message_types_token">message_types::token</a>());

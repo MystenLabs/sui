@@ -93,6 +93,7 @@ module bridge::bridge {
     const EBridgeAlreadyPaused: u64 = 13;
     const EBridgeNotPaused: u64 = 14;
     const ETokenAlreadyClaimed: u64 = 15;
+    const EInvalidBridgeRoute: u64 = 16;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -175,6 +176,7 @@ module bridge::bridge {
     ) {
         let inner = load_inner_mut(self);
         assert!(!inner.paused, EBridgeUnavailable);
+        assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         let amount = balance::value(coin::balance(&token));
 
         let bridge_seq_num = get_current_seq_num_and_increment(inner, message_types::token());
@@ -528,7 +530,7 @@ module bridge::bridge {
     fun test_system_msg_incorrect_chain_id() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = scenario.ctx();
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
         let blocklist = create_blocklist_message(chain_ids::sui_mainnet(), 0, 0, vector[]);
         execute_system_message(&mut bridge, blocklist, vector[]);
@@ -540,7 +542,7 @@ module bridge::bridge {
     fun test_get_current_seq_num_and_increment() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
 
         let inner = load_inner_mut(&mut bridge);
@@ -597,7 +599,7 @@ module bridge::bridge {
     fun test_execute_update_bridge_limit_abort_with_unexpected_chain_id() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -621,7 +623,7 @@ module bridge::bridge {
     fun test_execute_update_asset_price() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -645,40 +647,46 @@ module bridge::bridge {
         test_scenario::end(scenario);
     }
 
-
-    #[test]
-    fun test_execute_emergency_op() {
-        let mut scenario = test_scenario::begin(@0x0);
-        let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
-        let mut bridge = new_for_testing(ctx, chain_id);
-        let inner = load_inner_mut(&mut bridge);
-
-        // initially it's unfrozen
-        assert!(!inner.paused, 0);
+    #[test_only]
+    fun freeze_bridge(bridge: &mut Bridge) {
+        let inner = load_inner_mut(bridge);
         // freeze it
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_testnet(),
             0, // seq num
             0, // freeze op
         );
         let payload = message::extract_emergency_op_payload(&msg);
         execute_emergency_op(inner, payload);
-
-        // should be frozen now
         assert!(inner.paused, 0);
+    }
 
+    #[test_only]
+    fun unfreeze_bridge(bridge: &mut Bridge) {
+        let inner = load_inner_mut(bridge);
         // unfreeze it
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_testnet(),
             1, // seq num, this is supposed to be the next seq num but it's not what we test here
             1, // unfreeze op
         );
         let payload = message::extract_emergency_op_payload(&msg);
         execute_emergency_op(inner, payload);
-
-        // should be unfrozen now
         assert!(!inner.paused, 0);
+    }
+
+    #[test]
+    fun test_execute_emergency_op() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_testnet();
+        let mut bridge = new_for_testing(ctx, chain_id);
+
+        assert!(!load_inner_mut(&mut bridge).paused, 0);
+        freeze_bridge(&mut bridge);
+
+        assert!(load_inner_mut(&mut bridge).paused, 0);
+        unfreeze_bridge(&mut bridge);
 
         destroy(bridge);
         test_scenario::end(scenario);
@@ -689,20 +697,59 @@ module bridge::bridge {
     fun test_execute_emergency_op_abort_when_not_frozen() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
-        let inner = load_inner_mut(&mut bridge);
 
-        // initially it's unfrozen
-        assert!(!inner.paused, 0);
+        assert!(!load_inner_mut(&mut bridge).paused, 0);
         // unfreeze it, should abort
-        let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
-            0, // seq num
-            1, // freeze op
+        unfreeze_bridge(&mut bridge);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EBridgeUnavailable)]
+    fun test_execute_send_token_frozen() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_testnet();
+        let mut bridge = new_for_testing(ctx, chain_id);
+
+        assert!(!load_inner_mut(&mut bridge).paused, 0);
+        freeze_bridge(&mut bridge);
+
+        let eth_address = b"01234"; // it does not really matter
+        let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, ctx);
+        send_token(
+            &mut bridge,
+            chain_ids::eth_sepolia(), 
+            eth_address,
+            btc,
+            ctx,
         );
-        let payload = message::extract_emergency_op_payload(&msg);
-        execute_emergency_op(inner, payload);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EInvalidBridgeRoute)]
+    fun test_execute_send_token_invalid_route() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_testnet();
+        let mut bridge = new_for_testing(ctx, chain_id);
+
+        let eth_address = b"01234"; // it does not really matter
+        let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, ctx);
+        send_token(
+            &mut bridge,
+            chain_ids::eth_mainnet(), 
+            eth_address,
+            btc,
+            ctx,
+        );
 
         destroy(bridge);
         test_scenario::end(scenario);
@@ -713,7 +760,7 @@ module bridge::bridge {
     fun test_execute_emergency_op_abort_when_already_frozen() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -721,7 +768,7 @@ module bridge::bridge {
         assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_testnet(),
             0, // seq num
             0, // freeze op
         );
@@ -733,7 +780,7 @@ module bridge::bridge {
 
         // freeze it again, should abort
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_testnet(),
             1, // seq num, this is supposed to be the next seq num but it's not what we test here
             0, // unfreeze op
         );
@@ -751,13 +798,13 @@ module bridge::bridge {
     fun test_get_token_transfer_action_status() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
         let coin = coin::mint_for_testing<ETH>(12345, ctx);
 
         // Test when pending
         let message = message::create_token_bridge_message(
-            chain_ids::sui_devnet(), // source chain
+            chain_ids::sui_testnet(), // source chain
             10, // seq_num
             address::to_bytes(ctx.sender()), // sender address
             chain_ids::eth_sepolia(), // target_chain
@@ -776,7 +823,7 @@ module bridge::bridge {
 
         // Test when ready for claim
         let message = message::create_token_bridge_message(
-            chain_ids::sui_devnet(), // source chain
+            chain_ids::sui_testnet(), // source chain
             11, // seq_num
             address::to_bytes(ctx.sender()), // sender address
             chain_ids::eth_sepolia(), // target_chain
@@ -794,7 +841,7 @@ module bridge::bridge {
 
         // Test when already claimed
         let message = message::create_token_bridge_message(
-            chain_ids::sui_devnet(), // source chain
+            chain_ids::sui_testnet(), // source chain
             12, // seq_num
             address::to_bytes(ctx.sender()), // sender address
             chain_ids::eth_sepolia(), // target_chain
