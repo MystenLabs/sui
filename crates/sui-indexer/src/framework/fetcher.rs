@@ -22,7 +22,7 @@ pub struct CheckpointFetcher {
 }
 
 impl CheckpointFetcher {
-    const INTERVAL_PERIOD: std::time::Duration = std::time::Duration::from_secs(5);
+    const INTERVAL_MS: usize = 500;
     const CHECKPOINT_DOWNLOAD_CONCURRENCY: usize = 100;
 
     pub fn new(
@@ -41,7 +41,12 @@ impl CheckpointFetcher {
     }
 
     pub async fn run(mut self) {
-        let mut interval = tokio::time::interval(Self::INTERVAL_PERIOD);
+        let interval_ms = std::env::var("CHECKPOINT_FETCH_INTERVAL_MS")
+            .unwrap_or_else(|_| Self::INTERVAL_MS.to_string())
+            .parse::<u64>()
+            .expect("Invalid interval");
+        let interval_duration = std::time::Duration::from_millis(interval_ms);
+        let mut interval = tokio::time::interval(interval_duration);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         info!("CheckpointFetcher started");
