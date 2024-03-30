@@ -177,7 +177,7 @@ impl TestCluster {
             self.fullnode_config_builder()
                 .build(&mut OsRng, self.swarm.config()),
         )
-        .await
+            .await
     }
 
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
@@ -357,7 +357,7 @@ impl TestCluster {
             }
         })
             .await
-            .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node.")
+            .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
     }
 
     pub async fn wait_for_protocol_version(
@@ -368,7 +368,7 @@ impl TestCluster {
             target_protocol_version,
             Duration::from_secs(60),
         )
-        .await
+            .await
     }
 
     pub async fn wait_for_protocol_version_with_timeout(
@@ -384,8 +384,8 @@ impl TestCluster {
                 }
             }
         })
-        .await
-        .expect("Timed out waiting for cluster to target protocol version")
+            .await
+            .expect("Timed out waiting for cluster to target protocol version")
     }
 
     /// Ask 2f+1 validators to close epoch actively, and wait for the entire network to reach the next
@@ -495,7 +495,7 @@ impl TestCluster {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             })
-            .await;
+                .await;
         }
     }
 
@@ -537,8 +537,8 @@ impl TestCluster {
                 }
             }),
         )
-        .await
-        .expect("Timed out waiting for authenticator state update");
+            .await
+            .expect("Timed out waiting for authenticator state update");
     }
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
@@ -866,7 +866,7 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
+    pub fn with_objects<I: IntoIterator<Item=Object>>(mut self, objects: I) -> Self {
         self.additional_objects.extend(objects);
         self
     }
@@ -953,7 +953,7 @@ impl TestClusterBuilder {
 
     pub fn with_validator_candidates(
         mut self,
-        addresses: impl IntoIterator<Item = SuiAddress>,
+        addresses: impl IntoIterator<Item=SuiAddress>,
     ) -> Self {
         self.get_or_init_genesis_config()
             .accounts
@@ -1070,8 +1070,8 @@ impl TestClusterBuilder {
                 .state()
                 .get_object_store(),
         )
-        .unwrap()
-        .unwrap();
+            .unwrap()
+            .unwrap();
 
         let mut bridge_authority_keys = vec![];
         let mut server_ports = vec![];
@@ -1108,7 +1108,7 @@ impl TestClusterBuilder {
                 &server_url,
                 ref_gas_price,
             )
-            .unwrap();
+                .unwrap();
 
             let tx = Transaction::from_data_and_signer(
                 data,
@@ -1408,7 +1408,7 @@ impl TestClusterBuilder {
             active_address,
             active_env: Default::default(),
         }
-        .save(wallet_path)?;
+            .save(wallet_path)?;
 
         // Return network handle
         Ok(swarm)
