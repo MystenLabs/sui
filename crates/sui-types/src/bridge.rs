@@ -46,8 +46,7 @@ pub const BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME: &IdentStr =
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 
-pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 7500;
-// out of 10000 (75%)
+pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 7500; // out of 10000 (75%)
 pub const BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER: u64 = 10000; // (100%)
 
 // Threshold for action to be approved by the committee (our of 10000)
