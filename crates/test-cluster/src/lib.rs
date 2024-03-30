@@ -177,7 +177,7 @@ impl TestCluster {
             self.fullnode_config_builder()
                 .build(&mut OsRng, self.swarm.config()),
         )
-            .await
+        .await
     }
 
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
@@ -318,13 +318,13 @@ impl TestCluster {
             }
             unreachable!("Broken reconfig channel");
         })
-            .await
-            .unwrap_or_else(|_| {
-                if let Some(state) = state {
-                    panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
-                }
-                panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
-            })
+        .await
+        .unwrap_or_else(|_| {
+            if let Some(state) = state {
+                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
+            }
+            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
+        })
     }
 
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {
@@ -356,8 +356,8 @@ impl TestCluster {
                 },
             }
         })
-            .await
-            .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
+        .await
+        .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
     }
 
     pub async fn wait_for_protocol_version(
@@ -368,7 +368,7 @@ impl TestCluster {
             target_protocol_version,
             Duration::from_secs(60),
         )
-            .await
+        .await
     }
 
     pub async fn wait_for_protocol_version_with_timeout(
@@ -384,8 +384,8 @@ impl TestCluster {
                 }
             }
         })
-            .await
-            .expect("Timed out waiting for cluster to target protocol version")
+        .await
+        .expect("Timed out waiting for cluster to target protocol version")
     }
 
     /// Ask 2f+1 validators to close epoch actively, and wait for the entire network to reach the next
@@ -495,7 +495,7 @@ impl TestCluster {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             })
-                .await;
+            .await;
         }
     }
 
@@ -537,8 +537,8 @@ impl TestCluster {
                 }
             }),
         )
-            .await
-            .expect("Timed out waiting for authenticator state update");
+        .await
+        .expect("Timed out waiting for authenticator state update");
     }
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
@@ -1070,8 +1070,8 @@ impl TestClusterBuilder {
                 .state()
                 .get_object_store(),
         )
-            .unwrap()
-            .unwrap();
+        .unwrap()
+        .unwrap();
 
         let mut bridge_authority_keys = vec![];
         let mut server_ports = vec![];
@@ -1108,7 +1108,7 @@ impl TestClusterBuilder {
                 &server_url,
                 ref_gas_price,
             )
-                .unwrap();
+            .unwrap();
 
             let tx = Transaction::from_data_and_signer(
                 data,
@@ -1408,7 +1408,7 @@ impl TestClusterBuilder {
             active_address,
             active_env: Default::default(),
         }
-            .save(wallet_path)?;
+        .save(wallet_path)?;
 
         // Return network handle
         Ok(swarm)
