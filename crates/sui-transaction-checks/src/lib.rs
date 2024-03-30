@@ -54,13 +54,15 @@ mod checked {
         reference_gas_price: u64,
         transaction: &TransactionData,
     ) -> SuiResult<SuiGasStatus> {
+        let zero_gas_price_override =
+            protocol_config.get_zero_tx_gas_price_override(reference_gas_price);
         check_gas(
             objects,
             protocol_config,
             reference_gas_price,
             gas,
             transaction.gas_budget(),
-            transaction.gas_price(),
+            transaction.gas_price(zero_gas_price_override),
             transaction.kind(),
         )
     }

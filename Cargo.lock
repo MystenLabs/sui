@@ -11736,6 +11736,7 @@ dependencies = [
  "sui-indexer",
  "sui-json-rpc-types",
  "sui-package-resolver",
+ "sui-protocol-config",
  "sui-rest-api",
  "sui-storage",
  "sui-types",

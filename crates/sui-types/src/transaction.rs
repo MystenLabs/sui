@@ -45,7 +45,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions, ZeroGasPriceOverride};
 use tap::Pipe;
 use tracing::trace;
 
@@ -1902,7 +1902,8 @@ pub trait TransactionDataAPI {
 
     fn gas(&self) -> &[ObjectRef];
 
-    fn gas_price(&self) -> u64;
+    /// If gas_price is 0, we will use zero_override instead.
+    fn gas_price(&self, zero_override: ZeroGasPriceOverride) -> u64;
 
     fn gas_budget(&self) -> u64;
 
@@ -1981,8 +1982,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.gas_data.payment
     }
 
-    fn gas_price(&self) -> u64 {
-        self.gas_data.price
+    fn gas_price(&self, zero_override: ZeroGasPriceOverride) -> u64 {
+        zero_override.get_gas_price(self.gas_data.price)
     }
 
     fn gas_budget(&self) -> u64 {
@@ -2654,10 +2655,6 @@ impl CertifiedTransaction {
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
-    }
-
-    pub fn gas_price(&self) -> u64 {
-        self.data().transaction_data().gas_price()
     }
 }
 

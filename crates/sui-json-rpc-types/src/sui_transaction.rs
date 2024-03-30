@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
+use sui_protocol_config::ZeroGasPriceOverride;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -1314,7 +1315,7 @@ impl SuiTransactionBlockData {
                 .map(|obj_ref| SuiObjectRef::from(*obj_ref))
                 .collect(),
             owner: data.gas_owner(),
-            price: data.gas_price(),
+            price: data.gas_price(ZeroGasPriceOverride::NoOverride),
             budget: data.gas_budget(),
         };
         let transaction = SuiTransactionBlockKind::try_from(data.into_kind(), module_cache)?;

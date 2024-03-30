@@ -8,6 +8,7 @@ use fastcrypto::encoding::{Base64, Encoding};
 use move_core_types::account_address::AccountAddress;
 use serde::de::DeserializeOwned;
 use sui_json_rpc_types::DevInspectArgs;
+use sui_protocol_config::ZeroGasPriceOverride;
 use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
@@ -157,7 +158,7 @@ impl Query {
                 (
                     tx_data.sender(),
                     tx_data.clone().into_kind(),
-                    Some(tx_data.gas_price().into()),
+                    Some(tx_data.gas_price(ZeroGasPriceOverride::NoOverride).into()),
                     Some(tx_data.gas_owner()),
                     Some(tx_data.gas_budget().into()),
                     Some(tx_data.gas().to_vec()),

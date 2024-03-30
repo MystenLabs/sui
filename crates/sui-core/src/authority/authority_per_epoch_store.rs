@@ -2397,14 +2397,19 @@ impl AuthorityPerEpochStore {
             })
             .collect();
 
+        let zero_gas_price_override = self
+            .protocol_config
+            .get_zero_tx_gas_price_override(self.reference_gas_price());
         // We always order transactions using randomness last.
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),
+            zero_gas_price_override,
         );
         PostConsensusTxReorder::reorder(
             &mut sequenced_randomness_transactions,
             self.protocol_config.consensus_transaction_ordering(),
+            zero_gas_price_override,
         );
         let consensus_transactions: Vec<_> = system_transactions
             .into_iter()

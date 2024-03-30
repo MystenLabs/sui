@@ -813,7 +813,9 @@ mod tests {
     use narwhal_types::{Batch, Certificate, CommittedSubDag, HeaderV1Builder, ReputationScores};
     use prometheus::Registry;
     use shared_crypto::intent::Intent;
-    use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
+    use sui_protocol_config::{
+        ConsensusTransactionOrdering, SupportedProtocolVersions, ZeroGasPriceOverride,
+    };
     use sui_types::{
         base_types::{random_object_ref, AuthorityName, SuiAddress},
         committee::Committee,
@@ -993,7 +995,11 @@ mod tests {
     #[test]
     fn test_order_by_gas_price() {
         let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        PostConsensusTxReorder::reorder(
+            &mut v,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::NoOverride,
+        );
         assert_eq!(
             extract(v),
             vec![
@@ -1014,7 +1020,11 @@ mod tests {
             cap_txn(1),
             user_txn(1000),
         ];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        PostConsensusTxReorder::reorder(
+            &mut v,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::NoOverride,
+        );
         assert_eq!(
             extract(v),
             vec![
@@ -1037,7 +1047,11 @@ mod tests {
             cap_txn(1),
             eop_txn(11),
         ];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        PostConsensusTxReorder::reorder(
+            &mut v,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::NoOverride,
+        );
         assert_eq!(
             extract(v),
             vec![
@@ -1046,6 +1060,82 @@ mod tests {
                 "eop(10)".to_string(),
                 "cap(1)".to_string(),
                 "eop(11)".to_string(),
+            ]
+        );
+    }
+
+    // TODO: Move this test and some above to post_consensus_tx_reorder.rs
+    #[test]
+    fn test_order_with_zero_gas_price_override() {
+        let v = vec![user_txn(0), user_txn(1), user_txn(2), user_txn(3)];
+        let mut v1 = v.clone();
+        let rgp = 0; // No override.
+        PostConsensusTxReorder::reorder(
+            &mut v1,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::Override(rgp),
+        );
+        assert_eq!(
+            extract(v1),
+            vec![
+                "user(3)".to_string(),
+                "user(2)".to_string(),
+                "user(1)".to_string(),
+                "user(0)".to_string(),
+            ]
+        );
+
+        let mut v2 = v.clone();
+        let rgp = 1;
+        PostConsensusTxReorder::reorder(
+            &mut v2,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::Override(rgp),
+        );
+        assert_eq!(
+            extract(v2),
+            vec![
+                "user(3)".to_string(),
+                "user(2)".to_string(),
+                // 0 gas price is effectively gas_price=1.
+                "user(0)".to_string(),
+                "user(1)".to_string(),
+            ]
+        );
+
+        let mut v3 = v.clone();
+        let rgp = 2;
+        PostConsensusTxReorder::reorder(
+            &mut v3,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::Override(rgp),
+        );
+        assert_eq!(
+            extract(v3),
+            vec![
+                "user(3)".to_string(),
+                // 0 gas price is effectively gas_price=2.
+                "user(0)".to_string(),
+                "user(2)".to_string(),
+                "user(1)".to_string(),
+            ]
+        );
+
+        let mut v4 = v.clone();
+        let rgp = 5;
+        PostConsensusTxReorder::reorder(
+            &mut v4,
+            ConsensusTransactionOrdering::ByGasPrice,
+            ZeroGasPriceOverride::Override(rgp),
+        );
+        assert_eq!(
+            extract(v4),
+            vec![
+                // 0 gas price is effectively gas_price=5.
+                "user(0)".to_string(),
+                "user(3)".to_string(),
+                "user(2)".to_string(),
+                "user(1)".to_string(),
             ]
         );
     }
@@ -1064,7 +1154,11 @@ mod tests {
                     format!("cap({})", cap.generation)
                 }
                 ConsensusTransactionKind::UserTransaction(txn) => {
-                    format!("user({})", txn.transaction_data().gas_price())
+                    format!(
+                        "user({})",
+                        txn.transaction_data()
+                            .gas_price(ZeroGasPriceOverride::NoOverride)
+                    )
                 }
                 _ => unreachable!(),
             },

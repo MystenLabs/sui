@@ -73,7 +73,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_async, fail_point_if};
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions, ZeroGasPriceOverride};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
@@ -1857,7 +1857,17 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let max_tx_gas = protocol_config.max_tx_gas();
 
-        let price = gas_price.unwrap_or(reference_gas_price);
+        let zero_gas_price_override =
+            protocol_config.get_zero_tx_gas_price_override(reference_gas_price);
+        let price = gas_price.unwrap_or(
+            if matches!(zero_gas_price_override, ZeroGasPriceOverride::NoOverride) {
+                // If we don't support zero gas price override yet, we must use the reference gas price
+                // so that the transaction has a meaningful gas price.
+                reference_gas_price
+            } else {
+                0
+            },
+        );
         let budget = gas_budget.unwrap_or(max_tx_gas);
         let owner = gas_sponsor.unwrap_or(sender);
         // Payment might be empty here, but it's fine we'll have to deal with it later after reading all the input objects.
@@ -1937,7 +1947,7 @@ impl AuthorityState {
             )?;
             let gas_status = SuiGasStatus::new(
                 max_tx_gas,
-                transaction.gas_price(),
+                transaction.gas_price(zero_gas_price_override),
                 reference_gas_price,
                 protocol_config,
             )?;

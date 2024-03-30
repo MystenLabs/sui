@@ -252,7 +252,7 @@ async fn test_dry_run_transaction_block() {
         txn_data.sender(),
         vec![],
         txn_data.gas_budget(),
-        txn_data.gas_price(),
+        txn_data.gas_price(ZeroGasPriceOverride::NoOverride),
     );
     let (response, _, _, _) = fullnode
         .dry_exec_transaction(txn_data, transaction_digest)

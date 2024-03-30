@@ -8,6 +8,7 @@ use fastcrypto::encoding::{Base64, Encoding};
 use tracing::error;
 
 use sui_indexer::framework::Handler;
+use sui_protocol_config::ZeroGasPriceOverride;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -164,7 +165,7 @@ impl TransactionHandler {
             storage_rebate: gas_summary.storage_rebate,
             non_refundable_storage_fee: gas_summary.non_refundable_storage_fee,
 
-            gas_price: txn_data.gas_price(),
+            gas_price: txn_data.gas_price(ZeroGasPriceOverride::NoOverride),
 
             raw_transaction: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
 

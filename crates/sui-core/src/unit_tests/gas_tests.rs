@@ -39,8 +39,8 @@ async fn test_tx_less_than_minimum_gas_budget() {
     assert_eq!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
         UserInputError::GasBudgetTooLow {
-            gas_budget: budget * result.rgp,
-            min_budget: *MIN_GAS_BUDGET_PRE_RGP * result.rgp,
+            gas_budget: budget * result.gas_price,
+            min_budget: *MIN_GAS_BUDGET_PRE_RGP * result.gas_price,
         }
     );
 }
@@ -470,7 +470,7 @@ async fn test_tx_gas_balance_less_than_budget() {
     // during handle transaction phase.
     let gas_balance = *MIN_GAS_BUDGET_PRE_RGP - 1;
     let budget = *MIN_GAS_BUDGET_PRE_RGP;
-    let result = execute_transfer_with_price(gas_balance, budget, 1, false, true).await;
+    let result = execute_transfer_with_price(gas_balance, budget, 1.0, false, true).await;
     assert!(matches!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow { .. }
@@ -509,7 +509,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
 #[tokio::test]
 async fn test_native_transfer_gas_price_is_used() {
     let result =
-        execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 1, true, false).await;
+        execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 1.0, true, false).await;
     let effects = result
         .response
         .unwrap()
@@ -518,7 +518,7 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_summary_1 = effects.gas_cost_summary();
 
     let result =
-        execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 2, true, false).await;
+        execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 2.0, true, false).await;
     let effects = result
         .response
         .unwrap()
@@ -534,7 +534,7 @@ async fn test_native_transfer_gas_price_is_used() {
     // test overflow with insufficient gas
     let gas_balance = *MAX_GAS_BUDGET - 1;
     let gas_budget = *MAX_GAS_BUDGET;
-    let result = execute_transfer_with_price(gas_balance, gas_budget, 1, true, false).await;
+    let result = execute_transfer_with_price(gas_balance, gas_budget, 1.0, true, false).await;
     assert!(matches!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow { .. }
@@ -906,11 +906,31 @@ async fn test_move_call_gas() -> SuiResult {
 async fn test_tx_gas_price_less_than_reference_gas_price() {
     let gas_balance = *MAX_GAS_BUDGET;
     let budget = *MIN_GAS_BUDGET_PRE_RGP;
-    let result = execute_transfer_with_price(gas_balance, budget, 0, false, true).await;
+    let result = execute_transfer_with_price(gas_balance, budget, 0.5, false, true).await;
     assert!(matches!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
         UserInputError::GasPriceUnderRGP { .. }
     ));
+}
+
+#[tokio::test]
+async fn test_zero_tx_gas_price() {
+    let gas_balance = *MAX_GAS_BUDGET;
+    let budget = *MAX_GAS_BUDGET;
+    let result1 = execute_transfer_with_price(gas_balance, budget, 0.0, true, false).await;
+    let result2 = execute_transfer_with_price(gas_balance, budget, 1.0, true, false).await;
+    assert_eq!(
+        result1
+            .response
+            .unwrap()
+            .into_effects_for_testing()
+            .gas_cost_summary(),
+        result2
+            .response
+            .unwrap()
+            .into_effects_for_testing()
+            .gas_cost_summary()
+    )
 }
 
 #[tokio::test]
@@ -994,7 +1014,7 @@ struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub gas_object_id: ObjectID,
     pub response: SuiResult<TransactionStatus>,
-    pub rgp: u64,
+    pub gas_price: u64,
 }
 
 async fn execute_transfer(
@@ -1003,13 +1023,20 @@ async fn execute_transfer(
     run_confirm: bool,
     min_budget_pre_rgp: bool,
 ) -> TransferResult {
-    execute_transfer_with_price(gas_balance, gas_budget, 1, run_confirm, min_budget_pre_rgp).await
+    execute_transfer_with_price(
+        gas_balance,
+        gas_budget,
+        1.0,
+        run_confirm,
+        min_budget_pre_rgp,
+    )
+    .await
 }
 
 async fn execute_transfer_with_price(
     gas_balance: u64,
     gas_budget: u64,
-    rgp_multiple: u64,
+    rgp_multiple: f64,
     run_confirm: bool,
     min_budget_pre_rgp: bool,
 ) -> TransferResult {
@@ -1017,9 +1044,14 @@ async fn execute_transfer_with_price(
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap() * rgp_multiple;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let gas_price = (rgp as f64 * rgp_multiple) as u64;
     let gas_budget = if min_budget_pre_rgp {
-        gas_budget * rgp
+        if gas_price == 0 {
+            gas_budget * rgp
+        } else {
+            gas_budget * gas_price
+        }
     } else {
         gas_budget
     };
@@ -1042,7 +1074,7 @@ async fn execute_transfer_with_price(
         builder.finish()
     };
     let kind = TransactionKind::ProgrammableTransaction(pt);
-    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, rgp);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, gas_price);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let response = if run_confirm {
@@ -1067,6 +1099,6 @@ async fn execute_transfer_with_price(
         authority_state,
         gas_object_id,
         response,
-        rgp,
+        gas_price,
     }
 }

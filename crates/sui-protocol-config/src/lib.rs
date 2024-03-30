@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 42;
+const MAX_PROTOCOL_VERSION: u64 = 43;
 
 // Record history of protocol version allocations here:
 //
@@ -115,6 +115,7 @@ const MAX_PROTOCOL_VERSION: u64 = 42;
 // Version 40:
 // Version 41: Enable group operations native functions in testnet and mainnet (without msm).
 // Version 42: Migrate sui framework and related code to Move 2024
+// Version 43: Allow transactions to use network reference gas price by setting gas price to 0.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -393,6 +394,10 @@ struct FeatureFlags {
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
+
+    // Allow transactions to just use the network reference gas price, by setting gas price to 0.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_zero_tx_gas_price: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -416,6 +421,21 @@ pub enum ConsensusTransactionOrdering {
 impl ConsensusTransactionOrdering {
     pub fn is_none(&self) -> bool {
         matches!(self, ConsensusTransactionOrdering::None)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum ZeroGasPriceOverride {
+    Override(u64),
+    NoOverride,
+}
+
+impl ZeroGasPriceOverride {
+    pub fn get_gas_price(&self, gas_price: u64) -> u64 {
+        match (gas_price, self) {
+            (0, ZeroGasPriceOverride::Override(value)) => *value,
+            (gas_price, _) => gas_price,
+        }
     }
 }
 
@@ -1185,6 +1205,18 @@ impl ProtocolConfig {
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
+    }
+
+    pub fn enable_zero_tx_gas_price(&self) -> bool {
+        self.feature_flags.enable_zero_tx_gas_price
+    }
+
+    pub fn get_zero_tx_gas_price_override(&self, rgp: u64) -> ZeroGasPriceOverride {
+        if self.enable_zero_tx_gas_price() {
+            ZeroGasPriceOverride::Override(rgp)
+        } else {
+            ZeroGasPriceOverride::NoOverride
+        }
     }
 }
 
@@ -2025,6 +2057,9 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
                 42 => {}
+                43 => {
+                    cfg.feature_flags.enable_zero_tx_gas_price = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
