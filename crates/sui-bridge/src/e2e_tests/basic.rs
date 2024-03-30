@@ -116,7 +116,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
             tx_ack,
             eth_private_key_hex_0,
         )
-            .await
+        .await
     });
     let deployed_contracts = rx_ack.await.unwrap();
     println!("Deployed contracts: {:?}", deployed_contracts);
@@ -141,14 +141,14 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         TOKEN_ID_ETH,
         0,
     )
-        .await;
+    .await;
 
     start_bridge_cluster(
         &test_cluster,
         anvil_port,
         deployed_contracts.sui_bridge_addrress_hex(),
     )
-        .await;
+    .await;
 
     wait_for_transfer_action_status(
         &sui_bridge_client,
@@ -156,7 +156,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         0,
         BridgeActionStatus::Claimed,
     )
-        .await;
+    .await;
 
     let eth_coin = sui_client
         .coin_read_api()
@@ -193,7 +193,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         sui_amount,
         &sui_token_type_tags,
     )
-        .await;
+    .await;
 
     let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
 
@@ -204,7 +204,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         nonce,
         BridgeActionStatus::Approved,
     )
-        .await;
+    .await;
 
     // Now collect sigs from the bridge record and submit to eth to claim
     // TODO: add a function to grab validator sigs
@@ -219,10 +219,10 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         }
     );
     let status_object_id = sui_client.read_api().get_dynamic_field_object(records_id,
-                                                                          DynamicFieldName {
-                                                                              type_: TypeTag::from_str("0x000000000000000000000000000000000000000000000000000000000000000b::message::BridgeMessageKey").unwrap(),
-                                                                              value: key.clone(),
-                                                                          },
+        DynamicFieldName {
+            type_: TypeTag::from_str("0x000000000000000000000000000000000000000000000000000000000000000b::message::BridgeMessageKey").unwrap(),
+            value: key.clone(),
+        },
     ).await.unwrap().into_object().unwrap().object_id;
 
     let object_resp = sui_client
@@ -600,7 +600,7 @@ async fn init_eth_to_sui_bridge(
         sui_chain_id,
         amount,
     )
-        .await;
+    .await;
     let pending_tx = eth_tx.send().await.unwrap();
     let tx_receipt = pending_tx.await.unwrap().unwrap();
     let eth_bridge_event = tx_receipt
@@ -609,11 +609,11 @@ async fn init_eth_to_sui_bridge(
         .find_map(EthBridgeEvent::try_from_log)
         .unwrap();
     let EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
-                                               eth_bridge_event,
-                                           )) = eth_bridge_event
-        else {
-            unreachable!();
-        };
+        eth_bridge_event,
+    )) = eth_bridge_event
+    else {
+        unreachable!();
+    };
     // assert eth log matches
     assert_eq!(eth_bridge_event.source_chain_id, eth_chain_id);
     assert_eq!(eth_bridge_event.nonce, nonce);
@@ -647,7 +647,7 @@ async fn init_sui_to_eth_bridge(
         bridge_object_arg,
         sui_token_type_tags,
     )
-        .await;
+    .await;
     let sui_events = resp.events.unwrap().data;
     let bridge_event = sui_events
         .iter()
