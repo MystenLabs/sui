@@ -14,6 +14,7 @@ use std::path::Path;
 use tracing::debug;
 use tracing::info;
 
+// include the boilerplate code in this binary
 static PROJECT_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/boilerplate");
 
 #[derive(ValueEnum, Parser, Debug, Clone)]
