@@ -12,6 +12,7 @@ use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::str::from_utf8;
 use std::str::FromStr;
 use std::time::Duration;
@@ -25,7 +26,6 @@ use sui_json_rpc_types::{
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::bridge;
 use sui_types::bridge::get_bridge;
 use sui_types::bridge::BridgeCommitteeSummary;
 use sui_types::bridge::BridgeInnerDynamicField;
@@ -59,6 +59,7 @@ use sui_types::{
     event::EventID,
     Identifier,
 };
+use sui_types::{bridge, parse_sui_type_tag};
 use tap::TapFallible;
 use tracing::{error, warn};
 
@@ -166,6 +167,49 @@ where
             .get_bridge_summary()
             .await
             .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
+    }
+
+    pub async fn get_token_id_map(&self) -> BridgeResult<HashMap<u8, TypeTag>> {
+        self.get_bridge_summary()
+            .await?
+            .treasury
+            .id_token_type_map
+            .into_iter()
+            .map(|(id, name)| {
+                parse_sui_type_tag(&format!("0x{name}"))
+                    .map(|name| (id, name))
+                    .map_err(|e| {
+                        BridgeError::InternalError(format!(
+                            "Failed to retrieve token id mapping: {e}, type name: {name}"
+                        ))
+                    })
+            })
+            .collect()
+    }
+
+    pub async fn get_notional_values(&self) -> BridgeResult<HashMap<u8, u64>> {
+        let bridge_summary = self.get_bridge_summary().await?;
+        bridge_summary
+            .treasury
+            .id_token_type_map
+            .iter()
+            .map(|(id, type_name)| {
+                bridge_summary
+                    .treasury
+                    .supported_tokens
+                    .iter()
+                    .find_map(|(tn, metadata)| {
+                        if type_name == tn {
+                            Some((*id, metadata.notional_value))
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or(BridgeError::InternalError(
+                        "Error encountered when retrieving token notional values.".into(),
+                    ))
+            })
+            .collect()
     }
 
     // TODO: cache this
@@ -610,7 +654,7 @@ mod tests {
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
             .with_epoch_duration_ms(15000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
 
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -632,6 +676,7 @@ mod tests {
         let summary = sui_client.inner.get_bridge_summary().await.unwrap();
         let usdc_amount = 5000000;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. Create a Eth -> Sui Transfer (recipient is sender address), approve with validator secrets and assert its status to be Claimed
         let action = get_test_eth_to_sui_bridge_action(None, Some(usdc_amount), Some(sender));
@@ -641,6 +686,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             Some(sender),
+            &id_token_map,
         )
         .await
         .unwrap();
@@ -663,7 +709,7 @@ mod tests {
             context,
             eth_recv_address,
             usdc_object_ref,
-            TOKEN_ID_USDC,
+            id_token_map.get(&TOKEN_ID_USDC).unwrap().clone(),
             bridge_object_arg,
         )
         .await;
@@ -703,6 +749,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
 

@@ -8,18 +8,14 @@ title: Module `0xb::limiter`
 -  [Struct `TransferLimiter`](#0xb_limiter_TransferLimiter)
 -  [Struct `TransferRecord`](#0xb_limiter_TransferRecord)
 -  [Struct `UpdateRouteLimitEvent`](#0xb_limiter_UpdateRouteLimitEvent)
--  [Struct `UpdateAssetPriceEvent`](#0xb_limiter_UpdateAssetPriceEvent)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0xb_limiter_new)
 -  [Function `get_route_limit`](#0xb_limiter_get_route_limit)
--  [Function `get_asset_notional_price`](#0xb_limiter_get_asset_notional_price)
 -  [Function `update_route_limit`](#0xb_limiter_update_route_limit)
--  [Function `update_asset_notional_price`](#0xb_limiter_update_asset_notional_price)
 -  [Function `current_hour_since_epoch`](#0xb_limiter_current_hour_since_epoch)
 -  [Function `check_and_record_sending_transfer`](#0xb_limiter_check_and_record_sending_transfer)
 -  [Function `adjust_transfer_records`](#0xb_limiter_adjust_transfer_records)
 -  [Function `initial_transfer_limits`](#0xb_limiter_initial_transfer_limits)
--  [Function `initial_notional_values`](#0xb_limiter_initial_notional_values)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -27,12 +23,8 @@ title: Module `0xb::limiter`
 <b>use</b> <a href="../sui-framework/clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="../sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
-<b>use</b> <a href="btc.md#0xb_btc">0xb::btc</a>;
 <b>use</b> <a href="chain_ids.md#0xb_chain_ids">0xb::chain_ids</a>;
-<b>use</b> <a href="eth.md#0xb_eth">0xb::eth</a>;
 <b>use</b> <a href="treasury.md#0xb_treasury">0xb::treasury</a>;
-<b>use</b> <a href="usdc.md#0xb_usdc">0xb::usdc</a>;
-<b>use</b> <a href="usdt.md#0xb_usdt">0xb::usdt</a>;
 </code></pre>
 
 
@@ -55,12 +47,6 @@ title: Module `0xb::limiter`
 <dl>
 <dt>
 <code>transfer_limits: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, u64&gt;</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>notional_values: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u8, u64&gt;</code>
 </dt>
 <dd>
 
@@ -160,39 +146,6 @@ title: Module `0xb::limiter`
 
 </details>
 
-<a name="0xb_limiter_UpdateAssetPriceEvent"></a>
-
-## Struct `UpdateAssetPriceEvent`
-
-
-
-<pre><code><b>struct</b> <a href="limiter.md#0xb_limiter_UpdateAssetPriceEvent">UpdateAssetPriceEvent</a> <b>has</b> <b>copy</b>, drop
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>token_id: u8</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>new_price: u64</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -244,7 +197,6 @@ title: Module `0xb::limiter`
     // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> <a href="../sui-system/genesis.md#0x3_genesis">genesis</a>
     <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
         transfer_limits: <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
-        notional_values: <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(),
         transfer_records: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>()
     }
 }
@@ -278,30 +230,6 @@ title: Module `0xb::limiter`
 
 </details>
 
-<a name="0xb_limiter_get_asset_notional_price"></a>
-
-## Function `get_asset_notional_price`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_asset_notional_price">get_asset_notional_price</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, token_id: &u8): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_asset_notional_price">get_asset_notional_price</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, token_id: &u8): u64 {
-    self.notional_values[token_id]
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xb_limiter_update_route_limit"></a>
 
 ## Function `update_route_limit`
@@ -317,7 +245,7 @@ title: Module `0xb::limiter`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(
     self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
     route: &BridgeRoute,
     new_usd_limit: u64
@@ -334,43 +262,6 @@ title: Module `0xb::limiter`
         sending_chain: *route.source(),
         receiving_chain,
         new_limit: new_usd_limit,
-    })
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_limiter_update_asset_notional_price"></a>
-
-## Function `update_asset_notional_price`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_asset_notional_price">update_asset_notional_price</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, token_id: u8, new_usd_price: u64)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="limiter.md#0xb_limiter_update_asset_notional_price">update_asset_notional_price</a>(
-    self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
-    token_id: u8,
-    new_usd_price: u64
-) {
-    <b>if</b> (!self.notional_values.contains(&token_id)) {
-        self.notional_values.insert(token_id, new_usd_price);
-    } <b>else</b> {
-        *&<b>mut</b> self.notional_values[&token_id] = new_usd_price;
-    };
-
-    emit(<a href="limiter.md#0xb_limiter_UpdateAssetPriceEvent">UpdateAssetPriceEvent</a> {
-        token_id,
-        new_price: new_usd_price,
     })
 }
 </code></pre>
@@ -409,7 +300,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, <a href="treasury.md#0xb_treasury">treasury</a>: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
 </code></pre>
 
 
@@ -420,6 +311,7 @@ title: Module `0xb::limiter`
 
 <pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(
     self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
+    <a href="treasury.md#0xb_treasury">treasury</a>: &BridgeTreasury,
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     route: BridgeRoute,
     amount: u64
@@ -442,21 +334,21 @@ title: Module `0xb::limiter`
     <b>let</b> route_limit = self.transfer_limits.try_get(&route);
     <b>assert</b>!(route_limit.is_some(), <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>);
     <b>let</b> route_limit = route_limit.destroy_some();
-    <b>let</b> route_limit_adjusted = (route_limit <b>as</b> u128) * (<a href="treasury.md#0xb_treasury_decimal_multiplier">treasury::decimal_multiplier</a>&lt;T&gt;() <b>as</b> u128);
+    <b>let</b> route_limit_adjusted = (route_limit <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
 
     // Compute notional amount
     // Upcast <b>to</b> u128 <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
-    <b>let</b> value = (self.notional_values[&<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;()] <b>as</b> u128);
+    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> u128);
     <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> u128);
 
     // Check <b>if</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> amount exceed limit
     // Upscale them <b>to</b> the token's decimal.
-    <b>if</b> ((record.total_amount <b>as</b> u128) * (<a href="treasury.md#0xb_treasury_decimal_multiplier">treasury::decimal_multiplier</a>&lt;T&gt;() <b>as</b> u128) + notional_amount_with_token_multiplier &gt; route_limit_adjusted) {
+    <b>if</b> ((record.total_amount <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128) + notional_amount_with_token_multiplier &gt; route_limit_adjusted) {
         <b>return</b> <b>false</b>
     };
 
     // Now scale down <b>to</b> notional value
-    <b>let</b> notional_amount = notional_amount_with_token_multiplier / (<a href="treasury.md#0xb_treasury_decimal_multiplier">treasury::decimal_multiplier</a>&lt;T&gt;() <b>as</b> u128);
+    <b>let</b> notional_amount = notional_amount_with_token_multiplier / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
     // Should be safe <b>to</b> downcast <b>to</b> u64 after dividing by the decimals
     <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
 
@@ -579,35 +471,6 @@ title: Module `0xb::limiter`
     );
 
     transfer_limits
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_limiter_initial_notional_values"></a>
-
-## Function `initial_notional_values`
-
-
-
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(): <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u8, u64&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(): VecMap&lt;u8, u64&gt; {
-    <b>let</b> <b>mut</b> notional_values = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-    notional_values.insert(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;BTC&gt;(), 50_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
-    notional_values.insert(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;ETH&gt;(), 3_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
-    notional_values.insert(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;USDC&gt;(), 1 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
-    notional_values.insert(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;USDT&gt;(), 1 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
-    notional_values
 }
 </code></pre>
 

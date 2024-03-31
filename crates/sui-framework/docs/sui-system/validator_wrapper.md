@@ -76,7 +76,7 @@ title: Module `0x3::validator_wrapper`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_create_v1">create_v1</a>(<a href="../sui-system/validator.md#0x3_validator">validator</a>: Validator, ctx: &<b>mut</b> TxContext): <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_create_v1">create_v1</a>(<a href="../sui-system/validator.md#0x3_validator">validator</a>: Validator, ctx: &<b>mut</b> TxContext): <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
     <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
         inner: <a href="../sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(1, <a href="../sui-system/validator.md#0x3_validator">validator</a>, ctx)
     }
@@ -104,7 +104,7 @@ If the inner version is old, we upgrade it lazily in-place.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_load_validator_maybe_upgrade">load_validator_maybe_upgrade</a>(self: &<b>mut</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): &<b>mut</b> Validator {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_load_validator_maybe_upgrade">load_validator_maybe_upgrade</a>(self: &<b>mut</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): &<b>mut</b> Validator {
     <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self);
     <a href="../sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner)
 }
@@ -130,7 +130,7 @@ Destroy the wrapper and retrieve the inner validator object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_destroy">destroy</a>(self: <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): Validator {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_destroy">destroy</a>(self: <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): Validator {
     <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(&self);
     <b>let</b> <a href="../sui-system/validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> { inner } = self;
     <a href="../sui-framework/versioned.md#0x2_versioned_destroy">versioned::destroy</a>(inner)

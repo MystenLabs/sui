@@ -197,6 +197,7 @@ impl SuiClientInner for SuiMockClient {
             is_frozen: false,
             limiter: Default::default(),
             committee: Default::default(),
+            treasury: Default::default(),
         })
     }
 

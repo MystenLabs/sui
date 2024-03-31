@@ -669,7 +669,7 @@ Max gas price a validator can set is 100K MIST.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_new_metadata">new_metadata</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_new_metadata">new_metadata</a>(
     sui_address: <b>address</b>,
     protocol_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     network_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
@@ -732,7 +732,7 @@ Max gas price a validator can set is 100K MIST.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_new">new</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_new">new</a>(
     sui_address: <b>address</b>,
     protocol_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     network_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
@@ -813,7 +813,7 @@ Deactivate this validator's staking pool
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, deactivation_epoch: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, deactivation_epoch: u64) {
     self.<a href="../sui-system/staking_pool.md#0x3_staking_pool">staking_pool</a>.deactivate_staking_pool(deactivation_epoch)
 }
 </code></pre>
@@ -837,7 +837,7 @@ Deactivate this validator's staking pool
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_activate">activate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, activation_epoch: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_activate">activate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, activation_epoch: u64) {
     self.<a href="../sui-system/staking_pool.md#0x3_staking_pool">staking_pool</a>.activate_staking_pool(activation_epoch);
 }
 </code></pre>
@@ -862,7 +862,7 @@ Process pending stake and pending withdraws, and update the gas price.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>) {
     self.gas_price = self.next_epoch_gas_price;
     self.commission_rate = self.next_epoch_commission_rate;
 }
@@ -888,7 +888,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_add_stake">request_add_stake</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_add_stake">request_add_stake</a>(
     self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>,
     stake: Balance&lt;SUI&gt;,
     staker_address: <b>address</b>,
@@ -936,7 +936,7 @@ Request to add stake to the validator's staking pool at genesis
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(
     self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>,
     stake: Balance&lt;SUI&gt;,
     staker_address: <b>address</b>,
@@ -980,7 +980,7 @@ Request to withdraw stake from the validator's staking pool, processed at the en
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_withdraw_stake">request_withdraw_stake</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_withdraw_stake">request_withdraw_stake</a>(
     self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>,
     staked_sui: StakedSui,
     ctx: &TxContext,
@@ -1027,7 +1027,7 @@ Need to present a <code>ValidatorOperationCap</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_set_gas_price">request_set_gas_price</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_set_gas_price">request_set_gas_price</a>(
     self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>,
     verified_cap: ValidatorOperationCap,
     new_price: u64,
@@ -1059,7 +1059,7 @@ Set new gas price for the candidate validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_set_candidate_gas_price">set_candidate_gas_price</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_set_candidate_gas_price">set_candidate_gas_price</a>(
     self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>,
     verified_cap: ValidatorOperationCap,
     new_price: u64
@@ -1093,7 +1093,7 @@ Request to set new commission rate for the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
     <b>assert</b>!(new_commission_rate &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="../sui-system/validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.next_epoch_commission_rate = new_commission_rate;
 }
@@ -1119,7 +1119,7 @@ Set new commission rate for the candidate validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_set_candidate_commission_rate">set_candidate_commission_rate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_set_candidate_commission_rate">set_candidate_commission_rate</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(new_commission_rate &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="../sui-system/validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.commission_rate = new_commission_rate;
@@ -1146,7 +1146,7 @@ Deposit stakes rewards into the validator's staking pool, called at the end of t
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_deposit_stake_rewards">deposit_stake_rewards</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, reward: Balance&lt;SUI&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_deposit_stake_rewards">deposit_stake_rewards</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, reward: Balance&lt;SUI&gt;) {
     self.next_epoch_stake = self.next_epoch_stake + reward.value();
     self.<a href="../sui-system/staking_pool.md#0x3_staking_pool">staking_pool</a>.deposit_rewards(reward);
 }
@@ -1172,7 +1172,7 @@ Process pending stakes and withdraws, called at the end of the epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, ctx: &TxContext) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, ctx: &TxContext) {
     self.<a href="../sui-system/staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="../sui-system/validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(ctx);
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_stake_amount">stake_amount</a>(self) == self.next_epoch_stake, <a href="../sui-system/validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
 }
@@ -1897,7 +1897,7 @@ Set the voting power of this validator, called only from validator_set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_set_voting_power">set_voting_power</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, new_voting_power: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_set_voting_power">set_voting_power</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, new_voting_power: u64) {
     self.<a href="../sui-system/voting_power.md#0x3_voting_power">voting_power</a> = new_voting_power;
 }
 </code></pre>
@@ -2179,7 +2179,7 @@ and registers it, thus revoking the previous cap's permission.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <b>address</b> = ctx.sender();
     <b>assert</b>!(<b>address</b> == self.metadata.sui_address, <a href="../sui-system/validator.md#0x3_validator_ENewCapNotCreatedByValidatorItself">ENewCapNotCreatedByValidatorItself</a>);
     <b>let</b> new_id = <a href="../sui-system/validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">validator_cap::new_unverified_validator_operation_cap_and_transfer</a>(<b>address</b>, ctx);
@@ -2207,7 +2207,7 @@ Update name of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         name.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2236,7 +2236,7 @@ Update description of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         description.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2265,7 +2265,7 @@ Update image url of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, image_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, image_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         image_url.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2294,7 +2294,7 @@ Update project url of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, project_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, project_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         project_url.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2323,7 +2323,7 @@ Update network address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         net_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2354,7 +2354,7 @@ Update network address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
         net_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
@@ -2386,7 +2386,7 @@ Update p2p address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         p2p_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2417,7 +2417,7 @@ Update p2p address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
         p2p_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
@@ -2449,7 +2449,7 @@ Update primary address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         primary_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2480,7 +2480,7 @@ Update primary address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
         primary_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
@@ -2512,7 +2512,7 @@ Update worker address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
         worker_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="../sui-system/validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
@@ -2543,7 +2543,7 @@ Update worker address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
         worker_address.length() &lt;= <a href="../sui-system/validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
@@ -2575,7 +2575,7 @@ Update protocol public key of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_protocol_pubkey">update_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_protocol_pubkey">update_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_protocol_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(protocol_pubkey);
     self.metadata.next_epoch_proof_of_possession = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(proof_of_possession);
     <a href="../sui-system/validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2602,7 +2602,7 @@ Update protocol public key of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_protocol_pubkey">update_candidate_protocol_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_protocol_pubkey">update_candidate_protocol_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.protocol_pubkey_bytes = protocol_pubkey;
     self.metadata.proof_of_possession = proof_of_possession;
@@ -2630,7 +2630,7 @@ Update network public key of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_network_pubkey">update_next_epoch_network_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_network_pubkey">update_next_epoch_network_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_network_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(network_pubkey);
     <a href="../sui-system/validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2656,7 +2656,7 @@ Update network public key of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_network_pubkey">update_candidate_network_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_network_pubkey">update_candidate_network_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.network_pubkey_bytes = network_pubkey;
     <a href="../sui-system/validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2683,7 +2683,7 @@ Update Narwhal worker public key of this validator, taking effects from next epo
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_worker_pubkey">update_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_next_epoch_worker_pubkey">update_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_worker_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(worker_pubkey);
     <a href="../sui-system/validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2709,7 +2709,7 @@ Update Narwhal worker public key of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_worker_pubkey">update_candidate_worker_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_update_candidate_worker_pubkey">update_candidate_worker_pubkey</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="../sui-system/validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="../sui-system/validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.worker_pubkey_bytes = worker_pubkey;
     <a href="../sui-system/validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2738,7 +2738,7 @@ advancing an epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>) {
     <b>if</b> (<a href="../sui-system/validator.md#0x3_validator_next_epoch_network_address">next_epoch_network_address</a>(self).is_some()) {
         self.metadata.net_address = self.metadata.next_epoch_net_address.extract();
         self.metadata.next_epoch_net_address = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
@@ -2844,7 +2844,7 @@ Aborts if validator metadata is valid
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>) : &StakingPool {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator.md#0x3_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="../sui-system/validator.md#0x3_validator_Validator">Validator</a>) : &StakingPool {
     &self.<a href="../sui-system/staking_pool.md#0x3_staking_pool">staking_pool</a>
 }
 </code></pre>

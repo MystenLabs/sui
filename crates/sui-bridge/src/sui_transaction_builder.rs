@@ -3,11 +3,8 @@
 
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
-use once_cell::sync::OnceCell;
 use std::{collections::HashMap, str::FromStr};
-use sui_types::bridge::{
-    BRIDGE_MODULE_NAME, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT,
-};
+use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::transaction::CallArg;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
@@ -23,40 +20,13 @@ use crate::{
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
 };
 
-// FIXME: when the ndoe starts, it queries bridge summary to get all mappings
-// from token id to type tags
-pub fn get_sui_token_type_tag(token_id: u8) -> Option<TypeTag> {
-    static TYPE_TAGS: OnceCell<HashMap<u8, TypeTag>> = OnceCell::new();
-    let type_tags = TYPE_TAGS.get_or_init(|| {
-        let package_id = BRIDGE_PACKAGE_ID;
-        let mut type_tags = HashMap::new();
-        type_tags.insert(
-            TOKEN_ID_BTC,
-            TypeTag::from_str(&format!("{:?}::btc::BTC", package_id)).unwrap(),
-        );
-        type_tags.insert(
-            TOKEN_ID_ETH,
-            TypeTag::from_str(&format!("{:?}::eth::ETH", package_id)).unwrap(),
-        );
-        type_tags.insert(
-            TOKEN_ID_USDC,
-            TypeTag::from_str(&format!("{:?}::usdc::USDC", package_id)).unwrap(),
-        );
-        type_tags.insert(
-            TOKEN_ID_USDT,
-            TypeTag::from_str(&format!("{:?}::usdt::USDT", package_id)).unwrap(),
-        );
-        type_tags
-    });
-    type_tags.get(&token_id).cloned()
-}
-
 // TODO: pass in gas price
 pub fn build_sui_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     bridge_object_arg: ObjectArg,
+    sui_token_type_tags: &HashMap<u8, TypeTag>,
 ) -> BridgeResult<TransactionData> {
     match action.data() {
         BridgeAction::EthToSuiBridgeAction(_) => build_token_bridge_approve_transaction(
@@ -65,6 +35,7 @@ pub fn build_sui_transaction(
             action,
             true,
             bridge_object_arg,
+            sui_token_type_tags,
         ),
         BridgeAction::SuiToEthBridgeAction(_) => build_token_bridge_approve_transaction(
             client_address,
@@ -72,6 +43,7 @@ pub fn build_sui_transaction(
             action,
             false,
             bridge_object_arg,
+            sui_token_type_tags,
         ),
         BridgeAction::BlocklistCommitteeAction(_) => build_committee_blocklist_approve_transaction(
             client_address,
@@ -111,6 +83,7 @@ fn build_token_bridge_approve_transaction(
     action: VerifiedCertifiedBridgeAction,
     claim: bool,
     bridge_object_arg: ObjectArg,
+    sui_token_type_tags: &HashMap<u8, TypeTag>,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -206,8 +179,10 @@ fn build_token_bridge_approve_transaction(
             BRIDGE_PACKAGE_ID,
             sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
             ident_str!("claim_and_transfer_token").to_owned(),
-            vec![get_sui_token_type_tag(token_type)
-                .ok_or(BridgeError::UnknownTokenId(token_type))?],
+            vec![sui_token_type_tags
+                .get(&token_type)
+                .ok_or(BridgeError::UnknownTokenId(token_type))?
+                .clone()],
             vec![arg_bridge, arg_clock, source_chain, seq_num],
         );
     }
@@ -437,6 +412,7 @@ fn build_asset_price_update_approve_transaction(
 
     // Unwrap: these should not fail
     let source_chain = builder.pure(source_chain as u8).unwrap();
+    let token_id = builder.pure(token_id).unwrap();
     let seq_num = builder.pure(seq_num).unwrap();
     let new_price = builder.pure(new_usd_price).unwrap();
     let arg_bridge = builder.obj(bridge_object_arg).unwrap();
@@ -445,8 +421,8 @@ fn build_asset_price_update_approve_transaction(
         BRIDGE_PACKAGE_ID,
         ident_str!("message").to_owned(),
         ident_str!("create_update_asset_price_message").to_owned(),
-        vec![get_sui_token_type_tag(token_id).ok_or(BridgeError::UnknownTokenId(token_id))?],
-        vec![source_chain, seq_num, new_price],
+        vec![],
+        vec![token_id, source_chain, seq_num, new_price],
     );
 
     let mut sig_bytes = vec![];
@@ -540,9 +516,9 @@ mod tests {
     async fn test_build_sui_transaction_for_token_transfer() {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .with_epoch_duration_ms(2000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
 
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -560,6 +536,7 @@ mod tests {
         let sender = context.active_address().unwrap();
         let usdc_amount = 5000000;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. Test Eth -> Sui Transfer approval
         let action = get_test_eth_to_sui_bridge_action(None, Some(usdc_amount), Some(sender));
@@ -570,6 +547,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             Some(sender),
+            &id_token_map,
         )
         .await
         .unwrap();
@@ -579,7 +557,7 @@ mod tests {
             context,
             EthAddress::random(),
             usdc_object_ref,
-            TOKEN_ID_USDC,
+            id_token_map.get(&TOKEN_ID_USDC).unwrap().clone(),
             bridge_object_arg,
         )
         .await;
@@ -600,6 +578,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
     }
@@ -610,7 +589,7 @@ mod tests {
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
             .with_epoch_duration_ms(15000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -628,6 +607,7 @@ mod tests {
 
         let context = &mut test_cluster.wallet;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. Pause
         let action = BridgeAction::EmergencyAction(EmergencyAction {
@@ -642,6 +622,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
         let summary = sui_client.get_bridge_summary().await.unwrap();
@@ -660,6 +641,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
         let summary = sui_client.get_bridge_summary().await.unwrap();
@@ -672,7 +654,7 @@ mod tests {
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
             .with_epoch_duration_ms(15000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -693,6 +675,7 @@ mod tests {
 
         let context = &mut test_cluster.wallet;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. blocklist The victim
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
@@ -711,6 +694,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
         let committee = sui_client.get_bridge_summary().await.unwrap().committee;
@@ -739,6 +723,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
         let committee = sui_client.get_bridge_summary().await.unwrap().committee;
@@ -753,7 +738,7 @@ mod tests {
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
             .with_epoch_duration_ms(15000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -778,6 +763,7 @@ mod tests {
 
         let context = &mut test_cluster.wallet;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // update limit
         let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
@@ -793,6 +779,7 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
         let new_transfer_limit = sui_client
@@ -814,9 +801,9 @@ mod tests {
     async fn test_build_sui_transaction_for_price_update() {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .with_epoch_duration_ms(15000)
-            .build_with_bridge()
+            .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -829,18 +816,12 @@ mod tests {
         if committee.members.is_empty() {
             test_cluster.wait_for_epoch(None).await;
         }
-        let notional_values = sui_client
-            .get_bridge_summary()
-            .await
-            .unwrap()
-            .limiter
-            .notional_values
-            .into_iter()
-            .collect::<HashMap<_, _>>();
+        let notional_values = sui_client.get_notional_values().await.unwrap();
         assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 
         let context = &mut test_cluster.wallet;
         let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // update price
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
@@ -856,14 +837,10 @@ mod tests {
             action.clone(),
             &bridge_authority_keys,
             None,
+            &id_token_map,
         )
         .await;
-        let new_notional_values = sui_client
-            .get_bridge_summary()
-            .await
-            .unwrap()
-            .limiter
-            .notional_values;
+        let new_notional_values = sui_client.get_notional_values().await.unwrap();
         for (token_id, price) in new_notional_values {
             if token_id == TOKEN_ID_BTC {
                 assert_eq!(price, 69_000 * USD_MULTIPLIER);

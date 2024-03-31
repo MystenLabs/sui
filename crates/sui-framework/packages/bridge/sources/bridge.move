@@ -5,9 +5,10 @@ module bridge::bridge {
     use sui::address;
     use sui::balance;
     use sui::clock::Clock;
-    use sui::coin::{Self, Coin};
+    use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
+    use sui::package::UpgradeCap;
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
     use sui_system::sui_system::SuiSystemState;
@@ -16,7 +17,7 @@ module bridge::bridge {
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::limiter::{Self, TransferLimiter};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
-        UpdateBridgeLimit
+        UpdateBridgeLimit, AddTokenOnSui
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -24,7 +25,9 @@ module bridge::bridge {
     #[test_only]
     use sui::{hex, test_scenario, test_utils::{assert_eq, destroy}};
     #[test_only]
-    use bridge::{btc::BTC, eth::ETH, message::create_blocklist_message};
+    use bridge::treasury::{BTC, ETH};
+    #[test_only]
+    use bridge::message::create_blocklist_message;
 
     const MESSAGE_VERSION: u8 = 1;
 
@@ -166,6 +169,12 @@ module bridge::bridge {
             .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
     }
 
+    public fun register_foreign_token<T>(self: &mut Bridge, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
+        load_inner_mut(self)
+            .treasury
+            .register_foreign_token<T>(tc, uc, metadata)
+    }
+
     // Create bridge request to send token to other chain, the request will be in pending state until approved
     public fun send_token<T>(
         self: &mut Bridge,
@@ -180,7 +189,7 @@ module bridge::bridge {
         let amount = balance::value(coin::balance(&token));
 
         let bridge_seq_num = get_current_seq_num_and_increment(inner, message_types::token());
-        let token_id = treasury::token_id<T>();
+        let token_id = treasury::token_id<T>(&inner.treasury);
         let token_amount = balance::value(coin::balance(&token));
 
         // create bridge message
@@ -195,7 +204,7 @@ module bridge::bridge {
         );
 
         // burn / escrow token, unsupported coins will fail in this step
-        inner.treasury.burn(token, ctx);
+        inner.treasury.burn(token);
 
         // Store pending bridge request
         inner.bridge_records.push_back(message.key(), BridgeRecord {
@@ -374,11 +383,11 @@ module bridge::bridge {
         // get owner address
         let owner = address::from_bytes(token_payload.token_target_address());
         // check token type
-        assert!(treasury::token_id<T>() == token_payload.token_type(), EUnexpectedTokenType);
+        assert!(treasury::token_id<T>(&inner.treasury) == token_payload.token_type(), EUnexpectedTokenType);
 
         let amount = token_payload.token_amount();
         // Make sure transfer is within limit.
-        if (!inner.limiter.check_and_record_sending_transfer<T>(clock, route, amount)) {
+        if (!inner.limiter.check_and_record_sending_transfer<T>(&inner.treasury, clock, route, amount)) {
             return (option::none(), owner)
         };
 
@@ -388,7 +397,7 @@ module bridge::bridge {
         // Record changes
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
-        
+
         (option::some(token), owner)
     }
 
@@ -423,6 +432,9 @@ module bridge::bridge {
         } else if (message_type == message_types::update_asset_price()) {
             let payload = message.extract_update_asset_price();
             execute_update_asset_price(inner, payload);
+        } else if (message_type == message_types::add_tokens_on_sui()) {
+            let payload = message::extract_add_tokens_on_sui(&message);
+            execute_add_tokens_on_sui(inner, payload);
         } else {
             abort EUnexpectedMessageType
         };
@@ -458,10 +470,28 @@ module bridge::bridge {
     }
 
     fun execute_update_asset_price(inner: &mut BridgeInner, payload: UpdateAssetPrice) {
-        inner.limiter.update_asset_notional_price(
+        inner.treasury.update_asset_notional_price(
             payload.update_asset_price_payload_token_id(),
             payload.update_asset_price_payload_new_price()
         )
+    }
+
+    fun execute_add_tokens_on_sui(inner: &mut BridgeInner, payload: AddTokenOnSui) {
+        let native_token = payload.is_native();
+        let mut token_ids = payload.token_ids();
+        let mut token_type_names = payload.token_type_names();
+        let mut token_prices = payload.token_prices();
+
+        // Make sure token data is consistent
+        assert!(token_ids.length() == token_type_names.length(), EMalformedMessageError);
+        assert!(token_ids.length() == token_prices.length(), EMalformedMessageError);
+
+        while (vector::length(&token_ids) > 0) {
+            let token_id = token_ids.pop_back();
+            let token_type_name = token_type_names.pop_back();
+            let token_price = token_prices.pop_back();
+            inner.treasury.add_new_token(token_type_name, token_id, native_token, token_price)
+        }
     }
 
     // Verify seq number matches the next expected seq number for the message type,
@@ -514,7 +544,7 @@ module bridge::bridge {
             chain_id,
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
-            treasury: treasury::create(ctx),
+            treasury: treasury::mock_for_test(ctx),
             bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
             limiter: limiter::new(),
             paused: false,
@@ -625,12 +655,13 @@ module bridge::bridge {
         let ctx = test_scenario::ctx(&mut scenario);
         let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(ctx, chain_id);
-        let inner = load_inner_mut(&mut bridge);
+        let inner = bridge.load_inner_mut();
 
         // Assert the starting limit is a different value
-        assert!(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()) != 1_001_000_000, 0);
+        assert!(inner.treasury.notional_value<BTC>() != 1_001_000_000, 0);
         // now change it to 100_001_000
-        let msg = message::create_update_asset_price_message<BTC>(
+        let msg = message::create_update_asset_price_message(
+            inner.treasury.token_id<BTC>(),
             chain_ids::sui_mainnet(),
             0,
             1_001_000_000,
@@ -639,12 +670,12 @@ module bridge::bridge {
         execute_update_asset_price(inner, payload);
 
         // should be 1_001_000_000 now
-        assert_eq(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()), 1_001_000_000);
+        assert_eq(inner.treasury.notional_value<BTC>(), 1_001_000_000);
         // other assets are not impacted
-        assert!(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<ETH>()) != 1_001_000_000, 0);
+        assert!(inner.treasury.notional_value<ETH>() != 1_001_000_000, 0);
 
         destroy(bridge);
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     #[test_only]
