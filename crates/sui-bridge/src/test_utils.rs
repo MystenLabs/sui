@@ -5,7 +5,7 @@ use crate::abi::EthToSuiTokenBridgeV1;
 use crate::eth_mock_provider::EthMockProvider;
 use crate::events::SuiBridgeEvent;
 use crate::server::mock_handler::run_mock_server;
-use crate::sui_transaction_builder::{build_sui_transaction, get_sui_token_type_tag};
+use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{
     BridgeCommitteeValiditySignInfo, CertifiedBridgeAction, VerifiedCertifiedBridgeAction,
 };
@@ -27,7 +27,8 @@ use ethers::types::{
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use hex_literal::hex;
-use std::collections::BTreeMap;
+use move_core_types::language_storage::TypeTag;
+use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
@@ -281,7 +282,7 @@ pub async fn bridge_token(
     context: &mut WalletContext,
     recv_address: EthAddress,
     token_ref: ObjectRef,
-    token_id: u8,
+    token_type: TypeTag,
     bridge_object_arg: ObjectArg,
 ) -> EmittedSuiToEthTokenBridgeV1 {
     let rgp = context.get_reference_gas_price().await.unwrap();
@@ -299,7 +300,7 @@ pub async fn bridge_token(
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(token_ref)),
             ],
         )
-        .with_type_args(vec![get_sui_token_type_tag(token_id).unwrap()])
+        .with_type_args(vec![token_type])
         .build();
     let signed_tn = context.sign_transaction(&tx);
     let resp = context.execute_transaction_must_succeed(signed_tn).await;
@@ -349,6 +350,7 @@ pub async fn approve_action_with_validator_secrets(
     validator_secrets: &Vec<BridgeAuthorityKeyPair>,
     // Only relevant for eth -> sui transfers when token will be dropped to the recipient
     expected_token_receiver: Option<SuiAddress>,
+    id_token_map: &HashMap<u8, TypeTag>,
 ) -> Option<ObjectRef> {
     let action_certificate = get_certified_action_with_validator_secrets(action, validator_secrets);
     let sui_address = wallet_context.active_address().unwrap();
@@ -363,6 +365,7 @@ pub async fn approve_action_with_validator_secrets(
         &gas_obj_ref,
         action_certificate,
         bridge_obj_org,
+        id_token_map,
     )
     .unwrap();
     let signed_tx = wallet_context.sign_transaction(&tx_data);

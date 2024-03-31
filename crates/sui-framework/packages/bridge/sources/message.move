@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::message {
+    use std::ascii::{Self, String};
     use sui::bcs::{Self, BCS};
 
     use bridge::chain_ids;
     use bridge::message_types;
+    #[test_only]
     use bridge::treasury;
 
     #[test_only]
-    use sui::{address, balance, coin, hex, test_scenario, test_utils::assert_eq};
+    use sui::{address, balance, coin, hex, test_scenario, test_utils::{assert_eq, destroy}};
     #[test_only]
-    use bridge::{btc::BTC, eth::ETH, treasury::token_id, usdc::USDC};
+    use bridge::treasury::{BTC, ETH, USDC};
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
     const ECDSA_ADDRESS_LENGTH: u64 = 20;
@@ -70,6 +72,13 @@ module bridge::message {
     public struct UpdateAssetPrice has drop {
         token_id: u8,
         new_price: u64
+    }
+
+    public struct AddTokenOnSui has drop {
+        native_token: bool,
+        token_ids: vector<u8>,
+        token_type_names: vector<String>,
+        token_prices: vector<u64>
     }
 
     // Note: `bcs::peel_vec_u8` *happens* to work here because
@@ -158,6 +167,28 @@ module bridge::message {
         UpdateAssetPrice {
             token_id,
             new_price
+        }
+    }
+
+    public fun extract_add_tokens_on_sui(message: &BridgeMessage): AddTokenOnSui {
+        let mut bcs = bcs::new(message.payload);
+        let native_token = bcs.peel_bool();
+        let token_ids = bcs.peel_vec_u8();
+        let token_type_names_bytes = bcs.peel_vec_vec_u8();
+        let token_prices = bcs.peel_vec_u64();
+
+        let mut n = 0;
+        let mut token_type_names = vector[];
+        while (n < token_type_names_bytes.length()){
+            token_type_names.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
+            n = n + 1;
+        };
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+        AddTokenOnSui {
+            native_token,
+            token_ids,
+            token_type_names,
+            token_prices
         }
     }
 
@@ -333,7 +364,8 @@ module bridge::message {
     /// [chain_id: u8]
     /// [token_id: u8]
     /// [new_price:u64]
-    public fun create_update_asset_price_message<T>(
+    public fun create_update_asset_price_message(
+        token_id: u8,
         source_chain: u8,
         seq_num: u64,
         new_price: u64,
@@ -342,11 +374,41 @@ module bridge::message {
         // TODO: replace with `chain_ids::is_valid_chain_id()`
         chain_ids::assert_valid_chain_id(source_chain);
 
-        let mut payload = vector[treasury::token_id<T>()];
+        let mut payload = vector[token_id];
         payload.append(reverse_bytes(bcs::to_bytes(&new_price)));
-
         BridgeMessage {
             message_type: message_types::update_asset_price(),
+            message_version: CURRENT_MESSAGE_VERSION,
+            seq_num,
+            source_chain,
+            payload,
+        }
+    }
+
+    /// Update Sui token message
+    /// [message_type:u8]
+    /// [version:u8]
+    /// [nonce:u64]
+    /// [chain_id: u8]
+    /// [native_token:bool]
+    /// [token_ids:vector<u8>]
+    /// [token_type_name:vector<String>]
+    /// [token_prices:vector<u64>]
+    public fun create_add_tokens_on_sui_message(
+        source_chain: u8,
+        seq_num: u64,
+        native_token: bool,
+        token_ids: vector<u8>,
+        type_names: vector<String>,
+        token_prices: vector<u64>,
+    ): BridgeMessage {
+        chain_ids::assert_valid_chain_id(source_chain);
+        let mut payload = bcs::to_bytes(&native_token);
+        payload.append(bcs::to_bytes(&token_ids));
+        payload.append(bcs::to_bytes(&type_names));
+        payload.append(bcs::to_bytes(&token_prices));
+        BridgeMessage {
+            message_type: message_types::add_tokens_on_sui(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
             source_chain,
@@ -428,6 +490,22 @@ module bridge::message {
         self.new_price
     }
 
+    public fun is_native(self: &AddTokenOnSui): bool {
+        self.native_token
+    }
+
+    public fun token_ids(self: &AddTokenOnSui): vector<u8> {
+        self.token_ids
+    }
+
+    public fun token_type_names(self: &AddTokenOnSui): vector<String> {
+        self.token_type_names
+    }
+
+    public fun token_prices(self: &AddTokenOnSui): vector<u64> {
+        self.token_prices
+    }
+
     public fun emergency_op_pause(): u8 {
         PAUSE
     }
@@ -456,6 +534,8 @@ module bridge::message {
         } else if (message_type == message_types::update_asset_price()) {
             5001
         } else if (message_type == message_types::update_bridge_limit()) {
+            5001
+        } else if (message_type == message_types::add_tokens_on_sui()) {
             5001
         } else {
             abort EInvalidMessageType
@@ -740,7 +820,8 @@ module bridge::message {
 
     #[test]
     fun test_update_asset_price_message_serialization() {
-        let asset_price_message = create_update_asset_price_message<ETH>(
+        let asset_price_message = create_update_asset_price_message(
+            2,
             chain_ids::sui_testnet(), // source chain
             10, // seq_num
             12345
@@ -755,14 +836,27 @@ module bridge::message {
         assert!(asset_price_message == deserialize_message_test_only(message), 0);
 
         let asset_price = extract_update_asset_price(&asset_price_message);
-        assert!(asset_price.token_id == token_id<ETH>(), 0);
+
+        let mut scenario = test_scenario::begin(@0x1);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let treasury = treasury::mock_for_test(ctx);
+
+        assert!(asset_price.token_id == treasury::token_id<ETH>(&treasury), 0);
         assert!(asset_price.new_price == 12345, 0);
+
+        destroy(treasury);
+        test_scenario::end(scenario);
     }
 
     // Do not change/remove this test, it uses move bytes generated by Rust
     #[test]
     fun test_update_asset_price_message_serialization_regression() {
-        let asset_price_message = create_update_asset_price_message<BTC>(
+        let mut scenario = test_scenario::begin(@0x1);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let treasury = treasury::mock_for_test(ctx);
+
+        let asset_price_message = create_update_asset_price_message(
+            treasury.token_id<BTC>(),
             chain_ids::sui_local_test(), // source chain
             266, // seq_num
             1_000_000_000 // $100k USD
@@ -777,8 +871,96 @@ module bridge::message {
         assert!(asset_price_message == deserialize_message_test_only(message), 0);
 
         let asset_price = extract_update_asset_price(&asset_price_message);
-        assert!(asset_price.token_id == token_id<BTC>(), 0);
+
+        assert!(asset_price.token_id == treasury::token_id<BTC>(&treasury), 0);
         assert!(asset_price.new_price == 1_000_000_000, 0);
+
+        destroy(treasury);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_add_tokens_on_sui_message_serialization() {
+        let mut scenario = test_scenario::begin(@0x1);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let treasury = treasury::mock_for_test(ctx);
+
+        let add_tokens_on_sui_message = create_add_tokens_on_sui_message(
+            chain_ids::sui_local_test(),
+            1, // seq_num
+            false, // native_token
+            vector[treasury.token_id<BTC>(), treasury.token_id<ETH>()],
+            vector[ascii::string(b"0x28ac483b6f2b62dd58abdf0bbc3f86900d86bbdc710c704ba0b33b7f1c4b43c8::btc::BTC"), ascii::string(b"0xbd69a54e7c754a332804f325307c6627c06631dc41037239707e3242bc542e99::eth::ETH")],
+            vector[100, 100]
+        );
+        let payload = extract_add_tokens_on_sui(&add_tokens_on_sui_message);
+        assert!(payload == AddTokenOnSui {
+            native_token: false,
+            token_ids: vector[treasury.token_id<BTC>(), treasury.token_id<ETH>()],
+            token_type_names: vector[ascii::string(b"0x28ac483b6f2b62dd58abdf0bbc3f86900d86bbdc710c704ba0b33b7f1c4b43c8::btc::BTC"), ascii::string(b"0xbd69a54e7c754a332804f325307c6627c06631dc41037239707e3242bc542e99::eth::ETH")],
+            token_prices: vector[100, 100],
+        }, 0);
+        // Test message serialization
+        let message = serialize_message(add_tokens_on_sui_message);
+        let expected_msg = hex::decode(
+            b"060100000000000000010300020102024c3078323861633438336236663262363264643538616264663062626333663836393030643836626264633731306337303462613062333362376631633462343363383a3a6274633a3a4254434c3078626436396135346537633735346133333238303466333235333037633636323763303636333164633431303337323339373037653332343262633534326539393a3a6574683a3a4554480264000000000000006400000000000000",
+        );
+        assert_eq(message, expected_msg);
+        assert!(add_tokens_on_sui_message == deserialize_message_test_only(message), 0);
+
+        destroy(treasury);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_add_tokens_on_sui_message_serialization_2() {
+        let mut scenario = test_scenario::begin(@0x1);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let treasury = treasury::mock_for_test(ctx);
+
+        let add_tokens_on_sui_message = create_add_tokens_on_sui_message(
+            chain_ids::sui_local_test(),
+            0, // seq_num
+            false, // native_token
+            vector[1, 2, 3, 4],
+            vector[
+                ascii::string(b"0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC"),
+                ascii::string(b"0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH"),
+                ascii::string(b"0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC"),
+                ascii::string(b"0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT")
+            ],
+            vector[500_000_000, 30_000_000, 1_000, 1_000]
+        );
+        let payload = extract_add_tokens_on_sui(&add_tokens_on_sui_message);
+        assert!(payload == AddTokenOnSui {
+            native_token: false,
+            token_ids: vector[1, 2, 3, 4],
+            token_type_names: vector[
+                ascii::string(b"0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC"),
+                ascii::string(b"0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH"),
+                ascii::string(b"0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC"),
+                ascii::string(b"0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT")
+            ],
+            token_prices: vector[500_000_000, 30_000_000, 1_000, 1_000]
+        }, 0);
+        // Test message serialization
+        let message = serialize_message(add_tokens_on_sui_message);
+        let expected_msg = hex::decode(
+            b"0601000000000000000003000401020304044c3078396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434c3078373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484e3078353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434e3078343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
+        );
+        assert_eq(message, expected_msg);
+        assert!(add_tokens_on_sui_message == deserialize_message_test_only(message), 0);
+
+        let mut message_bytes = b"SUI_BRIDGE_MESSAGE";
+        message_bytes.append(message);
+
+        let pubkey = sui::ecdsa_k1::secp256k1_ecrecover(
+            &x"732e92696bff86a94997f51242fae9c73033f4bc37e24d11dbb4bcd5036a05f727a62f9257ce5235542acb8ada5375c746e284ba2f2291a85bd86e46865051c601"
+            , &message_bytes, 0);
+
+        assert_eq(pubkey, x"02d247165672cf02f5ca4ae6b521461af22f06f2344f0ac0f584632d58e693d087");
+        destroy(treasury);
+        test_scenario::end(scenario);
     }
 
     #[test]

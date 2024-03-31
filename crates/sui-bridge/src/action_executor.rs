@@ -295,6 +295,9 @@ where
         bridge_object_arg: ObjectArg,
     ) {
         info!("Starting run_onchain_execution_loop");
+        // Get token id maps, this must succeed to continue.
+        let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+
         while let Some(certificate_wrapper) = execution_queue_receiver.recv().await {
             info!(
                 "Received certified action for execution: {:?}",
@@ -324,6 +327,7 @@ where
                 &gas_object_ref,
                 ceriticate_clone,
                 bridge_object_arg,
+                &sui_token_type_tags,
             ) {
                 Ok(tx_data) => tx_data,
                 Err(err) => {
@@ -450,10 +454,13 @@ mod tests {
     use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
+    use std::str::FromStr;
     use sui_json_rpc_types::SuiTransactionBlockResponse;
+    use sui_types::bridge::{TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
+    use sui_types::TypeTag;
     use sui_types::{base_types::random_object_ref, transaction::TransactionData};
 
     use crate::{
@@ -489,6 +496,7 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
+            id_token_map,
         ) = setup().await;
 
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
@@ -502,6 +510,7 @@ mod tests {
             &gas_object_ref,
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
         )
         .unwrap();
 
@@ -553,6 +562,7 @@ mod tests {
             &gas_object_ref,
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -602,6 +612,7 @@ mod tests {
             &gas_object_ref,
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -665,6 +676,7 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
+            id_token_map,
         ) = setup().await;
 
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
@@ -743,6 +755,7 @@ mod tests {
             &gas_object_ref,
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+            &id_token_map,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -779,6 +792,7 @@ mod tests {
             _handles,
             _gas_object_ref,
             _sui_address,
+            _id_token_map,
         ) = setup().await;
 
         let sui_tx_digest = TransactionDigest::random();
@@ -845,6 +859,7 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
+            id_token_map,
         ) = setup().await;
 
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
@@ -859,6 +874,7 @@ mod tests {
             &gas_object_ref,
             action_certificate.clone(),
             arg,
+            &id_token_map,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -1029,6 +1045,7 @@ mod tests {
         Vec<tokio::task::JoinHandle<()>>,
         ObjectRef,
         SuiAddress,
+        HashMap<u8, TypeTag>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
@@ -1075,6 +1092,14 @@ mod tests {
 
         let (executor_handle, signing_tx, execution_tx) = executor.run_inner();
         handles.extend(executor_handle);
+
+        // Mock id token type map for testing
+        let mut id_token_map = HashMap::new();
+        id_token_map.insert(TOKEN_ID_BTC, TypeTag::from_str("0xb::btc::BTC").unwrap());
+        id_token_map.insert(TOKEN_ID_ETH, TypeTag::from_str("0xb::eth::ETH").unwrap());
+        id_token_map.insert(TOKEN_ID_USDC, TypeTag::from_str("0xb::usdc::USDC").unwrap());
+        id_token_map.insert(TOKEN_ID_USDT, TypeTag::from_str("0xb::usdt::USDT").unwrap());
+
         (
             signing_tx,
             execution_tx,
@@ -1090,6 +1115,7 @@ mod tests {
             handles,
             gas_object_ref,
             sui_address,
+            id_token_map,
         )
     }
 }

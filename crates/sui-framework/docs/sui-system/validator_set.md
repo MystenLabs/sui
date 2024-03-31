@@ -638,7 +638,7 @@ The epoch value corresponds to the first epoch this change takes place.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_new">new</a>(init_active_validators: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext): <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a> {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_new">new</a>(init_active_validators: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext): <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a> {
     <b>let</b> total_stake = <a href="../sui-system/validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&init_active_validators);
     <b>let</b> <b>mut</b> staking_pool_mappings = <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx);
     <b>let</b> num_validators = init_active_validators.length();
@@ -684,7 +684,7 @@ Called by <code><a href="../sui-system/sui_system.md#0x3_sui_system">sui_system<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     <a href="../sui-system/validator.md#0x3_validator">validator</a>: Validator,
     ctx: &<b>mut</b> TxContext,
@@ -732,7 +732,7 @@ Called by <code><a href="../sui-system/sui_system.md#0x3_sui_system">sui_system<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_remove_validator_candidate">request_remove_validator_candidate</a>(self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_remove_validator_candidate">request_remove_validator_candidate</a>(self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> validator_address = ctx.sender();
      <b>assert</b>!(
         self.validator_candidates.contains(validator_address),
@@ -779,7 +779,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &TxContext) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &TxContext) {
     <b>let</b> validator_address = ctx.sender();
     <b>assert</b>!(
         self.validator_candidates.contains(validator_address),
@@ -818,7 +818,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui-system/validator.md#0x3_validator">validator</a>: &Validator) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui-system/validator.md#0x3_validator">validator</a>: &Validator) {
     // Validator here must be active or pending, and thus must be identified <b>as</b> duplicate exactly once.
     <b>assert</b>!(
         <a href="../sui-system/validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(&self.active_validators, <a href="../sui-system/validator.md#0x3_validator">validator</a>) +
@@ -851,7 +851,7 @@ Only an active validator can request to be removed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_remove_validator">request_remove_validator</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_remove_validator">request_remove_validator</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &TxContext,
 ) {
@@ -890,7 +890,7 @@ Aborts in case the staking amount is smaller than MIN_STAKING_THRESHOLD
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_add_stake">request_add_stake</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_add_stake">request_add_stake</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
     stake: Balance&lt;SUI&gt;,
@@ -928,7 +928,7 @@ the stake and any rewards corresponding to it will be immediately processed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_withdraw_stake">request_withdraw_stake</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_withdraw_stake">request_withdraw_stake</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     staked_sui: StakedSui,
     ctx: &TxContext,
@@ -966,7 +966,7 @@ the stake and any rewards corresponding to it will be immediately processed.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     new_commission_rate: u64,
     ctx: &TxContext,
@@ -1003,7 +1003,7 @@ It does the following things:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     computation_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
@@ -1417,7 +1417,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID
 ) : &Table&lt;u64, PoolTokenExchangeRate&gt; {
     <b>let</b> <a href="../sui-system/validator.md#0x3_validator">validator</a> =
@@ -1453,7 +1453,7 @@ Get the total number of validators in the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
     self.active_validators.length() - self.pending_removals.length() + self.pending_active_validators.length()
 }
 </code></pre>
@@ -1478,7 +1478,7 @@ Returns true iff the address exists in active validators.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_is_active_validator_by_sui_address">is_active_validator_by_sui_address</a>(
     self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
 ): bool {
@@ -1532,7 +1532,7 @@ only the sui address but this function looks at more metadata.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
     <a href="../sui-system/validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators, new_validator) &gt; 0
 }
 </code></pre>
@@ -1786,7 +1786,7 @@ Aborts if any address isn't in the given validator set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut">get_validator_mut</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut">get_validator_mut</a>(
     validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
     validator_address: <b>address</b>,
 ): &<b>mut</b> Validator {
@@ -1861,7 +1861,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     verified_cap: &ValidatorOperationCap,
     include_candidate: bool,
@@ -1889,7 +1889,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">get_validator_mut_with_ctx</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">get_validator_mut_with_ctx</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &TxContext,
 ): &<b>mut</b> Validator {
@@ -1917,7 +1917,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     ctx: &TxContext,
 ): &<b>mut</b> Validator {
@@ -1975,7 +1975,7 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
     which_validator: u8,
@@ -2076,7 +2076,7 @@ Otherwise, verify the Cap for au either active or pending validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_verify_cap">verify_cap</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_verify_cap">verify_cap</a>(
     self: &<b>mut</b> <a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     cap: &UnverifiedValidatorOperationCap,
     which_validator: u8,
@@ -2901,7 +2901,7 @@ Returns true if the staking pool identified by <code>staking_pool_id</code> is o
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_active_validator_addresses">active_validator_addresses</a>(self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_set.md#0x3_validator_set_active_validator_addresses">active_validator_addresses</a>(self: &<a href="../sui-system/validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; {
     <b>let</b> vs = &self.active_validators;
     <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 0;

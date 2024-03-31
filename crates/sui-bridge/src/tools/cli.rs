@@ -93,11 +93,13 @@ async fn main() -> anyhow::Result<()> {
                     .get_mutable_bridge_object_arg()
                     .await
                     .expect("Failed to get mutable bridge object arg");
+                let id_token_map = sui_client.get_token_id_map().await.unwrap();
                 let tx = build_sui_transaction(
                     sui_address,
                     &gas_object_ref,
                     certified_action,
                     bridge_arg,
+                    &id_token_map,
                 )
                 .expect("Failed to build sui transaction");
                 let sui_sig = Signature::new_secure(
