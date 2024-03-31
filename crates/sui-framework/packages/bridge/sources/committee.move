@@ -267,6 +267,7 @@ module bridge::committee {
                     member.blocklisted = blocklisted;
                     pub_keys.push_back(*pub_key);
                     found = true;
+                    member_idx = 0;
                     break
                 };
 
@@ -676,6 +677,16 @@ module bridge::committee {
             0, // seq
             0, // type 0 is blocklist
             vector[eth_address0, eth_address1]
+        );
+        let blocklist = message::extract_blocklist_payload(&blocklist);
+        execute_blocklist(&mut committee, blocklist);
+
+        // Blocklist both reverse order
+        let blocklist = message::create_blocklist_message(
+            chain_ids::sui_testnet(),
+            0, // seq
+            0, // type 0 is blocklist
+            vector[eth_address1, eth_address0]
         );
         let blocklist = message::extract_blocklist_payload(&blocklist);
         execute_blocklist(&mut committee, blocklist);

@@ -620,6 +620,7 @@ title: Module `0xb::committee`
                 member.blocklisted = blocklisted;
                 pub_keys.push_back(*pub_key);
                 found = <b>true</b>;
+                member_idx = 0;
                 <b>break</b>
             };
 
