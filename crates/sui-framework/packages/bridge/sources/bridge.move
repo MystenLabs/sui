@@ -53,7 +53,7 @@ module bridge::bridge {
         committee: BridgeCommittee,
         // Bridge treasury for mint/burn bridged tokens
         treasury: BridgeTreasury,
-        bridge_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
+        token_transfer_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
         limiter: TransferLimiter,
         paused: bool,
     }
@@ -97,6 +97,7 @@ module bridge::bridge {
     const EBridgeNotPaused: u64 = 14;
     const ETokenAlreadyClaimed: u64 = 15;
     const EInvalidBridgeRoute: u64 = 16;
+    const EMustBeTokenMessage: u64 = 17;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -127,7 +128,7 @@ module bridge::bridge {
             sequence_nums: vec_map::empty(),
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
-            bridge_records: linked_table::new(ctx),
+            token_transfer_records: linked_table::new(ctx),
             limiter: limiter::new(),
             paused: false,
         };
@@ -207,7 +208,7 @@ module bridge::bridge {
         inner.treasury.burn(token);
 
         // Store pending bridge request
-        inner.bridge_records.push_back(message.key(), BridgeRecord {
+        inner.token_transfer_records.push_back(message.key(), BridgeRecord {
             message,
             verified_signatures: option::none(),
             claimed: false,
@@ -228,23 +229,29 @@ module bridge::bridge {
 
     // Record bridge message approvals in Sui, called by the bridge client
     // If already approved, return early instead of aborting.
-    // TODO: rename this to `approve_token_transfer`
-    public fun approve_bridge_message(
+    public fun approve_token_transfer(
         self: &mut Bridge,
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
     ) {
-        // FIXME: need to check pause
         let inner = load_inner_mut(self);
-        let message_key = message.key();
-        // TODO: test this
-        assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(!inner.paused, EBridgeUnavailable);
+        // verify signatures
+        inner.committee.verify_signatures(message, signatures);
 
+        assert!(message.message_type() == message_types::token(), EMustBeTokenMessage);
+        assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
+        let token_payload = message.extract_token_bridge_payload();
+        let target_chain = token_payload.token_target_chain();
+        assert!(
+            message.source_chain() == inner.chain_id || target_chain == inner.chain_id, 
+            EUnexpectedChainID,
+        );
+
+        let message_key = message.key();
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
-        if (message.message_type() == message_types::token() && message::source_chain(
-            &message
-        ) == inner.chain_id) {
-            let record = &mut inner.bridge_records[message_key];
+        if (message.source_chain() == inner.chain_id) {
+            let record = &mut inner.token_transfer_records[message_key];
 
             assert!(record.message == message, EMalformedMessageError);
             assert!(!record.claimed, EInvariantSuiInitializedTokenTransferShouldNotBeClaimed);
@@ -255,21 +262,17 @@ module bridge::bridge {
                 emit(TokenTransferAlreadyApproved { message_key });
                 return
             };
-            // verify signatures
-            inner.committee.verify_signatures(message, signatures);
             // Store approval
             record.verified_signatures = option::some(signatures)
         } else {
-            // At this point, if this message is in bridge_records, we know it's already approved
-            // because we only add a message to bridge_records after verifying the signatures.
-            if (inner.bridge_records.contains(message_key)) {
+            // At this point, if this message is in token_transfer_records, we know it's already approved
+            // because we only add a message to token_transfer_records after verifying the signatures.
+            if (inner.token_transfer_records.contains(message_key)) {
                 emit(TokenTransferAlreadyApproved { message_key });
                 return
             };
-            // verify signatures
-            inner.committee.verify_signatures(message, signatures);
             // Store message and approval
-            inner.bridge_records.push_back(message_key, BridgeRecord {
+            inner.token_transfer_records.push_back(message_key, BridgeRecord {
                 message,
                 verified_signatures: option::some(signatures),
                 claimed: false
@@ -352,10 +355,10 @@ module bridge::bridge {
         assert!(!inner.paused, EBridgeUnavailable);
 
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
-        assert!(inner.bridge_records.contains(key), EMessageNotFoundInRecords);
+        assert!(inner.token_transfer_records.contains(key), EMessageNotFoundInRecords);
 
         // retrieve approved bridge message
-        let record = &mut inner.bridge_records[key];
+        let record = &mut inner.token_transfer_records[key];
         // ensure this is a token bridge message
         assert!(&record.message.message_type() == message_types::token(), EUnexpectedMessageType);
         // Ensure it's signed
@@ -520,11 +523,11 @@ module bridge::bridge {
             bridge_seq_num
         );
 
-        if (!inner.bridge_records.contains(key)) {
+        if (!inner.token_transfer_records.contains(key)) {
             return TRANSFER_STATUS_NOT_FOUND
         };
 
-        let record = &inner.bridge_records[key];
+        let record = &inner.token_transfer_records[key];
         if (record.claimed) {
             return TRANSFER_STATUS_CLAIMED
         };
@@ -545,7 +548,7 @@ module bridge::bridge {
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
             treasury: treasury::mock_for_test(ctx),
-            bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
+            token_transfer_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
             limiter: limiter::new(),
             paused: false,
         };
@@ -845,7 +848,7 @@ module bridge::bridge {
         );
 
         let key = message::key(&message);
-        linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
+        linked_table::push_back(&mut load_inner_mut(&mut bridge).token_transfer_records, key, BridgeRecord {
             message,
             verified_signatures: option::none(),
             claimed: false,
@@ -863,7 +866,7 @@ module bridge::bridge {
             balance::value(coin::balance(&coin))
         );
         let key = message::key(&message);
-        linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
+        linked_table::push_back(&mut load_inner_mut(&mut bridge).token_transfer_records, key, BridgeRecord {
             message,
             verified_signatures: option::some(vector[]),
             claimed: false,
@@ -881,7 +884,7 @@ module bridge::bridge {
             balance::value(coin::balance(&coin))
         );
         let key = message::key(&message);
-        linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
+        linked_table::push_back(&mut load_inner_mut(&mut bridge).token_transfer_records, key, BridgeRecord {
             message,
             verified_signatures: option::some(vector[]),
             claimed: true,
