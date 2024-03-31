@@ -569,6 +569,10 @@ pub struct AuthorityStorePruningConfig {
     /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub killswitch_tombstone_pruning: bool,
+    /// maximum number of range delete tombstones that we track in memory before we force a
+    /// db commit
+    #[serde(default = "default_max_tombstones_per_write_batch")]
+    pub max_tombstones_per_write_batch: usize,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -587,6 +591,10 @@ fn default_max_checkpoints_in_batch() -> usize {
     10
 }
 
+fn default_max_tombstones_per_write_batch() -> usize {
+    25000
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
@@ -599,6 +607,7 @@ impl Default for AuthorityStorePruningConfig {
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
+            max_tombstones_per_write_batch: 10_000,
         }
     }
 }
