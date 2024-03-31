@@ -7,7 +7,6 @@ use crate::crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes};
 use crate::events::SuiBridgeEvent;
 use crate::node::run_bridge_node;
 use crate::sui_client::SuiBridgeClient;
-use crate::sui_transaction_builder::get_sui_token_type_tag;
 use crate::types::{BridgeAction, BridgeActionStatus, BridgeActionType, SuiToEthBridgeAction};
 use crate::utils::EthSigner;
 use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
@@ -16,7 +15,7 @@ use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use move_core_types::ident_str;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
@@ -86,7 +85,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
         .with_epoch_duration_ms(20000)
-        .build_with_bridge()
+        .build_with_bridge(true)
         .await;
     let sui_client = test_cluster.fullnode_handle.sui_client.clone();
     test_cluster
@@ -179,6 +178,8 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         .unwrap();
     let nonce = 0;
 
+    let sui_token_type_tags = sui_bridge_client.get_token_id_map().await.unwrap();
+
     let sui_to_eth_bridge_action = init_sui_to_eth_bridge(
         &sui_client,
         sui_address,
@@ -190,6 +191,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         nonce,
         bridge_obj_arg,
         sui_amount,
+        &sui_token_type_tags,
     )
     .await;
 
@@ -518,6 +520,7 @@ async fn deposit_eth_to_sui_package(
     target_address: EthAddress,
     token: ObjectRef,
     bridge_object_arg: ObjectArg,
+    sui_token_type_tags: &HashMap<u8, TypeTag>,
 ) -> SuiTransactionBlockResponse {
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg_target_chain = builder.pure(target_chain).unwrap();
@@ -529,7 +532,7 @@ async fn deposit_eth_to_sui_package(
         BRIDGE_PACKAGE_ID,
         BRIDGE_MODULE_NAME.to_owned(),
         ident_str!("send_token").to_owned(),
-        vec![get_sui_token_type_tag(TOKEN_ID_ETH).unwrap()],
+        vec![sui_token_type_tags.get(&TOKEN_ID_ETH).unwrap().clone()],
         vec![arg_bridge, arg_target_chain, arg_target_address, arg_token],
     );
 
@@ -632,6 +635,7 @@ async fn init_sui_to_eth_bridge(
     nonce: u64,
     bridge_object_arg: ObjectArg,
     sui_amount: u64,
+    sui_token_type_tags: &HashMap<u8, TypeTag>,
 ) -> SuiToEthBridgeAction {
     let resp = deposit_eth_to_sui_package(
         sui_client,
@@ -641,6 +645,7 @@ async fn init_sui_to_eth_bridge(
         eth_address,
         token,
         bridge_object_arg,
+        sui_token_type_tags,
     )
     .await;
     let sui_events = resp.events.unwrap().data;

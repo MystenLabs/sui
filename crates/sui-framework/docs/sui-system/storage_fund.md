@@ -74,7 +74,7 @@ Called by <code><a href="../sui-system/sui_system.md#0x3_sui_system">sui_system<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/storage_fund.md#0x3_storage_fund_new">new</a>(initial_fund: Balance&lt;SUI&gt;) : <a href="../sui-system/storage_fund.md#0x3_storage_fund_StorageFund">StorageFund</a> {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/storage_fund.md#0x3_storage_fund_new">new</a>(initial_fund: Balance&lt;SUI&gt;) : <a href="../sui-system/storage_fund.md#0x3_storage_fund_StorageFund">StorageFund</a> {
     <a href="../sui-system/storage_fund.md#0x3_storage_fund_StorageFund">StorageFund</a> {
         // At the beginning there's no <a href="../sui-framework/object.md#0x2_object">object</a> in the storage yet
         total_object_storage_rebates: <a href="../sui-framework/balance.md#0x2_balance_zero">balance::zero</a>(),
@@ -103,7 +103,7 @@ Called by <code><a href="../sui-system/sui_system.md#0x3_sui_system">sui_system<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/storage_fund.md#0x3_storage_fund_advance_epoch">advance_epoch</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/storage_fund.md#0x3_storage_fund_advance_epoch">advance_epoch</a>(
     self: &<b>mut</b> <a href="../sui-system/storage_fund.md#0x3_storage_fund_StorageFund">StorageFund</a>,
     storage_charges: Balance&lt;SUI&gt;,
     storage_fund_reinvestment: Balance&lt;SUI&gt;,

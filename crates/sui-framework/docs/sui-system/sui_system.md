@@ -178,7 +178,7 @@ This function will be called only once in genesis.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-system/sui_system.md#0x3_sui_system_create">create</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/sui_system.md#0x3_sui_system_create">create</a>(
     id: UID,
     validators: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
     <a href="../sui-system/storage_fund.md#0x3_storage_fund">storage_fund</a>: Balance&lt;SUI&gt;,

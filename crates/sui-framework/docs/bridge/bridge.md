@@ -18,6 +18,7 @@ title: Module `0xb::bridge`
 -  [Function `create`](#0xb_bridge_create)
 -  [Function `init_bridge_committee`](#0xb_bridge_init_bridge_committee)
 -  [Function `committee_registration`](#0xb_bridge_committee_registration)
+-  [Function `register_foreign_token`](#0xb_bridge_register_foreign_token)
 -  [Function `send_token`](#0xb_bridge_send_token)
 -  [Function `approve_bridge_message`](#0xb_bridge_approve_bridge_message)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
@@ -29,11 +30,13 @@ title: Module `0xb::bridge`
 -  [Function `execute_emergency_op`](#0xb_bridge_execute_emergency_op)
 -  [Function `execute_update_bridge_limit`](#0xb_bridge_execute_update_bridge_limit)
 -  [Function `execute_update_asset_price`](#0xb_bridge_execute_update_asset_price)
+-  [Function `execute_add_tokens_on_sui`](#0xb_bridge_execute_add_tokens_on_sui)
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
 -  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 
 
-<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="../sui-framework/clock.md#0x2_clock">0x2::clock</a>;
@@ -41,6 +44,7 @@ title: Module `0xb::bridge`
 <b>use</b> <a href="../sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../sui-framework/linked_table.md#0x2_linked_table">0x2::linked_table</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../sui-framework/package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="../sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -729,6 +733,32 @@ title: Module `0xb::bridge`
 
 </details>
 
+<a name="0xb_bridge_register_foreign_token"></a>
+
+## Function `register_foreign_token`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, tc: <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, uc: <a href="../sui-framework/package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, metadata: &<a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>, tc: TreasuryCap&lt;T&gt;, uc: UpgradeCap, metadata: &CoinMetadata&lt;T&gt;) {
+    <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self)
+        .<a href="treasury.md#0xb_treasury">treasury</a>
+        .<a href="bridge.md#0xb_bridge_register_foreign_token">register_foreign_token</a>&lt;T&gt;(tc, uc, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0xb_bridge_send_token"></a>
 
 ## Function `send_token`
@@ -757,7 +787,7 @@ title: Module `0xb::bridge`
     <b>let</b> amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="../sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     <b>let</b> bridge_seq_num = <a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(inner, <a href="message_types.md#0xb_message_types_token">message_types::token</a>());
-    <b>let</b> token_id = <a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;();
+    <b>let</b> token_id = <a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;(&inner.<a href="treasury.md#0xb_treasury">treasury</a>);
     <b>let</b> token_amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="../sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     // create <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
@@ -772,7 +802,7 @@ title: Module `0xb::bridge`
     );
 
     // burn / escrow token, unsupported coins will fail in this step
-    inner.<a href="treasury.md#0xb_treasury">treasury</a>.burn(token, ctx);
+    inner.<a href="treasury.md#0xb_treasury">treasury</a>.burn(token);
 
     // Store pending <a href="bridge.md#0xb_bridge">bridge</a> request
     inner.bridge_records.push_back(<a href="message.md#0xb_message">message</a>.key(), <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a> {
@@ -1061,11 +1091,11 @@ title: Module `0xb::bridge`
     // get owner <b>address</b>
     <b>let</b> owner = address::from_bytes(token_payload.token_target_address());
     // check token type
-    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == token_payload.token_type(), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
+    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;(&inner.<a href="treasury.md#0xb_treasury">treasury</a>) == token_payload.token_type(), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
 
     <b>let</b> amount = token_payload.token_amount();
     // Make sure <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> is within limit.
-    <b>if</b> (!inner.<a href="limiter.md#0xb_limiter">limiter</a>.check_and_record_sending_transfer&lt;T&gt;(<a href="../sui-framework/clock.md#0x2_clock">clock</a>, route, amount)) {
+    <b>if</b> (!inner.<a href="limiter.md#0xb_limiter">limiter</a>.check_and_record_sending_transfer&lt;T&gt;(&inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>, route, amount)) {
         <b>return</b> (<a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
     };
 
@@ -1130,6 +1160,9 @@ title: Module `0xb::bridge`
     } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
         <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_asset_price();
         <a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner, payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message_extract_add_tokens_on_sui">message::extract_add_tokens_on_sui</a>(&<a href="message.md#0xb_message">message</a>);
+        <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner, payload);
     } <b>else</b> {
         <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>
     };
@@ -1225,10 +1258,48 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: UpdateAssetPrice) {
-    inner.<a href="limiter.md#0xb_limiter">limiter</a>.update_asset_notional_price(
+    inner.<a href="treasury.md#0xb_treasury">treasury</a>.update_asset_notional_price(
         payload.update_asset_price_payload_token_id(),
         payload.update_asset_price_payload_new_price()
     )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_execute_add_tokens_on_sui"></a>
+
+## Function `execute_add_tokens_on_sui`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>, payload: <a href="message.md#0xb_message_AddTokenOnSui">message::AddTokenOnSui</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: AddTokenOnSui) {
+    <b>let</b> native_token = payload.is_native();
+    <b>let</b> <b>mut</b> token_ids = payload.token_ids();
+    <b>let</b> <b>mut</b> token_type_names = payload.token_type_names();
+    <b>let</b> <b>mut</b> token_prices = payload.token_prices();
+
+    // Make sure token data is consistent
+    <b>assert</b>!(token_ids.length() == token_type_names.length(), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
+    <b>assert</b>!(token_ids.length() == token_prices.length(), <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
+
+    <b>while</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&token_ids) &gt; 0) {
+        <b>let</b> token_id = token_ids.pop_back();
+        <b>let</b> token_type_name = token_type_names.pop_back();
+        <b>let</b> token_price = token_prices.pop_back();
+        inner.<a href="treasury.md#0xb_treasury">treasury</a>.add_new_token(token_type_name, token_id, native_token, token_price)
+    }
 }
 </code></pre>
 
