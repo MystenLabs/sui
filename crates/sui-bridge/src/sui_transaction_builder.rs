@@ -169,7 +169,7 @@ fn build_token_bridge_approve_transaction(
     builder.programmable_move_call(
         BRIDGE_PACKAGE_ID,
         sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
-        ident_str!("approve_bridge_message").to_owned(),
+        ident_str!("approve_token_transfer").to_owned(),
         vec![],
         vec![arg_bridge, arg_msg, arg_signatures],
     );
