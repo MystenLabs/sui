@@ -548,7 +548,7 @@ module bridge::bridge {
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
             treasury: treasury::mock_for_test(ctx),
-            bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
+            token_transfer_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
             limiter: limiter::new(),
             paused: false,
         };
