@@ -31,6 +31,7 @@ use sui_types::bridge::BridgeCommitteeSummary;
 use sui_types::bridge::BridgeInnerDynamicField;
 use sui_types::bridge::BridgeRecordDyanmicField;
 use sui_types::bridge::BridgeSummary;
+use sui_types::bridge::BridgeTreasurySummary;
 use sui_types::bridge::MoveTypeBridgeCommittee;
 use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::collection_types::LinkedTableNode;
@@ -169,6 +170,10 @@ where
             .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
     }
 
+    pub async fn get_treasury_summary(&self) -> BridgeResult<BridgeTreasurySummary> {
+        Ok(self.get_bridge_summary().await?.treasury)
+    }
+
     pub async fn get_token_id_map(&self) -> BridgeResult<HashMap<u8, TypeTag>> {
         self.get_bridge_summary()
             .await?
@@ -263,11 +268,13 @@ where
         self.inner.execute_transaction_block_with_effects(tx).await
     }
 
+    // TODO: this function is very slow (seconds) in tests, we need to optimize it
     pub async fn get_token_transfer_action_onchain_status_until_success(
         &self,
         source_chain_id: u8,
         seq_number: u64,
     ) -> BridgeActionStatus {
+        let now = std::time::Instant::now();
         loop {
             let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
                 self.get_mutable_bridge_object_arg(),
@@ -653,7 +660,6 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .with_epoch_duration_ms(15000)
             .build_with_bridge(true)
             .await;
 
@@ -662,15 +668,10 @@ mod tests {
             .unwrap();
         let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
 
-        // Return once the bridge committee is initialized. Return immediately if it's already the case.
-        // Otherwise wait until the next epoch. This call should be called after proper bridge committee setup,
-        // such as `build_with_bridge`.
-        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
-        // is not initialized during the construction of `BridgeCommittee`.
-        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
-        if committee.members.is_empty() {
-            test_cluster.wait_for_epoch(None).await;
-        }
+        // Wait until committee is set up
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
         let context = &mut test_cluster.wallet;
         let sender = context.active_address().unwrap();
         let summary = sui_client.inner.get_bridge_summary().await.unwrap();

@@ -4,7 +4,10 @@
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
 use std::{collections::HashMap, str::FromStr};
-use sui_types::bridge::BRIDGE_MODULE_NAME;
+use sui_types::bridge::{
+    BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME,
+    BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME, BRIDGE_MESSAGE_MODULE_NAME, BRIDGE_MODULE_NAME,
+};
 use sui_types::transaction::CallArg;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
@@ -73,6 +76,12 @@ pub fn build_sui_transaction(
             // It does not need a Sui tranaction to execute EVM contract upgrade
             unreachable!()
         }
+        BridgeAction::AddTokensOnSuiAction(_) => build_add_tokens_on_sui_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            bridge_object_arg,
+        ),
     }
 }
 
@@ -456,6 +465,83 @@ fn build_asset_price_update_approve_transaction(
     ))
 }
 
+// TODO: pass in gas price
+pub fn build_add_tokens_on_sui_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+    bridge_object_arg: ObjectArg,
+) -> BridgeResult<TransactionData> {
+    let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let (source_chain, seq_num, native, token_ids, token_type_names, token_prices) =
+        match bridge_action {
+            BridgeAction::AddTokensOnSuiAction(a) => (
+                a.chain_id,
+                a.nonce,
+                a.native,
+                a.token_ids,
+                a.token_type_names,
+                a.token_prices,
+            ),
+            _ => unreachable!(),
+        };
+    let token_type_names = token_type_names
+        .iter()
+        .map(|type_name| type_name.to_canonical_string(false))
+        .collect::<Vec<_>>();
+    let source_chain = builder.pure(source_chain as u8).unwrap();
+    let seq_num = builder.pure(seq_num).unwrap();
+    let native_token = builder.pure(native).unwrap();
+    let token_ids = builder.pure(token_ids).unwrap();
+    let token_type_names = builder.pure(token_type_names).unwrap();
+    let token_prices = builder.pure(token_prices).unwrap();
+
+    let message_arg = builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        BRIDGE_MESSAGE_MODULE_NAME.into(),
+        BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME.into(),
+        vec![],
+        vec![
+            source_chain,
+            seq_num,
+            native_token,
+            token_ids,
+            token_type_names,
+            token_prices,
+        ],
+    );
+
+    let bridge_arg = builder.obj(bridge_object_arg).unwrap();
+
+    let mut sig_bytes = vec![];
+    for (_, sig) in sigs.signatures {
+        sig_bytes.push(sig.as_bytes().to_vec());
+    }
+    let sigs_arg = builder.pure(sig_bytes.clone()).unwrap();
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        BRIDGE_MODULE_NAME.into(),
+        BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME.into(),
+        vec![],
+        vec![bridge_arg, message_arg, sigs_arg],
+    );
+
+    let pt = builder.finish();
+
+    Ok(TransactionData::new_programmable(
+        client_address,
+        vec![*gas_object_ref],
+        pt,
+        100_000_000,
+        // TODO: use reference gas price
+        1500,
+    ))
+}
+
 pub fn build_committee_register_transaction(
     validator_address: SuiAddress,
     gas_object_ref: &ObjectRef,
@@ -517,7 +603,6 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-            .with_epoch_duration_ms(2000)
             .build_with_bridge(true)
             .await;
 
@@ -528,10 +613,9 @@ mod tests {
 
         // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
         // is not initialized during the construction of `BridgeCommittee`.
-        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
-        if committee.members.is_empty() {
-            test_cluster.wait_for_epoch(None).await;
-        }
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
         let context = &mut test_cluster.wallet;
         let sender = context.active_address().unwrap();
         let usdc_amount = 5000000;
@@ -588,7 +672,6 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .with_epoch_duration_ms(15000)
             .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -596,12 +679,10 @@ mod tests {
             .unwrap();
         let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
 
-        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
-        // is not initialized during the construction of `BridgeCommittee`.
-        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
-        if committee.members.is_empty() {
-            test_cluster.wait_for_epoch(None).await;
-        }
+        // Wait until committee is set up
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
         let summary = sui_client.get_bridge_summary().await.unwrap();
         assert!(!summary.is_frozen);
 
@@ -653,7 +734,6 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .with_epoch_duration_ms(15000)
             .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -661,12 +741,10 @@ mod tests {
             .unwrap();
         let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
 
-        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
-        // is not initialized during the construction of `BridgeCommittee`.
-        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
-        if committee.members.is_empty() {
-            test_cluster.wait_for_epoch(None).await;
-        }
+        // Wait until committee is set up
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
         let committee = sui_client.get_bridge_summary().await.unwrap().committee;
         let victim = committee.members.first().unwrap().clone().1;
         for member in committee.members {
@@ -737,7 +815,6 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .with_epoch_duration_ms(15000)
             .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -745,12 +822,10 @@ mod tests {
             .unwrap();
         let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
 
-        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
-        // is not initialized during the construction of `BridgeCommittee`.
-        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
-        if committee.members.is_empty() {
-            test_cluster.wait_for_epoch(None).await;
-        }
+        // Wait until committee is set up
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
         let transfer_limit = sui_client
             .get_bridge_summary()
             .await
@@ -802,7 +877,6 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-            .with_epoch_duration_ms(15000)
             .build_with_bridge(true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -812,10 +886,9 @@ mod tests {
 
         // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
         // is not initialized during the construction of `BridgeCommittee`.
-        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
-        if committee.members.is_empty() {
-            test_cluster.wait_for_epoch(None).await;
-        }
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
         let notional_values = sui_client.get_notional_values().await.unwrap();
         assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 

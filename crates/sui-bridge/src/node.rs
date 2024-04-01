@@ -163,8 +163,9 @@ mod tests {
     use std::process::Child;
 
     use super::*;
+    use crate::config::BridgeNodeConfig;
+    use crate::e2e_test_utils::wait_for_server_to_be_up;
     use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
-    use crate::{config::BridgeNodeConfig, server::APPLICATION_JSON};
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
@@ -182,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, _child) = setup().await;
+        let (test_cluster, anvil_port, mut child) = setup().await;
 
         // prepare node config (server only)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -214,13 +215,15 @@ mod tests {
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
-        wait_for_server_to_be_up(server_url, 3).await;
+        let res = wait_for_server_to_be_up(server_url, 5).await;
+        child.kill().unwrap();
+        res.unwrap();
     }
 
     #[tokio::test]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, _child) = setup().await;
+        let (test_cluster, anvil_port, mut child) = setup().await;
 
         // prepare node config (server + client)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -269,13 +272,15 @@ mod tests {
         // Now we expect to see the server to be up and running.
         // client components are spawned earlier than server, so as long as the server is up,
         // we know the client components are already running.
-        wait_for_server_to_be_up(server_url, 3).await;
+        let res = wait_for_server_to_be_up(server_url, 5).await;
+        child.kill().unwrap();
+        res.unwrap();
     }
 
     #[tokio::test]
     async fn test_starting_bridge_node_with_client_and_separate_client_key() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, _child) = setup().await;
+        let (test_cluster, anvil_port, mut child) = setup().await;
 
         // prepare node config (server + client)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -334,18 +339,19 @@ mod tests {
         // Now we expect to see the server to be up and running.
         // client components are spawned earlier than server, so as long as the server is up,
         // we know the client components are already running.
-        wait_for_server_to_be_up(server_url, 3).await;
+        let res = wait_for_server_to_be_up(server_url, 5).await;
+        child.kill().unwrap();
+        res.unwrap();
     }
 
     async fn setup() -> (test_cluster::TestCluster, u16, Child) {
         let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-            .with_epoch_duration_ms(10000)
             .build_with_bridge(true)
             .await;
 
         test_cluster
-            .wait_for_next_epoch_and_assert_bridge_committee_initialized()
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
             .await;
 
         // Start eth node with anvil
@@ -357,25 +363,5 @@ mod tests {
             .expect("Failed to start anvil");
 
         (test_cluster, anvil_port, eth_node_process)
-    }
-
-    async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) {
-        let now = std::time::Instant::now();
-        // Now we expect to see the server to be up and running, the max time to wait is 3 seconds.
-        loop {
-            if let Ok(true) = reqwest::Client::new()
-                .get(server_url.clone())
-                .header(reqwest::header::ACCEPT, APPLICATION_JSON)
-                .send()
-                .await
-                .map(|res| res.status().is_success())
-            {
-                break;
-            }
-            if now.elapsed().as_secs() > timeout_sec {
-                panic!("Server is not up and running after 3 seconds");
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
     }
 }

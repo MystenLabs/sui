@@ -70,6 +70,12 @@ impl BridgeRequestMockHandler {
     }
 }
 
+impl Default for BridgeRequestMockHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl BridgeRequestHandlerTrait for BridgeRequestMockHandler {
     async fn handle_eth_tx_hash(
