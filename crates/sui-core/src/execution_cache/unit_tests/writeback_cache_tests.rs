@@ -20,29 +20,12 @@ use sui_types::{
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
 };
-use tempfile::tempdir;
 
 use super::*;
 use crate::{
-    authority::{authority_store_tables::AuthorityPerpetualTables, AuthorityStore},
+    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState, AuthorityStore},
     execution_cache::ExecutionCacheAPI,
-    test_utils::init_state_parameters_from_rng,
 };
-
-async fn init_authority_store() -> Arc<AuthorityStore> {
-    let seed = [1u8; 32];
-    let (genesis, _) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
-
-    // Create a random directory to store the DB
-    let dir = tempdir().unwrap();
-    let db_path = dir.path();
-
-    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(db_path, None));
-    AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
-        .await
-        .unwrap()
-}
 
 trait AssertInserted {
     fn assert_inserted(&self);
@@ -63,7 +46,9 @@ impl AssertInserted for bool {
 type ActionCb = Box<dyn Fn(&mut Scenario) + Send>;
 
 struct Scenario {
+    authority: Arc<AuthorityState>,
     store: Arc<AuthorityStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     cache: Arc<WritebackCache>,
 
     id_map: BTreeMap<u32, ObjectID>,
@@ -77,13 +62,19 @@ struct Scenario {
 
 impl Scenario {
     async fn new(do_after: Option<(u32, ActionCb)>, action_count: Arc<AtomicU32>) -> Self {
-        let store = init_authority_store().await;
+        let authority = TestAuthorityBuilder::new().build().await;
+
+        let store = authority.database_for_testing().clone();
+        let epoch_store = authority.epoch_store_for_testing().clone();
+
         static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
             once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
 
         let cache = Arc::new(WritebackCache::new(store.clone(), (*METRICS).clone()));
         Self {
+            authority,
             store,
+            epoch_store,
             cache,
             id_map: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -92,20 +83,6 @@ impl Scenario {
 
             action_count,
             do_after,
-        }
-    }
-
-    fn new_with_store_and_cache(store: Arc<AuthorityStore>, cache: Arc<WritebackCache>) -> Self {
-        Self {
-            store,
-            cache,
-            id_map: BTreeMap::new(),
-            objects: BTreeMap::new(),
-            outputs: Self::new_outputs(),
-            transactions: BTreeSet::new(),
-
-            action_count: Arc::new(AtomicU32::new(0)),
-            do_after: None,
         }
     }
 
@@ -516,6 +493,19 @@ impl Scenario {
             .expect("no such object")
             .clone()
     }
+
+    fn obj_ref(&self, short_id: u32) -> ObjectRef {
+        self.object(short_id).compute_object_reference()
+    }
+
+    fn make_signed_transaction(&self, tx: &VerifiedTransaction) -> VerifiedSignedTransaction {
+        VerifiedSignedTransaction::new(
+            self.epoch_store.epoch(),
+            tx.clone(),
+            self.authority.name,
+            &*self.authority.secret,
+        )
+    }
 }
 
 #[tokio::test]
@@ -619,6 +609,7 @@ async fn test_received() {
 }
 
 #[tokio::test]
+#[should_panic(expected = "version must be the oldest in the map")]
 async fn test_out_of_order_commit() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
@@ -683,6 +674,162 @@ async fn test_write_transaction_outputs_is_sync() {
         // fail_point_async! macros above to be elided
         s.cache
             .write_transaction_outputs(1, outputs)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_transaction_locks_are_exclusive() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2, 3]);
+        s.do_tx().await;
+
+        s.with_mutated(&[1, 2, 3]);
+        s.do_tx().await;
+
+        let new1 = s.obj_ref(1);
+        let new2 = s.obj_ref(2);
+        let new3 = s.obj_ref(3);
+
+        s.with_mutated(&[1, 2, 3]); // begin forming a tx but never execute it
+        let outputs = s.take_outputs();
+
+        let tx1 = s.make_signed_transaction(&outputs.transaction);
+
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx1)
+            .await
+            .expect("locks should be available");
+
+        // this tx doesn't use the actual objects in question, but we just need something
+        // to insert into the table.
+        s.with_created(&[4, 5]);
+        let tx2 = s.take_outputs().transaction.clone();
+        let tx2 = s.make_signed_transaction(&tx2);
+
+        // both locks are held by tx1, so this should fail
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2.clone())
+            .await
+            .unwrap_err();
+
+        // new3 is lockable, but new2 is not, so this should fail
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new3, new2], tx2.clone())
+            .await
+            .unwrap_err();
+
+        // new3 is unlocked
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new3], tx2)
+            .await
+            .expect("new3 should be unlocked");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_transaction_locks_are_durable() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
+
+        let old2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]);
+        s.do_tx().await;
+
+        let new1 = s.obj_ref(1);
+        let new2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
+        let outputs = s.take_outputs();
+
+        let tx = s.make_signed_transaction(&outputs.transaction);
+
+        // fails because we are referring to an old object
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx.clone())
+            .await
+            .unwrap_err();
+
+        // succeeds because the above call releases the lock on new1 after failing
+        // to get the lock on old2
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx)
+            .await
+            .expect("new1 should be unlocked after revert");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_acquire_transaction_locks_revert() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
+
+        let old2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]);
+        s.do_tx().await;
+
+        let new1 = s.obj_ref(1);
+        let new2 = s.obj_ref(2);
+
+        s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
+        let outputs = s.take_outputs();
+
+        let tx = s.make_signed_transaction(&outputs.transaction);
+
+        // fails because we are referring to an old object
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx)
+            .await
+            .unwrap_err();
+
+        // this tx doesn't use the actual objects in question, but we just need something
+        // to insert into the table.
+        s.with_created(&[4, 5]);
+        let tx2 = s.take_outputs().transaction.clone();
+        let tx2 = s.make_signed_transaction(&tx2);
+
+        // succeeds because the above call releases the lock on new1 after failing
+        // to get the lock on old2
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2)
+            .await
+            .expect("new1 should be unlocked after revert");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_acquire_transaction_locks_is_sync() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
+
+        let objects: Vec<_> = vec![s.object(1), s.object(2)]
+            .into_iter()
+            .map(|o| o.compute_object_reference())
+            .collect();
+
+        s.with_mutated(&[1, 2]);
+        let outputs = s.take_outputs();
+
+        let tx2 = s.make_signed_transaction(&outputs.transaction);
+        // assert that acquire_transaction_locks is sync in non-simtest, which causes the
+        // fail_point_async! macros above to be elided
+        s.cache
+            .acquire_transaction_locks(&s.epoch_store, &objects, tx2)
             .now_or_never()
             .unwrap()
             .unwrap();
@@ -798,11 +945,8 @@ async fn test_concurrent_readers() {
         tokio::task::yield_now().await;
     });
 
-    let store = init_authority_store().await;
-    let registry = prometheus::Registry::new(); // One time registry for testing.
-    let cache = Arc::new(WritebackCache::new_for_tests(store.clone(), &registry));
-
-    let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
     let mut txns = Vec::new();
 
     for i in 0..100 {
@@ -873,4 +1017,86 @@ async fn test_concurrent_readers() {
 
     t1.await.unwrap();
     t2.await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_concurrent_lockers() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
+    let mut txns = Vec::new();
+
+    for i in 0..1000 {
+        let a = i * 4;
+        let b = i * 4 + 1;
+        let c = i * 4 + 2;
+        let d = i * 4 + 3;
+        s.with_created(&[a, b]);
+        s.do_tx().await;
+
+        let a_ref = s.obj_ref(a);
+        let b_ref = s.obj_ref(b);
+
+        // these contents of these txns are never used, they are just unique transactions to use for
+        // attempted equivocation
+        s.with_created(&[c]);
+        let tx1 = s.take_outputs();
+
+        s.with_created(&[d]);
+        let tx2 = s.take_outputs();
+
+        let tx1 = s.make_signed_transaction(&tx1.transaction);
+        let tx2 = s.make_signed_transaction(&tx2.transaction);
+
+        txns.push((tx1, tx2, a_ref, b_ref));
+    }
+
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+
+    let t1 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (tx1, _, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let t2 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (_, tx2, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx2)
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let results1 = t1.await.unwrap();
+    let results2 = t2.await.unwrap();
+
+    for (r1, r2) in results1.into_iter().zip(results2) {
+        // exactly one should succeed in each case
+        assert_eq!(r1.is_ok(), r2.is_err());
+    }
 }

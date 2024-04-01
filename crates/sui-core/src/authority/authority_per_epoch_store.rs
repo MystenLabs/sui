@@ -786,14 +786,12 @@ impl AuthorityEpochTables {
     pub fn write_transaction_locks(
         &self,
         transaction: VerifiedSignedTransaction,
-        locks_to_write: impl IntoIterator<Item = (ObjectRef, LockDetails)>,
+        locks_to_write: impl Iterator<Item = (ObjectRef, LockDetails)>,
     ) -> SuiResult {
         let mut batch = self.owned_object_locked_transactions.batch();
         batch.insert_batch(
             &self.owned_object_locked_transactions,
-            locks_to_write
-                .into_iter()
-                .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+            locks_to_write.map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
         )?;
         batch.insert_batch(
             &self.signed_transactions,
@@ -1466,8 +1464,7 @@ impl AuthorityPerEpochStore {
 
     pub fn object_lock_split_tables_enabled(&self) -> bool {
         self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::ObjectLockSplitTables)
+            .object_lock_split_tables_enabled()
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the

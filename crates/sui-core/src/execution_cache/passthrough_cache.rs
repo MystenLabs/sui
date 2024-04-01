@@ -178,7 +178,7 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.get_lock(obj_ref, epoch_store)
     }
 
-    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
         self.store.get_latest_live_version_for_object_id(object_id)
     }
 
@@ -276,6 +276,19 @@ impl ExecutionCacheWrite for PassthroughCache {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
             let effects_digest = tx_outputs.effects.digest();
+
+            // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
+            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
+            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+            //    (But the lock should exist which means previous transactions finished)
+            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
+            //    fine
+            // 4. Locks may have existed when we started processing this tx, but could have since
+            //    been deleted by a concurrent tx that finished first. In that case, check if the
+            //    tx effects exist.
+            self.store
+                .check_owned_object_locks_exist(&tx_outputs.locks_to_delete)?;
+
             self.store
                 .write_transaction_outputs(epoch_id, tx_outputs)
                 .await?;
