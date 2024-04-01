@@ -165,8 +165,9 @@ jobs:
         with:
           swap-size-gb: 256
       - name: cargo simtest
+        # Use a different seed per run to avoid unrelated changes stuck on a flaky test.
         run: |
-          scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(date +%s)" scripts/simtest/cargo-simtest simtest --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
