@@ -29,9 +29,6 @@ env:
   # Enable Mysticeti in tests.
   CONSENSUS: "mysticeti"
 
-  # Reduce logging noise.
-  RUST_LOG: "error"
-
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
   #
@@ -165,8 +162,9 @@ jobs:
         with:
           swap-size-gb: 256
       - name: cargo simtest
+        # Use a different seed per commit to avoid unrelated changes stuck on a flaky test.
         run: |
-          scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
