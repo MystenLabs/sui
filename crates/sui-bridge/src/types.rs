@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::bridge::{
-    BridgeChainId, APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
-    BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
+    BridgeChainId, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM, APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI,
+    BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
 use sui_types::bridge::{
     APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
@@ -175,6 +175,7 @@ pub enum BridgeActionType {
     AssetPriceUpdate = 4,
     EvmContractUpgrade = 5,
     AddTokensOnSui = 6,
+    AddTokensOnEvm = 7,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
@@ -296,6 +297,17 @@ pub struct AddTokensOnSuiAction {
     pub token_prices: Vec<u64>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct AddTokensOnEvmAction {
+    pub nonce: u64,
+    pub chain_id: BridgeChainId,
+    pub native: bool,
+    pub token_ids: Vec<u8>,
+    pub token_addresses: Vec<EthAddress>,
+    pub token_sui_decimals: Vec<u8>,
+    pub token_prices: Vec<u64>,
+}
+
 /// The type of actions Bridge Committee verify and sign off to execution.
 /// Its relationship with BridgeEvent is similar to the relationship between
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -311,6 +323,7 @@ pub enum BridgeAction {
     AssetPriceUpdateAction(AssetPriceUpdateAction),
     EvmContractUpgradeAction(EvmContractUpgradeAction),
     AddTokensOnSuiAction(AddTokensOnSuiAction),
+    AddTokensOnEvmAction(AddTokensOnEvmAction),
 }
 
 impl BridgeAction {
@@ -331,6 +344,7 @@ impl BridgeAction {
             BridgeAction::AssetPriceUpdateAction(a) => a.chain_id,
             BridgeAction::EvmContractUpgradeAction(a) => a.chain_id,
             BridgeAction::AddTokensOnSuiAction(a) => a.chain_id,
+            BridgeAction::AddTokensOnEvmAction(a) => a.chain_id,
         }
     }
 
@@ -343,6 +357,7 @@ impl BridgeAction {
             BridgeActionType::AssetPriceUpdate => true,
             BridgeActionType::EvmContractUpgrade => true,
             BridgeActionType::AddTokensOnSui => true,
+            BridgeActionType::AddTokensOnEvm => true,
         }
     }
 
@@ -357,6 +372,7 @@ impl BridgeAction {
             BridgeAction::AssetPriceUpdateAction(_) => BridgeActionType::AssetPriceUpdate,
             BridgeAction::EvmContractUpgradeAction(_) => BridgeActionType::EvmContractUpgrade,
             BridgeAction::AddTokensOnSuiAction(_) => BridgeActionType::AddTokensOnSui,
+            BridgeAction::AddTokensOnEvmAction(_) => BridgeActionType::AddTokensOnEvm,
         }
     }
 
@@ -371,6 +387,7 @@ impl BridgeAction {
             BridgeAction::AssetPriceUpdateAction(a) => a.nonce,
             BridgeAction::EvmContractUpgradeAction(a) => a.nonce,
             BridgeAction::AddTokensOnSuiAction(a) => a.nonce,
+            BridgeAction::AddTokensOnEvmAction(a) => a.nonce,
         }
     }
 
@@ -387,6 +404,7 @@ impl BridgeAction {
             BridgeAction::AssetPriceUpdateAction(_) => APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE,
             BridgeAction::EvmContractUpgradeAction(_) => APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE,
             BridgeAction::AddTokensOnSuiAction(_) => APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI,
+            BridgeAction::AddTokensOnEvmAction(_) => APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
         }
     }
 }

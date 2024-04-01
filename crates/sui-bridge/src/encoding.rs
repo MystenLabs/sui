@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::AddTokensOnEvmAction;
 use crate::types::AddTokensOnSuiAction;
 use crate::types::AssetPriceUpdateAction;
 use crate::types::BlocklistCommitteeAction;
@@ -22,6 +23,7 @@ pub const LIMIT_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const ASSET_PRICE_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const EVM_CONTRACT_UPGRADE_MESSAGE_VERSION: u8 = 1;
 pub const ADD_TOKENS_ON_SUI_MESSAGE_VERSION: u8 = 1;
+pub const ADD_TOKENS_ON_EVM_MESSAGE_VERSION: u8 = 1;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 
@@ -322,6 +324,59 @@ impl BridgeMessageEncoding for AddTokensOnSuiAction {
     }
 }
 
+impl BridgeMessageEncoding for AddTokensOnEvmAction {
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Add message type
+        bytes.push(BridgeActionType::AddTokensOnEvm as u8);
+        // Add message version
+        bytes.push(ADD_TOKENS_ON_EVM_MESSAGE_VERSION);
+        // Add nonce
+        bytes.extend_from_slice(&self.nonce.to_be_bytes());
+        // Add chain id
+        bytes.push(self.chain_id as u8);
+
+        // Add payload bytes
+        bytes.extend_from_slice(&self.as_payload_bytes());
+
+        bytes
+    }
+
+    fn as_payload_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Add native
+        bytes.push(self.native as u8);
+        // Add token ids
+        // Unwrap: bcs serialization should not fail
+        bytes.push(u8::try_from(self.token_ids.len()).unwrap());
+        for token_id in &self.token_ids {
+            bytes.push(*token_id);
+        }
+
+        // Add token addresses
+        // Unwrap: bcs serialization should not fail
+        bytes.push(u8::try_from(self.token_addresses.len()).unwrap());
+        for token_address in &self.token_addresses {
+            bytes.extend_from_slice(&token_address.to_fixed_bytes());
+        }
+
+        // Add token sui decimals
+        // Unwrap: bcs serialization should not fail
+        bytes.push(u8::try_from(self.token_sui_decimals.len()).unwrap());
+        for token_sui_decimal in &self.token_sui_decimals {
+            bytes.push(*token_sui_decimal);
+        }
+
+        // Add token prices
+        // Unwrap: bcs serialization should not fail
+        bytes.push(u8::try_from(self.token_prices.len()).unwrap());
+        for token_price in &self.token_prices {
+            bytes.extend_from_slice(&token_price.to_be_bytes());
+        }
+        bytes
+    }
+}
+
 impl BridgeAction {
     /// Convert to message bytes to verify in Move and Solidity
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -337,7 +392,9 @@ impl BridgeAction {
 #[cfg(test)]
 mod tests {
     use crate::abi::EthToSuiTokenBridgeV1;
+    use crate::crypto::BridgeAuthorityKeyPair;
     use crate::crypto::BridgeAuthorityPublicKeyBytes;
+    use crate::crypto::BridgeAuthoritySignInfo;
     use crate::events::EmittedSuiToEthTokenBridgeV1;
     use crate::types::BlocklistType;
     use crate::types::EmergencyActionType;
@@ -885,5 +942,68 @@ mod tests {
             "5355495f4252494447455f4d4553534147450601000000000000000003000401020304044a396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434a373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484c353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434c343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_bridge_message_encoding_regression_add_coins_on_evm() -> anyhow::Result<()> {
+        let action = BridgeAction::AddTokensOnEvmAction(crate::types::AddTokensOnEvmAction {
+            nonce: 0,
+            chain_id: BridgeChainId::EthLocalTest,
+            native: true,
+            token_ids: vec![99, 100, 101],
+            token_addresses: vec![
+                EthAddress::repeat_byte(1),
+                EthAddress::repeat_byte(2),
+                EthAddress::repeat_byte(3),
+            ],
+            token_sui_decimals: vec![5, 6, 7],
+            token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
+        });
+        let encoded_bytes = action.to_bytes();
+
+        assert_eq!(
+            Hex::encode(encoded_bytes),
+            "5355495f4252494447455f4d455353414745070100000000000000000c0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00",
+        );
+        // To generate regression test for sol contracts
+        let keys = get_bridge_encoding_regression_test_keys();
+        for key in keys {
+            let pub_key = key.public.as_bytes();
+            println!("pub_key: {:?}", Hex::encode(pub_key));
+            println!(
+                "sig: {:?}",
+                Hex::encode(
+                    BridgeAuthoritySignInfo::new(&action, &key)
+                        .signature
+                        .as_bytes()
+                )
+            );
+        }
+        Ok(())
+    }
+
+    fn get_bridge_encoding_regression_test_keys() -> Vec<BridgeAuthorityKeyPair> {
+        vec![
+            BridgeAuthorityKeyPair::from_bytes(
+                &Hex::decode("e42c82337ce12d4a7ad6cd65876d91b2ab6594fd50cdab1737c91773ba7451db")
+                    .unwrap(),
+            )
+            .unwrap(),
+            BridgeAuthorityKeyPair::from_bytes(
+                &Hex::decode("1aacd610da3d0cc691a04b83b01c34c6c65cda0fe8d502df25ff4b3185c85687")
+                    .unwrap(),
+            )
+            .unwrap(),
+            BridgeAuthorityKeyPair::from_bytes(
+                &Hex::decode("53e7baf8378fbc62692e3056c2e10c6666ef8b5b3a53914830f47636d1678140")
+                    .unwrap(),
+            )
+            .unwrap(),
+            BridgeAuthorityKeyPair::from_bytes(
+                &Hex::decode("08b5350a091faabd5f25b6e290bfc3f505d43208775b9110dfed5ee6c7a653f0")
+                    .unwrap(),
+            )
+            .unwrap(),
+        ]
     }
 }
