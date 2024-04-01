@@ -350,10 +350,7 @@ impl Compiler {
 
         source_text.iter_mut().for_each(|(_, (path, _))| {
             // TODO better support for bytecode interface file paths
-            *path = vfs_to_original_path
-                .get(path)
-                .copied()
-                .unwrap_or_else(|| *path)
+            *path = vfs_to_original_path.get(path).copied().unwrap_or(*path)
         });
 
         for (fhash, (fname, contents)) in source_text.iter() {
