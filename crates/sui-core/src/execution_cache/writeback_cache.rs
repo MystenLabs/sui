@@ -972,6 +972,11 @@ impl WritebackCache {
         // Futher, once we do this, we can delay the insertion of the transaction into
         // pending_consensus_transactions until after the transaction has executed.
         let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
+            assert!(
+                !self.is_tx_already_executed(tx).expect("read cannot fail"),
+                "attempt to revert committed transaction"
+            );
+
             // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
             // can happen before the transaction executes.
             info!("Not reverting {:?} as it was not executed", tx);
@@ -985,6 +990,7 @@ impl WritebackCache {
             }
         }
 
+        // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
 
