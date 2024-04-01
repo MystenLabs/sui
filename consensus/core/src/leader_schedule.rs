@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::Ordering, 
-    ops::Bound::{Excluded, Included},
-    collections::{BTreeMap, HashMap}, 
-    fmt::{Debug, Formatter}, 
-    sync::Arc
+    collections::HashMap, fmt::{Debug, Formatter}, sync::Arc
 };
 
 use parking_lot::RwLock;
@@ -15,14 +11,10 @@ use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 use consensus_config::{Authority, AuthorityIndex, Stake};
 
 use crate::{
-    base_committer::BaseCommitter, 
-    block::{BlockAPI,BlockDigest, BlockRef, Slot, VerifiedBlock},
-    commit::CommitRange, 
     context::Context, 
     dag_state::DagState, 
-    stake_aggregator::{QuorumThreshold, StakeAggregator}, 
-    universal_committer::UniversalCommitter, 
-    CommittedSubDag, 
+    leader_scoring::{ReputationScoreCalculator, ReputationScores}, 
+    universal_committer::UniversalCommitter,
     Round
 };
 
@@ -265,7 +257,7 @@ impl LeaderSwapTable {
             );
         });
 
-        tracing::debug!("{reputation_scores:?}");
+        tracing::debug!("Scores used for new LeaderSwapTable: {reputation_scores:?}");
 
         Self {
             good_nodes,
@@ -357,316 +349,20 @@ impl Debug for LeaderSwapTable {
     }
 }
 
-pub(crate) struct ReputationScoreCalculator<'a> {
-    context: Arc<Context>,
-    unscored_blocks: BTreeMap<BlockRef, VerifiedBlock>,
-    committer: &'a UniversalCommitter,
-    pub commit_range: CommitRange,
-    pub scores_per_authority: Vec<u64>
-}
-
-impl<'a> ReputationScoreCalculator<'a> {
-    pub(crate) fn new(
-        context: Arc<Context>,
-        committer: &'a UniversalCommitter,
-        unscored_subdags: &Vec<CommittedSubDag>,
-    ) -> Self {
-        let num_authorities = context.committee.size();
-        let scores_per_authority = vec![0_u64; num_authorities];
-
-        let unscored_blocks = unscored_subdags
-            .iter()
-            .flat_map(|subdag| subdag.blocks.iter())
-            .map(|block| (block.reference(), block.clone()))
-            .collect::<BTreeMap<_, _>>();
-
-        assert!(!unscored_subdags.is_empty(), "Attempted to calculate scores with no unscored subdags");
-        let commit_indexes = unscored_subdags
-            .iter()
-            .map(|subdag| subdag.commit_index)
-            .collect::<Vec<_>>();
-        let min_commit_index = *commit_indexes.iter().min().unwrap();
-        let max_commit_index = *commit_indexes.iter().max().unwrap();
-        let commit_range = CommitRange::new(min_commit_index..max_commit_index);
-
-        Self {
-            context,
-            unscored_blocks,
-            committer,
-            commit_range,
-            scores_per_authority
-        }
-    }
-
-    pub(crate) fn calculate(&mut self) -> ReputationScores {
-        assert!(!self.unscored_blocks.is_empty(), "Attempted to calculate scores with no blocks from unscored subdags");
-        let rounds = self.unscored_blocks.keys().map(|block_ref| block_ref.round);
-        let min_round = rounds.clone().min().unwrap();
-        let max_round = rounds.max().unwrap();
-
-        // We will search for certificates for leaders up to R - 3.
-        for round in min_round..=(max_round - 3) {
-            for committer in self.committer.committers.iter() {
-
-                if let Some(leader_slot) = committer.elect_leader(round) {
-                    self.calculate_scores_for_leader(leader_slot, committer);
-                }
-            }
-        }
-
-        ReputationScores::new(self.commit_range.clone(), self.scores_per_authority.clone())
-    }
-
-
-    pub(crate) fn calculate_scores_for_leader(
-        &mut self, 
-        leader_slot: Slot, 
-        committer: &BaseCommitter,
-        )  {
-            let wave = committer.wave_number(leader_slot.round);
-            let decision_round = committer.decision_round(wave);
-    
-            let leader_blocks = self.get_blocks_at_slot(leader_slot);
-    
-            if leader_blocks.is_empty() {
-                tracing::info!("[{}] No block for leader slot {leader_slot} in this set of unscored committed subdags, skip scoring", self.context.own_index);
-                return;
-            }
-    
-            // At this point we are guaranteed that there is only one leader per slot
-            // because we are operating on committed subdags.
-            assert!(leader_blocks.len() == 1);
-    
-            let leader_block = leader_blocks.first().unwrap();
-    
-            // TODO(arun): move to a separate "scoring strategy" method. Will need to do points 
-            // for votes connected to certificates (certified vote). Can experiment with 
-            // point per certificate  or 1 point per 2f+1 certs
-            let decision_blocks = self.get_blocks_at_round(decision_round);
-            let mut all_votes = HashMap::new();
-            for potential_cert in decision_blocks {
-                let authority = potential_cert.reference().author;
-                if self.is_certificate(
-                    &potential_cert,
-                    leader_block,
-                    &mut all_votes,
-                ) {
-                    tracing::info!("Found a certificate for leader {leader_block} from authority {authority}");
-                    tracing::info!("[{}] scores +1 reputation for {authority}!",  self.context.own_index);
-                    self.add_score(authority, 1);
-                }
-            }   
-        
-    }
-
-    /// Adds the provided `score` to the existing score for the provided `authority`
-    fn add_score(
-        &mut self,
-        authority_idx: AuthorityIndex, 
-        score: u64
-    ) {
-        self.scores_per_authority[authority_idx] += score;
-    }
-
-    fn find_supported_block(
-        &self,
-        leader_slot: Slot,
-        from: &VerifiedBlock,
-    ) -> Option<BlockRef> {
-        if from.round() < leader_slot.round {
-            return None;
-        }
-        for ancestor in from.ancestors() {
-            if Slot::from(*ancestor) == leader_slot {
-                return Some(*ancestor);
-            }
-            // Weak links may point to blocks with lower round numbers than strong links.
-            if ancestor.round <= leader_slot.round {
-                continue;
-            }
-            if let Some(ancestor) = self.get_block(ancestor) {
-                if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
-                    return Some(support);
-                }
-            } else {
-                // TODO(arun): Add unit test for this case.
-                tracing::warn!("Potential vote's ancestor block not found in unscored committed subdags: {:?}", ancestor);
-                return None;
-            }
-        }
-        None
-    }
-
-    fn is_vote(
-        &self,
-        potential_vote: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-    ) -> bool {
-        let reference = leader_block.reference();
-        let leader_slot = Slot::from(reference);
-        self.find_supported_block(leader_slot, potential_vote) == Some(reference)
-    }
-
-    fn is_certificate(
-        &self,
-        potential_certificate: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-        all_votes: &mut HashMap<BlockRef, bool>,
-    ) -> bool {
-        let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-        for reference in potential_certificate.ancestors() {
-            let is_vote = if let Some(is_vote) = all_votes.get(reference) {
-                *is_vote
-            } else {
-                if let Some(potential_vote) = self.get_block(reference) {
-                    let is_vote = self.is_vote(&potential_vote, leader_block);
-                    all_votes.insert(*reference, is_vote);
-                    is_vote
-                } else {
-                    // TODO(arun): Add unit test for this case.
-                    tracing::warn!("Potential vote not found in unscored committed subdags: {:?}", reference);
-                    false
-                }
-            };
-
-            if is_vote {
-                tracing::trace!("{reference} is a vote for {leader_block}");
-                if votes_stake_aggregator.add(reference.author, &self.context.committee) {
-                    tracing::trace!(
-                        "{potential_certificate} is a certificate for leader {leader_block}"
-                    );
-                    return true;
-                }
-            } else {
-                tracing::trace!("{reference} is not a vote for {leader_block}",);
-            }
-        }
-        tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
-        false
-    }
-
-    fn get_blocks_at_slot(
-        &self,
-        slot: Slot,
-    ) -> Vec<VerifiedBlock> {
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.unscored_blocks.range((
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    fn get_blocks_at_round(
-        &self,
-        round: Round,
-    ) -> Vec<VerifiedBlock> {
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.unscored_blocks.range((
-            Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
-            Excluded(BlockRef::new(
-                round + 1,
-                AuthorityIndex::ZERO,
-                BlockDigest::MIN,
-            )),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    fn get_block(
-        &self,
-        block_ref: &BlockRef,
-    ) -> Option<VerifiedBlock> {
-        self.unscored_blocks.get(block_ref).cloned()
-    }
-}
-
-
-
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct ReputationScores {
-    /// Score per authority. Vec index is the AuthorityIndex.
-    pub scores_per_authority: Vec<u64>,
-    // The range of commits these scores were calculated from.
-    pub commit_range: CommitRange
-}
-
-impl ReputationScores {
-    pub(crate) fn new(commit_range: CommitRange, scores_per_authority: Vec<u64>) -> Self {
-        Self {
-            scores_per_authority,
-            commit_range,
-        }
-    }
-
-    // Returns the authorities in score descending order.
-    pub fn authorities_by_score_desc(&self, context: Arc<Context>) -> Vec<(AuthorityIndex, u64)> {
-        let mut authorities: Vec<_> = self
-            .scores_per_authority
-            .iter()
-            .enumerate()
-            .map(|(index, score)| {
-                (
-                    context
-                        .committee
-                        .to_authority_index(index)
-                        .expect("Should be a valid AuthorityIndex"),
-                    *score,
-                )
-            })
-            .collect();
-
-        authorities.sort_by(|a1, a2| {
-            match a2.1.cmp(&a1.1) {
-                Ordering::Equal => {
-                    // we resolve the score equality deterministically by ordering in authority
-                    // identifier order descending.
-                    a2.0.cmp(&a1.0)
-                }
-                result => result,
-            }
-        });
-
-        authorities
-    }
-
-    pub(crate) fn update_metrics(&self, context: Arc<Context>)  {
-        let authorities = self.authorities_by_score_desc(context.clone());
-        for (authority_index, score) in authorities {
-            let authority = context.committee.authority(authority_index);
-            if !authority.hostname.is_empty() {
-                context.metrics.node_metrics
-                    .reputation_scores
-                    .with_label_values(&[&authority.hostname])
-                    .set(score as i64);
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use consensus_config::{local_committee_and_keys, Parameters};
-    use sui_protocol_config::ProtocolConfig;
-
     use super::*;
-    use crate::metrics::test_metrics;
+    use crate::{
+        block::{timestamp_utc_ms, BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock}, 
+        commit::{CommitDigest, CommitInfo, CommitRange, CommittedSubDag, TrustedCommit}, 
+        storage::{mem_store::MemStore, WriteBatch}, 
+        universal_committer::universal_committer_builder::UniversalCommitterBuilder
+    };
+    use crate::storage::Store;
 
     #[test]
     fn test_elect_leader() {
-        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
-        let metrics = test_metrics();
-        let context = Arc::new(Context::new(
-            AuthorityIndex::new_for_test(0),
-            committee,
-            Parameters::default(),
-            ProtocolConfig::get_for_min_version(),
-            metrics,
-        ));
+        let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = LeaderSchedule::new(context, LeaderSwapTable::default());
 
         assert_eq!(
@@ -690,15 +386,7 @@ mod tests {
 
     #[test]
     fn test_elect_leader_stake_based() {
-        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
-        let metrics = test_metrics();
-        let context = Arc::new(Context::new(
-            AuthorityIndex::new_for_test(0),
-            committee,
-            Parameters::default(),
-            ProtocolConfig::get_for_min_version(),
-            metrics,
-        ));
+        let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = LeaderSchedule::new(context, LeaderSwapTable::default());
 
         assert_eq!(
@@ -717,6 +405,300 @@ mod tests {
         assert_ne!(
             leader_schedule.elect_leader_stake_based(1, 1),
             leader_schedule.elect_leader_stake_based(1, 2)
+        );
+    }
+
+    #[test]
+    fn test_leader_schedule_from_store() {
+        telemetry_subscribers::init_for_testing();
+        let mut context = Context::new_for_test(4).0;
+        context.protocol_config.set_consensus_bad_nodes_stake_threshold(33);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+
+        // The CommitInfo for the first 10 commits are written to store. This is the 
+        // info that the LeaderSchedule will be recovered from
+        let commit_range = CommitRange::new(1..10);
+        let reputation_scores = vec![4, 1, 1, 3];
+        let last_committed_rounds = vec![9, 9, 10, 9];
+
+        let commit_info = CommitInfo {
+            reputation_scores,
+            last_committed_rounds,
+        };
+
+        store.write(WriteBatch::default().commit_ranges_with_commit_info(vec![(commit_range, commit_info)])).unwrap();
+
+        // CommitIndex '11' will be written to store. This should result in the cached
+        // last_committed_rounds & unscored subdags in DagState to be updated with the
+        // latest commit information on recovery.
+        let leader_timestamp = timestamp_utc_ms();
+        let blocks = vec![
+            VerifiedBlock::new_for_test(TestBlock::new(11, 3).set_timestamp_ms(leader_timestamp).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(10, 0).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(10, 1).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(10, 3).build()),
+        ];
+        
+        let leader = blocks[0].clone();
+        let leader_ref = leader.reference();
+        let last_commit_index = 11;
+        let mut expected_subdag = CommittedSubDag::new(
+            leader_ref,
+            blocks.clone(),
+            leader_timestamp,
+            last_commit_index,
+        );
+        expected_subdag.sort();
+        let expected_unscored_subdags = vec![expected_subdag.clone()];
+        let expected_last_committed_rounds = vec![10, 10, 10, 11];
+        let last_commit = TrustedCommit::new_for_test(
+            last_commit_index,
+            CommitDigest::MIN,
+            leader_ref,
+            blocks.iter().map(|block| block.reference()).collect::<Vec<_>>(),
+        );
+        store.write(WriteBatch::default().blocks(blocks).commits(vec![last_commit])).unwrap();
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            store,
+        )));
+
+        // Check that DagState recovery from stored CommitInfo worked correctly
+        assert_eq!(expected_last_committed_rounds, dag_state.read().last_committed_rounds());
+        let actual_unscored_subdags = dag_state.read().unscored_committed_subdags();
+        assert_eq!(expected_unscored_subdags.len() as u64, dag_state.read().unscored_committed_subdags_count());
+        let mut actual_subdag = actual_unscored_subdags[0].clone();
+        actual_subdag.sort();
+        assert_eq!(expected_subdag, actual_subdag);
+
+        let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
+
+        // Check that LeaderSchedule recovery from stored CommitInfo worked correctly
+        let leader_swap_table = leader_schedule.leader_swap_table.read();
+        assert_eq!(leader_swap_table.good_nodes.len(), 1);
+        assert_eq!(leader_swap_table.good_nodes[0].0, AuthorityIndex::new_for_test(0));
+        assert_eq!(leader_swap_table.bad_nodes.len(), 1);
+        assert!(leader_swap_table.bad_nodes.contains_key(&AuthorityIndex::new_for_test(1)));
+    }
+
+    
+    #[test]
+    fn test_leader_schedule_commits_until_leader_schedule_update() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context,
+            Arc::new(MemStore::new()),
+        )));
+        let unscored_subdags = vec![CommittedSubDag::new(
+            BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
+            vec![],
+            timestamp_utc_ms(),
+            1,
+        )];
+        dag_state.write().add_unscored_committed_subdags(unscored_subdags);
+
+        let commits_until_leader_schedule_update = leader_schedule.commits_until_leader_schedule_update(dag_state.clone());
+        assert_eq!(commits_until_leader_schedule_update, 299);
+    }
+
+    #[test]
+    fn test_leader_schedule_update_leader_schedule() {
+        telemetry_subscribers::init_for_testing();
+        let mut context = Context::new_for_test(4).0;
+        context.protocol_config.set_consensus_bad_nodes_stake_threshold(33);
+        let context = Arc::new(context);
+        let leader_schedule = Arc::new(LeaderSchedule::new(context.clone(), LeaderSwapTable::default()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+
+        // Populate fully connected test blocks for round 0 ~ 4, authorities 0 ~ 3.
+        let max_round: u32 = 4;
+        let num_authorities: u32 = 4;
+
+        let mut blocks = Vec::new();
+        let (genesis_references, genesis): (Vec<_>, Vec<_>) = context
+            .committee
+            .authorities()
+            .map(|index| {
+                let author_idx = index.0.value() as u32;
+                let block = TestBlock::new(0, author_idx).build();
+                VerifiedBlock::new_for_test(block)
+            })
+            .map(|block| (block.reference(), block))
+            .unzip();
+        blocks.extend(genesis);
+
+        let mut ancestors = genesis_references;
+        let mut leader = None;
+        for round in 1..=max_round {
+            let mut new_ancestors = vec![];
+            for author in 0..num_authorities {
+                let base_ts = round as BlockTimestampMs * 1000;
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(round, author)
+                        .set_timestamp_ms(base_ts + (author + round) as u64)
+                        .set_ancestors(ancestors.clone())
+                        .build(),
+                );
+                new_ancestors.push(block.reference());
+
+                // Simulate referenced block which was part of another committed
+                // subdag.
+                if round == 3 && author == 0 {
+                    tracing::info!("Skipping {block} in committed subdags blocks");
+                    continue;
+                }
+
+                blocks.push(block.clone());
+
+                // only write one block for the final round, which is the leader
+                // of the committed subdag.
+                if round == max_round {
+                    leader = Some(block.clone());
+                    break;
+                }
+            }
+            ancestors = new_ancestors;
+        }
+
+        let leader_block = leader.unwrap();
+        let leader_ref = leader_block.reference();
+        let commit_index = 1;
+
+        let unscored_subdags = vec![CommittedSubDag::new(
+            leader_ref,
+            blocks,
+            timestamp_utc_ms(),
+            commit_index,
+        )];
+        
+        dag_state.write().add_unscored_committed_subdags(unscored_subdags);
+
+        let committer = UniversalCommitterBuilder::new(
+            context.clone(),
+            leader_schedule.clone(),
+            dag_state.clone(),
+        )
+        .with_pipeline(true)
+        .build();
+    
+        assert_eq!(leader_schedule.elect_leader(4, 0), AuthorityIndex::new_for_test(0));
+
+        leader_schedule.update_leader_schedule(dag_state.clone(), &committer);
+
+        let leader_swap_table = leader_schedule.leader_swap_table.read();
+        assert_eq!(leader_swap_table.good_nodes.len(), 1);
+        assert_eq!(leader_swap_table.good_nodes[0].0, AuthorityIndex::new_for_test(3));
+        assert_eq!(leader_swap_table.bad_nodes.len(), 1);
+        assert!(leader_swap_table.bad_nodes.contains_key(&AuthorityIndex::new_for_test(0)));
+        assert_eq!(leader_schedule.elect_leader(4, 0), AuthorityIndex::new_for_test(3));
+    }
+
+    #[test]
+    fn test_leader_swap_table() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        let bad_nodes_stake_threshold = 33;
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(0..10),
+            (0..4)
+                .map(|i| i as u64)
+                .collect::<Vec<_>>(),
+        );
+        let leader_swap_table = LeaderSwapTable::new(
+            context,
+            reputation_scores,
+            bad_nodes_stake_threshold,
+        );
+
+        assert_eq!(leader_swap_table.good_nodes.len(), 1);
+        assert_eq!(leader_swap_table.good_nodes[0].0, AuthorityIndex::new_for_test(3));
+        assert_eq!(leader_swap_table.bad_nodes.len(), 1);
+        assert!(leader_swap_table.bad_nodes.contains_key(&AuthorityIndex::new_for_test(0)));
+    }
+
+    #[test]
+    fn test_leader_swap_table_swap() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        let bad_nodes_stake_threshold = 33;
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(0..10),
+            (0..4)
+                .map(|i| i as u64)
+                .collect::<Vec<_>>(),
+        );
+        let leader_swap_table = LeaderSwapTable::new(
+            context.clone(),
+            reputation_scores,
+            bad_nodes_stake_threshold,
+        );
+
+        // Test swapping a bad leader
+        let leader = AuthorityIndex::new_for_test(0);
+        let leader_round = 0;
+        let leader_offset = 0;
+        let swapped_leader = leader_swap_table.swap(&leader, leader_round, leader_offset);
+        assert_eq!(swapped_leader, Some(AuthorityIndex::new_for_test(3)));
+
+        // Test not swapping a good leader
+        let leader = AuthorityIndex::new_for_test(1);
+        let leader_round = 0;
+        let leader_offset = 0;
+        let swapped_leader = leader_swap_table.swap(&leader, leader_round, leader_offset);
+        assert_eq!(swapped_leader, None);
+    }
+
+    #[test]
+    fn test_leader_swap_table_retrieve_first_nodes() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        let authorities = vec![
+            (AuthorityIndex::new_for_test(0), 1),
+            (AuthorityIndex::new_for_test(1), 2),
+            (AuthorityIndex::new_for_test(2), 3),
+            (AuthorityIndex::new_for_test(3), 4),
+        ];
+
+        let stake_threshold = 50;
+        let filtered_authorities = LeaderSwapTable::retrieve_first_nodes(
+            context.clone(),
+            authorities.into_iter(),
+            stake_threshold,
+        );
+
+        assert_eq!(filtered_authorities.len(), 2);
+        assert!(filtered_authorities.contains(context.committee.authority(AuthorityIndex::new_for_test(0))));
+        assert!(filtered_authorities.contains(context.committee.authority(AuthorityIndex::new_for_test(1))));
+    }
+
+    #[test]
+    #[should_panic(expected = "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected")]
+    fn test_leader_swap_table_bad_nodes_stake_threshold_out_of_bounds() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        let bad_nodes_stake_threshold = 34;
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(0..10),
+            (0..4)
+                .map(|i| i as u64)
+                .collect::<Vec<_>>(),
+        );
+        LeaderSwapTable::new(
+            context,
+            reputation_scores,
+            bad_nodes_stake_threshold,
         );
     }
 }

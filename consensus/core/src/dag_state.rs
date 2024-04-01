@@ -109,7 +109,7 @@ impl DagState {
 
                 if last_commit.index() > commit_range.end() {
                     let commit_range =
-                        CommitRange::new(commit_range.end() + 1..last_commit.index());
+                        CommitRange::new((commit_range.end() + 1)..last_commit.index() + 1);
                     let committed_blocks = store
                         .scan_commits(commit_range)
                         .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
@@ -659,6 +659,11 @@ impl DagState {
 
     pub(crate) fn unscored_committed_subdags_count(&self) -> u64 {
         self.unscored_committed_subdags.len() as u64
+    }
+
+    #[cfg(test)]
+    pub(crate) fn unscored_committed_subdags(&self) -> Vec<CommittedSubDag> {
+        self.unscored_committed_subdags.clone()
     }
 
     pub(crate) fn add_unscored_committed_subdags(

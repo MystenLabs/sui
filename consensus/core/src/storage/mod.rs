@@ -90,4 +90,13 @@ impl WriteBatch {
         self.commits = commits;
         self
     }
+
+    #[cfg(test)]
+    pub(crate) fn commit_ranges_with_commit_info(
+        mut self,
+        commit_ranges_with_commit_info: Vec<(CommitRange, CommitInfo)>,
+    ) -> Self {
+        self.commit_ranges_with_commit_info = commit_ranges_with_commit_info;
+        self
+    }
 }

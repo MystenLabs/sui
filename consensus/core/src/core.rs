@@ -633,7 +633,7 @@ mod test {
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
         commit::{CommitAPI as _, CommitRange},
-        leader_schedule::ReputationScores,
+        leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         transaction::TransactionClient,
         CommitConsumer, CommitIndex,
