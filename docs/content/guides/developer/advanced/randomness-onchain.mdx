@@ -67,7 +67,7 @@ entry fun play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext):
 
 :::note
 
-Move compiler enforces this behavior by rejecting `public` functions with `Random` as an argument.
+The Move compiler enforces this behavior by rejecting `public` functions with `Random` as an argument.
 
 :::
 
@@ -95,7 +95,7 @@ To protect against PTB-based composition attacks, Sui rejects PTBs that have com
 
 :::note
 
-The Move compiler prevents defining `public` functions with `RandomGenerator` as an argument.
+The Move compiler enforces this behavior by rejecting `public` functions with `RandomGenerator` as an argument.
 
 :::
 
