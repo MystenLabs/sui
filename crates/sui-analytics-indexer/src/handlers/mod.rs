@@ -12,6 +12,7 @@ use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
@@ -174,7 +175,7 @@ async fn get_move_struct<T: PackageStore>(
         .await?
     {
         MoveTypeLayout::Struct(move_struct_layout) => {
-            MoveStruct::simple_deserialize(contents, &move_struct_layout)
+            BoundedVisitor::deserialize_struct(contents, &move_struct_layout)
         }
         _ => Err(anyhow!("Object is not a move struct")),
     }?;
