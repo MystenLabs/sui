@@ -367,9 +367,8 @@ impl SuiCommand {
                 println!("rpc_url: {}", rpc_url);
                 let sui_bridge_client = SuiBridgeClient::new(rpc_url).await?;
                 let bridge_arg = sui_bridge_client
-                    .get_mutable_bridge_object_arg()
-                    .await
-                    .unwrap();
+                    .get_mutable_bridge_object_arg_must_succeed()
+                    .await;
                 assert_eq!(
                     network_config.validator_configs().len(),
                     bridge_committee_config

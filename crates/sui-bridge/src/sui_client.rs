@@ -7,10 +7,10 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
+use core::panic;
 use ethers::types::{Address, U256};
 use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::from_utf8;
@@ -62,6 +62,7 @@ use sui_types::{
 };
 use sui_types::{bridge, parse_sui_type_tag};
 use tap::TapFallible;
+use tokio::sync::OnceCell;
 use tracing::{error, warn};
 
 use crate::crypto::BridgeAuthorityPublicKey;
@@ -109,12 +110,22 @@ where
         Ok(())
     }
 
-    // TODO(bridge): cache this
-    pub async fn get_mutable_bridge_object_arg(&self) -> BridgeResult<ObjectArg> {
-        self.inner
-            .get_mutable_bridge_object_arg()
-            .await
-            .map_err(|e| BridgeError::Generic(format!("Can't get mutable bridge object arg: {e}")))
+    /// Get the mutable bridge object arg on chain.
+    // We retry a few times in case of errors. If it fails eventually, we panic.
+    // In generaly it's safe to call in the beginning of the program.
+    // After the first call, the result is cached since the value should never change.
+    pub async fn get_mutable_bridge_object_arg_must_succeed(&self) -> ObjectArg {
+        static ARG: OnceCell<ObjectArg> = OnceCell::const_new();
+        *ARG.get_or_init(|| async move {
+            let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
+                self.inner.get_mutable_bridge_object_arg(),
+                Duration::from_secs(30)
+            ) else {
+                panic!("Failed to get bridge object arg after retries");
+            };
+            bridge_object_arg
+        })
+        .await
     }
 
     /// Query emitted Events that are defined in the given Move Module.
@@ -276,14 +287,7 @@ where
     ) -> BridgeActionStatus {
         let now = std::time::Instant::now();
         loop {
-            let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
-                self.get_mutable_bridge_object_arg(),
-                Duration::from_secs(30)
-            ) else {
-                // TODO: add metrics and fire alert
-                error!("Failed to get bridge object arg");
-                continue;
-            };
+            let bridge_object_arg = self.get_mutable_bridge_object_arg_must_succeed().await;
             let Ok(Ok(status)) = retry_with_max_elapsed_time!(
                 self.inner.get_token_transfer_action_onchain_status(
                     bridge_object_arg,
@@ -310,14 +314,7 @@ where
     ) -> Option<Vec<Vec<u8>>> {
         let now = std::time::Instant::now();
         loop {
-            let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
-                self.get_mutable_bridge_object_arg(),
-                Duration::from_secs(30)
-            ) else {
-                // TODO: add metrics and fire alert
-                error!("Failed to get bridge object arg");
-                continue;
-            };
+            let bridge_object_arg = self.get_mutable_bridge_object_arg_must_succeed().await;
             let Ok(Ok(sigs)) = retry_with_max_elapsed_time!(
                 self.inner.get_token_transfer_action_onchain_signatures(
                     bridge_object_arg,
@@ -770,7 +767,9 @@ mod tests {
         let sender = context.active_address().unwrap();
         let summary = sui_client.inner.get_bridge_summary().await.unwrap();
         let usdc_amount = 5000000;
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. Create a Eth -> Sui Transfer (recipient is sender address), approve with validator secrets and assert its status to be Claimed
