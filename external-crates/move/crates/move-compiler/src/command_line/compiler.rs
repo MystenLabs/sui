@@ -23,7 +23,7 @@ use crate::{
     unit_test,
 };
 use move_command_line_common::files::{
-    find_filenames_vfs, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
@@ -320,6 +320,17 @@ impl Compiler {
             })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
+        for path in targets.iter().chain(&deps) {
+            if !path.path.is_file().unwrap_or(false) {
+                debug_assert!(
+                    false,
+                    "Specified path is not a file: {}",
+                    path.path.as_str()
+                );
+                anyhow::bail!("Specified path is not a file: {}", path.path.as_str());
+            }
+        }
+
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
@@ -338,6 +349,7 @@ impl Compiler {
             parse_program(&mut compilation_env, maps, targets, deps)?;
 
         source_text.iter_mut().for_each(|(_, (path, _))| {
+            // TODO better support for bytecode interface file paths
             *path = vfs_to_original_path
                 .get(path)
                 .copied()
@@ -757,40 +769,18 @@ pub fn generate_interface_files(
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
     separate_by_hash: bool,
 ) -> anyhow::Result<Vec<IndexedVfsPackagePath>> {
-    let mv_files = {
-        let mut v = vec![];
-        let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
-            mv_file_locations.iter().cloned().partition(|s| {
-                let is_file = s
-                    .path
-                    .metadata()
-                    .map(|d| d.file_type == VfsFileType::File)
-                    .unwrap_or(false);
-                is_file && has_compiled_module_magic_number(&s.path)
-            });
-        v.extend(mv_magic_files);
-        for IndexedVfsPackagePath {
-            package,
-            path,
-            named_address_map,
-        } in other_file_locations
-        {
-            v.extend(
-                find_filenames_vfs(&[path], |path| {
-                    path.extension()
-                        .map(|e| e.as_str() == MOVE_COMPILED_EXTENSION)
-                        .unwrap_or(false)
-                })?
-                .into_iter()
-                .map(|path| IndexedVfsPackagePath {
-                    package,
-                    path,
-                    named_address_map,
-                }),
-            );
-        }
-        v
-    };
+    let mv_files: Vec<_> = mv_file_locations
+        .iter()
+        .filter(|s| {
+            let is_file = s
+                .path
+                .metadata()
+                .map(|d| d.file_type == VfsFileType::File)
+                .unwrap_or(false);
+            is_file && has_compiled_module_magic_number(&s.path)
+        })
+        .cloned()
+        .collect();
     if mv_files.is_empty() {
         return Ok(vec![]);
     }

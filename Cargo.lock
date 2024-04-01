@@ -6679,7 +6679,6 @@ dependencies = [
  "move-proc-macros",
  "move-symbol-pool",
  "once_cell",
- "pathdiff",
  "petgraph 0.5.1",
  "regex",
  "serde",

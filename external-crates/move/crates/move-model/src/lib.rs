@@ -6,6 +6,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
     rc::Rc,
 };
 
@@ -14,6 +15,7 @@ use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle};
 use itertools::Itertools;
 #[allow(unused_imports)]
 use log::warn;
+use move_command_line_common::files::find_move_filenames;
 use num::{BigUint, Num};
 
 use builder::module_builder::ModuleBuilder;
@@ -109,11 +111,48 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     let mut env = GlobalEnv::new();
     env.set_extension(options);
 
+    fn find_all_move_filenames<
+        Paths: Into<MoveSymbol> + Clone,
+        NamedAddress: Into<MoveSymbol> + Clone,
+    >(
+        paths_with_mapping: Vec<PackagePaths<Paths, NamedAddress>>,
+    ) -> anyhow::Result<Vec<PackagePaths<MoveSymbol, NamedAddress>>> {
+        paths_with_mapping
+            .into_iter()
+            .map(
+                |PackagePaths {
+                     name,
+                     paths,
+                     named_address_map,
+                 }| {
+                    let paths = find_move_filenames(
+                        &paths
+                            .into_iter()
+                            .map(|s| {
+                                let s: MoveSymbol = s.into();
+                                PathBuf::from(s.as_str())
+                            })
+                            .collect::<Vec<_>>(),
+                        true,
+                    )?;
+                    Ok(PackagePaths {
+                        name,
+                        paths: paths.into_iter().map(MoveSymbol::from).collect(),
+                        named_address_map,
+                    })
+                },
+            )
+            .collect()
+    }
+
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
-        .set_flags(flags)
-        .set_warning_filter(warning_filter)
-        .run::<PASS_PARSER>()?;
+    let (files, comments_and_compiler_res) = Compiler::from_package_paths(
+        find_all_move_filenames(move_sources)?,
+        find_all_move_filenames(deps)?,
+    )?
+    .set_flags(flags)
+    .set_warning_filter(warning_filter)
+    .run::<PASS_PARSER>()?;
     let (comment_map, compiler) = match comments_and_compiler_res {
         Err((_pass, diags)) => {
             // Add source files so that the env knows how to translate locations of parse errors
