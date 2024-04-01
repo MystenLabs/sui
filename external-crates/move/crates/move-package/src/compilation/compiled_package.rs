@@ -487,7 +487,7 @@ impl CompiledPackage {
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
-        let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
+        let mut compiler = Compiler::from_package_paths(None, paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
         if sui_mode {
