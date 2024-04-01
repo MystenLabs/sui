@@ -1,14 +1,14 @@
 ---
-title: Access On-Chain Randomness
+title: On-Chain Randomness
 description: Randomness is a valuable tool to simulate chance on chain, but can also expose flaws in your logic. Understanding the vulnerabilities and accounting for them can mitigate the threat exposure for your smart contracts. 
 ---
 
 Generating pseudo-random values in Move is similar to solutions in other languages. A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types, for example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)`, or,
 
-```rust
+```move
 entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
     let generator = new_generator(r, ctx); // generator is a PRG
-		Dice { value: random::generate_u8_in_range(&mut generator, 1, 6) }
+	Dice { value: random::generate_u8_in_range(&mut generator, 1, 6) }
 }
 ```
 
@@ -24,7 +24,7 @@ Having access to random numbers is only one part of designing secure application
 
 While composition is very powerful for smart contracts, it opens the door to attacks on functions that use randomness. Consider for example the next module:
 
-```rust
+```move
 module games::dice { 
 ...
 	struct GuessedCorrectly has drop { ... };
@@ -50,8 +50,8 @@ An attacker can deploy the next function:
 
 ```move
 public fun attack(guess: u8, r: &Random, ctx: &mut TxContext): GuessedCorrectly {
-		let output = dice::play_dice(guess, r, ctx);
-		option::extract(output) // reverts the transaction if roll_dice returns option::none()
+	let output = dice::play_dice(guess, r, ctx);
+	option::extract(output) // reverts the transaction if roll_dice returns option::none()
 }
 ```
 
@@ -61,7 +61,7 @@ To protect against composition attacks in this example, define `play_dice` as a 
 
 ```move
 entry fun play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> {
-		...
+	...
 }
 ```
 
@@ -77,7 +77,7 @@ A similar attack to the one previously described involves PTBs *even* when `play
 
 ```move
 public fun attack(output: Option<GuessedCorrectly>): GuessedCorrectly {
-		option::extract(output)
+	option::extract(output)
 }
 ```
 
@@ -103,17 +103,17 @@ The Move compiler prevents defining `public` functions with `RandomGenerator` as
 
 Developers should be aware that some resources that are available to transactions are limited. If a function that reads `Random` consumes more resources in the unhappy path flow than in the happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow as previously demonstrated. Concretely, gas is such a resource. Consider the following code:
 
-```rust
-entry fun play(r: &Random, payment: Coin<SUI>, ...) {
-	...
-  let generator = new_generator(r, ctx);
-	let win = random::generate_bool(generator);
-	if (win) { // happy flow
-		... cheap computation ...
-	} else {
-		... very expensive computation ...
+```move
+	entry fun play(r: &Random, payment: Coin<SUI>, ...) {
+		...
+		let generator = new_generator(r, ctx);
+		let win = random::generate_bool(generator);
+		if (win) { // happy flow
+			... cheap computation ...
+		} else {
+			... very expensive computation ...
+		}
 	}
-}
 ```
 
 Observe that the gas costs of a transaction that calls `play` depends on the value of `win` - An attacker could call this function with a gas object that has enough balance to cover the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
