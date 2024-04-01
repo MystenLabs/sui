@@ -12,11 +12,13 @@ use crate::{
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
-        self as N, BlockLabel, BuiltinTypeName_, Color, IndexSyntaxMethods, ResolvedUseFuns,
-        StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_,
-        Type_, UseFun, UseFunKind, Var,
+        self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
+        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type,
+        TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
     },
-    parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName, ENTRY_MODIFIER},
+    parser::ast::{
+        Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
+    },
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -590,20 +592,40 @@ impl<'env> Context<'env> {
         self.modules.module(m)
     }
 
-    fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
+    fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
         self.modules.struct_definition(m, n)
     }
 
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
+    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
         self.modules.struct_declared_abilities(m, n)
     }
 
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
+    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
         self.modules.struct_declared_loc(m, n)
     }
 
-    pub fn struct_tparams(&self, m: &ModuleIdent, n: &StructName) -> &Vec<StructTypeParameter> {
+    pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
         self.modules.struct_type_parameters(m, n)
+    }
+
+    fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
+        self.modules.enum_definition(m, n)
+    }
+
+    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        self.modules.enum_declared_abilities(m, n)
+    }
+
+    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.modules.enum_declared_loc(m, n)
+    }
+
+    pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
+        self.modules.enum_type_parameters(m, n)
+    }
+
+    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
+        self.modules.datatype_kind(m, n)
     }
 
     pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
@@ -815,16 +837,28 @@ pub fn infer_abilities<const INFO_PASS: bool>(
             let (declared_abilities, ty_args) = match &n.value {
                 TypeName_::Multiple(_) => (AbilitySet::collection(loc), ty_args),
                 TypeName_::Builtin(b) => (b.value.declared_abilities(b.loc), ty_args),
-                TypeName_::ModuleType(m, n) => {
-                    let declared_abilities = context.struct_declared_abilities(m, n).clone();
-                    let non_phantom_ty_args = ty_args
-                        .into_iter()
-                        .zip(context.struct_type_parameters(m, n))
-                        .filter(|(_, param)| !param.is_phantom)
-                        .map(|(arg, _)| arg)
-                        .collect::<Vec<_>>();
-                    (declared_abilities, non_phantom_ty_args)
-                }
+                TypeName_::ModuleType(m, n) => match context.datatype_kind(m, n) {
+                    DatatypeKind::Struct => {
+                        let declared_abilities = context.struct_declared_abilities(m, n).clone();
+                        let non_phantom_ty_args = ty_args
+                            .into_iter()
+                            .zip(context.struct_type_parameters(m, n))
+                            .filter(|(_, param)| !param.is_phantom)
+                            .map(|(arg, _)| arg)
+                            .collect::<Vec<_>>();
+                        (declared_abilities, non_phantom_ty_args)
+                    }
+                    DatatypeKind::Enum => {
+                        let declared_abilities = context.enum_declared_abilities(m, n).clone();
+                        let non_phantom_ty_args = ty_args
+                            .into_iter()
+                            .zip(context.enum_type_parameters(m, n))
+                            .filter(|(_, param)| !param.is_phantom)
+                            .map(|(arg, _)| arg)
+                            .collect::<Vec<_>>();
+                        (declared_abilities, non_phantom_ty_args)
+                    }
+                },
             };
             let ty_args_abilities = ty_args
                 .into_iter()
@@ -871,11 +905,20 @@ fn debug_abilities_info(context: &mut Context, ty: &Type) -> (Option<Loc>, Abili
         T::Apply(_, sp!(_, TypeName_::Builtin(b)), ty_args) => {
             (None, b.value.declared_abilities(b.loc), ty_args.clone())
         }
-        T::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), ty_args) => (
-            Some(context.struct_declared_loc(m, n)),
-            context.struct_declared_abilities(m, n).clone(),
-            ty_args.clone(),
-        ),
+        T::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), ty_args) => {
+            match context.datatype_kind(m, n) {
+                DatatypeKind::Struct => (
+                    Some(context.struct_declared_loc(m, n)),
+                    context.struct_declared_abilities(m, n).clone(),
+                    ty_args.clone(),
+                ),
+                DatatypeKind::Enum => (
+                    Some(context.enum_declared_loc(m, n)),
+                    context.enum_declared_abilities(m, n).clone(),
+                    ty_args.clone(),
+                ),
+            }
+        }
         T::Fun(_, _) => (None, AbilitySet::functions(loc), vec![]),
     }
 }
@@ -897,7 +940,7 @@ pub fn make_struct_type(
     context: &mut Context,
     loc: Loc,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
     let tn = sp(loc, TypeName_::ModuleType(*m, *n));
@@ -943,11 +986,11 @@ pub fn make_expr_list_tvars(
 }
 
 // ty_args should come from make_struct_type
-pub fn make_field_types(
+pub fn make_struct_field_types(
     context: &mut Context,
     _loc: Loc,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     ty_args: Vec<Type>,
 ) -> N::StructFields {
     let sdef = context.struct_definition(m, n);
@@ -970,11 +1013,11 @@ pub fn make_field_types(
 }
 
 // ty_args should come from make_struct_type
-pub fn make_field_type(
+pub fn make_struct_field_type(
     context: &mut Context,
     loc: Loc,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     ty_args: Vec<Type>,
     field: &Field,
 ) -> Type {
@@ -1024,6 +1067,65 @@ pub fn find_index_funs(context: &mut Context, type_name: &TypeName) -> Option<In
     let entry = module_defn.syntax_methods.get(type_name)?;
     let index = entry.index.clone()?;
     Some(*index)
+}
+
+//**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+pub fn make_enum_type(
+    context: &mut Context,
+    loc: Loc,
+    mident: &ModuleIdent,
+    enum_: &DatatypeName,
+    ty_args_opt: Option<Vec<Type>>,
+) -> (Type, Vec<Type>) {
+    let tn = sp(loc, TypeName_::ModuleType(*mident, *enum_));
+    let edef = context.enum_definition(mident, enum_);
+    match ty_args_opt {
+        None => {
+            let constraints = edef
+                .type_parameters
+                .iter()
+                .map(|tp| (loc, tp.param.abilities.clone()))
+                .collect();
+            let ty_args = make_tparams(context, loc, TVarCase::Base, constraints);
+            (sp(loc, Type_::Apply(None, tn, ty_args.clone())), ty_args)
+        }
+        Some(ty_args) => {
+            let tapply_ = instantiate_apply(context, loc, None, tn, ty_args);
+            let targs = match &tapply_ {
+                Type_::Apply(_, _, targs) => targs.clone(),
+                _ => panic!("ICE instantiate_apply returned non Apply"),
+            };
+            (sp(loc, tapply_), targs)
+        }
+    }
+}
+
+// ty_args should come from make_struct_type
+pub fn make_variant_field_types(
+    context: &mut Context,
+    _loc: Loc,
+    mident: &ModuleIdent,
+    enum_: &DatatypeName,
+    variant: &VariantName,
+    ty_args: Vec<Type>,
+) -> N::VariantFields {
+    let edef = context.enum_definition(mident, enum_);
+    let tparam_subst = &make_tparam_subst(edef.type_parameters.iter().map(|tp| &tp.param), ty_args);
+    let vdef = edef
+        .variants
+        .get(variant)
+        .expect("ICE should have failed during naming");
+    match &vdef.fields {
+        N::VariantFields::Empty => N::VariantFields::Empty,
+        N::VariantFields::Defined(m) => {
+            N::VariantFields::Defined(m.ref_map(|_, (idx, field_ty)| {
+                (*idx, subst_tparams(tparam_subst, field_ty.clone()))
+            }))
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -1799,9 +1901,12 @@ fn instantiate_apply(
             debug_assert!(abilities_opt.is_none(), "ICE instantiated expanded type");
             (0..*len).map(|_| AbilitySet::empty()).collect()
         }
-        sp!(_, N::TypeName_::ModuleType(m, s)) => {
+        sp!(_, N::TypeName_::ModuleType(m, n)) => {
             debug_assert!(abilities_opt.is_none(), "ICE instantiated expanded type");
-            let tps = context.struct_tparams(m, s);
+            let tps = match context.datatype_kind(m, n) {
+                DatatypeKind::Struct => context.struct_tparams(m, n),
+                DatatypeKind::Enum => context.enum_tparams(m, n),
+            };
             tps.iter().map(|tp| tp.param.abilities.clone()).collect()
         }
     };

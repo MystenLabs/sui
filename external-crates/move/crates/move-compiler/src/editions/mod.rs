@@ -35,6 +35,7 @@ pub enum FeatureGate {
     PublicPackage,
     PostFixAbilities,
     StructTypeVisibility,
+    Enums,
     DotCall,
     PositionalFields,
     LetMut,
@@ -65,35 +66,50 @@ pub const UPGRADE_NOTE: &str =
 // Entry
 //**************************************************************************************************
 
+/// Returns true if the feature is present in the given edition.
+/// Adds an error to the environment.
 pub fn check_feature_or_error(
     env: &mut CompilationEnv,
     edition: Edition,
     feature: FeatureGate,
     loc: Loc,
 ) -> bool {
+    if !edition.supports(feature) {
+        env.add_diag(create_feature_error(edition, feature, loc));
+        false
+    } else {
+        true
+    }
+}
+
+pub fn feature_edition_error_msg(edition: Edition, feature: FeatureGate) -> Option<String> {
     let supports_feature = edition.supports(feature);
     if !supports_feature {
-        env.add_diag(create_feature_error(edition, feature, loc));
+        let valid_editions = valid_editions_for_feature(feature);
+        let message = if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature)
+        {
+            format!(
+                "{} under development and should not be used right now.",
+                feature.error_prefix()
+            )
+        } else {
+            format!(
+                "{} not supported by current edition '{edition}', \
+                    only {} support this feature",
+                feature.error_prefix(),
+                format_oxford_list!("and", "'{}'", valid_editions)
+            )
+        };
+        Some(message)
+    } else {
+        None
     }
-    supports_feature
 }
 
 pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
     assert!(!edition.supports(feature));
-    let valid_editions = valid_editions_for_feature(feature);
-    let message = if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature)
-    {
-        format!(
-            "{} under development and should not be used right now.",
-            feature.error_prefix()
-        )
-    } else {
-        format!(
-            "{} not supported by current edition '{edition}', \
-                only {} support this feature",
-            feature.error_prefix(),
-            format_oxford_list!("and", "'{}'", valid_editions)
-        )
+    let Some(message) = feature_edition_error_msg(edition, feature) else {
+        panic!("Previous assert should have failed");
     };
     let mut diag = diag!(Editions::FeatureTooNew, (loc, message));
     diag.add_note(UPGRADE_NOTE);
@@ -122,6 +138,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
+    FeatureGate::Enums,
     FeatureGate::DotCall,
     FeatureGate::PositionalFields,
     FeatureGate::LetMut,
@@ -241,6 +258,7 @@ impl FeatureGate {
             FeatureGate::PublicPackage => "'public(package)' is",
             FeatureGate::PostFixAbilities => "Postfix abilities are",
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
+            FeatureGate::Enums => "Enums are",
             FeatureGate::DotCall => "Method syntax is",
             FeatureGate::PositionalFields => "Positional fields are",
             FeatureGate::LetMut => "'mut' variable modifiers are",

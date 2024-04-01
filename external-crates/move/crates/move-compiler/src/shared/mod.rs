@@ -9,7 +9,10 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
         Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters,
     },
-    editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
+    editions::{
+        check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
+        FeatureGate, Flavor,
+    },
     expansion::ast as E,
     naming::ast as N,
     sui_mode,
@@ -540,6 +543,15 @@ impl CompilationEnv {
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
+    }
+
+    // Returns an error string if if the feature isn't supported, or None otherwise.
+    pub fn feature_edition_error_msg(
+        &mut self,
+        feature: FeatureGate,
+        package: Option<Symbol>,
+    ) -> Option<String> {
+        feature_edition_error_msg(self.package_config(package).edition, feature)
     }
 
     pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {

@@ -1134,3 +1134,30 @@ impl<C: DiagnosticCode> From<C> for DiagnosticInfo {
         value.into_info()
     }
 }
+
+//**************************************************************************************************
+// String Construction Helpers
+//**************************************************************************************************
+
+pub fn and_list_string(input: Vec<String>) -> String {
+    comma_list_string(input, "and".to_string())
+}
+
+pub fn or_list_string(input: Vec<String>) -> String {
+    comma_list_string(input, "or".to_string())
+}
+
+pub fn comma_list_string(mut input: Vec<String>, separator_word: String) -> String {
+    assert!(!input.is_empty());
+    if input.len() == 1 {
+        input.pop().unwrap()
+    } else if input.len() == 2 {
+        let last = input.pop().unwrap();
+        let first = input.pop().unwrap();
+        format!("{} {} {}", first, separator_word, last)
+    } else {
+        let last = format!("{} {}", separator_word, input.pop().unwrap());
+        input.push(last);
+        input.join(", ")
+    }
+}

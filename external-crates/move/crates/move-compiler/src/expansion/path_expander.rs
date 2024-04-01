@@ -10,7 +10,7 @@ use crate::{
     expansion::{
         alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace},
         aliases::{AliasMap, AliasSet},
-        ast::{self as E, Address, ModuleIdent_},
+        ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
         translate::{
             is_valid_struct_or_constant_name, make_address, module_ident, top_level_address,
@@ -25,7 +25,7 @@ use crate::{
     shared::*,
 };
 
-use move_ir_types::location::*;
+use move_ir_types::location::{sp, Loc, Spanned};
 
 //**************************************************************************************************
 // Definitions
@@ -43,6 +43,7 @@ pub enum Access {
     ApplyNamed,
     ApplyPositional,
     Term,
+    Variant,
     Module, // Just used for errors
 }
 
@@ -136,7 +137,8 @@ pub struct Move2024PathExpander {
 
 #[derive(Debug, PartialEq, Eq)]
 enum AccessChainNameResult {
-    ModuleAccess(Loc, E::ModuleAccess_),
+    ModuleAccess(Loc, ModuleIdent, Name),
+    Variant(Loc, Spanned<(ModuleIdent, Name)>, Name),
     Address(Loc, E::Address),
     ModuleIdent(Loc, E::ModuleIdent),
     UnresolvedName(Loc, Name),
@@ -213,7 +215,6 @@ impl Move2024PathExpander {
     ) -> AccessChainNameResult {
         use AccessChainFailure as NF;
         use AccessChainNameResult as NR;
-        use E::ModuleAccess_ as EN;
 
         match self.aliases.resolve(namespace, &name) {
             Some(AliasEntry::Member(_, mident, sp!(_, mem))) => {
@@ -221,7 +222,7 @@ impl Move2024PathExpander {
                 // the alias was defined. The name represents JUST the member name, though, so we do
                 // not change location of the module as we don't have this information.
                 // TODO maybe we should also keep the alias reference (or its location)?
-                NR::ModuleAccess(name.loc, EN::ModuleAccess(mident, sp(name.loc, mem)))
+                NR::ModuleAccess(name.loc, mident, sp(name.loc, mem))
             }
             Some(AliasEntry::Module(_, mident)) => {
                 // We are preserving the name's original location, rather than referring to where
@@ -236,7 +237,7 @@ impl Move2024PathExpander {
                     }
                 ) = mident;
                 let module = ModuleName(sp(name.loc, module));
-                NR::ModuleIdent(name.loc, sp(name.loc, ModuleIdent_ { address, module }))
+                NR::ModuleIdent(name.loc, sp(name.loc, E::ModuleIdent_ { address, module }))
             }
             Some(AliasEntry::Address(_, address)) => {
                 NR::Address(name.loc, make_address(context, name, name.loc, address))
@@ -262,7 +263,7 @@ impl Move2024PathExpander {
                         }
                         AliasEntry::Module(_, mident) => NR::ModuleIdent(name.loc, mident),
                         AliasEntry::Member(_, mident, mem) => {
-                            NR::ModuleAccess(name.loc, EN::ModuleAccess(mident, mem))
+                            NR::ModuleAccess(name.loc, mident, mem)
                         }
                         AliasEntry::TypeParam(_) => {
                             context.env.add_diag(ice!((
@@ -288,7 +289,6 @@ impl Move2024PathExpander {
     ) -> AccessChainResult {
         use AccessChainFailure as NF;
         use AccessChainNameResult as NR;
-        use E::ModuleAccess_ as EN;
         use P::NameAccessChain_ as PN;
 
         fn check_tyargs(
@@ -296,13 +296,13 @@ impl Move2024PathExpander {
             tyargs: &Option<Spanned<Vec<Type>>>,
             result: &NR,
         ) {
-            if let NR::Address(_, _) | NR::ModuleIdent(_, _) = result {
+            if let NR::Address(_, _) | NR::ModuleIdent(_, _) | NR::Variant(_, _, _) = result {
                 if let Some(tyargs) = tyargs {
                     context.env.add_diag(diag!(
                         NameResolution::InvalidTypeParameter,
                         (
                             tyargs.loc,
-                            format!("Cannot use type parameters for {}", result.err_name())
+                            format!("Cannot use type parameters on {}", result.err_name())
                         )
                     ));
                 }
@@ -328,9 +328,11 @@ impl Move2024PathExpander {
                 use crate::naming::ast::BuiltinFunction_;
                 use crate::naming::ast::BuiltinTypeName_;
                 let namespace = match access {
-                    Access::Type | Access::ApplyNamed | Access::ApplyPositional | Access::Term => {
-                        NameSpace::ModuleMembers
-                    }
+                    Access::Type
+                    | Access::ApplyNamed
+                    | Access::ApplyPositional
+                    | Access::Term
+                    | Access::Variant => NameSpace::ModuleMembers,
                     Access::Module => NameSpace::LeadingAccess,
                 };
 
@@ -385,13 +387,31 @@ impl Move2024PathExpander {
                 for entry in entries {
                     check_tyargs(context, &ptys_opt, &result);
                     check_is_macro(context, &is_macro, &result);
+                    // ModuleAccess(ModuleIdent, Name),
+                    // Variant(Spanned<(ModuleIdent, Name)>, Name),
                     match result {
-                        NR::ModuleAccess(_, _) => {
+                        NR::Variant(_, _, _) => {
                             result = NR::ResolutionFailure(
                                 Box::new(result),
-                                NF::InvalidKind("a module or address".to_string()),
+                                NF::InvalidKind("a module, module member, or address".to_string()),
                             );
                             break;
+                        }
+                        NR::ModuleAccess(mloc, mident, member) => {
+                            let loc = make_loc(
+                                mloc.file_hash(),
+                                mloc.start() as usize,
+                                entry.name.loc.end() as usize,
+                            );
+                            result = NR::Variant(loc, sp(mloc, (mident, member)), entry.name);
+                            // For a variant, we use the type args from the access. We check these
+                            // are empty or error.
+                            check_tyargs(context, &entry.tyargs, &result);
+                            if ptys_opt.is_none() && entry.tyargs.is_some() {
+                                // This is an error, but we can try to be helpful.
+                                ptys_opt = entry.tyargs;
+                            }
+                            check_is_macro(context, &entry.is_macro, &result);
                         }
                         NR::Address(aloc, address) => {
                             let loc = make_loc(
@@ -412,7 +432,7 @@ impl Move2024PathExpander {
                                 mloc.start() as usize,
                                 entry.name.loc.end() as usize,
                             );
-                            result = NR::ModuleAccess(loc, EN::ModuleAccess(mident, entry.name));
+                            result = NR::ModuleAccess(loc, mident, entry.name);
                             ptys_opt = entry.tyargs;
                             is_macro = entry.is_macro;
                         }
@@ -514,7 +534,14 @@ impl PathExpander for Move2024PathExpander {
                             }
                             EV::Module(mident)
                         }
-                        NR::ModuleAccess(loc, access) => EV::ModuleAccess(sp(loc, access)),
+                        NR::ModuleAccess(loc, mident, member) => {
+                            let access = sp(loc, E::ModuleAccess_::ModuleAccess(mident, member));
+                            EV::ModuleAccess(access)
+                        }
+                        NR::Variant(loc, member_path, variant) => {
+                            let access = sp(loc, E::ModuleAccess_::Variant(member_path, variant));
+                            EV::ModuleAccess(access)
+                        }
                         NR::UnresolvedName(loc, name) => {
                             EV::ModuleAccess(sp(loc, E::ModuleAccess_::Name(name)))
                         }
@@ -550,11 +577,29 @@ impl PathExpander for Move2024PathExpander {
                         loc = name.loc;
                         (EN::Name(name), tyargs, is_macro)
                     }
-                    NR::ModuleAccess(_, access) => (access, tyargs, is_macro),
+                    NR::ModuleAccess(loc, mident, member) => {
+                        let access = E::ModuleAccess_::ModuleAccess(mident, member);
+                        (access, tyargs, is_macro)
+                    }
+                    NR::Variant(loc, sp!(mloc, (mident, member)), _) if access == Access::Type => {
+                        let mut diag = unexpected_access_error(
+                            resolved_name.loc(),
+                            resolved_name.name(),
+                            access,
+                        );
+                        diag.add_note("Variants may not be used as types. Use the enum instead.");
+                        context.env.add_diag(diag);
+                        // We could try to use the member access to try to keep going.
+                        return None;
+                    }
+                    NR::Variant(loc, member_path, variant) => {
+                        let access = E::ModuleAccess_::Variant(member_path, variant);
+                        (access, tyargs, is_macro)
+                    }
                     NR::Address(_, _) => {
                         context.env.add_diag(unexpected_access_error(
                             resolved_name.loc(),
-                            "address".to_string(),
+                            resolved_name.name(),
                             access,
                         ));
                         return None;
@@ -562,7 +607,7 @@ impl PathExpander for Move2024PathExpander {
                     NR::ModuleIdent(_, sp!(_, ModuleIdent_ { address, module })) => {
                         let mut diag = unexpected_access_error(
                             resolved_name.loc(),
-                            "module".to_string(),
+                            resolved_name.name(),
                             access,
                         );
                         let base_str = format!("{}", chain);
@@ -582,7 +627,7 @@ impl PathExpander for Move2024PathExpander {
                     }
                 }
             }
-            Access::Term => match chain.value {
+            Access::Term | Access::Variant => match chain.value {
                 PN::Single(path_entry!(name, tyargs, is_macro))
                     if !is_valid_struct_or_constant_name(&name.to_string()) =>
                 {
@@ -593,19 +638,26 @@ impl PathExpander for Move2024PathExpander {
                         self.resolve_name_access_chain(context, access, chain);
                     match resolved_name {
                         NR::UnresolvedName(_, name) => (EN::Name(name), tyargs, is_macro),
-                        NR::ModuleAccess(_, access) => (access, tyargs, is_macro),
-                        NR::Address(_, _) => {
+                        NR::ModuleAccess(loc, mident, member) if access == Access::Variant => {
                             context.env.add_diag(unexpected_access_error(
                                 resolved_name.loc(),
-                                "address".to_string(),
+                                resolved_name.name(),
                                 access,
                             ));
                             return None;
                         }
-                        NR::ModuleIdent(_, _) => {
+                        NR::ModuleAccess(loc, mident, member) => {
+                            let access = E::ModuleAccess_::ModuleAccess(mident, member);
+                            (access, tyargs, is_macro)
+                        }
+                        NR::Variant(loc, member_path, variant) => {
+                            let access = E::ModuleAccess_::Variant(member_path, variant);
+                            (access, tyargs, is_macro)
+                        }
+                        NR::Address(_, _) | NR::ModuleIdent(_, _) => {
                             context.env.add_diag(unexpected_access_error(
                                 resolved_name.loc(),
-                                "module".to_string(),
+                                resolved_name.name(),
                                 access,
                             ));
                             return None;
@@ -652,7 +704,7 @@ impl PathExpander for Move2024PathExpander {
                 ));
                 None
             }
-            NR::ModuleAccess(_, _) => {
+            NR::ModuleAccess(_, _, _) | NR::Variant(_, _, _) => {
                 context.env.add_diag(unexpected_access_error(
                     resolved_name.loc(),
                     "module member".to_string(),
@@ -671,7 +723,8 @@ impl PathExpander for Move2024PathExpander {
 impl AccessChainNameResult {
     fn loc(&self) -> Loc {
         match self {
-            AccessChainNameResult::ModuleAccess(loc, _) => *loc,
+            AccessChainNameResult::ModuleAccess(loc, _, _) => *loc,
+            AccessChainNameResult::Variant(loc, _, _) => *loc,
             AccessChainNameResult::Address(loc, _) => *loc,
             AccessChainNameResult::ModuleIdent(loc, _) => *loc,
             AccessChainNameResult::UnresolvedName(loc, _) => *loc,
@@ -679,9 +732,21 @@ impl AccessChainNameResult {
         }
     }
 
+    fn name(&self) -> String {
+        match self {
+            AccessChainNameResult::ModuleAccess(_, _, _) => "module member".to_string(),
+            AccessChainNameResult::Variant(_, _, _) => "enum variant".to_string(),
+            AccessChainNameResult::ModuleIdent(_, _) => "module".to_string(),
+            AccessChainNameResult::UnresolvedName(_, _) => "name".to_string(),
+            AccessChainNameResult::Address(_, _) => "address".to_string(),
+            AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
+        }
+    }
+
     fn err_name(&self) -> String {
         match self {
-            AccessChainNameResult::ModuleAccess(_, _) => "a module member".to_string(),
+            AccessChainNameResult::ModuleAccess(_, _, _) => "a module member".to_string(),
+            AccessChainNameResult::Variant(_, _, _) => "an enum variant".to_string(),
             AccessChainNameResult::ModuleIdent(_, _) => "a module".to_string(),
             AccessChainNameResult::UnresolvedName(_, _) => "a name".to_string(),
             AccessChainNameResult::Address(_, _) => "an address".to_string(),
@@ -695,9 +760,10 @@ fn unexpected_access_error(loc: Loc, result: String, access: Access) -> Diagnost
         Access::Type | Access::ApplyNamed => "type",
         Access::ApplyPositional => "expression",
         Access::Term => "expression",
+        Access::Variant => "variant",
         Access::Module => "module",
     };
-    let unexpected_msg = if result.starts_with('a') {
+    let unexpected_msg = if result.starts_with('a') | result.starts_with('e') {
         format!(
             "Unexpected {0} identifier. An {0} identifier is not a valid {1}",
             result, case
@@ -877,6 +943,13 @@ impl PathExpander for LegacyPathExpander {
         use P::{LeadingNameAccess_ as LN, NameAccessChain_ as PN};
 
         let tn_: ModuleAccessResult = match (access, ptn_) {
+            (Access::Variant, _) => {
+                context.env.add_diag(ice!((
+                    loc,
+                    "Attempted to expand a variant with the legacy path expander"
+                )));
+                return None;
+            }
             (
                 Access::ApplyPositional | Access::ApplyNamed | Access::Type,
                 single_entry!(name, tyargs, is_macro),
@@ -1078,6 +1151,7 @@ fn unexpected_address_module_error(loc: Loc, nloc: Loc, access: Access) -> Diagn
     let case = match access {
         Access::Type | Access::ApplyNamed | Access::ApplyPositional => "type",
         Access::Term => "expression",
+        Access::Variant => "variant",
         Access::Module => {
             return ice!(
                 (

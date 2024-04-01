@@ -1,0 +1,92 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/counterexample_lits.move:8:16
+  │
+8 │         match (Tuple2::Ctor(0, 1)) {
+  │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
+  │
+  = When '_0' is not 0
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/counterexample_lits.move:13:15
+   │
+13 │     fun t1(): u64 {
+   │               ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/counterexample_lits.move:14:32
+   │
+14 │         match (Tuple2::Ctor(0, 1)) {
+   │                                ^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:20:16
+   │
+20 │         match (tup) {
+   │                ^^^ Pattern 'Tuple2::Ctor(Tuple2::Ctor(_0, _), _)' not covered
+   │
+   = When '_0' is not 1
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:26:16
+   │
+26 │         match (tup) {
+   │                ^^^ Pattern 'Tuple2::Ctor(false, _)' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:32:16
+   │
+32 │         match (tup) {
+   │                ^^^ Pattern 'Tuple2::Ctor(false, false)' not covered
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/counterexample_lits.move:43:26
+   │
+43 │             Tuple2::Ctor(false, false) => false,
+   │                          ^^^^^ ICE base type constraint failed: &(bool: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/counterexample_lits.move:43:33
+   │
+43 │             Tuple2::Ctor(false, false) => false,
+   │                                 ^^^^^ ICE base type constraint failed: &(bool: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:48:16
+   │
+48 │         match (Tuple2::Ctor(0, 1)) {
+   │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
+   │
+   = When '_0' is not 0 or 3
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:55:16
+   │
+55 │         match (Tuple2::Ctor(0, 1)) {
+   │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
+   │
+   = When '_0' is not 0, 3, 4, or 7
+

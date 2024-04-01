@@ -1,0 +1,24 @@
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/abc_match_no_drop_invalid.move:9:15
+  │
+9 │     fun t0(): u64 {
+  │               ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/matching/abc_match_no_drop_invalid.move:13:13
+   │
+ 3 │     public enum ABC<T> {
+   │                 --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+10 │         match (ABC::C(0)) {
+   │                --------- The type '0x42::m::ABC<u64>' does not have the ability 'drop'
+   ·
+13 │             _ => 1,
+   │             ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values
+

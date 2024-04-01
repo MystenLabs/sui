@@ -21,8 +21,9 @@ use crate::{
     },
     ice, ice_assert,
     parser::ast::{
-        self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-        ModuleName, NameAccess, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        self as P, Ability, BlockLabel, ConstantName, DatatypeName, Field, FieldBindings,
+        FunctionName, ModuleName, NameAccess, Var, VariantName, ENTRY_MODIFIER, MACRO_MODIFIER,
+        NATIVE_MODIFIER,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -862,6 +863,7 @@ fn module_(
     let mut functions = UniqueMap::new();
     let mut constants = UniqueMap::new();
     let mut structs = UniqueMap::new();
+    let mut enums = UniqueMap::new();
     for member in members {
         match member {
             P::ModuleMember::Use(_) => unreachable!(),
@@ -879,6 +881,7 @@ fn module_(
             }
             P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
+            P::ModuleMember::Enum(e) => enum_def(context, &mut enums, e),
             P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc, /* is_error */ false),
         }
     }
@@ -895,6 +898,7 @@ fn module_(
         is_source_module: context.is_source_definition,
         friends,
         structs,
+        enums,
         constants,
         functions,
         warning_filter,
@@ -1390,8 +1394,10 @@ fn module_members(
             P::ModuleMember::Struct(s) => {
                 cur_members.insert(s.name.0, ModuleMemberKind::Struct);
             }
-            P::ModuleMember::Spec(_) => (),
-            P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
+            P::ModuleMember::Enum(e) => {
+                cur_members.insert(e.name.0, ModuleMemberKind::Enum);
+            }
+            P::ModuleMember::Spec(_) | P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
         };
     }
     members.add(mident, cur_members).unwrap();
@@ -1465,6 +1471,11 @@ fn aliases_from_member(
             Some(P::ModuleMember::Struct(s))
         }
         P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
+        P::ModuleMember::Enum(e) => {
+            let n = e.name.0;
+            check_name_and_add_implicit_alias!(ModuleMemberKind::Enum, n);
+            Some(P::ModuleMember::Enum(e))
+        }
     }
 }
 
@@ -1785,7 +1796,7 @@ fn unused_alias(context: &mut Context, _kind: &str, alias: Name) {
 
 fn struct_def(
     context: &mut Context,
-    structs: &mut UniqueMap<StructName, E::StructDefinition>,
+    structs: &mut UniqueMap<DatatypeName, E::StructDefinition>,
     pstruct: P::StructDefinition,
 ) {
     let (sname, sdef) = struct_def_(context, structs.len(), pstruct);
@@ -1798,7 +1809,7 @@ fn struct_def_(
     context: &mut Context,
     index: usize,
     pstruct: P::StructDefinition,
-) -> (StructName, E::StructDefinition) {
+) -> (DatatypeName, E::StructDefinition) {
     let P::StructDefinition {
         attributes,
         loc,
@@ -1832,7 +1843,7 @@ fn struct_def_(
 
 fn struct_fields(
     context: &mut Context,
-    sname: &StructName,
+    sname: &DatatypeName,
     pfields: P::StructFields,
 ) -> E::StructFields {
     let pfields_vec = match pfields {
@@ -1841,7 +1852,7 @@ fn struct_fields(
             let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
             return E::StructFields::Positional(field_tys);
         }
-        P::StructFields::Defined(v) => v,
+        P::StructFields::Named(v) => v,
     };
     let mut field_map = UniqueMap::new();
     for (idx, (field, pt)) in pfields_vec.into_iter().enumerate() {
@@ -1861,6 +1872,125 @@ fn struct_fields(
         }
     }
     E::StructFields::Named(field_map)
+}
+
+//**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+fn enum_def(
+    context: &mut Context,
+    enums: &mut UniqueMap<DatatypeName, E::EnumDefinition>,
+    penum: P::EnumDefinition,
+) {
+    let (ename, edef) = enum_def_(context, enums.len(), penum);
+    if let Err(_old_loc) = enums.add(ename, edef) {
+        assert!(context.env().has_errors())
+    }
+}
+
+fn enum_def_(
+    context: &mut Context,
+    index: usize,
+    penum: P::EnumDefinition,
+) -> (DatatypeName, E::EnumDefinition) {
+    let P::EnumDefinition {
+        attributes,
+        loc,
+        name,
+        abilities: abilities_vec,
+        type_parameters: pty_params,
+        variants: pvariants,
+    } = penum;
+    let attributes = flatten_attributes(context, AttributePosition::Enum, attributes);
+    let warning_filter = warning_filter(context, &attributes);
+    context
+        .env()
+        .add_warning_filter_scope(warning_filter.clone());
+    let type_parameters = enum_type_parameters(context, pty_params);
+    context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
+    let abilities = ability_set(context, "modifier", abilities_vec);
+    let variants = enum_variants(context, &name, pvariants);
+    let edef = E::EnumDefinition {
+        warning_filter,
+        index,
+        attributes,
+        loc,
+        abilities,
+        type_parameters,
+        variants,
+    };
+    context.pop_alias_scope(None);
+    context.env().pop_warning_filter_scope();
+    (name, edef)
+}
+
+fn enum_variants(
+    context: &mut Context,
+    ename: &DatatypeName,
+    pvariants: Vec<P::VariantDefinition>,
+) -> UniqueMap<VariantName, E::VariantDefinition> {
+    let mut variants = UniqueMap::new();
+    for variant in pvariants {
+        let loc = variant.loc;
+        let (vname, vdef) = enum_variant_def(context, variants.len(), variant);
+        if let Err(old_loc) = variants.add(vname, vdef) {
+            let msg: String = format!(
+                "Duplicate definition for variant '{}' in enum '{}'",
+                vname, ename
+            );
+            context.env().add_diag(diag!(
+                Declarations::DuplicateItem,
+                (loc, msg),
+                (old_loc.1, "Variant previously defined here")
+            ));
+        }
+    }
+    variants
+}
+
+fn enum_variant_def(
+    context: &mut Context,
+    index: usize,
+    pvariant: P::VariantDefinition,
+) -> (VariantName, E::VariantDefinition) {
+    let P::VariantDefinition { loc, name, fields } = pvariant;
+    let fields = variant_fields(context, &name, fields);
+    let vdef = E::VariantDefinition { loc, index, fields };
+    (name, vdef)
+}
+
+fn variant_fields(
+    context: &mut Context,
+    vname: &VariantName,
+    pfields: P::VariantFields,
+) -> E::VariantFields {
+    let pfields_vec = match pfields {
+        P::VariantFields::Empty => return E::VariantFields::Empty,
+        P::VariantFields::Positional(tys) => {
+            let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
+            return E::VariantFields::Positional(field_tys);
+        }
+        P::VariantFields::Named(v) => v,
+    };
+    let mut field_map = UniqueMap::new();
+    for (idx, (field, pt)) in pfields_vec.into_iter().enumerate() {
+        let t = type_(context, pt);
+        if let Err((field, old_loc)) = field_map.add(field, (idx, t)) {
+            context.env().add_diag(diag!(
+                Declarations::DuplicateItem,
+                (
+                    field.loc(),
+                    format!(
+                        "Duplicate definition for field '{}' in variant '{}'",
+                        field, vname
+                    ),
+                ),
+                (old_loc, "Field previously defined here"),
+            ));
+        }
+    }
+    E::VariantFields::Named(field_map)
 }
 
 //**************************************************************************************************
@@ -2141,13 +2271,30 @@ fn function_type_parameters(
 
 fn struct_type_parameters(
     context: &mut Context,
-    pty_params: Vec<P::StructTypeParameter>,
-) -> Vec<E::StructTypeParameter> {
+    pty_params: Vec<P::DatatypeTypeParameter>,
+) -> Vec<E::DatatypeTypeParameter> {
     pty_params
         .into_iter()
         .map(|param| {
             let _ = check_valid_type_parameter_name(context, None, &param.name);
-            E::StructTypeParameter {
+            E::DatatypeTypeParameter {
+                is_phantom: param.is_phantom,
+                name: param.name,
+                constraints: ability_set(context, "constraint", param.constraints),
+            }
+        })
+        .collect()
+}
+
+fn enum_type_parameters(
+    context: &mut Context,
+    pty_params: Vec<P::DatatypeTypeParameter>,
+) -> Vec<E::DatatypeTypeParameter> {
+    pty_params
+        .into_iter()
+        .map(|param| {
+            let _ = check_valid_type_parameter_name(context, None, &param.name);
+            E::DatatypeTypeParameter {
                 is_phantom: param.is_phantom,
                 name: param.name,
                 constraints: ability_set(context, "constraint", param.constraints),
@@ -2376,6 +2523,15 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             };
             EE::IfElse(eb, et, ef)
         }
+        PE::Match(subject, sp!(aloc, arms)) => EE::Match(
+            exp(context, subject),
+            sp(
+                aloc,
+                arms.into_iter()
+                    .map(|arm| match_arm(context, arm))
+                    .collect(),
+            ),
+        ),
         PE::Labeled(name, pe) => {
             let e = exp(context, pe);
             return maybe_labeled_exp(context, loc, name, e);
@@ -2566,6 +2722,7 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
             | PE::UnaryExp(_, _)
             | PE::BinopExp(_, _, _)
             | PE::Cast(_, _)
+            | PE::Match(_, _)
             | PE::Spec(_) => true,
 
             PE::DotCall(lhs, _, _, _, _)
@@ -2728,6 +2885,173 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
     };
     Some(Box::new(sp(loc, edotted_)))
 }
+
+//**************************************************************************************************
+// Match and Patterns
+//**************************************************************************************************
+
+fn match_arm(context: &mut Context, sp!(loc, arm_): P::MatchArm) -> E::MatchArm {
+    let P::MatchArm_ {
+        pattern,
+        guard,
+        rhs,
+    } = arm_;
+    let pattern = match_pattern(context, pattern);
+    let guard = guard.map(|guard| exp(context, guard));
+    let rhs = exp(context, rhs);
+    let arm = E::MatchArm_ {
+        pattern,
+        guard,
+        rhs,
+    };
+    sp(loc, arm)
+}
+
+fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::MatchPattern {
+    use E::{MatchPattern_ as EP, ModuleAccess_ as EM};
+    use P::MatchPattern_ as PP;
+
+    fn head_ctor_okay(
+        context: &mut Context,
+        name: E::ModuleAccess,
+        identifier_okay: bool,
+    ) -> Option<E::ModuleAccess> {
+        match &name.value {
+            EM::Variant(_, _) => Some(name),
+            EM::Name(_) if identifier_okay => Some(name),
+            EM::Name(_) => {
+                context.env().add_diag(diag!(
+                    Syntax::UnexpectedToken,
+                    (
+                        name.loc,
+                        "Unexpected name access.\
+                        Expected an '<enum>::<variant>' form."
+                    )
+                ));
+                None
+            }
+            EM::ModuleAccess(_mident, name) => {
+                context.env().add_diag(diag!(
+                    Syntax::UnexpectedToken,
+                    (
+                        name.loc,
+                        "Unexpected module member access.\
+                        Expected an identifier or enum variant."
+                    )
+                ));
+                None
+            }
+        }
+    }
+
+    fn resolve_and_validate_name(
+        context: &mut Context,
+        name_chain: P::NameAccessChain,
+        identifier_okay: bool,
+    ) -> Option<(E::ModuleAccess, Option<Spanned<Vec<P::Type>>>)> {
+        let ModuleAccessResult {
+            access,
+            ptys_opt,
+            is_macro,
+        } = context.name_access_chain_to_module_access(Access::Variant, name_chain)?;
+        let name = head_ctor_okay(context, access, identifier_okay)?;
+        if let Some(loc) = is_macro {
+            context.env().add_diag(diag!(
+                Syntax::InvalidMacro,
+                (loc, "Macros are not allowed in patterns.")
+            ));
+        }
+        Some((name, ptys_opt))
+    }
+
+    macro_rules! error_pattern {
+        () => {{
+            assert!(context.env().has_errors());
+            sp(loc, EP::ErrorPat)
+        }};
+    }
+
+    match pat_ {
+        PP::PositionalConstructor(name_chain, pats) => {
+            let Some((head_ctor_name, pts_opt)) =
+                resolve_and_validate_name(context, name_chain, false)
+            else {
+                return error_pattern!();
+            };
+            let tys = optional_sp_types(context, pts_opt);
+            match head_ctor_name {
+                sp!(_, EM::Variant(_, _)) => {
+                    let ploc = pats.loc;
+                    let pats = pats
+                        .value
+                        .into_iter()
+                        .map(|pat| match_pattern(context, pat))
+                        .collect();
+                    sp(
+                        loc,
+                        EP::PositionalConstructor(head_ctor_name, tys, sp(ploc, pats)),
+                    )
+                }
+                _ => error_pattern!(),
+            }
+        }
+        PP::FieldConstructor(name_chain, fields) => {
+            let Some((head_ctor_name, pts_opt)) =
+                resolve_and_validate_name(context, name_chain, false)
+            else {
+                return error_pattern!();
+            };
+            let tys = optional_sp_types(context, pts_opt);
+            match head_ctor_name {
+                sp!(_, EM::Variant(_, _)) => {
+                    let fields = fields
+                        .value
+                        .into_iter()
+                        .map(|(field, pat)| (field, match_pattern(context, pat)))
+                        .collect();
+                    let fields = named_fields(context, loc, "pattern", "sub-pattern", fields);
+                    sp(loc, EP::FieldConstructor(head_ctor_name, tys, fields))
+                }
+                _ => error_pattern!(),
+            }
+        }
+        PP::Name(name_chain) => {
+            let Some((head_ctor_name, pts_opt)) =
+                resolve_and_validate_name(context, name_chain, true)
+            else {
+                return error_pattern!();
+            };
+            let tys = optional_sp_types(context, pts_opt);
+            match head_ctor_name {
+                sp!(loc, EM::Name(name)) => sp(loc, EP::Binder(Var(name))),
+                head_ctor_name @ sp!(_, EM::Variant(_, _)) => {
+                    sp(loc, EP::HeadConstructor(head_ctor_name, tys))
+                }
+                _ => error_pattern!(),
+            }
+        }
+        PP::Literal(v) => {
+            if let Some(v) = value(&mut context.defn_context, v) {
+                sp(loc, EP::Literal(v))
+            } else {
+                assert!(context.env().has_errors());
+                error_pattern!()
+            }
+        }
+        PP::Or(lhs, rhs) => sp(
+            loc,
+            EP::Or(
+                Box::new(match_pattern(context, *lhs)),
+                Box::new(match_pattern(context, *rhs)),
+            ),
+        ),
+        PP::At(x, inner) => sp(loc, EP::At(x, Box::new(match_pattern(context, *inner)))),
+    }
+}
+
+//**************************************************************************************************
+// Values
+//**************************************************************************************************
 
 pub(super) fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> Option<E::Value> {
     use E::Value_ as EV;
@@ -2991,6 +3315,22 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                     context.env().add_diag(diag);
                     None
                 }
+                Some(access_result!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
+                    let cur_pkg = context.current_package();
+                    if context
+                        .env()
+                        .check_feature(cur_pkg, FeatureGate::Enums, loc)
+                    {
+                        let msg = "Unexpected assignment of variant";
+                        let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
+                        diag.add_note("If you are trying to unpack an enum variant, use 'match'");
+                        context.env().add_diag(diag);
+                        None
+                    } else {
+                        assert!(context.env().has_errors());
+                        None
+                    }
+                }
                 None => None,
             }
         }
@@ -3161,6 +3501,7 @@ pub enum ModuleMemberKind {
     Constant,
     Function,
     Struct,
+    Enum,
 }
 
 impl ModuleMemberKind {
@@ -3169,6 +3510,7 @@ impl ModuleMemberKind {
             ModuleMemberKind::Constant => NameCase::Constant,
             ModuleMemberKind::Function => NameCase::Function,
             ModuleMemberKind::Struct => NameCase::Struct,
+            ModuleMemberKind::Enum => NameCase::Enum,
         }
     }
 }
@@ -3178,6 +3520,7 @@ pub enum NameCase {
     Constant,
     Function,
     Struct,
+    Enum,
     Module,
     ModuleMemberAlias(ModuleMemberKind),
     ModuleAlias,
@@ -3192,10 +3535,12 @@ impl NameCase {
             NameCase::Constant => "constant",
             NameCase::Function => "function",
             NameCase::Struct => "struct",
+            NameCase::Enum => "enum",
             NameCase::Module => "module",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Function) => "function alias",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Constant) => "constant alias",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Struct) => "struct alias",
+            NameCase::ModuleMemberAlias(ModuleMemberKind::Enum) => "enum alias",
             NameCase::ModuleAlias => "module alias",
             NameCase::Variable => "variable",
             NameCase::Address => "address",
@@ -3260,7 +3605,7 @@ fn check_valid_module_member_name_impl(
                 return Err(());
             }
         }
-        M::Constant | M::Struct => {
+        M::Constant | M::Struct | M::Enum => {
             if !is_valid_struct_or_constant_name(&n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
@@ -3371,6 +3716,7 @@ fn check_restricted_name_all_cases(
         NameCase::Constant
         | NameCase::Function
         | NameCase::Struct
+        | NameCase::Enum
         | NameCase::Module
         | NameCase::ModuleMemberAlias(_)
         | NameCase::ModuleAlias

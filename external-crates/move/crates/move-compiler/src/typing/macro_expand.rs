@@ -5,9 +5,11 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     expansion::ast::{ModuleIdent, Mutability},
-    naming::ast::{self as N, BlockLabel, Color, TParamID, Type, Type_, UseFuns, Var, Var_},
+    naming::ast::{
+        self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
+    },
     parser::ast::FunctionName,
-    shared::program_info::FunctionInfo,
+    shared::{program_info::FunctionInfo, unique_map::UniqueMap},
     typing::{
         ast as T,
         core::{self, TParamSubst},
@@ -500,6 +502,44 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_exp(ctx, et);
             recolor_exp(ctx, ef);
         }
+        N::Exp_::Match(subject, arms) => {
+            recolor_exp(ctx, subject);
+            for arm in &mut arms.value {
+                let MatchArm_ {
+                    pattern,
+                    binders,
+                    guard,
+                    guard_binders,
+                    rhs_binders,
+                    rhs,
+                } = &mut arm.value;
+                for var in binders.iter_mut() {
+                    recolor_var(ctx, var);
+                }
+                let mut old_guard_binders = std::mem::take(guard_binders)
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                for (pv, gv) in old_guard_binders.iter_mut() {
+                    recolor_var(ctx, pv);
+                    recolor_var(ctx, gv);
+                }
+                let _ = std::mem::replace(
+                    guard_binders,
+                    UniqueMap::maybe_from_iter(old_guard_binders.into_iter()).unwrap(),
+                );
+                let mut recolored_rhs_binders =
+                    std::mem::take(rhs_binders).into_iter().collect::<Vec<_>>();
+                for var in recolored_rhs_binders.iter_mut() {
+                    recolor_var(ctx, var);
+                }
+                let _ = std::mem::replace(rhs_binders, recolored_rhs_binders.into_iter().collect());
+                recolor_pat(ctx, pattern);
+                guard.iter_mut().map(|guard| recolor_exp(ctx, guard));
+                recolor_exp(ctx, rhs);
+                guard.as_mut().map(|guard| recolor_exp(ctx, guard));
+                recolor_exp(ctx, rhs);
+            }
+        }
         N::Exp_::Loop(name, e) => {
             ctx.add_block_label(*name);
             recolor_block_label(ctx, name);
@@ -531,6 +571,11 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_exp(ctx, er)
         }
         N::Exp_::Pack(_, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                recolor_exp(ctx, e)
+            }
+        }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
             for (_, _, (_, e)) in fields {
                 recolor_exp(ctx, e)
             }
@@ -591,6 +636,27 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     }
 }
 
+fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
+    match p_ {
+        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {
+            ()
+        }
+        N::MatchPattern_::Constructor(_, _, _, _, fields) => {
+            for (_, _, (_, p)) in fields {
+                recolor_pat(ctx, p)
+            }
+        }
+        N::MatchPattern_::Binder(var) => recolor_var(ctx, var),
+        N::MatchPattern_::Or(lhs, rhs) => {
+            recolor_pat(ctx, lhs);
+            recolor_pat(ctx, rhs);
+        }
+        N::MatchPattern_::At(var, inner) => {
+            recolor_var(ctx, var);
+            recolor_pat(ctx, inner);
+        }
+    }
+}
 //**************************************************************************************************
 // subst args
 //**************************************************************************************************
@@ -711,6 +777,53 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
+        N::Exp_::Match(subject, arms) => {
+            exp(context, subject);
+            for arm in &mut arms.value {
+                let MatchArm_ {
+                    pattern,
+                    binders,
+                    guard,
+                    guard_binders,
+                    rhs_binders,
+                    rhs,
+                } = &mut arm.value;
+                let valid_binders = std::mem::take(binders);
+                let taken_binders = valid_binders
+                    .into_iter()
+                    .filter(|sp!(_, var_)| {
+                        if context.all_params.contains_key(var_) {
+                            assert!(
+                                context.core.env.has_errors(),
+                                "ICE cannot use macro parameter in pattern"
+                            );
+                            false
+                        } else {
+                            true
+                        }
+                    })
+                    .collect::<BTreeSet<_>>();
+                let old_guard = std::mem::take(guard_binders);
+                let valid_guard_binders = old_guard.filter_map(|k, v| {
+                    if taken_binders.contains(&k) {
+                        Some(v)
+                    } else {
+                        None
+                    }
+                });
+                std::mem::replace(guard_binders, valid_guard_binders);
+                let old_rhs_binders = std::mem::take(rhs_binders);
+                let valid_rhs_binders = old_rhs_binders
+                    .into_iter()
+                    .filter(|v| taken_binders.contains(&v))
+                    .collect();
+                std::mem::replace(rhs_binders, valid_rhs_binders);
+                std::mem::replace(binders, taken_binders.into_iter().collect());
+                pat(context, pattern);
+                guard.as_mut().map(|guard| exp(context, guard));
+                exp(context, rhs);
+            }
+        }
         N::Exp_::While(_name, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
@@ -729,6 +842,14 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             exp(context, er)
         }
         N::Exp_::Pack(_, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
+        N::Exp_::PackVariant(_, _, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
@@ -971,5 +1092,43 @@ fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
 fn exps(context: &mut Context, es: &mut [N::Exp]) {
     for e in es {
         exp(context, e)
+    }
+}
+
+fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
+    match p_ {
+        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {
+            ()
+        }
+        N::MatchPattern_::Constructor(_, _, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, p)) in fields {
+                pat(context, p)
+            }
+        }
+        N::MatchPattern_::Binder(var) => {
+            if context.all_params.contains_key(&var.value) {
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE cannot use macro parameter in pattern"
+                );
+                *p_ = N::MatchPattern_::ErrorPat;
+            }
+        }
+        N::MatchPattern_::Or(lhs, rhs) => {
+            pat(context, lhs);
+            pat(context, rhs);
+        }
+        N::MatchPattern_::At(var, inner) => {
+            if context.all_params.contains_key(&var.value) {
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE cannot use macro parameter in pattern"
+                );
+            }
+            pat(context, inner);
+        }
     }
 }

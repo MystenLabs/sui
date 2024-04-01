@@ -1,0 +1,72 @@
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/todd_test_1.move:4:11
+  │
+4 │         A(u64),
+  │           ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/todd_test_1.move:4:11
+  │
+4 │         A(u64),
+  │           ^^^ ICE base type constraint failed: &mut (u64: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/todd_test_1.move:5:11
+  │
+5 │         B(u8),
+  │           ^^ ICE base type constraint failed: &(u8: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/todd_test_1.move:5:11
+  │
+5 │         B(u8),
+  │           ^^ ICE base type constraint failed: &mut (u8: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/todd_test_1.move:6:11
+  │
+6 │         C(u16),
+  │           ^^^ ICE base type constraint failed: &(u16: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/todd_test_1.move:6:11
+  │
+6 │         C(u16),
+  │           ^^^ ICE base type constraint failed: &mut (u16: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
