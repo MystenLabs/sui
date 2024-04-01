@@ -19,6 +19,7 @@ use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::error::{SuiError, SuiResult};
+use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::SUI_SYSTEM_ADDRESS;
@@ -128,7 +129,7 @@ impl Event {
         contents: &[u8],
         layout: MoveStructLayout,
     ) -> SuiResult<MoveStruct> {
-        MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+        BoundedVisitor::deserialize_struct(contents, &layout).map_err(|e| {
             SuiError::ObjectSerializationError {
                 error: e.to_string(),
             }
