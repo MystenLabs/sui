@@ -122,6 +122,7 @@ const guides = [
 					'guides/developer/advanced/move-2024-migration',
 					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/custom-indexer',
+					'guides/developer/advanced/randomness-onchain',
 				],
 			},
 			{
