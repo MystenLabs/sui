@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::CheckpointStore;
@@ -238,7 +238,12 @@ impl DBCheckpointHandler {
         Ok(())
     }
 
-    async fn prune_and_compact(&self, db_path: PathBuf, epoch: u64) -> Result<()> {
+    async fn prune_and_compact(
+        &self,
+        db_path: PathBuf,
+        epoch: u64,
+        epoch_duration_ms: u64,
+    ) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
         let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
             db_path.join("checkpoints"),
@@ -259,6 +264,7 @@ impl DBCheckpointHandler {
             self.pruning_config,
             metrics,
             self.indirect_objects_threshold,
+            epoch_duration_ms,
         )
         .await?;
         info!(
@@ -297,7 +303,8 @@ impl DBCheckpointHandler {
 
                 if self.prune_and_compact_before_upload {
                     // Invoke pruning and compaction on the db checkpoint
-                    self.prune_and_compact(local_db_path, *epoch).await?;
+                    self.prune_and_compact(local_db_path, *epoch, EPOCH_DURATION_MS_FOR_TESTING)
+                        .await?;
                 }
 
                 info!("Copying db checkpoint for epoch: {epoch} to remote storage");
