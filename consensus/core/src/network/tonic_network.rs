@@ -45,6 +45,7 @@ use crate::{
 const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
 
 // Maximum bytes size in a single fetch_blocks()response.
+// TODO: put max RPC response size in protocol config.
 const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 // Maximum total bytes fetched in a single fetch_blocks() call, after combining the responses.

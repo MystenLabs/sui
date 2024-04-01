@@ -1,6 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module defines the network interface, and provides network implementations for the
+//! consensus protocol.
+//!
+//! Having an abstract network interface allows
+//! - simplying the semantics of sending data and serving requests over the network
+//! - hiding implementation specific types and semantics from the consensus protocol
+//! - allowing easy swapping of network implementations, for better performance or testing
+//!
+//! When modifying the client and server interfaces, the principle is to keep the interfaces
+//! low level, close to underlying implementations in semantics. For example, the client interface
+//! exposes sending messages to a specific peer, instead of broadcasting to all peers. Subscribing
+//! to a stream of blocks gets back the stream via response, instead of delivering the stream
+//! directly to the server. This keeps the logic agnostics to the underlying network outside of
+//! this module, so they can be reused easily across network implementations.
+
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
@@ -60,6 +75,7 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
     ) -> ConsensusResult<BlockStream>;
 
     /// Fetches serialized `SignedBlock`s from a peer.
+    // TODO: add a parameter for maximum total size of blocks returned.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
