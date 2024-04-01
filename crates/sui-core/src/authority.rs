@@ -133,7 +133,9 @@ use typed_store::TypedStoreError;
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
-use crate::authority::authority_store_pruner::AuthorityStorePruner;
+use crate::authority::authority_store_pruner::{
+    AuthorityStorePruner, EPOCH_DURATION_MS_FOR_TESTING,
+};
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
@@ -2724,6 +2726,7 @@ impl AuthorityState {
             metrics,
             config.indirect_objects_threshold,
             archive_readers,
+            EPOCH_DURATION_MS_FOR_TESTING,
         )
         .await
     }
