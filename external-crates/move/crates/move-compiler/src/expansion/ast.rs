@@ -291,7 +291,7 @@ pub type Type = Spanned<Type_>;
 // Expressions
 //**************************************************************************************************
 
-#[derive(Clone, Copy, Debug, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialOrd, Ord)]
 pub enum Mutability {
     Imm,
     Mut(Loc), // if the local had a `mut` prefix

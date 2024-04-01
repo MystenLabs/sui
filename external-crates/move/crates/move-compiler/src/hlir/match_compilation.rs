@@ -1211,11 +1211,21 @@ fn make_arm_unpack(
                     // make a copy of the value (or ref) and do both sides
                     (true, true) => {
                         let bind_entry = entry.clone();
-                        seq.push_back(make_copy_binding(x, Mutability::Imm, bind_entry.ty.clone(), bind_entry));
+                        seq.push_back(make_copy_binding(
+                            x,
+                            Mutability::Imm,
+                            bind_entry.ty.clone(),
+                            bind_entry,
+                        ));
                         queue.push_front((entry, *inner));
                     }
                     // no unpack needed, just move the value to the x
-                    (true, false) => seq.push_back(make_move_binding(x, Mutability::Imm, entry.ty.clone(), entry)),
+                    (true, false) => seq.push_back(make_move_binding(
+                        x,
+                        Mutability::Imm,
+                        entry.ty.clone(),
+                        entry,
+                    )),
                     // we need to unpack either way, handling wildcards and the like
                     (false, _) => queue.push_front((entry, *inner)),
                 }

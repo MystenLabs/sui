@@ -2211,7 +2211,7 @@ fn match_pattern_(
             };
             T::pat(bt, sp(loc, pat_))
         }
-        P::Binder(mut_, x, /* unused binding */ true) => {
+        P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Wildcard))
         }

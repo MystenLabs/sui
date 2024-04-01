@@ -577,11 +577,13 @@ impl PathExpander for Move2024PathExpander {
                         loc = name.loc;
                         (EN::Name(name), tyargs, is_macro)
                     }
-                    NR::ModuleAccess(loc, mident, member) => {
+                    NR::ModuleAccess(_loc, mident, member) => {
                         let access = E::ModuleAccess_::ModuleAccess(mident, member);
                         (access, tyargs, is_macro)
                     }
-                    NR::Variant(loc, sp!(mloc, (mident, member)), _) if access == Access::Type => {
+                    NR::Variant(_loc, sp!(_mloc, (_mident, _member)), _)
+                        if access == Access::Type =>
+                    {
                         let mut diag = unexpected_access_error(
                             resolved_name.loc(),
                             resolved_name.name(),
@@ -592,7 +594,7 @@ impl PathExpander for Move2024PathExpander {
                         // We could try to use the member access to try to keep going.
                         return None;
                     }
-                    NR::Variant(loc, member_path, variant) => {
+                    NR::Variant(_loc, member_path, variant) => {
                         let access = E::ModuleAccess_::Variant(member_path, variant);
                         (access, tyargs, is_macro)
                     }
@@ -638,7 +640,7 @@ impl PathExpander for Move2024PathExpander {
                         self.resolve_name_access_chain(context, access, chain);
                     match resolved_name {
                         NR::UnresolvedName(_, name) => (EN::Name(name), tyargs, is_macro),
-                        NR::ModuleAccess(loc, mident, member) if access == Access::Variant => {
+                        NR::ModuleAccess(_loc, _mident, _member) if access == Access::Variant => {
                             context.env.add_diag(unexpected_access_error(
                                 resolved_name.loc(),
                                 resolved_name.name(),
@@ -646,11 +648,11 @@ impl PathExpander for Move2024PathExpander {
                             ));
                             return None;
                         }
-                        NR::ModuleAccess(loc, mident, member) => {
+                        NR::ModuleAccess(_loc, mident, member) => {
                             let access = E::ModuleAccess_::ModuleAccess(mident, member);
                             (access, tyargs, is_macro)
                         }
-                        NR::Variant(loc, member_path, variant) => {
+                        NR::Variant(_loc, member_path, variant) => {
                             let access = E::ModuleAccess_::Variant(member_path, variant);
                             (access, tyargs, is_macro)
                         }

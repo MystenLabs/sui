@@ -3064,7 +3064,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                             .add_diag(diag!(Declarations::InvalidName, (name.loc, msg)));
                         error_pattern!()
                     } else {
-                        if let Some(tys) = pts_opt {
+                        if let Some(_tys) = pts_opt {
                             let msg = "Invalid type arguments on a pattern variable";
                             let mut diag = diag!(Declarations::InvalidName, (name.loc, msg));
                             diag.add_note("Type arguments cannot appear on pattern variables");
