@@ -12546,6 +12546,7 @@ dependencies = [
  "sui-rest-api",
  "sui-sdk",
  "sui-swarm-config",
+ "sui-test-transaction-builder",
  "sui-types",
  "tap",
  "telemetry-subscribers 0.2.0",
