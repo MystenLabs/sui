@@ -26,6 +26,7 @@ use move_compiler::{
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
 };
@@ -68,7 +69,6 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
-use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
@@ -648,8 +648,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
-                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
-                                .unwrap();
+                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
 
                         self.stabilize_str(format!(
                             "Owner: {}\nVersion: {}\nContents: {}",
