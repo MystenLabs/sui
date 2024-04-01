@@ -28,9 +28,8 @@ use move_command_line_common::files::{
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use pathdiff::diff_paths;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs,
     io::{Read, Write},
     path::PathBuf,
@@ -280,24 +279,6 @@ impl Compiler {
         FilesSourceText,
         Result<(CommentMap, SteppedCompiler<TARGET>), (Pass, Diagnostics)>,
     )> {
-        /// Path relativization after parsing is needed as paths are initially canonicalized when
-        /// converted to virtual file system paths and would show up as absolute in the test output
-        /// which wouldn't be machine-agnostic. We need to relativize using `vfs_root` beacuse it
-        /// was also used during canonicalization and might have altered path prefix in a
-        /// non-standard way (e.g., this can happen on Windows).
-        fn relativize_path(vsf_root: &VfsPath, path: Symbol) -> Symbol {
-            let Some(current_dir) = std::env::current_dir().ok() else {
-                return path;
-            };
-            let Ok(current_dir_vfs) = vsf_root.join(current_dir.to_string_lossy()) else {
-                return path;
-            };
-            let Some(new_path) = diff_paths(path.to_string(), current_dir_vfs.as_str()) else {
-                return path;
-            };
-            Symbol::from(new_path.to_string_lossy().to_string())
-        }
-
         let Self {
             maps,
             targets,
@@ -317,15 +298,26 @@ impl Compiler {
             Some(p) => p,
             None => VfsPath::new(PhysicalFS::new("/")),
         };
+        let mut vfs_to_original_path = HashMap::new();
 
         let targets = targets
             .into_iter()
-            .map(|p| Ok(p.to_vfs_path(&vfs_root)?))
+            .map(|p| {
+                let original = p.path;
+                let vfs = p.to_vfs_path(&vfs_root)?;
+                vfs_to_original_path.insert(Symbol::from(vfs.path.as_str()), original);
+                Ok(vfs)
+            })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
         let mut deps = deps
             .into_iter()
-            .map(|p| Ok(p.to_vfs_path(&vfs_root)?))
+            .map(|p| {
+                let original = p.path;
+                let vfs = p.to_vfs_path(&vfs_root)?;
+                vfs_to_original_path.insert(Symbol::from(vfs.path.as_str()), original);
+                Ok(vfs)
+            })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
         generate_interface_files_for_deps(
@@ -347,7 +339,7 @@ impl Compiler {
 
         source_text
             .iter_mut()
-            .for_each(|(_, (path, _))| *path = relativize_path(&vfs_root, *path));
+            .for_each(|(_, (path, _))| *path = vfs_to_original_path[path]);
 
         for (fhash, (fname, contents)) in source_text.iter() {
             compilation_env.add_source_file(*fhash, *fname, contents.clone())
