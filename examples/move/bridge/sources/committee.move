@@ -3,19 +3,16 @@
 
 #[allow(unused_use)]
 module bridge::committee {
-    use std::vector;
-
     use sui::address;
     use sui::ecdsa_k1;
     use sui::hex;
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
 
     use bridge::message::{Self, BridgeMessage};
     use bridge::message_types;
 
-    friend bridge::bridge;
+    /* friend bridge::bridge; */
 
     const ESignatureBelowThreshold: u64 = 0;
     const EDuplicatedSignature: u64 = 1;
@@ -24,14 +21,14 @@ module bridge::committee {
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
 
-    struct BridgeCommittee has store {
-        // commitee pub key and weight
+    public struct BridgeCommittee has store {
+        // committee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
         // threshold for each message type
         thresholds: VecMap<u8, u64>
     }
 
-    struct CommitteeMember has drop, store {
+    public struct CommitteeMember has drop, store {
         /// The Sui Address of the validator
         sui_address: address,
         /// The public key bytes of the bridge key
@@ -45,11 +42,11 @@ module bridge::committee {
         blocklisted: bool,
     }
 
-    public(friend) fun create(_ctx: &TxContext): BridgeCommittee {
+    public(package) fun create(_ctx: &TxContext): BridgeCommittee {
         // assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         // Hardcoded genesis committee
-        // TODO: change this to real committe members
-        let members = vec_map::empty<vector<u8>, CommitteeMember>();
+        // TODO: change this to real committee members
+        let mut members = vec_map::empty<vector<u8>, CommitteeMember>();
 
         let bridge_pubkey_bytes = hex::decode(b"02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4");
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
@@ -88,7 +85,7 @@ module bridge::committee {
             blocklisted: false
         });
 
-        let thresholds = vec_map::empty();
+        let mut thresholds = vec_map::empty();
         vec_map::insert(&mut thresholds, message_types::token(), 3334);
         BridgeCommittee { members, thresholds }
     }
@@ -98,15 +95,15 @@ module bridge::committee {
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
     ) {
-        let (i, signature_counts) = (0, vector::length(&signatures));
-        let seen_pub_key = vec_set::empty<vector<u8>>();
+        let (mut i, signature_counts) = (0, vector::length(&signatures));
+        let mut seen_pub_key = vec_set::empty<vector<u8>>();
         let required_threshold = *vec_map::get(&self.thresholds, &message::message_type(&message));
 
         // add prefix to the message bytes
-        let message_bytes = SUI_MESSAGE_PREFIX;
+        let mut message_bytes = SUI_MESSAGE_PREFIX;
         vector::append(&mut message_bytes, message::serialize_message(message));
 
-        let threshold = 0;
+        let mut threshold = 0;
         while (i < signature_counts) {
             let signature = vector::borrow(&signatures, i);
             let pubkey = ecdsa_k1::secp256k1_ecrecover(signature, &message_bytes, 0);
@@ -203,7 +200,7 @@ module bridge::committee {
 
     #[test_only]
     fun setup_test(): BridgeCommittee {
-        let members = vec_map::empty<vector<u8>, CommitteeMember>();
+        let mut members = vec_map::empty<vector<u8>, CommitteeMember>();
 
         let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
@@ -223,7 +220,7 @@ module bridge::committee {
             blocklisted: false
         });
 
-        let thresholds = vec_map::empty<u8, u64>();
+        let mut thresholds = vec_map::empty<u8, u64>();
         vec_map::insert(&mut thresholds, message_types::token(), 200);
 
         let committee = BridgeCommittee {

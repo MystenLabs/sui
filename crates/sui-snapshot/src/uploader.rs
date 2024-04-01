@@ -5,24 +5,29 @@ use crate::writer::StateSnapshotWriterV1;
 use anyhow::Result;
 use bytes::Bytes;
 use object_store::DynObjectStore;
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
+};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::checkpoints::CheckpointStore;
 use sui_core::db_checkpoint_handler::{STATE_SNAPSHOT_COMPLETED_MARKER, SUCCESS_MARKER};
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs, path_to_filesystem, put,
     run_manifest_update_loop,
 };
-
 use sui_storage::FileCompression;
+use sui_types::messages_checkpoint::CheckpointCommitment::ECMHLiveObjectSetDigest;
 use tracing::{debug, error, info};
 
 pub struct StateSnapshotUploaderMetrics {
     pub first_missing_state_snapshot_epoch: IntGauge,
+    pub state_snapshot_upload_err: IntCounter,
 }
 
 impl StateSnapshotUploaderMetrics {
@@ -31,6 +36,12 @@ impl StateSnapshotUploaderMetrics {
             first_missing_state_snapshot_epoch: register_int_gauge_with_registry!(
                 "first_missing_state_snapshot_epoch",
                 "First epoch for which we have no state snapshot in remote store",
+                registry
+            )
+            .unwrap(),
+            state_snapshot_upload_err: register_int_counter_with_registry!(
+                "state_snapshot_upload_err",
+                "Track upload errors we can alert on",
                 registry
             )
             .unwrap(),
@@ -44,6 +55,8 @@ pub struct StateSnapshotUploader {
     db_checkpoint_path: PathBuf,
     /// Store on local disk where db checkpoints are written to
     db_checkpoint_store: Arc<DynObjectStore>,
+    /// Checkpoint store; needed to fetch epoch state commitments for verification
+    checkpoint_store: Arc<CheckpointStore>,
     /// Directory path on local disk where state snapshots are staged for upload
     staging_path: PathBuf,
     /// Store on local disk where state snapshots are staged for upload
@@ -62,6 +75,7 @@ impl StateSnapshotUploader {
         snapshot_store_config: ObjectStoreConfig,
         interval_s: u64,
         registry: &Registry,
+        checkpoint_store: Arc<CheckpointStore>,
     ) -> Result<Arc<Self>> {
         let db_checkpoint_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
@@ -76,6 +90,7 @@ impl StateSnapshotUploader {
         Ok(Arc::new(StateSnapshotUploader {
             db_checkpoint_path: db_checkpoint_path.to_path_buf(),
             db_checkpoint_store: db_checkpoint_store_config.make()?,
+            checkpoint_store,
             staging_path: staging_path.to_path_buf(),
             staging_store: staging_store_config.make()?,
             snapshot_store: snapshot_store_config.make()?,
@@ -115,7 +130,18 @@ impl StateSnapshotUploader {
                     &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
                 ));
-                state_snapshot_writer.write(*epoch, db).await?;
+                let commitments = self
+                    .checkpoint_store
+                    .get_epoch_state_commitments(*epoch)
+                    .expect("Expected last checkpoint of epoch to have end of epoch data")
+                    .expect("Expected end of epoch data to be present");
+                let ECMHLiveObjectSetDigest(state_hash_commitment) = commitments
+                    .last()
+                    .expect("Expected at least one commitment")
+                    .clone();
+                state_snapshot_writer
+                    .write(*epoch, db, state_hash_commitment)
+                    .await?;
                 info!("State snapshot creation successful for epoch: {}", *epoch);
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
@@ -150,6 +176,7 @@ impl StateSnapshotUploader {
                         let first_missing_epoch = epochs.first().cloned().unwrap_or(0);
                         self.metrics.first_missing_state_snapshot_epoch.set(first_missing_epoch as i64);
                         if let Err(err) = self.upload_state_snapshot_to_object_store(epochs).await {
+                            self.metrics.state_snapshot_upload_err.inc();
                             error!("Failed to upload state snapshot to remote store with err: {:?}", err);
                         } else {
                             debug!("Successfully completed snapshot upload loop");

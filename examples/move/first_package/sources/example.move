@@ -2,17 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module first_package::example {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
-    struct Sword has key, store {
+    public struct Sword has key, store {
         id: UID,
         magic: u64,
         strength: u64,
     }
 
-    struct Forge has key {
+    public struct Forge has key {
         id: UID,
         swords_created: u64,
     }
@@ -66,7 +62,7 @@ module first_package::example {
 
     #[test]
     public fun test_module_init() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         // first transaction to emulate module initialization.
         {
@@ -94,7 +90,7 @@ module first_package::example {
 
     #[test]
     fun test_sword_transactions() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         // first transaction to emulate module initialization
         {
@@ -105,7 +101,7 @@ module first_package::example {
         // second transaction executed by admin to create the sword
         {
             ts::next_tx(&mut ts, ADMIN);
-            let forge: Forge = ts::take_from_sender(&ts);
+            let mut forge: Forge = ts::take_from_sender(&ts);
             // create the sword and transfer it to the initial owner
             let sword = new_sword(&mut forge, 42, 7, ts::ctx(&mut ts));
             transfer::public_transfer(sword, ALICE);

@@ -6,10 +6,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-workspace.anyhow = true
-workspace.axum = true
-workspace.mysten-service = true
-workspace.prometheus = true
-workspace.serde = true
-workspace.tokio = true
-workspace.tracing = true
+anyhow.workspace = true
+axum.workspace = true
+mysten-service.workspace = true
+prometheus.workspace = true
+tracing.workspace = true
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }

@@ -116,8 +116,13 @@ impl<A: Clone> QuorumDriver<A> {
                 debug!(?task, "Enqueued task.");
                 self.metrics.current_requests_in_flight.inc();
                 self.metrics.total_enqueued.inc();
-                if task.retry_times == 1 {
-                    self.metrics.current_transactions_in_retry.inc();
+                if task.retry_times > 0 {
+                    if task.retry_times == 1 {
+                        self.metrics.current_transactions_in_retry.inc();
+                    }
+                    self.metrics
+                        .transaction_retry_count
+                        .report(task.retry_times as u64);
                 }
             })
             .map_err(|e| SuiError::QuorumDriverCommunicationError {
@@ -716,11 +721,6 @@ where
         } = task;
         let tx_digest = *transaction.digest();
         let is_single_writer_tx = !transaction.contains_shared_object();
-
-        quorum_driver
-            .metrics
-            .transaction_retry_count
-            .report(old_retry_times as u64 + 1);
 
         let timer = Instant::now();
         let tx_cert = match tx_cert {

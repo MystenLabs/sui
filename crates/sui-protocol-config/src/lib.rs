@@ -393,6 +393,13 @@ struct FeatureFlags {
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
+
+    // Controls the behavior of per object congestion control in consensus handler.
+    #[serde(skip_serializing_if = "PerObjectCongestionControlMode::is_none")]
+    per_object_congestion_control_mode: PerObjectCongestionControlMode,
+    // Set the upper bound allowed for max_epoch in zklogin signature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -416,6 +423,20 @@ pub enum ConsensusTransactionOrdering {
 impl ConsensusTransactionOrdering {
     pub fn is_none(&self) -> bool {
         matches!(self, ConsensusTransactionOrdering::None)
+    }
+}
+
+// The config for per object congestion control in consensus handler.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+pub enum PerObjectCongestionControlMode {
+    #[default]
+    None, // No congestion control.
+    TotalGasBudget, // Use txn gas budget as execution cost.
+}
+
+impl PerObjectCongestionControlMode {
+    pub fn is_none(&self) -> bool {
+        matches!(self, PerObjectCongestionControlMode::None)
     }
 }
 
@@ -965,6 +986,10 @@ pub struct ProtocolConfig {
     consensus_max_transaction_size_bytes: Option<u64>,
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
+
+    // The max accumulated txn execution cost per object in a checkpoint. Transactions
+    // in a checkpoint will be deferred once their touch shared objects hit this limit.
+    max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
 }
 
 // feature flags
@@ -1155,6 +1180,10 @@ impl ProtocolConfig {
         self.feature_flags.accept_zklogin_in_multisig
     }
 
+    pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
+        self.feature_flags.zklogin_max_epoch_upper_bound_delta
+    }
+
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
@@ -1185,6 +1214,10 @@ impl ProtocolConfig {
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
+    }
+
+    pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
+        self.feature_flags.per_object_congestion_control_mode
     }
 }
 
@@ -1629,6 +1662,8 @@ impl ProtocolConfig {
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
+
+            max_accumulated_txn_cost_per_object_in_checkpoint: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2024,7 +2059,9 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
-                42 => {}
+                42 => {
+                    cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2119,6 +2156,18 @@ impl ProtocolConfig {
     }
     pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
         self.consensus_max_transactions_in_block_bytes = Some(val);
+    }
+
+    pub fn set_per_object_congestion_control_mode(&mut self, val: PerObjectCongestionControlMode) {
+        self.feature_flags.per_object_congestion_control_mode = val;
+    }
+
+    pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {
+        self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
+    }
+
+    pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
+        self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
 }
 

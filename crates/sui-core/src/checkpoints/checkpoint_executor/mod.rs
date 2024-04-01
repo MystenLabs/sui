@@ -602,6 +602,10 @@ impl CheckpointExecutor {
                     .await
                     .expect("Finalizing checkpoint cannot fail");
 
+                    self.checkpoint_store
+                        .insert_epoch_last_checkpoint(cur_epoch, checkpoint)
+                        .expect("Failed to insert epoch last checkpoint");
+
                     self.accumulator
                         .accumulate_epoch(
                             &cur_epoch,

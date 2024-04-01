@@ -38,6 +38,10 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
             tokens,
         }
     }
+
+    fn at_end(&self, prev: Loc) -> bool {
+        prev.end() as usize == self.tokens.start_loc()
+    }
 }
 
 //**************************************************************************************************
@@ -336,6 +340,20 @@ where
     }
 }
 
+// Helper for location blocks
+
+macro_rules! ok_with_loc {
+    ($context:expr, $body:expr) => {{
+        let start_loc = $context.tokens.start_loc();
+        let result = $body;
+        let end_loc = $context.tokens.previous_end_loc();
+        Ok(sp(
+            make_loc($context.tokens.file_hash(), start_loc, end_loc),
+            result,
+        ))
+    }};
+}
+
 //**************************************************************************************************
 // Identifiers, Addresses, and Names
 //**************************************************************************************************
@@ -419,14 +437,14 @@ fn parse_address_bytes(
 // Parse the beginning of an access, either an address or an identifier:
 //      LeadingNameAccess = <NumericalAddress> | <Identifier> | <SyntaxIdentifier>
 fn parse_leading_name_access(context: &mut Context) -> Result<LeadingNameAccess, Box<Diagnostic>> {
-    parse_leading_name_access_(context, false, || "an address or an identifier")
+    parse_leading_name_access_(context, false, &|| "an address or an identifier")
 }
 
 // Parse the beginning of an access, either an address or an identifier with a specific description
-fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
+fn parse_leading_name_access_<'a, F: Fn() -> &'a str>(
     context: &mut Context,
     global_name: bool,
-    item_description: F,
+    item_description: &F,
 ) -> Result<LeadingNameAccess, Box<Diagnostic>> {
     match context.tokens.peek() {
         Tok::RestrictedIdentifier | Tok::Identifier => {
@@ -491,83 +509,193 @@ fn parse_module_name(context: &mut Context) -> Result<ModuleName, Box<Diagnostic
     Ok(ModuleName(parse_identifier(context)?))
 }
 
-// Parse a module identifier:
-//      ModuleIdent = <LeadingNameAccess> "::" <ModuleName>
-//                  | "::" <LeadingNameAccess> "::" <ModuleName>
-
 // Parse a module access (a variable, struct type, or function):
-//      NameAccessChain = <LeadingNameAccess> ( "::" <Identifier> ( "::" <Identifier> )? )?
-fn parse_name_access_chain<'a, F: FnOnce() -> &'a str>(
+//      NameAccessChain =
+//          <LeadingNameAccess> <OptionalTypeArgs>
+//              ( "::" <Identifier> <OptionalTypeArgs> )^n
+//
+//  (n in {0,1,2})
+//  Returns a name and an indicator if we parsed a macro. Note that if `n > 2`, this parses those
+//  and reports errors.
+fn parse_name_access_chain<'a, F: Fn() -> &'a str>(
     context: &mut Context,
+    macros_allowed: bool,
+    tyargs_allowed: bool,
     item_description: F,
 ) -> Result<NameAccessChain, Box<Diagnostic>> {
-    let start_loc = context.tokens.start_loc();
-    let access = if context.tokens.peek() == Tok::ColonColon {
-        context.tokens.advance()?;
-        parse_name_access_chain_(context, true, item_description)?
-    } else {
-        parse_name_access_chain_(context, false, item_description)?
-    };
-    let end_loc = context.tokens.previous_end_loc();
-    Ok(spanned(
-        context.tokens.file_hash(),
-        start_loc,
-        end_loc,
-        access,
-    ))
+    ok_with_loc!(context, {
+        let global_name = if context.tokens.peek() == Tok::ColonColon {
+            context.tokens.advance()?;
+            true
+        } else {
+            false
+        };
+        parse_name_access_chain_(
+            context,
+            macros_allowed,
+            tyargs_allowed,
+            global_name,
+            item_description,
+        )?
+    })
 }
 
 // Parse a module access with a specific description
-fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
+fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
     context: &mut Context,
+    macros_allowed: bool,
+    tyargs_allowed: bool,
     global_name: bool,
     item_description: F,
 ) -> Result<NameAccessChain_, Box<Diagnostic>> {
-    let start_loc = context.tokens.start_loc();
-    let ln = parse_leading_name_access_(context, global_name, item_description)?;
+    use LeadingNameAccess_ as LN;
+    let ln = parse_leading_name_access_(context, global_name, &item_description)?;
+
+    let (mut is_macro, mut tys) = parse_macro_opt_and_tyargs_opt(context, ln.loc)?;
+    if let Some(loc) = &is_macro {
+        if !macros_allowed {
+            let msg = format!(
+                "Macro invocation are disallowed here. Expected {}",
+                item_description()
+            );
+            context
+                .env
+                .add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
+            is_macro = None;
+        }
+    }
+    if let Some(sp!(ty_loc, _)) = tys {
+        if !tyargs_allowed {
+            context.env.add_diag(diag!(
+                Syntax::InvalidName,
+                (
+                    ty_loc,
+                    format!(
+                        "Type arguments are disallowed here. Expected {}",
+                        item_description()
+                    )
+                )
+            ));
+            tys = None;
+        }
+    }
+
     let ln = match ln {
         // A name by itself is a valid access chain
-        sp!(_, LeadingNameAccess_::Name(n1)) if context.tokens.peek() != Tok::ColonColon => {
-            return Ok(NameAccessChain_::One(n1))
+        sp!(_, LN::Name(n1)) if context.tokens.peek() != Tok::ColonColon => {
+            let single = PathEntry {
+                name: n1,
+                tyargs: tys,
+                is_macro,
+            };
+            return Ok(NameAccessChain_::Single(single));
         }
         ln => ln,
     };
 
-    if matches!(ln, sp!(_, LeadingNameAccess_::GlobalAddress(_)))
+    if matches!(ln.value, LN::GlobalAddress(_) | LN::AnonymousAddress(_))
         && context.tokens.peek() != Tok::ColonColon
     {
+        let addr_msg = match &ln.value {
+            LN::AnonymousAddress(_) => "anonymous",
+            LN::GlobalAddress(_) => "global",
+            LN::Name(_) => "named",
+        };
         let mut diag = diag!(
             Syntax::UnexpectedToken,
             (
                 ln.loc,
-                "Expected '::' after the address in this module access chain"
+                format!(
+                    "Expected '::' after the {} address in this module access chain",
+                    addr_msg
+                )
             )
         );
-        diag.add_note(
-            "Access chains that start with '::' must be one of the following forms: \
-            \n  '::<address>::<module>', '::<address>::<module>::<member>'",
-        );
+        if matches!(ln.value, LN::GlobalAddress(_)) {
+            diag.add_note("Access chains that start with '::' must be multi-part");
+        }
         return Err(Box::new(diag));
     }
 
-    consume_token_(
-        context.tokens,
-        Tok::ColonColon,
-        start_loc,
-        " after an address in a module access chain",
-    )?;
-    let n2 = parse_identifier(context)?;
-    if context.tokens.peek() != Tok::ColonColon {
-        return Ok(NameAccessChain_::Two(ln, n2));
+    let root = RootPathEntry {
+        name: ln,
+        tyargs: tys,
+        is_macro,
+    };
+
+    let mut path = NameAccessChain_::path(root);
+    while context.tokens.peek() == Tok::ColonColon {
+        consume_token_(
+            context.tokens,
+            Tok::ColonColon,
+            context.tokens.start_loc(),
+            " after an address in a module access chain",
+        )?;
+        let name = parse_identifier(context)?;
+        let (mut is_macro, mut tys) = parse_macro_opt_and_tyargs_opt(context, name.loc)?;
+        if let Some(loc) = &is_macro {
+            if !macros_allowed {
+                context.env.add_diag(diag!(
+                    Syntax::InvalidName,
+                    (
+                        *loc,
+                        format!("Cannot use macro invocation '!' in {}", item_description())
+                    )
+                ));
+                is_macro = None;
+            }
+        }
+        if let Some(sp!(ty_loc, _)) = tys {
+            if !tyargs_allowed {
+                context.env.add_diag(diag!(
+                    Syntax::InvalidName,
+                    (
+                        ty_loc,
+                        format!("Cannot use type arguments in {}", item_description())
+                    )
+                ));
+                tys = None;
+            }
+        }
+
+        path.push_path_entry(name, tys, is_macro)
+            .into_iter()
+            .for_each(|diag| context.env.add_diag(diag));
     }
-    let ln_n2_loc = make_loc(
-        context.tokens.file_hash(),
-        start_loc,
-        context.tokens.previous_end_loc(),
-    );
-    consume_token(context.tokens, Tok::ColonColon)?;
-    let n3 = parse_identifier(context)?;
-    Ok(NameAccessChain_::Three(sp(ln_n2_loc, (ln, n2)), n3))
+    Ok(NameAccessChain_::Path(path))
+}
+
+fn parse_macro_opt_and_tyargs_opt(
+    context: &mut Context,
+    end_loc: Loc,
+) -> Result<(Option<Loc>, Option<Spanned<Vec<Type>>>), Box<Diagnostic>> {
+    let mut is_macro = None;
+    let mut tyargs = None;
+
+    if let Tok::Exclaim = context.tokens.peek() {
+        let loc = current_token_loc(context.tokens);
+        context.tokens.advance()?;
+        is_macro = Some(loc);
+    }
+
+    // There's an ambiguity if the name is followed by a '<'.
+    // If there is no whitespace after the name or if a macro call has been started,
+    //   treat it as the start of a list of type arguments.
+    // Otherwise, assume that the '<' is a boolean operator.
+    let _start_loc = context.tokens.start_loc();
+    if context.tokens.peek() == Tok::Less && (context.at_end(end_loc) || is_macro.is_some()) {
+        let start_loc = context.tokens.start_loc();
+        let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
+        let tys_ = parse_optional_type_args(context)
+            .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
+        let ty_loc = make_loc(
+            context.tokens.file_hash(),
+            start_loc,
+            context.tokens.previous_end_loc(),
+        );
+        tyargs = tys_.map(|tys| sp(ty_loc, tys));
+    }
+    Ok((is_macro, tyargs))
 }
 
 //**************************************************************************************************
@@ -725,7 +853,12 @@ fn parse_attribute_value(context: &mut Context) -> Result<AttributeValue, Box<Di
         return Ok(sp(v.loc, AttributeValue_::Value(v)));
     }
 
-    let ma = parse_name_access_chain(context, || "attribute name value")?;
+    let ma = parse_name_access_chain(
+        context,
+        /* macros */ false,
+        /* tyargs */ false,
+        || "attribute name value",
+    )?;
     Ok(sp(ma.loc, AttributeValue_::ModuleAccess(ma)))
 }
 
@@ -834,7 +967,7 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
     } else {
         sp(
             f.loc(),
-            Exp_::Name(sp(f.loc(), NameAccessChain_::One(f.0)), None),
+            Exp_::Name(sp(f.loc(), NameAccessChain_::single(f.0))),
         )
     };
     Ok((f, arg))
@@ -902,8 +1035,12 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     // The item description specified here should include the special case above for
     // variable names, because if the current context cannot be parsed as a struct name
     // it is possible that the user intention was to use a variable name.
-    let ty = parse_name_access_chain(context, || "a variable or struct name")?;
-    let ty_args = parse_optional_type_args(context)?;
+    let ty = parse_name_access_chain(
+        context,
+        /* macros */ false,
+        /* tyargs */ true,
+        || "a variable or struct name",
+    )?;
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
         context.env.check_feature(
@@ -930,7 +1067,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         FieldBindings::Named(args)
     };
     let end_loc = context.tokens.previous_end_loc();
-    let unpack = Bind_::Unpack(Box::new(ty), ty_args, args);
+    let unpack = Bind_::Unpack(Box::new(ty), args);
     Ok(spanned(
         context.tokens.file_hash(),
         start_loc,
@@ -1506,37 +1643,18 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
 //          | <NameAccessChain> "!" <OptionalTypeArgs> "(" Comma<Exp> ")"
 //          | <NameAccessChain> <OptionalTypeArgs>
 fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
-    let name = parse_name_access_chain(context, || {
-        panic!("parse_name_exp with something other than a ModuleAccess")
-    })?;
-
-    let is_macro = if let Tok::Exclaim = context.tokens.peek() {
-        let loc = current_token_loc(context.tokens);
-        context.tokens.advance()?;
-        Some(loc)
-    } else {
-        None
-    };
-
-    // There's an ambiguity if the name is followed by a '<'.
-    // If there is no whitespace after the name or if a macro call has been started,
-    //   treat it as the start of a list of type arguments.
-    // Otherwise, assume that the '<' is a boolean operator.
-    let mut tys = None;
-    let start_loc = context.tokens.start_loc();
-    if context.tokens.peek() == Tok::Less
-        && (name.loc.end() as usize == start_loc || is_macro.is_some())
-    {
-        let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
-        tys = parse_optional_type_args(context)
-            .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
-    }
+    let name = parse_name_access_chain(
+        context,
+        /* macros */ true,
+        /* tyargs */ true,
+        || panic!("parse_name_exp with something other than a ModuleAccess"),
+    )?;
 
     match context.tokens.peek() {
-        _ if is_macro.is_some() => {
+        _ if name.value.is_macro().is_some() => {
             // if in a macro, we must have a call
             let rhs = parse_call_args(context)?;
-            Ok(Exp_::Call(name, is_macro, tys, rhs))
+            Ok(Exp_::Call(name, rhs))
         }
 
         // Pack: "{" Comma<ExpField> "}"
@@ -1548,18 +1666,18 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
                 parse_exp_field,
                 "a field expression",
             )?;
-            Ok(Exp_::Pack(name, tys, fs))
+            Ok(Exp_::Pack(name, fs))
         }
 
         // Call: "(" Comma<Exp> ")"
         Tok::LParen => {
-            debug_assert!(is_macro.is_none());
+            debug_assert!(name.value.is_macro().is_none());
             let rhs = parse_call_args(context)?;
-            Ok(Exp_::Call(name, None, tys, rhs))
+            Ok(Exp_::Call(name, rhs))
         }
 
         // Other name reference...
-        _ => Ok(Exp_::Name(name, tys)),
+        _ => Ok(Exp_::Name(name)),
     }
 }
 
@@ -1998,9 +2116,8 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
 // to determine if we should parse the type arguments and args following a name. Otherwise, we will
 // parse a field access
 fn is_start_of_call_after_function_name(context: &Context, n: &Name) -> bool {
-    let call_start = context.tokens.start_loc();
     let peeked = context.tokens.peek();
-    (peeked == Tok::Less && n.loc.end() as usize == call_start)
+    (peeked == Tok::Less && context.at_end(n.loc))
         || peeked == Tok::LParen
         || peeked == Tok::Exclaim
 }
@@ -2157,7 +2274,7 @@ fn parse_quant_binding(context: &mut Context) -> Result<Spanned<(Bind, Exp)>, Bo
         // Built `domain<ty>()` expression.
         context.tokens.advance()?;
         let ty = parse_type(context)?;
-        make_builtin_call(ty.loc, symbol!("$spec_domain"), Some(vec![ty]), vec![])
+        make_builtin_call(ty.loc, symbol!("$spec_domain"), vec![])
     } else {
         // This is a quantifier over a value, like a vector or a range.
         consume_identifier(context.tokens, "in")?;
@@ -2172,9 +2289,9 @@ fn parse_quant_binding(context: &mut Context) -> Result<Spanned<(Bind, Exp)>, Bo
     ))
 }
 
-fn make_builtin_call(loc: Loc, name: Symbol, type_args: Option<Vec<Type>>, args: Vec<Exp>) -> Exp {
-    let maccess = sp(loc, NameAccessChain_::One(sp(loc, name)));
-    sp(loc, Exp_::Call(maccess, None, type_args, sp(loc, args)))
+fn make_builtin_call(loc: Loc, name: Symbol, args: Vec<Exp>) -> Exp {
+    let maccess = sp(loc, NameAccessChain_::single(sp(loc, name)));
+    sp(loc, Exp_::Call(maccess, sp(loc, args)))
 }
 
 //**************************************************************************************************
@@ -2195,7 +2312,7 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
 
 fn parse_type_(
     context: &mut Context,
-    whitespace_sensitive_ty_args: bool,
+    _whitespace_sensitive_ty_args: bool,
 ) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
@@ -2254,16 +2371,13 @@ fn parse_type_(
             ));
         }
         _ => {
-            let tn = parse_name_access_chain(context, || "a type name")?;
-            let start_loc = context.tokens.start_loc();
-            let tys = if context.tokens.peek() == Tok::Less
-                && (!whitespace_sensitive_ty_args || tn.loc.end() as usize == start_loc)
-            {
-                parse_comma_list(context, Tok::Less, Tok::Greater, parse_type, "a type")?
-            } else {
-                vec![]
-            };
-            Type_::Apply(Box::new(tn), tys)
+            let tn = parse_name_access_chain(
+                context,
+                /* macros */ false,
+                /* tyargs */ true,
+                || "a type name",
+            )?;
+            Type_::Apply(Box::new(tn))
         }
     };
     let end_loc = context.tokens.previous_end_loc();
@@ -2424,7 +2538,6 @@ fn parse_struct_type_parameters(
 //          "fun"
 //          <FunctionDefName> "(" Comma<Parameter> ")"
 //          (":" <Type>)?
-//          ("acquires" <NameAccessChain> ("," <NameAccessChain>)*)?
 //          ("{" <Sequence> "}" | ";")
 //
 fn parse_function_decl(
@@ -2460,24 +2573,6 @@ fn parse_function_decl(
     } else {
         sp(name.loc(), Type_::Unit)
     };
-
-    // ("acquires" (<NameAccessChain> ",")* <NameAccessChain> ","?
-    let mut acquires = vec![];
-    if match_token(context.tokens, Tok::Acquires)? {
-        let follows_acquire = |tok| matches!(tok, Tok::Semicolon | Tok::LBrace);
-        loop {
-            acquires.push(parse_name_access_chain(context, || {
-                "a resource struct name"
-            })?);
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-            consume_token(context.tokens, Tok::Comma)?;
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-        }
-    }
 
     let body = match native {
         Some(loc) => {
@@ -2977,7 +3072,18 @@ fn parse_friend_decl(
 ) -> Result<FriendDecl, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     consume_token(context.tokens, Tok::Friend)?;
-    let friend = parse_name_access_chain(context, || "a friend declaration")?;
+    let friend = parse_name_access_chain(
+        context,
+        /* macros */ false,
+        /* tyargs */ false,
+        || "a friend declaration",
+    )?;
+    if friend.value.is_macro().is_some() || friend.value.has_tyargs() {
+        context.env.add_diag(diag!(
+            Syntax::InvalidName,
+            (friend.loc, "Invalid 'friend' name")
+        ))
+    }
     consume_token(context.tokens, Tok::Semicolon)?;
     let loc = make_loc(
         context.tokens.file_hash(),
@@ -3019,9 +3125,19 @@ fn parse_use_decl(
     let use_ = match context.tokens.peek() {
         Tok::Fun => {
             consume_token(context.tokens, Tok::Fun).unwrap();
-            let function = parse_name_access_chain(context, || "a function name")?;
+            let function = parse_name_access_chain(
+                context,
+                /* macros */ false,
+                /* tyargs */ false,
+                || "a function name",
+            )?;
             consume_token(context.tokens, Tok::As)?;
-            let ty = parse_name_access_chain(context, || "a type name")?;
+            let ty = parse_name_access_chain(
+                context,
+                /* macros */ false,
+                /* tyargs */ false,
+                || "a type name with no type arguments",
+            )?;
             consume_token(context.tokens, Tok::Period)?;
             let method = parse_identifier(context)?;
             Use::Fun {
