@@ -458,6 +458,8 @@ jobs:
       - name: Check Bridge EVM Unit Tests
         shell: bash
         working-directory: bridge/evm
+        env:
+          INFURA_API_KEY: ${{ secrets.INFURA_API_KEY }}
         run: |
           forge clean
           forge test --ffi
