@@ -282,6 +282,7 @@ mod test {
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+        register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
