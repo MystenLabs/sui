@@ -337,9 +337,12 @@ impl Compiler {
         let (mut source_text, pprog, comments) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
 
-        source_text
-            .iter_mut()
-            .for_each(|(_, (path, _))| *path = vfs_to_original_path[path]);
+        source_text.iter_mut().for_each(|(_, (path, _))| {
+            *path = vfs_to_original_path
+                .get(path)
+                .copied()
+                .unwrap_or_else(|| *path)
+        });
 
         for (fhash, (fname, contents)) in source_text.iter() {
             compilation_env.add_source_file(*fhash, *fname, contents.clone())
