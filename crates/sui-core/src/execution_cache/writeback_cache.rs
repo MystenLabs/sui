@@ -811,11 +811,19 @@ impl WritebackCache {
     fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
         // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
         // state when clear_state_end_of_epoch_impl is called.
-        let (_, outputs) = self
-            .dirty
-            .pending_transaction_writes
-            .remove(tx)
-            .expect("transaction must exist");
+        // Futher, once we do this, we can delay the insertion of the transaction into
+        // pending_consensus_transactions until after the transaction has executed.
+        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
+            assert!(
+                !self.is_tx_already_executed(tx).expect("read cannot fail"),
+                "attempt to revert committed transaction"
+            );
+
+            // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
+            // can happen before the transaction executes.
+            info!("Not reverting {:?} as it was not executed", tx);
+            return Ok(());
+        };
 
         for (object_id, object) in outputs.written.iter() {
             if object.is_package() {
@@ -824,6 +832,7 @@ impl WritebackCache {
             }
         }
 
+        // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
 
@@ -884,20 +893,9 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    // TOOO: we may not need this function now that all writes go through the cache
-    fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]) {
-        for package_id in system_package_ids {
-            if let Some(p) = self
-                .store
-                .get_object(package_id)
-                .expect("Failed to update system packages")
-            {
-                assert!(p.is_package());
-                self.packages.insert(*package_id, PackageObject::new(p));
-            }
-            // It's possible that a package is not found if it's newly added system package ID
-            // that hasn't got created yet. This should be very very rare though.
-        }
+    fn force_reload_system_packages(&self, _system_package_ids: &[ObjectID]) {
+        // This is a no-op because all writes go through the cache, therefore it can never
+        // be incoherent
     }
 
     // get_object and variants.

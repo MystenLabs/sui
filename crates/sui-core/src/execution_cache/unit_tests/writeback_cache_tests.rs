@@ -776,7 +776,7 @@ async fn test_missing_reverts_panic() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "transaction must exist")]
+#[should_panic(expected = "attempt to revert committed transaction")]
 async fn test_revert_committed_tx_panics() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
@@ -784,6 +784,21 @@ async fn test_revert_committed_tx_panics() {
         let tx1 = s.do_tx().await;
         s.commit(tx1).await.unwrap();
         s.cache().revert_state_update(&tx1).unwrap();
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_revert_unexecuted_tx() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1]);
+        let tx1 = s.do_tx().await;
+        s.commit(tx1).await.unwrap();
+        let random_digest = TransactionDigest::random();
+        // must not panic - pending_consensus_transactions is a super set of
+        // executed but un-checkpointed transactions
+        s.cache().revert_state_update(&random_digest).unwrap();
     })
     .await;
 }
