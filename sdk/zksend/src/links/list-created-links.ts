@@ -61,27 +61,31 @@ const ListCreatedLinksQuery = graphql(`
 	}
 `);
 
-export async function listCreatedLinks({
-	address,
-	cursor,
-	network,
-	contract = MAINNET_CONTRACT_IDS,
-	...linkOptions
-}: {
-	address: string;
-	contract?: ZkBagContractOptions;
-	cursor?: string;
-	network?: 'mainnet' | 'testnet';
-	// Link options:
-	host?: string;
-	path?: string;
-	client?: SuiClient;
-}) {
+export async function listCreatedLinks(
+	{
+		address,
+		cursor,
+		network,
+		contract = MAINNET_CONTRACT_IDS,
+		...linkOptions
+	}: {
+		address: string;
+		contract?: ZkBagContractOptions;
+		cursor?: string;
+		network?: 'mainnet' | 'testnet';
+		// Link options:
+		host?: string;
+		path?: string;
+		client?: SuiClient;
+	},
+	fetchFn?: typeof fetch,
+) {
 	const gqlClient = new SuiGraphQLClient({
 		url:
 			network === 'testnet'
 				? 'https://sui-testnet.mystenlabs.com/graphql'
 				: 'https://sui-mainnet.mystenlabs.com/graphql',
+		fetch: fetchFn,
 	});
 
 	const packageId = normalizeSuiAddress(contract.packageId);
