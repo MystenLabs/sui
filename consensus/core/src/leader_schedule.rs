@@ -11,11 +11,7 @@ use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 use consensus_config::{Authority, AuthorityIndex, Stake};
 
 use crate::{
-    context::Context, 
-    dag_state::DagState, 
-    leader_scoring::{ReputationScoreCalculator, ReputationScores}, 
-    universal_committer::UniversalCommitter,
-    Round
+    context::Context, dag_state::DagState, leader_scoring::{ReputationScoreCalculator, ReputationScores}, leader_scoring_strategy::{CertificateScoringStrategy, CertifiedVoteScoringStrategyV1, ScoringStrategy, VoteScoringStrategy}, universal_committer::UniversalCommitter, Round
 };
 
 /// The `LeaderSchedule` is responsible for producing the leader schedule across
@@ -95,10 +91,39 @@ impl LeaderSchedule {
             .scope_processing_time
             .with_label_values(&["ReputationScoreCalculator::calculate"])
             .start_timer();
+
+
+        // TODO: remove this once scoring strategy is settled
+        let scoring_strategy = if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
+            let scoring_strategy: Box<dyn ScoringStrategy> = match scoring_strategy.as_str() {
+                "vote" => {
+                    tracing::info!("Using scoring strategy VoteScoringStrategy for ReputationScoreCalculator");
+                    Box::new(VoteScoringStrategy {})
+                },
+                "certified_vote" => {
+                    tracing::info!("Using scoring strategy CertifiedVoteScoringStrategyV1 for ReputationScoreCalculator");
+                    Box::new(CertifiedVoteScoringStrategyV1 {})
+                },
+                "certificate" => {
+                    tracing::info!("Using scoring strategy CertificateScoringStrategy for ReputationScoreCalculator");
+                    Box::new(CertificateScoringStrategy {})
+                },
+                _ => { 
+                    tracing::info!("Using scoring strategy CertificateScoringStrategy for ReputationScoreCalculator");
+                    Box::new(CertificateScoringStrategy {})
+                }
+            };
+            scoring_strategy
+        } else {
+            tracing::info!("Using scoring strategy CertificateScoringStrategy for ReputationScoreCalculator");
+            Box::new(CertificateScoringStrategy {})
+        };
+
         let reputation_scores = ReputationScoreCalculator::new(
             self.context.clone(),
             committer,
             &unscored_subdags,
+            scoring_strategy
         )
         .calculate();
         drop(score_calculation_timer);

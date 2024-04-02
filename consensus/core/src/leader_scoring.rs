@@ -12,18 +12,18 @@ use std::{
 use consensus_config::AuthorityIndex;
 
 use crate::{
-    base_committer::BaseCommitter,
     block::{BlockAPI, BlockDigest, BlockRef, Slot, VerifiedBlock},
     commit::CommitRange,
     context::Context,
+    leader_scoring_strategy::ScoringStrategy,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     universal_committer::UniversalCommitter,
     CommittedSubDag, Round,
 };
 
 pub(crate) struct ReputationScoreCalculator<'a> {
-    context: Arc<Context>,
-    unscored_blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    unscored_subdag: UnscoredSubdag,
+    scoring_strategy: Box<dyn ScoringStrategy>,
     committer: &'a UniversalCommitter,
     pub commit_range: CommitRange,
     pub scores_per_authority: Vec<u64>,
@@ -34,20 +34,18 @@ impl<'a> ReputationScoreCalculator<'a> {
         context: Arc<Context>,
         committer: &'a UniversalCommitter,
         unscored_subdags: &Vec<CommittedSubDag>,
+        scoring_strategy: Box<dyn ScoringStrategy>,
     ) -> Self {
         let num_authorities = context.committee.size();
         let scores_per_authority = vec![0_u64; num_authorities];
-
-        let unscored_blocks = unscored_subdags
-            .iter()
-            .flat_map(|subdag| subdag.blocks.iter())
-            .map(|block| (block.reference(), block.clone()))
-            .collect::<BTreeMap<_, _>>();
 
         assert!(
             !unscored_subdags.is_empty(),
             "Attempted to calculate scores with no unscored subdags"
         );
+
+        let unscored_subdag = UnscoredSubdag::new(context.clone(), unscored_subdags);
+
         let commit_indexes = unscored_subdags
             .iter()
             .map(|subdag| subdag.commit_index)
@@ -57,26 +55,18 @@ impl<'a> ReputationScoreCalculator<'a> {
         let commit_range = CommitRange::new(min_commit_index..max_commit_index);
 
         Self {
-            context,
-            unscored_blocks,
+            unscored_subdag,
             committer,
             commit_range,
+            scoring_strategy,
             scores_per_authority,
         }
     }
 
     pub(crate) fn calculate(&mut self) -> ReputationScores {
-        assert!(
-            !self.unscored_blocks.is_empty(),
-            "Attempted to calculate scores with no blocks from unscored subdags"
-        );
-        let leader_rounds = self
-            .unscored_blocks
-            .keys()
-            .map(|block_ref| block_ref.round)
-            .filter(|round| *round != 0); // Skip genesis round
-        let min_leader_round = leader_rounds.clone().min().unwrap();
-        let max_leader_round = leader_rounds.clone().max().unwrap();
+        let leader_rounds = self.unscored_subdag.get_leader_rounds();
+        let min_leader_round = *leader_rounds.iter().min().unwrap();
+        let max_leader_round = *leader_rounds.iter().max().unwrap();
 
         // We will search for certificates for leaders up to R - 3.
         for leader_round in min_leader_round..=(max_leader_round - 3) {
@@ -86,7 +76,11 @@ impl<'a> ReputationScoreCalculator<'a> {
                 );
                 if let Some(leader_slot) = committer.elect_leader(leader_round) {
                     tracing::info!("Calculating score for leader {leader_slot}");
-                    self.calculate_scores_for_leader(leader_slot, committer);
+                    self.add_scores(self.scoring_strategy.calculate_scores_for_leader(
+                        &self.unscored_subdag,
+                        leader_slot,
+                        committer,
+                    ))
                 }
             }
         }
@@ -94,152 +88,14 @@ impl<'a> ReputationScoreCalculator<'a> {
         ReputationScores::new(self.commit_range.clone(), self.scores_per_authority.clone())
     }
 
-    pub(crate) fn calculate_scores_for_leader(
-        &mut self,
-        leader_slot: Slot,
-        committer: &BaseCommitter,
-    ) {
-        let wave = committer.wave_number(leader_slot.round);
-        let decision_round = committer.decision_round(wave);
+    // TODO(arun): Move this to ReputationScores and add an add_score function to
+    // reptuation scores as well
+    fn add_scores(&mut self, scores: Vec<u64>) {
+        assert_eq!(scores.len(), self.scores_per_authority.len());
 
-        let leader_blocks = self.get_blocks_at_slot(leader_slot);
-
-        if leader_blocks.is_empty() {
-            tracing::info!("[{}] No block for leader slot {leader_slot} in this set of unscored committed subdags, skip scoring", self.context.own_index);
-            return;
+        for (authority_idx, score) in scores.iter().enumerate() {
+            self.scores_per_authority[authority_idx] += *score;
         }
-
-        // At this point we are guaranteed that there is only one leader per slot
-        // because we are operating on committed subdags.
-        assert!(leader_blocks.len() == 1);
-
-        let leader_block = leader_blocks.first().unwrap();
-
-        // TODO(arun): move to a separate "scoring strategy" method. Will need to do points
-        // for votes connected to certificates (certified vote). Can experiment with
-        // point per certificate or 1 point per 2f+1 certs
-        let decision_blocks = self.get_blocks_at_round(decision_round);
-        let mut all_votes = HashMap::new();
-        for potential_cert in decision_blocks {
-            let authority = potential_cert.reference().author;
-            if self.is_certificate(&potential_cert, leader_block, &mut all_votes) {
-                tracing::info!(
-                    "Found a certificate for leader {leader_block} from authority {authority}"
-                );
-                tracing::info!(
-                    "[{}] scores +1 reputation for {authority}!",
-                    self.context.own_index
-                );
-                self.add_score(authority, 1);
-            }
-        }
-    }
-
-    /// Adds the provided `score` to the existing score for the provided `authority`
-    fn add_score(&mut self, authority_idx: AuthorityIndex, score: u64) {
-        self.scores_per_authority[authority_idx] += score;
-    }
-
-    fn find_supported_block(&self, leader_slot: Slot, from: &VerifiedBlock) -> Option<BlockRef> {
-        if from.round() < leader_slot.round {
-            return None;
-        }
-        for ancestor in from.ancestors() {
-            if Slot::from(*ancestor) == leader_slot {
-                return Some(*ancestor);
-            }
-            // Weak links may point to blocks with lower round numbers than strong links.
-            if ancestor.round <= leader_slot.round {
-                continue;
-            }
-            if let Some(ancestor) = self.get_block(ancestor) {
-                if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
-                    return Some(support);
-                }
-            } else {
-                // TODO(arun): Add unit test for this case.
-                tracing::info!(
-                    "Potential vote's ancestor block not found in unscored committed subdags: {:?}",
-                    ancestor
-                );
-                return None;
-            }
-        }
-        None
-    }
-
-    fn is_vote(&self, potential_vote: &VerifiedBlock, leader_block: &VerifiedBlock) -> bool {
-        let reference = leader_block.reference();
-        let leader_slot = Slot::from(reference);
-        self.find_supported_block(leader_slot, potential_vote) == Some(reference)
-    }
-
-    fn is_certificate(
-        &self,
-        potential_certificate: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-        all_votes: &mut HashMap<BlockRef, bool>,
-    ) -> bool {
-        let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-        for reference in potential_certificate.ancestors() {
-            let is_vote = if let Some(is_vote) = all_votes.get(reference) {
-                *is_vote
-            } else if let Some(potential_vote) = self.get_block(reference) {
-                let is_vote = self.is_vote(&potential_vote, leader_block);
-                all_votes.insert(*reference, is_vote);
-                is_vote
-            } else {
-                tracing::info!(
-                    "Potential vote not found in unscored committed subdags: {:?}",
-                    reference
-                );
-                false
-            };
-
-            if is_vote {
-                tracing::trace!("{reference} is a vote for {leader_block}");
-                if votes_stake_aggregator.add(reference.author, &self.context.committee) {
-                    tracing::trace!(
-                        "{potential_certificate} is a certificate for leader {leader_block}"
-                    );
-                    return true;
-                }
-            } else {
-                tracing::trace!("{reference} is not a vote for {leader_block}",);
-            }
-        }
-        tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
-        false
-    }
-
-    fn get_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.unscored_blocks.range((
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    fn get_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.unscored_blocks.range((
-            Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
-            Excluded(BlockRef::new(
-                round + 1,
-                AuthorityIndex::ZERO,
-                BlockDigest::MIN,
-            )),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    fn get_block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
-        self.unscored_blocks.get(block_ref).cloned()
     }
 }
 
@@ -306,6 +162,146 @@ impl ReputationScores {
     }
 }
 
+pub(crate) struct UnscoredSubdag {
+    pub(crate) context: Arc<Context>,
+    pub(crate) blocks: BTreeMap<BlockRef, VerifiedBlock>,
+}
+
+impl UnscoredSubdag {
+    pub(crate) fn new(context: Arc<Context>, subdags: &[CommittedSubDag]) -> Self {
+        let blocks = subdags
+            .iter()
+            .flat_map(|subdag| subdag.blocks.iter())
+            .map(|block| (block.reference(), block.clone()))
+            .collect::<BTreeMap<_, _>>();
+
+        assert!(
+            !blocks.is_empty(),
+            "Attempted to create unscored subdag with no blocks"
+        );
+
+        Self { context, blocks }
+    }
+
+    pub(crate) fn get_leader_rounds(&self) -> Vec<Round> {
+        self.blocks
+            .keys()
+            .map(|block_ref| block_ref.round)
+            .filter(|round| *round != 0) // Skip genesis round
+            .collect::<Vec<_>>()
+    }
+
+    pub(crate) fn find_supported_block(
+        &self,
+        leader_slot: Slot,
+        from: &VerifiedBlock,
+    ) -> Option<BlockRef> {
+        if from.round() < leader_slot.round {
+            return None;
+        }
+        for ancestor in from.ancestors() {
+            if Slot::from(*ancestor) == leader_slot {
+                return Some(*ancestor);
+            }
+            // Weak links may point to blocks with lower round numbers than strong links.
+            if ancestor.round <= leader_slot.round {
+                continue;
+            }
+            if let Some(ancestor) = self.get_block(ancestor) {
+                if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
+                    return Some(support);
+                }
+            } else {
+                // TODO(arun): Add unit test for this case.
+                tracing::info!(
+                    "Potential vote's ancestor block not found in unscored committed subdags: {:?}",
+                    ancestor
+                );
+                return None;
+            }
+        }
+        None
+    }
+
+    pub(crate) fn is_vote(
+        &self,
+        potential_vote: &VerifiedBlock,
+        leader_block: &VerifiedBlock,
+    ) -> bool {
+        let reference = leader_block.reference();
+        let leader_slot = Slot::from(reference);
+        self.find_supported_block(leader_slot, potential_vote) == Some(reference)
+    }
+
+    pub(crate) fn is_certificate(
+        &self,
+        potential_certificate: &VerifiedBlock,
+        leader_block: &VerifiedBlock,
+        all_votes: &mut HashMap<BlockRef, bool>,
+    ) -> bool {
+        let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
+        for reference in potential_certificate.ancestors() {
+            let is_vote = if let Some(is_vote) = all_votes.get(reference) {
+                *is_vote
+            } else if let Some(potential_vote) = self.get_block(reference) {
+                let is_vote = self.is_vote(&potential_vote, leader_block);
+                all_votes.insert(*reference, is_vote);
+                is_vote
+            } else {
+                tracing::info!(
+                    "Potential vote not found in unscored committed subdags: {:?}",
+                    reference
+                );
+                false
+            };
+
+            if is_vote {
+                tracing::trace!("{reference} is a vote for {leader_block}");
+                if votes_stake_aggregator.add(reference.author, &self.context.committee) {
+                    tracing::trace!(
+                        "{potential_certificate} is a certificate for leader {leader_block}"
+                    );
+                    return true;
+                }
+            } else {
+                tracing::trace!("{reference} is not a vote for {leader_block}",);
+            }
+        }
+        tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
+        false
+    }
+
+    pub(crate) fn get_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![];
+        for (_block_ref, block) in self.blocks.range((
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+        )) {
+            blocks.push(block.clone())
+        }
+        blocks
+    }
+
+    pub(crate) fn get_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![];
+        for (_block_ref, block) in self.blocks.range((
+            Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
+            Excluded(BlockRef::new(
+                round + 1,
+                AuthorityIndex::ZERO,
+                BlockDigest::MIN,
+            )),
+        )) {
+            blocks.push(block.clone())
+        }
+        blocks
+    }
+
+    pub(crate) fn get_block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
+        self.blocks.get(block_ref).cloned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use parking_lot::RwLock;
@@ -315,6 +311,7 @@ mod tests {
         block::{timestamp_utc_ms, BlockTimestampMs, TestBlock},
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
+        leader_scoring_strategy::CertificateScoringStrategy,
         storage::mem_store::MemStore,
         universal_committer::universal_committer_builder::UniversalCommitterBuilder,
     };
@@ -443,8 +440,12 @@ mod tests {
             timestamp_utc_ms(),
             commit_index,
         )];
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &committer, &unscored_subdags);
+        let mut calculator = ReputationScoreCalculator::new(
+            context.clone(),
+            &committer,
+            &unscored_subdags,
+            Box::new(CertificateScoringStrategy {}),
+        );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
         assert_eq!(scores.commit_range, CommitRange::new(1..1));
@@ -472,15 +473,19 @@ mod tests {
         .build();
 
         let unscored_subdags = vec![];
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &committer, &unscored_subdags);
+        let mut calculator = ReputationScoreCalculator::new(
+            context.clone(),
+            &committer,
+            &unscored_subdags,
+            Box::new(CertificateScoringStrategy {}),
+        );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![0, 0, 0, 0]);
         assert_eq!(scores.commit_range, CommitRange::new(0..0));
     }
 
     #[test]
-    #[should_panic(expected = "Attempted to calculate scores with no blocks from unscored subdags")]
+    #[should_panic(expected = "Attempted to create unscored subdag with no blocks")]
     fn test_reputation_score_calculator_no_subdag_blocks() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
@@ -507,8 +512,12 @@ mod tests {
             timestamp_utc_ms(),
             1,
         )];
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &committer, &unscored_subdags);
+        let mut calculator = ReputationScoreCalculator::new(
+            context.clone(),
+            &committer,
+            &unscored_subdags,
+            Box::new(CertificateScoringStrategy {}),
+        );
         calculator.calculate();
     }
 
@@ -586,8 +595,12 @@ mod tests {
             timestamp_utc_ms(),
             commit_index,
         )];
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &committer, &unscored_subdags);
+        let mut calculator = ReputationScoreCalculator::new(
+            context.clone(),
+            &committer,
+            &unscored_subdags,
+            Box::new(CertificateScoringStrategy {}),
+        );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
         assert_eq!(scores.commit_range, CommitRange::new(1..1));
