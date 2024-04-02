@@ -77,6 +77,7 @@ module bridge::treasury {
         let address_bytes = hex::decode(ascii::into_bytes(type_name::get_address(&type_name)));
         let coin_address = address::from_bytes(address_bytes);
         // Make sure upgrade cap is for the Coin package
+        // FIXME: add test
         assert!(object::id_to_address(&package::upgrade_package(&uc)) == coin_address, EInvalidUpgradeCap);
         let registration = ForeignTokenRegistration {
             type_name,

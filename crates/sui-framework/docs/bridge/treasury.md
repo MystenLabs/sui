@@ -349,6 +349,7 @@ title: Module `0xb::treasury`
     <b>let</b> address_bytes = <a href="../sui-framework/hex.md#0x2_hex_decode">hex::decode</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>)));
     <b>let</b> coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is for the Coin <a href="../sui-framework/package.md#0x2_package">package</a>
+    // FIXME: add test
     <b>assert</b>!(<a href="../sui-framework/object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="../sui-framework/package.md#0x2_package_upgrade_package">package::upgrade_package</a>(&uc)) == coin_address, <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>);
     <b>let</b> registration = <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
         <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,

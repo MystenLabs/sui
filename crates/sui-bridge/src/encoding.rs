@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::AddTokensOnSuiAction;
 use crate::types::AssetPriceUpdateAction;
 use crate::types::BlocklistCommitteeAction;
 use crate::types::BridgeAction;
@@ -20,6 +21,7 @@ pub const EMERGENCY_BUTTON_MESSAGE_VERSION: u8 = 1;
 pub const LIMIT_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const ASSET_PRICE_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const EVM_CONTRACT_UPGRADE_MESSAGE_VERSION: u8 = 1;
+pub const ADD_TOKENS_ON_SUI_MESSAGE_VERSION: u8 = 1;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 
@@ -273,6 +275,53 @@ impl BridgeMessageEncoding for EvmContractUpgradeAction {
     }
 }
 
+impl BridgeMessageEncoding for AddTokensOnSuiAction {
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Add message type
+        bytes.push(BridgeActionType::AddTokensOnSui as u8);
+        // Add message version
+        bytes.push(ADD_TOKENS_ON_SUI_MESSAGE_VERSION);
+        // Add nonce
+        bytes.extend_from_slice(&self.nonce.to_be_bytes());
+        // Add chain id
+        bytes.push(self.chain_id as u8);
+
+        // Add payload bytes
+        bytes.extend_from_slice(&self.as_payload_bytes());
+
+        bytes
+    }
+
+    fn as_payload_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Add native
+        bytes.push(self.native as u8);
+        // Add token ids
+        // Unwrap: bcs serialization should not fail
+        bytes.extend_from_slice(&bcs::to_bytes(&self.token_ids).unwrap());
+
+        // Add token type names
+        // Unwrap: bcs serialization should not fail
+        bytes.extend_from_slice(
+            &bcs::to_bytes(
+                &self
+                    .token_type_names
+                    .iter()
+                    .map(|m| m.to_canonical_string(false))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap(),
+        );
+
+        // Add token prices
+        // Unwrap: bcs serialization should not fail
+        bytes.extend_from_slice(&bcs::to_bytes(&self.token_prices).unwrap());
+
+        bytes
+    }
+}
+
 impl BridgeAction {
     /// Convert to message bytes to verify in Move and Solidity
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -306,6 +355,7 @@ mod tests {
     use sui_types::bridge::BridgeChainId;
     use sui_types::bridge::TOKEN_ID_BTC;
     use sui_types::bridge::TOKEN_ID_USDC;
+    use sui_types::TypeTag;
 
     use super::*;
 
@@ -802,6 +852,37 @@ mod tests {
             hash.to_vec(),
             Hex::decode("b352508c301a37bb1b68a75dd0fc42b6f692b2650818631c8f8a4d4d3e5bef46")
                 .unwrap(),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_message_encoding_regression_add_coins_on_sui() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+
+        let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+            nonce: 0,
+            chain_id: BridgeChainId::SuiLocalTest,
+            native: false,
+            token_ids: vec![1, 2, 3, 4],
+            token_type_names: vec![
+                TypeTag::from_str("0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC").unwrap(),
+                TypeTag::from_str("0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH").unwrap(),
+                TypeTag::from_str("0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC").unwrap(),
+                TypeTag::from_str("0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT").unwrap(),
+            ],
+            token_prices: vec![
+                500_000_000u64,
+                30_000_000u64,
+                1_000u64,
+                1_000u64,
+            ]
+        });
+        let encoded_bytes = action.to_bytes();
+
+        assert_eq!(
+            Hex::encode(encoded_bytes),
+            "5355495f4252494447455f4d4553534147450601000000000000000003000401020304044a396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434a373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484c353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434c343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
         );
         Ok(())
     }

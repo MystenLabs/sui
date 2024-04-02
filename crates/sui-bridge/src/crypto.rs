@@ -119,7 +119,6 @@ pub struct BridgeAuthoritySignInfo {
 impl BridgeAuthoritySignInfo {
     pub fn new(msg: &BridgeAction, secret: &BridgeAuthorityKeyPair) -> Self {
         let msg_bytes = msg.to_bytes();
-
         Self {
             authority_pub_key: secret.public().clone(),
             signature: secret.sign_recoverable_with_hash::<Keccak256>(&msg_bytes),
