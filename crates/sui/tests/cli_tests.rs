@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
+use move_package::lock_file::schema::ManagedPackage;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Deserialize;
 use serde_json::json;
@@ -2028,43 +2029,23 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let content = std::fs::read_to_string(lock_file.clone())?;
     eprintln!("content: {}", content);
 
-    let content = std::fs::read_to_string(lock_file)?;
-    // Deserialize lock contents and compare.
-    #[derive(Deserialize)]
-    struct Config {
-        env: Env,
-    }
-
-    #[derive(Deserialize)]
-    struct Env {
-        localnet: PackageInfo,
-    }
-
-    #[derive(Deserialize)]
-    struct PackageInfo {
-        #[serde(rename = "original-published-id")]
-        original_published_id: String,
-        #[serde(rename = "latest-published-id")]
-        latest_published_id: String,
-        #[serde(rename = "published-version")]
-        version: String,
-    }
-
-    let info = toml::de::from_str::<Config>(&content).expect("Deserializing package info");
+    let mut lock_file = std::fs::File::open(lock_file).unwrap();
+    let envs = ManagedPackage::read(&mut lock_file).unwrap();
+    let localnet = envs.get("localnet").unwrap();
     // Original ID should correspond to first published package.
     assert_eq!(
         expect_original_id.to_string(),
-        info.env.localnet.original_published_id,
+        localnet.original_published_id,
     );
     // Upgrade ID should correspond to upgraded package.
     assert_eq!(
         expect_upgrade_latest_id.to_string(),
-        info.env.localnet.latest_published_id,
+        localnet.latest_published_id,
     );
     // Version should correspond to upgraded package.
     assert_eq!(
         expect_upgrade_version.value(),
-        info.env.localnet.version.parse::<u64>().unwrap(),
+        localnet.version.parse::<u64>().unwrap(),
     );
     Ok(())
 }
