@@ -6896,6 +6896,7 @@ dependencies = [
  "toml 0.5.10",
  "toml_edit 0.14.4",
  "treeline",
+ "vfs",
  "walkdir",
  "whoami",
 ]
