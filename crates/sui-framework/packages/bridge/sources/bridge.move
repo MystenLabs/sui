@@ -480,6 +480,7 @@ module bridge::bridge {
     }
 
     fun execute_add_tokens_on_sui(inner: &mut BridgeInner, payload: AddTokenOnSui) {
+        // FIXME: assert native_token to be false and add test
         let native_token = payload.is_native();
         let mut token_ids = payload.token_ids();
         let mut token_type_names = payload.token_type_names();

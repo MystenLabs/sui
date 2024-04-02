@@ -49,7 +49,7 @@ impl BridgeClient {
         self.committee = committee;
     }
 
-    // Important: the paths need to match the ones in mod.rs
+    // Important: the paths need to match the ones in server/mod.rs
     fn bridge_action_to_path(event: &BridgeAction) -> String {
         match event {
             BridgeAction::SuiToEthBridgeAction(e) => format!(
@@ -107,6 +107,32 @@ impl BridgeClient {
                     let call_data = Hex::encode(a.call_data.clone());
                     format!("{}/{}", path, call_data)
                 }
+            }
+            BridgeAction::AddTokensOnSuiAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let native = if a.native { "1" } else { "0" };
+                let token_ids = a
+                    .token_ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_type_names = a
+                    .token_type_names
+                    .iter()
+                    .map(|name| name.to_canonical_string(true))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_prices = a
+                    .token_prices
+                    .iter()
+                    .map(|price| price.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(
+                    "sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}"
+                )
             }
         }
     }
@@ -183,6 +209,7 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDT};
+    use sui_types::TypeTag;
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 
     #[tokio::test]
@@ -522,6 +549,23 @@ mod tests {
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
             "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/5cd8a76b000000000000000000000000000000000000000000000000000000000000002a",
+        );
+
+        let action = BridgeAction::AddTokensOnSuiAction(crate::types::AddTokensOnSuiAction {
+            nonce: 3,
+            chain_id: BridgeChainId::SuiTestnet,
+            native: false,
+            token_ids: vec![99, 100, 101],
+            token_type_names: vec![
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").unwrap(),
+            ],
+            token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/add_tokens_on_sui/1/3/0/99,100,101/0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3/1000000000,2000000000,3000000000",
         );
     }
 }

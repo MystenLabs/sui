@@ -57,6 +57,7 @@ pub const APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST: u64 = 5001;
 pub const APPROVAL_THRESHOLD_LIMIT_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE: u64 = 5001;
 pub const APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE: u64 = 5001;
+pub const APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI: u64 = 5001;
 
 // const for initial token ids for convenience
 pub const TOKEN_ID_SUI: u8 = 0;
@@ -356,7 +357,7 @@ pub struct MoveTypeBridgeTreasury {
     pub waiting_room: Bag,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeTokenMetadata {
     pub id: u8,

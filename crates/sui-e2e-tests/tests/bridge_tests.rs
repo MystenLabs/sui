@@ -55,7 +55,6 @@ async fn test_committee_registration() {
     telemetry_subscribers::init_for_testing();
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .with_epoch_duration_ms(30000)
         .build_with_bridge(false)
         .await;
 
@@ -76,7 +75,7 @@ async fn test_committee_registration() {
     );
 
     test_cluster
-        .wait_for_next_epoch_and_assert_bridge_committee_initialized()
+        .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
         .await;
 }
 
@@ -84,10 +83,10 @@ async fn test_committee_registration() {
 async fn test_bridge_api_compatibility() {
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
+    test_cluster.trigger_reconfiguration().await;
     let client = test_cluster.rpc_client();
     client.get_latest_bridge().await.unwrap();
     // TODO: assert fields in summary

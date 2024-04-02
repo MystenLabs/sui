@@ -1297,6 +1297,7 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: AddTokenOnSui) {
+    // FIXME: <b>assert</b> native_token <b>to</b> be <b>false</b> and add test
     <b>let</b> native_token = payload.is_native();
     <b>let</b> <b>mut</b> token_ids = payload.token_ids();
     <b>let</b> <b>mut</b> token_type_names = payload.token_type_names();
