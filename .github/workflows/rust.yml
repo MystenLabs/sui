@@ -270,6 +270,8 @@ jobs:
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and
   # otherwise not block pushes to main.
+  # Note that this no-op job is only when there is a strategy matrix.
+  # Other required jobs without strategy matrix do not need a no-op counterpart.
   test-notrust:
     name: test
     needs: diff
@@ -288,6 +290,8 @@ jobs:
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and
   # otherwise not block pushes to main.
+  # Note that this no-op job is needed when there is a strategy matrix.
+  # Other required jobs without strategy matrix do not need a no-op counterpart.
   test-extra-notrust:
     name: test-extra
     needs: diff

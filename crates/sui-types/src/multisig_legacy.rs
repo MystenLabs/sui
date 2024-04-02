@@ -86,8 +86,20 @@ impl Hash for MultiSigLegacy {
 }
 
 impl AuthenticatorTrait for MultiSigLegacy {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
-        Ok(())
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch_id: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> Result<(), SuiError> {
+        let multisig: MultiSig =
+            self.clone()
+                .try_into()
+                .map_err(|_| SuiError::InvalidSignature {
+                    error: "Invalid legacy multisig".to_string(),
+                })?;
+        multisig.get_zklogin_sigs()?.iter().try_for_each(|s| {
+            s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
+        })
     }
 
     fn verify_uncached_checks<T>(
