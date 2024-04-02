@@ -866,6 +866,8 @@ impl ToolCommand {
                                 "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
                             )
                             .ok(),
+                            google_project_id: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID")
+                                .ok(),
                             object_store_connection_limit: 200,
                             no_sign_request,
                             ..Default::default()

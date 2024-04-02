@@ -90,7 +90,9 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
     editions::{Edition, FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+    expansion::ast::{
+        self as E, Fields, ModuleIdent, ModuleIdent_, Mutability, Value, Value_, Visibility,
+    },
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
@@ -186,6 +188,8 @@ pub enum DefInfo {
         Type,
         /// Should displayed definition be preceded by `let`?
         bool,
+        /// Should displayed definition be preceded by `mut`?
+        bool,
     ),
     Const(
         /// Defining module
@@ -254,8 +258,6 @@ struct LocalDef {
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
     def_type: Type,
-    /// Is directly declared with `let` (i.e., not a parameter and not declared with unpack)?
-    with_let: bool,
 }
 
 /// Definition of a constant
@@ -436,11 +438,12 @@ impl fmt::Display for DefInfo {
                     type_to_ide_string(t)
                 )
             }
-            Self::Local(name, t, is_decl) => {
+            Self::Local(name, t, is_decl, is_mut) => {
+                let mut_str = if *is_mut { "mut " } else { "" };
                 if *is_decl {
-                    write!(f, "let {}: {}", name, type_to_ide_string(t))
+                    write!(f, "let {}{}: {}", mut_str, name, type_to_ide_string(t))
                 } else {
-                    write!(f, "{}: {}", name, type_to_ide_string(t))
+                    write!(f, "{}{}: {}", mut_str, name, type_to_ide_string(t))
                 }
             }
             Self::Const(mod_ident, name, t, value) => {
@@ -2326,7 +2329,7 @@ impl<'a> TypingSymbolicator<'a> {
         // function body)
         let mut scope = OrdMap::new();
 
-        for (_, pname, ptype) in &fun.signature.parameters {
+        for (mutability, pname, ptype) in &fun.signature.parameters {
             self.add_type_id_use_def(ptype);
 
             // add definition of the parameter
@@ -2336,6 +2339,7 @@ impl<'a> TypingSymbolicator<'a> {
                 &mut scope,
                 ptype.clone(),
                 false, /* with_let */
+                matches!(mutability, Mutability::Mut(_)),
             );
         }
 
@@ -2398,7 +2402,9 @@ impl<'a> TypingSymbolicator<'a> {
         for_unpack: bool,
     ) {
         match &lval.value {
-            LValue_::Var { var, ty: t, .. } => {
+            LValue_::Var {
+                mut_, var, ty: t, ..
+            } => {
                 if define {
                     self.add_local_def(
                         &var.loc,
@@ -2406,6 +2412,8 @@ impl<'a> TypingSymbolicator<'a> {
                         scope,
                         *t.clone(),
                         define && !for_unpack, // with_let (only for simple definition, e.g., `let t = 1;``)
+                        mut_.map(|m| matches!(m, Mutability::Mut(_)))
+                            .unwrap_or_default(),
                     );
                 } else {
                     self.add_local_use_def(&var.value.name, &var.loc, scope)
@@ -2975,6 +2983,7 @@ impl<'a> TypingSymbolicator<'a> {
         scope: &mut OrdMap<Symbol, LocalDef>,
         def_type: Type,
         with_let: bool,
+        mutable: bool,
     ) {
         match get_start_loc(pos, self.files, self.file_id_mapping) {
             Some(name_start) => {
@@ -2987,7 +2996,6 @@ impl<'a> TypingSymbolicator<'a> {
                     LocalDef {
                         def_loc,
                         def_type: def_type.clone(),
-                        with_let,
                     },
                 );
                 // in other languages only one definition is allowed per scope but in move an (and
@@ -3015,7 +3023,7 @@ impl<'a> TypingSymbolicator<'a> {
                         fhash: pos.file_hash(),
                         start: name_start,
                     },
-                    DefInfo::Local(*name, def_type, with_let),
+                    DefInfo::Local(*name, def_type, with_let, mutable),
                 );
             }
             None => {
@@ -3182,7 +3190,7 @@ fn def_info_to_type_def_loc(
             find_struct(mod_outer_defs, mod_ident, name)
         }
         DefInfo::Field(_, _, _, t) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Local(_, t, _) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Local(_, t, _, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Const(_, _, t, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Module(_) => None,
     }
@@ -6554,6 +6562,87 @@ fn implicit_uses_test() {
         12,
         "object.move",
         "module sui::object",
+        None,
+    );
+}
+
+#[test]
+/// Tests mutability annotation added in Move 2024.
+fn let_mut_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/move-2024");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        &mut BTreeMap::new(),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/let_mut.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // mut param def
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        2,
+        23,
+        "let_mut.move",
+        2,
+        23,
+        "let_mut.move",
+        "mut p: u64",
+        None,
+    );
+    // mut param use
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        3,
+        8,
+        "let_mut.move",
+        2,
+        23,
+        "let_mut.move",
+        "mut p: u64",
+        None,
+    );
+    // mut var def
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        4,
+        16,
+        "let_mut.move",
+        4,
+        16,
+        "let_mut.move",
+        "let mut v: u64",
+        None,
+    );
+    // mut var use
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        5,
+        8,
+        "let_mut.move",
+        4,
+        16,
+        "let_mut.move",
+        "let mut v: u64",
         None,
     );
 }

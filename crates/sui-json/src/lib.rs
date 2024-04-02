@@ -35,6 +35,7 @@ use sui_types::base_types::{
 };
 use sui_types::id::{ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
 use sui_types::MOVE_STDLIB_ADDRESS;
 
@@ -154,7 +155,7 @@ impl SuiJsonValue {
             if let Some(s) = try_parse_string(layout, bytes) {
                 json!(s)
             } else {
-                let result = bcs::from_bytes_seed(layout, bytes).map_or_else(
+                let result = BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
                     |_| {
                         // fallback to array[u8] if fail to convert to json.
                         JsonValue::Array(

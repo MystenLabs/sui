@@ -1199,7 +1199,7 @@ mod tests {
 
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];
-        let _ = futures::future::join_all((0..30).map(|_| {
+        let _ = futures::future::join_all((0..number_of_coins).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),

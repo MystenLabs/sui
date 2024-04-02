@@ -19,7 +19,6 @@ use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-//#[cfg(any(test, feature = "test-utils"))]
 #[cfg(test)]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
 mod zk_login_authenticator_test;
@@ -89,11 +88,34 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
-    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult {
-        // Verify the max epoch in aux inputs is <= the current epoch of authority.
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> SuiResult {
+        // the checks here ensure that `current_epoch + max_epoch_upper_bound_delta >= self.max_epoch >= current_epoch`.
+        // 1. if the config for upper bound is set, ensure that the max epoch in signature is not larger than epoch + upper_bound.
+        if let Some(delta) = max_epoch_upper_bound_delta {
+            let max_epoch_upper_bound = epoch + delta;
+            if self.get_max_epoch() > max_epoch_upper_bound {
+                return Err(SuiError::InvalidSignature {
+                    error: format!(
+                        "ZKLogin max epoch too large {}, current epoch {}, max accepted: {}",
+                        self.get_max_epoch(),
+                        epoch,
+                        max_epoch_upper_bound
+                    ),
+                });
+            }
+        }
+        // 2. ensure that max epoch in signature is greater than the current epoch.
         if epoch > self.get_max_epoch() {
             return Err(SuiError::InvalidSignature {
-                error: format!("ZKLogin expired at epoch {}", self.get_max_epoch()),
+                error: format!(
+                    "ZKLogin expired at epoch {}, current epoch {}",
+                    self.get_max_epoch(),
+                    epoch
+                ),
             });
         }
         Ok(())
