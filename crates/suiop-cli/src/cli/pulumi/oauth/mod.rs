@@ -37,6 +37,7 @@ pub async fn get_oauth_token() -> Result<TokenResponse> {
         server_task.abort();
         Ok(token)
     } else {
+        server_task.abort();
         Err(anyhow::anyhow!("Failed to receive oauth token."))
     }
 }
