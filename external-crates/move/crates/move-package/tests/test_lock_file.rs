@@ -157,8 +157,19 @@ flavor = "sui"
 #[test]
 fn update_lock_file_toolchain_version() {
     let pkg = create_test_package().unwrap();
-    let lock_path = pkg.path().join("Move.lock");
+    let move_manifest = pkg.path().join("Move.toml");
+    // The 2024.beta in the manifest should override defaults.
+    fs::write(
+        &move_manifest,
+        r#"
+          [package]
+          name = "test"
+          edition = "2024.beta"
+        "#,
+    )
+    .unwrap();
 
+    let lock_path = pkg.path().join("Move.lock");
     let lock = LockFile::new(
         pkg.path().to_path_buf(),
         /* manifest_digest */ "42".to_string(),
@@ -184,7 +195,7 @@ fn update_lock_file_toolchain_version() {
 
     let expected = expect![[r#"
         compiler-version = "0.0.1"
-        edition = "2024.alpha"
+        edition = "2024.beta"
         flavor = "sui"
     "#]];
     expected.assert_eq(&toml);
