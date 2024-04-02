@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./utils/CommitteeUpgradeable.sol";
 import "./interfaces/ISuiBridge.sol";
 import "./interfaces/IBridgeVault.sol";
@@ -151,7 +152,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         );
 
         // Transfer the tokens from the contract to the vault
-        IERC20(tokenAddress).transferFrom(msg.sender, address(vault), amount);
+        SafeERC20.safeTransferFrom(IERC20(tokenAddress), msg.sender, address(vault), amount);
 
         // Adjust the amount
         uint64 suiAdjustedAmount = BridgeUtils.convertERC20ToSuiDecimal(
@@ -189,7 +190,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         wETH.deposit{value: amount}();
 
         // Transfer the wrapped ETH back to caller
-        wETH.transfer(address(vault), amount);
+        SafeERC20.safeTransfer(IERC20(address(wETH)), address(vault), amount);
 
         // Adjust the amount to emit.
         IBridgeConfig config = committee.config();
