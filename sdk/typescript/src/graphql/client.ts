@@ -64,7 +64,7 @@ export class SuiGraphQLClient<Queries extends Record<string, GraphQLDocument>> {
 		this.#url = url;
 		this.#queries = queries;
 		this.#headers = headers;
-		this.#fetch = fetchFn;
+		this.#fetch = (...args) => fetchFn(...args);
 	}
 
 	async query<Result = Record<string, unknown>, Variables = Record<string, unknown>>(

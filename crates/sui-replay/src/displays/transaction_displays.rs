@@ -9,6 +9,7 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
 use sui_types::execution_mode::ExecutionResult;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
     write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
@@ -321,26 +322,8 @@ fn resolve_value(
     executor: &Arc<dyn Executor + Send + Sync>,
     store_factory: &LocalExec,
 ) -> anyhow::Result<MoveValue> {
-    let mut layout_resolver = executor.type_layout_resolver(Box::new(store_factory.clone()));
-    match type_tag {
-        TypeTag::Vector(inner_type_tag) => {
-            let inner_layout = resolve_to_layout(inner_type_tag, executor, store_factory);
-            MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Vector(Box::from(inner_layout)))
-        }
-        TypeTag::Struct(struct_tag) => {
-            let annotated = layout_resolver.get_annotated_layout(struct_tag)?;
-            MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Struct(annotated))
-        }
-        TypeTag::Bool => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Bool),
-        TypeTag::U8 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U8),
-        TypeTag::U64 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U64),
-        TypeTag::U128 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U128),
-        TypeTag::Address => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Address),
-        TypeTag::Signer => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Signer),
-        TypeTag::U16 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U16),
-        TypeTag::U32 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U32),
-        TypeTag::U256 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U256),
-    }
+    let layout = resolve_to_layout(type_tag, executor, store_factory);
+    BoundedVisitor::deserialize_value(bytes, &layout)
 }
 
 pub fn transform_command_results_to_annotated(

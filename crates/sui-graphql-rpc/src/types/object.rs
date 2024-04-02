@@ -41,6 +41,7 @@ use sui_indexer::schema::{objects, objects_history, objects_snapshot};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
 use sui_package_resolver::Resolver;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
@@ -1352,7 +1353,9 @@ pub(crate) async fn deserialize_move_struct(
         return Err(Error::Internal("Object is not a move struct".to_string()));
     };
 
-    let move_struct = MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+    // TODO (annotated-visitor): Use custom visitors for extracting a dynamic field, and for
+    // creating a GraphQL MoveValue directly (not via an annotated visitor).
+    let move_struct = BoundedVisitor::deserialize_struct(contents, &layout).map_err(|e| {
         Error::Internal(format!(
             "Error deserializing move struct for type {}: {e}",
             struct_tag.to_canonical_string(/* with_prefix */ true)

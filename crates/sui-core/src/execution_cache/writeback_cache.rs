@@ -199,6 +199,9 @@ impl UncommittedData {
     }
 }
 
+// TODO: set this via the config
+static MAX_CACHE_SIZE: u64 = 10000;
+
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
@@ -206,6 +209,14 @@ struct CachedCommittedData {
 
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
+
+    transactions: MokaCache<TransactionDigest, Arc<VerifiedTransaction>>,
+
+    transaction_effects: MokaCache<TransactionEffectsDigest, Arc<TransactionEffects>>,
+
+    transaction_events: MokaCache<TransactionEventsDigest, Arc<TransactionEvents>>,
+
+    executed_effects_digests: MokaCache<TransactionDigest, TransactionEffectsDigest>,
 
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
@@ -215,21 +226,41 @@ struct CachedCommittedData {
 impl CachedCommittedData {
     fn new() -> Self {
         let object_cache = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
         let marker_cache = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let transactions = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let transaction_effects = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let transaction_events = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let executed_effects_digests = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
         let transaction_objects = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
 
         Self {
             object_cache,
             marker_cache,
+            transactions,
+            transaction_effects,
+            transaction_events,
+            executed_effects_digests,
             _transaction_objects: transaction_objects,
         }
     }
@@ -289,8 +320,8 @@ macro_rules! check_cache_entry_by_latest {
 impl WritebackCache {
     fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         let packages = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
         Self {
             dirty: UncommittedData::new(),
@@ -537,10 +568,15 @@ impl WritebackCache {
         let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
 
+        // insert transaction effects before executed_effects_digests so that there
+        // are never dangling entries in executed_effects_digests
         self.dirty
             .transaction_effects
             .insert(effects_digest, effects.clone());
 
+        // note: if events.data.is_empty(), then there are no events for this transaction. We
+        // store it anyway to avoid special cases in commint_transaction_outputs, and translate
+        // an empty events structure to None when reading.
         match self.dirty.transaction_events.entry(events.digest()) {
             DashMapEntry::Occupied(mut occupied) => {
                 occupied.get_mut().0.insert(tx_digest);
@@ -577,14 +613,30 @@ impl WritebackCache {
         epoch: EpochId,
         digest: TransactionDigest,
     ) -> SuiResult {
-        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(&digest) else {
+        fail_point_async!("writeback-cache-commit");
+
+        let DashMapEntry::Occupied(occupied) = self.dirty.pending_transaction_writes.entry(digest)
+        else {
             panic!("Attempt to commit unknown transaction {:?}", digest);
         };
 
-        // Flush writes to disk
+        let outputs = occupied.get().clone();
+
+        // Flush writes to disk before removing anything from dirty set. otherwise,
+        // a cache eviction could cause a value to disappear briefly, even if we insert to the
+        // cache before removing from the dirty set.
         self.store
             .write_transaction_outputs(epoch, outputs.clone())
             .await?;
+
+        // Cache transaction before removing entry from self.dirty to avoid
+        // unnecessary cache misses
+        self.cached
+            .transactions
+            .insert(digest, outputs.transaction.clone());
+
+        // releases lock on pending_transaction_writes
+        occupied.remove();
 
         // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
@@ -598,6 +650,43 @@ impl WritebackCache {
             events,
             ..
         } = &*outputs;
+
+        let tx_digest = *transaction.digest();
+        let effects_digest = effects.digest();
+        let events_digest = events.digest();
+
+        self.cached
+            .transaction_effects
+            .insert(effects_digest, effects.clone().into());
+        self.cached
+            .executed_effects_digests
+            .insert(digest, effects_digest);
+        self.cached
+            .transaction_events
+            .insert(events_digest, events.clone().into());
+
+        self.dirty
+            .transaction_effects
+            .remove(&effects_digest)
+            .expect("effects must exist");
+
+        match self.dirty.transaction_events.entry(events.digest()) {
+            DashMapEntry::Occupied(mut occupied) => {
+                let txns = &mut occupied.get_mut().0;
+                assert!(txns.remove(&tx_digest), "transaction must exist");
+                if txns.is_empty() {
+                    occupied.remove();
+                }
+            }
+            DashMapEntry::Vacant(_) => {
+                panic!("events must exist");
+            }
+        }
+
+        self.dirty
+            .executed_effects_digests
+            .remove(&tx_digest)
+            .expect("executed effects must exist");
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
@@ -639,32 +728,6 @@ impl WritebackCache {
                 &ObjectEntry::Wrapped,
             );
         }
-
-        let tx_digest = *transaction.digest();
-        let effects_digest = effects.digest();
-
-        self.dirty
-            .transaction_effects
-            .remove(&effects_digest)
-            .expect("effects must exist");
-
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                let txns = &mut occupied.get_mut().0;
-                assert!(txns.remove(&tx_digest), "transaction must exist");
-                if txns.is_empty() {
-                    occupied.remove();
-                }
-            }
-            DashMapEntry::Vacant(_) => {
-                panic!("events must exist");
-            }
-        }
-
-        self.dirty
-            .executed_effects_digests
-            .remove(&tx_digest)
-            .expect("executed effects must exist");
 
         Ok(())
     }
@@ -748,11 +811,19 @@ impl WritebackCache {
     fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
         // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
         // state when clear_state_end_of_epoch_impl is called.
-        let (_, outputs) = self
-            .dirty
-            .pending_transaction_writes
-            .remove(tx)
-            .expect("transaction must exist");
+        // Futher, once we do this, we can delay the insertion of the transaction into
+        // pending_consensus_transactions until after the transaction has executed.
+        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
+            assert!(
+                !self.is_tx_already_executed(tx).expect("read cannot fail"),
+                "attempt to revert committed transaction"
+            );
+
+            // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
+            // can happen before the transaction executes.
+            info!("Not reverting {:?} as it was not executed", tx);
+            return Ok(());
+        };
 
         for (object_id, object) in outputs.written.iter() {
             if object.is_package() {
@@ -761,6 +832,7 @@ impl WritebackCache {
             }
         }
 
+        // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
 
@@ -821,20 +893,9 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    // TOOO: we may not need this function now that all writes go through the cache
-    fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]) {
-        for package_id in system_package_ids {
-            if let Some(p) = self
-                .store
-                .get_object(package_id)
-                .expect("Failed to update system packages")
-            {
-                assert!(p.is_package());
-                self.packages.insert(*package_id, PackageObject::new(p));
-            }
-            // It's possible that a package is not found if it's newly added system package ID
-            // that hasn't got created yet. This should be very very rare though.
-        }
+    fn force_reload_system_packages(&self, _system_package_ids: &[ObjectID]) {
+        // This is a no-op because all writes go through the cache, therefore it can never
+        // be incoherent
     }
 
     // get_object and variants.
@@ -1006,6 +1067,8 @@ impl ExecutionCacheRead for WritebackCache {
                 Ok(
                     if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
                         CacheResult::Hit(Some(tx.transaction.clone()))
+                    } else if let Some(tx) = self.cached.transactions.get(digest) {
+                        CacheResult::Hit(Some(tx.clone()))
                     } else {
                         CacheResult::Miss
                     },
@@ -1029,6 +1092,8 @@ impl ExecutionCacheRead for WritebackCache {
                 Ok(
                     if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
                         CacheResult::Hit(Some(*digest))
+                    } else if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
+                        CacheResult::Hit(Some(digest))
                     } else {
                         CacheResult::Miss
                     },
@@ -1048,6 +1113,8 @@ impl ExecutionCacheRead for WritebackCache {
                 Ok(
                     if let Some(effects) = self.dirty.transaction_effects.get(digest) {
                         CacheResult::Hit(Some(effects.clone()))
+                    } else if let Some(effects) = self.cached.transaction_effects.get(digest) {
+                        CacheResult::Hit(Some((*effects).clone()))
                     } else {
                         CacheResult::Miss
                     },
@@ -1090,8 +1157,23 @@ impl ExecutionCacheRead for WritebackCache {
             event_digests,
             |digest| {
                 Ok(
-                    if let Some(events) = self.dirty.transaction_events.get(digest) {
-                        CacheResult::Hit(Some(events.1.clone()))
+                    if let Some(events) = self
+                        .dirty
+                        .transaction_events
+                        .get(digest)
+                        .map(|e| e.1.clone())
+                        .or_else(|| {
+                            self.cached
+                                .transaction_events
+                                .get(digest)
+                                .map(|e| (*e).clone())
+                        })
+                    {
+                        if events.data.is_empty() {
+                            CacheResult::Hit(None)
+                        } else {
+                            CacheResult::Hit(Some(events))
+                        }
                     } else {
                         CacheResult::Miss
                     },

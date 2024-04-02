@@ -9,9 +9,9 @@ use once_cell::sync::Lazy;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::annotated_value::MoveStruct;
 use sui_types::object::MoveObject;
 
 use self::models::*;
@@ -286,7 +286,7 @@ fn main() {
 
                 match layout {
                     Ok(l) => {
-                        let move_object = MoveStruct::simple_deserialize(&event.event_bcs, &l)
+                        let move_object = BoundedVisitor::deserialize_struct(&event.event_bcs, &l)
                             .map_err(|e| IndexerError::SerdeError(e.to_string()));
 
                         match move_object {
