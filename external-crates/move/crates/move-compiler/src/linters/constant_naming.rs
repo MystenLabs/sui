@@ -1,13 +1,20 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
+
 //! `ConstantNamingVisitor` enforces a naming convention for constants in Move programs,
 //! requiring them to follow an ALL_CAPS_SNAKE_CASE format. This lint checks each constant's name
 //! within a module against this convention.
 use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::{
+        codes::{custom, DiagnosticInfo, Severity},
+        WarningFilters,
+    },
     shared::{program_info::TypingProgramInfo, CompilationEnv},
-    typing::{ast as T, visitor::TypingVisitor},
+    typing::{
+        ast as T,
+        visitor::{TypingVisitorConstructor, TypingVisitorContext},
+    },
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -24,42 +31,50 @@ const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
 );
 
 pub struct ConstantNamingVisitor;
+pub struct Context<'a> {
+    env: &'a mut CompilationEnv,
+}
+impl TypingVisitorConstructor for ConstantNamingVisitor {
+    type Context<'a> = Context<'a>;
 
-impl TypingVisitor for ConstantNamingVisitor {
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        _program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    ) {
+    fn context<'a>(
+        env: &'a mut CompilationEnv,
+        _program_info: &'a TypingProgramInfo,
+        _program: &T::Program_,
+    ) -> Self::Context<'a> {
+        Context { env }
+    }
+}
+
+impl TypingVisitorContext for Context<'_> {
+    fn visit(&mut self, program: &mut T::Program_) {
         for module_def in program
             .modules
             .iter()
             .filter(|(_, _, mdef)| !mdef.attributes.is_test_or_test_only())
         {
-            env.add_warning_filter_scope(module_def.2.warning_filter.clone());
+            self.env
+                .add_warning_filter_scope(module_def.2.warning_filter.clone());
             module_def
                 .2
                 .constants
                 .iter()
                 .for_each(|(loc, name, _constant)| {
-                    visit_constant_custom(env, *name, loc);
+                    if !is_valid_name(name.as_str()) {
+                        let uid_msg = format!("'{}' should be named using UPPER_CASE_WITH_UNDERSCORES or PascalCase/UpperCamelCase",name.as_str());
+                        let diagnostic = diag!(CONSTANT_NAMING_DIAG, (loc, uid_msg));
+                        self.env.add_diag(diagnostic);
+                    }
                 });
-            env.pop_warning_filter_scope();
         }
     }
-}
 
-/// Checks if a constant's name adheres to the all caps snake case naming convention.
-fn visit_constant_custom(env: &mut CompilationEnv, name: Symbol, loc: Loc) {
-    if !is_valid_name(name.as_str()) {
-        let uid_msg = format!(
-            "{} should be named using UPPER_CASE_WITH_UNDERSCORES or PascalCase/UpperCamelCase",
-            name.as_str()
-        );
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
 
-        let diagnostic = diag!(CONSTANT_NAMING_DIAG, (loc, uid_msg));
-        env.add_diag(diagnostic);
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
     }
 }
 
@@ -68,28 +83,12 @@ fn is_valid_name(name: &str) -> bool {
     if name
         .chars()
         .all(|c| c.is_uppercase() || c == '_' || c.is_numeric())
-        && name.chars().any(char::is_alphabetic)
     {
         return true;
     }
     // Check for PascalCase/UpperCamelCase
     // The string must start with an uppercase letter, and only contain alphanumeric characters,
     // with every new word starting with an uppercase letter.
-    let is_pascal_case = name.chars().enumerate().all(|(i, c)| {
-        if i == 0 {
-            c.is_uppercase()
-        } else {
-            c.is_alphanumeric()
-                && (c.is_lowercase()
-                    || c.is_numeric()
-                    || (c.is_uppercase()
-                        && name
-                            .chars()
-                            .nth(i - 1)
-                            .map(|prev| prev.is_lowercase() || prev.is_numeric())
-                            .unwrap_or(false)))
-        }
-    });
-
-    return is_pascal_case;
+    let mut chars = name.chars();
+    chars.next().unwrap().is_uppercase() && chars.all(|c| c.is_alphanumeric())
 }
