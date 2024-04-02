@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { CoinStruct, ProtocolConfig, SuiClient } from '../client/index.js';
-import { SUI_TYPE_ARG } from '../utils/index.js';
+import { normalizeSuiAddress, SUI_TYPE_ARG } from '../utils/index.js';
 import type { OpenMoveTypeSignature } from './blockData/v2.js';
 import { normalizedTypeToMoveTypeSignature } from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
@@ -45,6 +45,7 @@ export interface BuildTransactionBlockOptions {
 	protocolConfig?: ProtocolConfig;
 	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
 	limits?: Limits;
+	dataResolvers?: TransactionBlockDataResolverPlugin[];
 }
 
 export interface SerializeTransactionBlockOptions extends BuildTransactionBlockOptions {
@@ -56,15 +57,14 @@ const chunk = <T>(arr: T[], size: number): T[][] =>
 		arr.slice(i * size, i * size + size),
 	);
 
-type TransactionBlockDataResolverPlugin = {
+export type TransactionBlockDataResolverPlugin = {
 	[K in keyof TransactionBlockDataResolver as TransactionBlockDataResolver[K] extends (
 		...args: any[]
 	) => unknown
 		? K
 		: never]?: TransactionBlockDataResolver[K] extends (...args: infer Args) => infer R
 		? (
-				dataResolver: TransactionBlockDataResolver,
-				...args: Args
+				...args: [...args: Args, next: (...args: Args) => R]
 		  ) => R extends Promise<infer T> ? T | null | Promise<T | null> : R | null
 		: never;
 };
@@ -73,14 +73,9 @@ export class TransactionBlockDataResolver {
 	protected options: SerializeTransactionBlockOptions;
 	protected plugins: TransactionBlockDataResolverPlugin[];
 
-	constructor({
-		plugins = [],
-		...options
-	}: SerializeTransactionBlockOptions & {
-		plugins?: TransactionBlockDataResolverPlugin[];
-	} = {}) {
+	constructor({ dataResolvers = [], ...options }: SerializeTransactionBlockOptions) {
 		this.options = options;
-		this.plugins = plugins;
+		this.plugins = dataResolvers;
 	}
 
 	#getClient(): SuiClient {
@@ -98,21 +93,24 @@ export class TransactionBlockDataResolver {
 		args: Parameters<TransactionBlockDataResolver[T]>,
 		cb: () => ReturnType<TransactionBlockDataResolver[T]>,
 	): Promise<ReturnType<TransactionBlockDataResolver[T]>> {
-		for (const plugin of this.plugins) {
-			if (method in plugin) {
-				const result = await (
-					plugin[method as never] as (
-						...args: unknown[]
-					) => ReturnType<TransactionBlockDataResolver[T]>
-				)(this, ...args);
+		const methods = this.plugins
+			.filter((plugin) => method in plugin)
+			.map((plugin) => plugin[method]!);
 
-				if (result != null) {
-					return result;
-				}
+		function run(index: number, runArgs: unknown[]) {
+			if (index >= methods.length) {
+				return cb();
 			}
+
+			const resolver = methods[index];
+
+			return (resolver as (...args: unknown[]) => ReturnType<TransactionBlockDataResolver[T]>)(
+				...runArgs,
+				(...nextArgs: unknown[]) => run(index + 1, nextArgs),
+			);
 		}
 
-		return cb();
+		return run(0, args);
 	}
 
 	#runPluginsSync<T extends keyof TransactionBlockDataResolver>(
@@ -281,6 +279,7 @@ export class TransactionBlockDataResolver {
 			objectId: string;
 			digest: string;
 			version: string;
+			owner: string | null;
 			initialSharedVersion: string | null;
 		}[]
 	> {
@@ -321,10 +320,20 @@ export class TransactionBlockDataResolver {
 						? owner.Shared.initial_shared_version
 						: null;
 
+				const ownerAddress =
+					owner && typeof owner === 'object'
+						? 'AddressOwner' in owner
+							? owner.AddressOwner
+							: 'ObjectOwner' in owner
+							? owner.ObjectOwner
+							: null
+						: null;
+
 				return {
 					objectId: object.data.objectId,
 					digest: object.data.digest,
 					version: object.data.version,
+					owner: ownerAddress,
 					initialSharedVersion,
 				};
 			});
@@ -336,12 +345,18 @@ export class TransactionBlockDataResolver {
 		module: string;
 		function: string;
 	}): Promise<{
+		package: string;
+		module: string;
+		function: string;
 		parameters: OpenMoveTypeSignature[];
 	}> {
 		return this.#runPlugins('getMoveFunctionDefinition', [ref], async () => {
 			const definition = await this.#getClient().getNormalizedMoveFunction(ref);
 
 			return {
+				package: normalizeSuiAddress(ref.package),
+				module: ref.module,
+				function: ref.function,
 				parameters: definition.parameters.map((param) => normalizedTypeToMoveTypeSignature(param)),
 			};
 		});
