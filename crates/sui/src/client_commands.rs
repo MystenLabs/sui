@@ -1766,7 +1766,7 @@ pub(crate) async fn compile_package(
         check_unpublished_dependencies(&dependencies.unpublished)?;
     };
     let compiled_package = build_from_resolution_graph(
-        package_path,
+        package_path.clone(),
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
@@ -1815,6 +1815,16 @@ pub(crate) async fn compile_package(
     } else {
         eprintln!("{}", "Skipping dependency verification".bold().yellow());
     }
+
+    compiled_package
+        .package
+        .compiled_package_info
+        .build_flags
+        .update_lock_file_toolchain_version(&package_path, env!("CARGO_PKG_VERSION").into())
+        .map_err(|e| SuiError::ModuleBuildFailure {
+            error: format!("Failed to update Move.lock toolchain version: {e}"),
+        })?;
+
     Ok((dependencies, compiled_modules, compiled_package, package_id))
 }
 
