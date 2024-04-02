@@ -27,7 +27,8 @@ use super::LockFile;
 ///
 /// V0: Base version.
 /// V1: Adds toolchain versioning support.
-pub const VERSION: u64 = 1;
+/// V2: Adds support for managing addresses on package publish and upgrades.
+pub const VERSION: u64 = 2;
 
 /// Table for storing package info under an environment.
 const ENV_TABLE_NAME: &str = "env";
