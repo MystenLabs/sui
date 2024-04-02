@@ -14139,6 +14139,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sha2 0.10.6",
  "spinners",
  "strum 0.24.1",
  "tempfile",
