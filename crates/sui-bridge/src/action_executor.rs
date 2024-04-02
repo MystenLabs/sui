@@ -322,6 +322,7 @@ where
             let (_gas_coin, gas_object_ref) =
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
             let ceriticate_clone = certificate.clone();
+            info!("Building Sui transaction for action: {:?}", action);
             let tx_data = match build_sui_transaction(
                 sui_address,
                 &gas_object_ref,
