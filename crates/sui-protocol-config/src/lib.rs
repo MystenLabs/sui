@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 42;
+const MAX_PROTOCOL_VERSION: u64 = 43;
 
 // Record history of protocol version allocations here:
 //
@@ -2059,7 +2059,8 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
-                42 => {
+                42 => {}
+                43 => {
                     cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
                 }
                 // Use this template when making changes:
