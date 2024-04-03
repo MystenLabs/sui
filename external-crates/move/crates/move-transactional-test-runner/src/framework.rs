@@ -636,6 +636,7 @@ pub fn compile_source_units(
     // a lot of them!) so let's suppress them function warnings, so let's suppress these
     let warning_filter = WarningFilters::unused_warnings_filter_for_test();
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
+        None,
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),
         named_address_mapping,

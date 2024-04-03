@@ -210,7 +210,7 @@ pub fn run_test_inner(
 
     let flags = flags.set_sources_shadow_deps(true);
 
-    let mut compiler = Compiler::from_package_paths(targets, deps)
+    let mut compiler = Compiler::from_package_paths(None, targets, deps)
         .unwrap()
         .set_flags(flags)
         .set_default_config(package_config);

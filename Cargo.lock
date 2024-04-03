@@ -6692,7 +6692,6 @@ dependencies = [
  "move-proc-macros",
  "move-symbol-pool",
  "once_cell",
- "pathdiff",
  "petgraph 0.5.1",
  "regex",
  "serde",
@@ -6899,6 +6898,7 @@ dependencies = [
  "toml 0.5.10",
  "toml_edit 0.14.4",
  "treeline",
+ "vfs",
  "walkdir",
  "whoami",
 ]

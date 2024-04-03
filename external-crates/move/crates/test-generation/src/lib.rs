@@ -54,6 +54,7 @@ fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
 static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
     let mut storage = InMemoryStorage::new();
     let (_, compiled_units) = Compiler::from_files(
+        None,
         move_stdlib::move_stdlib_files(),
         vec![],
         move_stdlib::move_stdlib_named_addresses(),
@@ -403,7 +404,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
                 *idx,
                 type_params.iter().map(|ty| substitute(ty, tys)).collect(),
             )))
-        },
+        }
         Reference(ty) => Reference(Box::new(substitute(ty, tys))),
         MutableReference(ty) => MutableReference(Box::new(substitute(ty, tys))),
         TypeParameter(idx) => {
@@ -491,7 +492,7 @@ pub(crate) fn get_type_actuals_from_reference(
             StructInstantiation(struct_inst) => {
                 let (_, tys) = &**struct_inst;
                 Some(tys.clone())
-            },
+            }
             Struct(_) => Some(vec![]),
             _ => None,
         },

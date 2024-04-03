@@ -1677,7 +1677,6 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "once_cell",
- "pathdiff",
  "petgraph",
  "regex",
  "serde",
@@ -1923,6 +1922,7 @@ dependencies = [
  "toml",
  "toml_edit 0.14.4",
  "treeline",
+ "vfs",
  "walkdir",
  "whoami",
 ]
@@ -2466,12 +2466,6 @@ name = "paste"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
-
-[[package]]
-name = "pathdiff"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 
 [[package]]
 name = "percent-encoding"

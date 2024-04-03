@@ -1033,7 +1033,8 @@ pub fn get_symbols(
     }
 
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
-    let build_plan = BuildPlan::create(resolution_graph)?;
+    let build_plan =
+        BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
@@ -1086,7 +1087,6 @@ pub fn get_symbols(
     build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
         // extract expansion AST
         let (files, compilation_result) = compiler
-            .set_vfs_root(overlay_fs_root.clone())
             .set_pre_compiled_lib_opt(compiled_libs.clone())
             .run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
@@ -1818,14 +1818,22 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     fn path_entry_symbols(&mut self, path: &P::PathEntry) {
-        let P::PathEntry { name: _, tyargs, is_macro: _ } = path;
+        let P::PathEntry {
+            name: _,
+            tyargs,
+            is_macro: _,
+        } = path;
         if let Some(sp!(_, tyargs)) = tyargs {
             tyargs.iter().for_each(|t| self.type_symbols(t));
         }
     }
 
     fn root_path_entry_symbols(&mut self, path: &P::RootPathEntry) {
-        let P::RootPathEntry { name: _, tyargs, is_macro: _ } = path;
+        let P::RootPathEntry {
+            name: _,
+            tyargs,
+            is_macro: _,
+        } = path;
         if let Some(sp!(_, tyargs)) = tyargs {
             tyargs.iter().for_each(|t| self.type_symbols(t));
         }
@@ -2116,11 +2124,13 @@ impl<'a> ParsingSymbolicator<'a> {
             NA::Single(entry) => {
                 self.path_entry_symbols(entry);
                 Some(entry.name)
-            },
+            }
             NA::Path(path) => {
                 let P::NamePath { root, entries } = path;
                 self.root_path_entry_symbols(root);
-                entries.iter().for_each(|entry| self.path_entry_symbols(entry));
+                entries
+                    .iter()
+                    .for_each(|entry| self.path_entry_symbols(entry));
                 // FIXME: this is a hack that will break when we add enums
                 if entries.len() < 2 {
                     if let P::LeadingNameAccess_::Name(n) = root.name.value {
