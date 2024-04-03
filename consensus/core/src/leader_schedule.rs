@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use consensus_config::{Authority, AuthorityIndex, Stake};
+use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 
@@ -100,13 +100,15 @@ pub(crate) struct LeaderSwapTable {
     /// The list of `f` (by stake) authorities with best scores as those defined
     /// by the provided `ReputationScores`. Those authorities will be used in the
     /// position of the `bad_nodes` on the final leader schedule.
-    pub good_nodes: Vec<(AuthorityIndex, Authority)>,
+    /// Storing the hostname & stake along side the authority index for debugging.
+    pub good_nodes: Vec<(AuthorityIndex, String, Stake)>,
 
     /// The set of `f` (by stake) authorities with the worst scores as those defined
     /// by the provided `ReputationScores`. Every time where such authority is elected
     /// as leader on the schedule, it will swapped by one of the authorities of the
     /// `good_nodes`.
-    pub bad_nodes: HashMap<AuthorityIndex, Authority>,
+    /// Storing the hostname & stake along side the authority index for debugging.
+    pub bad_nodes: HashMap<AuthorityIndex, (String, Stake)>,
 
     // The scores for which the leader swap table was built from. This struct is
     // used for debugging purposes. Once `good_nodes` & `bad_nodes` are identified
@@ -139,8 +141,7 @@ impl LeaderSwapTable {
             bad_nodes_stake_threshold,
         )
         .into_iter()
-        .map(|authority| (context.committee.authority_index(&authority), authority))
-        .collect::<Vec<(AuthorityIndex, Authority)>>();
+        .collect::<Vec<(AuthorityIndex, String, Stake)>>();
 
         // Calculating the bad nodes
         // Reverse the sorted authorities to score ascending so we get the first
@@ -154,22 +155,20 @@ impl LeaderSwapTable {
             bad_nodes_stake_threshold,
         )
         .into_iter()
-        .map(|authority| (context.committee.authority_index(&authority), authority))
-        .collect::<HashMap<AuthorityIndex, Authority>>();
+        .map(|(idx, hostname, stake)| (idx, (hostname, stake)))
+        .collect::<HashMap<AuthorityIndex, (String, Stake)>>();
 
-        good_nodes.iter().for_each(|(idx, good_node)| {
+        good_nodes.iter().for_each(|(idx, hostname, stake)| {
             tracing::debug!(
-                "Good node {} with score {} for {:?}",
-                good_node.hostname,
+                "Good node {hostname} with stake {stake} has score {} for {:?}",
                 reputation_scores.scores_per_authority[idx.to_owned()],
                 reputation_scores.commit_range,
             );
         });
 
-        bad_nodes.iter().for_each(|(idx, bad_node)| {
+        bad_nodes.iter().for_each(|(idx, (hostname, stake))| {
             tracing::debug!(
-                "Bad node {} with score {} for {:?}",
-                bad_node.hostname,
+                "Bad node {hostname} with stake {stake} has score {} for {:?}",
                 reputation_scores.scores_per_authority[idx.to_owned()],
                 reputation_scores.commit_range,
             );
@@ -206,7 +205,7 @@ impl LeaderSwapTable {
             seed_bytes[28..32].copy_from_slice(&leader_offset.to_le_bytes());
             let mut rng = StdRng::from_seed(seed_bytes);
 
-            let (idx, _good_node) = self
+            let (idx, _hostname, _stake) = self
                 .good_nodes
                 .choose(&mut rng)
                 .expect("There should be at least one good node available");
@@ -232,7 +231,7 @@ impl LeaderSwapTable {
         context: Arc<Context>,
         authorities: impl Iterator<Item = (AuthorityIndex, u64)>,
         stake_threshold: u64,
-    ) -> Vec<Authority> {
+    ) -> Vec<(AuthorityIndex, String, Stake)> {
         let mut filtered_authorities = Vec::new();
 
         let mut stake = 0;
@@ -248,7 +247,7 @@ impl LeaderSwapTable {
             }
 
             let authority = context.committee.authority(authority_idx).to_owned();
-            filtered_authorities.push(authority);
+            filtered_authorities.push((authority_idx, authority.hostname, authority.stake));
         }
 
         filtered_authorities
@@ -262,16 +261,16 @@ impl Debug for LeaderSwapTable {
             self.reputation_scores.commit_range,
             self.good_nodes
                 .iter()
-                .map(|(idx, _auth)| idx.to_owned())
+                .map(|(idx, _hostname, _stake)| idx.to_owned())
                 .collect::<Vec<AuthorityIndex>>(),
             self.good_nodes
                 .iter()
-                .map(|(_idx, auth)| auth.stake)
+                .map(|(_idx, _hostname, stake)| stake)
                 .sum::<Stake>(),
             self.bad_nodes.keys().map(|idx| idx.to_owned()),
             self.bad_nodes
                 .values()
-                .map(|auth| auth.stake)
+                .map(|(_hostname, stake)| stake)
                 .sum::<Stake>(),
         ))
     }
@@ -405,10 +404,20 @@ mod tests {
         );
 
         assert_eq!(filtered_authorities.len(), 2);
-        assert!(filtered_authorities
-            .contains(context.committee.authority(AuthorityIndex::new_for_test(0))));
-        assert!(filtered_authorities
-            .contains(context.committee.authority(AuthorityIndex::new_for_test(1))));
+        let authority_0_idx = AuthorityIndex::new_for_test(0);
+        let authority_0 = context.committee.authority(authority_0_idx);
+        assert!(filtered_authorities.contains(&(
+            authority_0_idx,
+            authority_0.hostname.clone(),
+            authority_0.stake
+        )));
+        let authority_1_idx = AuthorityIndex::new_for_test(1);
+        let authority_1 = context.committee.authority(authority_1_idx);
+        assert!(filtered_authorities.contains(&(
+            authority_1_idx,
+            authority_1.hostname.clone(),
+            authority_1.stake
+        )));
     }
 
     #[test]
