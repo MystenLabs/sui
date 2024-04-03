@@ -25,6 +25,7 @@ jobs:
 
     - name: Get list of PRs
       id: get-pr-list
+      working-directory: ./
       run: |
         export new_commit_hash=$(git rev-parse HEAD)
         export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
@@ -61,7 +62,7 @@ jobs:
         export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
         {
           echo 'release_notes<<EOF'
-          ${rel_notes}
+          echo ${rel_notes}
           echo EOF
         } >> "$GITHUB_ENV"
 
