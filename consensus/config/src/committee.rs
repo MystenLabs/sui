@@ -80,15 +80,6 @@ impl Committee {
         self.authorities[authority_index].stake
     }
 
-    pub fn authority_index(&self, authority: &Authority) -> AuthorityIndex {
-        AuthorityIndex(
-            self.authorities
-                .iter()
-                .position(|a| a == authority)
-                .expect("Authority not found in the committee!") as u32,
-        )
-    }
-
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
         &self.authorities[authority_index]
     }
@@ -138,7 +129,7 @@ impl Committee {
 ///
 /// NOTE: this is intentionally un-cloneable, to encourage only copying relevant fields.
 /// AuthorityIndex should be used to reference an authority instead.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Authority {
     /// Voting power of the authority in the committee.
     pub stake: Stake,
