@@ -5,13 +5,12 @@ use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::consistency::CheckpointViewedAt;
+use crate::consistency::Watermark;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
-use crate::server::background_tasks::{check_epoch_boundary, epoch_boundary_listener};
-use crate::types::checkpoint::Checkpoint;
+use crate::server::background_tasks::{epoch_boundary_listener, update_watermark};
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -31,8 +30,8 @@ use crate::{
 use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
+use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
-use async_graphql::{EmptySubscription, ServerError};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
@@ -56,17 +55,19 @@ use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
-use tokio::sync::{Notify, OnceCell};
+use tokio::sync::{watch, OnceCell};
 use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
+
+use super::background_tasks::{ServiceWatermark, WatchSender};
 
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     /// The following fields are internally used for background tasks
-    checkpoint_watermark: CheckpointWatermark,
+    watermark: ServiceWatermark,
     state: AppState,
     db_reader: Db,
 }
@@ -77,43 +78,25 @@ impl Server {
     pub async fn run(self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
-        // A handle that spawns a background task to periodically update the `CheckpointViewedAt`,
-        // which is the u64 high watermark of checkpoints that the service is guaranteed to produce
-        // a consistent result for.
+        let (tx, rx) = watch::channel(0);
+
+        // A handle that spawns a background task to periodically update the `Watermark`, which
+        // consists of the checkpoint upper bound and current epoch.
         let watermark_task = {
             let metrics = self.state.metrics.clone();
             let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
             let cancellation_token = self.state.cancellation_token.clone();
             let db_reader = self.db_reader.clone();
+            let rx_clone = rx.clone();
             info!("Starting watermark update task");
             spawn_monitored_task!(async move {
                 update_watermark(
                     &db_reader,
-                    self.checkpoint_watermark,
+                    self.watermark,
                     metrics,
                     tokio::time::Duration::from_millis(sleep_ms),
                     cancellation_token,
-                )
-                .await;
-            })
-        };
-
-        let notify = Arc::new(Notify::new());
-
-        // A handle that checks every 12 hours for an epoch change. If an epoch change is detected,
-        // emits a signal and updates the latest epoch value.
-        let epoch_boundary_task_notifier = {
-            let metrics = self.state.metrics.clone();
-            let cancellation_token = self.state.cancellation_token.clone();
-            let controller = notify.clone();
-            info!("Starting epoch boundary task");
-            spawn_monitored_task!(async move {
-                check_epoch_boundary(
-                    &self.db_reader,
-                    metrics,
-                    tokio::time::Duration::from_secs(12 * 60 * 60),
-                    cancellation_token,
-                    controller,
+                    WatchSender { tx, rx: rx_clone },
                 )
                 .await;
             })
@@ -122,9 +105,8 @@ impl Server {
         // A handle for tasks that are dependent on the epoch boundary signal.
         let epoch_boundary_task_listener = {
             let cancellation_token = self.state.cancellation_token.clone();
-            let notification = notify.clone();
             spawn_monitored_task!(async move {
-                epoch_boundary_listener(cancellation_token, notification).await;
+                epoch_boundary_listener(cancellation_token, rx).await;
             })
         };
 
@@ -144,12 +126,7 @@ impl Server {
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(
-            watermark_task,
-            epoch_boundary_task_listener,
-            epoch_boundary_task_notifier,
-            server_task
-        );
+        let _ = join!(watermark_task, epoch_boundary_task_listener, server_task);
 
         Ok(())
     }
@@ -170,11 +147,6 @@ pub(crate) struct AppState {
     cancellation_token: CancellationToken,
     pub version: Version,
 }
-
-/// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
-/// cross-query consistency.
-#[derive(Clone)]
-pub(crate) struct CheckpointWatermark(pub Arc<AtomicU64>);
 
 impl AppState {
     pub(crate) fn new(
@@ -339,12 +311,15 @@ impl ServerBuilder {
         let state = self.state.clone();
         let (address, schema, db_reader, router) = self.build_components();
 
-        // Initialize the checkpoint watermark for the background task to update.
-        let checkpoint_watermark = CheckpointWatermark(Arc::new(AtomicU64::new(0)));
+        // Initialize the watermark for the background task to update.
+        let watermark = ServiceWatermark {
+            checkpoint: Arc::new(AtomicU64::new(0)),
+            epoch: Arc::new(AtomicU64::new(0)),
+        };
 
         let app = router
             .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(checkpoint_watermark.clone()))
+            .layer(axum::extract::Extension(watermark.clone()))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -354,7 +329,7 @@ impl ServerBuilder {
                     .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
             )
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
-            checkpoint_watermark,
+            watermark,
             state,
             db_reader,
         })
@@ -495,7 +470,7 @@ pub fn export_schema() -> String {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    watermark: axum::Extension<CheckpointWatermark>,
+    service_watermark: axum::Extension<ServiceWatermark>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -508,10 +483,11 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let checkpoint_viewed_at = watermark.0 .0.load(Relaxed);
-
     // This wrapping is done to delineate the watermark from potentially other u64 types.
-    req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
+    req.data.insert(Watermark {
+        checkpoint: service_watermark.checkpoint.load(Relaxed),
+        epoch: service_watermark.epoch.load(Relaxed),
+    });
 
     let result = schema.execute(req).await;
 
@@ -602,39 +578,6 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-/// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
-pub(crate) async fn update_watermark(
-    db: &Db,
-    checkpoint_viewed_at: CheckpointWatermark,
-    metrics: Metrics,
-    sleep_ms: tokio::time::Duration,
-    cancellation_token: CancellationToken,
-) {
-    loop {
-        tokio::select! {
-                    _ = cancellation_token.cancelled() => {
-                        info!("Shutdown signal received, terminating watermark update task");
-                        return;
-                    },
-                    _ = tokio::time::sleep(sleep_ms) => {
-                        let new_checkpoint_viewed_at =
-                    match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
-                        Ok(checkpoint) => Some(checkpoint),
-                        Err(e) => {
-                            error!("{}", e);
-                            metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
-                            None
-                        }
-                    };
-
-                if let Some(checkpoint) = new_checkpoint_viewed_at {
-                    checkpoint_viewed_at.0.store(checkpoint, Relaxed);
-                }
-            }
-        }
-    }
-}
-
 pub mod tests {
     use super::*;
     use crate::{
@@ -668,7 +611,10 @@ pub mod tests {
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
-        let watermark = CheckpointViewedAt(1);
+        let watermark = Watermark {
+            checkpoint: 1,
+            epoch: 0,
+        };
         let state = AppState::new(
             connection_config.clone(),
             service_config.clone(),

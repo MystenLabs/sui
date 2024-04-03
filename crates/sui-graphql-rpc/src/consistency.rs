@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::connection::CursorType;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::schema::checkpoints;
 
-use crate::data::Conn;
+use crate::data::{Conn, Db, DbConnection, QueryExecutor};
+use crate::error::Error;
 use crate::raw_query::RawQuery;
 use crate::types::checkpoint::Checkpoint;
 use crate::types::cursor::{JsonCursor, Page};
@@ -43,14 +46,44 @@ pub(crate) struct ConsistentNamedCursor {
     pub c: u64,
 }
 
-/// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
-/// cross-query consistency.
+/// Watermark used by graphql queries to ensure cross-query consistency and flag epoch-boundary
+/// changes.
 #[derive(Clone, Copy)]
-pub(crate) struct CheckpointViewedAt(pub u64);
+pub(crate) struct Watermark {
+    /// The checkpoint upper-bound for the query.
+    pub checkpoint: u64,
+    /// The current epoch.
+    pub epoch: u64,
+}
 
 /// Trait for cursors that have a checkpoint sequence number associated with them.
 pub(crate) trait Checkpointed: CursorType {
     fn checkpoint_viewed_at(&self) -> u64;
+}
+
+impl Watermark {
+    pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
+        use checkpoints::dsl;
+        let Some((checkpoint, epoch)): Option<(i64, i64)> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    dsl::checkpoints
+                        .select((dsl::sequence_number, dsl::epoch))
+                        .order_by(dsl::sequence_number.desc())
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(Watermark {
+            checkpoint: checkpoint as u64,
+            epoch: epoch as u64,
+        }))
+    }
 }
 
 impl Checkpointed for JsonCursor<ConsistentIndexCursor> {
