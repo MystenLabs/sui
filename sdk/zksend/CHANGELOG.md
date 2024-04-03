@@ -1,5 +1,12 @@
 # @mysten/zksend
 
+## 0.4.3
+
+### Patch Changes
+
+- 59168f73ff: Make contract optional in ZkLSendLinkBuilder.createLinks
+- b8f2a859ce: Handle the fetch function for environments that don't support window
+
 ## 0.4.2
 
 ### Patch Changes
