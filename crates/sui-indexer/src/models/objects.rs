@@ -8,7 +8,6 @@ use diesel::prelude::*;
 use serde::de::DeserializeOwned;
 
 use move_core_types::annotated_value::MoveTypeLayout;
-use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_json_rpc::coin_api::parse_to_struct_tag;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_package_resolver::{PackageStore, Resolver};
@@ -310,9 +309,8 @@ impl StoredObject {
             )));
         }
 
-        let struct_tag: StructTag = move_object.type_().clone().into();
         let layout = package_resolver
-            .type_layout(TypeTag::Struct(Box::new(struct_tag)))
+            .type_layout(name.type_.clone())
             .await
             .map_err(|e| {
                 IndexerError::ResolveMoveStructError(format!(
