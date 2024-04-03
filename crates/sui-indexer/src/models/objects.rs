@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::de::DeserializeOwned;
 use std::collections::HashMap;
-use sui_json_rpc::coin_api::parse_to_struct_tag;
+use std::sync::Arc;
 
 use diesel::prelude::*;
-use move_bytecode_utils::module_cache::GetModule;
+use serde::de::DeserializeOwned;
+
+use move_core_types::annotated_value::MoveTypeLayout;
+use sui_json_rpc::coin_api::parse_to_struct_tag;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_package_resolver::{PackageStore, Resolver};
+use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::digests::ObjectDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
@@ -181,21 +184,49 @@ impl TryFrom<StoredObject> for Object {
 }
 
 impl StoredObject {
-    pub fn try_into_object_read(
+    pub async fn try_into_object_read(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<ObjectRead, IndexerError> {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
-        let layout = object.get_layout(module_cache)?;
-        Ok(ObjectRead::Exists(oref, object, layout))
+        let Some(move_object) = object.data.try_as_move().cloned() else {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is not a Move object",
+                oref,
+            )));
+        };
+
+        let move_type_layout = package_resolver
+            .type_layout(move_object.type_().clone().into())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to convert into object read for obj {}:{}, type: {}. Error: {e}",
+                    object.id(),
+                    object.version(),
+                    move_object.type_(),
+                ))
+            })?;
+        let move_struct_layout = match move_type_layout {
+            MoveTypeLayout::Struct(s) => Ok(s),
+            _ => Err(IndexerError::ResolveMoveStructError(
+                "MoveTypeLayout is not Struct".to_string(),
+            )),
+        }?;
+
+        Ok(ObjectRead::Exists(oref, object, Some(move_struct_layout)))
     }
 
-    pub fn try_into_expectant_dynamic_field_info(
+    pub async fn try_into_expectant_dynamic_field_info(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<DynamicFieldInfo, IndexerError> {
-        match self.try_into_dynamic_field_info(module_cache).transpose() {
+        match self
+            .try_into_dynamic_field_info(package_resolver)
+            .await
+            .transpose()
+        {
             Some(Ok(info)) => Ok(info),
             Some(Err(e)) => Err(e),
             None => Err(IndexerError::PersistentStorageDataCorruptionError(
@@ -204,9 +235,9 @@ impl StoredObject {
         }
     }
 
-    pub fn try_into_dynamic_field_info(
+    pub async fn try_into_dynamic_field_info(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
         if self.df_kind.is_none() {
             return Ok(None);
@@ -225,7 +256,7 @@ impl StoredObject {
                 object_id
             ))
         })?;
-        let df_object_id = if let Some(df_object_id) = self.df_object_id {
+        let df_object_id = if let Some(df_object_id) = self.df_object_id.clone() {
             ObjectID::from_bytes(df_object_id).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "object {} has incompatible dynamic field type: df_object_id. Error: {e}",
@@ -248,7 +279,7 @@ impl StoredObject {
                 )))
             }
         };
-        let name = if let Some(field_name) = self.df_name {
+        let name = if let Some(field_name) = self.df_name.clone() {
             let name: DynamicFieldName = bcs::from_bytes(&field_name).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "object {} has incompatible dynamic field type: df_name. Error: {e}",
@@ -262,20 +293,44 @@ impl StoredObject {
                 object_id
             )));
         };
-        let layout = move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(
-            &name.type_,
-            module_cache,
-        )?;
+
+        let oref = self.get_object_ref()?;
+        let object: sui_types::object::Object = self.clone().try_into()?;
+        let Some(move_object) = object.data.try_as_move().cloned() else {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is not a Move object",
+                oref,
+            )));
+        };
+        if !move_object.type_().is_dynamic_field() {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is not a dynamic field",
+                oref,
+            )));
+        }
+
+        let layout = package_resolver
+            .type_layout(name.type_.clone())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
+                    object.id(),
+                    object.version(),
+                    move_object.type_(),
+                ))
+            })?;
         let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
         let bcs_name = sui_json_value.to_bcs_bytes(&layout)?;
-        let object_type =
-            self.df_object_type
-                .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: empty df_object_type",
-                    object_id
-                )))?;
+        let object_type = self.df_object_type.clone().ok_or(
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "object {} has incompatible dynamic field type: empty df_object_type",
+                object_id
+            )),
+        )?;
+
         Ok(Some(DynamicFieldInfo {
-            version: SequenceNumber::from_u64(self.object_version as u64),
+            version: oref.1,
             digest: object_digest,
             type_,
             name,

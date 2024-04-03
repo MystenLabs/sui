@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::sync::Arc;
+
 use diesel::prelude::*;
 
-use move_bytecode_utils::module_cache::GetModule;
-use sui_json_rpc_types::BalanceChange;
-use sui_json_rpc_types::ObjectChange;
-use sui_json_rpc_types::SuiTransactionBlock;
-use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_json_rpc_types::SuiTransactionBlockEvents;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::TypeTag;
+use sui_json_rpc_types::{
+    BalanceChange, ObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
+use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
@@ -100,11 +102,12 @@ impl From<&IndexedTransaction> for StoredTransaction {
 }
 
 impl StoredTransaction {
-    pub fn try_into_sui_transaction_block_response(
+    pub async fn try_into_sui_transaction_block_response(
         self,
-        options: &SuiTransactionBlockResponseOptions,
-        module: &impl GetModule,
+        options: SuiTransactionBlockResponseOptions,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> IndexerResult<SuiTransactionBlockResponse> {
+        let options = options.clone();
         let tx_digest =
             TransactionDigest::try_from(self.transaction_digest.as_slice()).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -115,7 +118,11 @@ impl StoredTransaction {
 
         let transaction = if options.show_input {
             let sender_signed_data = self.try_into_sender_signed_data()?;
-            let tx_block = SuiTransactionBlock::try_from(sender_signed_data, module)?;
+            let tx_block = SuiTransactionBlock::try_from_with_package_resolver(
+                sender_signed_data,
+                package_resolver.clone(),
+            )
+            .await?;
             Some(tx_block)
         } else {
             None
@@ -156,13 +163,8 @@ impl StoredTransaction {
                 .collect::<Result<Vec<Event>, IndexerError>>()?;
             let timestamp = self.timestamp_ms as u64;
             let tx_events = TransactionEvents { data: events };
-            let tx_events = SuiTransactionBlockEvents::try_from_using_module_resolver(
-                tx_events,
-                tx_digest,
-                Some(timestamp),
-                module,
-            )?;
-            Some(tx_events)
+
+            tx_events_to_sui_tx_events(tx_events, package_resolver, tx_digest, timestamp).await?
         } else {
             None
         };
@@ -220,7 +222,6 @@ impl StoredTransaction {
             raw_effects: self.raw_effects,
         })
     }
-
     fn try_into_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
         let sender_signed_data: SenderSignedData =
             bcs::from_bytes(&self.raw_transaction).map_err(|e| {
@@ -242,4 +243,59 @@ impl StoredTransaction {
         let effects = SuiTransactionBlockEffects::try_from(effects)?;
         Ok(effects)
     }
+}
+
+pub async fn tx_events_to_sui_tx_events(
+    tx_events: TransactionEvents,
+    package_resolver: Arc<Resolver<impl PackageStore>>,
+    tx_digest: TransactionDigest,
+    timestamp: u64,
+) -> Result<Option<SuiTransactionBlockEvents>, IndexerError> {
+    let mut sui_event_futures = vec![];
+    let tx_events_data_len = tx_events.data.len();
+    for tx_event in tx_events.data.clone() {
+        let package_resolver_clone = package_resolver.clone();
+        sui_event_futures.push(tokio::task::spawn(async move {
+            let resolver = package_resolver_clone;
+            resolver
+                .type_layout(TypeTag::Struct(Box::new(tx_event.type_.clone())))
+                .await
+        }));
+    }
+    let event_move_type_layouts = futures::future::join_all(sui_event_futures)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            IndexerError::ResolveMoveStructError(format!(
+                "Failed to convert to sui event with Error: {e}",
+            ))
+        })?;
+    let event_move_struct_layouts = event_move_type_layouts
+        .into_iter()
+        .filter_map(|move_type_layout| match move_type_layout {
+            MoveTypeLayout::Struct(s) => Some(s),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(tx_events_data_len == event_move_struct_layouts.len());
+    let sui_events = tx_events
+        .data
+        .into_iter()
+        .enumerate()
+        .zip(event_move_struct_layouts)
+        .map(|((seq, tx_event), move_struct_layout)| {
+            SuiEvent::try_from(
+                tx_event,
+                tx_digest,
+                seq as u64,
+                Some(timestamp),
+                move_struct_layout,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let sui_tx_events = SuiTransactionBlockEvents { data: sui_events };
+    Ok(Some(sui_tx_events))
 }

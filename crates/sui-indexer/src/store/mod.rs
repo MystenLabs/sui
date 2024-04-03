@@ -5,10 +5,9 @@ pub(crate) use indexer_store::*;
 pub use pg_indexer_store::PgIndexerStore;
 
 pub mod indexer_store;
-pub mod module_resolver;
+pub mod package_resolver;
 mod pg_indexer_store;
 mod pg_partition_manager;
-mod query;
 
 pub(crate) mod diesel_macro {
     macro_rules! read_only_blocking {
