@@ -43,6 +43,7 @@ use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
+use sui_package_management::LockCommand;
 use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
@@ -75,7 +76,7 @@ use tabled::{
     },
 };
 
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
 
@@ -980,8 +981,8 @@ impl SuiClientCommands {
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
-                        build_config,
-                        package_path,
+                        build_config.clone(),
+                        package_path.clone(),
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
@@ -1002,13 +1003,28 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Upgrade
-                )
+                );
+                if let SuiClientCommandResult::Upgrade(ref response) = result {
+                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    if let Err(e) = sui_package_management::update_lock_file(
+                        context,
+                        LockCommand::Upgrade,
+                        build_config.install_dir,
+                        build_config.lock_file,
+                        response,
+                    )
+                    .await
+                    {
+                        warn!("Updating lock file for package: {e}")
+                    };
+                };
+                result
             }
             SuiClientCommands::Publish {
                 package_path,
@@ -1041,8 +1057,8 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
-                    build_config,
-                    package_path,
+                    build_config.clone(),
+                    package_path.clone(),
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
@@ -1058,13 +1074,28 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Publish
-                )
+                );
+                if let SuiClientCommandResult::Publish(ref response) = result {
+                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    if let Err(e) = sui_package_management::update_lock_file(
+                        context,
+                        LockCommand::Publish,
+                        build_config.install_dir,
+                        build_config.lock_file,
+                        response,
+                    )
+                    .await
+                    {
+                        warn!("Warning updating lock file for package: {e}")
+                    };
+                };
+                result
             }
 
             SuiClientCommands::VerifyBytecodeMeter {

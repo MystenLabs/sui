@@ -11625,6 +11625,7 @@ dependencies = [
  "sui-macros",
  "sui-move",
  "sui-move-build",
+ "sui-package-management",
  "sui-protocol-config",
  "sui-replay",
  "sui-sdk",
@@ -11642,6 +11643,7 @@ dependencies = [
  "test-cluster",
  "thiserror",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "unescape",
 ]
@@ -13161,6 +13163,17 @@ dependencies = [
  "tap",
  "telemetry-subscribers 0.2.0",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sui-package-management"
+version = "1.23.0"
+dependencies = [
+ "anyhow",
+ "move-package",
+ "sui-json-rpc-types",
+ "sui-sdk",
  "tracing",
 ]
 
