@@ -2160,7 +2160,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Given a list of object IDs, return the information of each object needed for transaction building. If any object does not exist, it will return an error. If any object is an object-owned object, which cannot be used as transaction input, it will return an error. If an object exists, the corresponding entry will be an enum of object information. For shared object, the entry will contain the init shared version; For owned object, the entry will contain the latest version, digest and owner address. For immutable object, the entry will contain the latest version and digest. It is guaranteed that the returned list will have the same length as the input list.",
+      "description": "Given a list of object IDs, return the information of each object needed for transaction building. If any object does not exist, it will return an error. If any object is a child object, which cannot be used as transaction input, it will return an error. If an object exists, the corresponding entry will be an enum of object information. For shared object, the entry will contain the init shared version; For address owned object (including receiving objects), the entry will contain the latest version, digest and owner address. For immutable object, the entry will contain the latest version and digest. It is guaranteed that the returned list will have the same length as the input list.",
       "params": [
         {
           "name": "object_ids",

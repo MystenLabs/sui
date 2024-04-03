@@ -593,10 +593,9 @@ impl ReadApiServer for ReadApi {
             if object_ids.len() > MAX_OBJECT_IDS {
                 return Err(SuiRpcInputError::SizeLimitExceeded(MAX_OBJECT_IDS.to_string()).into());
             }
-            let state = self.state.clone();
             let mut results = vec![];
             for object_id in &object_ids {
-                let object = state.get_object(object_id).await?;
+                let object = self.state.get_object(object_id).await?;
                 let Some(object) = object else {
                     return Err(
                         SuiRpcInputError::UserInputError(UserInputError::ObjectNotFound {
