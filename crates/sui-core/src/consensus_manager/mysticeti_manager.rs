@@ -92,13 +92,11 @@ impl ConsensusManagerTrait for MysticetiManager {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
         let network_type = match std::env::var("CONSENSUS_NETWORK") {
-            Ok(type_str) => {
-                if type_str.to_lowercase() == "tonic" {
-                    NetworkType::Tonic
-                } else {
-                    NetworkType::Anemo
-                }
-            }
+            Ok(type_str) => match type_str.to_lowercase().as_str() {
+                "tonic" => NetworkType::Tonic,
+                "anemo" => NetworkType::Anemo,
+                _ => NetworkType::Anemo,
+            },
             Err(_) => NetworkType::Anemo,
         };
 

@@ -43,6 +43,8 @@ pub(crate) mod anemo_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
+#[cfg(test)]
+pub(crate) mod test_network;
 pub(crate) mod tonic_network;
 
 /// A stream of serialized blocks returned over the network.
@@ -89,12 +91,22 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
 /// of `anemo_gen::ConsensusRpc`, which itself is annotated with `async_trait`.
 #[async_trait]
 pub(crate) trait NetworkService: Send + Sync + 'static {
+    /// Handles the block sent from the peer via either unicast RPC or subscription stream.
+    /// Peer value can be trusted to be a valid authority index.
+    /// But serialized_block must be verified before its contents are trusted.
     async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
+
+    /// Handles the subscription request from the peer.
+    /// A stream of newly proposed blocks is returned to the peer.
+    /// The stream continues until the end of epoch, peer unsubscribes, or a network error / crash
+    /// occurs.
     async fn handle_subscribe_blocks(
         &self,
         peer: AuthorityIndex,
         last_received: Round,
     ) -> ConsensusResult<BlockStream>;
+
+    /// Handles the request to fetch blocks by references from the peer.
     async fn handle_fetch_blocks(
         &self,
         peer: AuthorityIndex,
