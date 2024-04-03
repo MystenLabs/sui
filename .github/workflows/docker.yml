@@ -9,7 +9,7 @@ on:
       - testnet4-wit
 
 env:
-  REPOSITORY: mamorufoundation/sui-sniffer
+  REPOSITORY: mamorufoundation/sui-sniffer-wit
 
 concurrency:
   # cancel redundant builds on PRs (only on PR, not on branches)
