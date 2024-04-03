@@ -104,6 +104,11 @@ impl UniversalCommitter {
             .collect()
     }
 
+    /// Return list of committers
+    pub(crate) fn get_committers(&self) -> Vec<&BaseCommitter> {
+        self.committers.iter().collect()
+    }
+
     /// Update metrics.
     fn update_metrics(&self, leader: &LeaderStatus, decision: Decision) {
         let authority = leader.authority().to_string();
