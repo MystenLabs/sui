@@ -331,7 +331,10 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             let arm_somes = arms
                 .value
                 .iter()
-                .map(|sp!(_, arm)| tail(context, &arm.rhs))
+                .map(|sp!(_, arm)| {
+                    arm.guard.as_ref().and_then(|guard| value(context, guard)).iter().for_each(|flow| context.report_value_error(*flow));
+                    tail(context, &arm.rhs)
+                })
                 .collect::<Vec<_>>();
             if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
                 for arm_opt in arm_somes {
@@ -448,7 +451,10 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             let arm_somes = arms
                 .value
                 .iter()
-                .map(|sp!(_, arm)| value(context, &arm.rhs))
+                .map(|sp!(_, arm)| {
+                    arm.guard.as_ref().and_then(|guard| value(context, guard)).iter().for_each(|flow| context.report_value_error(*flow));
+                    value(context, &arm.rhs)
+                })
                 .collect::<Vec<_>>();
             if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
                 for arm_opt in arm_somes {
@@ -610,6 +616,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             if let Some(test_control_flow) = value(context, subject) {
                 context.report_value_error(test_control_flow);
                 for sp!(_, arm) in arms.value.iter() {
+                    arm.guard.as_ref().and_then(|guard| value(context, guard)).iter().for_each(|flow| context.report_value_error(*flow));
                     statement(context, &arm.rhs);
                 }
                 already_reported(*eloc)

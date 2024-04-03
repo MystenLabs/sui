@@ -26,16 +26,11 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:9:19
   │
 9 │     struct X { f: X::S, f2: S }
-  │                   ^^^^ Unexpected enum variant identifier. An enum variant identifier is not a valid type
-  │
-  = Variants may not be used as types. Use the enum instead.
+  │                   ^ Expected a module or address in this position, not a module member
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/use_nested_self_as_invalid.move:11:9
    │
 11 │         X::foo();
-   │         ^^^^^^
-   │         │
-   │         Invalid construction. Expected an enum
-   │         But 'X' is an struct
+   │         ^ Expected a module or address in this position, not a module member
 

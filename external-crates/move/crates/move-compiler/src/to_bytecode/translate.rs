@@ -206,7 +206,6 @@ fn module(
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
         datatype_declarations,
-        // enum_declarations,
         function_declarations,
     );
 

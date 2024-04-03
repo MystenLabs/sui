@@ -1103,7 +1103,7 @@ pub fn make_enum_type(
     }
 }
 
-// ty_args should come from make_struct_type
+// ty_args should come from make_enum_type
 pub fn make_variant_field_types(
     context: &mut Context,
     _loc: Loc,

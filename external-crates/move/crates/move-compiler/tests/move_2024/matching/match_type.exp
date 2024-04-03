@@ -1,6 +1,0 @@
-error[E03018]: invalid type parameter
-   ┌─ tests/move_2024/matching/match_type.move:15:25
-   │
-15 │             Option::None<u64> => (),
-   │                         ^^^^^ Cannot use type parameters on an enum variant
-

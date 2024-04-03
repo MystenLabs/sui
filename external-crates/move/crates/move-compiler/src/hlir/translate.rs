@@ -64,8 +64,7 @@ fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
         color,
     } = v_;
     let s = format!(
-        "{}{}{}{}{}",
-        name, NEW_NAME_DELIM, depth, NEW_NAME_DELIM, color
+        "{name}{NEW_NAME_DELIM}{depth}{NEW_NAME_DELIM}{color}"
     )
     .into();
     H::BlockLabel(sp(loc, s))
@@ -146,6 +145,7 @@ impl<'env> Context<'env> {
         prog: &T::Program_,
     ) -> Self {
         fn add_struct_fields(
+            env: &mut CompilationEnv,
             structs: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
             mident: ModuleIdent,
             struct_defs: &UniqueMap<DatatypeName, N::StructDefinition>,
@@ -162,11 +162,15 @@ impl<'env> Context<'env> {
                 }
                 cur_structs.add(sname, fields).unwrap();
             }
-            structs.remove(&mident);
-            structs.add(mident, cur_structs).unwrap();
+            if let Err((_,  prev_loc)) = structs.add(mident, cur_structs) {
+                let mut diag = ice!((mident.loc, format!("Structs for module {} redefined here", mident)));
+                diag.add_secondary_label((prev_loc,  "Previously defined here"));
+                env.add_diag(diag);
+            }
         }
 
         fn add_enums(
+            env: &mut CompilationEnv,
             enum_variants: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
             variant_fields: &mut VariantFieldIndicies,
             mident: ModuleIdent,
@@ -202,12 +206,16 @@ impl<'env> Context<'env> {
                     .unwrap();
                 cur_enums_variant_fields.add(ename, variant_fields).unwrap();
             }
-            enum_variants.remove(&mident);
-            enum_variants.add(mident, cur_enums_variants).unwrap();
-            variant_fields.remove(&mident);
-            variant_fields
-                .add(mident, cur_enums_variant_fields)
-                .unwrap();
+            if let Err((_,  prev_loc)) = enum_variants.add(mident, cur_enums_variants) {
+                let mut diag = ice!((mident.loc, format!("Enums for module {} redefined here", mident)));
+                diag.add_secondary_label((prev_loc,  "Previously defined here"));
+                env.add_diag(diag);
+            }
+            if let Err((_,  prev_loc)) = variant_fields.add(mident, cur_enums_variant_fields) {
+                let mut diag = ice!((mident.loc, format!("Variants for module {} redefined here", mident)));
+                diag.add_secondary_label((prev_loc,  "Previously defined here"));
+                env.add_diag(diag);
+            }
         }
 
         let mut structs = UniqueMap::new();
@@ -215,14 +223,14 @@ impl<'env> Context<'env> {
         let mut variant_fields = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
             for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
-                add_struct_fields(&mut structs, mident, &mdef.structs);
+                add_struct_fields(env, &mut structs, mident, &mdef.structs);
                 // add_enums(&mut enums, &mut variant_fields, mident, &mdef.enums);
-                add_enums(&mut enum_variants, &mut variant_fields, mident, &mdef.enums);
+                add_enums(env, &mut enum_variants, &mut variant_fields, mident, &mdef.enums);
             }
         }
         for (mident, mdef) in prog.modules.key_cloned_iter() {
-            add_struct_fields(&mut structs, mident, &mdef.structs);
-            add_enums(&mut enum_variants, &mut variant_fields, mident, &mdef.enums);
+            add_struct_fields(env, &mut structs, mident, &mdef.structs);
+            add_enums(env, &mut enum_variants, &mut variant_fields, mident, &mdef.enums);
         }
         Context {
             env,
@@ -263,8 +271,8 @@ impl<'env> Context<'env> {
     pub fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
         let id = self.counter_next();
         let name = format!(
-            "{}{}{}{}{}",
-            *MATCH_TEMP_PREFIX_SYMBOL, NEW_NAME_DELIM, name, NEW_NAME_DELIM, id
+            "{}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",
+            *MATCH_TEMP_PREFIX_SYMBOL,
         )
         .into();
         sp(
@@ -694,7 +702,7 @@ fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFi
 }
 
 //**************************************************************************************************
-// Structs
+// Enums
 //**************************************************************************************************
 
 fn enum_def(
@@ -1308,6 +1316,7 @@ fn value(
             }
         }
 
+        // FIXME: print is left intentionally for development.
         E::Match(subject, arms) => {
             // println!("compiling match!");
             // print!("subject:");
@@ -1541,12 +1550,6 @@ fn value(
         }
 
         E::PackVariant(module_ident, enum_name, variant_name, arg_types, fields) => {
-            // // all fields of a packed struct type are used
-            // context
-            //     .used_fields
-            //     .entry(struct_name.value())
-            //     .or_default()
-            //     .extend(fields.iter().map(|(_, name, _)| *name));
 
             let base_types = base_types(context, arg_types);
 
@@ -1607,7 +1610,7 @@ fn value(
                     let base_ty = base_type(context, bt);
                     let t = H::Type_::base(base_ty.clone());
                     let field_expr = value(context, block, Some(&t), tf);
-                    assert!(fields.get(decl_idx).unwrap().is_none());
+                    debug_assert!(fields.get(decl_idx).unwrap().is_none());
                     let move_tmp = bind_exp(context, block, field_expr);
                     fields[decl_idx] = Some((field, base_ty, move_tmp))
                 }
@@ -1949,6 +1952,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
         }
+        // FIXME: print is left intentionally for development.
         E::Match(subject, arms) => {
             // println!("compiling match!");
             // print!("subject:");

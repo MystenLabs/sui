@@ -138,7 +138,6 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
-    FeatureGate::Enums,
     FeatureGate::DotCall,
     FeatureGate::PositionalFields,
     FeatureGate::LetMut,
@@ -151,7 +150,7 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::NoParensCast,
 ];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions, FeatureGate::Enums];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 

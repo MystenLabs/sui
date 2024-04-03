@@ -1,8 +1,0 @@
-error[E13003]: feature is under active development
-  ┌─ tests/move_2024/matching/drop_ref.move:3:17
-  │
-3 │     public enum Temperature {
-  │                 ^^^^^^^^^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

@@ -229,7 +229,7 @@ pub fn in_module(
     });
 }
 
-/// Reverses mapping from `StructDefinition(Index)` to `DatatpeHandle`, so that handles for structs
+/// Reverses mapping from `StructDefinition(Index)` to `StructHandle`, so that handles for structs
 /// defined in a module can be arranged in definition order.
 fn struct_definition_order(
     defs: &[StructDefinition],

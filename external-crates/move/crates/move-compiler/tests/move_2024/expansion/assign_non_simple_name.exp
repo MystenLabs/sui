@@ -30,13 +30,11 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-error[E01009]: invalid assignment
+error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/assign_non_simple_name.move:15:9
    │
 15 │         X::S = ();
-   │         ^^^^ Unexpected assignment of variant
-   │
-   = If you are trying to unpack an enum variant, use 'match'
+   │         ^ Expected a module or address in this position, not a module member
 
 error[E01009]: invalid assignment
    ┌─ tests/move_2024/expansion/assign_non_simple_name.move:16:9

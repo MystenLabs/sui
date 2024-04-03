@@ -8,7 +8,7 @@ use crate::{
     ice,
     shared::{
         ast_debug::*, Identifier, Name, NamedAddressMap, NamedAddressMapIndex, NamedAddressMaps,
-        NumericalAddress, TName,
+        NumericalAddress, TName, format_comma,
     },
 };
 use move_command_line_common::files::FileHash;
@@ -1254,6 +1254,23 @@ impl fmt::Display for Ability_ {
                 Ability_::Key => Ability_::KEY,
             }
         )
+    }
+}
+
+impl fmt::Display for Type_ {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        use Type_::*;
+        match self {
+            Apply(n) => write!(f, "{}", n),
+            Ref(mut_, ty) => write!(f, "&{}{}", if *mut_ { "mut " } else { "" }, ty),
+            Fun(args, result) => write!(f, "({}):{}", format_comma(args), result),
+            Unit => write!(f, "()"),
+            Multiple(tys) => {
+                write!(f, "(")?;
+                write!(f, "{}", format_comma(tys))?;
+                write!(f, ")")
+            }
+        }
     }
 }
 

@@ -298,13 +298,18 @@ impl Move2024PathExpander {
         ) {
             if let NR::Address(_, _) | NR::ModuleIdent(_, _) | NR::Variant(_, _, _) = result {
                 if let Some(tyargs) = tyargs {
-                    context.env.add_diag(diag!(
+                    let mut diag = diag!(
                         NameResolution::InvalidTypeParameter,
                         (
                             tyargs.loc,
                             format!("Cannot use type parameters on {}", result.err_name())
                         )
-                    ));
+                    );
+                    if let NR::Variant(_, sp!(_,  (mident, name)), variant) = result {
+                        let tys = tyargs.value.iter().map(|ty| format!("{}", ty.value)).collect::<Vec<_>>().join(",");
+                        diag.add_note(format!("Type arguments are used with the enum, as '{mident}::{name}<{tys}>::{variant}'"))
+                    }
+                    context.env.add_diag(diag);
                 }
             }
         }
@@ -397,7 +402,7 @@ impl Move2024PathExpander {
                             );
                             break;
                         }
-                        NR::ModuleAccess(mloc, mident, member) => {
+                        NR::ModuleAccess(mloc, mident, member) if context.env.supports_feature(context.current_package, FeatureGate::Enums) => {
                             let loc = make_loc(
                                 mloc.file_hash(),
                                 mloc.start() as usize,
@@ -413,6 +418,14 @@ impl Move2024PathExpander {
                             }
                             check_is_macro(context, &entry.is_macro, &result);
                         }
+                        NR::ModuleAccess(_mloc, _mident, _member) => {
+                            result = NR::ResolutionFailure(
+                                Box::new(result),
+                                NF::InvalidKind("a module or address".to_string()),
+                            );
+                            break;
+                        }
+
                         NR::Address(aloc, address) => {
                             let loc = make_loc(
                                 aloc.file_hash(),
