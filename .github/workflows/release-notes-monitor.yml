@@ -25,7 +25,6 @@ jobs:
 
     - name: Get list of PRs
       id: get-pr-list
-      working-directory: ./
       run: |
         export new_commit_hash=$(git rev-parse HEAD)
         export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
