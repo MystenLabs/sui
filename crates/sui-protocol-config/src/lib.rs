@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 42;
+const MAX_PROTOCOL_VERSION: u64 = 43;
 
 // Record history of protocol version allocations here:
 //
@@ -115,6 +115,7 @@ const MAX_PROTOCOL_VERSION: u64 = 42;
 // Version 40:
 // Version 41: Enable group operations native functions in testnet and mainnet (without msm).
 // Version 42: Migrate sui framework and related code to Move 2024
+// Version 43: Introduce the upper bound delta config for a zklogin signature's max epoch.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -2059,7 +2060,8 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
-                42 => {
+                42 => {}
+                43 => {
                     cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
                 }
                 // Use this template when making changes:
