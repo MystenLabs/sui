@@ -34,7 +34,7 @@ jobs:
         export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
         
         # export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
-        export list_of_prs=("16885")
+        export list_of_prs=([\"16885\"])
 
         echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
         echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
@@ -105,12 +105,12 @@ jobs:
             ]
           }
 
-  tag:
-    name: Adding git tag to processed commit
-    needs: [ get-list-of-prs ]
-    if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
-    uses: mystenlabs/sui/.github/workflows/tag.yml@main
-    with:
-      sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
-      tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
-    secrets: inherit
+  # tag:
+  #   name: Adding git tag to processed commit
+  #   needs: [ get-list-of-prs ]
+  #   if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
+  #   uses: mystenlabs/sui/.github/workflows/tag.yml@main
+  #   with:
+  #     sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
+  #     tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
+  #   secrets: inherit
