@@ -4,6 +4,7 @@
 use std::{
     collections::BTreeMap,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -12,15 +13,17 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use futures::{stream, Stream, StreamExt as _};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use parking_lot::RwLock;
 use tokio::{
     sync::oneshot::{self, Sender},
     task::JoinSet,
 };
+use tokio_stream::{iter, Iter};
 use tonic::{
     transport::{Channel, Server},
-    Request, Response,
+    Request, Response, Streaming,
 };
 use tracing::{debug, info, warn};
 
@@ -29,17 +32,24 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    FetchBlocksRequest, FetchBlocksResponse, NetworkClient, NetworkManager, NetworkService,
-    SendBlockRequest, SendBlockResponse,
+    BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::tonic_gen::consensus_service_server::ConsensusServiceServer,
+    Round,
 };
 
 const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
+
+// Maximum bytes size in a single fetch_blocks()response.
+// TODO: put max RPC response size in protocol config.
+const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
+// Maximum total bytes fetched in a single fetch_blocks() call, after combining the responses.
+const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 
 // Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
@@ -67,6 +77,8 @@ impl TonicClient {
 
 #[async_trait]
 impl NetworkClient for TonicClient {
+    const SUPPORT_STREAMING: bool = false;
+
     async fn send_block(
         &self,
         peer: AuthorityIndex,
@@ -88,6 +100,43 @@ impl NetworkClient for TonicClient {
             .await
             .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
+    }
+
+    async fn subscribe_blocks(
+        &self,
+        peer: AuthorityIndex,
+        last_received: Round,
+        timeout: Duration,
+    ) -> ConsensusResult<BlockStream> {
+        let mut client = self.get_client(peer, timeout).await?;
+        // TODO: add sampled block acknowledgments for latency measurements.
+        let mut request = Request::new(stream::once(async move {
+            SubscribeBlocksRequest {
+                last_received_round: last_received,
+            }
+        }));
+        // TODO: remove below after adding authentication.
+        request.metadata_mut().insert(
+            AUTHORITY_INDEX_METADATA_KEY,
+            self.context.own_index.value().to_string().parse().unwrap(),
+        );
+        let response = client
+            .subscribe_blocks(request)
+            .await
+            .map_err(|e| ConsensusError::NetworkError(format!("subscribe_blocks failed: {e:?}")))?;
+        let stream = response
+            .into_inner()
+            .filter_map(move |b| async move {
+                match b {
+                    Ok(response) => Some(response.block),
+                    Err(e) => {
+                        debug!("Network error received from {}: {e:?}", peer);
+                        None
+                    }
+                }
+            })
+            .boxed();
+        Ok(stream)
     }
 
     async fn fetch_blocks(
@@ -115,11 +164,44 @@ impl NetworkClient for TonicClient {
             AUTHORITY_INDEX_METADATA_KEY,
             self.context.own_index.value().to_string().parse().unwrap(),
         );
-        let response = client
+        let mut stream = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
-        Ok(response.into_inner().blocks)
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?
+            .into_inner();
+        let mut blocks = vec![];
+        let mut total_fetched_bytes = 0;
+        loop {
+            match stream.message().await {
+                Ok(Some(response)) => {
+                    for b in &response.blocks {
+                        total_fetched_bytes += b.len();
+                    }
+                    blocks.extend(response.blocks);
+                    if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
+                        info!(
+                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
+                            total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
+                        );
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(e) => {
+                    if blocks.is_empty() {
+                        return Err(ConsensusError::NetworkError(format!(
+                            "fetch_blocks failed mid-stream: {e:?}"
+                        )));
+                    } else {
+                        warn!("fetch_blocks failed mid-stream: {e:?}");
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(blocks)
     }
 }
 
@@ -223,10 +305,50 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         Ok(Response::new(SendBlockResponse {}))
     }
 
+    type SubscribeBlocksStream =
+        Pin<Box<dyn Stream<Item = Result<SubscribeBlocksResponse, tonic::Status>> + Send>>;
+
+    async fn subscribe_blocks(
+        &self,
+        request: Request<Streaming<SubscribeBlocksRequest>>,
+    ) -> Result<Response<Self::SubscribeBlocksStream>, tonic::Status> {
+        // TODO: switch to using authenticated peer identity.
+        let Some(peer) = request
+            .metadata()
+            .get(AUTHORITY_INDEX_METADATA_KEY)
+            .and_then(|s| s.to_str().ok())
+            .and_then(|s| s.parse().ok())
+            .and_then(|index| self.context.committee.to_authority_index(index))
+        else {
+            return Err(tonic::Status::invalid_argument("Invalid authority index"));
+        };
+        let mut reuqest_stream = request.into_inner();
+        let first_request = match reuqest_stream.next().await {
+            Some(Ok(r)) => r,
+            Some(Err(e)) => {
+                debug!("subscribe_blocks() request from {} failed: {e:?}", peer);
+                return Err(tonic::Status::invalid_argument("Request error"));
+            }
+            None => {
+                return Err(tonic::Status::invalid_argument("Missing request"));
+            }
+        };
+        let stream = self
+            .service
+            .handle_subscribe_blocks(peer, first_request.last_received_round)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
+            .map(|block| Ok(SubscribeBlocksResponse { block }))
+            .boxed();
+        Ok(Response::new(stream))
+    }
+
+    type FetchBlocksStream = Iter<std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>>>;
+
     async fn fetch_blocks(
         &self,
         request: Request<FetchBlocksRequest>,
-    ) -> Result<Response<FetchBlocksResponse>, tonic::Status> {
+    ) -> Result<Response<Self::FetchBlocksStream>, tonic::Status> {
         // TODO: switch to using authenticated peer identity.
         let Some(peer_index) = request
             .metadata()
@@ -254,7 +376,14 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_fetch_blocks(peer_index, block_refs)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
-        Ok(Response::new(FetchBlocksResponse { blocks }))
+        let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
+            chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
+                .into_iter()
+                .map(|blocks| Ok(FetchBlocksResponse { blocks }))
+                .collect::<Vec<_>>()
+                .into_iter();
+        let stream = iter(responses);
+        Ok(Response::new(stream))
     }
 }
 
@@ -404,6 +533,62 @@ fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
     }
 }
 
+/// Network message types.
+#[derive(Clone, prost::Message)]
+pub(crate) struct SendBlockRequest {
+    // Serialized SignedBlock.
+    #[prost(bytes = "bytes", tag = "1")]
+    block: Bytes,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct SendBlockResponse {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct SubscribeBlocksRequest {
+    #[prost(uint32, tag = "1")]
+    last_received_round: Round,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct SubscribeBlocksResponse {
+    #[prost(bytes = "bytes", tag = "1")]
+    block: Bytes,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchBlocksRequest {
+    #[prost(bytes = "vec", repeated, tag = "1")]
+    block_refs: Vec<Vec<u8>>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchBlocksResponse {
+    // Serialized SignedBlock.
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    blocks: Vec<Bytes>,
+}
+
+fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
+    let mut chunks = vec![];
+    let mut chunk = vec![];
+    let mut chunk_size = 0;
+    for block in blocks {
+        let block_size = block.len();
+        if !chunk.is_empty() && chunk_size + block_size > chunk_limit {
+            chunks.push(chunk);
+            chunk = vec![];
+            chunk_size = 0;
+        }
+        chunk.push(block);
+        chunk_size += block_size;
+    }
+    if !chunk.is_empty() {
+        chunks.push(chunk);
+    }
+    chunks
+}
+
 // TODO: after supporting peer authentication, using rtest to share the test case with anemo_network.rs
 #[cfg(test)]
 mod test {
@@ -412,27 +597,43 @@ mod test {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use futures::{stream, StreamExt};
     use parking_lot::Mutex;
 
     use crate::{
         block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
-        network::{tonic_network::TonicManager, NetworkClient, NetworkManager, NetworkService},
+        network::{
+            tonic_network::TonicManager, BlockStream, NetworkClient, NetworkManager, NetworkService,
+        },
+        Round,
     };
 
     struct TestService {
         handle_send_block: Vec<(AuthorityIndex, Bytes)>,
         handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
+        handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
+        own_blocks: Vec<Bytes>,
     }
 
     impl TestService {
         pub(crate) fn new() -> Self {
+            let mut own_blocks = vec![];
+            for i in 0..=100u8 {
+                own_blocks.push(block_for_round(i as Round));
+            }
             Self {
                 handle_send_block: Vec::new(),
                 handle_fetch_blocks: Vec::new(),
+                handle_subscribe_blocks: Vec::new(),
+                own_blocks,
             }
         }
+    }
+
+    fn block_for_round(round: Round) -> Bytes {
+        Bytes::from(vec![round as u8; 16])
     }
 
     #[async_trait]
@@ -446,6 +647,23 @@ mod test {
             Ok(())
         }
 
+        async fn handle_subscribe_blocks(
+            &self,
+            peer: AuthorityIndex,
+            last_received: Round,
+        ) -> ConsensusResult<BlockStream> {
+            let mut state = self.lock();
+            state.handle_subscribe_blocks.push((peer, last_received));
+            let own_blocks = state
+                .own_blocks
+                .iter()
+                // Let index in own_blocks be the round, and skip blocks <= last_received round.
+                .skip(last_received as usize + 1)
+                .cloned()
+                .collect::<Vec<_>>();
+            Ok(Box::pin(stream::iter(own_blocks)))
+        }
+
         async fn handle_fetch_blocks(
             &self,
             peer: AuthorityIndex,
@@ -457,7 +675,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn tonic_basics() {
+    async fn tonic_send_block() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(
@@ -518,5 +736,66 @@ mod test {
             service_1.lock().handle_send_block[0].1,
             test_block_0.serialized(),
         );
+    }
+
+    #[tokio::test]
+    async fn tonic_subscribe_blocks() {
+        let (context, keys) = Context::new_for_test(4);
+
+        let context_0 = Arc::new(
+            context
+                .clone()
+                .with_authority_index(context.committee.to_authority_index(0).unwrap()),
+        );
+        let mut manager_0 = TonicManager::new(context_0.clone());
+        let client_0 = <TonicManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
+        let service_0 = Arc::new(Mutex::new(TestService::new()));
+        manager_0
+            .install_service(keys[0].0.clone(), service_0.clone())
+            .await;
+
+        let context_1 = Arc::new(
+            context
+                .clone()
+                .with_authority_index(context.committee.to_authority_index(1).unwrap()),
+        );
+        let mut manager_1 = TonicManager::new(context_1.clone());
+        let client_1 = <TonicManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
+        let service_1 = Arc::new(Mutex::new(TestService::new()));
+        manager_1
+            .install_service(keys[1].0.clone(), service_1.clone())
+            .await;
+
+        let client_0_round = 50;
+        let receive_stream_0 = client_0
+            .subscribe_blocks(
+                context_0.committee.to_authority_index(1).unwrap(),
+                client_0_round,
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+
+        let count = receive_stream_0
+            .enumerate()
+            .then(|(i, item)| async move {
+                assert_eq!(item, block_for_round(client_0_round + i as Round + 1));
+                1
+            })
+            .fold(0, |a, b| async move { a + b })
+            .await;
+        // Round 51 to 100 blocks should have been received.
+        assert_eq!(count, 50);
+
+        let client_1_round = 100;
+        let mut receive_stream_1 = client_1
+            .subscribe_blocks(
+                context_1.committee.to_authority_index(0).unwrap(),
+                client_1_round,
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+        assert!(receive_stream_1.next().await.is_none());
     }
 }

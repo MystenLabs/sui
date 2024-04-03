@@ -487,7 +487,7 @@ mod tests {
     use crate::context::Context;
     use crate::core_thread::{CoreError, CoreThreadDispatcher};
     use crate::error::{ConsensusError, ConsensusResult};
-    use crate::network::NetworkClient;
+    use crate::network::{BlockStream, NetworkClient};
     use crate::synchronizer::{Synchronizer, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT};
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -565,13 +565,24 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for MockNetworkClient {
+        const SUPPORT_STREAMING: bool = false;
+
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
             _serialized_block: &VerifiedBlock,
             _timeout: Duration,
         ) -> ConsensusResult<()> {
-            todo!()
+            unimplemented!("Unimplemented")
+        }
+
+        async fn subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<BlockStream> {
+            unimplemented!("Unimplemented")
         }
 
         async fn fetch_blocks(
