@@ -306,7 +306,12 @@ impl<'env> Context<'env> {
     pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
         use E::ModuleAccess_ as EN;
         match ma_ {
-            EN::Name(sp!(_, n)) if n == symbol!("_") => ResolvedType::Hole,
+            EN::Name(sp!(_, n)) if n == symbol!("_") => {
+                let current_package = self.current_package;
+                self.env
+                    .check_feature(current_package, FeatureGate::TypeHoles, nloc);
+                ResolvedType::Hole
+            }
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
             EN::ModuleAccess(m, n) => {
                 let Some(module_type) = self.resolve_module_type(nloc, &m, &n) else {
