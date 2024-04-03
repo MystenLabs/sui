@@ -11,6 +11,7 @@ use crate::{
     commit::LeaderStatus,
     context::Context,
     dag_state::DagState,
+    leader_schedule::{LeaderSchedule, LeaderSwapTable},
     storage::mem_store::MemStore,
     test_dag::{build_dag, build_dag_layer},
     test_dag_builder::DagBuilder,
@@ -711,9 +712,14 @@ fn basic_test_setup() -> (
         context.clone(),
         Arc::new(MemStore::new()),
     )));
+    let leader_schedule = Arc::new(LeaderSchedule::new(
+        context.clone(),
+        LeaderSwapTable::default(),
+    ));
 
     // Create committer without pipelining and only 1 leader per leader round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let committer =
+        UniversalCommitterBuilder::new(context.clone(), leader_schedule, dag_state.clone()).build();
 
     // note: without pipelining or multi-leader enabled there should only be one committer.
     assert!(committer.committers.len() == 1);

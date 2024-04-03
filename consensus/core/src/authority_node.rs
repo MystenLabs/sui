@@ -20,6 +20,7 @@ use crate::{
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
+    leader_schedule::{LeaderSchedule, LeaderSwapTable},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
     network::{
@@ -213,8 +214,14 @@ where
             store.clone(),
         );
 
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+
         let core = Core::new(
             context.clone(),
+            leader_schedule,
             tx_consumer,
             block_manager,
             commit_observer,
