@@ -33,9 +33,8 @@ jobs:
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -rV | head -1)
         export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
         
-        # export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
-        export list_of_prs=([\"16885\"])
-
+        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit 3ebeac064d1cc4af4da3eb2f16269c7d185fb710...ef0ed96f9677935ace9608f65ae285c0d7c292ea -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
+        
         echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
         echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
         echo "existing_commit_tag=${existing_commit_tag}" >> $GITHUB_OUTPUT
