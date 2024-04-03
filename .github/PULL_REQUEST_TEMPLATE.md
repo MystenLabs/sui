@@ -10,9 +10,9 @@ How did you test the new or updated feature?
 
 ## Release notes
 
-Check each box that your changes affect.
+Check each box that your changes affect. If none of the boxes relate to your changes, release notes aren't required.
 
-If you check a box other than "None of the above", include information that describes the impact of your changes that a user might notice and any actions they must take to implement updates. 
+For each box you select, include information that describes the impact of your changes that a user might notice and any actions they must take to implement updates. 
 
 - [ ] Protocol: 
 - [ ] Nodes (Validators and Full nodes): 
@@ -21,4 +21,3 @@ If you check a box other than "None of the above", include information that desc
 - [ ] GraphQL: 
 - [ ] CLI: 
 - [ ] Rust SDK: 
-- [ ] None of the above
