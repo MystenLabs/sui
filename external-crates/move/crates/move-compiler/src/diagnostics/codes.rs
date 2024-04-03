@@ -236,6 +236,7 @@ codes!(
         InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
         InvalidMacroParameter: { msg: "invalid macro parameter", severity: NonblockingError },
         InvalidTypeParameter: { msg: "invalid type parameter", severity: NonblockingError },
+        InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
