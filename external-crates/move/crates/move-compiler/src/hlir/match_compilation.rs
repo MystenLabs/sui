@@ -6,6 +6,8 @@ use crate::{
     // diag,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
     hlir::translate::Context,
+    ice,
+    ice_assert,
     naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
     shared::{
@@ -62,6 +64,7 @@ struct PatternMatrix {
 
 #[derive(Clone, Debug)]
 struct ArmResult {
+    loc: Loc,
     bindings: PatBindings,
     guard: Option<Box<T::Exp>>,
     arm: Arm,
@@ -92,6 +95,7 @@ impl PatternArm {
             let bindings = self.make_arm_bindings(fringe);
             let PatternArm { pat: _, guard, arm } = self;
             let arm = ArmResult {
+                loc: arm.orig_pattern.pat.loc,
                 bindings,
                 guard: guard.clone(),
                 arm: arm.clone(),
@@ -127,17 +131,14 @@ impl PatternArm {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     names.insert(name, (pat.pat.loc, ty_fields));
                 }
-                TP::BorrowConstructor(_, _, name, _, fields) => {
+                TP::BorrowConstructor(_, _, _, name, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     names.insert(name, (pat.pat.loc, ty_fields));
                 }
                 TP::Binder(_, _) => (),
                 TP::Literal(_) => (),
                 TP::Wildcard => (),
-                TP::Or(lhs, rhs) => {
-                    ctor_queue.push(*lhs);
-                    ctor_queue.push(*rhs);
-                }
+                TP::Or(_, _) => unreachable!(),
                 TP::At(_, inner) => {
                     ctor_queue.push(*inner);
                 }
@@ -156,16 +157,13 @@ impl PatternArm {
         while let Some(pat) = ctor_queue.pop() {
             match pat.pat.value {
                 TP::Constructor(_, _, _, _, _) => (),
-                TP::BorrowConstructor(_, _, _, _, _) => (),
+                TP::BorrowConstructor(_, _, _, _, _, _) => (),
                 TP::Binder(_, _) => (),
                 TP::Literal(v) => {
                     values.insert(v);
                 }
                 TP::Wildcard => (),
-                TP::Or(lhs, rhs) => {
-                    ctor_queue.push(*lhs);
-                    ctor_queue.push(*rhs);
-                }
+                TP::Or(_, _) => unreachable!(),
                 TP::At(_, inner) => {
                     ctor_queue.push(*inner);
                 }
@@ -186,7 +184,7 @@ impl PatternArm {
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Constructor(mident, enum_, name, _, fields)
-            | TP::BorrowConstructor(mident, enum_, name, _, fields)
+            | TP::BorrowConstructor(_, mident, enum_, name, _, fields)
                 if &name == ctor_name =>
             {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
@@ -197,7 +195,7 @@ impl PatternArm {
                 }
                 Some((vec![], output))
             }
-            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _) => None,
+            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
             TP::Literal(_) => None,
             TP::Binder(mut_, x) => {
                 for arg_type in arg_types
@@ -243,7 +241,7 @@ impl PatternArm {
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
-            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _) => None,
+            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
             TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
@@ -267,7 +265,7 @@ impl PatternArm {
         let first_pattern = output.pat.pop_front().unwrap();
         match first_pattern.pat.value {
             TP::Literal(_) => None,
-            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _) => None,
+            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
             TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
@@ -300,10 +298,10 @@ impl PatternMatrix {
                         spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
                     TP::Constructor(m, e, v, ta, out_fields)
                 }
-                TP::BorrowConstructor(m, e, v, ta, spats) => {
+                TP::BorrowConstructor(mut_, m, e, v, ta, spats) => {
                     let out_fields =
                         spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
-                    TP::Constructor(m, e, v, ta, out_fields)
+                    TP::BorrowConstructor(mut_, m, e, v, ta, out_fields)
                 }
                 TP::At(x, inner) => {
                     let xloc = x.loc;
@@ -494,7 +492,7 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
         vec![pat]
     } else if matches!(
     &pat.pat.value,
-    TP::Constructor(_, _, _, _, pats) | TP::BorrowConstructor(_, _, _, _, pats)
+    TP::Constructor(_, _, _, _, pats) | TP::BorrowConstructor(_, _, _, _, _, pats)
         if pats.is_empty()
     ) {
         return vec![pat];
@@ -516,7 +514,7 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
                     })
                     .collect::<Vec<_>>()
             }
-            TP::BorrowConstructor(m, e, v, ta, spats) => {
+            TP::BorrowConstructor(mut_, m, e, v, ta, spats) => {
                 let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
                 let fields_lists: Vec<Fields<(Type, MatchPattern)>> =
                     combine_pattern_fields(all_spats);
@@ -524,7 +522,10 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
                     .into_iter()
                     .map(|field_list| MatchPattern {
                         ty: ty.clone(),
-                        pat: sp(ploc, TP::BorrowConstructor(m, e, v, ta.clone(), field_list)),
+                        pat: sp(
+                            ploc,
+                            TP::BorrowConstructor(mut_, m, e, v, ta.clone(), field_list),
+                        ),
                     })
                     .collect::<Vec<_>>()
             }
@@ -771,7 +772,12 @@ pub fn compile_match(
                     )
                 }
             };
-        assert!(redefined.is_none(), "ICE match work queue went awry");
+        ice_assert!(
+            context.env,
+            redefined.is_none(),
+            arms_loc,
+            "Match work queue went awry"
+        );
     }
 
     let match_start = compilation_results.remove(&0).unwrap();
@@ -812,13 +818,19 @@ fn compile_match_head(
         let lits = matrix.first_lits();
         let mut arms = BTreeMap::new();
         for lit in lits {
+            let lit_loc = lit.loc;
             // println!("specializing to {:?}", lit);
             let (mut new_binders, inner_matrix) = matrix.specialize_literal(&lit);
             // println!("binders: {:#?}", new_binders);
             subject_binders.append(&mut new_binders);
             // println!("specialized:");
             // inner_matrix.print();
-            assert!(arms.insert(lit, inner_matrix).is_none());
+            ice_assert!(
+                context.env,
+                arms.insert(lit, inner_matrix).is_none(),
+                lit_loc,
+                "Specialization failed"
+            );
         }
         let (mut new_binders, default) = matrix.default();
         // println!("default binders: {:#?}", new_binders);
@@ -851,7 +863,11 @@ fn compile_match_head(
 
         // TODO: enable this later.
         if context.is_struct(&mident, &datatype_name) {
-            panic!("ICE should have been handled by the leaf case or failed in naming / typing");
+            context.env.add_diag(ice!((
+                subject.ty.loc,
+                "Found a struct in match head destructuring"
+            )));
+            return MatchStep::Failure;
         }
 
         let tyargs = subject.ty.value.type_arguments().unwrap().clone();
@@ -884,9 +900,13 @@ fn compile_match_head(
             subject_binders.append(&mut new_binders);
             // println!("specialized:");
             // inner_matrix.print();
-            assert!(arms
-                .insert(ctor, (fringe_binders, inner_fringe, inner_matrix))
-                .is_none());
+            ice_assert!(
+                context.env,
+                arms.insert(ctor, (fringe_binders, inner_fringe, inner_matrix))
+                    .is_none(),
+                ploc,
+                "Inserted duplicate ctor"
+            );
         }
 
         let (mut new_binders, default_matrix) = matrix.default();
@@ -1096,19 +1116,32 @@ fn make_leaf(
 
     if leaf.len() == 1 {
         let last = leaf.pop().unwrap();
-        if last.guard.is_some() {
-            panic!("ICE must have a non-guarded leaf, got {:#?}", last);
-        }
+        ice_assert!(
+            context.hlir_context.env,
+            last.guard.is_none(),
+            last.guard.unwrap().exp.loc,
+            "Must have a non-guarded leaf"
+        );
         return make_copy_bindings(last.bindings, make_arm(context, subject.clone(), last.arm));
     }
 
     let last = leaf.pop().unwrap();
-    assert!(last.guard.is_none(), "ICE must have a non-guarded leaf");
+    ice_assert!(
+        context.hlir_context.env,
+        last.guard.is_none(),
+        last.guard.unwrap().exp.loc,
+        "Must have a non-guarded leaf"
+    );
     let mut out_exp =
         make_copy_bindings(last.bindings, make_arm(context, subject.clone(), last.arm));
     let out_ty = out_exp.ty.clone();
     while let Some(arm) = leaf.pop() {
-        assert!(arm.guard.is_some(), "ICE expected a guard");
+        ice_assert!(
+            context.hlir_context.env,
+            arm.guard.is_some(),
+            arm.loc,
+            "Expected a guard"
+        );
         out_exp = make_guard_exp(context, subject, arm, out_exp, out_ty.clone());
     }
     out_exp
@@ -1122,6 +1155,7 @@ fn make_guard_exp(
     result_ty: Type,
 ) -> T::Exp {
     let ArmResult {
+        loc: _,
         bindings,
         guard,
         arm,
@@ -1161,39 +1195,34 @@ fn make_arm_unpack(
     // retain `x`. Rust does something similar.
     while let Some((entry, pat)) = queue.pop_front() {
         match pat.pat.value {
-            TP::Constructor(mident, enum_, variant, tyargs, fields)
-            | TP::BorrowConstructor(mident, enum_, variant, tyargs, fields) => {
+            TP::Constructor(mident, enum_, variant, tyargs, fields) => {
+                let (queue_entries, fields) =
+                    make_arm_unpack_fields(context, pat.pat.loc, mident, enum_, variant, fields);
+                for entry in queue_entries.into_iter().rev() {
+                    queue.push_front(entry);
+                }
+                let unpack =
+                    make_arm_unpack_stmt(None, mident, enum_, variant, tyargs, fields, entry);
+                seq.push_back(unpack);
+            }
+            TP::BorrowConstructor(mut_, mident, enum_, variant, tyargs, fields) => {
                 let all_wild = fields
                     .iter()
                     .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
                     || fields.is_empty();
-                if matches!(entry.ty.value, N::Type_::Ref(_, _)) && all_wild {
+                // If we are  matching a  ref with no fields under it, we aren't going to drop so
+                // we just continue on.
+                if all_wild {
                     continue;
                 }
-                let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
-                let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
-                let fringe_binders = context
-                    .hlir_context
-                    .make_unpack_binders(pat.pat.loc, field_tys);
-                let fringe_exps = make_fringe_entries(&fringe_binders);
-
-                let decl_fields = context
-                    .hlir_context
-                    .enum_variant_fields(&mident, &enum_, &variant);
-                let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
-
-                let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
-                for (fringe_exp, (_, field, _)) in fringe_exps.iter().zip(ordered_pats.iter()) {
-                    unpack_fields.push((*field, fringe_exp.var, fringe_exp.ty.clone()));
-                }
-                for (fringe_exp, (_, _, ordered_pat)) in
-                    fringe_exps.into_iter().zip(ordered_pats.into_iter()).rev()
-                {
-                    queue.push_front((fringe_exp, ordered_pat));
+                let (queue_entries, fields) =
+                    make_arm_unpack_fields(context, pat.pat.loc, mident, enum_, variant, fields);
+                for entry in queue_entries.into_iter().rev() {
+                    queue.push_front(entry);
                 }
                 let unpack =
-                    make_unpack_stmt(mident, enum_, variant, tyargs, unpack_fields, entry, false);
+                    make_arm_unpack_stmt(Some(mut_), mident, enum_, variant, tyargs, fields, entry);
                 seq.push_back(unpack);
             }
             TP::Literal(_) => (),
@@ -1248,17 +1277,51 @@ fn match_pattern_has_binders(pat: &T::MatchPattern, rhs_binders: &BTreeSet<Var>)
         TP::At(x, inner) => {
             rhs_binders.contains(x) || match_pattern_has_binders(inner, rhs_binders)
         }
-        TP::Constructor(_, _, _, _, fields) | TP::BorrowConstructor(_, _, _, _, fields) => fields
-            .iter()
-            .any(|(_, _, (_, (_, pat)))| match_pattern_has_binders(pat, rhs_binders)),
-        TP::Or(lhs, rhs) => {
-            match_pattern_has_binders(lhs, rhs_binders)
-                || match_pattern_has_binders(rhs, rhs_binders)
+        TP::Constructor(_, _, _, _, fields) | TP::BorrowConstructor(_, _, _, _, _, fields) => {
+            fields
+                .iter()
+                .any(|(_, _, (_, (_, pat)))| match_pattern_has_binders(pat, rhs_binders))
         }
+        TP::Or(_, _) => unreachable!(),
         TP::Literal(_) => false,
         TP::Wildcard => false,
         TP::ErrorPat => false,
     }
+}
+
+fn make_arm_unpack_fields(
+    context: &mut ResolutionContext,
+    pat_loc: Loc,
+    mident: ModuleIdent,
+    enum_: DatatypeName,
+    variant: VariantName,
+    fields: Fields<(Type, MatchPattern)>,
+) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
+    let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
+
+    let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
+    let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
+    let fringe_exps = make_fringe_entries(&fringe_binders);
+
+    let decl_fields = context
+        .hlir_context
+        .enum_variant_fields(&mident, &enum_, &variant);
+    let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+
+    let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
+    for (fringe_exp, (_, field, _)) in fringe_exps.iter().zip(ordered_pats.iter()) {
+        unpack_fields.push((*field, fringe_exp.var, fringe_exp.ty.clone()));
+    }
+    let queue_entries = fringe_exps
+        .into_iter()
+        .zip(
+            ordered_pats
+                .into_iter()
+                .map(|(_, _, ordered_pat)| ordered_pat),
+        )
+        .collect::<Vec<_>>();
+
+    (queue_entries, unpack_fields)
 }
 
 //------------------------------------------------
@@ -1273,16 +1336,15 @@ fn make_var_ref(subject: FringeEntry) -> Box<T::Exp> {
             Box::new(make_copy_exp(ty, loc, var))
         }
         sp!(_, N::Type_::Ref(true, inner)) => {
+            // NB(cswords): we freeze the mut ref at the non-mut ref type.
             let loc = var.loc;
-
-            // NB(cswords): we now freeze the mut ref at the non-mut ref type.
-
             let ref_ty = sp(loc, N::Type_::Ref(true, inner.clone()));
             let freeze_arg = make_copy_exp(ref_ty, loc, var);
             let freeze_ty = sp(loc, N::Type_::Ref(false, inner));
             Box::new(make_freeze_exp(freeze_ty, loc, freeze_arg))
         }
         ty => {
+            // NB(cswords): we borrow the local
             let loc = var.loc;
             let ref_ty = sp(loc, N::Type_::Ref(false, Box::new(ty)));
             let borrow_exp = T::UnannotatedExp_::BorrowLocal(false, var);
@@ -1291,6 +1353,7 @@ fn make_var_ref(subject: FringeEntry) -> Box<T::Exp> {
     }
 }
 
+// Performs an  unpatch for the purpose of matching, where we are matching against an imm. ref.
 fn make_match_unpack(
     mident: ModuleIdent,
     enum_: DatatypeName,
@@ -1302,24 +1365,43 @@ fn make_match_unpack(
 ) -> T::Exp {
     assert!(matches!(rhs.ty.value, N::Type_::Ref(false, _)));
     let mut seq = VecDeque::new();
-    seq.push_back(make_unpack_stmt(
-        mident, enum_, variant, tyargs, fields, rhs, true,
-    ));
+
+    let rhs_loc = rhs.var.loc;
+    let mut lvalue_fields: Fields<(Type, T::LValue)> = UniqueMap::new();
+
+    for (ndx, (field_name, var, ty)) in fields.into_iter().enumerate() {
+        let var_lvalue = make_lvalue(var, Mutability::Imm, ty.clone());
+        lvalue_fields
+            .add(field_name, (ndx, (ty, var_lvalue)))
+            .unwrap();
+    }
+
+    let unpack_lvalue = sp(
+        rhs_loc,
+        T::LValue_::BorrowUnpackVariant(false, mident, enum_, variant, tyargs, lvalue_fields),
+    );
+
+    let FringeEntry { var, ty } = rhs;
+    let rhs = Box::new(make_copy_exp(ty.clone(), var.loc, var));
+    let binder = T::SequenceItem_::Bind(sp(rhs_loc, vec![unpack_lvalue]), vec![Some(ty)], rhs);
+    seq.push_back(sp(rhs_loc, binder));
+
     let result_type = next.ty.clone();
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
+
     let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(result_type, exp_value)
 }
 
-fn make_unpack_stmt(
+fn make_arm_unpack_stmt(
+    mut_ref: Option<bool>,
     mident: ModuleIdent,
     enum_: DatatypeName,
     variant: VariantName,
     tyargs: Vec<Type>,
     fields: Vec<(Field, Var, Type)>,
     rhs: FringeEntry,
-    rhs_as_var_ref: bool,
 ) -> T::SequenceItem {
     let rhs_loc = rhs.var.loc;
     let mut lvalue_fields: Fields<(Type, T::LValue)> = UniqueMap::new();
@@ -1331,47 +1413,19 @@ fn make_unpack_stmt(
             .unwrap();
     }
 
-    let unpack_lvalue = match rhs.ty.value {
-        N::Type_::Ref(mut_, _) => sp(
-            rhs_loc,
-            T::LValue_::BorrowUnpackVariant(mut_, mident, enum_, variant, tyargs, lvalue_fields),
-        ),
-        _ => sp(
-            rhs_loc,
-            T::LValue_::UnpackVariant(mident, enum_, variant, tyargs, lvalue_fields),
-        ),
+    let unpack_lvalue_ = if let Some(mut_) = mut_ref {
+        T::LValue_::BorrowUnpackVariant(mut_, mident, enum_, variant, tyargs, lvalue_fields)
+    } else {
+        T::LValue_::UnpackVariant(mident, enum_, variant, tyargs, lvalue_fields)
     };
     let rhs_ty = rhs.ty.clone();
-    let rhs: Box<T::Exp> = if rhs_as_var_ref {
-        make_unpack_var_ref(rhs)
-    } else {
-        Box::new(rhs.into_move_exp())
-    };
-    let binder = T::SequenceItem_::Bind(sp(rhs_loc, vec![unpack_lvalue]), vec![Some(rhs_ty)], rhs);
+    let rhs: Box<T::Exp> = Box::new(rhs.into_move_exp());
+    let binder = T::SequenceItem_::Bind(
+        sp(rhs_loc, vec![sp(rhs_loc, unpack_lvalue_)]),
+        vec![Some(rhs_ty)],
+        rhs,
+    );
     sp(rhs_loc, binder)
-}
-
-fn make_unpack_var_ref(subject: FringeEntry) -> Box<T::Exp> {
-    let FringeEntry { var, ty } = subject;
-    match ty {
-        sp!(_, N::Type_::Ref(false, _)) => Box::new(make_copy_exp(ty, var.loc, var)),
-        sp!(_, N::Type_::Ref(true, inner)) => {
-            let loc = var.loc;
-
-            // NB(cswords): we now freeze the mut ref at the non-mut ref type.
-
-            let ref_ty = sp(loc, N::Type_::Ref(true, inner.clone()));
-            let freeze_arg = make_copy_exp(ref_ty, loc, var);
-            let freeze_ty = sp(loc, N::Type_::Ref(false, inner));
-            Box::new(make_freeze_exp(freeze_ty, loc, freeze_arg))
-        }
-        ty => {
-            let loc = var.loc;
-            let ref_ty = sp(loc, N::Type_::Ref(false, Box::new(ty)));
-            let borrow_exp = T::UnannotatedExp_::BorrowLocal(false, var);
-            Box::new(T::exp(ref_ty, sp(loc, borrow_exp)))
-        }
-    }
 }
 
 fn make_lit_copy(subject: FringeEntry) -> T::Exp {

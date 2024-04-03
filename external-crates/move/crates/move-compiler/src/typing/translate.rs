@@ -2204,8 +2204,8 @@ fn match_pattern_(
                     .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
             let bt = rtype!(bt);
-            let pat_ = if mut_ref.is_some() {
-                TP::BorrowConstructor(m, enum_, variant, targs, tfields)
+            let pat_ = if let Some(mut_) = mut_ref {
+                TP::BorrowConstructor(*mut_, m, enum_, variant, targs, tfields)
             } else {
                 TP::Constructor(m, enum_, variant, targs, tfields)
             };

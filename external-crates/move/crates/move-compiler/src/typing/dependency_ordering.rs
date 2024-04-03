@@ -493,7 +493,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
 fn pat(context: &mut Context, p: &T::MatchPattern) {
     use T::UnannotatedPat_ as P;
     match &p.pat.value {
-        P::Constructor(m, _, _, tys, fields) | P::BorrowConstructor(m, _, _, tys, fields) => {
+        P::Constructor(m, _, _, tys, fields) | P::BorrowConstructor(_, m, _, _, tys, fields) => {
             context.add_usage(*m, p.pat.loc);
             types(context, tys);
             for (_, _, (_, (_, p))) in fields {

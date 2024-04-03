@@ -274,6 +274,7 @@ pub enum UnannotatedPat_ {
         Fields<(Type, MatchPattern)>,
     ),
     BorrowConstructor(
+        bool,
         ModuleIdent,
         DatatypeName,
         VariantName,
@@ -902,7 +903,11 @@ impl AstDebug for MatchPattern {
 impl AstDebug for UnannotatedPat_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            UnannotatedPat_::BorrowConstructor(m, e, v, tys, fields) => {
+            UnannotatedPat_::BorrowConstructor(mut_, m, e, v, tys, fields) => {
+                w.write("&");
+                if *mut_ {
+                    w.write("mut ");
+                }
                 w.write(&format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
