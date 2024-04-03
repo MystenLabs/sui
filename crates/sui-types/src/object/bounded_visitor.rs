@@ -27,12 +27,12 @@ pub enum Error {
     OutOfBudget,
 }
 
-/// Initial budget for deserialization -- we're okay to spend an extra ~350KiB on types and field
+/// Initial budget for deserialization -- we're okay to spend an extra ~1MiB on types and field
 /// information per value.
 ///
 /// Bounded deserialization is intended for use outside of the validator, and so uses a fixed bound,
 /// rather than one that is configured as part of the protocol.
-const MAX_BOUND: usize = 350 * 1024;
+const MAX_BOUND: usize = 1024 * 1024;
 
 impl BoundedVisitor {
     fn new(bound: usize) -> Self {
