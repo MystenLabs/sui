@@ -326,8 +326,8 @@ impl DagState {
         genesis_block.clone()
     }
 
-    /// Returns cached recent blocks from the input authority, starting from round `start`.
-    /// Number of blocks returned is limited by the number of blocks cached.
+    /// Returns cached recent blocks from the specified authority.
+    /// Blocks returned is limited by both the `start` round, and if the blocks are cached.
     pub(crate) fn get_cached_blocks(
         &self,
         authority: AuthorityIndex,

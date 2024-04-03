@@ -620,7 +620,7 @@ mod test {
     impl TestService {
         pub(crate) fn new() -> Self {
             let mut own_blocks = vec![];
-            for i in 0..100u8 {
+            for i in 0..=100u8 {
                 own_blocks.push(block_for_round(i as Round));
             }
             Self {
@@ -775,12 +775,17 @@ mod test {
             )
             .await
             .unwrap();
-        receive_stream_0
+
+        let count = receive_stream_0
             .enumerate()
-            .for_each_concurrent(None, |(i, item)| async move {
+            .then(|(i, item)| async move {
                 assert_eq!(item, block_for_round(client_0_round + i as Round + 1));
+                1
             })
+            .fold(0, |a, b| async move { a + b })
             .await;
+        // Round 51 to 100 blocks should have been received.
+        assert_eq!(count, 50);
 
         let client_1_round = 100;
         let mut receive_stream_1 = client_1
