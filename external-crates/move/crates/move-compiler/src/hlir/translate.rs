@@ -63,10 +63,7 @@ fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
         id: depth,
         color,
     } = v_;
-    let s = format!(
-        "{name}{NEW_NAME_DELIM}{depth}{NEW_NAME_DELIM}{color}"
-    )
-    .into();
+    let s = format!("{name}{NEW_NAME_DELIM}{depth}{NEW_NAME_DELIM}{color}").into();
     H::BlockLabel(sp(loc, s))
 }
 
@@ -162,9 +159,12 @@ impl<'env> Context<'env> {
                 }
                 cur_structs.add(sname, fields).unwrap();
             }
-            if let Err((_,  prev_loc)) = structs.add(mident, cur_structs) {
-                let mut diag = ice!((mident.loc, format!("Structs for module {} redefined here", mident)));
-                diag.add_secondary_label((prev_loc,  "Previously defined here"));
+            if let Err((_, prev_loc)) = structs.add(mident, cur_structs) {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Structs for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
                 env.add_diag(diag);
             }
         }
@@ -206,14 +206,20 @@ impl<'env> Context<'env> {
                     .unwrap();
                 cur_enums_variant_fields.add(ename, variant_fields).unwrap();
             }
-            if let Err((_,  prev_loc)) = enum_variants.add(mident, cur_enums_variants) {
-                let mut diag = ice!((mident.loc, format!("Enums for module {} redefined here", mident)));
-                diag.add_secondary_label((prev_loc,  "Previously defined here"));
+            if let Err((_, prev_loc)) = enum_variants.add(mident, cur_enums_variants) {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Enums for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
                 env.add_diag(diag);
             }
-            if let Err((_,  prev_loc)) = variant_fields.add(mident, cur_enums_variant_fields) {
-                let mut diag = ice!((mident.loc, format!("Variants for module {} redefined here", mident)));
-                diag.add_secondary_label((prev_loc,  "Previously defined here"));
+            if let Err((_, prev_loc)) = variant_fields.add(mident, cur_enums_variant_fields) {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Variants for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
                 env.add_diag(diag);
             }
         }
@@ -225,12 +231,24 @@ impl<'env> Context<'env> {
             for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
                 add_struct_fields(env, &mut structs, mident, &mdef.structs);
                 // add_enums(&mut enums, &mut variant_fields, mident, &mdef.enums);
-                add_enums(env, &mut enum_variants, &mut variant_fields, mident, &mdef.enums);
+                add_enums(
+                    env,
+                    &mut enum_variants,
+                    &mut variant_fields,
+                    mident,
+                    &mdef.enums,
+                );
             }
         }
         for (mident, mdef) in prog.modules.key_cloned_iter() {
             add_struct_fields(env, &mut structs, mident, &mdef.structs);
-            add_enums(env, &mut enum_variants, &mut variant_fields, mident, &mdef.enums);
+            add_enums(
+                env,
+                &mut enum_variants,
+                &mut variant_fields,
+                mident,
+                &mdef.enums,
+            );
         }
         Context {
             env,
@@ -1550,7 +1568,6 @@ fn value(
         }
 
         E::PackVariant(module_ident, enum_name, variant_name, arg_types, fields) => {
-
             let base_types = base_types(context, arg_types);
 
             let decl_fields = context.enum_variant_fields(&module_ident, &enum_name, &variant_name);

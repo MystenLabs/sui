@@ -7,8 +7,8 @@ use crate::{
     diagnostics::Diagnostic,
     ice,
     shared::{
-        ast_debug::*, Identifier, Name, NamedAddressMap, NamedAddressMapIndex, NamedAddressMaps,
-        NumericalAddress, TName, format_comma,
+        ast_debug::*, format_comma, Identifier, Name, NamedAddressMap, NamedAddressMapIndex,
+        NamedAddressMaps, NumericalAddress, TName,
     },
 };
 use move_command_line_common::files::FileHash;

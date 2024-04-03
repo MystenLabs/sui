@@ -332,7 +332,11 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 .value
                 .iter()
                 .map(|sp!(_, arm)| {
-                    arm.guard.as_ref().and_then(|guard| value(context, guard)).iter().for_each(|flow| context.report_value_error(*flow));
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
                     tail(context, &arm.rhs)
                 })
                 .collect::<Vec<_>>();
@@ -452,7 +456,11 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 .value
                 .iter()
                 .map(|sp!(_, arm)| {
-                    arm.guard.as_ref().and_then(|guard| value(context, guard)).iter().for_each(|flow| context.report_value_error(*flow));
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
                     value(context, &arm.rhs)
                 })
                 .collect::<Vec<_>>();
@@ -616,7 +624,11 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             if let Some(test_control_flow) = value(context, subject) {
                 context.report_value_error(test_control_flow);
                 for sp!(_, arm) in arms.value.iter() {
-                    arm.guard.as_ref().and_then(|guard| value(context, guard)).iter().for_each(|flow| context.report_value_error(*flow));
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
                     statement(context, &arm.rhs);
                 }
                 already_reported(*eloc)
