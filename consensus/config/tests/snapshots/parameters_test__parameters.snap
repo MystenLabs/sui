@@ -15,4 +15,8 @@ max_forward_time_drift:
 db_path: ~
 anemo:
   excessive_message_size: 8388608
-
+tonic:
+  keepalive_interval:
+    secs: 10
+    nanos: 0
+  message_size_limit: 8388608

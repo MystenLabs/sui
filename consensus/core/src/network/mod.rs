@@ -43,6 +43,8 @@ pub(crate) mod anemo_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
+#[cfg(test)]
+pub(crate) mod test_network;
 pub(crate) mod tonic_network;
 
 /// A stream of serialized blocks returned over the network.

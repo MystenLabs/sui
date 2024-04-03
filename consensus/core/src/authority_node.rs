@@ -21,8 +21,12 @@ use crate::{
     dag_state::DagState,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager},
+    network::{
+        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
+        NetworkManager,
+    },
     storage::rocksdb_store::RocksDBStore,
+    subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     CommitConsumer,
@@ -125,6 +129,7 @@ where
     core_thread_handle: CoreThreadHandle,
     // Not created when using block streaming.
     broadcaster: Option<Broadcaster>,
+    subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
 }
 
@@ -169,11 +174,15 @@ where
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster = Some(Broadcaster::new(
-            context.clone(),
-            network_client.clone(),
-            &signals_receivers,
-        ));
+        let broadcaster = if N::Client::SUPPORT_STREAMING {
+            None
+        } else {
+            Some(Broadcaster::new(
+                context.clone(),
+                network_client.clone(),
+                &signals_receivers,
+            ))
+        };
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -206,7 +215,7 @@ where
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
         let synchronizer = Synchronizer::start(
-            network_client,
+            network_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
@@ -218,8 +227,26 @@ where
             synchronizer.clone(),
             core_dispatcher,
             tx_block_broadcast,
-            dag_state,
+            dag_state.clone(),
         ));
+
+        let subscriber = if N::Client::SUPPORT_STREAMING {
+            let s = Subscriber::new(
+                context.clone(),
+                network_client,
+                network_service.clone(),
+                dag_state,
+            );
+            for (peer, _) in context.committee.authorities() {
+                if peer != context.own_index {
+                    s.subscribe(peer);
+                }
+            }
+            Some(s)
+        } else {
+            None
+        };
+
         network_manager
             .install_service(network_keypair, network_service)
             .await;
@@ -232,6 +259,7 @@ where
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
+            subscriber,
             network_manager,
         }
     }
@@ -243,6 +271,9 @@ where
         );
 
         self.network_manager.stop().await;
+        if let Some(subscriber) = self.subscriber {
+            subscriber.stop();
+        }
         if let Some(mut broadcaster) = self.broadcaster {
             broadcaster.stop();
         }

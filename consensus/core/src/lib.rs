@@ -22,6 +22,7 @@ mod metrics;
 mod network;
 mod stake_aggregator;
 mod storage;
+mod subscriber;
 mod synchronizer;
 #[cfg(test)]
 mod test_dag;
