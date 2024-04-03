@@ -2086,9 +2086,8 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
         sp!(_, Apply(_, sp!(_, ModuleType(m, n)), targs)) => {
             if !context.is_current_module(&m) {
                 let msg = format!(
-                    "Invalid access of field '{}' on '{}::{}'. Fields can only be accessed inside \
-                     the struct's module",
-                    field, &m, &n
+                    "Invalid access of field '{field}' on the struct '{m}::{n}'. The field '{field}' can only \
+                    be accessed within the module '{m}' since it defines '{n}'"
                 );
                 context
                     .env
