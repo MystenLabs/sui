@@ -78,6 +78,7 @@ impl Server {
     pub async fn run(self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
+        // Initialize watch channel for epoch boundary.
         let (tx, rx) = watch::channel(0);
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
