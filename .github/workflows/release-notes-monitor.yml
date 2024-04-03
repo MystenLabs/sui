@@ -87,7 +87,7 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       with:
-        channel-id: '#ext-mysten-release-notes'
+        channel-id: '#test-notifications'
         payload: |
           {
             "text": "PR *${{ matrix.pr }}* Release Notes",
