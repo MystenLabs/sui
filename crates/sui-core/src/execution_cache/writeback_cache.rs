@@ -517,13 +517,26 @@ impl WritebackCache {
                 }
                 Ok(lock)
             }
-            DashMapEntry::Occupied(occupied) => Ok(Some(*occupied.get())),
+            DashMapEntry::Occupied(occupied) => {
+                if cfg!(debug_assertions) {
+                    if let Some(lock_details) = epoch_store
+                        .tables()
+                        .unwrap()
+                        .get_locked_transaction(obj_ref)
+                        .unwrap()
+                    {
+                        assert_eq!(*occupied.get(), lock_details);
+                    }
+                }
+                Ok(Some(*occupied.get()))
+            }
         }
     }
 
     /// Attempts to atomically test-and-set a transaction lock on an object.
-    /// If the lock is already set, it will be overridden if the old lock is from a previous epoch.
-    /// If the lock is set successfully, the previous lock (if any) is returned
+    /// If the lock is already set to a conflicting transaction, an error is returned.
+    /// If the lock is not set, or is already set to the same transaction, the lock is
+    /// set.
     fn try_set_transaction_lock(
         &self,
         obj_ref: &ObjectRef,
@@ -548,23 +561,21 @@ impl WritebackCache {
         //
         // Solving this is not terribly important as it is not in the execution path, and
         // hence only improves the latency of transaction signing, not transaction execution
-        let occupied = match entry {
+        let prev_lock = match entry {
             DashMapEntry::Vacant(vacant) => {
                 let tables = epoch_store.tables()?;
                 if let Some(lock_details) = tables.get_locked_transaction(obj_ref)? {
                     trace!("read lock from db: {:?}", lock_details);
-                    vacant.insert_entry(lock_details)
+                    vacant.insert(lock_details);
+                    lock_details
                 } else {
                     trace!("set lock: {:?}", new_lock);
-                    vacant.insert_entry(new_lock)
+                    vacant.insert(new_lock);
+                    new_lock
                 }
             }
-            DashMapEntry::Occupied(occupied) => occupied,
+            DashMapEntry::Occupied(occupied) => *occupied.get(),
         };
-
-        let prev_lock = *occupied.get();
-
-        drop(occupied); // make sure we didn't drop the lock earlier by mistake
 
         if prev_lock != new_lock {
             debug!("lock conflict detected: {:?} != {:?}", prev_lock, new_lock);
@@ -613,6 +624,7 @@ impl WritebackCache {
     }
 
     fn verify_live_object(obj_ref: &ObjectRef, live_object: &Object) -> SuiResult {
+        debug_assert_eq!(obj_ref.0, live_object.id());
         if obj_ref.1 != live_object.version() {
             debug!(
                 "object version unavailable for consumption: {:?} (current: {})",
@@ -670,30 +682,29 @@ impl WritebackCache {
     ) -> SuiResult {
         let tx_digest = *transaction.digest();
 
-        let mut locks_to_write: Vec<(_, LockDetails)> =
-            Vec::with_capacity(owned_input_objects.len());
-
         let object_ids = owned_input_objects.iter().map(|o| o.0).collect::<Vec<_>>();
         let live_objects = self.multi_get_objects_must_exist(&object_ids)?;
+
+        // Only live objects can be locked
+        for (obj_ref, live_object) in owned_input_objects.iter().zip(live_objects.iter()) {
+            Self::verify_live_object(obj_ref, live_object)?;
+        }
+
+        let mut locks_to_write: Vec<(_, LockDetails)> =
+            Vec::with_capacity(owned_input_objects.len());
 
         // Note that this function does not have to operate atomically. If there are two racing threads,
         // then they are either trying to lock the same transaction (in which case both will succeed),
         // or they are trying to lock the same object in two different transactions, in which case
         // the sender has equivocated, and we are under no obligation to help them form a cert.
-        for (obj_ref, live_object) in owned_input_objects.iter().zip(live_objects.into_iter()) {
-            match Self::verify_live_object(obj_ref, &live_object)
-                .and_then(|_| self.try_set_transaction_lock(obj_ref, tx_digest, epoch_store))
-            {
-                Ok(()) => {
-                    locks_to_write.push((*obj_ref, tx_digest));
-                }
+        for obj_ref in owned_input_objects.iter() {
+            match self.try_set_transaction_lock(obj_ref, tx_digest, epoch_store) {
+                Ok(()) => locks_to_write.push((*obj_ref, tx_digest)),
                 Err(e) => {
                     // revert all pending writes and return error
                     // Note that reverting is not required for liveness, since a well formed and un-equivocating
                     // txn cannot fail to acquire locks.
-                    // However, a user may inadvertently sign a txn that tries to use an old object. If they do this,
-                    // they will not be able to obtain a lock, but we'd like to unlock the other objects in the
-                    // transaction so they can correct the error.
+                    // However, reverting is easy enough to do in this implementation that we do it anyway.
                     self.clear_cached_locks(&locks_to_write);
                     return Err(e);
                 }
