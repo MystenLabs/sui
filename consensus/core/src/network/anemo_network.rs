@@ -356,7 +356,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
-                self.context.parameters.anemo.excessive_message_size(),
+                self.context.parameters.anemo.excessive_message_size,
             )))
             .layer(SetResponseHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -372,7 +372,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
-                self.context.parameters.anemo.excessive_message_size(),
+                self.context.parameters.anemo.excessive_message_size,
             )))
             .layer(SetRequestHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),

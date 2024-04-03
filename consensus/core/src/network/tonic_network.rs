@@ -70,8 +70,11 @@ impl TonicClient {
         peer: AuthorityIndex,
         timeout: Duration,
     ) -> ConsensusResult<ConsensusServiceClient<Channel>> {
+        let config = &self.context.parameters.tonic;
         let channel = self.channel_pool.get_channel(peer, timeout).await?;
-        Ok(ConsensusServiceClient::new(channel))
+        Ok(ConsensusServiceClient::new(channel)
+            .max_encoding_message_size(config.message_size_limit)
+            .max_decoding_message_size(config.message_size_limit))
     }
 }
 
@@ -238,12 +241,19 @@ impl ChannelPool {
             ConsensusError::NetworkError(format!("Cannot convert address to host:port: {e:?}"))
         })?;
         let address = format!("http://{address}");
+        let config = &self.context.parameters.tonic;
         let endpoint = Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
             .initial_connection_window_size(64 << 20)
             .initial_stream_window_size(32 << 20)
-            .buffer_size(64 << 20);
+            .buffer_size(64 << 20)
+            .keep_alive_while_idle(true)
+            .keep_alive_timeout(config.keepalive_interval)
+            .http2_keep_alive_interval(config.keepalive_interval)
+            .tcp_keepalive(Some(config.keepalive_interval))
+            .user_agent("mysticeti")
+            .unwrap();
         // TODO: tune endpoint options and set TLS config.
 
         let deadline = tokio::time::Instant::now() + timeout;
@@ -445,11 +455,19 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let (tx, rx) = oneshot::channel::<()>();
         self.shutdown = Some(tx);
         let service = TonicServiceProxy::new(self.context.clone(), service);
+        let config = &self.context.parameters.tonic;
 
         let server = Server::builder()
             .initial_connection_window_size(64 << 20)
             .initial_stream_window_size(32 << 20)
-            .add_service(ConsensusServiceServer::new(service))
+            .http2_keepalive_interval(Some(config.keepalive_interval))
+            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .tcp_keepalive(Some(config.keepalive_interval))
+            .add_service(
+                ConsensusServiceServer::new(service)
+                    .max_encoding_message_size(config.message_size_limit)
+                    .max_decoding_message_size(config.message_size_limit),
+            )
             .serve_with_shutdown(own_address, async move {
                 match rx.await {
                     Ok(()) => {
@@ -463,13 +481,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
         self.server.spawn(async move {
             if let Err(e) = server.await {
-                warn!("TonicNetwork server failed: {e:?}");
+                warn!("Tonic server failed: {e:?}");
             } else {
-                info!("TonicNetwork server stopped");
+                info!("Tonic server stopped");
             }
         });
 
-        info!("TonicNetwork server started at: {own_address}");
+        info!("Tonic server started at: {own_address}");
     }
 
     async fn stop(&mut self) {
