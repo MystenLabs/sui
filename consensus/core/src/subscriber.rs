@@ -8,7 +8,7 @@ use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::{
     block::BlockAPI as _,
@@ -19,9 +19,9 @@ use crate::{
 };
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
-/// if a subscription stream fails. Blocks returned from the peer are sent to authority service
-/// for processing.
-/// Currently individual subscription management is not exposed, but it could become
+/// when subscription streams break. Blocks returned from the peer are sent to the authority
+/// service for processing.
+/// Currently subscription management for individual peer is not exposed, but it could become
 /// useful in future.
 pub(crate) struct Subscriber<C: NetworkClient, S: NetworkService> {
     context: Arc<Context>,
@@ -51,6 +51,10 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
     }
 
     pub(crate) fn subscribe(&self, peer: AuthorityIndex) {
+        if peer == self.context.own_index {
+            error!("Attempt to subscribe to own validator {peer} is ignored!");
+            return;
+        }
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let authority_service = self.authority_service.clone();
@@ -61,7 +65,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             .round();
 
         let mut subscriptions = self.subscriptions.lock();
-        self.unsubscribe_locked(&mut subscriptions[peer.value()]);
+        self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
         subscriptions[peer.value()] = Some(spawn_monitored_task!(Self::subscription_loop(
             context,
             network_client,
@@ -69,43 +73,62 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             peer,
             last_received,
         )));
+        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        self.context
+            .metrics
+            .node_metrics
+            .subscriber_connections
+            .with_label_values(&[&peer_hostname])
+            .inc();
     }
 
     pub(crate) fn stop(&self) {
         let mut subscriptions = self.subscriptions.lock();
-        subscriptions.iter_mut().for_each(|subscription| {
-            self.unsubscribe_locked(subscription);
-        });
+        for (peer, _) in self.context.committee.authorities() {
+            self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
+        }
     }
 
-    fn unsubscribe_locked(&self, subscription: &mut Option<JoinHandle<()>>) {
+    fn unsubscribe_locked(&self, peer: AuthorityIndex, subscription: &mut Option<JoinHandle<()>>) {
+        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        self.context
+            .metrics
+            .node_metrics
+            .subscriber_connections
+            .with_label_values(&[&peer_hostname])
+            .dec();
         if let Some(subscription) = subscription.take() {
             subscription.abort();
         }
     }
 
     async fn subscription_loop(
-        _context: Arc<Context>,
+        context: Arc<Context>,
         network_client: Arc<C>,
         authority_service: Arc<S>,
         peer: AuthorityIndex,
         last_received: Round,
     ) {
+        const IMMEDIATE_RETRIES: i64 = 3;
         const MAX_RETRY_INTERNAL: Duration = Duration::from_secs(10);
-        let mut retries: u64 = 0;
-        loop {
-            if retries >= 4 {
-                let delay = Duration::from_secs_f64(1.2f64.powf((retries - 4) as f64))
-                    .min(MAX_RETRY_INTERNAL);
+        let peer_hostname = context.committee.authority(peer).hostname.clone();
+        let mut retries: i64 = 0;
+        'subscription: loop {
+            if retries > IMMEDIATE_RETRIES {
+                // When not immediately retrying, add a delay starting from 100ms and increases until 10s.
+                let delay = Duration::from_secs_f64(
+                    0.1 * 1.2f64.powf((retries - IMMEDIATE_RETRIES - 1) as f64),
+                )
+                .min(MAX_RETRY_INTERNAL);
                 debug!(
-                    "Waiting to subscribe to blocks from peer {} in {} seconds, retry {}",
+                    "Delaying retry {} to subscribe to blocks from peer {} in {} seconds",
+                    retries,
                     peer,
                     delay.as_secs_f64(),
-                    retries
                 );
                 sleep(delay).await;
             } else {
-                // No need for delay but yield to avoid monopolizing the thread.
+                // Retry immediately, but still yield to avoid monopolizing the thread.
                 tokio::task::yield_now().await;
             }
             let mut blocks = match network_client
@@ -114,15 +137,27 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             {
                 Ok(blocks) => {
                     retries = 0;
+                    context
+                        .metrics
+                        .node_metrics
+                        .subscriber_connection_attempts
+                        .with_label_values(&[&peer_hostname, "success"])
+                        .inc();
                     blocks
                 }
                 Err(e) => {
                     retries += 1;
+                    context
+                        .metrics
+                        .node_metrics
+                        .subscriber_connection_attempts
+                        .with_label_values(&[&peer_hostname, "failure"])
+                        .inc();
                     debug!("Failed to subscribe to blocks from peer {}: {}", peer, e);
-                    continue;
+                    continue 'subscription;
                 }
             };
-            loop {
+            'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
                         let result = authority_service
@@ -138,7 +173,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                     None => {
                         retries += 1;
                         debug!("Subscription to blocks from peer {} ended", peer);
-                        break;
+                        break 'stream;
                     }
                 }
             }

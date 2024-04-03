@@ -88,6 +88,8 @@ pub(crate) struct NodeMetrics {
     pub fetch_blocks_scheduler_inflight: IntGauge,
     pub fetched_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub rejected_future_blocks: IntCounterVec,
+    pub verified_blocks: IntCounterVec,
     pub committed_leaders_total: IntCounterVec,
     pub last_committed_leader_round: IntGauge,
     pub commit_round_advancement_interval: Histogram,
@@ -100,6 +102,8 @@ pub(crate) struct NodeMetrics {
     pub suspended_blocks: IntCounterVec,
     pub threshold_clock_round: IntGauge,
     pub unsuspended_blocks: IntCounterVec,
+    pub subscriber_connection_attempts: IntCounterVec,
+    pub subscriber_connections: IntGaugeVec,
     pub uptime: Histogram,
 }
 
@@ -189,6 +193,18 @@ impl NodeMetrics {
                 &["authority", "source"],
                 registry,
             ).unwrap(),
+            rejected_future_blocks: register_int_counter_vec_with_registry!(
+                "rejected_future_blocks",
+                "Number of blocks rejected because their timestamp is too far in the future",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            verified_blocks: register_int_counter_vec_with_registry!(
+                "verified_blocks",
+                "Number of blocks received from each peer that are verified",
+                &["authority"],
+                registry,
+            ).unwrap(),
             committed_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
                 "Total number of (direct or indirect) committed leaders per authority",
@@ -252,6 +268,18 @@ impl NodeMetrics {
             unsuspended_blocks: register_int_counter_vec_with_registry!(
                 "unsuspended_blocks",
                 "The number of unsuspended blocks",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            subscriber_connection_attempts: register_int_counter_vec_with_registry!(
+                "subscriber_connection_attempts",
+                "The number of connection attempts per peer",
+                &["authority", "status"],
+                registry,
+            ).unwrap(),
+            subscriber_connections: register_int_gauge_vec_with_registry!(
+                "subscriber_connections",
+                "The number of block stream connections breaking down by peer",
                 &["authority"],
                 registry,
             ).unwrap(),

@@ -173,7 +173,8 @@ where
         let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
-        // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
+        // REQUIRED: Broadcaster must be created before Core, to start listening on the
+        // broadcast channel in order to not miss blocks.
         let broadcaster = if N::Client::SUPPORT_STREAMING {
             None
         } else {
@@ -318,7 +319,7 @@ mod tests {
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         error::ConsensusResult,
-        network::{BlockStream, NetworkClient},
+        network::{BlockStream, NetworkClient, NetworkService as _},
         storage::mem_store::MemStore,
         transaction::NoopTransactionVerifier,
     };
@@ -475,7 +476,7 @@ mod tests {
         let serialized = input_block.serialized().clone();
         tokio::spawn(async move {
             service
-                .handle_received_block(context.committee.to_authority_index(0).unwrap(), serialized)
+                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
                 .await
                 .unwrap();
         });

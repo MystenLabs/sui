@@ -55,9 +55,11 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
         }
     }
+}
 
-    /// Handling the block sent from the peer via either unicast RPC or subscription stream.
-    pub(crate) async fn handle_received_block(
+#[async_trait]
+impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
+    async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
         serialized_block: Bytes,
@@ -78,6 +80,8 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
+        // Specified peer can be trusted to be a valid authority index.
+        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
 
         // Reject blocks failing validations.
         if let Err(e) = self.block_verifier.verify(&signed_block) {
@@ -85,7 +89,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
+                .with_label_values(&[&peer_hostname, "send_block"])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -99,6 +103,12 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .saturating_sub(timestamp_utc_ms()),
         );
         if forward_time_drift > self.context.parameters.max_forward_time_drift {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_future_blocks
+                .with_label_values(&[&peer_hostname])
+                .inc();
             return Err(ConsensusError::BlockTooFarInFuture {
                 block_timestamp: verified_block.timestamp_ms(),
                 forward_time_drift,
@@ -116,12 +126,18 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             sleep(forward_time_drift).await;
         }
 
+        self.context
+            .metrics
+            .node_metrics
+            .verified_blocks
+            .with_label_values(&[&peer_hostname])
+            .inc();
+
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
-
         if !missing_ancestors.is_empty() {
             // schedule the fetching of them from this peer
             if let Err(err) = self
@@ -134,17 +150,6 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         }
 
         Ok(())
-    }
-}
-
-#[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
-    async fn handle_send_block(
-        &self,
-        peer: AuthorityIndex,
-        serialized_block: Bytes,
-    ) -> ConsensusResult<()> {
-        self.handle_received_block(peer, serialized_block).await
     }
 
     async fn handle_subscribe_blocks(
