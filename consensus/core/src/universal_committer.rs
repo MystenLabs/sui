@@ -136,9 +136,8 @@ impl UniversalCommitter {
 pub(crate) mod universal_committer_builder {
     use super::*;
     use crate::{
-        base_committer::BaseCommitterOptions,
-        commit::DEFAULT_WAVE_LENGTH,
-        leader_schedule::{LeaderSchedule, LeaderSwapTable},
+        base_committer::BaseCommitterOptions, commit::DEFAULT_WAVE_LENGTH,
+        leader_schedule::LeaderSchedule,
     };
 
     pub(crate) struct UniversalCommitterBuilder {

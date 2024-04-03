@@ -213,6 +213,11 @@ where
             LeaderSwapTable::default(),
         ));
 
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+
         let core = Core::new(
             context.clone(),
             leader_schedule,
