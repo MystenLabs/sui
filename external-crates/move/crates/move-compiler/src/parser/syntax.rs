@@ -1369,7 +1369,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 
     let start_loc = context.tokens.start_loc();
     let term = match context.tokens.peek() {
-        tok if is_control_exp(tok) => {
+        tok if is_control_exp(context, tok) => {
             let (control_exp, ends_in_block) = parse_control_exp(context)?;
             if !ends_in_block || at_end_of_exp(context) {
                 return Ok(control_exp);
@@ -1507,7 +1507,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     ))
 }
 
-fn is_control_exp(tok: Tok) -> bool {
+fn is_control_exp(context: &mut Context, tok: Tok) -> bool {
     matches!(
         tok,
         Tok::Break
@@ -1518,8 +1518,11 @@ fn is_control_exp(tok: Tok) -> bool {
             | Tok::Return
             | Tok::Abort
             | Tok::BlockLabel
-            | Tok::Match
-    )
+    ) || (matches!(tok, Tok::Match)
+        && context
+            .env
+            .supports_feature(context.current_package, FeatureGate::Move2024Keywords)
+        && context.env.edition(context.current_package) != Edition::E2024_MIGRATION)
 }
 
 // An identifier with a leading ', used to label blocks and control flow
@@ -1675,7 +1678,7 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         Tok::BlockLabel => {
             let name = parse_block_label(context)?;
             consume_token(context.tokens, Tok::Colon)?;
-            let (e, ends_in_block) = if is_control_exp(context.tokens.peek()) {
+            let (e, ends_in_block) = if is_control_exp(context, context.tokens.peek()) {
                 parse_control_exp(context)?
             } else {
                 parse_exp_or_sequence(context)?
