@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Range},
     sync::Arc,
 };
 
@@ -445,6 +446,46 @@ impl Display for LeaderStatus {
     }
 }
 
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CommitRange(Range<CommitIndex>);
+
+#[allow(unused)]
+impl CommitRange {
+    pub(crate) fn new(range: Range<CommitIndex>) -> Self {
+        Self(range)
+    }
+
+    pub(crate) fn start(&self) -> CommitIndex {
+        self.0.start
+    }
+
+    pub(crate) fn end(&self) -> CommitIndex {
+        self.0.end
+    }
+
+    pub(crate) fn range_overlaps(&self, other: &Self) -> bool {
+        let self_range = &self.0;
+        let other_range = &other.0;
+
+        self_range.start < other_range.end && self_range.end > other_range.start
+    }
+}
+
+impl Ord for CommitRange {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .start
+            .cmp(&other.0.start)
+            .then_with(|| self.0.end.cmp(&other.0.end))
+    }
+}
+
+impl PartialOrd for CommitRange {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -527,5 +568,24 @@ mod tests {
             (num_authorities * wave_length) as usize + 1
         );
         assert_eq!(subdag.commit_index, commit_index);
+    }
+
+    #[test]
+    fn test_commit_range() {
+        let range1 = CommitRange::new(1..5);
+        let range2 = CommitRange::new(2..6);
+        let range3 = CommitRange::new(5..10);
+        let range4 = CommitRange::new(6..10);
+
+        assert_eq!(range1.start(), 1);
+        assert_eq!(range1.end(), 5);
+
+        assert!(range1.range_overlaps(&range2));
+        assert!(!range1.range_overlaps(&range3));
+        assert!(range3.range_overlaps(&range4));
+
+        assert!(range1 < range2);
+        assert!(range2 < range3);
+        assert!(range3 < range4);
     }
 }

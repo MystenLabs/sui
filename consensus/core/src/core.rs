@@ -13,8 +13,6 @@ use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
-use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
@@ -25,8 +23,9 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
-    transaction::TransactionConsumer,
+    transaction::{TransactionConsumer, TransactionGuard},
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
@@ -579,8 +578,7 @@ mod test {
 
     use super::*;
     use crate::{
-        block::genesis_blocks,
-        block::TestBlock,
+        block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI as _,
         storage::{mem_store::MemStore, Store, WriteBatch},

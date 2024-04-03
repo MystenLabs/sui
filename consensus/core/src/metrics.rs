@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 
-use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
+
+use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -99,6 +100,7 @@ pub(crate) struct NodeMetrics {
     pub leader_timeout_total: IntCounter,
     pub missing_blocks_total: IntGauge,
     pub quorum_receive_latency: Histogram,
+    pub reputation_scores: IntGaugeVec,
     pub scope_processing_time: HistogramVec,
     pub sub_dags_per_commit_count: Histogram,
     pub block_suspensions: IntCounterVec,
@@ -264,6 +266,12 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            reputation_scores: register_int_gauge_vec_with_registry!(
+                "reputation_scores",
+                "Reputation scores for each authority",
+                &["authority"],
+                registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(
                 "scope_processing_time",

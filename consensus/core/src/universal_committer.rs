@@ -131,8 +131,9 @@ impl UniversalCommitter {
 pub(crate) mod universal_committer_builder {
     use super::*;
     use crate::{
-        base_committer::BaseCommitterOptions, commit::DEFAULT_WAVE_LENGTH,
-        leader_schedule::LeaderSchedule,
+        base_committer::BaseCommitterOptions,
+        commit::DEFAULT_WAVE_LENGTH,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
     };
 
     pub(crate) struct UniversalCommitterBuilder {
@@ -146,7 +147,7 @@ pub(crate) mod universal_committer_builder {
 
     impl UniversalCommitterBuilder {
         pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
-            let leader_schedule = LeaderSchedule::new(context.clone());
+            let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
             Self {
                 context,
                 leader_schedule,

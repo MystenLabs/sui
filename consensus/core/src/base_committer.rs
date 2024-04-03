@@ -397,6 +397,7 @@ impl Display for BaseCommitter {
 #[cfg(test)]
 mod base_committer_builder {
     use super::*;
+    use crate::leader_schedule::LeaderSwapTable;
 
     pub(crate) struct BaseCommitterBuilder {
         context: Arc<Context>,
@@ -443,7 +444,7 @@ mod base_committer_builder {
             };
             BaseCommitter::new(
                 self.context.clone(),
-                LeaderSchedule::new(self.context),
+                LeaderSchedule::new(self.context, LeaderSwapTable::default()),
                 self.dag_state,
                 options,
             )
