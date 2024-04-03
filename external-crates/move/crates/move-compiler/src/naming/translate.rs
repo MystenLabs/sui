@@ -442,8 +442,7 @@ impl<'env> Context<'env> {
     }
 
     fn new_local_scope(&mut self) {
-        let cur = self.local_scopes.last().unwrap().clone();
-        self.local_scopes.push(cur)
+        self.local_scopes.push(BTreeMap::new());
     }
 
     fn close_local_scope(&mut self) {
@@ -471,7 +470,11 @@ impl<'env> Context<'env> {
         variable_msg: impl FnOnce(Symbol) -> S,
         sp!(vloc, name): Name,
     ) -> Option<N::Var> {
-        let id_opt = self.local_scopes.last().unwrap().get(&name).copied();
+        let id_opt = self
+            .local_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(&name).copied());
         match id_opt {
             None => {
                 let msg = variable_msg(name);
