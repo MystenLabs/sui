@@ -28,21 +28,21 @@ While composition is very powerful for smart contracts, it opens the door to att
 ```move
 module games::dice { 
 ...
-	struct GuessedCorrectly has drop { ... };
+  struct GuessedCorrectly has drop { ... };
 
-	/// If you guess correctly the output you get a GuessedCorrectly object.
-	public fun play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> {
-		// Pay for the turn
-		assert!(coin::value(&fee) == 1000000, EInvalidAmount);
-		transfer::public_transfer(fee, CREATOR_ADDRESS);
-		// Roll the dice
-		let generator = new_generator(r, ctx);
-		if (guess == random::generate_u8_in_range(&mut generator, 1, 6)) { 
-			option::some(GuessedCorrectly {})
-		} else {
-			option::none()
-		}
-	}
+  /// If you guess correctly the output you get a GuessedCorrectly object.
+  public fun play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> {
+    // Pay for the turn
+    assert!(coin::value(&fee) == 1000000, EInvalidAmount);
+    transfer::public_transfer(fee, CREATOR_ADDRESS);
+    // Roll the dice
+    let generator = new_generator(r, ctx);
+    if (guess == random::generate_u8_in_range(&mut generator, 1, 6)) { 
+      option::some(GuessedCorrectly {})
+    } else {
+      option::none()
+    }
+  }
 ...
 }
 ```
