@@ -4,9 +4,9 @@ With Programmable Transaction blocks, you can use the gas payment coin to constr
 balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin
 selection. You can use `txb.gas` to access the gas coin in a transaction block, and it is valid as
 input for any arguments, as long as it is used
-[by-reference](https://docs.sui.io/build/programming-with-objects/ch2-using-objects#pass-objects-by-reference).
-Practically speaking, this means you can also add to the gas coin with `mergeCoins` and borrow it
-for Move functions with `moveCall`.
+[by-reference](https://docs.sui.io/guides/developer/sui-101/simulating-refs). Practically speaking,
+this means you can also add to the gas coin with `mergeCoins` and borrow it for Move functions with
+`moveCall`.
 
 You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer
 all of your coin balance to another address.

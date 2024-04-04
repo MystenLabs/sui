@@ -6,8 +6,8 @@ use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
-    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
-    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::env;
@@ -22,6 +22,7 @@ use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
+use sui_archival::{read_manifest_as_json, write_manifest_from_json};
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
@@ -139,19 +140,6 @@ pub enum ToolCommand {
         cmd: Option<DbToolCommand>,
     },
 
-    /// Tool to sync the node from archive store
-    #[command(name = "sync-from-archive")]
-    SyncFromArchive {
-        #[arg(long = "genesis")]
-        genesis: PathBuf,
-        #[arg(long = "db-path")]
-        db_path: PathBuf,
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(default_value_t = 5)]
-        download_concurrency: usize,
-    },
-
     /// Tool to verify the archive store
     #[command(name = "verify-archive")]
     VerifyArchive {
@@ -163,6 +151,20 @@ pub enum ToolCommand {
         download_concurrency: usize,
     },
 
+    /// Tool to print the archive manifest
+    #[command(name = "print-archive-manifest")]
+    PrintArchiveManifest {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+    },
+    /// Tool to update the archive manifest
+    #[command(name = "update-archive-manifest")]
+    UpdateArchiveManifest {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[arg(long = "archive-path")]
+        archive_json_path: PathBuf,
+    },
     /// Tool to verify the archive store by comparing file checksums
     #[command(name = "verify-archive-from-checksums")]
     VerifyArchiveByChecksum {
@@ -864,6 +866,8 @@ impl ToolCommand {
                                 "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
                             )
                             .ok(),
+                            google_project_id: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID")
+                                .ok(),
                             object_store_connection_limit: 200,
                             no_sign_request,
                             ..Default::default()
@@ -927,26 +931,23 @@ impl ToolCommand {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
                     .await?;
             }
-            ToolCommand::SyncFromArchive {
-                genesis,
-                db_path,
-                object_store_config,
-                download_concurrency,
-            } => {
-                state_sync_from_archive(
-                    &db_path,
-                    &genesis,
-                    object_store_config,
-                    download_concurrency,
-                )
-                .await?;
-            }
             ToolCommand::VerifyArchive {
                 genesis,
                 object_store_config,
                 download_concurrency,
             } => {
                 verify_archive(&genesis, object_store_config, download_concurrency, true).await?;
+            }
+            ToolCommand::PrintArchiveManifest {
+                object_store_config,
+            } => {
+                println!("{}", read_manifest_as_json(object_store_config).await?);
+            }
+            ToolCommand::UpdateArchiveManifest {
+                object_store_config,
+                archive_json_path,
+            } => {
+                write_manifest_from_json(object_store_config, archive_json_path).await?;
             }
             ToolCommand::VerifyArchiveByChecksum {
                 object_store_config,

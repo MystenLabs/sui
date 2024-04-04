@@ -11,9 +11,6 @@ module test::m1 {
     use sui::sui::SUI;
     use sui::coin;
 
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-
     public fun mint_shared(ctx: &mut TxContext) {
         transfer::public_share_object(coin::zero<SUI>(ctx))
     }
@@ -25,4 +22,3 @@ module test::m1 {
 
 //# programmable --sender A --inputs object(2,0)
 //> MergeCoins(Gas, [Input(0)])
-

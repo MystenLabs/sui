@@ -77,6 +77,9 @@ pub struct EpochMetrics {
     /// Buffer stake current in effect for this epoch
     pub effective_buffer_stake: IntGauge,
 
+    /// Set to 1 if the random beacon DKG protocol failed for the most recent epoch.
+    pub epoch_random_beacon_dkg_failed: IntGauge,
+
     /// The number of shares held by this node after the random beacon DKG protocol completed.
     pub epoch_random_beacon_dkg_num_shares: IntGauge,
 
@@ -177,6 +180,12 @@ impl EpochMetrics {
                 "Buffer stake current in effect for this epoch",
                 registry,
             ).unwrap(),
+            epoch_random_beacon_dkg_failed: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_failed",
+                "Set to 1 if the random beacon DKG protocol failed for the most recent epoch.",
+                registry
+            )
+            .unwrap(),
             epoch_random_beacon_dkg_num_shares: register_int_gauge_with_registry!(
                 "epoch_random_beacon_dkg_num_shares",
                 "The number of shares held by this node after the random beacon DKG protocol completed",

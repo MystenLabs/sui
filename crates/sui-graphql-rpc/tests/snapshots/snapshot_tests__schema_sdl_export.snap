@@ -93,7 +93,7 @@ type Address implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
 	manage the associated domain.
@@ -477,7 +477,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -636,7 +636,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -821,6 +821,11 @@ type DisplayEntry {
 	An error string describing why the template could not be rendered.
 	"""
 	error: String
+}
+
+enum DomainFormat {
+	AT
+	DOT
 }
 
 type DryRunEffect {
@@ -1434,7 +1439,7 @@ interface IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the capability to manage the associated domain.
 	"""
@@ -1768,7 +1773,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -1948,7 +1953,7 @@ type MovePackage implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
 	manage the associated domain.
@@ -2279,7 +2284,7 @@ type Object implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -2624,7 +2629,7 @@ type Owner implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the
 	capability to manage the associated domain.
@@ -2908,6 +2913,20 @@ type Query {
 	The coin metadata associated with the given coin type.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
+	"""
+	Verify a zkLogin signature based on the provided transaction or personal message
+	based on current epoch, chain id, and latest JWKs fetched on-chain. If the
+	signature is valid, the function returns a `ZkLoginVerifyResult` with success as
+	true and an empty list of errors. If the signature is invalid, the function returns
+	a `ZkLoginVerifyResult` with success as false with a list of errors.
+	
+	- `bytes` is either the personal message in raw bytes or transaction data bytes in
+	BCS-encoded and then Base64-encoded.
+	- `signature` is a serialized zkLogin signature that is Base64-encoded.
+	- `intentScope` is an enum that specifies the intent scope to be used to parse bytes.
+	- `author` is the address of the signer of the transaction or personal msg.
+	"""
+	verifyZkloginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
 }
 
 type RandomnessStateCreateTransaction {
@@ -3232,7 +3251,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3434,7 +3453,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3585,7 +3604,7 @@ type SystemParameters {
 	"""
 	validatorLowStakeThreshold: BigInt
 	"""
-	Validators with stake below this threshold will be removed from the the active validator set
+	Validators with stake below this threshold will be removed from the active validator set
 	at the next epoch boundary, without a grace period.
 	"""
 	validatorVeryLowStakeThreshold: BigInt
@@ -4127,8 +4146,36 @@ type ValidatorSet {
 	activeValidators(first: Int, before: String, last: Int, after: String): ValidatorConnection!
 }
 
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature
+verification.
+"""
+enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
+	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
+	PERSONAL_MESSAGE
+}
+
+"""
+The result of the zkLogin signature verification.
+"""
+type ZkLoginVerifyResult {
+	"""
+	The boolean result of the verification. If true, errors should be empty.
+	"""
+	success: Boolean!
+	"""
+	The errors field captures any verification error
+	"""
+	errors: [String!]!
+}
+
 schema {
 	query: Query
 	mutation: Mutation
 }
-

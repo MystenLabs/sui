@@ -39,6 +39,10 @@ pub struct Parameters {
     /// The database path.
     /// Required.
     pub db_path: Option<PathBuf>,
+
+    /// Anemo network settings.
+    #[serde(default = "AnemoParameters::default")]
+    pub anemo: AnemoParameters,
 }
 
 impl Parameters {
@@ -77,6 +81,35 @@ impl Default for Parameters {
             min_round_delay: Parameters::default_min_round_delay(),
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             db_path: None,
+            anemo: AnemoParameters::default(),
         }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AnemoParameters {
+    /// Size in bytes above which network messages are considered excessively large. Excessively
+    /// large messages will still be handled, but logged and reported in metrics for debugging.
+    ///
+    /// If unspecified, this will default to 8 MiB.
+    #[serde(default = "AnemoParameters::default_excessive_message_size")]
+    excessive_message_size: usize,
+}
+
+impl Default for AnemoParameters {
+    fn default() -> Self {
+        Self {
+            excessive_message_size: AnemoParameters::default_excessive_message_size(),
+        }
+    }
+}
+
+impl AnemoParameters {
+    pub fn excessive_message_size(&self) -> usize {
+        self.excessive_message_size
+    }
+
+    fn default_excessive_message_size() -> usize {
+        8 << 20
     }
 }

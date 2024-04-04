@@ -157,7 +157,7 @@ mod tests {
         let context = Arc::new(context.with_parameters(parameters));
         let start = Instant::now();
 
-        let (mut signals, signal_receivers) = CoreSignals::new();
+        let (mut signals, signal_receivers) = CoreSignals::new(context.clone());
 
         // spawn the task
         let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);
@@ -199,7 +199,7 @@ mod tests {
         let context = Arc::new(context.with_parameters(parameters));
         let now = Instant::now();
 
-        let (mut signals, signal_receivers) = CoreSignals::new();
+        let (mut signals, signal_receivers) = CoreSignals::new(context.clone());
 
         // spawn the task
         let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);

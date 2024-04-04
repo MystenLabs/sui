@@ -16,21 +16,24 @@ use uuid::Uuid;
 
 use crate::{config::ServiceConfig, error::code};
 
+/// Extension factory for creating new `Timeout` instances, per query.
+pub(crate) struct Timeout;
+
 #[derive(Debug, Default)]
-pub(crate) struct Timeout {
+struct TimeoutExt {
     pub query: Mutex<Option<String>>,
 }
 
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(Timeout {
+        Arc::new(TimeoutExt {
             query: Mutex::new(None),
         })
     }
 }
 
 #[async_trait::async_trait]
-impl Extension for Timeout {
+impl Extension for TimeoutExt {
     async fn parse_query(
         &self,
         ctx: &ExtensionContext<'_>,

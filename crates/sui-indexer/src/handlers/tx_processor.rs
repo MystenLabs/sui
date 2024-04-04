@@ -219,6 +219,12 @@ impl InMemObjectCache {
     }
 }
 
+impl Default for InMemObjectCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Along with InMemObjectCache, TxChangesProcessor implements ObjectProvider
 /// so it can be used in indexing write path to get object/balance changes.
 /// Its lifetime is per checkpoint.

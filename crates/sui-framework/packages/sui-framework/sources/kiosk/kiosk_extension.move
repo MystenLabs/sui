@@ -41,9 +41,8 @@
 module sui::kiosk_extension {
     use sui::bag::{Self, Bag};
     use sui::dynamic_field as df;
-    use sui::tx_context::TxContext;
     use sui::transfer_policy::TransferPolicy;
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+    use sui::kiosk::{Kiosk, KioskOwnerCap};
 
     /// Trying to add an extension while not being the owner of the Kiosk.
     const ENotOwner: u64 = 0;
@@ -63,7 +62,7 @@ module sui::kiosk_extension {
     /// The Extension struct contains the data used by the extension and the
     /// configuration for this extension. Stored under the `ExtensionKey`
     /// dynamic field.
-    struct Extension has store {
+    public struct Extension has store {
         /// Storage for the extension, an isolated Bag. By putting the extension
         /// into a single dynamic field, we reduce the amount of fields on the
         /// top level (eg items / listings) while giving extension developers
@@ -93,7 +92,7 @@ module sui::kiosk_extension {
     /// The `ExtensionKey` is a typed dynamic field key used to store the
     /// extension configuration and data. `Ext` is a phantom type that is used
     /// to identify the extension witness.
-    struct ExtensionKey<phantom Ext> has store, copy, drop {}
+    public struct ExtensionKey<phantom Ext> has store, copy, drop {}
 
     // === Management ===
 
@@ -107,9 +106,9 @@ module sui::kiosk_extension {
         permissions: u128,
         ctx: &mut TxContext
     ) {
-        assert!(kiosk::has_access(self, cap), ENotOwner);
+        assert!(self.has_access(cap), ENotOwner);
         df::add(
-            kiosk::uid_mut_as_owner(self, cap),
+            self.uid_mut_as_owner(cap),
             ExtensionKey<Ext> {},
             Extension {
                 storage: bag::new(ctx),
@@ -126,7 +125,7 @@ module sui::kiosk_extension {
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
     ) {
-        assert!(kiosk::has_access(self, cap), ENotOwner);
+        assert!(self.has_access(cap), ENotOwner);
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         extension_mut<Ext>(self).is_enabled = false;
     }
@@ -138,7 +137,7 @@ module sui::kiosk_extension {
         self: &mut Kiosk,
         cap: &KioskOwnerCap,
     ) {
-        assert!(kiosk::has_access(self, cap), ENotOwner);
+        assert!(self.has_access(cap), ENotOwner);
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         extension_mut<Ext>(self).is_enabled = true;
     }
@@ -148,16 +147,16 @@ module sui::kiosk_extension {
     public fun remove<Ext: drop>(
         self: &mut Kiosk, cap: &KioskOwnerCap
     ) {
-        assert!(kiosk::has_access(self, cap), ENotOwner);
+        assert!(self.has_access(cap), ENotOwner);
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
 
         let Extension {
             storage,
             permissions: _,
             is_enabled: _,
-        } = df::remove(kiosk::uid_mut_as_owner(self, cap), ExtensionKey<Ext> {});
+        } = df::remove(self.uid_mut_as_owner(cap), ExtensionKey<Ext> {});
 
-        bag::destroy_empty(storage);
+        storage.destroy_empty();
     }
 
     // === Storage ===
@@ -204,7 +203,7 @@ module sui::kiosk_extension {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         assert!(can_place<Ext>(self) || can_lock<Ext>(self), EExtensionNotAllowed);
 
-        kiosk::place_internal(self, item)
+        self.place_internal(item)
     }
 
     /// Protected action: lock an item in the Kiosk. Can be performed by an
@@ -215,14 +214,14 @@ module sui::kiosk_extension {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         assert!(can_lock<Ext>(self), EExtensionNotAllowed);
 
-        kiosk::lock_internal(self, item)
+        self.lock_internal(item)
     }
 
     // === Field Access ===
 
     /// Check whether an extension of type `Ext` is installed.
     public fun is_installed<Ext: drop>(self: &Kiosk): bool {
-        df::exists_(kiosk::uid(self), ExtensionKey<Ext> {})
+        df::exists_(self.uid(), ExtensionKey<Ext> {})
     }
 
     /// Check whether an extension of type `Ext` is enabled.
@@ -245,11 +244,11 @@ module sui::kiosk_extension {
 
     /// Internal: get a read-only access to the Extension.
     fun extension<Ext: drop>(self: &Kiosk): &Extension {
-        df::borrow(kiosk::uid(self), ExtensionKey<Ext> {})
+        df::borrow(self.uid(), ExtensionKey<Ext> {})
     }
 
     /// Internal: get a mutable access to the Extension.
     fun extension_mut<Ext: drop>(self: &mut Kiosk): &mut Extension {
-        df::borrow_mut(kiosk::uid_mut_internal(self), ExtensionKey<Ext> {})
+        df::borrow_mut(self.uid_mut_internal(), ExtensionKey<Ext> {})
     }
 }

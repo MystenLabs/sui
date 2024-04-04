@@ -3,9 +3,8 @@
 
 #[test_only]
 module sui::prover_tests {
-    use sui::object::UID;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID
     }
 
@@ -27,7 +26,7 @@ module sui::prover_tests {
 
     public fun simple_delete(o: Obj) {
         let Obj { id } = o;
-        sui::object::delete(id);
+        id.delete();
     }
 
     // ====================================================================

@@ -188,7 +188,7 @@ pub trait ExecutionCacheRead: Send + Sync {
                 // be false, but since this is a receiving object we should mark it as available if
                 // we can determine that an object with a version greater than or equal to the
                 // specified version exists or was deleted. We will then let mark it as available
-                // to let the the transaction through so it can fail at execution.
+                // to let the transaction through so it can fail at execution.
                 let is_available = self
                     .get_object(&input_key.id())?
                     .map(|obj| obj.version() >= input_key.version().unwrap())

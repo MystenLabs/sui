@@ -1,7 +1,6 @@
-
-<a name="0xdee9_custodian_v2"></a>
-
-# Module `0xdee9::custodian_v2`
+---
+title: Module `0xdee9::custodian_v2`
+---
 
 
 
@@ -27,11 +26,11 @@
 -  [Function `borrow_mut_account_balance`](#0xdee9_custodian_v2_borrow_mut_account_balance)
 
 
-<pre><code><b>use</b> <a href="dependencies/sui-framework/balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="dependencies/sui-framework/coin.md#0x2_coin">0x2::coin</a>;
-<b>use</b> <a href="dependencies/sui-framework/object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="dependencies/sui-framework/table.md#0x2_table">0x2::table</a>;
-<b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<pre><code><b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="../sui-framework/coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="../sui-framework/table.md#0x2_table">0x2::table</a>;
+<b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
@@ -53,13 +52,13 @@
 
 <dl>
 <dt>
-<code>available_balance: <a href="dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;</code>
+<code>available_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>locked_balance: <a href="dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;</code>
+<code>locked_balance: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;</code>
 </dt>
 <dd>
 
@@ -91,7 +90,7 @@ that can access funds, but cannot create new <code><a href="custodian_v2.md#0xde
 
 <dl>
 <dt>
-<code>id: <a href="dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a></code>
+<code>id: <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
@@ -125,13 +124,13 @@ that can access funds, but cannot create new <code><a href="custodian_v2.md#0xde
 
 <dl>
 <dt>
-<code>id: <a href="dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a></code>
+<code>id: <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>account_balances: <a href="dependencies/sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="custodian_v2.md#0xdee9_custodian_v2_Account">custodian_v2::Account</a>&lt;T&gt;&gt;</code>
+<code>account_balances: <a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="custodian_v2.md#0xdee9_custodian_v2_Account">custodian_v2::Account</a>&lt;T&gt;&gt;</code>
 </dt>
 <dd>
  Map from the owner address of AccountCap object to an Account object
@@ -163,7 +162,7 @@ Create an admin <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">A
 the permission to create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code>s that can access the same source of funds
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>
 </code></pre>
 
 
@@ -172,9 +171,9 @@ the permission to create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
-    <b>let</b> id = <a href="dependencies/sui-framework/object.md#0x2_object_new">object::new</a>(ctx);
-    <b>let</b> owner = <a href="dependencies/sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&id);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
+    <b>let</b> id = <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx);
+    <b>let</b> owner = <a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&id);
     <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> { id, owner }
 }
 </code></pre>
@@ -191,7 +190,7 @@ Create a "child account cap" such that id != owner
 that can access funds, but cannot create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code>s.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_create_child_account_cap">create_child_account_cap</a>(admin_account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>
+<pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_create_child_account_cap">create_child_account_cap</a>(admin_account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>
 </code></pre>
 
 
@@ -202,10 +201,10 @@ that can access funds, but cannot create new <code><a href="custodian_v2.md#0xde
 
 <pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_create_child_account_cap">create_child_account_cap</a>(admin_account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>, ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
     // Only the admin account cap can create new account caps
-    <b>assert</b>!(<a href="dependencies/sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&admin_account_cap.id) == admin_account_cap.owner, <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>);
+    <b>assert</b>!(<a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&admin_account_cap.id) == admin_account_cap.owner, <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>);
 
     <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
-        id: <a href="dependencies/sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+        id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         owner: admin_account_cap.owner
     }
 }
@@ -233,7 +232,7 @@ Destroy the given <code>account_cap</code> object
 
 <pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_delete_account_cap">delete_account_cap</a>(account_cap: <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>) {
     <b>let</b> <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> { id, owner: _ } = account_cap;
-    <a href="dependencies/sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
+    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
 }
 </code></pre>
 
@@ -281,17 +280,17 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_balance">account_balance</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;Asset&gt;,
     owner: <b>address</b>
 ): (u64, u64) {
     // <b>if</b> <a href="custodian.md#0xdee9_custodian">custodian</a> account is not created yet, directly <b>return</b> (0, 0) rather than <b>abort</b>
-    <b>if</b> (!<a href="dependencies/sui-framework/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
+    <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
         <b>return</b> (0, 0)
     };
-    <b>let</b> account_balances = <a href="dependencies/sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner);
-    <b>let</b> avail_balance = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(&account_balances.available_balance);
-    <b>let</b> locked_balance = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(&account_balances.locked_balance);
+    <b>let</b> account_balances = <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner);
+    <b>let</b> avail_balance = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&account_balances.available_balance);
+    <b>let</b> locked_balance = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&account_balances.locked_balance);
     (avail_balance, locked_balance)
 }
 </code></pre>
@@ -306,7 +305,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;
 </code></pre>
 
 
@@ -315,10 +314,10 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_new">new</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; {
     <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt; {
-        id: <a href="dependencies/sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-        account_balances: <a href="dependencies/sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
+        id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+        account_balances: <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
     }
 }
 </code></pre>
@@ -333,7 +332,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;Asset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;Asset&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;Asset&gt;, quantity: u64, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;Asset&gt;
 </code></pre>
 
 
@@ -342,13 +341,13 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_withdraw_asset">withdraw_asset</a>&lt;Asset&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;Asset&gt;,
     quantity: u64,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;Asset&gt; {
-    <a href="dependencies/sui-framework/coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, quantity), ctx)
+    <a href="../sui-framework/coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;Asset&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap, quantity), ctx)
 }
 </code></pre>
 
@@ -362,7 +361,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: <a href="dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -371,13 +370,13 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_available_balance">increase_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
     quantity: Balance&lt;T&gt;,
 ) {
     <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, owner);
-    <a href="dependencies/sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> account.available_balance, quantity);
+    <a href="../sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> account.available_balance, quantity);
 }
 </code></pre>
 
@@ -391,7 +390,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64): <a href="dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -400,13 +399,13 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_available_balance">decrease_user_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     quantity: u64,
 ): Balance&lt;T&gt; {
     <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap.owner);
-    <a href="dependencies/sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> account.available_balance, quantity)
+    <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> account.available_balance, quantity)
 }
 </code></pre>
 
@@ -420,7 +419,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, quantity: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -429,13 +428,13 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_increase_user_locked_balance">increase_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     quantity: Balance&lt;T&gt;,
 ) {
     <b>let</b> account = <a href="custodian_v2.md#0xdee9_custodian_v2_borrow_mut_account_balance">borrow_mut_account_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>, account_cap.owner);
-    <a href="dependencies/sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> account.locked_balance, quantity);
+    <a href="../sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> account.locked_balance, quantity);
 }
 </code></pre>
 
@@ -449,7 +448,7 @@ Return the owner of an AccountCap
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: u64): <a href="dependencies/sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(<a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">custodian_v2::Custodian</a>&lt;T&gt;, owner: <b>address</b>, quantity: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -458,7 +457,7 @@ Return the owner of an AccountCap
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_decrease_user_locked_balance">decrease_user_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
     quantity: u64,
@@ -488,7 +487,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_lock_balance">lock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>,
     quantity: u64,
@@ -518,7 +517,7 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_unlock_balance">unlock_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
     quantity: u64,
@@ -547,11 +546,11 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_available_balance">account_available_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): u64 {
-    <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(&<a href="dependencies/sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).available_balance)
+    <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&<a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).available_balance)
 }
 </code></pre>
 
@@ -574,11 +573,11 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_locked_balance">account_locked_balance</a>&lt;T&gt;(
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): u64 {
-    <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(&<a href="dependencies/sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).locked_balance)
+    <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&<a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner).locked_balance)
 }
 </code></pre>
 
@@ -605,14 +604,14 @@ Move <code>quantity</code> from the locked balance of <code>user</code> to the u
     <a href="custodian.md#0xdee9_custodian">custodian</a>: &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>&lt;T&gt;,
     owner: <b>address</b>,
 ): &<b>mut</b> <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a>&lt;T&gt; {
-    <b>if</b> (!<a href="dependencies/sui-framework/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
-        <a href="dependencies/sui-framework/table.md#0x2_table_add">table::add</a>(
+    <b>if</b> (!<a href="../sui-framework/table.md#0x2_table_contains">table::contains</a>(&<a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)) {
+        <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(
             &<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances,
             owner,
-            <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a> { available_balance: <a href="dependencies/sui-framework/balance.md#0x2_balance_zero">balance::zero</a>(), locked_balance: <a href="dependencies/sui-framework/balance.md#0x2_balance_zero">balance::zero</a>() }
+            <a href="custodian_v2.md#0xdee9_custodian_v2_Account">Account</a> { available_balance: <a href="../sui-framework/balance.md#0x2_balance_zero">balance::zero</a>(), locked_balance: <a href="../sui-framework/balance.md#0x2_balance_zero">balance::zero</a>() }
         );
     };
-    <a href="dependencies/sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)
+    <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> <a href="custodian.md#0xdee9_custodian">custodian</a>.account_balances, owner)
 }
 </code></pre>
 

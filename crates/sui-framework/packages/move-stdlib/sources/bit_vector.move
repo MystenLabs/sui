@@ -14,7 +14,7 @@ module std::bit_vector {
     /// The maximum allowed bitvector size
     const MAX_SIZE: u64 = 1024;
 
-    struct BitVector has copy, drop, store {
+    public struct BitVector has copy, drop, store {
         length: u64,
         bit_field: vector<bool>,
     }
@@ -22,10 +22,10 @@ module std::bit_vector {
     public fun new(length: u64): BitVector {
         assert!(length > 0, ELENGTH);
         assert!(length < MAX_SIZE, ELENGTH);
-        let counter = 0;
-        let bit_field = vector::empty();
+        let mut counter = 0;
+        let mut bit_field = vector::empty();
         while (counter < length) {
-            vector::push_back(&mut bit_field, false);
+            bit_field.push_back(false);
             counter = counter + 1;
         };
 
@@ -37,15 +37,15 @@ module std::bit_vector {
 
     /// Set the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun set(bitvector: &mut BitVector, bit_index: u64) {
-        assert!(bit_index < vector::length(&bitvector.bit_field), EINDEX);
-        let x = vector::borrow_mut(&mut bitvector.bit_field, bit_index);
+        assert!(bit_index < bitvector.bit_field.length(), EINDEX);
+        let x = &mut bitvector.bit_field[bit_index];
         *x = true;
     }
 
     /// Unset the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun unset(bitvector: &mut BitVector, bit_index: u64) {
-        assert!(bit_index < vector::length(&bitvector.bit_field), EINDEX);
-        let x = vector::borrow_mut(&mut bitvector.bit_field, bit_index);
+        assert!(bit_index < bitvector.bit_field.length(), EINDEX);
+        let x = &mut bitvector.bit_field[bit_index];
         *x = false;
     }
 
@@ -53,19 +53,19 @@ module std::bit_vector {
     /// bitvector's length the bitvector will be zeroed out.
     public fun shift_left(bitvector: &mut BitVector, amount: u64) {
         if (amount >= bitvector.length) {
-           let len = vector::length(&bitvector.bit_field);
-           let i = 0;
+           let len = bitvector.bit_field.length();
+           let mut i = 0;
            while (i < len) {
-               let elem = vector::borrow_mut(&mut bitvector.bit_field, i);
+               let elem = &mut bitvector.bit_field[i];
                *elem = false;
                i = i + 1;
            };
         } else {
-            let i = amount;
+            let mut i = amount;
 
             while (i < bitvector.length) {
-                if (is_index_set(bitvector, i)) set(bitvector, i - amount)
-                else unset(bitvector, i - amount);
+                if (bitvector.is_index_set(i)) bitvector.set(i - amount)
+                else bitvector.unset(i - amount);
                 i = i + 1;
             };
 
@@ -81,13 +81,13 @@ module std::bit_vector {
     /// Return the value of the bit at `bit_index` in the `bitvector`. `true`
     /// represents "1" and `false` represents a 0
     public fun is_index_set(bitvector: &BitVector, bit_index: u64): bool {
-        assert!(bit_index < vector::length(&bitvector.bit_field), EINDEX);
-        *vector::borrow(&bitvector.bit_field, bit_index)
+        assert!(bit_index < bitvector.bit_field.length(), EINDEX);
+        bitvector.bit_field[bit_index]
     }
 
     /// Return the length (number of usable bits) of this bitvector
     public fun length(bitvector: &BitVector): u64 {
-        vector::length(&bitvector.bit_field)
+        bitvector.bit_field.length()
     }
 
     /// Returns the length of the longest sequence of set bits starting at (and
@@ -95,11 +95,11 @@ module std::bit_vector {
     /// sequence, then `0` is returned.
     public fun longest_set_sequence_starting_at(bitvector: &BitVector, start_index: u64): u64 {
         assert!(start_index < bitvector.length, EINDEX);
-        let index = start_index;
+        let mut index = start_index;
 
         // Find the greatest index in the vector such that all indices less than it are set.
         while (index < bitvector.length) {
-            if (!is_index_set(bitvector, index)) break;
+            if (!bitvector.is_index_set(index)) break;
             index = index + 1;
         };
 

@@ -4,10 +4,9 @@
 #[allow(unused_const)]
 module sui::transfer {
 
-    use sui::object::{Self, ID, UID};
 
-    #[test_only]
-    friend sui::test_scenario;
+    /* #[test_only] */
+    /* friend sui::test_scenario; */
 
     /// This represents the ability to `receive` an object of type `T`.
     /// This type is ephemeral per-transaction and cannot be stored on-chain.
@@ -16,7 +15,7 @@ module sui::transfer {
     /// `id` at version `version` if you can prove mutable access to the parent
     /// object during the transaction.
     /// Internals of this struct are opaque outside this module.
-    struct Receiving<phantom T: key> has drop {
+    public struct Receiving<phantom T: key> has drop {
         id: ID,
         version: u64,
     }
@@ -110,7 +109,7 @@ module sui::transfer {
             id,
             version,
         } = to_receive;
-        receive_impl(object::uid_to_address(parent), id, version)
+        receive_impl(parent.to_address(), id, version)
     }
 
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
@@ -122,7 +121,7 @@ module sui::transfer {
             id,
             version,
         } = to_receive;
-        receive_impl(object::uid_to_address(parent), id, version)
+        receive_impl(parent.to_address(), id, version)
     }
 
     /// Return the object ID that the given `Receiving` argument references.
@@ -130,11 +129,11 @@ module sui::transfer {
         receiving.id
     }
 
-    public(friend) native fun freeze_object_impl<T: key>(obj: T);
+    public(package) native fun freeze_object_impl<T: key>(obj: T);
 
-    public(friend) native fun share_object_impl<T: key>(obj: T);
+    public(package) native fun share_object_impl<T: key>(obj: T);
 
-    public(friend) native fun transfer_impl<T: key>(obj: T, recipient: address);
+    public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
-    native fun receive_impl<T: key>(parent: address, to_receive: object::ID, version: u64): T;
+    native fun receive_impl<T: key>(parent: address, to_receive: ID, version: u64): T;
 }

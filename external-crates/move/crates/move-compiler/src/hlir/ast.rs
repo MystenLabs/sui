@@ -333,6 +333,7 @@ pub enum UnannotatedExp_ {
         var: Var,
     },
     Constant(ConstantName),
+    ErrorConstant(Option<ConstantName>),
 
     ModuleCall(Box<ModuleCall>),
     Freeze(Box<Exp>),
@@ -1386,6 +1387,12 @@ impl AstDebug for UnannotatedExp_ {
             }
             E::UnresolvedError => w.write("_|_"),
             E::Unreachable => w.write("unreachable"),
+            E::ErrorConstant(c) => {
+                w.write("ErrorConstant");
+                if let Some(c) = c {
+                    w.write(&format!("({})", c))
+                }
+            }
         }
     }
 }

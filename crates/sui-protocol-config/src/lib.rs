@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 41;
+const MAX_PROTOCOL_VERSION: u64 = 42;
 
 // Record history of protocol version allocations here:
 //
@@ -114,6 +114,7 @@ const MAX_PROTOCOL_VERSION: u64 = 41;
 //             Extra version to fix `test_upgrade_compatibility` simtest.
 // Version 40:
 // Version 41: Enable group operations native functions in testnet and mainnet (without msm).
+// Version 42: Migrate sui framework and related code to Move 2024
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -955,6 +956,10 @@ pub struct ProtocolConfig {
     /// random beacon protocol.
     random_beacon_reduction_lower_bound: Option<u32>,
 
+    /// Consensus Round after which DKG should be aborted and randomness disabled for
+    /// the epoch, if it hasn't already completed.
+    random_beacon_dkg_timeout_round: Option<u32>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1197,8 +1202,18 @@ impl ProtocolConfig {
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
     pub fn get_for_version(version: ProtocolVersion, chain: Chain) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
-        assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
-        assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
+        assert!(
+            version >= ProtocolVersion::MIN,
+            "Network protocol version is {:?}, but the minimum supported version by the binary is {:?}. Please upgrade the binary.",
+            version,
+            ProtocolVersion::MIN.0,
+        );
+        assert!(
+            version <= ProtocolVersion::MAX_ALLOWED,
+            "Network protocol version is {:?}, but the maximum supported version by the binary is {:?}. Please upgrade the binary.",
+            version,
+            ProtocolVersion::MAX_ALLOWED.0,
+        );
 
         let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
@@ -1609,6 +1624,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_lower_bound: None,
 
+            random_beacon_dkg_timeout_round: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1856,6 +1873,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.random_beacon = true;
                         cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(200);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
@@ -2006,6 +2024,7 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_msm_max_len = Some(32);
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
+                42 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

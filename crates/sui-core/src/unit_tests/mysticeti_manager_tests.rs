@@ -47,7 +47,7 @@ async fn test_mysticeti_manager() {
         let client = Arc::new(LazyMysticetiClient::default());
 
         let manager = MysticetiManager::new(
-            config.protocol_key_pair().copy(),
+            config.worker_key_pair().copy(),
             config.network_key_pair().copy(),
             consensus_config.db_path().to_path_buf(),
             metrics,

@@ -1683,6 +1683,7 @@ dependencies = [
  "move-core-types",
  "num-bigint",
  "once_cell",
+ "proptest",
  "serde",
  "sha2",
  "vfs",
@@ -1716,6 +1717,7 @@ dependencies = [
  "petgraph",
  "regex",
  "serde",
+ "similar",
  "stacker",
  "tempfile",
  "vfs",
@@ -2211,6 +2213,7 @@ name = "move-unit-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "better_any",
  "clap 4.4.1",
  "codespan-reporting",
@@ -3364,6 +3367,12 @@ name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74233d3b3b2f6d4b006dc19dee745e73e2a6bfb6f93607cd3b02bd5b00797d7c"
+
+[[package]]
+name = "similar"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32fea41aca09ee824cc9724996433064c89f7777e60762749a4170a14abbfa21"
 
 [[package]]
 name = "simplelog"

@@ -49,7 +49,7 @@ pub fn default_num_transactions() -> usize {
 /// Represents any sort of transaction that can be done in an account universe.
 pub trait AUTransactionGen: fmt::Debug {
     /// Applies this transaction onto the universe, updating balances within the universe as
-    /// necessary. Returns a signed transaction that can be run on the VM and the the execution status.
+    /// necessary. Returns a signed transaction that can be run on the VM and the execution status.
     fn apply(
         &self,
         universe: &mut AccountUniverse,

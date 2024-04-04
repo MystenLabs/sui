@@ -357,7 +357,7 @@ impl SignatureVerifier {
                 let verify_params = VerifyParams::new(
                     jwks,
                     self.zk_login_params.supported_providers.clone(),
-                    self.zk_login_params.env.clone(),
+                    self.zk_login_params.env,
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
                 );

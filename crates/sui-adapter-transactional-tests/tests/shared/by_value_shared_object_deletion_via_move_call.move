@@ -6,9 +6,6 @@
 //# publish
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
 

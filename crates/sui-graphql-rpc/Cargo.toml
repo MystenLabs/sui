@@ -20,6 +20,7 @@ const-str.workspace = true
 diesel.workspace = true
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto-zkp.workspace = true
 futures.workspace = true
 git-version.workspace = true
 hex.workspace = true
@@ -50,12 +51,14 @@ sui-types.workspace = true
 tap.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio-util = { workspace = true, features = ["rt"] }
 toml.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+im.workspace = true
 
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true

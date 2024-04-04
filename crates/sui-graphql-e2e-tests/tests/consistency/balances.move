@@ -14,13 +14,11 @@
 // snapshot@[0, 4), first two transaction blocks are out of available range.
 // snapshot@[0, 6), all transaction blocks are out of available range.
 
-//# init --addresses P0=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses P0=0x0 --accounts A B --simulator
 
 //# publish --sender A
 module P0::fake {
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     public struct FAKE has drop {}
 

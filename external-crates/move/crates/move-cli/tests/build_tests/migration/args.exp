@@ -18,249 +18,231 @@ The following changes will be made.
 
 --- sources/mod0.move
 +++ sources/mod0.move
-@@ -2,1 +2,1 @@
+@@ -2 +2 @@
 -    struct S { f: u64 }
 +    public struct S { f: u64 }
-@@ -4,1 +4,1 @@
+@@ -4 +4 @@
 -    struct LongerName {
 +    public struct LongerName {
-@@ -9,1 +9,1 @@
+@@ -9 +9 @@
 -    struct Positional(u64, u64, u64)
 +    public struct Positional(u64, u64, u64)
-@@ -11,1 +11,1 @@
+@@ -11,2 +11,2 @@
 -    entry fun t0(x: u64, s: S): u64 {
-+    entry fun t0(mut x: u64, s: S): u64 {
-@@ -12,1 +12,1 @@
 -        let S { f: fin } = s;
++    entry fun t0(mut x: u64, s: S): u64 {
 +        let S { f: mut fin } = s;
 --- sources/mod1.move
 +++ sources/mod1.move
-@@ -3,1 +3,1 @@
+@@ -3,3 +3,3 @@
 -    public fun t(x: u64, yip: u64, s: S): u64  {
-+    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
-@@ -4,1 +4,1 @@
 -        let yes = 0;
-+        let mut yes = 0;
-@@ -5,1 +5,1 @@
 -        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
 +        let S { f: mut fin } = s;
 --- sources/mod2.move
 +++ sources/mod2.move
-@@ -3,1 +3,1 @@
+@@ -3,3 +3,3 @@
 -    public fun t(x: u64, yip: u64, s: S): u64  {
-+    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
-@@ -4,1 +4,1 @@
 -        let yes = 0;
-+        let mut yes = 0;
-@@ -5,1 +5,1 @@
 -        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
 +        let S { f: mut fin } = s;
-@@ -15,1 +15,1 @@
+@@ -15 +15 @@
 -        let x = 5; let y = 10;
 +        let mut x = 5; let mut y = 10;
 --- sources/mod3_4.move
 +++ sources/mod3_4.move
-@@ -2,1 +2,1 @@
+@@ -2 +2 @@
 -    struct S { f: u64 }
 +    public struct S { f: u64 }
-@@ -4,1 +4,1 @@
+@@ -4 +4 @@
 -    struct LongerName {
 +    public struct LongerName {
-@@ -9,1 +9,1 @@
+@@ -9 +9 @@
 -    struct Positional(u64, u64, u64)
 +    public struct Positional(u64, u64, u64)
-@@ -11,1 +11,1 @@
+@@ -11,2 +11,2 @@
 -    entry fun t0(x: u64, s: S): u64 {
+-        let S { f: fin } = s;
 +    entry fun t0(mut x: u64, s: S): u64 {
-@@ -12,1 +12,1 @@
--        let S { f: fin } = s;
 +        let S { f: mut fin } = s;
-@@ -22,1 +22,1 @@
+@@ -22,3 +22,3 @@
 -    public fun t(x: u64, yip: u64, s: S): u64  {
-+    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
-@@ -23,1 +23,1 @@
 -        let yes = 0;
-+        let mut yes = 0;
-@@ -24,1 +24,1 @@
 -        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
 +        let S { f: mut fin } = s;
 --- sources/mod5.move
 +++ sources/mod5.move
-@@ -3,1 +3,1 @@
+@@ -3,2 +3,2 @@
 -    struct UID { }
-+    public struct UID { }
-@@ -4,1 +4,1 @@
 -    struct TxContext { }
++    public struct UID { }
 +    public struct TxContext { }
-@@ -14,1 +14,1 @@
+@@ -14,2 +14,2 @@
 -        let v: vector<UID> = empty();
-+        let mut v: vector<UID> = empty();
-@@ -15,1 +15,1 @@
 -        let i = 0;
++        let mut v: vector<UID> = empty();
 +        let mut i = 0;
 --- tests/test0.move
 +++ tests/test0.move
-@@ -5,1 +5,1 @@
+@@ -5,3 +5,3 @@
 -    struct R has store { }
-+    public struct R has store { }
-@@ -6,1 +6,1 @@
 -    struct Droppable has drop {}
-+    public struct Droppable has drop {}
-@@ -7,1 +7,1 @@
 -    struct NotDroppable {}
++    public struct R has store { }
++    public struct Droppable has drop {}
 +    public struct NotDroppable {}
-@@ -30,1 +30,1 @@
+@@ -30 +30 @@
 -        let v1 = V::empty<u64>();
 +        let mut v1 = V::empty<u64>();
-@@ -38,1 +38,1 @@
+@@ -38,2 +38,2 @@
 -        let v1 = V::empty();
-+        let mut v1 = V::empty();
-@@ -39,1 +39,1 @@
 -        let v2 = V::empty();
++        let mut v1 = V::empty();
 +        let mut v2 = V::empty();
-@@ -55,1 +55,1 @@
+@@ -55 +55 @@
 -        let v1 = V::empty();
 +        let mut v1 = V::empty();
-@@ -72,1 +72,1 @@
+@@ -72,2 +72,2 @@
 -        let v1 = V::empty();
-+        let mut v1 = V::empty();
-@@ -73,1 +73,1 @@
 -        let v2 = V::empty();
++        let mut v1 = V::empty();
 +        let mut v2 = V::empty();
-@@ -85,1 +85,1 @@
+@@ -85 +85 @@
 -        let i = 0;
 +        let mut i = 0;
-@@ -95,1 +95,1 @@
+@@ -95 +95 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -102,1 +102,1 @@
+@@ -102 +102 @@
 -        let vec = V::empty();
 +        let mut vec = V::empty();
-@@ -129,1 +129,1 @@
+@@ -129 +129 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -138,1 +138,1 @@
+@@ -138 +138 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -145,1 +145,1 @@
+@@ -145 +145 @@
 -        let vec = V::empty();
 +        let mut vec = V::empty();
-@@ -159,1 +159,1 @@
+@@ -159 +159 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -165,1 +165,1 @@
+@@ -165 +165 @@
 -        let vec = V::empty();
 +        let mut vec = V::empty();
-@@ -180,1 +180,1 @@
+@@ -180 +180 @@
 -        let vec = V::empty();
 +        let mut vec = V::empty();
-@@ -194,1 +194,1 @@
+@@ -194 +194 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -202,1 +202,1 @@
+@@ -202 +202 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -217,1 +217,1 @@
+@@ -217 +217 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -233,1 +233,1 @@
+@@ -233 +233 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -240,1 +240,1 @@
+@@ -240 +240 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -247,1 +247,1 @@
+@@ -247 +247 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -255,1 +255,1 @@
+@@ -255 +255 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -264,1 +264,1 @@
+@@ -264 +264 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -285,1 +285,1 @@
+@@ -285 +285 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -304,1 +304,1 @@
+@@ -304 +304 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -311,1 +311,1 @@
+@@ -311 +311 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -324,1 +324,1 @@
+@@ -324 +324 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -330,1 +330,1 @@
+@@ -330 +330 @@
 -        let v = V::empty<u64>();
 +        let mut v = V::empty<u64>();
-@@ -338,1 +338,1 @@
+@@ -338 +338 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -360,1 +360,1 @@
+@@ -360 +360 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -382,1 +382,1 @@
+@@ -382 +382 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -389,1 +389,1 @@
+@@ -389 +389 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -411,1 +411,1 @@
+@@ -411 +411 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -420,1 +420,1 @@
+@@ -420 +420 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -431,1 +431,1 @@
+@@ -431 +431 @@
 -        let v = V::empty();
 +        let mut v = V::empty();
-@@ -442,1 +442,1 @@
+@@ -442 +442 @@
 -        let empty = V::empty();
 +        let mut empty = V::empty();
-@@ -444,1 +444,1 @@
+@@ -444 +444 @@
 -        let i = 0;
 +        let mut i = 0;
-@@ -455,1 +455,1 @@
+@@ -455,2 +455,2 @@
 -        let v = V::empty();
-+        let mut v = V::empty();
-@@ -456,1 +456,1 @@
 -        let i = 0;
++        let mut v = V::empty();
 +        let mut i = 0;
-@@ -471,1 +471,1 @@
+@@ -471,2 +471,2 @@
 -    fun test_natives_with_type<T>(x1: T, x2: T): (T, T) {
-+    fun test_natives_with_type<T>(mut x1: T, mut x2: T): (T, T) {
-@@ -472,1 +472,1 @@
 -        let v = V::empty();
++    fun test_natives_with_type<T>(mut x1: T, mut x2: T): (T, T) {
 +        let mut v = V::empty();
-@@ -509,1 +509,1 @@
+@@ -509 +509 @@
 -        let v = vector[7];
 +        let mut v = vector[7];
-@@ -513,1 +513,1 @@
+@@ -513 +513 @@
 -        let v = vector[7, 9];
 +        let mut v = vector[7, 9];
-@@ -517,1 +517,1 @@
+@@ -517 +517 @@
 -        let v = vector[6, 7];
 +        let mut v = vector[6, 7];
-@@ -521,1 +521,1 @@
+@@ -521 +521 @@
 -        let v = vector[5, 6, 8];
 +        let mut v = vector[5, 6, 8];
-@@ -528,1 +528,1 @@
+@@ -528 +528 @@
 -        let v = vector[];
 +        let mut v = vector[];
-@@ -539,1 +539,1 @@
+@@ -539 +539 @@
 -        let v = vector[7];
 +        let mut v = vector[7];
-@@ -545,1 +545,1 @@
+@@ -545,2 +545,2 @@
 -        let v = V::empty();
-+        let mut v = V::empty();
-@@ -546,1 +546,1 @@
 -        let i = 0;
++        let mut v = V::empty();
 +        let mut i = 0;
-@@ -559,1 +559,1 @@
+@@ -559,2 +559,2 @@
 -        let v = V::empty();
-+        let mut v = V::empty();
-@@ -560,1 +560,1 @@
 -        let i = 0;
++        let mut v = V::empty();
 +        let mut i = 0;
 
 

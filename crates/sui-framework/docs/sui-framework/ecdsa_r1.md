@@ -1,7 +1,6 @@
-
-<a name="0x2_ecdsa_r1"></a>
-
-# Module `0x2::ecdsa_r1`
+---
+title: Module `0x2::ecdsa_r1`
+---
 
 
 
@@ -74,7 +73,7 @@ key, otherwise throw error. This is similar to ecrecover in Ethereum, can only b
 applied to Secp256r1 signatures. May fail with <code><a href="ecdsa_r1.md#0x2_ecdsa_r1_EFailToRecoverPubKey">EFailToRecoverPubKey</a></code> or <code><a href="ecdsa_r1.md#0x2_ecdsa_r1_EInvalidSignature">EInvalidSignature</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_ecrecover">secp256r1_ecrecover</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_ecrecover">secp256r1_ecrecover</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -83,7 +82,7 @@ applied to Secp256r1 signatures. May fail with <code><a href="ecdsa_r1.md#0x2_ec
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_ecrecover">secp256r1_ecrecover</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_ecrecover">secp256r1_ecrecover</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 
@@ -105,7 +104,7 @@ https://github.com/MystenLabs/fastcrypto/blob/74aec4886e62122a5b769464c2bea5f803
 If the signature is valid to the pubkey and hashed message, return true. Else false.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_verify">secp256r1_verify</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool
+<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_verify">secp256r1_verify</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool
 </code></pre>
 
 
@@ -114,7 +113,7 @@ If the signature is valid to the pubkey and hashed message, return true. Else fa
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_verify">secp256r1_verify</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_verify">secp256r1_verify</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool;
 </code></pre>
 
 

@@ -7,15 +7,9 @@
 
 //# publish --sender A
 module test::regulated_coin {
-    use std::option;
     use sui::coin;
     use sui::coin::Coin;
-    use sui::object;
-    use sui::object::UID;
-    use sui::transfer;
     use sui::transfer::Receiving;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
 
     public struct REGULATED_COIN has drop {}
 

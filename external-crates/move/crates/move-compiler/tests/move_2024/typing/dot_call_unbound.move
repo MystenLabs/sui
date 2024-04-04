@@ -1,7 +1,5 @@
 module 0x42::t {
 
-friend 0x42::m;
-
 public struct X has drop {}
 
 fun call(x: &X) {

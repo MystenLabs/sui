@@ -107,6 +107,7 @@ async fn main() -> Result<()> {
         "https://checkpoints.mainnet.sui.io".to_string(),
         0, /* initial checkpoint number */
         5, /* concurrency */
+        None, /* extra reader options */
     ).await?;
     executor.await?;
     Ok(())

@@ -8,14 +8,12 @@
 // This test also demonstrates why we need separate dynamicField and dynamicObjectField APIs.
 // It is possible for a dynamic field and a dynamic object field to share the same name lookup.
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::m {
     use sui::dynamic_field as field;
     use sui::dynamic_object_field as ofield;
-    use sui::object;
-    use sui::tx_context::{sender, TxContext};
 
     public struct Wrapper has key {
         id: object::UID,
@@ -32,7 +30,7 @@ module Test::m {
 
     public entry fun create_obj(ctx: &mut TxContext){
         let id = object::new(ctx);
-        sui::transfer::public_transfer(Parent { id }, sender(ctx))
+        sui::transfer::public_transfer(Parent { id }, ctx.sender())
     }
 
     public entry fun add_df(obj: &mut Parent) {
@@ -49,7 +47,7 @@ module Test::m {
 
     public entry fun wrap(parent: Parent, ctx: &mut TxContext) {
         let wrapper = Wrapper { id: object::new(ctx), o: parent };
-        sui::transfer::transfer(wrapper, sender(ctx))
+        sui::transfer::transfer(wrapper, ctx.sender())
     }
 }
 

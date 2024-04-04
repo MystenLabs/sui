@@ -44,9 +44,7 @@ export function DeepBookContextProvider({ children }: DeepBookContextProviderPro
 
 	const { data } = useGetOwnedObjects(
 		activeAccountAddress,
-		{
-			MatchAll: [{ StructType: '0xdee9::custodian_v2::AccountCap' }],
-		},
+		{ StructType: '0xdee9::custodian_v2::AccountCap' },
 		1,
 	);
 

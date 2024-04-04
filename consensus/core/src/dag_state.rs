@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
-/// Only uncommited and last committed blocks are cached in memory.
+/// Only uncommitted and last committed blocks are cached in memory.
 /// The rest of blocks are stored on disk.
 /// Refs to cached blocks and additional refs are cached as well, to speed up existence checks.
 ///
@@ -47,6 +47,9 @@ pub(crate) struct DagState {
 
     // Last consensus commit of the dag.
     last_commit: Option<TrustedCommit>,
+
+    // Last wall time when commit round advanced. Does not persist across restarts.
+    last_commit_round_advancement_time: Option<std::time::Instant>,
 
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
@@ -98,6 +101,7 @@ impl DagState {
             recent_refs: vec![BTreeSet::new(); num_authorities],
             highest_accepted_round: 0,
             last_commit,
+            last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
             commits_to_vote: VecDeque::new(),
             blocks_to_write: vec![],
@@ -145,6 +149,7 @@ impl DagState {
         }
         self.update_block_metadata(&block);
         self.blocks_to_write.push(block);
+        self.context.metrics.node_metrics.accepted_blocks.inc();
     }
 
     /// Updates internal metadata for a block.
@@ -153,6 +158,11 @@ impl DagState {
         self.recent_blocks.insert(block_ref, block.clone());
         self.recent_refs[block_ref.author].insert(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
+        self.context
+            .metrics
+            .node_metrics
+            .highest_accepted_round
+            .set(self.highest_accepted_round as i64);
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
@@ -462,13 +472,34 @@ impl DagState {
         } else {
             assert_eq!(commit.index(), 1);
         }
+
+        let commit_round_advanced = if let Some(previous_commit) = &self.last_commit {
+            previous_commit.round() < commit.round()
+        } else {
+            true
+        };
+
         self.last_commit = Some(commit.clone());
+
+        if commit_round_advanced {
+            let now = std::time::Instant::now();
+            if let Some(previous_time) = self.last_commit_round_advancement_time {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .commit_round_advancement_interval
+                    .observe(now.duration_since(previous_time).as_secs_f64())
+            }
+            self.last_commit_round_advancement_time = Some(now);
+        }
+
         for block_ref in commit.blocks().iter() {
             self.last_committed_rounds[block_ref.author] = max(
                 self.last_committed_rounds[block_ref.author],
                 block_ref.round,
             );
         }
+
         self.commits_to_vote.push_back(commit.reference());
         self.commits_to_write.push(commit);
     }
@@ -519,6 +550,13 @@ impl DagState {
     /// After each flush, DagState becomes persisted in storage and it expected to recover
     /// all internal states from storage after restarts.
     pub(crate) fn flush(&mut self) {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["DagState::flush"])
+            .start_timer();
         // Flush buffered data to storage.
         let blocks = std::mem::take(&mut self.blocks_to_write);
         let commits = std::mem::take(&mut self.commits_to_write);

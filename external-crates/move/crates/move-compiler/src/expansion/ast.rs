@@ -138,6 +138,9 @@ pub struct ModuleDefinition {
 #[derive(Debug, Clone)]
 pub struct Friend {
     pub attributes: Attributes,
+    // We retain attr locations for Move 2024 migration: `flatten_attributes` in `translate.rs`
+    // discards the overall attribute spans, but we need them to comment full attribute forms out.
+    pub attr_locs: Vec<Loc>,
     pub loc: Loc,
 }
 

@@ -69,11 +69,11 @@ macro_rules! chunk {
 // is now less relevant. We should do experiments and remove it if it's true.
 const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 1000;
 // The amount of rows to update in one DB transcation
-const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
+const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // The amount of rows to update in one DB transcation, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
-const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -120,11 +120,11 @@ impl PgIndexerStore {
             SyncModuleCache::new(IndexerStorePackageModuleResolver::new(blocking_cp.clone())),
         );
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
-            .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
+            .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
         let parallel_objects_chunk_size = std::env::var("PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE")
-            .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
+            .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())

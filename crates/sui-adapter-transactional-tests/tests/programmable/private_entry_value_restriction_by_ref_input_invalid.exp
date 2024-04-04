@@ -3,24 +3,24 @@ processed 6 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 9-21:
+task 1 'publish'. lines 9-18:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5054000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 23-28:
+task 2 'programmable'. lines 20-25:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'programmable'. lines 30-32:
+task 3 'programmable'. lines 27-29:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
 
-task 4 'programmable'. lines 34-38:
+task 4 'programmable'. lines 31-35:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
 
-task 5 'programmable'. lines 40-42:
+task 5 'programmable'. lines 37-39:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
