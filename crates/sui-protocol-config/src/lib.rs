@@ -117,6 +117,9 @@ const MAX_PROTOCOL_VERSION: u64 = 43;
 // Version 41: Enable group operations native functions in testnet and mainnet (without msm).
 // Version 42: Migrate sui framework and related code to Move 2024
 // Version 43: Introduce the upper bound delta config for a zklogin signature's max epoch.
+//             Introduce an explicit parameter for the tick limit per package (previously this was
+//             represented by the parameter for the tick limit per module).
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -645,8 +648,11 @@ pub struct ProtocolConfig {
     /// Maximum number of meter `ticks` spent verifying a Move function. Enforced by the bytecode verifier at signing.
     max_verifier_meter_ticks_per_function: Option<u64>,
 
-    /// Maximum number of meter `ticks` spent verifying a Move function. Enforced by the bytecode verifier at signing.
+    /// Maximum number of meter `ticks` spent verifying a Move module. Enforced by the bytecode verifier at signing.
     max_meter_ticks_per_module: Option<u64>,
+
+    /// Maximum number of meter `ticks` spent verifying a Move package. Enforced by the bytecode verifier at signing.
+    max_meter_ticks_per_package: Option<u64>,
 
     // === Object runtime internal operation limits ====
     // These affect dynamic fields
@@ -1398,17 +1404,11 @@ impl ProtocolConfig {
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
 
-            // TODO: Is this too low/high?
             max_back_edges_per_function: Some(10_000),
-
-            // TODO:  Is this too low/high?
             max_back_edges_per_module: Some(10_000),
-
-            // TODO: Is this too low/high?
             max_verifier_meter_ticks_per_function: Some(6_000_000),
-
-            // TODO: Is this too low/high?
             max_meter_ticks_per_module: Some(6_000_000),
+            max_meter_ticks_per_package: None,
 
             object_runtime_max_num_cached_objects: Some(1000),
             object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
@@ -2064,6 +2064,7 @@ impl ProtocolConfig {
                 42 => {}
                 43 => {
                     cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
+                    cfg.max_meter_ticks_per_package = Some(16_000_000);
                 }
                 // Use this template when making changes:
                 //
@@ -2120,6 +2121,12 @@ impl ProtocolConfig {
         MeterConfig {
             max_per_fun_meter_units: Some(self.max_verifier_meter_ticks_per_function() as u128),
             max_per_mod_meter_units: Some(self.max_meter_ticks_per_module() as u128),
+            max_per_pkg_meter_units: Some(
+                // Until the per-package limit was introduced, the per-module limit played double
+                // duty.
+                self.max_meter_ticks_per_package_as_option()
+                    .unwrap_or_else(|| self.max_meter_ticks_per_module()) as u128,
+            ),
         }
     }
 

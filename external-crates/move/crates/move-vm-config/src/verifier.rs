@@ -30,6 +30,7 @@ pub struct VerifierConfig {
 pub struct MeterConfig {
     pub max_per_fun_meter_units: Option<u128>,
     pub max_per_mod_meter_units: Option<u128>,
+    pub max_per_pkg_meter_units: Option<u128>,
 }
 
 impl Default for VerifierConfig {
@@ -74,6 +75,7 @@ impl Default for MeterConfig {
         Self {
             max_per_fun_meter_units: Some(1000 * 8000),
             max_per_mod_meter_units: Some(1000 * 8000),
+            max_per_pkg_meter_units: Some(1000 * 8000),
         }
     }
 }
@@ -83,6 +85,7 @@ impl MeterConfig {
         Self {
             max_per_fun_meter_units: None,
             max_per_mod_meter_units: None,
+            max_per_pkg_meter_units: None,
         }
     }
 }

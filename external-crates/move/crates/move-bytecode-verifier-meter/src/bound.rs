@@ -8,6 +8,7 @@ use move_vm_config::verifier::MeterConfig;
 
 /// Module and function level metering.
 pub struct BoundMeter {
+    pkg_bounds: Bounds,
     mod_bounds: Bounds,
     fun_bounds: Bounds,
 }
@@ -57,6 +58,11 @@ impl Bounds {
 impl BoundMeter {
     pub fn new(config: MeterConfig) -> Self {
         Self {
+            pkg_bounds: Bounds {
+                name: "<unknown>".to_string(),
+                units: 0,
+                max: config.max_per_pkg_meter_units,
+            },
             mod_bounds: Bounds {
                 name: "<unknown>".to_string(),
                 units: 0,
@@ -71,18 +77,20 @@ impl BoundMeter {
     }
 
     fn get_bounds_mut(&mut self, scope: Scope) -> &mut Bounds {
-        if scope == Scope::Module {
-            &mut self.mod_bounds
-        } else {
-            &mut self.fun_bounds
+        match scope {
+            Scope::Package => &mut self.pkg_bounds,
+            Scope::Module => &mut self.mod_bounds,
+            Scope::Function => &mut self.fun_bounds,
+            Scope::Transaction => panic!("transaction scope unsupported."),
         }
     }
 
     fn get_bounds(&self, scope: Scope) -> &Bounds {
-        if scope == Scope::Module {
-            &self.mod_bounds
-        } else {
-            &self.fun_bounds
+        match scope {
+            Scope::Package => &self.pkg_bounds,
+            Scope::Module => &self.mod_bounds,
+            Scope::Function => &self.fun_bounds,
+            Scope::Transaction => panic!("transaction scope unsupported."),
         }
     }
 

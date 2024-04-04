@@ -1120,6 +1120,7 @@ impl SuiClientCommands {
                 let mut meter = BoundMeter::new(MeterConfig {
                     max_per_fun_meter_units: Some(u128::MAX),
                     max_per_mod_meter_units: Some(u128::MAX),
+                    max_per_pkg_meter_units: Some(u128::MAX),
                 });
 
                 verifier.meter_compiled_modules(&protocol_config, &modules, &mut meter)?;

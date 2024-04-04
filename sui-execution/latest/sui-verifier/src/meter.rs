@@ -44,12 +44,10 @@ impl SuiVerifierMeter {
                 ticks: 0,
                 max_ticks: None,
             },
-
-            // Not used for now to keep backward compat
             package_bounds: SuiVerifierMeterBounds {
                 name: "<unknown>".to_string(),
                 ticks: 0,
-                max_ticks: None,
+                max_ticks: config.max_per_pkg_meter_units,
             },
             module_bounds: SuiVerifierMeterBounds {
                 name: "<unknown>".to_string(),
