@@ -345,6 +345,10 @@ where
             )
         };
         info!(checkpoint_seq, "Indexed one checkpoint.");
+        metrics
+            .index_lag_ms
+            .set(chrono::Utc::now().timestamp_millis() - checkpoint.timestamp_ms as i64);
+
         Ok(CheckpointDataToCommit {
             checkpoint,
             transactions: db_transactions,

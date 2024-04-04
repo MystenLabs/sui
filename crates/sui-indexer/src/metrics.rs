@@ -93,6 +93,10 @@ pub struct IndexerMetrics {
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     pub latest_object_snapshot_sequence_number: IntGauge,
+    // lag starting from the timestamp of the latest checkpoint to the current time
+    pub download_lag_ms: IntGauge,
+    pub index_lag_ms: IntGauge,
+    pub db_commit_lag_ms: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub checkpoint_download_bytes_size: IntGauge,
@@ -241,6 +245,21 @@ impl IndexerMetrics {
             latest_object_snapshot_sequence_number: register_int_gauge_with_registry!(
                 "latest_object_snapshot_sequence_number",
                 "Latest object snapshot sequence number from the Indexer",
+                registry,
+            ).unwrap(),
+            download_lag_ms: register_int_gauge_with_registry!(
+                "download_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            index_lag_ms: register_int_gauge_with_registry!(
+                "index_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            db_commit_lag_ms: register_int_gauge_with_registry!(
+                "db_commit_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
                 registry,
             ).unwrap(),
             checkpoint_download_bytes_size: register_int_gauge_with_registry!(
