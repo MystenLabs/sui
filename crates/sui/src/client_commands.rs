@@ -76,7 +76,7 @@ use tabled::{
     },
 };
 
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
 
@@ -1021,7 +1021,12 @@ impl SuiClientCommands {
                     )
                     .await
                     {
-                        warn!("Updating lock file for package: {e}")
+                        eprintln!(
+                            "{} {e}",
+                            "Warning: Issue while updating `Move.lock` for published package."
+                                .bold()
+                                .yellow()
+                        )
                     };
                 };
                 result
@@ -1092,7 +1097,12 @@ impl SuiClientCommands {
                     )
                     .await
                     {
-                        warn!("Warning updating lock file for package: {e}")
+                        eprintln!(
+                            "{} {e}",
+                            "Warning: Issue while updating `Move.lock` for published package."
+                                .bold()
+                                .yellow()
+                        )
                     };
                 };
                 result
