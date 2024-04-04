@@ -35,6 +35,16 @@
 				"command": "move.serverVersion",
 				"title": "Show Server Version",
 				"category": "Move"
+			},
+			{
+				"command": "move.build",
+				"title": "Build a Move package",
+				"category": "Move"
+			},
+			{
+				"command": "move.test",
+				"title": "Test a Move package",
+				"category": "Move"
 			}
 		],
 		"configuration": {
@@ -54,6 +64,15 @@
                     "scope": "machine-overridable",
                     "default": null,
                     "markdownDescription": "Path to rust-analyzer executable (points to `~/.sui/bin/move-analyzer` by default)."
+				},
+				"move.sui.path": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "scope": "machine-overridable",
+                    "default": null,
+                    "markdownDescription": "Path to Sui executable (by default assumes that `sui` is on the systems path)."
 				},
 				"move.trace.server": {
 					"type": "string",
@@ -89,7 +108,13 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "move.serverVersion"
+					"command": "sui.serverVersion"
+				},
+				{
+					"command": "sui.build"
+				},
+				{
+					"command": "sui.test"
 				}
 			]
 		}
