@@ -2,6 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_ir_types::location::{sp, Loc};
+use move_symbol_pool::Symbol;
+
 use crate::{
     command_line::compiler::FullyCompiledProgram,
     diag,
@@ -11,8 +14,6 @@ use crate::{
     },
     shared::{known_attributes, CompilationEnv},
 };
-use move_ir_types::location::{sp, Loc};
-use move_symbol_pool::Symbol;
 
 use std::sync::Arc;
 
