@@ -356,20 +356,28 @@ impl PgIndexerStore {
             .checkpoint_db_commit_latency_checkpoints
             .start_timer();
 
-        let checkpoints = checkpoints
+        let stored_checkpoints = checkpoints
             .iter()
             .map(StoredCheckpoint::from)
             .collect::<Vec<_>>();
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for checkpoint_chunk in checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                for stored_checkpoint_chunk in
+                    stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
                     diesel::insert_into(checkpoints::table)
-                        .values(checkpoint_chunk)
+                        .values(stored_checkpoint_chunk)
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write checkpoints to PostgresDB")?;
+                    let time_now_ms = chrono::Utc::now().timestamp_millis();
+                    for stored_checkpoint in stored_checkpoint_chunk {
+                        self.metrics
+                            .db_commit_lag_ms
+                            .set(time_now_ms - stored_checkpoint.timestamp_ms);
+                    }
                 }
                 Ok::<(), IndexerError>(())
             },
@@ -377,7 +385,11 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} checkpoints", checkpoints.len());
+            info!(
+                elapsed,
+                "Persisted {} checkpoints",
+                stored_checkpoints.len()
+            );
         })
     }
 
