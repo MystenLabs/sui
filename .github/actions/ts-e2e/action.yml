@@ -56,12 +56,6 @@ runs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash
-    - name: Build explorer
-      run: pnpm turbo --filter=sui-explorer build
-      shell: bash
-    - name: Install Playwright Browsers
-      run: pnpm --filter sui-explorer playwright install --with-deps chromium
-      shell: bash
 
     - name: Set env
       run: |
@@ -72,10 +66,3 @@ runs:
     - name: Run TS SDK e2e tests
       run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js --filter @mysten/graphql-transport test:e2e'
       shell: bash
-
-    - uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: playwright-report-explorer
-        path: apps/explorer/playwright-report/
-        retention-days: 30
