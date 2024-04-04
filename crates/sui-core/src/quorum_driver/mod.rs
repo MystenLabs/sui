@@ -785,13 +785,15 @@ where
                 TX_TYPE_SHARED_OBJ_TX
             }])
             .observe(settlement_finality_latency);
-        if settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1 {
-            debug!(
-                ?tx_digest,
-                "Settlement finality latency is out of expected range: {}",
-                settlement_finality_latency
-            );
-        }
+        let is_out_of_expected_range =
+            settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
+        debug!(
+            ?tx_digest,
+            ?is_single_writer_tx,
+            ?is_out_of_expected_range,
+            "QuorumDriver settlement finality latency: {:.3} seconds",
+            settlement_finality_latency
+        );
 
         quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
     }
