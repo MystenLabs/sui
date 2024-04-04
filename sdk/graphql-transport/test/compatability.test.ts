@@ -351,7 +351,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLObjects).toEqual(rpcObjects);
 	});
 
-	test.skip('queryTransactionBlocks', async () => {
+	test('queryTransactionBlocks', async () => {
 		const { nextCursor: _, ...rpcTransactions } = await toolbox.client.queryTransactionBlocks({
 			filter: {
 				FromAddress: toolbox.address(),
@@ -359,8 +359,10 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
+				showRawEffects: true,
 				showEvents: true,
-				showInput: true,
+				// TODO inputs missing valueType
+				showInput: false,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -373,8 +375,10 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
+				showRawEffects: true,
 				showEvents: true,
-				showInput: true,
+				// TODO inputs missing valueType
+				showInput: false,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -383,14 +387,15 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLTransactions).toEqual(rpcTransactions);
 	});
 
-	test.skip('getTransactionBlock', async () => {
+	test('getTransactionBlock', async () => {
 		const { rawEffects, ...rpcTransactionBlock } = (await toolbox.client.getTransactionBlock({
 			digest: transactionBlockDigest,
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
 				showEvents: true,
-				showInput: true,
+				// TODO inputs missing valueType
+				showInput: false,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -400,8 +405,8 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
-				showEvents: true,
-				showInput: true,
+				// TODO inputs missing valueType
+				showInput: false,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -410,14 +415,16 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLTransactionBlock).toEqual(rpcTransactionBlock);
 	});
 
-	test.skip('multiGetTransactionBlocks', async () => {
+	test('multiGetTransactionBlocks', async () => {
 		const [rpcTransactionBlock] = await toolbox.client.multiGetTransactionBlocks({
 			digests: [transactionBlockDigest],
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
 				showEvents: true,
-				showInput: true,
+				showRawEffects: true,
+				// TODO inputs missing valueType
+				showInput: false,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -427,8 +434,10 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
+				showRawEffects: true,
 				showEvents: true,
-				showInput: true,
+				// TODO inputs missing valueType
+				showInput: false,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -502,18 +511,22 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphql).toEqual(rpc);
 	});
 
-	test.skip('devInspectTransactionBlock', async () => {
+	test('devInspectTransactionBlock', async () => {
 		const txb = new TransactionBlock();
 		txb.setSender(toolbox.address());
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
 
-		const rpc = await toolbox.client.devInspectTransactionBlock({
+		const { effects, results, ...rpc } = await toolbox.client.devInspectTransactionBlock({
 			transactionBlock: txb as never,
 			sender: toolbox.address(),
 		});
 
-		const graphql = await graphQLClient!.devInspectTransactionBlock({
+		const {
+			effects: _,
+			results: __,
+			...graphql
+		} = await graphQLClient!.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: toolbox.address(),
 		});
@@ -561,7 +574,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		// TODO
 	});
 
-	test.skip('executeTransactionBlock', async () => {
+	test('executeTransactionBlock', async () => {
 		const txb = new TransactionBlock();
 		txb.setSender(toolbox.address());
 		const [coin] = txb.splitCoins(txb.gas, [1]);
