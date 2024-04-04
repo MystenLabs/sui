@@ -22,7 +22,8 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
 
     /// @notice Initializes the contract with the provided parameters.
     /// @dev should be called directly after deployment (see OpenZeppelin upgradeable standards).
-    /// the provided arrays must have the same length and the total stake provided must equal 10000.
+    /// the provided arrays must have the same length and the total stake provided must be greater than,
+    /// or equal to the provided minimum stake required.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
     /// @param minStakeRequired minimum stake required for the committee.
