@@ -652,7 +652,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                                 .unwrap();
 
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {:#}",
                             &obj.owner,
                             obj.version().value(),
                             move_struct
