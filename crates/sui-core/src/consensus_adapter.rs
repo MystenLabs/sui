@@ -184,7 +184,7 @@ impl ConsensusAdapterMetrics {
 pub trait SubmitToConsensus: Sync + Send + 'static {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult;
 }
@@ -193,15 +193,21 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
 impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Channel> {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let serialized =
-            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
-        let bytes = Bytes::from(serialized.clone());
-
+        let transactions_bytes = transactions
+            .iter()
+            .map(|t| {
+                let serialized =
+                    bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail");
+                Bytes::from(serialized)
+            })
+            .collect::<Vec<_>>();
         self.clone()
-            .submit_transaction(TransactionProto { transaction: bytes })
+            .submit_transaction(TransactionProto {
+                transactions: transactions_bytes,
+            })
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
             .tap_err(|r| {
@@ -216,11 +222,13 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
 impl SubmitToConsensus for LazyNarwhalClient {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let transaction =
-            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
+        let transactions = transactions
+            .iter()
+            .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
+            .collect::<Vec<_>>();
         // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
         // Narwhal shuts down, so there should be no correctness issue.
         let client = {
@@ -234,7 +242,7 @@ impl SubmitToConsensus for LazyNarwhalClient {
         };
         let client = client.as_ref().unwrap().load();
         client
-            .submit_transaction(transaction)
+            .submit_transaction(transactions)
             .await
             .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
             .tap_err(|r| {
@@ -367,9 +375,7 @@ impl ConsensusAdapter {
             "Submitting {:?} recovered pending consensus transactions to Narwhal",
             recovered.len()
         );
-        for transaction in recovered {
-            self.submit_unchecked(transaction, epoch_store);
-        }
+        self.submit_unchecked(recovered, epoch_store);
     }
 
     fn await_submit_delay(
@@ -576,8 +582,18 @@ impl ConsensusAdapter {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<JoinHandle<()>> {
-        epoch_store.insert_pending_consensus_transactions(&transaction, lock)?;
-        Ok(self.submit_unchecked(transaction, epoch_store))
+        let transactions = vec![transaction];
+        self.submit_batch(transactions, lock, epoch_store)
+    }
+
+    pub fn submit_batch(
+        self: &Arc<Self>,
+        transactions: Vec<ConsensusTransaction>,
+        lock: Option<&RwLockReadGuard<ReconfigState>>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<JoinHandle<()>> {
+        epoch_store.insert_pending_consensus_transactions(&transactions, lock)?;
+        Ok(self.submit_unchecked(transactions, epoch_store))
     }
 
     /// Performs weakly consistent checks on internal buffers to quickly
@@ -603,13 +619,13 @@ impl ConsensusAdapter {
 
     fn submit_unchecked(
         self: &Arc<Self>,
-        transaction: ConsensusTransaction,
+        transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
         let async_stage = self
             .clone()
-            .submit_and_wait(transaction, epoch_store.clone());
+            .submit_and_wait(transactions, epoch_store.clone());
         // Number of these tasks is weakly limited based on `num_inflight_transactions`.
         // (Limit is not applied atomically, and only to user transactions.)
         let join_handle = spawn_monitored_task!(async_stage);
@@ -618,7 +634,7 @@ impl ConsensusAdapter {
 
     async fn submit_and_wait(
         self: Arc<Self>,
-        transaction: ConsensusTransaction,
+        transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
@@ -633,7 +649,7 @@ impl ConsensusAdapter {
         // this means we might be sending transactions from previous epochs to narwhal of
         // new epoch if we have not had this barrier.
         epoch_store
-            .within_alive_epoch(self.submit_and_wait_inner(transaction, &epoch_store))
+            .within_alive_epoch(self.submit_and_wait_inner(transactions, &epoch_store))
             .await
             .ok(); // result here indicates if epoch ended earlier, we don't care about it
     }
@@ -641,9 +657,14 @@ impl ConsensusAdapter {
     #[allow(clippy::option_map_unit_fn)]
     async fn submit_and_wait_inner(
         self: Arc<Self>,
-        transaction: ConsensusTransaction,
+        transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        assert!(transactions.len() > 0);
+        // TODO: to support soft bundle, we submit all transactions along with the first one.
+        // this is a dirty hack now as we did not check whether other transactions have already been submitted.
+        let all_transactions = &transactions;
+        let transaction = &transactions[0];
         if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
             info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
             epoch_store.record_epoch_pending_certs_process_time_metric();
@@ -729,7 +750,7 @@ impl ConsensusAdapter {
                 let mut retries: u32 = 0;
                 while let Err(e) = self
                     .consensus_client
-                    .submit_to_consensus(&transaction, epoch_store)
+                    .submit_to_consensus(&all_transactions, epoch_store)
                     .await
                 {
                     // This can happen during Narwhal reconfig, or when the Narwhal worker has
@@ -1038,10 +1059,10 @@ impl<'a> Drop for InflightDropGuard<'a> {
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        self.submit(transaction.clone(), None, epoch_store)
+        self.submit_batch(transactions.clone(), None, epoch_store)
             .map(|_| ())
     }
 }

@@ -47,7 +47,7 @@ pub struct BatchMaker {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Channel to receive transactions from the network.
-    rx_batch_maker: Receiver<(Transaction, TxResponse)>,
+    rx_batch_maker: Receiver<(Vec<Transaction>, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
     tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// Metrics handler
@@ -69,7 +69,7 @@ impl BatchMaker {
         batch_size_limit: usize,
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_batch_maker: Receiver<(Transaction, TxResponse)>,
+        rx_batch_maker: Receiver<(Vec<Transaction>, TxResponse)>,
         tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
         node_metrics: Arc<WorkerMetrics>,
         client: NetworkClient,
@@ -115,10 +115,16 @@ impl BatchMaker {
                 // Note that transactions are only consumed when the number of batches
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
-                Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+                Some((transactions, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
                     let _scope = monitored_scope("BatchMaker::recv");
-                    current_batch_size += transaction.len();
-                    current_batch.transactions_mut().push(transaction);
+                    let num_txns = transactions.len();
+                    for transaction in transactions {
+                        current_batch_size += transaction.len();
+                        current_batch.transactions_mut().push(transaction);
+                    }
+                    warn!("!!!! BatchMaker received {} transactions, batch num {}, batch size {}",
+                        num_txns, current_batch.transactions_mut().len(), current_batch_size);
+
                     current_responses.push(response_sender);
                     if current_batch_size >= self.batch_size_limit {
                         if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{

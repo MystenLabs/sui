@@ -42,7 +42,7 @@ async fn send_transactions(
     let mut client = TransactionsClient::new(channel);
     // Make a transaction to submit forever.
     let tx = TransactionProto {
-        transaction: Bytes::from(epoch.to_be_bytes().to_vec()),
+        transactions: vec![Bytes::from(epoch.to_be_bytes().to_vec())],
     };
     // Repeatedly send transactions.
     let interval = interval(Duration::from_millis(1));

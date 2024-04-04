@@ -165,6 +165,11 @@ pub struct HandleCertificateResponseV2 {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleSoftBundleCertificatesResponseV2 {
+    pub responses: Vec<HandleCertificateResponseV2>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitCertificateResponse {
     /// If transaction is already executed, return same result as handle_certificate
     pub executed: Option<HandleCertificateResponseV2>,

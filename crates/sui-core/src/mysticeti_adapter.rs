@@ -74,9 +74,13 @@ impl LazyMysticetiClient {
 impl SubmitToConsensus for LazyMysticetiClient {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        // TODO: Soft bundle is NOT yet implemented on mysticeti.
+        assert!(transactions.len() == 1);
+        let transaction = &transactions[0];
+
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.

@@ -42,6 +42,15 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
+                .name("handle_soft_bundle_certificates_v2")
+                .route_name("SoftBundleCertifiedTransactionsV2")
+                .input_type("sui_types::transaction::SoftBundleCertifiedTransactions")
+                .output_type("sui_types::messages_grpc::HandleSoftBundleCertificatesResponseV2")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("submit_certificate")
                 .route_name("SubmitCertificate")
                 .input_type("sui_types::transaction::CertifiedTransaction")

@@ -49,8 +49,8 @@ async fn make_batch() {
     let tx = transaction();
     let (s0, r0) = tokio::sync::oneshot::channel();
     let (s1, r1) = tokio::sync::oneshot::channel();
-    tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
-    tx_batch_maker.send((tx.clone(), s1)).await.unwrap();
+    tx_batch_maker.send((vec![tx.clone()], s0)).await.unwrap();
+    tx_batch_maker.send((vec![tx.clone()], s1)).await.unwrap();
 
     // Ensure the batch is as expected.
     let expected_batch = Batch::new(vec![tx.clone(), tx.clone()], &latest_protocol_version());
@@ -104,7 +104,7 @@ async fn batch_timeout() {
     // Do not send enough transactions to seal a batch.
     let tx = transaction();
     let (s0, r0) = tokio::sync::oneshot::channel();
-    tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
+    tx_batch_maker.send((vec![tx.clone()], s0)).await.unwrap();
 
     // Ensure the batch is as expected.
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();

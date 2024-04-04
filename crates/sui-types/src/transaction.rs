@@ -2659,6 +2659,11 @@ pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, Authorit
 
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SoftBundleCertifiedTransactions {
+    pub certificates: Vec<CertifiedTransaction>,
+}
+
 impl CertifiedTransaction {
     pub fn certificate_digest(&self) -> CertificateDigest {
         let mut digest = DefaultHash::default();

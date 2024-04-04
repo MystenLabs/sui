@@ -19,8 +19,9 @@ use sui_network::{
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-    SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleSoftBundleCertificatesResponseV2, HandleTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, SubmitCertificateResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
@@ -501,8 +502,9 @@ impl ValidatorService {
                     &self.state.name,
                     certificate.clone().into(),
                 );
-                self.consensus_adapter.submit(
-                    transaction,
+                let transactions = vec![transaction];
+                self.consensus_adapter.submit_batch(
+                    transactions,
                     Some(&reconfiguration_lock),
                     &epoch_store,
                 )?;
@@ -539,6 +541,195 @@ impl ValidatorService {
             events,
             fastpath_input_objects: vec![], // unused field
         }))
+    }
+
+    // Handle_soft_bundle_certificates submits a batch of certificates.
+    // If an error occurs for any of the certificates, the error is returned and the remaining certificates are not processed.
+    // Effects are always returned.
+    async fn handle_soft_bundle_certificates(
+        self,
+        certificates: Vec<CertifiedTransaction>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV2, tonic::Status> {
+        let Self {
+            state,
+            consensus_adapter,
+            metrics,
+        } = self;
+
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+        // Validate if cert can be executed
+        // Fullnode does not serve handle_certificate call.
+        fp_ensure!(
+            !state.is_fullnode(&epoch_store),
+            SuiError::FullNodeCantHandleCertificate.into()
+        );
+        let protocol_config = epoch_store.protocol_config();
+        fp_ensure!(
+            protocol_config.enable_soft_bundle(),
+            SuiError::FailedToSubmitToConsensus("SoftBundle: Feature not enabled".into()).into()
+        );
+        let max_num_certs = protocol_config.soft_bundle_max_num_certificates() as usize;
+        let max_serialized_size = protocol_config.soft_bundle_max_serialized_size_bytes() as usize;
+        fp_ensure!(
+            certificates.len() > 0,
+            SuiError::FailedToSubmitToConsensus("SoftBundle: Bundle size must not be zero".into())
+                .into()
+        );
+        fp_ensure!(
+            certificates.len() <= max_num_certs,
+            SuiError::FailedToSubmitToConsensus("SoftBundle: Bundle size must not be zero".into())
+                .into()
+        );
+
+        // Basic checks
+        let mut total_serialized_size: usize = 0;
+        let mut last_gas_price = None;
+        for certificate in &certificates {
+            // CRITICAL! Validators should never sign an external system transaction.
+            fp_ensure!(
+                !certificate.is_system_tx(),
+                SuiError::InvalidSystemTransaction.into()
+            );
+            fp_ensure!(
+                certificate.contains_shared_object(),
+                SuiError::FailedToSubmitToConsensus(
+                    "SoftBundle: All certificate must contain at least one shared objects".into()
+                )
+                .into()
+            );
+            let gas_price = certificate.data().intent_message().value.gas_price();
+            if let Some(last_gas_price) = last_gas_price {
+                fp_ensure!(
+                    gas_price == last_gas_price,
+                    SuiError::FailedToSubmitToConsensus(
+                        "SoftBundle: All certificate must have the same gas price".into()
+                    )
+                    .into()
+                );
+            }
+            last_gas_price = Some(gas_price);
+
+            certificate
+                .data()
+                .validity_check(epoch_store.protocol_config())?;
+            total_serialized_size += certificate.data().serialized_size()?;
+        }
+        fp_ensure!(
+            total_serialized_size <= max_serialized_size,
+            SuiError::FailedToSubmitToConsensus("SoftBundle: Bundle size too large".into()).into()
+        );
+
+        let mut responses = Vec::new();
+        responses.resize(certificates.len(), None);
+        let _metrics_guard = metrics.submit_certificate_consensus_latency.start_timer();
+        let mut cont = Vec::new();
+
+        // First pass
+        let mut cert_verify_futures = Vec::new();
+        for (request_idx, certificate) in certificates.into_iter().enumerate() {
+            // 1) Check if cert already executed
+            let tx_digest = *certificate.digest();
+            let already_executed =
+                match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)? {
+                    Some(_) => true,
+                    None => false,
+                };
+            fp_ensure!(
+                !already_executed,
+                SuiError::FailedToSubmitToConsensus(
+                    "SoftBundle: Rejected bundle with already executed certificate".into()
+                )
+                .into()
+            );
+
+            // 2) Verify the cert.
+            // Check system overload
+            let overload_check_res = state.check_system_overload(
+                &consensus_adapter,
+                certificate.data(),
+                state.check_system_overload_at_signing(),
+            );
+            if let Err(error) = overload_check_res {
+                metrics
+                    .num_rejected_cert_during_overload
+                    .with_label_values(&[error.as_ref()])
+                    .inc();
+                return Err(error.into());
+            }
+
+            let future = epoch_store.signature_verifier.verify_cert(certificate);
+            cert_verify_futures.push(future);
+            cont.push(request_idx);
+        }
+
+        // Second pass
+        let mut verified_certs = Vec::new();
+        let mut certs_idx_to_submit = Vec::new();
+        // 3) All certificates are sent to consensus (at least by some authorities)
+        // For shared objects this will wait until either timeout or we have heard back from consensus.
+        // For owned objects this will return without waiting for certificate to be sequenced
+        // First do quick dirty non-async check
+        for _request_idx in &cont {
+            let certificate = cert_verify_futures.remove(0).await?;
+            if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
+                certs_idx_to_submit.push(verified_certs.len());
+            }
+            verified_certs.push(certificate);
+        }
+        assert!(cert_verify_futures.is_empty());
+
+        {
+            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            if !reconfiguration_lock.should_accept_user_certs() {
+                metrics
+                    .num_rejected_cert_in_epoch_boundary
+                    .inc_by(certs_idx_to_submit.len() as u64);
+                return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
+            }
+            if certs_idx_to_submit.len() > 0 {
+                let _metrics_guard = metrics.consensus_latency.start_timer();
+                let transactions = certs_idx_to_submit
+                    .into_iter()
+                    .map(|cert_idx| {
+                        ConsensusTransaction::new_certificate_message(
+                            &state.name,
+                            verified_certs[cert_idx].clone().into(),
+                        )
+                    })
+                    .collect();
+                consensus_adapter.submit_batch(
+                    transactions,
+                    Some(&reconfiguration_lock),
+                    &epoch_store,
+                )?;
+            }
+            drop(reconfiguration_lock);
+        }
+
+        // 4) Execute the certificate if it contains only owned object transactions, or wait for
+        // the execution results if it contains shared objects.
+        for (cert_idx, request_idx) in cont.into_iter().enumerate() {
+            let effects = state
+                .execute_certificate(&verified_certs[cert_idx], &epoch_store)
+                .await?;
+            let events = if let Some(event_digest) = effects.events_digest() {
+                state.get_transaction_events(event_digest)?
+            } else {
+                TransactionEvents::default()
+            };
+            responses[request_idx] = Some(HandleCertificateResponseV2 {
+                signed_effects: effects.into_inner(),
+                events,
+                fastpath_input_objects: vec![], // unused field
+            });
+        }
+
+        for response in &responses {
+            assert!(response.is_some());
+        }
+        Ok(HandleSoftBundleCertificatesResponseV2 {
+            responses: responses.into_iter().map(|x| x.unwrap()).collect(),
+        })
     }
 }
 
@@ -582,6 +773,22 @@ impl ValidatorService {
                     ),
                 )
             })
+    }
+
+    async fn handle_soft_bundle_certificates_v2(
+        &self,
+        request: tonic::Request<SoftBundleCertifiedTransactions>,
+    ) -> Result<tonic::Response<HandleSoftBundleCertificatesResponseV2>, tonic::Status> {
+        let bundle = request.into_inner();
+        for cert in &bundle.certificates {
+            cert.verify_user_input()?;
+        }
+        let validator_service = self.clone();
+        let span = error_span!("handle_soft_bundle_certificates");
+        Self::handle_soft_bundle_certificates(validator_service, bundle.certificates)
+            .instrument(span)
+            .await
+            .map(|v| tonic::Response::new(v))
     }
 
     async fn object_info_impl(

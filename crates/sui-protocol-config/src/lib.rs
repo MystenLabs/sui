@@ -120,7 +120,7 @@ const MAX_PROTOCOL_VERSION: u64 = 44;
 //             Introduce an explicit parameter for the tick limit per package (previously this was
 //             represented by the parameter for the tick limit per module).
 // Version 44: Enable consensus fork detection on mainnet.
-
+//             Introduce the Soft Bundle API.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -411,6 +411,10 @@ struct FeatureFlags {
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     zklogin_max_epoch_upper_bound_delta: Option<u64>,
+
+    // Enable soft bundle.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_soft_bundle: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1019,6 +1023,14 @@ pub struct ProtocolConfig {
     // The max accumulated txn execution cost per object in a checkpoint. Transactions
     // in a checkpoint will be deferred once their touch shared objects hit this limit.
     max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+
+    // === soft bundle ===
+
+    // The maximum number of certificates in a soft bundle.
+    soft_bundle_max_num_certificates: Option<u64>,
+
+    // The maximum size of a soft bundle in bytes, measured in BCS serialized form.
+    soft_bundle_max_serialized_size_bytes: Option<u64>,
 }
 
 // feature flags
@@ -1251,6 +1263,10 @@ impl ProtocolConfig {
 
     pub fn consensus_choice(&self) -> ConsensusChoice {
         self.feature_flags.consensus_choice
+    }
+
+    pub fn enable_soft_bundle(&self) -> bool {
+        self.feature_flags.enable_soft_bundle
     }
 }
 
@@ -1693,6 +1709,10 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
+
+            // Soft bundle
+            soft_bundle_max_num_certificates: None,
+            soft_bundle_max_serialized_size_bytes: None,
         };
         for cur in 2..=version.0 {
             match cur {
@@ -2094,6 +2114,10 @@ impl ProtocolConfig {
                 44 => {
                     // Enable consensus digest in consensus commit prologue on all networks..
                     cfg.feature_flags.include_consensus_digest_in_prologue = true;
+
+                    cfg.feature_flags.enable_soft_bundle = true;
+                    cfg.soft_bundle_max_num_certificates = Some(4);
+                    cfg.soft_bundle_max_serialized_size_bytes = Some(64 * 1024);
                 }
                 // Use this template when making changes:
                 //

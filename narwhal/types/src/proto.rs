@@ -30,13 +30,15 @@ pub use narwhal::{
 impl From<Transaction> for TransactionProto {
     fn from(transaction: Transaction) -> Self {
         TransactionProto {
-            transaction: Bytes::from(transaction),
+            transactions: vec![Bytes::from(transaction)],
         }
     }
 }
 
-impl From<TransactionProto> for Transaction {
-    fn from(transaction: TransactionProto) -> Self {
-        transaction.transaction.to_vec()
+impl From<Vec<Transaction>> for TransactionProto {
+    fn from(transactions: Vec<Transaction>) -> Self {
+        TransactionProto {
+            transactions: transactions.into_iter().map(Bytes::from).collect(),
+        }
     }
 }
