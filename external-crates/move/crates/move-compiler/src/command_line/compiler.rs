@@ -967,7 +967,11 @@ fn run(
         match cur {
             PassResult::Parser(prog) => {
                 let eprog = {
-                    let prog = unit_test::filter_test_members::program(compilation_env, prog);
+                    let prog = unit_test::filter_test_members::program(
+                        compilation_env,
+                        pre_compiled_lib.clone(),
+                        prog,
+                    );
                     let prog = verification_attribute_filter::program(compilation_env, prog);
                     expansion::translate::program(compilation_env, pre_compiled_lib.clone(), prog)
                 };
