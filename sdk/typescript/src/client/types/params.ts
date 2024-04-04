@@ -26,6 +26,8 @@ export interface DevInspectTransactionBlockParams {
 	gasPrice?: bigint | number | null | undefined;
 	/** The epoch to perform the call. Will be set from the system state object if not provided */
 	epoch?: string | null | undefined;
+	/** Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks. */
+	additionalArgs?: RpcTypes.DevInspectArgs | null | undefined;
 }
 /**
  * Return transaction execution effects including the gas cost summary, while the effects are not

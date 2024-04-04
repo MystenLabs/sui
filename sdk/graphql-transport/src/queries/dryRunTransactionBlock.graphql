@@ -5,6 +5,7 @@ query dryRunTransactionBlock(
 	$txBytes: String!
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
+	$showRawEffects: Boolean = false
 	$showEvents: Boolean = false
 	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
