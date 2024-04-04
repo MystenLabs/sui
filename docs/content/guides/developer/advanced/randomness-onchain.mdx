@@ -8,8 +8,8 @@ Generating pseudo-random values in Move is similar to solutions in other languag
 
 ```move
 entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
-    let generator = new_generator(r, ctx); // generator is a PRG
-	Dice { value: random::generate_u8_in_range(&mut generator, 1, 6) }
+  let generator = new_generator(r, ctx); // generator is a PRG
+  Dice { value: random::generate_u8_in_range(&mut generator, 1, 6) }
 }
 ```
 
@@ -51,8 +51,8 @@ An attacker can deploy the next function:
 
 ```move
 public fun attack(guess: u8, r: &Random, ctx: &mut TxContext): GuessedCorrectly {
-	let output = dice::play_dice(guess, r, ctx);
-	option::extract(output) // reverts the transaction if roll_dice returns option::none()
+  let output = dice::play_dice(guess, r, ctx);
+  option::extract(output) // reverts the transaction if roll_dice returns option::none()
 }
 ```
 
@@ -62,7 +62,7 @@ To protect against composition attacks in this example, define `play_dice` as a 
 
 ```move
 entry fun play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Option<GuessedCorrectly> {
-	...
+  ...
 }
 ```
 
@@ -78,7 +78,7 @@ A similar attack to the one previously described involves PTBs *even* when `play
 
 ```move
 public fun attack(output: Option<GuessedCorrectly>): GuessedCorrectly {
-	option::extract(output)
+  option::extract(output)
 }
 ```
 
@@ -105,16 +105,16 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 Developers should be aware that some resources that are available to transactions are limited. If a function that reads `Random` consumes more resources in the unhappy path flow than in the happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow as previously demonstrated. Concretely, gas is such a resource. Consider the following code:
 
 ```move
-	entry fun play(r: &Random, payment: Coin<SUI>, ...) {
-		...
-		let generator = new_generator(r, ctx);
-		let win = random::generate_bool(generator);
-		if (win) { // happy flow
-			... cheap computation ...
-		} else {
-			... very expensive computation ...
-		}
-	}
+entry fun play(r: &Random, payment: Coin<SUI>, ...) {
+  ...
+  let generator = new_generator(r, ctx);
+  let win = random::generate_bool(generator);
+  if (win) { // happy flow
+    ... cheap computation ...
+  } else {
+    ... very expensive computation ...
+  }
+}
 ```
 
 Observe that the gas costs of a transaction that calls `play` depends on the value of `win` - An attacker could call this function with a gas object that has enough balance to cover the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
