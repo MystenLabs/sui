@@ -36,16 +36,17 @@ export async function setGasPayment(
 	blockData: TransactionBlockDataBuilder,
 	dataResolver: TransactionBlockDataResolver,
 ) {
-	if (blockData.gasConfig.payment) {
-		const maxGasObjects = dataResolver.getLimit('maxGasObjects');
-		if (blockData.gasConfig.payment.length > maxGasObjects) {
-			throw new Error(`Payment objects exceed maximum amount: ${maxGasObjects}`);
-		}
+	if (!blockData.gasConfig.payment) {
 		const paymentCoins = await dataResolver.getGasCoins(
 			blockData,
 			blockData.gasConfig.owner || blockData.sender!,
 		);
 		blockData.gasConfig.payment = paymentCoins.map((payment) => parse(ObjectRef, payment));
+	}
+
+	const maxGasObjects = dataResolver.getLimit('maxGasObjects');
+	if (blockData.gasConfig.payment.length > maxGasObjects) {
+		throw new Error(`Payment objects exceed maximum amount: ${maxGasObjects}`);
 	}
 }
 
