@@ -38,7 +38,7 @@ pub fn verify_function<'a>(
     index: FunctionDefinitionIndex,
     function_definition: &'a FunctionDefinition,
     code: &'a CodeUnit,
-    _meter: &mut impl Meter, // TODO: metering
+    _meter: &mut (impl Meter + ?Sized), // TODO: metering
 ) -> PartialVMResult<FunctionView<'a>> {
     let function_handle = module.function_handle_at(function_definition.function);
 

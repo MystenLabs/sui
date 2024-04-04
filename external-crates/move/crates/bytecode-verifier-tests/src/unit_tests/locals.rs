@@ -109,11 +109,11 @@ fn test_locals() {
         code.push(Bytecode::Ret);
     }
 
-    let config = production_config();
-    let mut meter = BoundMeter::new(&config);
+    let (verifier_config, meter_config) = production_config();
+    let mut meter = BoundMeter::new(meter_config);
     let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_locals",
-        &config,
+        &verifier_config,
         &m,
         &mut meter,
     );

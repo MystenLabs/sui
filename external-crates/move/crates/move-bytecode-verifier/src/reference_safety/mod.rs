@@ -70,7 +70,7 @@ pub(crate) fn verify<'a>(
     resolver: &'a BinaryIndexedView<'a>,
     function_view: &FunctionView,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let initial_state = AbstractState::new(function_view);
 
@@ -83,7 +83,7 @@ fn call(
     state: &mut AbstractState,
     offset: CodeOffset,
     function_handle: &FunctionHandle,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let parameters = verifier.resolver.signature_at(function_handle.parameters);
     let arguments = parameters
@@ -159,7 +159,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     meter.add_items(Scope::Function, STEP_PER_LOCAL_COST, state.local_count())?;
@@ -444,7 +444,7 @@ impl<'a> TransferFunctions for ReferenceSafetyAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         execute_inner(self, state, bytecode, index, meter)?;
         if index == last_index {

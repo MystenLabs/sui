@@ -4,7 +4,7 @@
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
-use move_vm_config::verifier::VerifierConfig;
+use move_vm_config::verifier::MeterConfig;
 
 struct SuiVerifierMeterBounds {
     name: String,
@@ -37,7 +37,7 @@ pub struct SuiVerifierMeter {
 }
 
 impl SuiVerifierMeter {
-    pub fn new(config: &VerifierConfig) -> Self {
+    pub fn new(config: MeterConfig) -> Self {
         Self {
             transaction_bounds: SuiVerifierMeterBounds {
                 name: "<unknown>".to_string(),

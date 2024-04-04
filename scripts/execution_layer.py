@@ -495,7 +495,7 @@ def generate_lib(output_file: TextIO):
                 for (version, feature, cut) in cuts
             )
         elif var == "VERIFIER_CUTS":
-            call = "Verifier::new(protocol_config, is_metered, metrics)"
+            call = "Verifier::new(config, metrics)"
             return "\n".join(
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
                 for (version, feature, cut) in cuts

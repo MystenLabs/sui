@@ -31,7 +31,7 @@ impl<'a> StackUsageVerifier<'a> {
         config: &VerifierConfig,
         resolver: &'a BinaryIndexedView<'a>,
         function_view: &'a FunctionView,
-        _meter: &mut impl Meter, // TODO: metering
+        _meter: &mut (impl Meter + ?Sized), // TODO: metering
     ) -> PartialVMResult<()> {
         let verifier = Self {
             resolver,

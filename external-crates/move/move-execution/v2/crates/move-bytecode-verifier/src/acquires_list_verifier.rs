@@ -38,7 +38,7 @@ impl<'a> AcquiresVerifier<'a> {
         module: &'a CompiledModule,
         index: FunctionDefinitionIndex,
         function_definition: &'a FunctionDefinition,
-        _meter: &mut impl Meter, // currently unused
+        _meter: &mut (impl Meter + ?Sized), // currently unused
     ) -> PartialVMResult<()> {
         let annotated_acquires: BTreeSet<_> = function_definition
             .acquires_global_resources

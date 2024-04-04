@@ -593,7 +593,7 @@ fn max_mixed_config_test() {
 
 #[test]
 fn max_identifier_len() {
-    let config = production_config();
+    let (config, _) = production_config();
     let max_ident = "z".repeat(
         config
             .max_idenfitier_len
@@ -604,7 +604,6 @@ fn max_identifier_len() {
     let res = LimitsVerifier::verify_module(&config, &good_module);
     assert!(res.is_ok());
 
-    let config = production_config();
     let max_ident = "z".repeat(
         (config
             .max_idenfitier_len

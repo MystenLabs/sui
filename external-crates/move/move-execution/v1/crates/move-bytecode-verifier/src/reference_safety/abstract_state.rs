@@ -519,7 +519,7 @@ impl AbstractState {
         arguments: Vec<AbstractValue>,
         acquired_resources: &BTreeSet<StructDefinitionIndex>,
         return_: &Signature,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<AbstractValue>> {
         meter.add_items(
             Scope::Function,
@@ -714,7 +714,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         let joined = Self::join_(self, state);
         assert!(joined.is_canonical());
