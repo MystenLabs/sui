@@ -38,10 +38,10 @@ You can interact with the Sui network through two official SDKs (TypeScript SDK 
 
 ## Move IDEs and plugins
 
-The recommended IDE for Move development is Visual Studio Code with the `move-analyzer` extension. Follow the Visual Studio Marketplace instructions to install the move-analyzer extension, then install the `move-analyzer` language server passing `address32` using the `--features` flag and passing `sui-move` to the branch flag:
+The recommended IDE for Move development is Visual Studio Code with the `move-analyzer` extension. Follow the Visual Studio Marketplace instructions to install the move-analyzer extension, then install the `move-analyzer` language server:
 
 ```shell
-cargo install --git https://github.com/move-language/move move-analyzer --branch sui-move --features "address32"
+cargo install --git https://github.com/MystenLabs/sui.git move-analyzer
 ```
 
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.
