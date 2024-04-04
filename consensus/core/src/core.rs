@@ -506,18 +506,18 @@ impl CoreSignals {
     const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
 
     pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
-        let (tx_block_broadcast, _rx_block_broadcast) =
+        let (tx_block_broadcast, rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {
-            tx_block_broadcast: tx_block_broadcast.clone(),
+            tx_block_broadcast,
             new_round_sender,
             context,
         };
 
         let receivers = CoreSignalsReceivers {
-            tx_block_broadcast,
+            rx_block_broadcast,
             new_round_receiver,
         };
 
@@ -545,23 +545,18 @@ impl CoreSignals {
     pub(crate) fn new_round(&mut self, round_number: Round) {
         let _ = self.new_round_sender.send_replace(round_number);
     }
-
-    /// Returns the channel to broadcast new blocks.
-    pub(crate) fn block_broadcast_sender(&self) -> broadcast::Sender<VerifiedBlock> {
-        self.tx_block_broadcast.clone()
-    }
 }
 
 /// Receivers of signals from Core.
 /// Intentially un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
-    tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    rx_block_broadcast: broadcast::Receiver<VerifiedBlock>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
 impl CoreSignalsReceivers {
     pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
-        self.tx_block_broadcast.subscribe()
+        self.rx_block_broadcast.resubscribe()
     }
 
     pub(crate) fn new_round_receiver(&self) -> watch::Receiver<Round> {

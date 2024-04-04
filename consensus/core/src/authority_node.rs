@@ -168,7 +168,6 @@ where
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
-        let tx_block_broadcast = core_signals.block_broadcast_sender();
 
         let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
@@ -227,7 +226,7 @@ where
             block_verifier,
             synchronizer.clone(),
             core_dispatcher,
-            tx_block_broadcast,
+            signals_receivers.block_broadcast_receiver(),
             dag_state.clone(),
         ));
 
@@ -444,7 +443,7 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
-        let (tx_block_broadcast, _rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
@@ -459,7 +458,7 @@ mod tests {
             block_verifier,
             synchronizer,
             core_dispatcher.clone(),
-            tx_block_broadcast,
+            rx_block_broadcast,
             dag_state,
         ));
 

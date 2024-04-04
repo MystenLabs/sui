@@ -80,7 +80,7 @@ impl TonicClient {
 
 #[async_trait]
 impl NetworkClient for TonicClient {
-    const SUPPORT_STREAMING: bool = false;
+    const SUPPORT_STREAMING: bool = true;
 
     async fn send_block(
         &self,
@@ -251,7 +251,7 @@ impl ChannelPool {
             .keep_alive_while_idle(true)
             .keep_alive_timeout(config.keepalive_interval)
             .http2_keep_alive_interval(config.keepalive_interval)
-            .tcp_keepalive(Some(config.keepalive_interval))
+            // tcp keepalive is unsupported by msim
             .user_agent("mysticeti")
             .unwrap();
         // TODO: tune endpoint options and set TLS config.
@@ -462,7 +462,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .initial_stream_window_size(32 << 20)
             .http2_keepalive_interval(Some(config.keepalive_interval))
             .http2_keepalive_timeout(Some(config.keepalive_interval))
-            .tcp_keepalive(Some(config.keepalive_interval))
+            // tcp keepalive is unsupported by msim
             .add_service(
                 ConsensusServiceServer::new(service)
                     .max_encoding_message_size(config.message_size_limit)

@@ -33,7 +33,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
-    tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
+    rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
     dag_state: Arc<RwLock<DagState>>,
 }
 
@@ -43,7 +43,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_verifier: Arc<dyn BlockVerifier>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
-        tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
+        rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         Self {
@@ -51,7 +51,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             block_verifier,
             synchronizer,
             core_dispatcher,
-            tx_block_broadcaster,
+            rx_block_broadcaster,
             dag_state,
         }
     }
@@ -171,7 +171,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
         let broadcasted_blocks = BroadcastedBlockStream {
             peer,
-            receiver: self.tx_block_broadcaster.subscribe(),
+            receiver: self.rx_block_broadcaster.resubscribe(),
         };
         Ok(Box::pin(missed_blocks.chain(broadcasted_blocks)))
     }
