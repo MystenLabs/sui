@@ -199,7 +199,7 @@ pub struct VariantDefinition {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum VariantFields {
-    Defined(Fields<Type>),
+    Defined(/* positional */ bool, Fields<Type>),
     Empty,
 }
 
@@ -1289,14 +1289,19 @@ impl AstDebug for (VariantName, &VariantDefinition) {
 
         w.write(&format!("variant#{index} {name}"));
         match fields {
-            VariantFields::Defined(fields) => w.block(|w| {
-                w.list(fields, ",", |w, (_, f, idx_st)| {
-                    let (idx, st) = idx_st;
-                    w.write(&format!("{}#{}: ", idx, f));
-                    st.ast_debug(w);
-                    true
-                });
-            }),
+            VariantFields::Defined(is_positional, fields) => {
+                if *is_positional {
+                    w.write("#positional");
+                }
+                w.block(|w| {
+                    w.list(fields, ",", |w, (_, f, idx_st)| {
+                        let (idx, st) = idx_st;
+                        w.write(&format!("{}#{}: ", idx, f));
+                        st.ast_debug(w);
+                        true
+                    });
+                })
+            }
             VariantFields::Empty => (),
         }
     }

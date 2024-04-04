@@ -1120,11 +1120,10 @@ pub fn make_variant_field_types(
         .expect("ICE should have failed during naming");
     match &vdef.fields {
         N::VariantFields::Empty => N::VariantFields::Empty,
-        N::VariantFields::Defined(m) => {
-            N::VariantFields::Defined(m.ref_map(|_, (idx, field_ty)| {
-                (*idx, subst_tparams(tparam_subst, field_ty.clone()))
-            }))
-        }
+        N::VariantFields::Defined(is_positional, m) => N::VariantFields::Defined(
+            *is_positional,
+            m.ref_map(|_, (idx, field_ty)| (*idx, subst_tparams(tparam_subst, field_ty.clone()))),
+        ),
     }
 }
 

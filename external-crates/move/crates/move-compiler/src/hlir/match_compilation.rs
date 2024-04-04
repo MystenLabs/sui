@@ -3,11 +3,9 @@
 
 use crate::{
     diag,
-    // diag,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
     hlir::translate::Context,
-    ice,
-    ice_assert,
+    ice, ice_assert,
     naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
     shared::{
@@ -51,7 +49,7 @@ struct Arm {
 
 #[derive(Clone, Debug)]
 struct PatternArm {
-    pat: VecDeque<T::MatchPattern>,
+    pats: VecDeque<T::MatchPattern>,
     guard: Guard,
     arm: Arm,
 }
@@ -83,17 +81,21 @@ impl FringeEntry {
 
 impl PatternArm {
     fn pattern_empty(&self) -> bool {
-        self.pat.is_empty()
+        self.pats.is_empty()
     }
 
     fn all_wild_arm(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<ArmResult> {
         if self
-            .pat
+            .pats
             .iter()
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
         {
             let bindings = self.make_arm_bindings(fringe);
-            let PatternArm { pat: _, guard, arm } = self;
+            let PatternArm {
+                pats: _,
+                guard,
+                arm,
+            } = self;
             let arm = ArmResult {
                 loc: arm.orig_pattern.pat.loc,
                 bindings,
@@ -108,8 +110,8 @@ impl PatternArm {
 
     fn make_arm_bindings(&mut self, fringe: &VecDeque<FringeEntry>) -> PatBindings {
         let mut bindings = BTreeMap::new();
-        assert!(self.pat.len() == fringe.len());
-        for (pmut, subject) in self.pat.iter_mut().zip(fringe.iter()) {
+        assert!(self.pats.len() == fringe.len());
+        for (pmut, subject) in self.pats.iter_mut().zip(fringe.iter()) {
             if let TP::Binder(mut_, x) = pmut.pat.value {
                 if bindings.insert(x, (mut_, subject.clone())).is_some() {
                     panic!("ICE should have failed in naming");
@@ -120,58 +122,49 @@ impl PatternArm {
         bindings
     }
 
-    fn first_ctor(&self) -> BTreeMap<VariantName, (Loc, Fields<Type>)> {
-        if self.pat.is_empty() {
-            return BTreeMap::new();
+    fn first_ctor(&self) -> Option<(VariantName, (Loc, Fields<Type>))> {
+        if self.pats.is_empty() {
+            return None;
         }
-        let mut names = BTreeMap::new();
-        let mut ctor_queue = vec![self.pat.front().unwrap().clone()];
-        while let Some(pat) = ctor_queue.pop() {
+
+        fn first_ctor_recur(pat: MatchPattern) -> Option<(VariantName, (Loc, Fields<Type>))> {
             match pat.pat.value {
                 TP::Constructor(_, _, name, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
-                    names.insert(name, (pat.pat.loc, ty_fields));
+                    Some((name, (pat.pat.loc, ty_fields)))
                 }
                 TP::BorrowConstructor(_, _, _, name, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
-                    names.insert(name, (pat.pat.loc, ty_fields));
+                    Some((name, (pat.pat.loc, ty_fields)))
                 }
-                TP::Binder(_, _) => (),
-                TP::Literal(_) => (),
-                TP::Wildcard => (),
+                TP::At(_, inner) => first_ctor_recur(*inner),
+                TP::Binder(_, _) | TP::Literal(_) | TP::Wildcard | TP::ErrorPat => None,
                 TP::Or(_, _) => unreachable!(),
-                TP::At(_, inner) => {
-                    ctor_queue.push(*inner);
-                }
-                TP::ErrorPat => (),
             }
         }
-        names
+
+        first_ctor_recur(self.pats.front().unwrap().clone())
     }
 
-    fn first_lit(&self) -> BTreeSet<Value> {
-        if self.pat.is_empty() {
-            return BTreeSet::new();
+    fn first_lit(&self) -> Option<Value> {
+        if self.pats.is_empty() {
+            return None;
         }
-        let mut values = BTreeSet::new();
-        let mut ctor_queue = vec![self.pat.front().unwrap().clone()];
-        while let Some(pat) = ctor_queue.pop() {
+
+        fn first_lit_recur(pat: MatchPattern) -> Option<Value> {
             match pat.pat.value {
-                TP::Constructor(_, _, _, _, _) => (),
-                TP::BorrowConstructor(_, _, _, _, _, _) => (),
-                TP::Binder(_, _) => (),
-                TP::Literal(v) => {
-                    values.insert(v);
-                }
-                TP::Wildcard => (),
+                TP::Literal(v) => Some(v),
+                TP::At(_, inner) => first_lit_recur(*inner),
+                TP::Constructor(_, _, _, _, _)
+                | TP::BorrowConstructor(_, _, _, _, _, _)
+                | TP::Binder(_, _)
+                | TP::Wildcard
+                | TP::ErrorPat => None,
                 TP::Or(_, _) => unreachable!(),
-                TP::At(_, inner) => {
-                    ctor_queue.push(*inner);
-                }
-                TP::ErrorPat => (),
             }
         }
-        values
+
+        first_lit_recur(self.pats.front().unwrap().clone())
     }
 
     fn specialize(
@@ -181,7 +174,7 @@ impl PatternArm {
         arg_types: &Vec<&Type>,
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pat.pop_front().unwrap();
+        let first_pattern = output.pats.pop_front().unwrap();
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Constructor(mident, enum_, name, _, fields)
@@ -192,7 +185,7 @@ impl PatternArm {
                 let decl_fields = context.enum_variant_fields(&mident, &enum_, &name);
                 let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
-                    output.pat.push_front(pat);
+                    output.pats.push_front(pat);
                 }
                 Some((vec![], output))
             }
@@ -205,7 +198,7 @@ impl PatternArm {
                     .map(|ty| ty_to_wildcard_pattern(ty.clone(), loc))
                     .rev()
                 {
-                    output.pat.push_front(arg_type);
+                    output.pats.push_front(arg_type);
                 }
                 Some((vec![(mut_, x)], output))
             }
@@ -216,21 +209,19 @@ impl PatternArm {
                     .map(|ty| ty_to_wildcard_pattern(ty.clone(), loc))
                     .rev()
                 {
-                    output.pat.push_front(arg_type);
+                    output.pats.push_front(arg_type);
                 }
                 Some((vec![], output))
             }
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
-                output.pat.push_front(*inner);
-                let inner_spec = output.specialize(context, ctor_name, arg_types);
-                match inner_spec {
-                    None => None,
-                    Some((mut v, inner)) => {
-                        v.push((Mutability::Imm, x));
-                        Some((v, inner))
-                    }
-                }
+                output.pats.push_front(*inner);
+                output
+                    .specialize(context, ctor_name, arg_types)
+                    .map(|(mut binders, inner)| {
+                        binders.push((Mutability::Imm, x));
+                        (binders, inner)
+                    })
             }
             TP::ErrorPat => None,
         }
@@ -238,7 +229,7 @@ impl PatternArm {
 
     fn specialize_literal(&self, literal: &Value) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pat.pop_front().unwrap();
+        let first_pattern = output.pats.pop_front().unwrap();
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
@@ -247,23 +238,21 @@ impl PatternArm {
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
-                output.pat.push_front(*inner);
-                let inner_spec = output.specialize_literal(literal);
-                match inner_spec {
-                    None => None,
-                    Some((mut v, inner)) => {
-                        v.push((Mutability::Imm, x));
-                        Some((v, inner))
-                    }
-                }
+                output.pats.push_front(*inner);
+                output
+                    .specialize_literal(literal)
+                    .map(|(mut binders, inner)| {
+                        binders.push((Mutability::Imm, x));
+                        (binders, inner)
+                    })
             }
             TP::ErrorPat => None,
         }
     }
 
-    fn default(&self) -> Option<(Binders, PatternArm)> {
+    fn specialize_default(&self) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pat.pop_front().unwrap();
+        let first_pattern = output.pats.pop_front().unwrap();
         match first_pattern.pat.value {
             TP::Literal(_) => None,
             TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
@@ -271,15 +260,11 @@ impl PatternArm {
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
-                output.pat.push_front(*inner);
-                let inner_spec = output.default();
-                match inner_spec {
-                    None => None,
-                    Some((mut v, inner)) => {
-                        v.push((Mutability::Imm, x));
-                        Some((v, inner))
-                    }
-                }
+                output.pats.push_front(*inner);
+                output.specialize_default().map(|(mut binders, inner)| {
+                    binders.push((Mutability::Imm, x));
+                    (binders, inner)
+                })
             }
             TP::ErrorPat => None,
         }
@@ -359,7 +344,7 @@ impl PatternMatrix {
                 // Make a match pattern that only holds guard binders
                 let match_pattern = apply_pattern_subst(pat, &guard_binders);
                 patterns.push(PatternArm {
-                    pat: VecDeque::from([match_pattern]),
+                    pats: VecDeque::from([match_pattern]),
                     guard,
                     arm,
                 });
@@ -414,10 +399,11 @@ impl PatternMatrix {
                 patterns.push(arm)
             }
         }
-        let mut tys = arg_types.into_iter().cloned().collect::<Vec<_>>();
-        let mut old_tys = self.tys.clone();
-        old_tys.remove(0);
-        tys.extend(&mut old_tys.into_iter());
+        let tys = arg_types
+            .into_iter()
+            .cloned()
+            .chain(self.tys.clone().into_iter().skip(1))
+            .collect::<Vec<_>>();
         let matrix = PatternMatrix { tys, patterns };
         (bindings, matrix)
     }
@@ -431,48 +417,44 @@ impl PatternMatrix {
                 patterns.push(arm)
             }
         }
-        let mut tys = self.tys.clone();
-        tys.remove(0);
+        let tys = self.tys[1..].to_vec();
         let matrix = PatternMatrix { tys, patterns };
         (bindings, matrix)
     }
 
-    fn default(&self) -> (Binders, PatternMatrix) {
+    fn specialize_default(&self) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         for entry in &self.patterns {
-            if let Some((mut new_bindings, arm)) = entry.default() {
+            if let Some((mut new_bindings, arm)) = entry.specialize_default() {
                 bindings.append(&mut new_bindings);
                 patterns.push(arm)
             }
         }
-        let mut tys = self.tys.clone();
-        tys.remove(0);
+        let tys = self.tys[1..].to_vec();
         let matrix = PatternMatrix { tys, patterns };
         (bindings, matrix)
     }
 
     fn first_head_ctors(&self) -> BTreeMap<VariantName, (Loc, Fields<Type>)> {
-        let mut ctors = BTreeMap::new();
-        for pat in &self.patterns {
-            ctors.append(&mut pat.first_ctor());
-        }
-        ctors
+        self.patterns
+            .iter()
+            .flat_map(|pat| pat.first_ctor())
+            .collect()
     }
 
     fn first_lits(&self) -> BTreeSet<Value> {
-        let mut ctors = BTreeSet::new();
-        for pat in &self.patterns {
-            ctors.append(&mut pat.first_lit());
-        }
-        ctors
+        self.patterns
+            .iter()
+            .flat_map(|pat| pat.first_lit())
+            .collect()
     }
 
     fn has_guards(&self) -> bool {
         self.patterns.iter().any(|pat| pat.guard.is_some())
     }
 
-    fn remove_guards(&mut self) {
+    fn remove_guarded_arms(&mut self) {
         let pats = std::mem::take(&mut self.patterns);
         self.patterns = pats.into_iter().filter(|pat| pat.guard.is_none()).collect();
     }
@@ -486,65 +468,52 @@ fn ty_to_wildcard_pattern(ty: Type, loc: Loc) -> T::MatchPattern {
 }
 
 fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
-    if matches!(
-        pat.pat.value,
-        TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat
-    ) {
-        vec![pat]
-    } else if matches!(
-    &pat.pat.value,
-    TP::Constructor(_, _, _, _, pats) | TP::BorrowConstructor(_, _, _, _, _, pats)
-        if pats.is_empty()
-    ) {
-        return vec![pat];
-    } else {
-        let MatchPattern {
-            ty,
-            pat: sp!(ploc, pat_),
-        } = pat;
-        match pat_ {
-            TP::Constructor(m, e, v, ta, spats) => {
-                let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
-                let fields_lists: Vec<Fields<(Type, MatchPattern)>> =
-                    combine_pattern_fields(all_spats);
-                fields_lists
-                    .into_iter()
-                    .map(|field_list| MatchPattern {
-                        ty: ty.clone(),
-                        pat: sp(ploc, TP::Constructor(m, e, v, ta.clone(), field_list)),
-                    })
-                    .collect::<Vec<_>>()
-            }
-            TP::BorrowConstructor(mut_, m, e, v, ta, spats) => {
-                let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
-                let fields_lists: Vec<Fields<(Type, MatchPattern)>> =
-                    combine_pattern_fields(all_spats);
-                fields_lists
-                    .into_iter()
-                    .map(|field_list| MatchPattern {
-                        ty: ty.clone(),
-                        pat: sp(
-                            ploc,
-                            TP::BorrowConstructor(mut_, m, e, v, ta.clone(), field_list),
-                        ),
-                    })
-                    .collect::<Vec<_>>()
-            }
-            TP::Or(lhs, rhs) => {
-                let mut lhs_rec = flatten_or(*lhs);
-                let mut rhs_rec = flatten_or(*rhs);
-                lhs_rec.append(&mut rhs_rec);
-                lhs_rec
-            }
-            TP::At(x, inner) => flatten_or(*inner)
-                .into_iter()
-                .map(|pat| MatchPattern {
-                    ty: ty.clone(),
-                    pat: sp(ploc, TP::At(x, Box::new(pat))),
-                })
-                .collect::<Vec<_>>(),
-            TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat => unreachable!(),
+    let ploc = pat.pat.loc;
+    match pat.pat.value {
+        TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat => vec![pat],
+        TP::Constructor(_, _, _, _, ref pats) | TP::BorrowConstructor(_, _, _, _, _, ref pats)
+            if pats.is_empty() =>
+        {
+            vec![pat]
         }
+        TP::Constructor(m, e, v, ta, spats) => {
+            let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
+            let fields_lists: Vec<Fields<(Type, MatchPattern)>> = combine_pattern_fields(all_spats);
+            fields_lists
+                .into_iter()
+                .map(|field_list| MatchPattern {
+                    ty: pat.ty.clone(),
+                    pat: sp(ploc, TP::Constructor(m, e, v, ta.clone(), field_list)),
+                })
+                .collect::<Vec<_>>()
+        }
+        TP::BorrowConstructor(mut_, m, e, v, ta, spats) => {
+            let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
+            let fields_lists: Vec<Fields<(Type, MatchPattern)>> = combine_pattern_fields(all_spats);
+            fields_lists
+                .into_iter()
+                .map(|field_list| MatchPattern {
+                    ty: pat.ty.clone(),
+                    pat: sp(
+                        ploc,
+                        TP::BorrowConstructor(mut_, m, e, v, ta.clone(), field_list),
+                    ),
+                })
+                .collect::<Vec<_>>()
+        }
+        TP::Or(lhs, rhs) => {
+            let mut lhs_rec = flatten_or(*lhs);
+            let mut rhs_rec = flatten_or(*rhs);
+            lhs_rec.append(&mut rhs_rec);
+            lhs_rec
+        }
+        TP::At(x, inner) => flatten_or(*inner)
+            .into_iter()
+            .map(|pat| MatchPattern {
+                ty: pat.ty.clone(),
+                pat: sp(ploc, TP::At(x, Box::new(pat))),
+            })
+            .collect::<Vec<_>>(),
     }
 }
 
@@ -575,10 +544,6 @@ fn combine_pattern_fields(
         }
     }
 
-    fn vfields_to_fields(vfields: VFields) -> Fields<(Type, MatchPattern)> {
-        UniqueMap::maybe_from_iter(vfields.into_iter()).unwrap()
-    }
-
     // println!("init fields: {:?}", fields);
     let mut vvfields: VVFields = fields.into_iter().collect::<Vec<_>>();
     // println!("vv fields: {:?}", vvfields);
@@ -586,7 +551,7 @@ fn combine_pattern_fields(
     // println!("output: {:?}", output_vec);
     output_vec
         .into_iter()
-        .map(vfields_to_fields)
+        .map(|vfields| UniqueMap::maybe_from_iter(vfields.into_iter()).unwrap())
         .collect::<Vec<_>>()
 }
 
@@ -645,7 +610,7 @@ pub fn compile_match(
 
     let mut counterexample_matrix = pattern_matrix.clone();
     let has_guards = counterexample_matrix.has_guards();
-    counterexample_matrix.remove_guards();
+    counterexample_matrix.remove_guarded_arms();
     if find_counterexample(context, subject.exp.loc, counterexample_matrix, has_guards) {
         return T::exp(
             result_type.clone(),
@@ -833,7 +798,7 @@ fn compile_match_head(
                 "Specialization failed"
             );
         }
-        let (mut new_binders, default) = matrix.default();
+        let (mut new_binders, default) = matrix.specialize_default();
         // println!("default binders: {:#?}", new_binders);
         subject_binders.append(&mut new_binders);
         MatchStep::LiteralSwitch {
@@ -910,7 +875,7 @@ fn compile_match_head(
             );
         }
 
-        let (mut new_binders, default_matrix) = matrix.default();
+        let (mut new_binders, default_matrix) = matrix.specialize_default();
         subject_binders.append(&mut new_binders);
 
         MatchStep::VariantSwitch {
@@ -1310,6 +1275,7 @@ fn make_arm_unpack_fields(
     let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
+    assert!(fringe_exps.len() == ordered_pats.len());
     for (fringe_exp, (_, field, _)) in fringe_exps.iter().zip(ordered_pats.iter()) {
         unpack_fields.push((*field, fringe_exp.var, fringe_exp.ty.clone()));
     }
@@ -1526,7 +1492,7 @@ fn make_lit_test(lit_exp: T::Exp, value: Value) -> T::Exp {
 
 fn make_if_else(test: T::Exp, conseq: T::Exp, alt: T::Exp, result_ty: Type) -> T::Exp {
     // FIXME: this span is woefully wrong
-    let loc = conseq.exp.loc;
+    let loc = test.exp.loc;
     T::exp(
         result_ty,
         sp(
@@ -1563,7 +1529,12 @@ fn make_deref_exp(ty: Type, loc: Loc, arg: T::Exp) -> T::Exp {
 enum CounterExample {
     Wildcard,
     Literal(String),
-    Constructor(DatatypeName, VariantName, Vec<CounterExample>),
+    Constructor(
+        DatatypeName,
+        VariantName,
+        /* is_positional */ bool,
+        Vec<(String, CounterExample)>,
+    ),
     Note(String, Box<CounterExample>),
 }
 
@@ -1577,9 +1548,9 @@ impl CounterExample {
                 notes.push_front(s.clone());
                 notes
             }
-            CounterExample::Constructor(_, _, inner) => inner
+            CounterExample::Constructor(_, _, _, inner) => inner
                 .into_iter()
-                .flat_map(|ce| ce.into_notes())
+                .flat_map(|(_, ce)| ce.into_notes())
                 .collect::<VecDeque<_>>(),
         }
     }
@@ -1591,19 +1562,32 @@ impl Display for CounterExample {
             CounterExample::Wildcard => write!(f, "_"),
             CounterExample::Literal(s) => write!(f, "{}", s),
             CounterExample::Note(_, inner) => inner.fmt(f),
-            CounterExample::Constructor(e, v, args) => {
+            CounterExample::Constructor(e, v, is_positional, args) => {
                 write!(f, "{}::{}", e, v)?;
                 if !args.is_empty() {
-                    write!(f, "(")?;
-                    write!(
-                        f,
-                        "{}",
-                        args.iter()
-                            .map(|arg| format!("{}", arg))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )?;
-                    write!(f, ")")
+                    if *is_positional {
+                        write!(f, "(")?;
+                        write!(
+                            f,
+                            "{}",
+                            args.iter()
+                                .map(|(_name, arg)| { format!("{}", arg) })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )?;
+                        write!(f, ")")
+                    } else {
+                        write!(f, " {{ ")?;
+                        write!(
+                            f,
+                            "{}",
+                            args.iter()
+                                .map(|(name, arg)| { format!("{}: {}", name, arg) })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )?;
+                        write!(f, " }}")
+                    }
                 } else {
                     Ok(())
                 }
@@ -1649,7 +1633,7 @@ fn find_counterexample(
             }
             None
         } else {
-            let (_, default) = matrix.default();
+            let (_, default) = matrix.specialize_default();
             if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
                 if literals.is_empty() {
                     let result = [CounterExample::Wildcard]
@@ -1686,7 +1670,7 @@ fn find_counterexample(
         // For all other non-literals, we don't consider a case where the constructors are
         // saturated.
         let literals = matrix.first_lits();
-        let (_, default) = matrix.default();
+        let (_, default) = matrix.specialize_default();
         if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
             if literals.is_empty() {
                 let result = [CounterExample::Wildcard]
@@ -1697,8 +1681,24 @@ fn find_counterexample(
             } else {
                 let n_id = format!("_{}", ndx);
                 *ndx += 1;
-                let lit_str =
-                    format_oxford_list!("or", "{}", literals.into_iter().collect::<Vec<_>>());
+                let lit_str = {
+                    let lit_len = literals.len() as u64;
+                    let fmt_lits = if lit_len > 4 {
+                        let mut result = literals
+                            .into_iter()
+                            .take(3)
+                            .map(|lit| lit.to_string())
+                            .collect::<Vec<_>>();
+                        result.push(format!("{} other values", lit_len - 3));
+                        result
+                    } else {
+                        literals
+                            .into_iter()
+                            .map(|lit| lit.to_string())
+                            .collect::<Vec<_>>()
+                    };
+                    format_oxford_list!("or", "{}", fmt_lits)
+                };
                 let lit_msg = format!("When '{}' is not {}", n_id, lit_str);
                 let lit_ce = CounterExample::Note(lit_msg, Box::new(CounterExample::Literal(n_id)));
                 let result = [lit_ce].into_iter().chain(counterexample).collect();
@@ -1724,7 +1724,7 @@ fn find_counterexample(
 
         // TODO: if we ever want to match against structs, this needs to behave differently
         if context.is_struct(&mident, &datatype_name) {
-            let (_, default) = matrix.default();
+            let (_, default) = matrix.specialize_default();
             if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
                 let result = [CounterExample::Wildcard]
                     .into_iter()
@@ -1749,6 +1749,12 @@ fn find_counterexample(
             for (ctor, (ploc, arg_types)) in ctors {
                 let ctor_arity = arg_types.len() as u32;
                 let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let is_positional =
+                    context.enum_variant_is_positional(&mident, &datatype_name, &ctor);
+                let names = fringe_binders
+                    .iter()
+                    .map(|(name, _, _)| name.to_string())
+                    .collect::<Vec<_>>();
                 let bind_tys = fringe_binders
                     .iter()
                     .map(|(_, _, ty)| ty)
@@ -1760,16 +1766,25 @@ fn find_counterexample(
                     let ctor_args = counterexample
                         .drain(0..(ctor_arity as usize))
                         .collect::<Vec<_>>();
-                    let output = [CounterExample::Constructor(datatype_name, ctor, ctor_args)]
-                        .into_iter()
-                        .chain(counterexample)
-                        .collect();
+                    assert!(ctor_args.len() == names.len());
+                    let output = [CounterExample::Constructor(
+                        datatype_name,
+                        ctor,
+                        is_positional,
+                        names
+                            .into_iter()
+                            .zip(ctor_args.into_iter())
+                            .collect::<Vec<_>>(),
+                    )]
+                    .into_iter()
+                    .chain(counterexample)
+                    .collect();
                     return Some(output);
                 }
             }
             None
         } else {
-            let (_, default) = matrix.default();
+            let (_, default) = matrix.specialize_default();
             if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
                 if ctors.is_empty() {
                     // If we didn't match any head constructor, `_` is a reasonable
@@ -1779,16 +1794,21 @@ fn find_counterexample(
                     Some(result)
                 } else {
                     let variant_name = unmatched_variants.first().unwrap();
-                    let ctor_arity = context
+                    let is_positional =
+                        context.enum_variant_is_positional(&mident, &datatype_name, variant_name);
+                    let ctor_args = context
                         .enum_variant_fields(&mident, &datatype_name, variant_name)
-                        .unwrap()
+                        .unwrap();
+                    let names = ctor_args
                         .iter()
-                        .count();
-                    let args = make_wildcards(ctor_arity);
+                        .map(|(_, field, _)| field.to_string())
+                        .collect::<Vec<_>>();
+                    let ctor_arity = names.len();
                     let result = [CounterExample::Constructor(
                         datatype_name,
                         *variant_name,
-                        args,
+                        is_positional,
+                        names.into_iter().zip(make_wildcards(ctor_arity)).collect(),
                     )]
                     .into_iter()
                     .chain(counterexample)
@@ -1827,7 +1847,7 @@ fn find_counterexample(
                 find_counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
                 // This can only be a binding or wildcard, so we act accordingly.
-                let (_, default) = matrix.default();
+                let (_, default) = matrix.specialize_default();
                 if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
                 {
                     let result = [CounterExample::Wildcard]
@@ -1882,7 +1902,11 @@ fn find_counterexample(
 impl AstDebug for PatternMatrix {
     fn ast_debug(&self, w: &mut AstWriter) {
         for arm in &self.patterns {
-            let PatternArm { pat, guard, arm } = arm;
+            let PatternArm {
+                pats: pat,
+                guard,
+                arm,
+            } = arm;
             w.write("    { ");
             w.comma(pat, |w, p| p.ast_debug(w));
             w.write(" } =>");

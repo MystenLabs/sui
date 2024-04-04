@@ -106,7 +106,7 @@ fn enum_def(context: &mut Context, ename: DatatypeName, edef: &N::EnumDefinition
     for (_, _, vdef) in &edef.variants {
         match &vdef.fields {
             N::VariantFields::Empty => (),
-            N::VariantFields::Defined(fields) => {
+            N::VariantFields::Defined(_, fields) => {
                 fields.iter().for_each(|(_, _, (_, ty))| type_(context, ty))
             }
         }

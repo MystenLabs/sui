@@ -1574,7 +1574,7 @@ fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::Varian
     match efields {
         E::VariantFields::Empty => N::VariantFields::Empty,
         E::VariantFields::Named(em) => {
-            N::VariantFields::Defined(em.map(|_f, (idx, t)| (idx, type_(context, t))))
+            N::VariantFields::Defined(false, em.map(|_f, (idx, t)| (idx, type_(context, t))))
         }
         E::VariantFields::Positional(tys) => {
             let fields = tys
@@ -1585,7 +1585,7 @@ fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::Varian
                     let field_name = positional_field_name(ty.loc, idx);
                     (field_name, (idx, ty))
                 });
-            N::VariantFields::Defined(UniqueMap::maybe_from_iter(fields).unwrap())
+            N::VariantFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
         }
     }
 }

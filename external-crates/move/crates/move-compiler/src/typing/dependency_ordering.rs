@@ -284,7 +284,7 @@ fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
 
 fn enum_def(context: &mut Context, edef: &N::EnumDefinition) {
     for (_, _, variant) in &edef.variants {
-        if let N::VariantFields::Defined(fields) = &variant.fields {
+        if let N::VariantFields::Defined(_, fields) = &variant.fields {
             fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
         }
     }

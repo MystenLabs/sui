@@ -120,12 +120,15 @@ type VariantFieldIndicies = UniqueMap<
     UniqueMap<DatatypeName, UniqueMap<VariantName, UniqueMap<Field, usize>>>,
 >;
 
+type VariantPositionalMap =
+    UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<VariantName, bool>>>;
 pub struct Context<'env> {
     pub env: &'env mut CompilationEnv,
     current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
     enum_variants: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
     variant_fields: VariantFieldIndicies,
+    variant_positional_info: VariantPositionalMap,
     function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
@@ -173,26 +176,34 @@ impl<'env> Context<'env> {
             env: &mut CompilationEnv,
             enum_variants: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
             variant_fields: &mut VariantFieldIndicies,
+            variant_positional_info: &mut VariantPositionalMap,
             mident: ModuleIdent,
             enum_defs: &UniqueMap<DatatypeName, N::EnumDefinition>,
         ) {
             let mut cur_enums_variants = UniqueMap::new();
             let mut cur_enums_variant_fields = UniqueMap::new();
+            let mut cur_enums_variant_positional_info = UniqueMap::new();
             for (ename, edef) in enum_defs.key_cloned_iter() {
                 let mut variant_fields = UniqueMap::new();
+                let mut variant_positional_info = UniqueMap::new();
+                let mut is_positional = false;
                 let mut indexed_variants = vec![];
                 for (variant_name, vdef) in edef.variants.key_cloned_iter() {
-                    indexed_variants.push((variant_name, vdef.index));
                     let mut fields = UniqueMap::new();
                     match &vdef.fields {
                         N::VariantFields::Empty => (),
-                        N::VariantFields::Defined(m) => {
+                        N::VariantFields::Defined(fields_are_positional, m) => {
+                            is_positional = *fields_are_positional;
                             for (field, (idx, _)) in m.key_cloned_iter() {
                                 fields.add(field, *idx).unwrap();
                             }
                         }
                     }
+                    indexed_variants.push((variant_name, vdef.index));
                     variant_fields.add(variant_name, fields).unwrap();
+                    variant_positional_info
+                        .add(variant_name, is_positional)
+                        .unwrap();
                 }
                 indexed_variants.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
                 cur_enums_variants
@@ -205,6 +216,9 @@ impl<'env> Context<'env> {
                     )
                     .unwrap();
                 cur_enums_variant_fields.add(ename, variant_fields).unwrap();
+                cur_enums_variant_positional_info
+                    .add(ename, variant_positional_info)
+                    .unwrap();
             }
             if let Err((_, prev_loc)) = enum_variants.add(mident, cur_enums_variants) {
                 let mut diag = ice!((
@@ -222,11 +236,22 @@ impl<'env> Context<'env> {
                 diag.add_secondary_label((prev_loc, "Previously defined here"));
                 env.add_diag(diag);
             }
+            if let Err((_, prev_loc)) =
+                variant_positional_info.add(mident, cur_enums_variant_positional_info)
+            {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Variants for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
         }
 
         let mut structs = UniqueMap::new();
         let mut enum_variants = UniqueMap::new();
         let mut variant_fields = UniqueMap::new();
+        let mut variant_positional_info = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
             for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
                 add_struct_fields(env, &mut structs, mident, &mdef.structs);
@@ -235,6 +260,7 @@ impl<'env> Context<'env> {
                     env,
                     &mut enum_variants,
                     &mut variant_fields,
+                    &mut variant_positional_info,
                     mident,
                     &mdef.enums,
                 );
@@ -246,6 +272,7 @@ impl<'env> Context<'env> {
                 env,
                 &mut enum_variants,
                 &mut variant_fields,
+                &mut variant_positional_info,
                 mident,
                 &mdef.enums,
             );
@@ -256,6 +283,7 @@ impl<'env> Context<'env> {
             structs,
             enum_variants,
             variant_fields,
+            variant_positional_info,
             function_locals: UniqueMap::new(),
             signature: None,
             tmp_counter: 0,
@@ -397,6 +425,21 @@ impl<'env> Context<'env> {
         // in that case, there should be errors
         assert!(fields.is_some() || self.env.has_errors());
         fields
+    }
+
+    /// Indicates if the enum variant is positional. Returns false on empty or missing.
+    pub fn enum_variant_is_positional(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> bool {
+        self.variant_positional_info
+            .get(module)
+            .and_then(|enums| enums.get(enum_name))
+            .and_then(|variants| variants.get(variant_name))
+            .cloned()
+            .unwrap_or(false)
     }
 
     pub fn make_imm_ref_match_binders(
@@ -756,7 +799,7 @@ fn enum_def(
 fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Field, H::BaseType)> {
     let tfields_map = match tfields {
         N::VariantFields::Empty => return vec![],
-        N::VariantFields::Defined(m) => m,
+        N::VariantFields::Defined(_, m) => m,
     };
     let mut indexed_fields = tfields_map
         .into_iter()

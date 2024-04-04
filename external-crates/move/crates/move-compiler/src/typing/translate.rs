@@ -736,7 +736,7 @@ fn variant_def(
 
     let field_map = match &mut v.fields {
         N::VariantFields::Empty => return vec![],
-        N::VariantFields::Defined(m) => m,
+        N::VariantFields::Defined(_, m) => m,
     };
 
     // instantiate types and check constraints
@@ -2768,7 +2768,7 @@ fn add_variant_field_types<T>(
 ) -> Fields<(Type, T)> {
     let maybe_fields_ty = core::make_variant_field_types(context, loc, m, n, v, targs);
     let mut fields_ty = match maybe_fields_ty {
-        N::VariantFields::Defined(m) => m,
+        N::VariantFields::Defined(_, m) => m,
         N::VariantFields::Empty => {
             if !fields.is_empty() {
                 let msg = format!(
