@@ -69,26 +69,26 @@ following table lists the primitive types available:
 | `bytes(size)`         | `Uint8Array` | `Iterable<number>`           | Fixed length bytes                                                          |
 
 ```ts
-import { bcs } from '@mysten/bcs';
-
+import { bcs, fromHEX } from '@mysten/bcs';
+ 
 // Integers
 const u8 = bcs.u8().serialize(100).toBytes();
 const u64 = bcs.u64().serialize(1000000n).toBytes();
 const u128 = bcs.u128().serialize('100000010000001000000').toBytes();
-
+ 
 // Other types
 const str = bcs.string().serialize('this is an ascii string').toBytes();
-const hex = bcs.hex().serialize('C0FFEE').toBytes();
+const hex = bcs.string().serialize('C0FFEE').toHex()
 const bytes = bcs.bytes(4).serialize([1, 2, 3, 4]).toBytes();
-
+ 
 // Parsing data back into original types
 const parsedU8 = bcs.u8().parse(u8);
 // u64-u256 will be represented as bigints regardless of how they were provided when serializing them
 const parsedU64 = bcs.u64().parse(u64);
 const parsedU128 = bcs.u128().parse(u128);
-
+ 
 const parsedStr = bcs.string().parse(str);
-const parsedHex = bcs.hex().parse(hex);
+const parsedHex = bcs.string().parse(fromHEX(hex))
 const parsedBytes = bcs.bytes(4).parse(bytes);
 ```
 
