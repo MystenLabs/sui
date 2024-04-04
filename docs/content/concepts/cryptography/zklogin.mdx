@@ -332,19 +332,14 @@ You need to fetch a new ZK proof if the previous ephemeral key pair is expired o
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
 There are two options:
-1. Call the Mysten Labs-maintained proving service
+1. Call the Mysten Labs-maintained proving service.
 1. Run the proving service in your backend using the provided Docker images.
 
 ### Call the Mysten Labs-maintained proving service
 
-If you wish to use the Mysten ran ZK Proving Service for Mainnet, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+If you want to use the Mysten hosted ZK Proving Service for Mainnet, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us for accessing it.
 
-To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet fails.
-
-| Network | Prover URL |
-| ------- | ---------- |
-| Mainnet, Testnet | https://prover.mystenlabs.com/v1 |
-| Devnet | https://prover-dev.mystenlabs.com/v1 |
+Use the `prover-dev` endpoint (https://prover-dev.mystenlabs.com/v1) freely for testing on Devnet. Note that you can submit proofs generated with this endpoint for Devnet zkLogin transactions only; submitting them to Testnet or Mainnet fails.
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
