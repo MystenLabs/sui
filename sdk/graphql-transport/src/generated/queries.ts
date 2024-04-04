@@ -201,6 +201,12 @@ export type AddressCoinsArgs = {
 
 
 /** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/** The 32-byte address that is an account address (corresponding to a public key). */
 export type AddressObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -638,6 +644,12 @@ export type CoinCoinsArgs = {
 
 
 /** Some 0x2::coin::Coin Move object. */
+export type CoinDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
 export type CoinDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -858,6 +870,12 @@ export type CoinMetadataCoinsArgs = {
 
 
 /** The metadata for a coin type. */
+export type CoinMetadataDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/** The metadata for a coin type. */
 export type CoinMetadataDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -967,6 +985,11 @@ export type DisplayEntry = {
   /** The template string for the key with placeholder values substituted. */
   value?: Maybe<Scalars['String']['output']>;
 };
+
+export enum DomainFormat {
+  At = 'AT',
+  Dot = 'DOT'
+}
 
 export type DryRunEffect = {
   __typename?: 'DryRunEffect';
@@ -1599,6 +1622,17 @@ export type IOwnerCoinsArgs = {
  * object. The same address can only refer to an account or an object, never both, but it is not
  * possible to know which up-front.
  */
+export type IOwnerDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
 export type IOwnerObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -2024,6 +2058,15 @@ export type MoveObjectCoinsArgs = {
  * The representation of an object as a Move Object, which exposes additional information
  * (content, module that governs it, version, is transferrable, etc.) about this object.
  */
+export type MoveObjectDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
 export type MoveObjectDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -2259,6 +2302,15 @@ export type MovePackageCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -2623,6 +2675,16 @@ export type ObjectCoinsArgs = {
  * with fields) with additional metadata detailing its id, version, transaction digest, owner
  * field indicating how this object can be accessed.
  */
+export type ObjectDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
 export type ObjectDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -2941,6 +3003,16 @@ export type OwnerCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -3763,6 +3835,12 @@ export type StakedSuiCoinsArgs = {
 
 
 /** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
 export type StakedSuiDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -3975,6 +4053,11 @@ export type SuinsRegistrationCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type SuinsRegistrationDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -4978,9 +5061,9 @@ export type PaginateTransactionBlockListsQueryVariables = Exact<{
 }>;
 
 
-export type PaginateTransactionBlockListsQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', effects?: { __typename?: 'TransactionBlockEffects', events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null } | null };
+export type PaginateTransactionBlockListsQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', effects?: { __typename?: 'TransactionBlockEffects', events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', address: any, inputState?: { __typename?: 'Object', version: number, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null, outputState?: { __typename?: 'Object', asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, asMovePackage?: { __typename?: 'MovePackage', modules?: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string }> } | null } | null } | null }> } } | null } | null };
 
-export type Paginate_Transaction_ListsFragment = { __typename?: 'TransactionBlock', effects?: { __typename?: 'TransactionBlockEffects', events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null };
+export type Paginate_Transaction_ListsFragment = { __typename?: 'TransactionBlock', effects?: { __typename?: 'TransactionBlockEffects', events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', address: any, inputState?: { __typename?: 'Object', version: number, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null, outputState?: { __typename?: 'Object', asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, asMovePackage?: { __typename?: 'MovePackage', modules?: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string }> } | null } | null } | null }> } } | null };
 
 export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', bcs?: any, timestamp?: any | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', address: any, inputState?: { __typename?: 'Object', version: number, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null, outputState?: { __typename?: 'Object', asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, asMovePackage?: { __typename?: 'MovePackage', modules?: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string }> } | null } | null } | null }> } } | null };
 
@@ -5454,27 +5537,18 @@ export const Paginate_Transaction_ListsFragmentDoc = new TypedDocumentString(`
         endCursor
       }
       nodes {
-        idCreated
-        idDeleted
+        address
         inputState {
           version
-          digest
-          address
           asMoveObject {
             contents {
               type {
                 repr
               }
             }
-          }
-          owner {
-            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
         outputState {
-          version
-          digest
-          address
           asMoveObject {
             contents {
               type {
@@ -5482,36 +5556,19 @@ export const Paginate_Transaction_ListsFragmentDoc = new TypedDocumentString(`
               }
             }
           }
-          owner {
-            ...RPC_OBJECT_OWNER_FIELDS
+          asMovePackage {
+            modules(first: 10) {
+              nodes {
+                name
+              }
+            }
           }
         }
       }
     }
   }
 }
-    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
-  __typename
-  ... on AddressOwner {
-    owner {
-      asObject {
-        address
-      }
-      asAddress {
-        address
-      }
-    }
-  }
-  ... on Parent {
-    parent {
-      address
-    }
-  }
-  ... on Shared {
-    initialSharedVersion
-  }
-}
-fragment RPC_EVENTS_FIELDS on Event {
+    fragment RPC_EVENTS_FIELDS on Event {
   sendingModule {
     package {
       address
@@ -7726,28 +7783,7 @@ export const PaginateTransactionBlockListsDocument = new TypedDocumentString(`
     ...PAGINATE_TRANSACTION_LISTS
   }
 }
-    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
-  __typename
-  ... on AddressOwner {
-    owner {
-      asObject {
-        address
-      }
-      asAddress {
-        address
-      }
-    }
-  }
-  ... on Parent {
-    parent {
-      address
-    }
-  }
-  ... on Shared {
-    initialSharedVersion
-  }
-}
-fragment RPC_EVENTS_FIELDS on Event {
+    fragment RPC_EVENTS_FIELDS on Event {
   sendingModule {
     package {
       address
@@ -7801,27 +7837,18 @@ fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
         endCursor
       }
       nodes {
-        idCreated
-        idDeleted
+        address
         inputState {
           version
-          digest
-          address
           asMoveObject {
             contents {
               type {
                 repr
               }
             }
-          }
-          owner {
-            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
         outputState {
-          version
-          digest
-          address
           asMoveObject {
             contents {
               type {
@@ -7829,8 +7856,12 @@ fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
               }
             }
           }
-          owner {
-            ...RPC_OBJECT_OWNER_FIELDS
+          asMovePackage {
+            modules(first: 10) {
+              nodes {
+                name
+              }
+            }
           }
         }
       }
