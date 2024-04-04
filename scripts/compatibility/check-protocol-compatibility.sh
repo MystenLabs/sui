@@ -44,8 +44,12 @@ ORIGIN_COMMIT=$(echo "$TOP_VERSION" | cut -d- -f2)
 
 git fetch -q || exit 1
 SOURCE_COMMIT=$(git rev-parse HEAD)
+SOURCE_BRANCH=$(git branch -a --contains "$SOURCE_COMMIT" | head -n 1 | cut -d' ' -f2-)
 
-echo "Checking protocol compatibility of $SOURCE_COMMIT with $NETWORK ($ORIGIN_COMMIT)"
+echo "Source commit: $SOURCE_COMMIT"
+echo "Source branch: $SOURCE_BRANCH"
+
+echo "Checking protocol compatibility with $NETWORK ($ORIGIN_COMMIT)"
 
 # put code to check if git client is clean into function
 function check_git_clean {
