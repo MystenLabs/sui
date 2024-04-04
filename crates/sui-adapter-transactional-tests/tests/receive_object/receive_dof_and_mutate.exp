@@ -16,22 +16,55 @@ gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 
 task 3 'view-object'. lines 38-38:
 Owner: Object ID: ( fake(2,2) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,3)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,3),
+    },
+}
 
 task 4 'view-object'. lines 40-40:
 Owner: Account Address ( A )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 0u64,
+}
 
 task 5 'view-object'. lines 42-42:
 Owner: Account Address ( fake(2,1) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
 
 task 6 'view-object'. lines 44-44:
 Owner: Object ID: ( fake(2,0) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 0u64,
+}
 
 task 7 'run'. lines 46-46:
 created: object(7,0)
@@ -41,19 +74,52 @@ gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 
 task 8 'view-object'. lines 48-48:
 Owner: Object ID: ( fake(2,2) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,3)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,3),
+    },
+}
 
 task 9 'view-object'. lines 50-50:
 Owner: Account Address ( A )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 0u64,
+}
 
 task 10 'view-object'. lines 52-52:
 Owner: Object ID: ( fake(7,0) )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 100u64}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 100u64,
+}
 
 task 11 'view-object'. lines 54-54:
 Owner: Object ID: ( fake(2,0) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 0u64,
+}
