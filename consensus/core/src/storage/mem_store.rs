@@ -2,18 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    ops::Bound::{Excluded, Included},
+    collections::{BTreeMap, BTreeSet, VecDeque, VecDeque},
+    ops::Bound::{Excluded, Included, Unbounded},
 };
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use super::{CommitInfo, Store, WriteBatch};
+use super::{Store, WriteBatch};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
-    error::ConsensusResult,
+    commit::{
+        CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRange,
+        TrustedCommit, CommitRef
+    },
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// In-memory storage for testing.
@@ -26,7 +29,7 @@ struct Inner {
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
     commits: BTreeMap<(CommitIndex, CommitDigest), TrustedCommit>,
     commit_votes: BTreeSet<(CommitIndex, CommitDigest, BlockRef)>,
-    commit_info: BTreeMap<(CommitIndex, CommitDigest), CommitInfo>,
+    commit_info: BTreeMap<CommitRange, CommitInfo>,
 }
 
 impl MemStore {

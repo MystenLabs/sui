@@ -8,7 +8,7 @@ use tempfile::TempDir;
 use super::{mem_store::MemStore, rocksdb_store::RocksDBStore, Store, WriteBatch};
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Slot, TestBlock, VerifiedBlock},
-    commit::{CommitDigest, TrustedCommit},
+    commit::{CommitDigest, CommitRange, TrustedCommit},
 };
 
 /// Test fixture for store tests. Wraps around various store implementations.

@@ -3,7 +3,7 @@
 
 use std::{
     collections::VecDeque,
-    ops::Bound::{Excluded, Included},
+    ops::Bound::{Excluded, Included, Unbounded},
     time::Duration,
 };
 
@@ -82,7 +82,7 @@ impl RocksDBStore {
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
             Self::COMMITS_CF;<(CommitIndex, CommitDigest), Bytes>,
             Self::COMMIT_VOTES_CF;<(CommitIndex, CommitDigest, BlockRef), ()>,
-            Self::COMMIT_INFO_CF;<(CommitIndex, CommitDigest), CommitInfo>
+            Self::COMMIT_INFO_CF;<CommitRange, CommitInfo>
         );
 
         Self {

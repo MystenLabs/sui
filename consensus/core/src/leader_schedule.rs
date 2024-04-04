@@ -11,20 +11,29 @@ use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 
-use crate::{commit::CommitRange, context::Context, leader_scoring::ReputationScores, Round};
+use crate::{
+    commit::CommitRange,
+    context::Context,
+    dag_state::DagState,
+    leader_scoring::{ReputationScoreCalculator, ReputationScores},
+    leader_scoring_strategy::{
+        CertificateScoringStrategy, CertifiedVoteScoringStrategyV1, CertifiedVoteScoringStrategyV2,
+        ScoringStrategy, VoteScoringStrategy,
+    },
+    universal_committer::UniversalCommitter,
+    Round,
+};
 
 /// The `LeaderSchedule` is responsible for producing the leader schedule across
 /// an epoch. The leader schedule is subject to change periodically based on
 /// calculated `ReputationScores` of the authorities.
 #[derive(Clone)]
 pub(crate) struct LeaderSchedule {
+    pub leader_swap_table: Arc<RwLock<LeaderSwapTable>>,
     context: Arc<Context>,
-    #[allow(unused)]
     num_commits_per_schedule: u64,
-    leader_swap_table: Arc<RwLock<LeaderSwapTable>>,
 }
 
-#[allow(unused)]
 impl LeaderSchedule {
     /// The window where the schedule change takes place in consensus. It represents
     /// number of committed sub dags.
@@ -37,6 +46,121 @@ impl LeaderSchedule {
             num_commits_per_schedule: Self::CONSENSUS_COMMITS_PER_SCHEDULE,
             leader_swap_table: Arc::new(RwLock::new(leader_swap_table)),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate)(crate) fn with_num_commits_per_schedule(mut self, num_commits_per_schedule: u64) -> Self {
+        self.num_commits_per_schedule = num_commits_per_schedule;
+        self
+    }
+
+    /// Restores the `LeaderSchedule` from storage. It will attempt to retrieve the
+    /// last stored `ReputationScores` and use them to build a `LeaderSwapTable`.
+    pub(crate) fn from_store(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+        let leader_swap_table = dag_state.read().last_reputation_scores_from_store().map_or(
+            LeaderSwapTable::default(),
+            |(commit_range, scores_per_authority)| {
+                LeaderSwapTable::new(
+                    context.clone(),
+                    ReputationScores::new(commit_range, scores_per_authority),
+                    context
+                        .protocol_config
+                        .consensus_bad_nodes_stake_threshold(),
+                )
+            },
+        );
+        // create the schedule
+        Self::new(context, leader_swap_table)
+    }
+
+    pub(crate) fn commits_until_leader_schedule_update(
+        &self,
+        dag_state: Arc<RwLock<DagState>>,
+    ) -> usize {
+        let unscored_committed_subdags_count = dag_state.read().unscored_committed_subdags_count();
+        assert!(
+            unscored_committed_subdags_count <= self.num_commits_per_schedule,
+            "Unscored committed subdags count exceeds the number of commits per schedule"
+        );
+        self.num_commits_per_schedule
+            .saturating_sub(unscored_committed_subdags_count) as usize
+    }
+
+    pub(crate) fn update_leader_schedule(
+        &self,
+        dag_state: Arc<RwLock<DagState>>,
+        committer: &UniversalCommitter,
+    ) {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["LeaderSchedule::update_leader_schedule"])
+            .start_timer();
+
+        let mut dag_state = dag_state.write();
+        let unscored_subdags = dag_state.take_unscored_committed_subdags();
+
+        // TODO: remove this once scoring strategy is finalized
+        let scoring_strategy =
+            if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
+                tracing::info!(
+                    "Using scoring strategy {scoring_strategy} for ReputationScoreCalculator"
+                );
+
+                let scoring_strategy: Box<dyn ScoringStrategy> = match scoring_strategy.as_str() {
+                    "vote" => Box::new(VoteScoringStrategy {}),
+                    "certified_vote_v1" => Box::new(CertifiedVoteScoringStrategyV1 {}),
+                    "certified_vote_v2" => Box::new(CertifiedVoteScoringStrategyV2 {}),
+                    "certificate" => Box::new(CertificateScoringStrategy {}),
+                    _ => Box::new(VoteScoringStrategy {}),
+                };
+                scoring_strategy
+            } else {
+                tracing::info!(
+                    "Using scoring strategy VoteScoringStrategy for ReputationScoreCalculator"
+                );
+                Box::new(VoteScoringStrategy {})
+            };
+
+        let score_calculation_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["ReputationScoreCalculator::calculate"])
+            .start_timer();
+        let reputation_scores = ReputationScoreCalculator::new(
+            self.context.clone(),
+            committer,
+            &unscored_subdags,
+            scoring_strategy,
+        )
+        .calculate();
+        drop(score_calculation_timer);
+
+        reputation_scores.update_metrics(self.context.clone());
+
+        self.update_leader_swap_table(LeaderSwapTable::new(
+            self.context.clone(),
+            reputation_scores.clone(),
+            self.context
+                .protocol_config
+                .consensus_bad_nodes_stake_threshold(),
+        ));
+
+        self.context
+            .metrics
+            .node_metrics
+            .num_of_bad_nodes
+            .set(self.leader_swap_table.read().bad_nodes.len() as i64);
+
+        // Buffer score and last commit rounds in dag state to be persisted later
+        dag_state.add_commit_info(
+            reputation_scores.commit_range,
+            reputation_scores.scores_per_authority,
+        );
     }
 
     pub(crate) fn elect_leader(&self, round: u32, leader_offset: u32) -> AuthorityIndex {
@@ -132,7 +256,6 @@ pub(crate) struct LeaderSwapTable {
     pub(crate) reputation_scores: ReputationScores,
 }
 
-#[allow(unused)]
 impl LeaderSwapTable {
     // Constructs a new table based on the provided reputation scores. The
     // `swap_stake_threshold` designates the total (by stake) nodes that will be
@@ -300,7 +423,14 @@ impl Debug for LeaderSwapTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commit::CommitRange;
+    use crate::{
+        block::{
+            timestamp_utc_ms, BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock,
+        },
+        commit::{CommitDigest, CommitInfo, CommitRange, CommittedSubDag, TrustedCommit},
+        storage::{mem_store::MemStore, Store, WriteBatch},
+        universal_committer::universal_committer_builder::UniversalCommitterBuilder,
+    };
 
     #[test]
     fn test_elect_leader() {
@@ -347,6 +477,247 @@ mod tests {
         assert_ne!(
             leader_schedule.elect_leader_stake_based(1, 1),
             leader_schedule.elect_leader_stake_based(1, 2)
+        );
+    }
+
+    #[test]
+    fn test_leader_schedule_from_store() {
+        telemetry_subscribers::init_for_testing();
+        let mut context = Context::new_for_test(4).0;
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold(33);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+
+        // The CommitInfo for the first 10 commits are written to store. This is the
+        // info that LeaderSchedule will be recovered from
+        let commit_range = CommitRange::new(1..10);
+        let reputation_scores = vec![4, 1, 1, 3];
+        let last_committed_rounds = vec![9, 9, 10, 9];
+
+        let commit_info = CommitInfo {
+            reputation_scores,
+            last_committed_rounds,
+        };
+
+        store
+            .write(
+                WriteBatch::default()
+                    .commit_ranges_with_commit_info(vec![(commit_range, commit_info)]),
+            )
+            .unwrap();
+
+        // CommitIndex '11' will be written to store. This should result in the cached
+        // last_committed_rounds & unscored subdags in DagState to be updated with the
+        // latest commit information on recovery.
+        let leader_timestamp = timestamp_utc_ms();
+        let blocks = vec![
+            VerifiedBlock::new_for_test(
+                TestBlock::new(11, 3)
+                    .set_timestamp_ms(leader_timestamp)
+                    .build(),
+            ),
+            VerifiedBlock::new_for_test(TestBlock::new(10, 0).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(10, 1).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(10, 3).build()),
+        ];
+
+        let leader = blocks[0].clone();
+        let leader_ref = leader.reference();
+        let last_commit_index = 11;
+        let mut expected_subdag = CommittedSubDag::new(
+            leader_ref,
+            blocks.clone(),
+            leader_timestamp,
+            last_commit_index,
+        );
+        expected_subdag.sort();
+        let expected_unscored_subdags = vec![expected_subdag.clone()];
+        let expected_last_committed_rounds = vec![10, 10, 10, 11];
+        let last_commit = TrustedCommit::new_for_test(
+            last_commit_index,
+            CommitDigest::MIN,
+            leader_ref,
+            blocks
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        );
+        store
+            .write(
+                WriteBatch::default()
+                    .blocks(blocks)
+                    .commits(vec![last_commit]),
+            )
+            .unwrap();
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        // Check that DagState recovery from stored CommitInfo worked correctly
+        assert_eq!(
+            expected_last_committed_rounds,
+            dag_state.read().last_committed_rounds()
+        );
+        let actual_unscored_subdags = dag_state.read().unscored_committed_subdags();
+        assert_eq!(
+            expected_unscored_subdags.len() as u64,
+            dag_state.read().unscored_committed_subdags_count()
+        );
+        let mut actual_subdag = actual_unscored_subdags[0].clone();
+        actual_subdag.sort();
+        assert_eq!(expected_subdag, actual_subdag);
+
+        let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
+
+        // Check that LeaderSchedule recovery from stored CommitInfo worked correctly
+        let leader_swap_table = leader_schedule.leader_swap_table.read();
+        assert_eq!(leader_swap_table.good_nodes.len(), 1);
+        assert_eq!(
+            leader_swap_table.good_nodes[0].0,
+            AuthorityIndex::new_for_test(0)
+        );
+        assert_eq!(leader_swap_table.bad_nodes.len(), 1);
+        assert!(leader_swap_table
+            .bad_nodes
+            .contains_key(&AuthorityIndex::new_for_test(1)));
+    }
+
+    #[test]
+    fn test_leader_schedule_commits_until_leader_schedule_update() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context,
+            Arc::new(MemStore::new()),
+        )));
+        let unscored_subdags = vec![CommittedSubDag::new(
+            BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
+            vec![],
+            timestamp_utc_ms(),
+            1,
+        )];
+        dag_state
+            .write()
+            .add_unscored_committed_subdags(unscored_subdags);
+
+        let commits_until_leader_schedule_update =
+            leader_schedule.commits_until_leader_schedule_update(dag_state.clone());
+        assert_eq!(commits_until_leader_schedule_update, 299);
+    }
+
+    #[test]
+    fn test_leader_schedule_update_leader_schedule() {
+        telemetry_subscribers::init_for_testing();
+        let mut context = Context::new_for_test(4).0;
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold(33);
+        let context = Arc::new(context);
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+
+        // Populate fully connected test blocks for round 0 ~ 4, authorities 0 ~ 3.
+        let max_round: u32 = 4;
+        let num_authorities: u32 = 4;
+
+        let mut blocks = Vec::new();
+        let (genesis_references, genesis): (Vec<_>, Vec<_>) = context
+            .committee
+            .authorities()
+            .map(|index| {
+                let author_idx = index.0.value() as u32;
+                let block = TestBlock::new(0, author_idx).build();
+                VerifiedBlock::new_for_test(block)
+            })
+            .map(|block| (block.reference(), block))
+            .unzip();
+        blocks.extend(genesis);
+
+        let mut ancestors = genesis_references;
+        let mut leader = None;
+        for round in 1..=max_round {
+            let mut new_ancestors = vec![];
+            for author in 0..num_authorities {
+                let base_ts = round as BlockTimestampMs * 1000;
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(round, author)
+                        .set_timestamp_ms(base_ts + (author + round) as u64)
+                        .set_ancestors(ancestors.clone())
+                        .build(),
+                );
+                new_ancestors.push(block.reference());
+
+                // Simulate referenced block which was part of another committed
+                // subdag.
+                if round == 3 && author == 0 {
+                    tracing::info!("Skipping {block} in committed subdags blocks");
+                    continue;
+                }
+
+                blocks.push(block.clone());
+
+                // only write one block for the final round, which is the leader
+                // of the committed subdag.
+                if round == max_round {
+                    leader = Some(block.clone());
+                    break;
+                }
+            }
+            ancestors = new_ancestors;
+        }
+
+        let leader_block = leader.unwrap();
+        let leader_ref = leader_block.reference();
+        let commit_index = 1;
+
+        let unscored_subdags = vec![CommittedSubDag::new(
+            leader_ref,
+            blocks,
+            timestamp_utc_ms(),
+            commit_index,
+        )];
+
+        dag_state
+            .write()
+            .add_unscored_committed_subdags(unscored_subdags);
+
+        let committer = UniversalCommitterBuilder::new(
+            context.clone(),
+            leader_schedule.clone(),
+            dag_state.clone(),
+        )
+        .with_pipeline(true)
+        .build();
+
+        assert_eq!(
+            leader_schedule.elect_leader(4, 0),
+            AuthorityIndex::new_for_test(0)
+        );
+
+        leader_schedule.update_leader_schedule(dag_state.clone(), &committer);
+
+        let leader_swap_table = leader_schedule.leader_swap_table.read();
+        assert_eq!(leader_swap_table.good_nodes.len(), 1);
+        assert_eq!(
+            leader_swap_table.good_nodes[0].0,
+            AuthorityIndex::new_for_test(3)
+        );
+        assert_eq!(leader_swap_table.bad_nodes.len(), 1);
+        assert!(leader_swap_table
+            .bad_nodes
+            .contains_key(&AuthorityIndex::new_for_test(0)));
+        assert_eq!(
+            leader_schedule.elect_leader(4, 0),
+            AuthorityIndex::new_for_test(3)
         );
     }
 
