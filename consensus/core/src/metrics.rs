@@ -109,6 +109,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) leader_timeout_total: IntCounterVec,
     pub(crate) missing_blocks_total: IntCounter,
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
+    pub num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) reputation_scores: IntGaugeVec,
     pub(crate) scope_processing_time: HistogramVec,
@@ -307,6 +308,11 @@ impl NodeMetrics {
                 "missing_blocks_after_fetch_total",
                 "Total number of missing blocks after fetching blocks from peer",
                 registry,
+            ).unwrap(),
+            num_of_bad_nodes: register_int_gauge_with_registry!(
+                "num_of_bad_nodes",
+                "The number of bad nodes in the new leader schedule",
+                registry
             ).unwrap(),
             quorum_receive_latency: register_histogram_with_registry!(
                 "quorum_receive_latency",

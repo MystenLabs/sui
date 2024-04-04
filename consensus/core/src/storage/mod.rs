@@ -11,7 +11,7 @@ use consensus_config::AuthorityIndex;
 
 use crate::{
     block::{BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitIndex, CommitInfo, CommitRange, CommitRef, TrustedCommit},
+    commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -91,6 +91,15 @@ impl WriteBatch {
     #[cfg(test)]
     pub(crate) fn commits(mut self, commits: Vec<TrustedCommit>) -> Self {
         self.commits = commits;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn last_commit_info(
+        mut self,
+        last_commit_info: Vec<(CommitRef, CommitInfo)>,
+    ) -> Self {
+        self.last_commit_info = last_commit_info;
         self
     }
 }

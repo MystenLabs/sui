@@ -22,7 +22,6 @@ use crate::{
     CommittedSubDag, Round,
 };
 
-#[allow(unused)]
 pub(crate) struct ReputationScoreCalculator<'a> {
     // The range of commits that these scores are calculated from.
     pub(crate) commit_range: CommitRange,
@@ -44,7 +43,6 @@ pub(crate) struct ReputationScoreCalculator<'a> {
     committer: &'a UniversalCommitter,
 }
 
-#[allow(unused)]
 impl<'a> ReputationScoreCalculator<'a> {
     pub(crate) fn new(
         context: Arc<Context>,
@@ -114,7 +112,6 @@ pub(crate) struct ReputationScores {
     pub(crate) commit_range: CommitRange,
 }
 
-#[allow(unused)]
 impl ReputationScores {
     pub(crate) fn new(commit_range: CommitRange, scores_per_authority: Vec<u64>) -> Self {
         Self {
@@ -302,147 +299,6 @@ impl UnscoredSubdag {
                 is_vote
             } else {
                 tracing::trace!(
-                    "Potential vote not found in unscored committed subdags: {:?}",
-                    reference
-                );
-                false
-            };
-
-            if is_vote {
-                tracing::trace!("{reference} is a vote for {leader_block}");
-                if votes_stake_aggregator.add(reference.author, &self.context.committee) {
-                    tracing::trace!(
-                        "{potential_certificate} is a certificate for leader {leader_block}"
-                    );
-                    return true;
-                }
-            } else {
-                tracing::trace!("{reference} is not a vote for {leader_block}",);
-            }
-        }
-        tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
-        false
-    }
-
-    pub(crate) fn get_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.blocks.range((
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    pub(crate) fn get_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.blocks.range((
-            Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
-            Excluded(BlockRef::new(
-                round + 1,
-                AuthorityIndex::ZERO,
-                BlockDigest::MIN,
-            )),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    pub(crate) fn get_block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
-        self.blocks.get(block_ref).cloned()
-    }
-}
-
-pub(crate) struct UnscoredSubdag {
-    pub context: Arc<Context>,
-    pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
-}
-
-impl UnscoredSubdag {
-    pub(crate) fn new(context: Arc<Context>, subdags: &[CommittedSubDag]) -> Self {
-        let blocks = subdags
-            .iter()
-            .flat_map(|subdag| subdag.blocks.iter())
-            .map(|block| (block.reference(), block.clone()))
-            .collect::<BTreeMap<_, _>>();
-
-        assert!(
-            !blocks.is_empty(),
-            "Attempted to create UnscoredSubdag with no blocks"
-        );
-
-        Self { context, blocks }
-    }
-
-    // Skip genesis round as we don't produce leaders for that round.
-    pub(crate) fn get_leader_rounds(&self) -> Vec<Round> {
-        self.blocks
-            .keys()
-            .map(|block_ref| block_ref.round)
-            .filter(|round| *round != 0)
-            .collect::<Vec<_>>()
-    }
-
-    pub(crate) fn find_supported_block(
-        &self,
-        leader_slot: Slot,
-        from: &VerifiedBlock,
-    ) -> Option<BlockRef> {
-        if from.round() < leader_slot.round {
-            return None;
-        }
-        for ancestor in from.ancestors() {
-            if Slot::from(*ancestor) == leader_slot {
-                return Some(*ancestor);
-            }
-            // Weak links may point to blocks with lower round numbers than strong links.
-            if ancestor.round <= leader_slot.round {
-                continue;
-            }
-            if let Some(ancestor) = self.get_block(ancestor) {
-                if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
-                    return Some(support);
-                }
-            } else {
-                // TODO: Add unit test for this case once dagbuilder is ready.
-                tracing::info!(
-                    "Potential vote's ancestor block not found in unscored committed subdags: {:?}",
-                    ancestor
-                );
-                return None;
-            }
-        }
-        None
-    }
-
-    pub(crate) fn is_vote(
-        &self,
-        potential_vote: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-    ) -> bool {
-        let reference = leader_block.reference();
-        let leader_slot = Slot::from(reference);
-        self.find_supported_block(leader_slot, potential_vote) == Some(reference)
-    }
-
-    pub(crate) fn is_certificate(
-        &self,
-        potential_certificate: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-        all_votes: &mut HashMap<BlockRef, bool>,
-    ) -> bool {
-        let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-        for reference in potential_certificate.ancestors() {
-            let is_vote = if let Some(is_vote) = all_votes.get(reference) {
-                *is_vote
-            } else if let Some(potential_vote) = self.get_block(reference) {
-                let is_vote = self.is_vote(&potential_vote, leader_block);
-                all_votes.insert(*reference, is_vote);
-                is_vote
-            } else {
-                tracing::info!(
                     "Potential vote not found in unscored committed subdags: {:?}",
                     reference
                 );

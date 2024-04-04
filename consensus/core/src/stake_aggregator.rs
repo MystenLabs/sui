@@ -58,10 +58,6 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
         T::is_threshold(committee, self.stake)
     }
 
-    pub(crate) fn stake(&self) -> Stake {
-        self.stake
-    }
-
     pub(crate) fn clear(&mut self) {
         self.votes.clear();
         self.stake = 0;
