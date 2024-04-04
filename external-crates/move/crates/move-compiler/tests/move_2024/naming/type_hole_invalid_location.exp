@@ -1,0 +1,34 @@
+error[E03019]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:2:21
+  │
+2 │     public struct P(_)
+  │                     ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type
+
+error[E03019]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:3:26
+  │
+3 │     public struct S { f: _ }
+  │                          ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type
+
+error[E03019]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:4:14
+  │
+4 │     const C: _ = 0;
+  │              ^ Invalid usage of a placeholder for type inference '_'. Constants require fully specified types. Replace '_' with a specific type
+
+error[E03019]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:5:16
+  │
+5 │     fun foo(_: _) {}
+  │                ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type
+  │
+  = Only 'macro' functions can use '_' in their signatures
+
+error[E03019]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:6:16
+  │
+6 │     fun bar(): _ { 0 }
+  │                ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type
+  │
+  = Only 'macro' functions can use '_' in their signatures
+
