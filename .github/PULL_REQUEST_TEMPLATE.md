@@ -8,16 +8,16 @@ How did you test the new or updated feature?
 
 ---
 
-## Release notes
+## Type of change
 
-Check each box that your changes affect. If none of the boxes relate to your changes, release notes aren't required.
+Check each box that the changes this PR introduces has an effect on. If you check at least one box, include information in the Release note section that describes the impact of your changes to users and any actions they must take to implement updates. If none of the boxes relate to your changes, a release note isn't required. 
 
-For each box you select, include information that describes the impact of your changes that a user might notice and any actions they must take to implement updates. 
+- [ ] Protocol
+- [ ] Nodes (Validators and Full nodes)
+- [ ] Indexer
+- [ ] JSON-RPC
+- [ ] GraphQL
+- [ ] CLI
+- [ ] Rust SDK
 
-- [ ] Protocol: 
-- [ ] Nodes (Validators and Full nodes): 
-- [ ] Indexer: 
-- [ ] JSON-RPC: 
-- [ ] GraphQL: 
-- [ ] CLI: 
-- [ ] Rust SDK: 
+### Release note
