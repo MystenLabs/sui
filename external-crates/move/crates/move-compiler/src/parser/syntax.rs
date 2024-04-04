@@ -1161,7 +1161,6 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | <Value>
 //          | "(" Comma<Exp> ")"
 //          | "(" <Exp> ":" <Type> ")"
-//          | "(" <Exp> "as" <Type> ")"
 //          | <BlockLabel> ":" <Exp>
 //          | "{" <Sequence>
 //          | "if" "(" <Exp> ")" <Exp> "else" (<BlockLabel> ":")? "{" <Exp> "}"
@@ -1260,7 +1259,6 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 
         // "(" Comma<Exp> ")"
         // "(" <Exp> ":" <Type> ")"
-        // "(" <Exp> "as" <Type> ")"
         Tok::LParen => {
             let list_loc = context.tokens.start_loc();
             context.tokens.advance()?; // consume the LParen
@@ -1274,10 +1272,6 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                     let ty = parse_type(context)?;
                     consume_token(context.tokens, Tok::RParen)?;
                     Exp_::Annotate(Box::new(e), ty)
-                } else if match_token(context.tokens, Tok::As)? {
-                    let ty = parse_type(context)?;
-                    consume_token(context.tokens, Tok::RParen)?;
-                    Exp_::Cast(Box::new(e), ty)
                 } else {
                     if context.tokens.peek() != Tok::RParen {
                         consume_token(context.tokens, Tok::Comma)?;
@@ -1291,7 +1285,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                         "an expression",
                     )?;
                     if es.is_empty() {
-                        e.value
+                        Exp_::Parens(Box::new(e))
                     } else {
                         es.insert(0, e);
                         Exp_::ExpList(es)
@@ -1732,17 +1726,18 @@ fn get_precedence(token: Tok) -> u32 {
         Tok::Greater => 5,
         Tok::LessEqual => 5,
         Tok::GreaterEqual => 5,
-        Tok::PeriodPeriod => 6,
-        Tok::Pipe => 7,
-        Tok::Caret => 8,
-        Tok::Amp => 9,
-        Tok::LessLess => 10,
-        Tok::GreaterGreater => 10,
-        Tok::Plus => 11,
-        Tok::Minus => 11,
-        Tok::Star => 12,
-        Tok::Slash => 12,
-        Tok::Percent => 12,
+        Tok::As => 6,
+        Tok::PeriodPeriod => 7,
+        Tok::Pipe => 8,
+        Tok::Caret => 9,
+        Tok::Amp => 10,
+        Tok::LessLess => 11,
+        Tok::GreaterGreater => 11,
+        Tok::Plus => 12,
+        Tok::Minus => 12,
+        Tok::Star => 13,
+        Tok::Slash => 13,
+        Tok::Percent => 13,
         _ => 0, // anything else is not a binary operator
     }
 }
@@ -1750,6 +1745,7 @@ fn get_precedence(token: Tok) -> u32 {
 // Parse a binary operator expression:
 //      BinOpExp =
 //          <BinOpExp> <BinOp> <BinOpExp>
+//          | <BinOpExp> "as" <Type> // in some sense, the lowest precedence binop
 //          | <UnaryExp>
 //      BinOp = (listed from lowest to highest precedence)
 //          "==>"                                       spec only
@@ -1778,6 +1774,16 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
         let op_token = context.tokens.peek();
         context.tokens.advance()?;
         let op_end_loc = context.tokens.previous_end_loc();
+
+        if op_token == Tok::As {
+            let ty = parse_type_(context, /* whitespace_sensitive_ty_args */ true)?;
+            let start_loc = result.loc.start() as usize;
+            let end_loc = context.tokens.previous_end_loc();
+            let e_ = Exp_::Cast(Box::new(result), ty);
+            result = spanned(context.tokens.file_hash(), start_loc, end_loc, e_);
+            next_tok_prec = get_precedence(context.tokens.peek());
+            continue;
+        }
 
         let mut rhs = parse_unary_exp(context)?;
 
@@ -2184,6 +2190,13 @@ fn make_builtin_call(loc: Loc, name: Symbol, type_args: Option<Vec<Type>>, args:
 //          | "|" Comma<Type> "|" Type   (spec only)
 //          | "(" Comma<Type> ")"
 fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
+    parse_type_(context, /* whitespace_sensitive_ty_args */ false)
+}
+
+fn parse_type_(
+    context: &mut Context,
+    whitespace_sensitive_ty_args: bool,
+) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
         Tok::LParen => {
@@ -2242,7 +2255,10 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
         }
         _ => {
             let tn = parse_name_access_chain(context, || "a type name")?;
-            let tys = if context.tokens.peek() == Tok::Less {
+            let start_loc = context.tokens.start_loc();
+            let tys = if context.tokens.peek() == Tok::Less
+                && (!whitespace_sensitive_ty_args || tn.loc.end() as usize == start_loc)
+            {
                 parse_comma_list(context, Tok::Less, Tok::Greater, parse_type, "a type")?
             } else {
                 vec![]
@@ -2842,6 +2858,8 @@ fn parse_address_block(
     context: &mut Context,
 ) -> Result<AddressDefinition, Box<Diagnostic>> {
     const UNEXPECTED_TOKEN: &str = "Invalid code unit. Expected 'address' or 'module'";
+    let in_migration_mode = context.env.edition(context.package_name) == Edition::E2024_MIGRATION;
+
     if context.tokens.peek() != Tok::Identifier {
         let start = context.tokens.start_loc();
         let end = start + context.tokens.content().len();
@@ -2861,6 +2879,7 @@ fn parse_address_block(
             (addr_name.loc, msg)
         )));
     }
+
     let start_loc = context.tokens.start_loc();
     let addr = parse_leading_name_access(context)?;
     let end_loc = context.tokens.previous_end_loc();
@@ -2868,6 +2887,16 @@ fn parse_address_block(
 
     let modules = match context.tokens.peek() {
         Tok::LBrace => {
+            if in_migration_mode {
+                let loc = make_loc(
+                    addr_name.loc.file_hash(),
+                    addr_name.loc.start() as usize,
+                    context.tokens.current_token_loc().end() as usize,
+                );
+                context
+                    .env
+                    .add_diag(diag!(Migration::AddressRemove, (loc, "address decl")));
+            }
             context.tokens.advance()?;
             let mut modules = vec![];
             loop {
@@ -2879,6 +2908,17 @@ fn parse_address_block(
                 let mut attributes = parse_attributes(context)?;
                 loop {
                     let (module, next_mod_attributes) = parse_module(attributes, context)?;
+
+                    if in_migration_mode {
+                        context.env.add_diag(diag!(
+                            Migration::AddressAdd,
+                            (
+                                module.name.loc(),
+                                format!("{}::", context.tokens.loc_contents(loc))
+                            ),
+                        ));
+                    }
+
                     modules.push(module);
                     let Some(attrs) = next_mod_attributes else {
                         // no attributes returned from parse_module - just keep parsing next module
@@ -2888,11 +2928,33 @@ fn parse_address_block(
                     attributes = attrs;
                 }
             }
+
+            if in_migration_mode {
+                let loc = context.tokens.current_token_loc();
+                context
+                    .env
+                    .add_diag(diag!(Migration::AddressRemove, (loc, "close lbrace")));
+            }
+
             consume_token(context.tokens, context.tokens.peek())?;
             modules
         }
         _ => return Err(unexpected_token_error(context.tokens, "'{'")),
     };
+
+    if context.env.edition(context.package_name) != Edition::LEGACY && !in_migration_mode {
+        let loc = addr_name.loc;
+        let msg = "'address' blocks are deprecated. Use addresses \
+                  directly in module definitions instead.";
+        let mut diag = diag!(Editions::DeprecatedFeature, (loc, msg));
+        for module in &modules {
+            diag.add_secondary_label((
+                module.name.loc(),
+                format!("Replace with '{}::{}'", addr, module.name),
+            ));
+        }
+        context.env.add_diag(diag);
+    }
 
     Ok(AddressDefinition {
         attributes,

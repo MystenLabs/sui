@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.21.1"
+    "version": "1.22.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "41",
+              "maxSupportedProtocolVersion": "42",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1895,6 +1895,7 @@
                 },
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
+                "random_beacon_dkg_timeout_round": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
@@ -5314,6 +5315,14 @@
         "type": "string"
       },
       "BigInt_for_uint64": {
+        "type": "string"
+      },
+      "Bn254FqElement": {
+        "description": "A struct that stores a Bn254 Fq field element as 32 bytes.",
+        "type": "string"
+      },
+      "Bn254FrElement": {
+        "description": "A struct that stores a Bn254 Fr field element as 32 bytes.",
         "type": "string"
       },
       "Checkpoint": {
@@ -10922,7 +10931,7 @@
         ],
         "properties": {
           "addressSeed": {
-            "type": "string"
+            "$ref": "#/components/schemas/Bn254FrElement"
           },
           "headerBase64": {
             "type": "string"
@@ -10947,7 +10956,7 @@
           "a": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           },
           "b": {
@@ -10955,14 +10964,14 @@
             "items": {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/components/schemas/Bn254FqElement"
               }
             }
           },
           "c": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           }
         }

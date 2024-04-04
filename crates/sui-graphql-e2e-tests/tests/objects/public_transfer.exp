@@ -3,20 +3,20 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-30:
+task 1 'publish'. lines 6-26:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 32-35:
+task 2 'programmable'. lines 28-31:
 created: object(2,0), object(2,1)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'create-checkpoint'. lines 37-37:
+task 3 'create-checkpoint'. lines 33-33:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 39-57:
+task 4 'run-graphql'. lines 35-53:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -25,6 +25,18 @@ Response: {
           "effects": {
             "objectChanges": {
               "nodes": [
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x7f4648830177f11e420009d324cc3541cbbb732ae1350a84893e5b5e9c1b0720::m::Bar"
+                        }
+                      },
+                      "hasPublicTransfer": false
+                    }
+                  }
+                },
                 {
                   "outputState": {
                     "asMoveObject": {
@@ -42,19 +54,7 @@ Response: {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0xc260d77a79b3e2dea61a33c17854d40e9b70b52ee4148024361cfafda12d77af::m::Bar"
-                        }
-                      },
-                      "hasPublicTransfer": false
-                    }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0xc260d77a79b3e2dea61a33c17854d40e9b70b52ee4148024361cfafda12d77af::m::Foo"
+                          "repr": "0x7f4648830177f11e420009d324cc3541cbbb732ae1350a84893e5b5e9c1b0720::m::Foo"
                         }
                       },
                       "hasPublicTransfer": true

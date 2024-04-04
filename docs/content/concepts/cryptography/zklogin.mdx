@@ -461,13 +461,13 @@ ZKEY=<path_to_zkLogin.zkey> PROVER_PORT=<PROVER_PORT> docker compose up
    - `/ping`: To test if the service is up. Running `curl http://localhost:PROVER_PORT/ping` should return `pong`.
    - `/v1`: The request and response are the same as the Mysten Labs maintained service.
 
-A few things to note:
+A few important things to note:
+
+- The backend service (mysten/zklogin:prover-stable) is compute-heavy. Use at least the minimum recommended 16 cores and 16GB RAM. Using weaker instances can lead to timeout errors with the message "Call to rapidsnark service took longer than 15s". You can adjust the environment variable `PROVER_TIMEOUT` to set a different timeout value, for example, `PROVER_TIMEOUT=30` for a timeout of 30 seconds.
 
 - If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
 
 - Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
-
-- If you are seeing the error message "Call to rapidsnark service took longer than 15s", consider increasing the timeout by setting the environment variable `PROVER_TIMEOUT` to a higher value. For example, `PROVER_TIMEOUT=30`.
 
 ## Assemble the zkLogin signature and submit the transaction
 
@@ -651,7 +651,7 @@ However, Groth16 needs a computation-specific Common Reference String (CRS) to b
 
 The Sui zkLogin ceremony is essentially a cryptographic multi-party computation (MPC) performed by a diverse group of participants to generate this CRS. We follow the MPC protocol [MMORPG](https://eprint.iacr.org/2017/1050.pdf) described by Bowe, Gabizon and Miers. The protocol roughly proceeds in 2 phases. The first phase results in a series of powers of a secret quantity tau in the exponent of an elliptic curve element. Since this phase is circuit-agnostic, we adopted the result of the existing community contributed [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master). Our ceremony was the second phase, which is specific to the zkLogin circuit.
 
-The MMORPG protocol is a sequential protocol, which allows an indefinite number of parties to participate in sequence, without the need of any prior synchronization or ordering. Each party needs to download the output of the previous party, generate entropy of its own and then layer it on top of the received result, producing its own contribution, which is then relayed to the next party. The protocol guarantees security, if at least one of the the participants follows the protocol faithfully, generates strong entropy and discards it reliably.
+The MMORPG protocol is a sequential protocol, which allows an indefinite number of parties to participate in sequence, without the need of any prior synchronization or ordering. Each party needs to download the output of the previous party, generate entropy of its own and then layer it on top of the received result, producing its own contribution, which is then relayed to the next party. The protocol guarantees security, if at least one of the participants follows the protocol faithfully, generates strong entropy and discards it reliably.
 
 ### How was the ceremony performed?
 

@@ -1,5 +1,23 @@
 # @mysten/zksend
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+  - @mysten/wallet-standard@0.11.1
+
+## 0.4.0
+
+### Minor Changes
+
+- c05a4e8cb7: removed listClaimableAssets, and added new assets and claimed properties to link instances
+- c05a4e8cb7: Use contract by default for new links
+- c05a4e8cb7: Add helper for bulk link creation
+- c05a4e8cb7: Removed options for filtering claims
+- c05a4e8cb7: renamed loadOwnedData to loadAssets
+
 ## 0.3.1
 
 ### Patch Changes

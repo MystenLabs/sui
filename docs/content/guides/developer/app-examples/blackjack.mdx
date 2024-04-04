@@ -68,10 +68,10 @@ The backend code is split in the following sub directories:
 
 | HTTP Method | Path                  | Description                                                   | Request Body                                      |
 | ----------- | --------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
-| GET         | /api/health           | A simple healthcheck endpoint to check the API availability   | txDigest                                          |
-| POST        | /api/games/{id}/deal  | Executes the initial deal transaction after the game creation | txDigest                                          |
-| POST        | /api/games/{id}/hit   | Executes a hit move                                           | txDigest, id of corresponding HitRequest object   |
-| POST        | /api/games/{id}/stand | Executes a stand move                                         | txDigest, id of corresponding StandRequest object |
+| GET         | `/api/health`           | A simple healthcheck endpoint to check the API availability   | txDigest                                          |
+| POST        | `/api/games/{id}/deal`  | Executes the initial deal transaction after the game creation | txDigest                                          |
+| POST        | `/api/games/{id}/hit`   | Executes a hit move                                           | txDigest, id of corresponding HitRequest object   |
+| POST        | `/api/games/{id}/stand` | Executes a stand move                                         | txDigest, id of corresponding StandRequest object |
 
 ### Need of usage of waitForTransactionBlock
 

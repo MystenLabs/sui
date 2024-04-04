@@ -10,7 +10,7 @@ const guides = [
 	{
 		type: 'category',
 		label: 'Developer Guides',
-                collapsed: false,
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'guides/developer',
@@ -19,7 +19,7 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Getting Started',
-                                collapsed: false,
+				collapsed: false,
 				link: {
 					type: 'doc',
 					id: 'guides/developer/getting-started',
@@ -118,8 +118,9 @@ const guides = [
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
-					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/graphql-migration',
+					'guides/developer/advanced/move-2024-migration',
+					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/custom-indexer',
 				],
 			},
@@ -152,15 +153,15 @@ const guides = [
 					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
-						label: 'Trading',
+						label: 'Trustless Token Swap',
 						link: {
 							type: 'doc',
-							id: 'guides/developer/app-examples/trading',
+							id: 'guides/developer/app-examples/trustless-token-swap',
 						},
 						items: [
-							'guides/developer/app-examples/trading/backend',
-							'guides/developer/app-examples/trading/indexer-api',
-							'guides/developer/app-examples/trading/frontend',
+							'guides/developer/app-examples/trustless-token-swap/backend',
+							'guides/developer/app-examples/trustless-token-swap/indexer-api',
+							'guides/developer/app-examples/trustless-token-swap/frontend',
 						],
 					},
 					'guides/developer/app-examples/trusted-swap',

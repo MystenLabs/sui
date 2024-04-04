@@ -1,23 +1,23 @@
 error[E01003]: invalid modifier
-  ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:3:5
+  ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:2:5
   │
-3 │     struct S {}
+2 │     struct S {}
   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
 error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:9:17
+  ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:8:17
   │
-8 │     use 0x2::X;
+7 │     use 0x2::X;
   │              - Alias previously defined here
-9 │     use 0x2::X::Self;
+8 │     use 0x2::X::Self;
   │                 ^^^^ Duplicate module alias 'X'. Module aliases must be unique within a given namespace
 
 error[E01003]: invalid modifier
-   ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:11:5
+   ┌─ tests/move_2024/expansion/use_nested_self_duplicate.move:10:5
    │
-11 │     struct S { f: X::S }
+10 │     struct S { f: X::S }
    │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
    │
    = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.

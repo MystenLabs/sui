@@ -181,6 +181,16 @@ pub enum ConsensusTransactionKind {
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
 }
 
+impl ConsensusTransactionKind {
+    pub fn is_dkg(&self) -> bool {
+        matches!(
+            self,
+            ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
+        )
+    }
+}
+
 impl ConsensusTransaction {
     pub fn new_certificate_message(
         authority: &AuthorityName,

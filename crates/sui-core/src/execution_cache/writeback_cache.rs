@@ -147,7 +147,7 @@ struct UncommittedData {
     /// This table may contain both live and dead objects, since we flush both live and dead
     /// objects to the db in order to support past object queries on fullnodes.
     ///
-    /// Further, we only remove objects in FIFO order, which ensures that the the cached
+    /// Further, we only remove objects in FIFO order, which ensures that the cached
     /// sequence of objects has no gaps. In other words, if we have versions 4, 8, 13 of
     /// an object, we can deduce that version 9 does not exist. This also makes child object
     /// reads efficient. `object_cache` cannot contain a more recent version of an object than

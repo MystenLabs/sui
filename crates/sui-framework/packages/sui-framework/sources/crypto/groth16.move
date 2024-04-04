@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::groth16 {
-    use std::vector;
 
     #[allow(unused_const)]
     // Error for input is not a valid Arkwork representation of a verifying key.
@@ -18,7 +17,7 @@ module sui::groth16 {
 
     /// Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
     /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
-    struct Curve has store, copy, drop {
+    public struct Curve has store, copy, drop {
         id: u8,
     }
 
@@ -29,7 +28,7 @@ module sui::groth16 {
     public fun bn254(): Curve { Curve { id: 1 } }
 
     /// A `PreparedVerifyingKey` consisting of four components in serialized form.
-    struct PreparedVerifyingKey has store, copy, drop {
+    public struct PreparedVerifyingKey has store, copy, drop {
         vk_gamma_abc_g1_bytes: vector<u8>,
         alpha_g1_beta_g2_bytes: vector<u8>,
         gamma_g2_neg_pc_bytes: vector<u8>,
@@ -48,16 +47,16 @@ module sui::groth16 {
 
     /// Returns bytes of the four components of the `PreparedVerifyingKey`.
     public fun pvk_to_bytes(pvk: PreparedVerifyingKey): vector<vector<u8>> {
-        let res = vector::empty();
-        vector::push_back(&mut res, pvk.vk_gamma_abc_g1_bytes);
-        vector::push_back(&mut res, pvk.alpha_g1_beta_g2_bytes);
-        vector::push_back(&mut res, pvk.gamma_g2_neg_pc_bytes);
-        vector::push_back(&mut res, pvk.delta_g2_neg_pc_bytes);
-        res
+        vector[
+            pvk.vk_gamma_abc_g1_bytes,
+            pvk.alpha_g1_beta_g2_bytes,
+            pvk.gamma_g2_neg_pc_bytes,
+            pvk.delta_g2_neg_pc_bytes,
+        ]
     }
 
     /// A `PublicProofInputs` wrapper around its serialized bytes.
-    struct PublicProofInputs has store, copy, drop {
+    public struct PublicProofInputs has store, copy, drop {
         bytes: vector<u8>,
     }
 
@@ -67,7 +66,7 @@ module sui::groth16 {
     }
 
     /// A `ProofPoints` wrapper around the serialized form of three proof points.
-    struct ProofPoints has store, copy, drop {
+    public struct ProofPoints has store, copy, drop {
         bytes: vector<u8>
     }
 

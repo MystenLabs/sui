@@ -1,7 +1,6 @@
-
-<a name="0x2_object_bag"></a>
-
-# Module `0x2::object_bag`
+---
+title: Module `0x2::object_bag`
+---
 
 Similar to <code>sui::bag</code>, an <code><a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a></code> is a heterogeneous map-like collection. But unlike
 <code>sui::bag</code>, the values bound to these dynamic fields _must_ be objects themselves. This allows
@@ -24,7 +23,7 @@ The difference is otherwise not observable from within Move.
 -  [Function `value_id`](#0x2_object_bag_value_id)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field">0x2::dynamic_object_field</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -345,7 +344,7 @@ Aborts with <code><a href="object_bag.md#0x2_object_bag_EBagNotEmpty">EBagNotEmp
 <pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_destroy_empty">destroy_empty</a>(<a href="bag.md#0x2_bag">bag</a>: <a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a>) {
     <b>let</b> <a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a> { id, size } = <a href="bag.md#0x2_bag">bag</a>;
     <b>assert</b>!(size == 0, <a href="object_bag.md#0x2_object_bag_EBagNotEmpty">EBagNotEmpty</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 
@@ -361,7 +360,7 @@ Returns the ID of the object associated with the key if the bag has an entry wit
 Returns none otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_value_id">value_id</a>&lt;K: <b>copy</b>, drop, store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>, k: K): <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_value_id">value_id</a>&lt;K: <b>copy</b>, drop, store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>, k: K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>&gt;
 </code></pre>
 
 

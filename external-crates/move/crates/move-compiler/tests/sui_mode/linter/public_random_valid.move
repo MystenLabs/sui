@@ -41,5 +41,5 @@ module sui::random {
     struct Random has key { id: UID }
     struct RandomGenerator has drop {}
 
-    public fun should_work(_r: &Random) {}
+    public fun should_work(_r: &Random, _rg: &RandomGenerator) {}
 }

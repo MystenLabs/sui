@@ -425,6 +425,8 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
 
+    ErrorConstant,
+
     UnresolvedError,
 }
 pub type Exp = Spanned<Exp_>;
@@ -842,6 +844,10 @@ impl Type_ {
 impl Var_ {
     pub fn starts_with_underscore(&self) -> bool {
         P::Var::starts_with_underscore_name(self.name)
+    }
+
+    pub fn is_syntax_identifier(&self) -> bool {
+        P::Var::is_syntax_identifier_name(self.name)
     }
 
     pub fn is_valid(&self) -> bool {
@@ -1602,6 +1608,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
+            E::ErrorConstant => w.write("ErrorConstant"),
         }
     }
 }

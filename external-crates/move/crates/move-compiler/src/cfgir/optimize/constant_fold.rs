@@ -95,6 +95,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         | E::BorrowLocal(_, _)
         | E::Move { .. }
         | E::Copy { .. }
+        | E::ErrorConstant(_)
         | E::Unreachable => false,
 
         e_ @ E::Constant(_) => {

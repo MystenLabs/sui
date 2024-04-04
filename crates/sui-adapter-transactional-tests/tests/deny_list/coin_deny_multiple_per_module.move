@@ -8,11 +8,7 @@
 
 //# publish --sender A
 module test::first_coin {
-    use std::option;
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
 
     public struct FIRST_COIN has drop {}
 
@@ -35,11 +31,7 @@ module test::first_coin {
 }
 
 module test::second_coin {
-    use std::option;
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
 
     public struct SECOND_COIN has drop {}
 

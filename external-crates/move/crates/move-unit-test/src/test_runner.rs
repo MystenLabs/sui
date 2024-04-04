@@ -15,16 +15,21 @@ use codespan_reporting::{
 };
 use colored::*;
 
-use move_binary_format::{errors::VMResult, file_format::CompiledModule};
+use move_binary_format::{
+    errors::{Location, VMResult},
+    file_format::CompiledModule,
+};
 use move_bytecode_utils::Modules;
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
+    compiled_unit::NamedCompiledModule,
     diagnostics::WarningFilters,
     shared::{Flags, NumericalAddress, PackagePaths},
-    unit_test::{ExpectedFailure, ModuleTestPlan, TestCase, TestPlan},
+    unit_test::{ExpectedFailure, ModuleTestPlan, MoveErrorType, TestCase, TestPlan},
 };
 use move_core_types::{
     account_address::AccountAddress, effects::ChangeSet, identifier::IdentStr,
-    runtime_value::serialize_values, vm_status::StatusCode,
+    language_storage::ModuleId, runtime_value::serialize_values, vm_status::StatusCode,
 };
 use move_model::{
     model::GlobalEnv, options::ModelBuilderOptions,
@@ -81,6 +86,34 @@ fn setup_test_storage<'a>(
     }
 
     Ok(storage)
+}
+
+fn convert_clever_move_abort_error(
+    abort_code: u64,
+    location: &Location,
+    test_info: &BTreeMap<ModuleId, NamedCompiledModule>,
+) -> Option<MoveErrorType> {
+    let Some(bitset) = ErrorBitset::from_u64(abort_code) else {
+        return Some(MoveErrorType::Code(abort_code));
+    };
+
+    // Otherwise it should be a tagged error
+    match location {
+        Location::Undefined | Location::Script => None,
+        Location::Module(module_id) => {
+            let module = test_info.get(module_id)?;
+            let name_constant_index = bitset.identifier_index()?;
+            let name_string = std::str::from_utf8(
+                &bcs::from_bytes::<Vec<u8>>(
+                    &module.module.constant_pool[name_constant_index as usize].data,
+                )
+                .expect("Invalid UTF-8 constant name -- this is impossible"),
+            )
+            .expect("Invalid UTF-8 constant name -- this is impossible")
+            .to_string();
+            Some(MoveErrorType::ConstantName(name_string))
+        }
+    }
 }
 
 impl TestRunner {
@@ -142,7 +175,13 @@ impl TestRunner {
                     .tests
                     .module_tests
                     .par_iter()
-                    .map(|(_, test_plan)| self.testing_config.exec_module_tests(test_plan, writer))
+                    .map(|(_, test_plan)| {
+                        self.testing_config.exec_module_tests(
+                            test_plan,
+                            &self.tests.module_info,
+                            writer,
+                        )
+                    })
                     .reduce(TestStatistics::new, |acc, stats| acc.combine(stats));
 
                 Ok(TestResults::new(final_statistics, self.tests))
@@ -314,6 +353,7 @@ impl SharedTestingConfig {
     fn exec_module_tests_move_vm_and_stackless_vm(
         &self,
         test_plan: &ModuleTestPlan,
+        global_test_context: &BTreeMap<ModuleId, NamedCompiledModule>,
         output: &TestOutput<impl Write>,
     ) -> TestStatistics {
         // TODO: Somehow, paths of some temporary Move interface files are being passed in after those files
@@ -393,8 +433,11 @@ impl SharedTestingConfig {
 
             match exec_result {
                 Err(err) => {
+                    let sub_status = err.sub_status().and_then(|status| {
+                        convert_clever_move_abort_error(status, err.location(), global_test_context)
+                    });
                     let actual_err =
-                        MoveError(err.major_status(), err.sub_status(), err.location().clone());
+                        MoveError(err.major_status(), sub_status, err.location().clone());
                     assert!(err.major_status() != StatusCode::EXECUTED);
                     match test_info.expected_failure.as_ref() {
                         Some(ExpectedFailure::Expected) => {
@@ -410,7 +453,7 @@ impl SharedTestingConfig {
                         Some(ExpectedFailure::ExpectedWithCodeDEPRECATED(code))
                             if actual_err.0 == StatusCode::ABORTED
                                 && actual_err.1.is_some()
-                                && actual_err.1.unwrap() == *code =>
+                                && actual_err.1.as_ref().unwrap() == code =>
                         {
                             output.pass(function_name);
                             stats.test_success(test_run_info, test_plan);
@@ -432,7 +475,7 @@ impl SharedTestingConfig {
                             stats.test_failure(
                                 TestFailure::new(
                                     FailureReason::wrong_abort_deprecated(
-                                        *expected_code,
+                                        expected_code.clone(),
                                         actual_err,
                                     ),
                                     test_run_info,
@@ -491,10 +534,11 @@ impl SharedTestingConfig {
     fn exec_module_tests(
         &self,
         test_plan: &ModuleTestPlan,
+        test_info: &BTreeMap<ModuleId, NamedCompiledModule>,
         writer: &Mutex<impl Write>,
     ) -> TestStatistics {
         let output = TestOutput { test_plan, writer };
 
-        self.exec_module_tests_move_vm_and_stackless_vm(test_plan, &output)
+        self.exec_module_tests_move_vm_and_stackless_vm(test_plan, test_info, &output)
     }
 }

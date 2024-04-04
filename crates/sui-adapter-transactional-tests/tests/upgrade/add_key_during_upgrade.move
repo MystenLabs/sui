@@ -5,7 +5,6 @@
 
 //# publish --upgradeable --sender A
 module Test_V0::base {
-    use sui::object::UID;
     public struct Foo {
         id: UID,
     }
@@ -16,7 +15,6 @@ module Test_V0::base {
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
-    use sui::object::UID;
     public struct Foo has key {
         id: UID,
     }
@@ -24,4 +22,3 @@ module Test_V1::base {
         id: UID,
     }
 }
-

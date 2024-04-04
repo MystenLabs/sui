@@ -5,10 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID, ID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
-    use std::vector;
+    use sui::transfer::Receiving;
 
     public struct A has key, store {
         id: UID,

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --simulator --accounts C
+//# init --protocol-version 39 --simulator --accounts C
 
 //# run-graphql
-{ # Initial query yields only the validator's stake
+{ # init --protocol-version 39ial query yields only the validator's stake
   objects(filter: { type: "0x3::staking_pool::StakedSui" }) {
     edges {
       cursor

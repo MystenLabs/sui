@@ -4042,7 +4042,7 @@ export type SystemParameters = {
    */
   validatorLowStakeThreshold?: Maybe<Scalars['BigInt']['output']>;
   /**
-   * Validators with stake below this threshold will be removed from the the active validator set
+   * Validators with stake below this threshold will be removed from the active validator set
    * at the next epoch boundary, without a grace period.
    */
   validatorVeryLowStakeThreshold?: Maybe<Scalars['BigInt']['output']>;

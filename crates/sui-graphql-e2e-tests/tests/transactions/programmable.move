@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses P0=0x0 P1=0x0 --accounts A --simulator
 
 //# publish --upgradeable --sender A
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct Foo has key, store {
         id: UID,
         xs: vector<u64>,
@@ -203,9 +200,6 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 
 //# upgrade --package P0 --upgrade-capability 1,1 --sender A
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct Foo has key, store {
         id: UID,
         xs: vector<u64>,

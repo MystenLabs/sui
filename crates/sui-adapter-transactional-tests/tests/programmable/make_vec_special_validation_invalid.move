@@ -7,9 +7,7 @@
 
 //# publish
 module test::m1 {
-    use std::vector;
     use std::string::{Self, String};
-    use std::option::{Self, Option};
 
     public entry fun vec_option_u64(mut v: vector<Option<u64>>) {
         while (!vector::is_empty(&v)) {

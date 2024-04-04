@@ -46,12 +46,14 @@ pub enum FeatureGate {
     Move2024Migration,
     SyntaxMethods,
     AutoborrowEq,
+    CleverAssertions,
+    NoParensCast,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
 pub enum Flavor {
     #[default]
-    GlobalStorage,
+    Core,
     Sui,
 }
 
@@ -78,18 +80,22 @@ pub fn check_feature_or_error(
 
 pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
     assert!(!edition.supports(feature));
-    let valid_editions = format_oxford_list!("and", "'{}'", valid_editions_for_feature(feature));
-    let mut diag = diag!(
-        Editions::FeatureTooNew,
-        (
-            loc,
-            format!(
-                "{} not supported by current edition '{edition}', \
-                only {valid_editions} support this feature",
-                feature.error_prefix(),
-            )
+    let valid_editions = valid_editions_for_feature(feature);
+    let message = if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature)
+    {
+        format!(
+            "{} under development and should not be used right now.",
+            feature.error_prefix()
         )
-    );
+    } else {
+        format!(
+            "{} not supported by current edition '{edition}', \
+                only {} support this feature",
+            feature.error_prefix(),
+            format_oxford_list!("and", "'{}'", valid_editions)
+        )
+    };
+    let mut diag = diag!(Editions::FeatureTooNew, (loc, message));
     diag.add_note(UPGRADE_NOTE);
     diag
 }
@@ -125,7 +131,10 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
     FeatureGate::AutoborrowEq,
+    FeatureGate::NoParensCast,
 ];
+
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
@@ -146,6 +155,10 @@ impl Edition {
         edition: symbol!("2024"),
         release: Some(symbol!("migration")),
     };
+    pub const DEVELOPMENT: Self = Self {
+        edition: symbol!("development"),
+        release: None,
+    };
 
     const SEP: &'static str = ".";
 
@@ -154,6 +167,7 @@ impl Edition {
         Self::E2024_ALPHA,
         Self::E2024_BETA,
         Self::E2024_MIGRATION,
+        Self::DEVELOPMENT,
     ];
     pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_BETA];
 
@@ -168,6 +182,7 @@ impl Edition {
             Self::E2024_ALPHA => Some(Self::E2024_BETA),
             Self::E2024_BETA => Some(Self::LEGACY),
             Self::E2024_MIGRATION => Some(Self::E2024_BETA),
+            Self::DEVELOPMENT => Some(Self::E2024_ALPHA),
             _ => self.unknown_edition_panic(),
         }
     }
@@ -192,6 +207,11 @@ impl Edition {
                 features.extend(E2024_MIGRATION_FEATURES);
                 features
             }
+            Self::DEVELOPMENT => {
+                let mut features = self.prev().unwrap().features();
+                features.extend(DEVELOPMENT_FEATURES);
+                features
+            }
             _ => self.unknown_edition_panic(),
         }
     }
@@ -200,7 +220,7 @@ impl Edition {
         panic!("{}", self.unknown_edition_error())
     }
 
-    fn unknown_edition_error(&self) -> anyhow::Error {
+    pub fn unknown_edition_error(&self) -> anyhow::Error {
         anyhow::anyhow!(
             "Unsupported edition \"{self}\". Current supported editions include: {}",
             format_oxford_list!("and", "\"{}\"", Self::VALID)
@@ -209,9 +229,9 @@ impl Edition {
 }
 
 impl Flavor {
-    pub const GLOBAL_STORAGE: &'static str = "global-storage";
+    pub const CORE: &'static str = "core";
     pub const SUI: &'static str = "sui";
-    pub const ALL: &'static [Self] = &[Self::GlobalStorage, Self::Sui];
+    pub const ALL: &'static [Self] = &[Self::Core, Self::Sui];
 }
 
 impl FeatureGate {
@@ -232,6 +252,8 @@ impl FeatureGate {
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
             FeatureGate::AutoborrowEq => "Automatic borrowing is",
+            FeatureGate::CleverAssertions => "Clever `assert!`, `abort`, and `#[error]` are",
+            FeatureGate::NoParensCast => "'as' without parentheses is",
         }
     }
 }
@@ -254,7 +276,7 @@ impl FromStr for Edition {
             edition: Symbol::from(edition),
             release: release.map(Symbol::from),
         };
-        if !Self::VALID.iter().any(|e| e == &edition) {
+        if !Self::VALID.iter().any(|e| e == &edition) && edition != Edition::DEVELOPMENT {
             return Err(edition.unknown_edition_error());
         }
         Ok(edition)
@@ -266,7 +288,7 @@ impl FromStr for Flavor {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            Self::GLOBAL_STORAGE => Self::GlobalStorage,
+            Self::CORE => Self::Core,
             Self::SUI => Self::Sui,
             _ => anyhow::bail!(
                 "Unknown flavor \"{s}\". Expected one of: {}",
@@ -316,7 +338,7 @@ impl Display for Edition {
 impl Display for Flavor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Flavor::GlobalStorage => write!(f, "{}", Self::GLOBAL_STORAGE),
+            Flavor::Core => write!(f, "{}", Self::CORE),
             Flavor::Sui => write!(f, "{}", Self::SUI),
         }
     }

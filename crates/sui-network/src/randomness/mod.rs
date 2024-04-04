@@ -69,7 +69,7 @@ impl Handle {
         new_epoch: EpochId,
         authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
         dkg_output: dkg::Output<bls12381::G2Element, bls12381::G2Element>,
-        aggregation_threshold: u32,
+        aggregation_threshold: u16,
     ) {
         self.sender
             .try_send(RandomnessMessage::UpdateEpoch(
@@ -120,7 +120,7 @@ enum RandomnessMessage {
         EpochId,
         HashMap<AuthorityName, (PeerId, PartyId)>,
         dkg::Output<bls12381::G2Element, bls12381::G2Element>,
-        u32, // aggregation_threshold
+        u16, // aggregation_threshold
     ),
     SendPartialSignatures(EpochId, RandomnessRound),
     CompleteRound(EpochId, RandomnessRound),
@@ -140,7 +140,7 @@ struct RandomnessEventLoop {
     authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
     peer_share_counts: Option<HashMap<PeerId, u16>>,
     dkg_output: Option<dkg::Output<bls12381::G2Element, bls12381::G2Element>>,
-    aggregation_threshold: u32,
+    aggregation_threshold: u16,
     pending_tasks: BTreeSet<(EpochId, RandomnessRound)>,
     send_tasks: BTreeMap<(EpochId, RandomnessRound), tokio::task::JoinHandle<()>>,
     round_request_time: BTreeMap<(EpochId, RandomnessRound), time::Instant>,
@@ -201,7 +201,7 @@ impl RandomnessEventLoop {
         new_epoch: EpochId,
         authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
         dkg_output: dkg::Output<bls12381::G2Element, bls12381::G2Element>,
-        aggregation_threshold: u32,
+        aggregation_threshold: u16,
     ) -> Result<()> {
         assert!(self.dkg_output.is_none() || new_epoch > self.epoch);
 

@@ -349,6 +349,10 @@ impl Compiler {
             .iter_mut()
             .for_each(|(_, (path, _))| *path = relativize_path(&vfs_root, *path));
 
+        for (fhash, (fname, contents)) in source_text.iter() {
+            compilation_env.add_source_file(*fhash, *fname, contents.clone())
+        }
+
         let res: Result<_, (Pass, Diagnostics)> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>()
@@ -372,8 +376,15 @@ impl Compiler {
                 });
                 return Ok((files, Err(diags)));
             }
-            let migration = generate_migration_diff(&files, &diags);
-            Ok((files, Ok(migration)))
+            let res = match generate_migration_diff(&files, &diags) {
+                Some((_, migration_errors)) if !migration_errors.is_empty() => {
+                    diags.extend(migration_errors);
+                    Err(diags)
+                }
+                Some((migration, _)) => Ok(Some(migration)),
+                None => Ok(None),
+            };
+            Ok((files, res))
         } else {
             Ok((files, Ok(None)))
         }

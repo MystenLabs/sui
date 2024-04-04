@@ -15,11 +15,7 @@ use consensus_config::{
     ProtocolPublicKey, DIGEST_LENGTH,
 };
 use enum_dispatch::enum_dispatch;
-use fastcrypto::traits::{Signer, ToFromBytes};
-use fastcrypto::{
-    hash::{Digest, HashFunction},
-    traits::VerifyingKey as _,
-};
+use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
@@ -321,7 +317,7 @@ impl SignedBlock {
         let signature = compute_block_signature(&block, protocol_keypair)?;
         Ok(Self {
             inner: block,
-            signature: signature.as_bytes().to_vec().into(),
+            signature: Bytes::copy_from_slice(signature.to_bytes()),
         })
     }
 

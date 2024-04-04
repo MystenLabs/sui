@@ -9,7 +9,7 @@ Functions are declared with the `fun` keyword followed by the function name, typ
 parameters, a return type, and finally the function body.
 
 ```text
-<visibility>? <entry>? fun <identifier><[type_parameters: constraint],*>([identifier: type],*): <return_type> <acquires [identifier],*> <function_body>
+<visibility>? <entry>? fun <identifier><[type_parameters: constraint],*>([identifier: type],*): <return_type> <function_body>
 ```
 
 For example
@@ -130,6 +130,8 @@ module a::n {
 `entry` functions may have restrictions on their parameters and return types. Although, these
 restrictions are specific to each individual deployment of Move.
 
+[The documentation for `entry` functions on Sui can be found here.](https://docs.sui.io/concepts/sui-move-concepts/entry-functions).
+
 ### Name
 
 Function names can start with letters `a` to `z`. After the first character, function names can
@@ -190,7 +192,7 @@ fun zero(): u64 { 0 }
 
 Here `: u64` indicates that the function's return type is `u64`.
 
-Using [tuples](./tuples.md), a function can return multiple values:
+Using [tuples](./primitive-types/tuples.md), a function can return multiple values:
 
 ```move
 fun one_two_three(): (u64, u64, u64) { (0, 1, 2) }
@@ -205,8 +207,8 @@ fun just_unit() { () }
 fun just_unit() { }
 ```
 
-As mentioned in the [tuples section](./tuples.md), these tuple "values" are virtual and do not exist
-at runtime. So for a function that returns unit `()`, it will not be returning any value at all
+As mentioned in the [tuples section](./primitive-types/tuples.md), these tuple "values" do not exist
+as runtime values. This means that a function that returns unit `()` does not return any value
 during execution.
 
 ### Function body

@@ -22,6 +22,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::ExitStatus,
+    sync::Arc,
 };
 // if windows
 #[cfg(target_family = "windows")]
@@ -170,7 +171,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
                 .map(|fname| {
                     let contents = fs::read_to_string(Path::new(fname.as_str())).unwrap();
                     let fhash = FileHash::new(&contents);
-                    (fhash, (*fname, contents))
+                    (fhash, (*fname, Arc::from(contents)))
                 })
                 .collect::<HashMap<_, _>>()
         })

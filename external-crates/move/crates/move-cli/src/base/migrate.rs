@@ -14,15 +14,6 @@ pub struct Migrate;
 impl Migrate {
     pub fn execute(self, path: Option<PathBuf>, config: BuildConfig) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        if config.fetch_deps_only {
-            let mut config = config;
-            if config.test_mode {
-                config.dev_mode = true;
-            }
-            config.download_deps_for_package(&rerooted_path, &mut std::io::stdout())?;
-            return Ok(());
-        }
-
         config.migrate_package(
             &rerooted_path,
             &mut std::io::stdout(),

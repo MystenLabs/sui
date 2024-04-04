@@ -8,12 +8,13 @@ use crate::{
         codes::{NameResolution, TypeSafety},
         Diagnostic,
     },
+    editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, IndexSyntaxMethods, ResolvedUseFuns,
         StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_,
-        Type_, UseFunKind, Var,
+        Type_, UseFun, UseFunKind, Var,
     },
     parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
@@ -188,7 +189,7 @@ impl<'env> Context<'env> {
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
         let N::UseFuns {
             color,
-            resolved: new_scope,
+            resolved: mut new_scope,
             implicit_candidates,
         } = new_scope;
         assert!(
@@ -199,6 +200,40 @@ impl<'env> Context<'env> {
         if new_scope.is_empty() && cur.color == Some(color) {
             cur.count += 1;
             return;
+        }
+        for (tn, methods) in &mut new_scope {
+            for (method, use_fun) in methods.key_cloned_iter_mut() {
+                if use_fun.used || !matches!(use_fun.kind, UseFunKind::Explicit) {
+                    continue;
+                }
+                let mut same_target = false;
+                let mut case = None;
+                let Some(prev) = self.find_method_impl(tn, method, |prev| {
+                    if use_fun.target_function == prev.target_function {
+                        case = Some(match &prev.kind {
+                            UseFunKind::UseAlias | UseFunKind::Explicit => "Duplicate",
+                            UseFunKind::FunctionDeclaration => "Unnecessary",
+                        });
+                        same_target = true;
+                        // suppress unused warning
+                        prev.used = true;
+                    }
+                }) else {
+                    continue;
+                };
+                if same_target {
+                    let case = case.unwrap();
+                    let prev_loc = prev.loc;
+                    let (target_m, target_f) = &use_fun.target_function;
+                    let msg =
+                        format!("{case} method alias '{tn}.{method}' for '{target_m}::{target_f}'");
+                    self.env.add_diag(diag!(
+                        Declarations::DuplicateAlias,
+                        (use_fun.loc, msg),
+                        (prev_loc, "The same alias was previously declared here")
+                    ));
+                }
+            }
         }
         self.use_funs.push(UseFunsScope {
             count: 1,
@@ -255,11 +290,12 @@ impl<'env> Context<'env> {
         }
     }
 
-    pub fn find_method_and_mark_used(
+    fn find_method_impl(
         &mut self,
         tn: &TypeName,
         method: Name,
-    ) -> Option<(ModuleIdent, FunctionName)> {
+        mut fmap_use_fun: impl FnMut(&mut N::UseFun),
+    ) -> Option<&UseFun> {
         let cur_color = self.use_funs.last().unwrap().color;
         self.use_funs.iter_mut().rev().find_map(|scope| {
             // scope color is None for global scope, which is always in consideration
@@ -269,9 +305,18 @@ impl<'env> Context<'env> {
                 return None;
             }
             let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
-            use_fun.used = true;
-            Some(use_fun.target_function)
+            fmap_use_fun(use_fun);
+            Some(&*use_fun)
         })
+    }
+
+    pub fn find_method_and_mark_used(
+        &mut self,
+        tn: &TypeName,
+        method: Name,
+    ) -> Option<(ModuleIdent, FunctionName)> {
+        self.find_method_impl(tn, method, |use_fun| use_fun.used = true)
+            .map(|use_fun| use_fun.target_function)
     }
 
     /// true iff it is safe to expand,
@@ -569,7 +614,7 @@ impl<'env> Context<'env> {
         self.macros.get(m)?.get(n)
     }
 
-    fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
         let constants = &self.module_info(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
@@ -1166,16 +1211,23 @@ pub fn make_function_type(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
+    let supports_public_package = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::PublicPackage);
     match finfo.visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
+            let friend_or_package = if supports_public_package {
+                Visibility::PACKAGE
+            } else {
+                Visibility::FRIEND
+            };
             let internal_msg = format!(
-                "This function is internal to its module. Only '{}', '{}', and '{}' functions can \
+                "This function is internal to its module. Only '{}' and '{}' functions can \
                  be called outside of their module",
                 Visibility::PUBLIC,
-                Visibility::FRIEND,
-                Visibility::PACKAGE
+                friend_or_package,
             );
             visibility_error(
                 context,

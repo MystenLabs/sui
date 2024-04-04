@@ -120,7 +120,7 @@ impl UniversalCommitter {
         self.context
             .metrics
             .node_metrics
-            .decided_leaders_total
+            .committed_leaders_total
             .with_label_values(&[&authority, &status])
             .inc();
     }

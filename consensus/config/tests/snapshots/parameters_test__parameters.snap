@@ -13,4 +13,6 @@ max_forward_time_drift:
   secs: 0
   nanos: 500000000
 db_path: ~
+anemo:
+  excessive_message_size: 8388608
 

@@ -4,14 +4,11 @@
 #[allow(unused_const, unused_function)]
 module sui::zklogin_verified_id {
     use std::string::String;
-    use sui::object;
-    use sui::object::UID;
-    use sui::tx_context::TxContext;
 
     const EFunctionDisabled: u64 = 0;
 
     /// Posession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
-    struct VerifiedID has key {
+    public struct VerifiedID has key {
         /// The ID of this VerifiedID
         id: UID,
         /// The address this VerifiedID is associated with
@@ -54,7 +51,7 @@ module sui::zklogin_verified_id {
     /// Delete a VerifiedID
     public fun delete(verified_id: VerifiedID) {
         let VerifiedID { id, owner: _, key_claim_name: _, key_claim_value: _, issuer: _, audience: _ } = verified_id;
-        object::delete(id);
+        id.delete();
     }
 
     /// This function has been disabled.

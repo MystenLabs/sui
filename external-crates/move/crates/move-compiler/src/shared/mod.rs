@@ -7,7 +7,7 @@ use crate::{
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, WarningFilters,
+        Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters,
     },
     editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
@@ -16,6 +16,7 @@ use crate::{
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
 use clap::*;
+use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
@@ -25,7 +26,10 @@ use std::{
     fmt,
     hash::Hash,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
+    sync::{
+        atomic::{AtomicUsize, Ordering as AtomicOrdering},
+        Arc,
+    },
 };
 use vfs::{VfsError, VfsPath};
 
@@ -162,6 +166,7 @@ pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
 pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
+pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -226,6 +231,7 @@ pub struct CompilationEnv {
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
+    mapped_files: MappedFiles,
 }
 
 macro_rules! known_code_filter {
@@ -298,6 +304,7 @@ impl CompilationEnv {
             known_code_filter!(FILTER_UNUSED_MUT_REF, UnusedItem::MutReference),
             known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
+            known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
         ]);
         let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
@@ -340,7 +347,21 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
+            mapped_files: MappedFiles::empty(),
         }
+    }
+
+    pub fn add_source_file(
+        &mut self,
+        file_hash: FileHash,
+        file_name: FileName,
+        source_text: Arc<str>,
+    ) {
+        self.mapped_files.add(file_hash, file_name, source_text)
+    }
+
+    pub fn file_mapping(&self) -> &MappedFiles {
+        &self.mapped_files
     }
 
     pub fn add_diag(&mut self, mut diag: Diagnostic) {

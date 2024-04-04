@@ -98,13 +98,13 @@ flowchart TB
 
 For example, you can create a new `Sword` object defined in the package by calling the `new_sword` function in the `my_module` package, and then transfer the `Sword` object to any address:
 
-```bash
+```shell
 $ sui client ptb \
 	--assign forge @<FORGE-ID> \
 	--assign to_address @<TO-ADDRESS> \
 	--move-call <PACKAGE-ID>::my_module::new_sword forge 3 3 \
 	--assign sword \
-	--transfer-objects to_address "[sword]" \
+	--transfer-objects "[sword]" to_address \
 	--gas-budget 20000000
 ```
 
