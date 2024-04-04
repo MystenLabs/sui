@@ -16,7 +16,7 @@ const COIN_WITH_BALANCE = 'CoinWithBalance';
 export function coinWithBalance(type: string, balance: bigint) {
 	return (txb: TransactionBlock) => {
 		txb.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
-		return txb.add({
+		txb.add({
 			$kind: 'TransactionIntent',
 			TransactionIntent: {
 				name: COIN_WITH_BALANCE,
@@ -26,7 +26,7 @@ export function coinWithBalance(type: string, balance: bigint) {
 					balance,
 				},
 			},
-		})[0];
+		});
 	};
 }
 
@@ -118,5 +118,18 @@ async function resolveCoinBalance(
 		);
 
 		blockData.replaceTransaction(index, transactions);
+
+		if (transactions.length > 1) {
+			blockData.mapArguments((arg) => {
+				if (arg.$kind === 'IntentResult' && arg.IntentResult === index) {
+					return {
+						$kind: 'NestedResult',
+						NestedResult: [index + transactions.length - 1, 0],
+					};
+				}
+
+				return arg;
+			});
+		}
 	}
 }
