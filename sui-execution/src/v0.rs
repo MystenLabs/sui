@@ -22,7 +22,7 @@ use sui_types::{
     type_resolver::LayoutResolver,
 };
 
-use move_bytecode_verifier_v0::meter::Scope;
+use move_bytecode_verifier_meter::Scope;
 use move_vm_runtime_v0::move_vm::MoveVM;
 use sui_adapter_v0::adapter::{
     default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,

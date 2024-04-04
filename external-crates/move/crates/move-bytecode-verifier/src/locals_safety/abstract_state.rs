@@ -10,6 +10,7 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 /// LocalState represents the current assignment state of a local
@@ -23,7 +24,6 @@ pub(crate) enum LocalState {
     /// The local has a value
     Available,
 }
-use crate::meter::{Meter, Scope};
 use LocalState::*;
 
 pub(crate) const STEP_BASE_COST: u128 = 15;

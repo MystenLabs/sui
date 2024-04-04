@@ -11,7 +11,6 @@ mod abstract_state;
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
     locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
-    meter::{Meter, Scope},
 };
 use abstract_state::{AbstractState, LocalState};
 use move_binary_format::{
@@ -19,6 +18,7 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) fn verify<'a>(
