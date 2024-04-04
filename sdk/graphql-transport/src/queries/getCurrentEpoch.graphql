@@ -15,7 +15,7 @@ query getCurrentEpoch {
 				}
 			}
 		}
-		# epochTotalTransactions
+		totalTransactions
 		firstCheckpoint: checkpoints(first: 1) {
 			nodes {
 				sequenceNumber

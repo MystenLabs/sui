@@ -56,15 +56,14 @@ query getLatestSuiSystemState {
 
 			inactivePoolsSize
 			pendingActiveValidatorsSize
-			stakePoolMappingsSize
+			stakingPoolMappingsSize
 			validatorCandidatesSize
 			pendingRemovals
 			totalStake
-
-			# inactivePoolsId
-			# validatorCandidatesId
-			# pendingActiveValidatorsId
-			# stakingPoolMappingsId
+			stakingPoolMappingsId
+			pendingActiveValidatorsId
+			validatorCandidatesId
+			inactivePoolsId
 		}
 	}
 }

@@ -91,6 +91,9 @@ export type CompressedSignature =
 	  }
 	| {
 			Secp256r1: string;
+	  }
+	| {
+			ZkLogin: string;
 	  };
 export type SuiParsedData =
 	| {
@@ -112,6 +115,19 @@ export interface DelegatedStake {
 	/** Validator's Address. */
 	validatorAddress: string;
 }
+/** Additional rguments supplied to dev inspect beyond what is allowed in today's API. */
+export interface DevInspectArgs {
+	/** The gas budget for the transaction. */
+	gasBudget?: string | null;
+	/** The gas objects used to pay for the transaction. */
+	gasObjects?: [string, string, string][] | null;
+	/** The sponsor of the gas for the transaction, might be different from the sender. */
+	gasSponsor?: string | null;
+	/** Whether to return the raw transaction data and effects. */
+	showRawTxnDataAndEffects?: boolean | null;
+	/** Whether to skip transaction checks for the transaction. */
+	skipChecks?: boolean | null;
+}
 /** The response from processing a dev inspect transaction */
 export interface DevInspectResults {
 	/**
@@ -124,6 +140,10 @@ export interface DevInspectResults {
 	error?: string | null;
 	/** Events that likely would be generated if the transaction is actually run. */
 	events: SuiEvent[];
+	/** The raw effects of the transaction that was dev inspected. */
+	rawEffects?: number[];
+	/** The raw transaction data that was dev inspected. */
+	rawTxnData?: number[];
 	/** Execution results (including return values) from executing the transactions */
 	results?: SuiExecutionResult[] | null;
 }
@@ -208,7 +228,11 @@ export type SuiEventFilter =
 	  } /** Return events emitted in a specified Package. */
 	| {
 			Package: string;
-	  } /** Return events emitted in a specified Move module. */
+	  } /**
+	 * Return events emitted in a specified Move module. If the event is defined in Module A but emitted in
+	 * a tx with Module B, query `MoveModule` by module B returns the event. Query `MoveEventModule` by
+	 * module A returns the event too.
+	 */
 	| {
 			MoveModule: {
 				/** the module name */
@@ -216,10 +240,17 @@ export type SuiEventFilter =
 				/** the Move package ID */
 				package: string;
 			};
-	  } /** Return events with the given move event struct name */
+	  } /**
+	 * Return events with the given Move event struct name (struct tag). For example, if the event is
+	 * defined in `0xabcd::MyModule`, and named `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.
+	 */
 	| {
 			MoveEventType: string;
-	  } /** Return events with the given move event module name */
+	  } /**
+	 * Return events with the given Move module name where the event struct is defined. If the event is
+	 * defined in Module A but emitted in a tx with Module B, query `MoveEventModule` by module A returns
+	 * the event. Query `MoveModule` by module B returns the event too.
+	 */
 	| {
 			MoveEventModule: {
 				/** the module name */
@@ -697,6 +728,9 @@ export interface ProtocolConfig {
 }
 export type ProtocolConfigValue =
 	| {
+			u16: string;
+	  }
+	| {
 			u32: string;
 	  }
 	| {
@@ -714,6 +748,9 @@ export type PublicKey =
 	  }
 	| {
 			Secp256r1: string;
+	  }
+	| {
+			ZkLogin: string;
 	  };
 export type RPCTransactionRequestParams =
 	| {
@@ -851,6 +888,8 @@ export interface CoinMetadata {
 }
 export type SuiEndOfEpochTransactionKind =
 	| 'AuthenticatorStateCreate'
+	| 'RandomnessStateCreate'
+	| 'CoinDenyListStateCreate'
 	| {
 			ChangeEpoch: SuiChangeEpoch;
 	  }
@@ -1319,10 +1358,23 @@ export type SuiTransactionBlockKind =
 			kind: 'AuthenticatorStateUpdate';
 			new_active_jwks: SuiActiveJwk[];
 			round: string;
+	  } /** A transaction which updates global randomness state */
+	| {
+			epoch: string;
+			kind: 'RandomnessStateUpdate';
+			random_bytes: number[];
+			randomness_round: string;
 	  } /** The transaction which occurs only at the end of the epoch */
 	| {
 			kind: 'EndOfEpochTransaction';
 			transactions: SuiEndOfEpochTransactionKind[];
+	  }
+	| {
+			commit_timestamp_ms: string;
+			consensus_commit_digest: string;
+			epoch: string;
+			kind: 'ConsensusCommitPrologueV2';
+			round: string;
 	  };
 export interface SuiTransactionBlockResponse {
 	balanceChanges?: BalanceChange[] | null;
@@ -1337,6 +1389,7 @@ export interface SuiTransactionBlockResponse {
 	errors?: string[];
 	events?: SuiEvent[] | null;
 	objectChanges?: SuiObjectChange[] | null;
+	rawEffects?: number[];
 	/**
 	 * BCS encoded [SenderSignedData] that includes input object references returns empty array if
 	 * `show_raw_transaction` is false
@@ -1357,6 +1410,8 @@ export interface SuiTransactionBlockResponseOptions {
 	showInput?: boolean;
 	/** Whether to show object_changes. Default to be False */
 	showObjectChanges?: boolean;
+	/** Whether to show raw transaction effects. Default to be False */
+	showRawEffects?: boolean;
 	/** Whether to show bcs-encoded transaction input data */
 	showRawInput?: boolean;
 }
