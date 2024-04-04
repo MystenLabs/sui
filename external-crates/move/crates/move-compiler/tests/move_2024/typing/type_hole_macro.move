@@ -6,7 +6,7 @@ module a::m {
         $e << $e
     }
 
-    fun t() {
+    fun tweird() {
         let _: u8 = weird!(1);
 
         let _: u8 = weird!(1 + 1);
@@ -15,5 +15,20 @@ module a::m {
         let _: u64 = weird!(1 + 1);
         let _: u128 = weird!(1 + 1);
         let _: u256 = weird!(1 + 1);
+    }
+
+    macro fun woah($e: _): (_, _) {
+        ($e, $e)
+    }
+
+    fun twoah() {
+        let (_, _): (u64, u8) = woah!(1);
+
+        let (_, _): (u8, u256) = woah!(1 + 1);
+        let (_, _): (u16, u128) = woah!(1 + 1);
+        let (_, _): (u32, u64) = woah!(1 + 1);
+        let (_, _): (u64, u32) = woah!(1 + 1);
+        let (_, _): (u128, u16) = woah!(1 + 1);
+        let (_, _): (u256, u8) = woah!(1 + 1);
     }
 }
