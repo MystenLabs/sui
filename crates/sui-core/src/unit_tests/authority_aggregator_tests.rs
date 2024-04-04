@@ -317,12 +317,6 @@ fn reference_gas_price(authorities: &AuthorityAggregator<LocalAuthorityClient>) 
         .unwrap()
 }
 
-fn effects_with_tx(digest: TransactionDigest) -> TransactionEffects {
-    let mut effects = TransactionEffects::default();
-    *effects.transaction_digest_mut_for_testing() = digest;
-    effects
-}
-
 /// The intent of this is to test whether client side timeouts
 /// have any impact on the server execution. Turns out because
 /// we spawn a tokio task on the server, client timing out and
@@ -751,7 +745,7 @@ async fn test_handle_transaction_fork() {
         .into_cert_for_testing();
 
     // Validators 2 and 3 return successful effects
-    let effects = effects_with_tx(*cert_epoch_0.digest());
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data()).build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
@@ -942,7 +936,7 @@ async fn test_handle_transaction_response() {
 
     println!("Case 3 - Successful Cert Transaction");
     // Val-0 returns tx-cert
-    let effects = effects_with_tx(*cert_epoch_0.digest());
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data()).build();
     let (name_0, key_0) = &authority_keys[0];
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -999,7 +993,7 @@ async fn test_handle_transaction_response() {
 
     println!("Case 5 - Retryable Transaction (WrongEpoch Error)");
     // Validators return tx-cert with epoch 0, client expects 1
-    let effects = effects_with_tx(*cert_epoch_0.digest());
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data()).build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
@@ -1230,7 +1224,7 @@ async fn test_handle_transaction_response() {
 
     println!("Case 7 - Retryable Transaction (MissingCommitteeAtEpoch Error)");
     // Validators return tx-cert with epoch 1, client expects 0
-    let effects = effects_with_tx(*cert_epoch_1.digest());
+    let effects = TestEffectsBuilder::new(cert_epoch_1.data()).build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
@@ -2253,7 +2247,7 @@ async fn process_with_cert(
         .await
         .unwrap()
         .into_cert_for_testing();
-    let effects = effects_with_tx(*cert.digest());
+    let effects = TestEffectsBuilder::new(cert.data()).build();
 
     for (name, secret) in &authority_keys {
         let auth_signature = if byzantines.contains(name) {
@@ -2388,7 +2382,7 @@ fn set_cert_response_with_certified_tx(
     cert: &CertifiedTransaction,
     epoch: EpochId,
 ) {
-    let effects = effects_with_tx(*cert.digest());
+    let effects = TestEffectsBuilder::new(cert.data()).build();
     for (name, secret) in authority_keys {
         let resp = HandleCertificateResponseV2 {
             signed_effects: sign_tx_effects(effects.clone(), epoch, *name, secret),

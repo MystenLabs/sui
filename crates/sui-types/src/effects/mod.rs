@@ -392,7 +392,6 @@ pub trait TransactionEffectsAPI {
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
-    fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;
     fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary;
     fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;

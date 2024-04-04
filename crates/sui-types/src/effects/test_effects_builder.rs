@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{ObjectID, SequenceNumber};
-use crate::digests::{ObjectDigest, TransactionEventsDigest};
+use crate::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use crate::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
 use crate::effects::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut, TransactionEffects};
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
@@ -12,26 +12,34 @@ use crate::object::Owner;
 use crate::transaction::{InputObjectKind, SenderSignedData, TransactionDataAPI};
 use std::collections::BTreeMap;
 
+#[derive(Default)]
 pub struct TestEffectsBuilder {
-    transaction: SenderSignedData,
+    transaction: Option<SenderSignedData>,
+    transaction_digest: Option<TransactionDigest>,
     /// Override the execution status if provided.
     status: Option<ExecutionStatus>,
     /// Provide the assigned versions for all shared objects.
     shared_input_versions: BTreeMap<ObjectID, SequenceNumber>,
     events_digest: Option<TransactionEventsDigest>,
+    dependencies: Vec<TransactionDigest>,
 }
 
 impl TestEffectsBuilder {
     pub fn new(transaction: &SenderSignedData) -> Self {
         Self {
-            transaction: transaction.clone(),
-            status: None,
-            shared_input_versions: BTreeMap::new(),
-            events_digest: None,
+            transaction: Some(transaction.clone()),
+            ..Default::default()
         }
     }
 
+    pub fn with_tx_digest(mut self, digest: TransactionDigest) -> Self {
+        assert!(self.transaction_digest.is_none() && self.transaction.is_none());
+        self.transaction_digest = Some(digest);
+        self
+    }
+
     pub fn with_status(mut self, status: ExecutionStatus) -> Self {
+        assert!(self.status.is_none());
         self.status = Some(status);
         self
     }
@@ -46,7 +54,14 @@ impl TestEffectsBuilder {
     }
 
     pub fn with_events_digest(mut self, digest: TransactionEventsDigest) -> Self {
+        assert!(self.events_digest.is_none());
         self.events_digest = Some(digest);
+        self
+    }
+
+    pub fn with_dependencies(mut self, dependencies: Vec<TransactionDigest>) -> Self {
+        assert!(self.dependencies.is_empty());
+        self.dependencies = dependencies;
         self
     }
 
@@ -58,30 +73,28 @@ impl TestEffectsBuilder {
             .iter()
             .map(|(id, version)| SharedInput::Existing((*id, *version, ObjectDigest::MIN)))
             .collect();
-        let executed_epoch = 0;
+        let (input_objects, receiving_objects) = if let Some(transaction) = &self.transaction {
+            (
+                transaction.transaction_data().input_objects().unwrap(),
+                transaction.transaction_data().receiving_objects(),
+            )
+        } else {
+            (vec![], vec![])
+        };
         let lamport_version = SequenceNumber::lamport_increment(
-            self.transaction
-                .transaction_data()
-                .input_objects()
-                .unwrap()
+            input_objects
                 .iter()
                 .filter_map(|kind| kind.version())
-                .chain(
-                    self.transaction
-                        .transaction_data()
-                        .receiving_objects()
-                        .iter()
-                        .map(|oref| oref.1),
-                )
-                .chain(self.shared_input_versions.values().copied()),
+                .chain(receiving_objects.iter().map(|oref| oref.1))
+                .chain(shared_objects.values().copied()),
         );
-        let sender = self.transaction.transaction_data().sender();
+        let sender = if let Some(transaction) = &self.transaction {
+            transaction.transaction_data().sender()
+        } else {
+            SuiAddress::ZERO
+        };
         // TODO: Include receiving objects in the object changes as well.
-        let changed_objects = self
-            .transaction
-            .transaction_data()
-            .input_objects()
-            .unwrap()
+        let changed_objects = input_objects
             .iter()
             .filter_map(|kind| match kind {
                 InputObjectKind::ImmOrOwnedMoveObject(oref) => Some((
@@ -131,15 +144,23 @@ impl TestEffectsBuilder {
                 )),
             })
             .collect();
-        let gas_object_id = self.transaction.transaction_data().gas()[0].0;
+        let gas_object_id = if let Some(transaction) = &self.transaction {
+            transaction.transaction_data().gas()[0].0
+        } else {
+            ObjectID::ZERO
+        };
         let event_digest = self.events_digest;
-        let dependencies = vec![];
+        let executed_epoch = 0;
+        let dependencies = self.dependencies;
         TransactionEffects::new_from_execution_v2(
             status,
             executed_epoch,
             GasCostSummary::default(),
             shared_objects,
-            self.transaction.digest(),
+            self.transaction.map(|tx| tx.digest()).unwrap_or_else(|_| {
+                self.transaction_digest
+                    .unwrap_or_else(|| TransactionDigest::ZERO)
+            }),
             lamport_version,
             changed_objects,
             Some(gas_object_id),

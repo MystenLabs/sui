@@ -212,7 +212,7 @@ mod tests {
     use super::*;
     use sui_types::base_types::ObjectDigest;
     use sui_types::base_types::{ObjectID, SequenceNumber};
-    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::{TestEffectsBuilder, TransactionEffects};
 
     #[test]
     pub fn test_causal_order() {
@@ -288,7 +288,9 @@ mod tests {
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
     ) -> TransactionEffects {
-        let mut effects = TransactionEffects::default();
+        let mut effects = TestEffectsBuilder::default()
+            .with_tx_digest(transaction_digest)
+            .build();
         *effects.transaction_digest_mut_for_testing() = transaction_digest;
         *effects.dependencies_mut_for_testing() = dependencies;
         effects

@@ -246,10 +246,6 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         &self.gas_used
     }
 
-    fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
-        &mut self.status
-    }
-
     fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary {
         &mut self.gas_used
     }
