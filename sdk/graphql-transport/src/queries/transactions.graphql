@@ -119,27 +119,18 @@ fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
 				endCursor
 			}
 			nodes {
-				idCreated
-				idDeleted
+				address
 				inputState {
 					version
-					digest
-					address
 					asMoveObject {
 						contents {
 							type {
 								repr
 							}
 						}
-					}
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
 					}
 				}
 				outputState {
-					version
-					digest
-					address
 					asMoveObject {
 						contents {
 							type {
@@ -147,8 +138,12 @@ fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
 							}
 						}
 					}
-					owner {
-						...RPC_OBJECT_OWNER_FIELDS
+					asMovePackage {
+						modules(first: 10) {
+							nodes {
+								name
+							}
+						}
 					}
 				}
 			}
