@@ -16,7 +16,16 @@ gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 
 task 3 'view-object'. lines 26-26:
 Owner: Account Address ( A )
 Version: 3
-Contents: sui::coin::Coin<test::fake::FAKE> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, balance: sui::balance::Balance<test::fake::FAKE> {value: 100u64}}
+Contents: sui::coin::Coin<test::fake::FAKE> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<test::fake::FAKE> {
+        value: 100u64,
+    },
+}
 
 task 4 'programmable'. lines 28-34:
 created: object(4,0)

@@ -13,4 +13,11 @@ gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 
 task 3 'view-object'. lines 29-29:
 Owner: Account Address ( A )
 Version: 3
-Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 0u64}
+Contents: Test::M1::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 0u64,
+}

@@ -16,7 +16,13 @@ gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 
 task 3 'view-object'. lines 43-43:
 Owner: Object ID: ( fake(2,2) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 4 'run'. lines 45-45:
 created: object(4,0)
@@ -33,7 +39,19 @@ gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 
 task 6 'view-object'. lines 50-50:
 Owner: Object ID: ( fake(5,1) )
 Version: 4
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(5,0)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(5,0),
+    },
+}
 
 task 7 'run'. lines 52-52:
 mutated: object(0,0), object(5,1)
@@ -48,7 +66,19 @@ gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 
 task 9 'view-object'. lines 57-57:
 Owner: Object ID: ( fake(8,0) )
 Version: 6
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(8,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(8,1),
+    },
+}
 
 task 10 'run'. lines 59-59:
 mutated: object(0,0), object(8,0), object(8,1)

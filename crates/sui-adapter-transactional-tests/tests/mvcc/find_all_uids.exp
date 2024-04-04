@@ -16,7 +16,56 @@ gas summary: computation_cost: 1000000, storage_cost: 15640800,  storage_rebate:
 task 3 'view-object'. lines 123-123:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}, wrapped: test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, many: vector[test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}]}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    other: sui::object::UID {
+        id: sui::object::ID {
+            bytes: _,
+        },
+    },
+    wrapped: test::m::Wrapped {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        other: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    many: vector[
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+    ],
+}
 
 task 4 'programmable'. lines 125-126:
 mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8)
@@ -25,7 +74,56 @@ gas summary: computation_cost: 1000000, storage_cost: 15640800,  storage_rebate:
 task 5 'view-object'. lines 128-128:
 Owner: Account Address ( A )
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}, wrapped: test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, many: vector[test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}]}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    other: sui::object::UID {
+        id: sui::object::ID {
+            bytes: _,
+        },
+    },
+    wrapped: test::m::Wrapped {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        other: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    many: vector[
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+    ],
+}
 
 task 6 'programmable'. lines 130-131:
 mutated: object(0,0), object(2,8)
@@ -35,7 +133,56 @@ gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 
 task 7 'view-object'. lines 133-136:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}, wrapped: test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, many: vector[test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}, test::m::Wrapped {id: sui::object::UID {id: sui::object::ID {bytes: _}}, other: sui::object::UID {id: sui::object::ID {bytes: _}}}]}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    other: sui::object::UID {
+        id: sui::object::ID {
+            bytes: _,
+        },
+    },
+    wrapped: test::m::Wrapped {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        other: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    many: vector[
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+    ],
+}
 
 task 8 'programmable'. lines 138-139:
 mutated: object(_), object(2,8)

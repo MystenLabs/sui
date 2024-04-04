@@ -13,27 +13,57 @@ gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 
 task 3 'view-object'. lines 67-67:
 Owner: Account Address ( _ )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'view-object'. lines 69-69:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 5 'view-object'. lines 71-71:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+}
 
 task 6 'view-object'. lines 73-73:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::C {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}}
+Contents: tto::M1::C {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+}
 
 task 7 'view-object'. lines 75-77:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::C {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,4)}}}
+Contents: tto::M1::C {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+}
 
 task 8 'programmable'. lines 78-81:
 mutated: object(0,0), object(2,0)
