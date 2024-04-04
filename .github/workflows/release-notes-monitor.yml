@@ -62,7 +62,7 @@ jobs:
         export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
         {
           echo 'release_notes<<EOF'
-          echo ${rel_notes}
+          echo '${rel_notes}'
           echo EOF
         } >> "$GITHUB_ENV"
 
@@ -95,7 +95,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ env.release_notes }}\n"
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n$'{{ env.release_notes }}'\n"
                 }
               },
               {
