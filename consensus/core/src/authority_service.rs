@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    pin::{pin, Pin},
-    sync::Arc,
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use futures::{ready, stream, task, Future as _, Stream, StreamExt};
+use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
 use tokio::{sync::broadcast, time::sleep};
+use tokio_util::sync::ReusableBoxFuture;
 use tracing::{info, warn};
 
 use crate::{
@@ -169,11 +166,11 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .into_iter()
                 .map(|block| block.serialized().clone()),
         );
-        let broadcasted_blocks = BroadcastedBlockStream {
-            peer,
-            receiver: self.rx_block_broadcaster.resubscribe(),
-        };
-        Ok(Box::pin(missed_blocks.chain(broadcasted_blocks)))
+        let broadcasted_blocks =
+            BroadcastedBlockStream::new(peer, self.rx_block_broadcaster.resubscribe());
+        Ok(Box::pin(missed_blocks.chain(
+            broadcasted_blocks.map(|block| block.serialized().clone()),
+        )))
     }
 
     async fn handle_fetch_blocks(
@@ -215,36 +212,71 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 }
 
 /// Each broadcasted block stream wraps a broadcast receiver for blocks.
-/// It yields serialized blocks that are broadcasted after the stream is created.
-struct BroadcastedBlockStream {
+/// It yields blocks that are broadcasted after the stream is created.
+pub(crate) type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
+
+/// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
+/// this tolerates lagging with only logging and does not yield error status.
+pub(crate) struct BroadcastStream<T> {
     peer: AuthorityIndex,
-    receiver: broadcast::Receiver<VerifiedBlock>,
+    // Store the receiver across poll_next() calls.
+    inner: ReusableBoxFuture<
+        'static,
+        (
+            Result<T, broadcast::error::RecvError>,
+            broadcast::Receiver<T>,
+        ),
+    >,
 }
 
-impl Stream for BroadcastedBlockStream {
-    type Item = Bytes;
+impl<T: 'static + Clone + Send> BroadcastStream<T> {
+    /// Create a new `BroadcastStream`.
+    pub fn new(peer: AuthorityIndex, rx: broadcast::Receiver<T>) -> Self {
+        Self {
+            peer,
+            inner: ReusableBoxFuture::new(make_recv_future(rx)),
+        }
+    }
+}
+
+impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
+    type Item = T;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
         cx: &mut task::Context<'_>,
     ) -> task::Poll<Option<Self::Item>> {
         let peer = self.peer;
-        loop {
-            let block = match ready!(pin!(self.receiver.recv()).poll(cx)) {
-                Ok(block) => Some(block.serialized().clone()),
+        let maybe_item = loop {
+            let (result, rx) = ready!(self.inner.poll(cx));
+            self.inner.set(make_recv_future(rx));
+            match result {
+                Ok(item) => break Some(item),
                 Err(broadcast::error::RecvError::Closed) => {
                     info!("Block BroadcastedBlockStream {} closed", peer);
-                    None
+                    break None;
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    info!(
-                        "Block BroadcastedBlockStream {} lagged by {n} messages",
-                        peer
+                    warn!(
+                        "Block BroadcastedBlockStream {} lagged by {} messages",
+                        peer, n
                     );
                     continue;
                 }
-            };
-            return task::Poll::Ready(block);
-        }
+            }
+        };
+        task::Poll::Ready(maybe_item)
     }
 }
+
+async fn make_recv_future<T: Clone>(
+    mut rx: broadcast::Receiver<T>,
+) -> (
+    Result<T, broadcast::error::RecvError>,
+    broadcast::Receiver<T>,
+) {
+    let result = rx.recv().await;
+    (result, rx)
+}
+
+// TODO: add a unit test for BroadcastStream.

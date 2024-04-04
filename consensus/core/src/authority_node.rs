@@ -127,7 +127,8 @@ where
     synchronizer: Arc<SynchronizerHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    // Not created when using block streaming.
+    // Only one of broadcaster and subscriber gets created, depending on
+    // if streaming is supported.
     broadcaster: Option<Broadcaster>,
     subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
@@ -270,16 +271,20 @@ where
             self.start_time.elapsed()
         );
 
-        self.network_manager.stop().await;
-        if let Some(subscriber) = self.subscriber {
-            subscriber.stop();
-        }
-        if let Some(mut broadcaster) = self.broadcaster {
+        // First shutdown components calling into Core.
+        self.synchronizer.stop().await;
+        self.leader_timeout_handle.stop().await;
+        // Shutdown Core to stop block productions and broadcast.
+        // When using streaming, all subscribers to broadcasted blocks stop after this.
+        self.core_thread_handle.stop().await;
+        if let Some(mut broadcaster) = self.broadcaster.take() {
             broadcaster.stop();
         }
-        self.core_thread_handle.stop().await;
-        self.leader_timeout_handle.stop().await;
-        self.synchronizer.stop().await;
+        // Stop outgoing long lived streams before stopping network server.
+        if let Some(subscriber) = self.subscriber.take() {
+            subscriber.stop();
+        }
+        self.network_manager.stop().await;
 
         self.context
             .metrics

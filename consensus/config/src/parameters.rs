@@ -59,7 +59,13 @@ impl Parameters {
     }
 
     pub fn default_min_round_delay() -> Duration {
-        Duration::from_millis(50)
+        if cfg!(msim) {
+            // Checkpoint building and execution cannot keep up with high commit rate in simtests,
+            // leading to long reconfiguration delays.
+            Duration::from_millis(200)
+        } else {
+            Duration::from_millis(50)
+        }
     }
 
     pub fn default_max_forward_time_drift() -> Duration {
