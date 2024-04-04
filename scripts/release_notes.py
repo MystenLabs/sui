@@ -39,7 +39,6 @@ before = sys.argv[1]
 results = []
 
 for commit in git("log", "--pretty=format:%H", f"{before}..HEAD").split("\n"):
-for message in TEST_COMMITS:
     message = git("show", "-s", "--format=%B", commit)
 
     match = RE_HEADING.search(message)
