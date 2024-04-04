@@ -215,10 +215,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 Some((response, block_refs, retries, _peer)) = requests.next() => {
                     match response {
                         Ok(Ok(blocks)) => {
+                            let peer_hostname = &context.committee.authority(peer_index).hostname;
                             context
-                            .metrics
-                            .node_metrics
-                            .fetched_blocks.with_label_values(&[&peer_index.to_string(), "live"]).inc_by(blocks.len() as u64);
+                                .metrics
+                                .node_metrics
+                                .fetched_blocks.with_label_values(&[peer_hostname, "live"]).inc_by(blocks.len() as u64);
 
                             if let Err(err) = Self::process_fetched_blocks(blocks,
                                 peer_index,
@@ -372,7 +373,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let mut total_fetched = 0;
                 for (requested_block_refs, fetched_blocks, peer) in results {
                     total_fetched += fetched_blocks.len();
-                    context.metrics.node_metrics.fetched_blocks.with_label_values(&[&peer.to_string(), "periodic"]).inc_by(fetched_blocks.len() as u64);
+                    let peer_hostname = &context.committee.authority(peer).hostname;
+                    context.metrics.node_metrics.fetched_blocks.with_label_values(&[peer_hostname, "periodic"]).inc_by(fetched_blocks.len() as u64);
 
                     if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, requested_block_refs, core_dispatcher.clone(), block_verifier.clone(), context.clone()).await {
                         warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");

@@ -64,6 +64,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         serialized_block: Bytes,
     ) -> ConsensusResult<()> {
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+
         // TODO: dedup block verifications, here and with fetched blocks.
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
@@ -74,14 +76,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
+                .with_label_values(&[peer_hostname, "send_block"])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
         // Specified peer can be trusted to be a valid authority index.
-        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
         if let Err(e) = self.block_verifier.verify(&signed_block) {
@@ -89,7 +91,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer_hostname, "send_block"])
+                .with_label_values(&[peer_hostname, "send_block"])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -121,7 +123,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[&peer.to_string()])
+                .with_label_values(&[peer_hostname])
                 .inc_by(forward_time_drift.as_millis() as u64);
             sleep(forward_time_drift).await;
         }

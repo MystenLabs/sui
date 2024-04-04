@@ -73,12 +73,12 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             peer,
             last_received,
         )));
-        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
         self.context
             .metrics
             .node_metrics
             .subscriber_connections
-            .with_label_values(&[&peer_hostname])
+            .with_label_values(&[peer_hostname])
             .inc();
     }
 
@@ -90,12 +90,12 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
     }
 
     fn unsubscribe_locked(&self, peer: AuthorityIndex, subscription: &mut Option<JoinHandle<()>>) {
-        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
         self.context
             .metrics
             .node_metrics
             .subscriber_connections
-            .with_label_values(&[&peer_hostname])
+            .with_label_values(&[peer_hostname])
             .dec();
         if let Some(subscription) = subscription.take() {
             subscription.abort();
@@ -111,7 +111,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MAX_RETRY_INTERNAL: Duration = Duration::from_secs(10);
-        let peer_hostname = context.committee.authority(peer).hostname.clone();
+        let peer_hostname = &context.committee.authority(peer).hostname;
         let mut retries: i64 = 0;
         'subscription: loop {
             if retries > IMMEDIATE_RETRIES {
