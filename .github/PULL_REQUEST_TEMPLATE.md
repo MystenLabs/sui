@@ -10,7 +10,7 @@ How did you test the new or updated feature?
 
 ## Type of change
 
-Check each box that the changes this PR introduces has an effect on. If you check at least one box, include information in the Release note section that describes the impact of your changes to users and any actions they must take to implement updates. If none of the boxes relate to your changes, a release note isn't required. 
+Check each box that the changes this PR introduces has an effect on. If you check at least one box, include information in the Release notes section that describes the impact of your changes to users and any actions they must take to implement updates. If none of the boxes relate to your changes, a release note isn't required. 
 
 - [ ] Protocol
 - [ ] Nodes (Validators and Full nodes)
@@ -20,4 +20,4 @@ Check each box that the changes this PR introduces has an effect on. If you chec
 - [ ] CLI
 - [ ] Rust SDK
 
-### Release note
+### Release notes
