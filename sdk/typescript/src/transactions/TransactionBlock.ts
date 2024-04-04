@@ -469,7 +469,13 @@ export class TransactionBlock {
 		}
 
 		const value =
-			'u64' in attribute ? attribute.u64 : 'u32' in attribute ? attribute.u32 : attribute.f64;
+			'u64' in attribute
+				? attribute.u64
+				: 'u32' in attribute
+				? attribute.u32
+				: 'u16' in attribute
+				? attribute.u16
+				: attribute.f64;
 
 		if (!value) {
 			throw new Error(`Unexpected protocol config value found for: "${LIMITS[key]}"`);
