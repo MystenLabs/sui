@@ -129,15 +129,16 @@ impl PatternArm {
 
         fn first_ctor_recur(pat: MatchPattern) -> Option<(VariantName, (Loc, Fields<Type>))> {
             match pat.pat.value {
-                TP::Constructor(_, _, name, _, fields) => {
+                TP::Variant(_, _, name, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     Some((name, (pat.pat.loc, ty_fields)))
                 }
-                TP::BorrowConstructor(_, _, _, name, _, fields) => {
+                TP::BorrowVariant(_, _, _, name, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     Some((name, (pat.pat.loc, ty_fields)))
                 }
                 TP::At(_, inner) => first_ctor_recur(*inner),
+                TP::Struct(..) | TP::BorrowStruct(..) => None,
                 TP::Binder(_, _) | TP::Literal(_) | TP::Wildcard | TP::ErrorPat => None,
                 TP::Or(_, _) => unreachable!(),
             }
@@ -155,8 +156,10 @@ impl PatternArm {
             match pat.pat.value {
                 TP::Literal(v) => Some(v),
                 TP::At(_, inner) => first_lit_recur(*inner),
-                TP::Constructor(_, _, _, _, _)
-                | TP::BorrowConstructor(_, _, _, _, _, _)
+                TP::Variant(_, _, _, _, _)
+                | TP::BorrowVariant(_, _, _, _, _, _)
+                | TP::Struct(..)
+                | TP::BorrowStruct(..)
                 | TP::Binder(_, _)
                 | TP::Wildcard
                 | TP::ErrorPat => None,
@@ -167,7 +170,7 @@ impl PatternArm {
         first_lit_recur(self.pats.front().unwrap().clone())
     }
 
-    fn specialize(
+    fn specialize_variant(
         &self,
         context: &Context,
         ctor_name: &VariantName,
@@ -177,8 +180,8 @@ impl PatternArm {
         let first_pattern = output.pats.pop_front().unwrap();
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
-            TP::Constructor(mident, enum_, name, _, fields)
-            | TP::BorrowConstructor(_, mident, enum_, name, _, fields)
+            TP::Variant(mident, enum_, name, _, fields)
+            | TP::BorrowVariant(_, mident, enum_, name, _, fields)
                 if &name == ctor_name =>
             {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
@@ -189,7 +192,8 @@ impl PatternArm {
                 }
                 Some((vec![], output))
             }
-            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
+            TP::Variant(_, _, _, _, _) | TP::BorrowVariant(_, _, _, _, _, _) => None,
+            TP::Struct(_, _, _, _) | TP::BorrowStruct(_, _, _, _, _) => None,
             TP::Literal(_) => None,
             TP::Binder(mut_, x) => {
                 for arg_type in arg_types
@@ -217,7 +221,7 @@ impl PatternArm {
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
                 output
-                    .specialize(context, ctor_name, arg_types)
+                    .specialize_variant(context, ctor_name, arg_types)
                     .map(|(mut binders, inner)| {
                         binders.push((Mutability::Imm, x));
                         (binders, inner)
@@ -233,7 +237,8 @@ impl PatternArm {
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
-            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
+            TP::Variant(_, _, _, _, _) | TP::BorrowVariant(_, _, _, _, _, _) => None,
+            TP::Struct(_, _, _, _) | TP::BorrowStruct(_, _, _, _, _) => None,
             TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
@@ -255,7 +260,8 @@ impl PatternArm {
         let first_pattern = output.pats.pop_front().unwrap();
         match first_pattern.pat.value {
             TP::Literal(_) => None,
-            TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _, _) => None,
+            TP::Variant(_, _, _, _, _) | TP::BorrowVariant(_, _, _, _, _, _) => None,
+            TP::Struct(_, _, _, _) | TP::BorrowStruct(_, _, _, _, _) => None,
             TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
@@ -279,15 +285,25 @@ impl PatternMatrix {
                 pat: sp!(ploc, pat),
             } = pat;
             let new_pat = match pat {
-                TP::Constructor(m, e, v, ta, spats) => {
+                TP::Variant(m, e, v, ta, spats) => {
                     let out_fields =
                         spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
-                    TP::Constructor(m, e, v, ta, out_fields)
+                    TP::Variant(m, e, v, ta, out_fields)
                 }
-                TP::BorrowConstructor(mut_, m, e, v, ta, spats) => {
+                TP::BorrowVariant(mut_, m, e, v, ta, spats) => {
                     let out_fields =
                         spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
-                    TP::BorrowConstructor(mut_, m, e, v, ta, out_fields)
+                    TP::BorrowVariant(mut_, m, e, v, ta, out_fields)
+                }
+                TP::Struct(m, s, ta, spats) => {
+                    let out_fields =
+                        spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
+                    TP::Struct(m, s, ta, out_fields)
+                }
+                TP::BorrowStruct(mut_, m, s, ta, spats) => {
+                    let out_fields =
+                        spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
+                    TP::BorrowStruct(mut_, m, s, ta, out_fields)
                 }
                 TP::At(x, inner) => {
                     let xloc = x.loc;
@@ -384,7 +400,7 @@ impl PatternMatrix {
         }
     }
 
-    fn specialize(
+    fn specialize_variant(
         &self,
         context: &Context,
         ctor_name: &VariantName,
@@ -393,7 +409,8 @@ impl PatternMatrix {
         let mut patterns = vec![];
         let mut bindings = vec![];
         for entry in &self.patterns {
-            if let Some((mut new_bindings, arm)) = entry.specialize(context, ctor_name, &arg_types)
+            if let Some((mut new_bindings, arm)) =
+                entry.specialize_variant(context, ctor_name, &arg_types)
             {
                 bindings.append(&mut new_bindings);
                 patterns.push(arm)
@@ -406,6 +423,33 @@ impl PatternMatrix {
             .collect::<Vec<_>>();
         let matrix = PatternMatrix { tys, patterns };
         (bindings, matrix)
+    }
+
+    fn specialize_struct(
+        &self,
+        context: &Context,
+        arg_types: Vec<&Type>,
+    ) -> (Binders, PatternMatrix) {
+        todo!()
+        /*
+        let mut patterns = vec![];
+        let mut bindings = vec![];
+        for entry in &self.patterns {
+            if let Some((mut new_bindings, arm)) =
+                entry.specialize_variant(context, ctor_name, &arg_types)
+            {
+                bindings.append(&mut new_bindings);
+                patterns.push(arm)
+            }
+        }
+        let tys = arg_types
+            .into_iter()
+            .cloned()
+            .chain(self.tys.clone().into_iter().skip(1))
+            .collect::<Vec<_>>();
+        let matrix = PatternMatrix { tys, patterns };
+        (bindings, matrix)
+        */
     }
 
     fn specialize_literal(&self, lit: &Value) -> (Binders, PatternMatrix) {
@@ -471,23 +515,26 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
     let ploc = pat.pat.loc;
     match pat.pat.value {
         TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat => vec![pat],
-        TP::Constructor(_, _, _, _, ref pats) | TP::BorrowConstructor(_, _, _, _, _, ref pats)
+        TP::Variant(_, _, _, _, ref pats)
+        | TP::BorrowVariant(_, _, _, _, _, ref pats)
+        | TP::Struct(_, _, _, ref pats)
+        | TP::BorrowStruct(_, _, _, _, ref pats)
             if pats.is_empty() =>
         {
             vec![pat]
         }
-        TP::Constructor(m, e, v, ta, spats) => {
+        TP::Variant(m, e, v, ta, spats) => {
             let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
             let fields_lists: Vec<Fields<(Type, MatchPattern)>> = combine_pattern_fields(all_spats);
             fields_lists
                 .into_iter()
                 .map(|field_list| MatchPattern {
                     ty: pat.ty.clone(),
-                    pat: sp(ploc, TP::Constructor(m, e, v, ta.clone(), field_list)),
+                    pat: sp(ploc, TP::Variant(m, e, v, ta.clone(), field_list)),
                 })
                 .collect::<Vec<_>>()
         }
-        TP::BorrowConstructor(mut_, m, e, v, ta, spats) => {
+        TP::BorrowVariant(mut_, m, e, v, ta, spats) => {
             let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
             let fields_lists: Vec<Fields<(Type, MatchPattern)>> = combine_pattern_fields(all_spats);
             fields_lists
@@ -496,8 +543,30 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
                     ty: pat.ty.clone(),
                     pat: sp(
                         ploc,
-                        TP::BorrowConstructor(mut_, m, e, v, ta.clone(), field_list),
+                        TP::BorrowVariant(mut_, m, e, v, ta.clone(), field_list),
                     ),
+                })
+                .collect::<Vec<_>>()
+        }
+        TP::Struct(m, s, ta, spats) => {
+            let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
+            let fields_lists: Vec<Fields<(Type, MatchPattern)>> = combine_pattern_fields(all_spats);
+            fields_lists
+                .into_iter()
+                .map(|field_list| MatchPattern {
+                    ty: pat.ty.clone(),
+                    pat: sp(ploc, TP::Struct(m, s, ta.clone(), field_list)),
+                })
+                .collect::<Vec<_>>()
+        }
+        TP::BorrowStruct(mut_, m, s, ta, spats) => {
+            let all_spats = spats.map(|_, (ndx, (t, pat))| (ndx, (t, flatten_or(pat))));
+            let fields_lists: Vec<Fields<(Type, MatchPattern)>> = combine_pattern_fields(all_spats);
+            fields_lists
+                .into_iter()
+                .map(|field_list| MatchPattern {
+                    ty: pat.ty.clone(),
+                    pat: sp(ploc, TP::BorrowStruct(mut_, m, s, ta.clone(), field_list)),
                 })
                 .collect::<Vec<_>>()
         }
@@ -855,7 +924,7 @@ fn compile_match_head(
                 .map(|(_, _, ty)| ty)
                 .collect::<Vec<_>>();
             debug_print!(context.debug.match_specialization, ("specializing to" => ctor; dbg));
-            let (mut new_binders, inner_matrix) = matrix.specialize(context, &ctor, bind_tys);
+            let (mut new_binders, inner_matrix) = matrix.specialize_variant(context, &ctor, bind_tys);
             debug_print!(
                 context.debug.match_specialization,
                 ("binders" => &new_binders; dbg), ("specialized" => inner_matrix)
@@ -1156,7 +1225,7 @@ fn make_arm_unpack(
     // retain `x`. Rust does something similar.
     while let Some((entry, pat)) = queue.pop_front() {
         match pat.pat.value {
-            TP::Constructor(mident, enum_, variant, tyargs, fields) => {
+            TP::Variant(mident, enum_, variant, tyargs, fields) => {
                 let (queue_entries, fields) =
                     make_arm_unpack_fields(context, pat.pat.loc, mident, enum_, variant, fields);
                 for entry in queue_entries.into_iter().rev() {
@@ -1166,7 +1235,7 @@ fn make_arm_unpack(
                     make_arm_unpack_stmt(None, mident, enum_, variant, tyargs, fields, entry);
                 seq.push_back(unpack);
             }
-            TP::BorrowConstructor(mut_, mident, enum_, variant, tyargs, fields) => {
+            TP::BorrowVariant(mut_, mident, enum_, variant, tyargs, fields) => {
                 let all_wild = fields
                     .iter()
                     .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
@@ -1186,6 +1255,7 @@ fn make_arm_unpack(
                     make_arm_unpack_stmt(Some(mut_), mident, enum_, variant, tyargs, fields, entry);
                 seq.push_back(unpack);
             }
+            TP::Struct(..) | TP::BorrowStruct(..) => todo!(),
             TP::Literal(_) => (),
             TP::Binder(mut_, x) if rhs_binders.contains(&x) => {
                 seq.push_back(make_move_binding(x, mut_, entry.ty.clone(), entry))
@@ -1238,11 +1308,12 @@ fn match_pattern_has_binders(pat: &T::MatchPattern, rhs_binders: &BTreeSet<Var>)
         TP::At(x, inner) => {
             rhs_binders.contains(x) || match_pattern_has_binders(inner, rhs_binders)
         }
-        TP::Constructor(_, _, _, _, fields) | TP::BorrowConstructor(_, _, _, _, _, fields) => {
-            fields
-                .iter()
-                .any(|(_, _, (_, (_, pat)))| match_pattern_has_binders(pat, rhs_binders))
-        }
+        TP::Variant(_, _, _, _, fields) | TP::BorrowVariant(_, _, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, (_, pat)))| match_pattern_has_binders(pat, rhs_binders)),
+        TP::Struct(_, _, _, fields) | TP::BorrowStruct(_, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, (_, pat)))| match_pattern_has_binders(pat, rhs_binders)),
         TP::Or(_, _) => unreachable!(),
         TP::Literal(_) => false,
         TP::Wildcard => false,
@@ -1753,7 +1824,7 @@ fn find_counterexample(
                     .iter()
                     .map(|(_, _, ty)| ty)
                     .collect::<Vec<_>>();
-                let (_, inner_matrix) = matrix.specialize(context, &ctor, bind_tys);
+                let (_, inner_matrix) = matrix.specialize_variant(context, &ctor, bind_tys);
                 if let Some(mut counterexample) =
                     find_counterexample(context, inner_matrix, ctor_arity + arity - 1, ndx)
                 {

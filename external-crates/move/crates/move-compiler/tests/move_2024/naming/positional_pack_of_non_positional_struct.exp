@@ -1,8 +1,11 @@
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/positional_pack_of_non_positional_struct.move:6:18
   │
+2 │     public struct Foo { field: u64 } has copy, drop;
+  │                   --- Struct is declared here
+  ·
 6 │         let _x = Foo(0);
-  │                  ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations.
+  │                  ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_pack_of_non_positional_struct.move:6:18

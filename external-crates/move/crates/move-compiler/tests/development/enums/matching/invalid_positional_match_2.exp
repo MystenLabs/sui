@@ -1,8 +1,13 @@
 error[E03013]: positional call mismatch
   ┌─ tests/development/enums/matching/invalid_positional_match_2.move:9:13
   │
+4 │         One(u64)
+  │         -------- Enum variant is declared here
+  ·
 9 │             Entry::One { x } => ()
-  │             ^^^^^^^^^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns.
+  │             ^^^^^^^^^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
+  │
+  = Positional patterns take arguments using '()'
 
 error[E04016]: too few arguments
   ┌─ tests/development/enums/matching/invalid_positional_match_2.move:9:13

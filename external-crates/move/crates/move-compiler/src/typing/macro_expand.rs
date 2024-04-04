@@ -643,7 +643,12 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
 fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
     match p_ {
         N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
-        N::MatchPattern_::Constructor(_, _, _, _, fields) => {
+        N::MatchPattern_::Variant(_, _, _, _, fields) => {
+            for (_, _, (_, p)) in fields {
+                recolor_pat(ctx, p)
+            }
+        }
+        N::MatchPattern_::Struct(_, _, _, fields) => {
             for (_, _, (_, p)) in fields {
                 recolor_pat(ctx, p)
             }
@@ -1107,7 +1112,15 @@ fn exps(context: &mut Context, es: &mut [N::Exp]) {
 fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
     match p_ {
         N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
-        N::MatchPattern_::Constructor(_, _, _, tys_opt, fields) => {
+        N::MatchPattern_::Variant(_, _, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, p)) in fields {
+                pat(context, p)
+            }
+        }
+        N::MatchPattern_::Struct(_, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }

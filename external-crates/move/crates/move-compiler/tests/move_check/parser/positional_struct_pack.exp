@@ -9,8 +9,11 @@ error[E13001]: feature is not supported in specified edition
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
   │
+4 │     struct Foo has drop { x: u64 }
+  │            --- Struct is declared here
+  ·
 7 │         let _ = Foo(0);
-  │                 ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations.
+  │                 ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations
 
 error[E04016]: too few arguments
   ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
