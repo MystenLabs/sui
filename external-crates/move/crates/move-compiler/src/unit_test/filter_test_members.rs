@@ -128,11 +128,7 @@ fn check_has_unit_test_module(
     prog: &P::Program,
 ) -> bool {
     let has_unit_test_module = has_unit_test_module(prog)
-        || if let Some(p) = pre_compiled_lib {
-            has_unit_test_module(&p.parser)
-        } else {
-            false
-        };
+        || pre_compiled_lib.is_some_and(|p| has_unit_test_module(&p.parser));
 
     if !has_unit_test_module && compilation_env.flags().is_testing() {
         if let Some(P::PackageDefinition { def, .. }) = prog
