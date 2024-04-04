@@ -6,6 +6,7 @@ on:
       - devnet
       - testnet
       - testnet4
+      - testnet4-v1.22.0
 
 env:
   REPOSITORY: mamorufoundation/sui-sniffer
