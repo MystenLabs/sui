@@ -94,7 +94,7 @@ pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
-    unscoped_types: BTreeMap<Symbol, ResolvedType>,
+    unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
@@ -169,13 +169,13 @@ impl<'env> Context<'env> {
                 (mident, mems)
             })
             .collect();
-        let unscoped_types = N::BuiltinTypeName_::all_names()
+        let unscoped_types = vec![N::BuiltinTypeName_::all_names()
             .iter()
             .map(|s| {
                 let b_ = RT::BuiltinType(N::BuiltinTypeName_::resolve(s.as_str()).unwrap());
                 (*s, b_)
             })
-            .collect();
+            .collect()];
         Self {
             env: compilation_env,
             current_module: None,
@@ -316,7 +316,12 @@ impl<'env> Context<'env> {
     }
 
     fn resolve_unscoped_type(&mut self, loc: Loc, n: Name) -> ResolvedType {
-        match self.unscoped_types.get(&n.value) {
+        match self
+            .unscoped_types
+            .iter()
+            .rev()
+            .find_map(|unscoped_types| unscoped_types.get(&n.value))
+        {
             None => {
                 let msg = format!("Unbound type '{}' in current scope", n);
                 self.env
@@ -330,9 +335,14 @@ impl<'env> Context<'env> {
     fn resolves_to_struct(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
         use E::ModuleAccess_ as EA;
         match ma_ {
-            EA::Name(n) => self.unscoped_types.get(&n.value).is_some_and(|rt| {
-                matches!(rt, ResolvedType::Module(_) | ResolvedType::BuiltinType(_))
-            }),
+            EA::Name(n) => self
+                .unscoped_types
+                .iter()
+                .rev()
+                .find_map(|unscoped_types| unscoped_types.get(&n.value))
+                .is_some_and(|rt| {
+                    matches!(rt, ResolvedType::Module(_) | ResolvedType::BuiltinType(_))
+                }),
             EA::ModuleAccess(m, n) => self
                 .scoped_types
                 .get(m)
@@ -420,20 +430,19 @@ impl<'env> Context<'env> {
     }
 
     fn bind_type(&mut self, s: Symbol, rt: ResolvedType) {
-        self.unscoped_types.insert(s, rt);
+        self.unscoped_types.last_mut().unwrap().insert(s, rt);
     }
 
-    fn save_unscoped(&self) -> BTreeMap<Symbol, ResolvedType> {
-        self.unscoped_types.clone()
+    fn push_unscoped_types_scope(&mut self) {
+        self.unscoped_types.push(BTreeMap::new())
     }
 
-    fn restore_unscoped(&mut self, types: BTreeMap<Symbol, ResolvedType>) {
-        self.unscoped_types = types;
+    fn pop_unscoped_types_scope(&mut self) {
+        self.unscoped_types.pop().unwrap();
     }
 
     fn new_local_scope(&mut self) {
-        let cur = self.local_scopes.last().unwrap().clone();
-        self.local_scopes.push(cur)
+        self.local_scopes.push(BTreeMap::new());
     }
 
     fn close_local_scope(&mut self) {
@@ -461,7 +470,11 @@ impl<'env> Context<'env> {
         variable_msg: impl FnOnce(Symbol) -> S,
         sp!(vloc, name): Name,
     ) -> Option<N::Var> {
-        let id_opt = self.local_scopes.last().unwrap().get(&name).copied();
+        let id_opt = self
+            .local_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(&name).copied());
         match id_opt {
             None => {
                 let msg = variable_msg(name);
@@ -718,21 +731,26 @@ fn module(
     } = mdef;
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let unscoped = context.save_unscoped();
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let structs = estructs.map(|name, s| {
-        context.restore_unscoped(unscoped.clone());
-        struct_def(context, name, s)
+        context.push_unscoped_types_scope();
+        let s = struct_def(context, name, s);
+        context.pop_unscoped_types_scope();
+        s
     });
     let functions = efunctions.map(|name, f| {
-        context.restore_unscoped(unscoped.clone());
-        function(context, &mut syntax_methods, ident, name, f)
+        context.push_unscoped_types_scope();
+        let f = function(context, &mut syntax_methods, ident, name, f);
+        context.pop_unscoped_types_scope();
+        f
     });
     let constants = econstants.map(|name, c| {
-        context.restore_unscoped(unscoped.clone());
-        constant(context, name, c)
+        context.push_unscoped_types_scope();
+        let c = constant(context, name, c);
+        context.pop_unscoped_types_scope();
+        c
     });
     // Silence unused use fun warnings if a module has macros.
     // For public macros, the macro will pull in the use fun, and we will which case we will be
@@ -745,7 +763,6 @@ fn module(
     if has_macro {
         mark_all_use_funs_as_used(&mut use_funs);
     }
-    context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
     context.current_package = None;
     N::ModuleDefinition {
