@@ -1176,13 +1176,13 @@ impl SuiClientCommands {
 
                 let exceeded = matches!(
                     meter_config.max_per_pkg_meter_units,
-                    Some(ticks) if ticks < used_ticks.max_ticks(Scope::Package)
+                    Some(allowed_ticks) if allowed_ticks < used_ticks.max_ticks(Scope::Package)
                 ) || matches!(
                     meter_config.max_per_mod_meter_units,
-                    Some(ticks) if ticks < used_ticks.max_ticks(Scope::Module)
+                    Some(allowed_ticks) if allowed_ticks < used_ticks.max_ticks(Scope::Module)
                 ) || matches!(
                     meter_config.max_per_fun_meter_units,
-                    Some(ticks) if ticks < used_ticks.max_ticks(Scope::Function)
+                    Some(allowed_ticks) if allowed_ticks < used_ticks.max_ticks(Scope::Function)
                 );
 
                 SuiClientCommandResult::VerifyBytecodeMeter {
