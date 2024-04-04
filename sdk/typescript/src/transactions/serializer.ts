@@ -24,10 +24,12 @@ const STD_OPTION_STRUCT_NAME = 'Option';
 export function isTxContext(param: OpenMoveTypeSignature): boolean {
 	const struct =
 		typeof param.body === 'object' && 'datatype' in param.body ? param.body.datatype : null;
+
 	return (
-		struct?.package === normalizeSuiAddress('0x2') &&
-		struct?.module === 'tx_context' &&
-		struct?.type === 'TxContext'
+		!!struct &&
+		normalizeSuiAddress(struct.package) === normalizeSuiAddress('0x2') &&
+		struct.module === 'tx_context' &&
+		struct.type === 'TxContext'
 	);
 }
 
