@@ -71,7 +71,7 @@ async function suiMoveCmd(context: Readonly<Context>, cmd: string): Promise<void
     if (version.stdout) {
         const pkgRoot = await findPkgRoot();
         if (pkgRoot !== undefined) {
-            const terminalName = `sui move`;
+            const terminalName = 'sui move';
             let terminal = vscode.window.terminals.find(t => t.name === terminalName);
             if (!terminal) {
                 terminal = vscode.window.createTerminal(terminalName);
