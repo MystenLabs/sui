@@ -28,8 +28,7 @@ use crate::{
     typing::{
         ast as T,
         core::{
-            self, make_tvar, public_testing_visibility, Context, PublicForTesting,
-            ResolvedFunctionType, Subst,
+            self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, recursive_structs,
         syntax_methods::validate_syntax_methods,
@@ -39,7 +38,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     sync::Arc,
 };
 
@@ -3445,9 +3444,14 @@ fn expected_by_name_arg_type(
     let ret_ty = if let Some(ty) = lambda.return_type.clone() {
         core::instantiate(context, ty)
     } else {
-        make_tvar(context, lambda.body.loc)
+        core::make_tvar(context, lambda.body.loc)
     };
     let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
+    let tfun_tvars = {
+        let mut m = HashMap::new();
+        core::all_tvars(&mut m, &tfun);
+        m
+    };
     let msg = || {
         format!(
             "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
@@ -3456,7 +3460,17 @@ fn expected_by_name_arg_type(
     };
     subtype(context, call_loc, msg, tfun.clone(), param_ty);
     // prefer the lambda type over the parameters to preserve annotations on the lambda
-    tfun
+    let readied_tfun = core::ready_tvars(&context.subst, tfun);
+    let tfun_subst = {
+        let mut subst = Subst::empty();
+        for (tv, loc) in tfun_tvars {
+            subst.insert(tv, sp(loc, Type_::Anything));
+        }
+        subst
+    };
+    // any tvars in the lambda type that did not get bound to a type in the param_ty are
+    // made an Anything so they get a fresh tvar at each call site
+    core::subst_tvars(&tfun_subst, readied_tfun)
 }
 
 fn expand_macro(
@@ -3468,8 +3482,7 @@ fn expand_macro(
     args: Vec<macro_expand::Arg>,
     return_ty: Type,
 ) -> (Type, T::UnannotatedExp_) {
-    use T::SequenceItem_ as TS;
-    use T::UnannotatedExp_ as TE;
+    use T::{SequenceItem_ as TS, UnannotatedExp_ as TE};
 
     let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {

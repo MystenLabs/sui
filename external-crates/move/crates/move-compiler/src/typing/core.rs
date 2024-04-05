@@ -1727,6 +1727,28 @@ pub fn all_tparams(sp!(_, t_): Type) -> BTreeSet<TParam> {
     }
 }
 
+/// Fills all tvars bound in the subst
+pub fn subst_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
+    use Type_::*;
+    match t_ {
+        x @ Unit | x @ UnresolvedError | x @ Anything | x @ Param(_) => sp(loc, x),
+        Ref(mut_, t) => sp(loc, Ref(mut_, Box::new(subst_tvars(subst, *t)))),
+        Apply(k, n, ty_args) => {
+            let ftys = ty_args.into_iter().map(|t| subst_tvars(subst, t)).collect();
+            sp(loc, Apply(k, n, ftys))
+        }
+        Fun(args, result) => {
+            let ftys = args.into_iter().map(|t| subst_tvars(subst, t)).collect();
+            let fres = Box::new(subst_tvars(subst, *result));
+            sp(loc, Fun(ftys, fres))
+        }
+        Var(i) => match subst.get(i) {
+            None => sp(loc, Var(i)),
+            Some(inner) => subst_tvars(subst, inner.clone()),
+        },
+    }
+}
+
 pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     match t_ {
@@ -1736,6 +1758,11 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
             let tys = tys.into_iter().map(|t| ready_tvars(subst, t)).collect();
             sp(loc, Apply(k, n, tys))
         }
+        Fun(args, result) => {
+            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
+            let result = Box::new(ready_tvars(subst, *result));
+            sp(loc, Fun(args, result))
+        }
         Var(i) => {
             let last_var = forward_tvar(subst, i);
             match subst.get(last_var) {
@@ -1744,10 +1771,27 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
                 Some(t) => ready_tvars(subst, t.clone()),
             }
         }
-        Fun(args, result) => {
-            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
-            let result = Box::new(ready_tvars(subst, *result));
-            sp(loc, Fun(args, result))
+    }
+}
+
+pub fn all_tvars(tvars: &mut HashMap<TVar, Loc>, sp!(loc, ty_): &Type) {
+    use Type_ as T;
+    match ty_ {
+        T::Unit | T::Anything | T::UnresolvedError | T::Param(_) => (),
+        T::Ref(_, t) => all_tvars(tvars, t),
+        T::Apply(_, _, tys) => {
+            for ty in tys {
+                all_tvars(tvars, ty)
+            }
+        }
+        T::Fun(tys, t) => {
+            for ty in tys {
+                all_tvars(tvars, ty)
+            }
+            all_tvars(tvars, t)
+        }
+        T::Var(v) => {
+            tvars.insert(*v, *loc);
         }
     }
 }
