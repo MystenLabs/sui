@@ -127,7 +127,8 @@ async fn submit_transaction_to_consensus_adapter() {
         ) -> SuiResult {
             let sequenced_transactions = transactions
                 .iter()
-                .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()));
+                .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
+                .collect();
             epoch_store
                 .process_consensus_transactions_for_tests(
                     sequenced_transactions,
