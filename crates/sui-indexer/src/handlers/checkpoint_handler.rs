@@ -165,7 +165,7 @@ where
             let packages = packages_per_checkpoint
                 .remove(checkpoint.checkpoint_summary.sequence_number())
                 .unwrap_or_default();
-            tasks.push(tokio::task::spawn(Self::index_one_checkpoint(
+            tasks.push(tokio::task::spawn(Self::index_checkpoint(
                 state_clone.clone(),
                 checkpoint.clone(),
                 metrics_clone.clone(),
@@ -297,7 +297,7 @@ where
         }))
     }
 
-    async fn index_one_checkpoint(
+    async fn index_checkpoint(
         state: Arc<S>,
         data: CheckpointData,
         metrics: Arc<IndexerMetrics>,
