@@ -4908,6 +4908,130 @@ async fn test_consensus_message_processed() {
     );
 }
 
+#[tokio::test]
+async fn test_soft_bundle_consensus() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut senders = Vec::new();
+    let mut keypairs = Vec::new();
+    let mut gas_objects = Vec::new();
+    let mut gas_object_refs = Vec::new();
+    for _ in 0..10 {
+        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+        let gas_object_id = ObjectID::random();
+        let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+        let gas_object_ref = gas_object.compute_object_reference();
+        gas_objects.push(gas_object);
+        gas_object_refs.push(gas_object_ref);
+        senders.push(sender);
+        keypairs.push(keypair);
+    }
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::object::MoveObject;
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+        let owner = Owner::Shared {
+            initial_shared_version: obj.version(),
+        };
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
+    };
+    let initial_shared_version = shared_object.version();
+
+    let mut all_objects = vec![shared_object.clone()];
+    all_objects.extend(gas_objects.clone());
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+        .committee_size(2.try_into().unwrap())
+        .with_objects(all_objects.clone())
+        .build();
+    let genesis = network_config.genesis;
+
+    let sec1 = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    let sec2 = network_config.validator_configs[1]
+        .protocol_key_pair()
+        .copy();
+
+    let authority1 =
+        init_state_with_objects_and_committee(all_objects.clone(), &genesis, &sec1).await;
+    let authority2 =
+        init_state_with_objects_and_committee(all_objects.clone(), &genesis, &sec2).await;
+
+    let seed = [1u8; 32];
+    let mut rng = StdRng::from_seed(seed);
+    for _ in 0..50 {
+        let mut certificates = Vec::new();
+        for i in 0..rng.gen_range(1..=10) {
+            let certificate = make_test_transaction(
+                &senders[i],
+                &keypairs[i],
+                shared_object_id,
+                initial_shared_version,
+                &gas_object_refs[i],
+                &[&authority1, &authority2],
+                Uniform::from(0..100000).sample(&mut rng),
+                None,
+                None,
+            )
+            .await;
+            certificates.push(certificate);
+        }
+
+        // on authority1, we sequence via consensus.
+        send_batch_consensus(&authority1, &certificates).await;
+        let mut effects1 = Vec::new();
+        for certificate in certificates.iter() {
+            let (effects, _execution_error_opt) =
+                authority1.try_execute_for_test(certificate).await.unwrap();
+            effects1.push(effects);
+        }
+
+        // on authority2, we wait for effects.
+        let epoch_store = authority2.epoch_store_for_testing();
+        for (i, certificate) in certificates.iter().enumerate() {
+            epoch_store
+                .acquire_shared_locks_from_effects(
+                    &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                    &effects1[i],
+                    authority2.get_cache_reader().as_ref(),
+                )
+                .await
+                .unwrap();
+            authority2.try_execute_for_test(&certificate).await.unwrap();
+            let effects2 = authority2
+                .get_cache_reader()
+                .get_executed_effects(certificate.digest())
+                .unwrap()
+                .unwrap();
+            assert_eq!(effects1[i].data(), &effects2);
+        }
+        send_batch_consensus(&authority2, &certificates).await;
+
+        // Update to the new gas objects for new txs
+        for i in 0..certificates.len() {
+            gas_object_refs[i] = *effects1[i]
+                .data()
+                .mutated()
+                .iter()
+                .map(|(objref, _)| objref)
+                .find(|objref| objref.0 == gas_object_refs[i].0)
+                .unwrap();
+        }
+    }
+
+    // verify the two validators are in sync.
+    assert_eq!(
+        authority1
+            .epoch_store_for_testing()
+            .get_next_object_version(&shared_object_id),
+        authority2
+            .epoch_store_for_testing()
+            .get_next_object_version(&shared_object_id),
+    );
+}
+
 #[test]
 fn test_choose_next_system_packages() {
     telemetry_subscribers::init_for_testing();

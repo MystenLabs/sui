@@ -384,6 +384,36 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .enqueue(certs, &authority.epoch_store_for_testing());
 }
 
+pub async fn send_batch_consensus(
+    authority: &AuthorityState,
+    certificates: &[VerifiedCertificate],
+) {
+    let transactions = certificates
+        .iter()
+        .map(|cert| {
+            SequencedConsensusTransaction::new_test(ConsensusTransaction::new_certificate_message(
+                &authority.name,
+                cert.clone().into_inner(),
+            ))
+        })
+        .collect();
+
+    let exec_certs = authority
+        .epoch_store_for_testing()
+        .process_consensus_transactions_for_tests(
+            transactions,
+            &Arc::new(CheckpointServiceNoop {}),
+            authority.get_cache_reader().as_ref(),
+            &authority.metrics.skipped_consensus_txns,
+        )
+        .await
+        .unwrap();
+
+    authority
+        .transaction_manager()
+        .enqueue(exec_certs, &authority.epoch_store_for_testing());
+}
+
 pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {
     let transaction = SequencedConsensusTransaction::new_test(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),

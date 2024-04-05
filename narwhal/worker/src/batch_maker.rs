@@ -117,13 +117,10 @@ impl BatchMaker {
                 // condition will be met eventually if the store and network are functioning.
                 Some((transactions, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
                     let _scope = monitored_scope("BatchMaker::recv");
-                    let num_txns = transactions.len();
                     for transaction in transactions {
                         current_batch_size += transaction.len();
                         current_batch.transactions_mut().push(transaction);
                     }
-                    warn!("!!!! BatchMaker received {} transactions, batch num {}, batch size {}",
-                        num_txns, current_batch.transactions_mut().len(), current_batch_size);
 
                     current_responses.push(response_sender);
                     if current_batch_size >= self.batch_size_limit {

@@ -577,8 +577,10 @@ impl ValidatorService {
         );
         fp_ensure!(
             certificates.len() <= max_num_certs,
-            SuiError::FailedToSubmitToConsensus("SoftBundle: Bundle size must not be zero".into())
-                .into()
+            SuiError::FailedToSubmitToConsensus(
+                "SoftBundle: Bundle contains too many certificates".into()
+            )
+            .into()
         );
 
         // Basic checks
