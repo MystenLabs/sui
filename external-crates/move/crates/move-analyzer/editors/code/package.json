@@ -23,7 +23,7 @@
 	"keywords": [
 		"move",
 		"Sui",
-		"Mysten",
+		"Mysten"
 	],
 	"main": "./out/src/main.js",
 	"activationEvents": [
