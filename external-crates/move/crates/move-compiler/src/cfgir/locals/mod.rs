@@ -230,7 +230,6 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
         | C::VariantSwitch { subject: e, .. } => exp(context, e),
 
         C::Return { exp: e, .. } => {
-            };
             exp(context, e);
             let mut diags = Diagnostics::new();
             for (local, state) in context.local_states.iter() {

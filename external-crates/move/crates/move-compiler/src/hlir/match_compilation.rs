@@ -1004,6 +1004,7 @@ fn compile_match_head(
         let subject = fringe
             .pop_front()
             .expect("ICE empty fringe in match compilation");
+        let tyargs = subject.ty.value.type_arguments().unwrap().clone();
         let mut subject_binders = vec![];
         debug_print!(
             context.debug.match_specialization,
@@ -1401,13 +1402,10 @@ fn make_arm_unpack(
     let mut queue: VecDeque<(FringeEntry, MatchPattern)> = VecDeque::from([(subject, pattern)]);
 
     // TODO(cgswords): we can coalese patterns a bit here, but don't for now.
-    // TODO(cgswords): optimization opportunity to avoid unpacking if the pattern is all wildcards.
-    // It raises the question, though: should we _drop_ that value? If there is an at-binding,
-    // maybe we don't want that, e.g., `x @ Some(_) => ... x ...` may like to avoid the unpack and
-    // retain `x`. Rust does something similar.
     while let Some((entry, pat)) = queue.pop_front() {
         match pat.pat.value {
             TP::Variant(mident, enum_, variant, tyargs, fields) => {
+                println!("handling plain variant");
                 let (queue_entries, fields) =
                     make_arm_variant_unpack_fields(context, pat.pat.loc, mident, enum_, variant, fields);
                 for entry in queue_entries.into_iter().rev() {
@@ -1418,6 +1416,7 @@ fn make_arm_unpack(
                 seq.push_back(unpack);
             }
             TP::BorrowVariant(mut_, mident, enum_, variant, tyargs, fields) => {
+                println!("handling borrowed variant");
                 let all_wild = fields
                     .iter()
                     .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))

@@ -149,7 +149,6 @@ pub(super) struct Context<'env> {
     named_block_types: UniqueMap<H::BlockLabel, H::Type>,
     /// collects all struct fields used in the current module
     pub used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
-    debug_flags: DebugFlags,
 }
 
 impl<'env> Context<'env> {
@@ -157,7 +156,6 @@ impl<'env> Context<'env> {
         env: &'env mut CompilationEnv,
         pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
         prog: &T::Program_,
-        debug_flags: DebugFlags,
     ) -> Self {
         fn add_struct_fields(
             env: &mut CompilationEnv,
@@ -343,7 +341,6 @@ impl<'env> Context<'env> {
             used_fields: BTreeMap::new(),
             named_block_binders: UniqueMap::new(),
             named_block_types: UniqueMap::new(),
-            debug_flags
         }
     }
 
@@ -563,8 +560,7 @@ pub fn program(
 ) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
 
-    let debug_flags = DebugFlags { match_compilation: true  };
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner, debug_flags);
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
     let T::Program_ { modules: tmodules } = prog.inner;
     let modules = modules(&mut context, tmodules);
 
@@ -926,7 +922,6 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
         NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
-            panic!("fixit");
             context.env.add_diag(ice!((
                 loc,
                 format!(
@@ -1020,6 +1015,37 @@ fn body(
         let final_exp = tail_block(context, &mut block, expected_type, seq);
         (block, final_exp)
     }
+}
+
+
+macro_rules! print_internal {
+    () => {};
+    (($name:expr => $val:expr)) => {
+        {
+        print!("{}: ", $name);
+        $val.print_verbose();
+        }
+    };
+    ((sp $name:expr => $val:expr)) => {
+        {
+        print!("{}: ", $name);
+        $val.value.print_verbose();
+        }
+    };
+    ((lines $name:expr => $val:expr)) => { {
+        println!("\n{}: ", $name);
+        for n in $val {
+            n.print_verbose()
+        }
+
+    }
+    };
+    ($fst:tt, $($rest:tt),+) => { {
+        print_internal!($fst);
+        print_internal!($($rest),+);
+    }
+    };
+
 }
 
 #[growing_stack]
