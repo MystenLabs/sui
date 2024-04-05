@@ -3435,42 +3435,25 @@ fn expected_by_name_arg_type(
         .iter()
         .map(|(p, ty_opt)| {
             if let Some(ty) = ty_opt {
-                core::instantiate(context, ty.clone())
+                core::instantiate_keep_tanything(context, ty.clone())
             } else {
-                core::make_tvar(context, p.loc)
+                sp(p.loc, Type_::Anything)
             }
         })
         .collect();
     let ret_ty = if let Some(ty) = lambda.return_type.clone() {
-        core::instantiate(context, ty)
+        core::instantiate_keep_tanything(context, ty)
     } else {
-        core::make_tvar(context, lambda.body.loc)
+        sp(lambda.body.loc, Type_::Anything)
     };
     let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
-    let tfun_tvars = {
-        let mut m = HashMap::new();
-        core::all_tvars(&mut m, &tfun);
-        m
-    };
     let msg = || {
         format!(
             "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
             m, &f, &param.value.name
         )
     };
-    subtype(context, call_loc, msg, tfun.clone(), param_ty);
-    // prefer the lambda type over the parameters to preserve annotations on the lambda
-    let readied_tfun = core::ready_tvars(&context.subst, tfun);
-    let tfun_subst = {
-        let mut subst = Subst::empty();
-        for (tv, loc) in tfun_tvars {
-            subst.insert(tv, sp(loc, Type_::Anything));
-        }
-        subst
-    };
-    // any tvars in the lambda type that did not get bound to a type in the param_ty are
-    // made an Anything so they get a fresh tvar at each call site
-    core::subst_tvars(&tfun_subst, readied_tfun)
+    subtype(context, call_loc, msg, tfun.clone(), param_ty)
 }
 
 fn expand_macro(
