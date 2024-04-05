@@ -123,7 +123,7 @@ where
     T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
-        let checkpoint_data = Self::index_one_checkpoint(
+        let checkpoint_data = Self::index_checkpoint(
             self.state.clone().into(),
             checkpoint.clone(),
             Arc::new(self.metrics.clone()),
@@ -251,7 +251,7 @@ where
         }))
     }
 
-    async fn index_one_checkpoint(
+    async fn index_checkpoint(
         state: Arc<S>,
         data: CheckpointData,
         metrics: Arc<IndexerMetrics>,
