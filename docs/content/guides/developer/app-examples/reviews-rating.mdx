@@ -34,7 +34,7 @@ Review readers access reviews to make informed decisions on selecting services. 
 
 ### Moderators
 
-Moderators monitor content of the reviews and can delete any reviews that contain inappropriate content. Moderators also keep an eye on the number of reviews registered for a service to ensure that they do not grow indefinitely.
+Moderators monitor content of the reviews and can delete any reviews that contain inappropriate content.
 
 The incentive mechanism is not implemented for this guide, but service owners can all pay into a pool that goes to moderators, on a rolling basis. People can stake moderators to influence what proportion of the reward each moderator gets, up to a limit (imagine how validators are staked on-chain), and moderator decisions are decided by quorum of stake weight. This is a way to ensure that moderators have incentives to do their job well.
 
@@ -86,9 +86,10 @@ struct Service has key, store {
 }
 ```
 
-All the submitted reviews are stored in `reviews` field, and top rated reviews are stored in `top_reviews` field, which has `MultiMap<ID>` type. The [multimap module](#multimap) defines the type.
+All the submitted reviews are stored in `reviews` field, and the top rated reviews are stored in `top_reviews` field, which has `MultiMap<ID>` type. The [multimap module](#multimap) defines the type.
 
-The `reward_pool` and `reward` fields store the available reward information.
+The same amount is rewarded to top reviewers, and the reward is distributed to 10 participants at most.
+The pool of `SUI` tokens that will be distributed to reviewers is stored in `reward_pool` field, and the amount of `SUI` tokens that will be awarded to each participant is configured in `reward` field.
 
 ```move
 struct AdminCap has key, store {
@@ -100,7 +101,8 @@ struct Moderator has key {
   service_id: ID,
 }
 ```
-`SERVICE OWNERS` are given `AdminCap`, and `MODERATORS` are given `Moderator` to allow them to perform privileged operations.
+This guide follows a [capabilities pattern](../../../concepts/sui-move-concepts/patterns/capabilities.mdx) to manage authorizations.
+For example, `SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` such that only they are allowed to perform privileged operations.
 
 ### multimap.move {#multimap}
 
@@ -123,21 +125,17 @@ Note that `vector` is used to store the contents of the `MultiMap`. This is acce
 public fun insert<K: copy>(self: &mut MultiMap<K>, key: K, priority: u64) {
   assert!(!contains(self, &key), EKeyAlreadyExists);
   let len = vector::length(&self.contents);
-  if (len == 0) {
-    vector::push_back(&mut self.contents, Entry { key, priority });
-  } else {
-    let (lo, hi) = (0, len);
-    while (lo < hi) {
-      let mid = (hi - lo) / 2 + lo;
-      let ele = vector::borrow(&self.contents, mid);
-      if (priority > ele.priority) {
-        hi = mid;
-      } else {
-        lo = mid + 1;
-      }
-    };
-    vector::insert(&mut self.contents, Entry { key, priority }, lo);
-  }
+  let (lo, hi) = (0, len);
+  while (lo < hi) {
+    let mid = (hi - lo) / 2 + lo;
+    let ele = vector::borrow(&self.contents, mid);
+    if (priority > ele.priority) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  };
+  vector::insert(&mut self.contents, Entry { key, priority }, lo);
 }
 ```
 `Binary Search` is implemented to insert a new entry in the `MultiMap`. The `insert` function is used to insert a new entry in the `MultiMap`.
