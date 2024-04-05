@@ -66,6 +66,9 @@ diesel::table! {
         package -> Bytea,
         module -> Text,
         event_type -> Text,
+        event_type_package -> Bytea,
+        event_type_module -> Text,
+        event_type_name -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
     }
