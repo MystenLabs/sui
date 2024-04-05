@@ -51,6 +51,14 @@ for the binary at this new location by using VSCode's settings (`⌘,` on macOS,
 item *Code > Preferences > Settings*). Search for the `move.server.path` workspace setting,
 set it to the new location of the `move-analyzer` binary, and restart VSCode.
 
+## What if advanced features (e.g., go to def) do not work, particularly after re-install or upgrade
+
+Assuming you did not specify a different location for the move-analyzer binary and that the
+move-analyzer binary already exists in the default location (`~/.sui/bin` on macOS or Linux, or
+`C:\Users\USER\.sui\bin` on Windows), delete the existing move-analyzer binary and reinstall the
+extension.
+
+
 ## What if everything else fails?
 
 Check [Sui Developer Forum](https://forums.sui.io/c/technical-support) to see if the problem
@@ -75,3 +83,6 @@ Move source file (a file with a `.move` file extension) and:
   - go to references
   - type on hover
   - outline view showing symbol tree for Move source files
+- If the opened Move source file is located within a buildable project you can build and (locally)
+  test this project using `Move: Build a Move package` and `Move: Test a Move package` commands from
+  VSCode's command palette
