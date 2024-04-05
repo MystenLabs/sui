@@ -9,13 +9,13 @@
 //! the stack height by the number of values returned by the function as indicated in its
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
-use crate::meter::Meter;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     control_flow_graph::{BlockId, ControlFlowGraph},
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 
@@ -31,7 +31,7 @@ impl<'a> StackUsageVerifier<'a> {
         config: &VerifierConfig,
         resolver: &'a BinaryIndexedView<'a>,
         function_view: &'a FunctionView,
-        _meter: &mut impl Meter, // TODO: metering
+        _meter: &mut (impl Meter + ?Sized), // TODO: metering
     ) -> PartialVMResult<()> {
         let verifier = Self {
             resolver,

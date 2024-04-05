@@ -16,7 +16,14 @@ gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 
 task 3 'view-object'. lines 72-72:
 Owner: Account Address ( A )
 Version: 3
-Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 10u64}
+Contents: test::object_basics::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 10u64,
+}
 
 task 4 'run'. lines 74-74:
 created: object(4,0)
@@ -33,4 +40,11 @@ gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 
 task 6 'view-object'. lines 78-78:
 Owner: Account Address ( A )
 Version: 5
-Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 10u64}
+Contents: test::object_basics::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 10u64,
+}

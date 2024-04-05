@@ -72,22 +72,13 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-      - name: Check Pull Request Description
+      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
+        with:
+          python-version: 3.10.10
+      - name: Validate PR's release notes
         shell: bash
         run: |
-          export PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          export DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/MystenLabs/sui/pulls/${PR_NUMBER}" \
-            | jq --raw-output .body)
-
-          if [[ "${DESCRIPTION}" == *"[x]"*  ]]; then
-            if [[ "${DESCRIPTION}" =~ Release[[:space:]]notes[[:space:]]+.* ]]; then
-              exit 0
-            else
-              echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
-              exit 1
-            fi
-          fi
+          python ./scripts/release_notes.py check
 
   test:
     needs: diff

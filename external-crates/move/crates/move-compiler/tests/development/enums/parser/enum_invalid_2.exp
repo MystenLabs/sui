@@ -1,0 +1,6 @@
+error[E01002]: unexpected token
+  ┌─ tests/development/enums/parser/enum_invalid_2.move:3:13
+  │
+3 │        Done(x: u64),
+  │             ^ Cannot use named fields in a positional definition
+

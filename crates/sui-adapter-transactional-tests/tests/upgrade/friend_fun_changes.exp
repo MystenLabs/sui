@@ -35,4 +35,12 @@ gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 
 task 7 'view-object'. lines 89-89:
 Owner: Account Address ( A )
 Version: 3
-Contents: V0::base_module::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}, field0: 10u64, field1: 10u64}
+Contents: V0::base_module::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    field0: 10u64,
+    field1: 10u64,
+}

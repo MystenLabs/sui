@@ -1,0 +1,22 @@
+error[E03013]: positional call mismatch
+  ┌─ tests/development/enums/matching/invalid_empty_ctor.move:8:18
+  │
+4 │         None
+  │         ---- Variant is defined here.
+  ·
+8 │         let _x = Empty::None { };
+  │                  ^^^^^^^^^^^^^^^ Invalid variant instantiation. Empty variant instantiations do not use field syntax
+  │
+  = Remove '{ }' after the variant name
+
+error[E03013]: positional call mismatch
+  ┌─ tests/development/enums/matching/invalid_empty_ctor.move:9:18
+  │
+4 │         None
+  │         ---- Variant is defined here.
+  ·
+9 │         let _x = Empty::None();
+  │                  ^^^^^^^^^^^^^ Invalid variant instantiation. Empty variant instantiations do not use call syntax
+  │
+  = Remove '()' after the variant name
+

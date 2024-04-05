@@ -31,7 +31,22 @@ gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 
 task 6 'view-object'. lines 92-92:
 Owner: Object ID: ( fake(2,0) )
 Version: 4
-Contents: sui::dynamic_field::Field<u64, a::m::Counter> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: 0u64, value: a::m::Counter {id: sui::object::UID {id: sui::object::ID {bytes: _}}, count: 1u64}}
+Contents: sui::dynamic_field::Field<u64, a::m::Counter> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: 0u64,
+    value: a::m::Counter {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        count: 1u64,
+    },
+}
 
 task 7 'run'. lines 94-94:
 mutated: object(0,0), object(5,0)
@@ -46,4 +61,19 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2
 task 9 'view-object'. lines 98-98:
 Owner: Object ID: ( fake(2,0) )
 Version: 4
-Contents: sui::dynamic_field::Field<u64, a::m::Counter> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: 0u64, value: a::m::Counter {id: sui::object::UID {id: sui::object::ID {bytes: _}}, count: 1u64}}
+Contents: sui::dynamic_field::Field<u64, a::m::Counter> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: 0u64,
+    value: a::m::Counter {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        count: 1u64,
+    },
+}

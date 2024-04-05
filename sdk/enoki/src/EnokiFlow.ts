@@ -108,11 +108,13 @@ export class EnokiFlow {
 		provider: AuthProvider;
 		clientId: string;
 		redirectUrl: string;
+		network?: 'mainnet' | 'testnet' | 'devnet';
 		extraParams?: Record<string, unknown>;
 	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
 		const { nonce, randomness, maxEpoch, estimatedExpiration } =
 			await this.#enokiClient.createZkLoginNonce({
+				network: input.network,
 				ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 			});
 
@@ -255,7 +257,7 @@ export class EnokiFlow {
 	}
 
 	// TODO: Should this return the proof if it already exists?
-	async getProof() {
+	async getProof({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
 		const zkp = await this.getSession();
 		const { salt } = this.$zkLoginState.get();
 
@@ -274,6 +276,7 @@ export class EnokiFlow {
 		const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair));
 
 		const proof = await this.#enokiClient.createZkLoginZkp({
+			network,
 			jwt: zkp.jwt,
 			maxEpoch: zkp.maxEpoch,
 			randomness: zkp.randomness,

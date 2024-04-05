@@ -1,0 +1,6 @@
+error[E01002]: unexpected token
+  ┌─ tests/development/enums/matching/invalid_at.move:9:13
+  │
+9 │             _ @ Option::Some(128u8) => (),
+  │             ^ Cannot use '_' as a binder in an '@' pattern
+

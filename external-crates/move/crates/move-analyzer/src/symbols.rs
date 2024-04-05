@@ -95,7 +95,7 @@ use move_compiler::{
     },
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
-    parser::ast::{self as P, StructName},
+    parser::ast::{self as P, DatatypeName},
     shared::{unique_map::UniqueMap, Identifier, Name},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
@@ -1776,10 +1776,25 @@ impl<'a> ParsingSymbolicator<'a> {
                     self.type_symbols(&fun.signature.return_type);
                 }
                 MM::Struct(sdef) => match &sdef.fields {
-                    P::StructFields::Defined(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
+                    P::StructFields::Named(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
                     P::StructFields::Positional(v) => v.iter().for_each(|t| self.type_symbols(t)),
                     P::StructFields::Native(_) => (),
                 },
+                MM::Enum(edef) => {
+                    let P::EnumDefinition { variants, .. } = edef;
+                    for variant in variants {
+                        let P::VariantDefinition { fields, .. } = variant;
+                        match fields {
+                            P::VariantFields::Named(v) => {
+                                v.iter().for_each(|(_, t)| self.type_symbols(t))
+                            }
+                            P::VariantFields::Positional(v) => {
+                                v.iter().for_each(|t| self.type_symbols(t))
+                            }
+                            P::VariantFields::Empty => (),
+                        }
+                    }
+                }
                 MM::Use(use_decl) => self.use_decl_symbols(use_decl),
                 MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
                 MM::Constant(c) => {
@@ -2104,10 +2119,20 @@ impl<'a> ParsingSymbolicator<'a> {
                 self.chain_symbols(chain);
                 match bindings {
                     P::FieldBindings::Named(v) => {
-                        v.iter().for_each(|(_, bind)| self.bind_symbols(bind))
+                        for symbol in v {
+                            match symbol {
+                                P::Ellipsis::Binder((_, x)) => self.bind_symbols(x),
+                                P::Ellipsis::Ellipsis(_) => (),
+                            }
+                        }
                     }
                     P::FieldBindings::Positional(v) => {
-                        v.iter().for_each(|bind| self.bind_symbols(bind))
+                        for symbol in v.iter() {
+                            match symbol {
+                                P::Ellipsis::Binder(x) => self.bind_symbols(x),
+                                P::Ellipsis::Ellipsis(_) => (),
+                            }
+                        }
                     }
                 }
             }
@@ -2436,6 +2461,9 @@ impl<'a> TypingSymbolicator<'a> {
                 self.unpack_symbols(define, ident, name, tparams, fields, scope);
             }
             LValue_::Ignore => (),
+            LValue_::UnpackVariant(..) | LValue_::BorrowUnpackVariant(..) => {
+                debug_assert!(false, "Enums are not supported by move analyzser.");
+            }
         }
     }
 
@@ -2444,7 +2472,7 @@ impl<'a> TypingSymbolicator<'a> {
         &mut self,
         define: bool,
         ident: &ModuleIdent,
-        name: &StructName,
+        name: &DatatypeName,
         tparams: &Vec<Type>,
         fields: &Fields<(Type, LValue)>,
         scope: &mut OrdMap<Symbol, LocalDef>,
@@ -2653,7 +2681,7 @@ impl<'a> TypingSymbolicator<'a> {
     fn pack_symbols(
         &mut self,
         ident: &ModuleIdent,
-        name: &StructName,
+        name: &DatatypeName,
         tparams: &Vec<Type>,
         fields: &Fields<(Type, Exp)>,
         scope: &mut OrdMap<Symbol, LocalDef>,

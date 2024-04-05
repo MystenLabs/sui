@@ -16,12 +16,25 @@ gas summary: computation_cost: 1000000, storage_cost: 3549200,  storage_rebate: 
 task 3 'view-object'. lines 88-88:
 Owner: Account Address ( A )
 Version: 2
-Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 4 'view-object'. lines 90-90:
 Owner: Account Address ( A )
 Version: 2
-Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 0u64}
+Contents: Test::M1::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+}
 
 task 5 'programmable'. lines 92-94:
 created: object(5,0)
@@ -31,12 +44,25 @@ gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 
 task 6 'view-object'. lines 96-96:
 Owner: Account Address ( A )
 Version: 3
-Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 7 'view-object'. lines 98-98:
 Owner: Object ID: ( fake(5,0) )
 Version: 3
-Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 1u64}
+Contents: Test::M1::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 1u64,
+}
 
 task 8 'create-checkpoint'. lines 100-100:
 Checkpoint created: 1
@@ -97,12 +123,25 @@ gas summary: computation_cost: 1000000, storage_cost: 9910400,  storage_rebate: 
 task 11 'view-object'. lines 170-170:
 Owner: Account Address ( A )
 Version: 4
-Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 12 'view-object'. lines 172-172:
 Owner: Object ID: ( fake(5,0) )
 Version: 4
-Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 2u64}
+Contents: Test::M1::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 2u64,
+}
 
 task 13 'create-checkpoint'. lines 174-174:
 Checkpoint created: 2
@@ -302,12 +341,25 @@ gas summary: computation_cost: 1000000, storage_cost: 8603200,  storage_rebate: 
 task 17 'view-object'. lines 281-281:
 Owner: Account Address ( A )
 Version: 5
-Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 18 'view-object'. lines 283-283:
 Owner: Object ID: ( fake(5,0) )
 Version: 4
-Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 2u64}
+Contents: Test::M1::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 2u64,
+}
 
 task 19 'create-checkpoint'. lines 285-285:
 Checkpoint created: 3
@@ -542,12 +594,25 @@ gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 
 task 22 'view-object'. lines 342-342:
 Owner: Account Address ( A )
 Version: 6
-Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 23 'view-object'. lines 344-344:
 Owner: Object ID: ( fake(5,0) )
 Version: 4
-Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 2u64}
+Contents: Test::M1::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 2u64,
+}
 
 task 24 'create-checkpoint'. lines 346-346:
 Checkpoint created: 4

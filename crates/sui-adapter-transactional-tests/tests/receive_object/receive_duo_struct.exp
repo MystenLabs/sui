@@ -13,17 +13,35 @@ gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 
 task 3 'view-object'. lines 48-48:
 Owner: Account Address ( _ )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'view-object'. lines 50-50:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 5 'view-object'. lines 52-54:
 Owner: Account Address ( fake(2,1) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+}
 
 task 6 'programmable'. lines 55-58:
 mutated: object(0,0), object(2,0)

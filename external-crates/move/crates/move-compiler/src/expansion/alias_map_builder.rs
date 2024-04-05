@@ -147,9 +147,9 @@ impl AliasMapBuilder {
                 ModuleMemberKind::Constant | ModuleMemberKind::Function => {
                     remove_dup(module_members, alias)
                 }
-                // structs are in the leading access namespace in addition to the module members
-                // namespace
-                ModuleMemberKind::Struct => {
+                // structs and enums are in the leading access namespace in addition to the module
+                // members namespace
+                ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
                     let r1 = remove_dup(module_members, alias);
                     let r2 = remove_dup(leading_access, alias);
                     r1.and(r2)
@@ -207,9 +207,9 @@ impl AliasMapBuilder {
                     let entry = (MemberEntry::Member(ident, member), is_implicit);
                     module_members.add(alias, entry).unwrap();
                 }
-                // structs are in the leading access namespace in addition to the module members
-                // namespace
-                ModuleMemberKind::Struct => {
+                // structs and enums are in the leading access namespace in addition to the module
+                // members namespace
+                ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
                     let member_entry = (MemberEntry::Member(ident, member), is_implicit);
                     module_members.add(alias, member_entry).unwrap();
                     let leading_access_entry =

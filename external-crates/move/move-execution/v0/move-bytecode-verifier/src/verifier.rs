@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains the public APIs supported by the bytecode verifier.
-use crate::meter::{DummyMeter, Meter};
 use crate::{
     ability_field_requirements, check_duplication::DuplicationChecker,
     code_unit_verifier::CodeUnitVerifier, constants, friends,
@@ -17,6 +16,7 @@ use move_binary_format::{
     errors::{Location, VMResult},
     file_format::{CompiledModule, CompiledScript},
 };
+use move_bytecode_verifier_meter::{dummy::DummyMeter, Meter};
 use move_vm_config::verifier::VerifierConfig;
 use std::time::Instant;
 
@@ -38,7 +38,7 @@ pub fn verify_module_with_config_for_test(
     name: &str,
     config: &VerifierConfig,
     module: &CompiledModule,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
     const MAX_MODULE_SIZE: usize = 65355;
     let mut bytes = vec![];
@@ -69,7 +69,7 @@ pub fn verify_module_with_config_for_test(
 pub fn verify_module_with_config_metered(
     config: &VerifierConfig,
     module: &CompiledModule,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
     BoundsChecker::verify_module(module).map_err(|e| {
         // We can't point the error at the module, because if bounds-checking
@@ -114,7 +114,7 @@ pub fn verify_script_unmetered(script: &CompiledScript) -> VMResult<()> {
 pub fn verify_script_with_config_metered(
     config: &VerifierConfig,
     script: &CompiledScript,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
     BoundsChecker::verify_script(script).map_err(|e| e.finish(Location::Script))?;
     LimitsVerifier::verify_script(config, script)?;

@@ -25,7 +25,14 @@ Debug of error: SharedObjectOperationNotAllowed at command None
 task 5 'view-object'. lines 81-81:
 Owner: Shared
 Version: 4
-Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+Contents: test::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
 
 task 6 'run'. lines 83-83:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 11) at offset 0, Abort Code: 1
@@ -34,7 +41,14 @@ Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: 
 task 7 'view-object'. lines 85-85:
 Owner: Shared
 Version: 4
-Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+Contents: test::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
 
 task 8 'run'. lines 87-87:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 11) at offset 0, Abort Code: 1

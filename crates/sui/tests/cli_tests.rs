@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
 use serde_json::json;
 use sui::key_identity::{get_identity_address, KeyIdentity};
 use sui_test_transaction_builder::batch_make_transfer_transactions;
@@ -31,9 +31,9 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+    get_new_package_obj_from_response, OwnedObjectRef, SuiObjectData, SuiObjectDataFilter,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -835,6 +835,77 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         get_parsed_object_assert_existence(obj_id, context).await;
     }
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_publish_command() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_publish");
+    let build_config = BuildConfig::new_for_testing().config;
+    // Publish the package
+    let resp = SuiClientCommands::Publish {
+        package_path,
+        build_config: build_config.clone(),
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Get Package ID and version
+    let (expect_original_id, expect_version, _) =
+        if let SuiClientCommandResult::Publish(response) = resp {
+            get_new_package_obj_from_response(&response)
+                .ok_or_else(|| anyhow::anyhow!("No package object response"))?
+        } else {
+            unreachable!("Invalid response");
+        };
+
+    // Get lock file that recorded Package ID and version
+    let lock_file = build_config.lock_file.expect("Lock file for testing");
+    let mut lock_file = std::fs::File::open(lock_file).unwrap();
+    let envs = ManagedPackage::read(&mut lock_file).unwrap();
+    let localnet = envs.get("localnet").unwrap();
+    assert_eq!(
+        expect_original_id.to_string(),
+        localnet.original_published_id,
+    );
+    assert_eq!(expect_original_id.to_string(), localnet.latest_published_id);
+    assert_eq!(
+        expect_version.value(),
+        localnet.version.parse::<u64>().unwrap(),
+    );
     Ok(())
 }
 
@@ -1777,6 +1848,167 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         get_parsed_object_assert_existence(obj_id, context).await;
     }
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
+    let build_config_publish = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config: build_config_publish.clone(),
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::Publish(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // Hacky for now: we need to add the correct `published-at` field to the Move toml file.
+    // In the future once we have automated address management replace this logic!
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&upgrade_pkg_path)
+        .unwrap();
+    upgrade_pkg_path.pop();
+
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+
+    // Add a `published-at = "0x<package_object_id>"` to the Move manifest.
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    lines.insert(
+        idx + 1,
+        format!(
+            "published-at = \"{}\"",
+            package.reference.object_id.to_hex_uncompressed()
+        ),
+    );
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+
+    // Create a new build config for the upgrade. Initialize its lock file
+    // to the package we published.
+    let build_config_upgrade = BuildConfig::new_for_testing().config;
+    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
+    upgrade_lock_file_path.push("Move.lock");
+    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
+    std::fs::copy(
+        publish_lock_file_path.clone(),
+        upgrade_lock_file_path.clone(),
+    )?;
+
+    // Now run the upgrade
+    let upgrade_response = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config: build_config_upgrade.clone(),
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Get Original Package ID and version
+    let (expect_original_id, _, _) = get_new_package_obj_from_response(&publish_response)
+        .ok_or_else(|| anyhow::anyhow!("No package object response"))?;
+
+    // Get Upgraded Package ID and version
+    let (expect_upgrade_latest_id, expect_upgrade_version, _) =
+        if let SuiClientCommandResult::Upgrade(response) = upgrade_response {
+            get_new_package_obj_from_response(&response)
+                .ok_or_else(|| anyhow::anyhow!("No package object response"))?
+        } else {
+            unreachable!("Invalid response");
+        };
+
+    // Get lock file that recorded Package ID and version
+    let lock_file = build_config_upgrade
+        .lock_file
+        .expect("Lock file for testing");
+    let mut lock_file = std::fs::File::open(lock_file).unwrap();
+    let envs = ManagedPackage::read(&mut lock_file).unwrap();
+    let localnet = envs.get("localnet").unwrap();
+    // Original ID should correspond to first published package.
+    assert_eq!(
+        expect_original_id.to_string(),
+        localnet.original_published_id,
+    );
+    // Upgrade ID should correspond to upgraded package.
+    assert_eq!(
+        expect_upgrade_latest_id.to_string(),
+        localnet.latest_published_id,
+    );
+    // Version should correspond to upgraded package.
+    assert_eq!(
+        expect_upgrade_version.value(),
+        localnet.version.parse::<u64>().unwrap(),
+    );
     Ok(())
 }
 

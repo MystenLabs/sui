@@ -314,7 +314,7 @@ fn indirect_code() {
         }],
     };
 
-    let res = crate::verify_module_with_config_unmetered(&VerifierConfig::unbounded(), &module)
+    let res = crate::verify_module_with_config_unmetered(&VerifierConfig::default(), &module)
         .unwrap_err();
     assert_eq!(
         res.major_status(),
