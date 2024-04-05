@@ -38,7 +38,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -3453,7 +3453,14 @@ fn expected_by_name_arg_type(
             m, &f, &param.value.name
         )
     };
-    subtype(context, call_loc, msg, tfun.clone(), param_ty)
+    // We need to return the subtyped type to properly remove the `Anything` in the cases
+    // where it should be a specific type, e.g. |_| -> _ <: |'a| -> 'b should return |'a| -> 'b
+    // In the case of an error, we give back tfun so macro expansion continues to know that this
+    // argument is a lambda
+    match subtype_impl(context, call_loc, msg, tfun.clone(), param_ty) {
+        Ok(t) => t,
+        Err(_) => tfun,
+    }
 }
 
 fn expand_macro(

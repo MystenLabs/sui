@@ -22,6 +22,4 @@ module a::m {
         apply_either2!(true, S1 { f: 0 }, S2 { f: 0 }, |s| vector[s.f]);
     }
 
-
-
 }
