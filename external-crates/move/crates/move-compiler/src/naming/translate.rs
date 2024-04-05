@@ -1347,32 +1347,29 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                 assert!(context.env.has_errors());
                 NT::UnresolvedError
             }
-            RT::Hole => match case {
-                TypeAnnotation::StructField
-                | TypeAnnotation::ConstantSignature
-                | TypeAnnotation::FunctionSignature => {
-                    let case_str = match case {
-                        TypeAnnotation::StructField => "Struct fields",
-                        TypeAnnotation::ConstantSignature => "Constants",
-                        TypeAnnotation::FunctionSignature => "Functions",
-                        _ => unreachable!(),
-                    };
-                    let msg = format!(
-                        "Invalid usage of a placeholder for type inference '_'. \
-                        {case_str} require fully specified types. Replace '_' with a specific type"
-                    );
-                    let mut diag = diag!(NameResolution::InvalidTypeAnnotation, (loc, msg));
-                    if let TypeAnnotation::FunctionSignature = case {
-                        diag.add_note("Only 'macro' functions can use '_' in their signatures");
-                    }
-                    context.env.add_diag(diag);
-                    NT::UnresolvedError
-                }
-                TypeAnnotation::MacroSignature | TypeAnnotation::Expression => {
-                    // replaced with a type variable during type instantiation
-                    NT::Anything
-                }
-            },
+              RT::Hole => {
+                  let case_str_opt = match case {
+                          TypeAnnotation::StructField => Some("Struct fields"),
+                          TypeAnnotation::ConstantSignature => Some("Constants"),
+                          TypeAnnotation::FunctionSignature => Some("Functions"),
+                          TypeAnnotation::MacroSignature | TypeAnnotation::Expression => None,
+                  };
+                  if let Some(case_str) = case_str_opt {
+                      let msg = format!(
+                          "Invalid usage of a placeholder for type inference '_'. \
+                          {case_str} require fully specified types. Replace '_' with a specific type"
+                      );
+                      let mut diag = diag!(NameResolution::InvalidTypeAnnotation, (loc, msg));
+                      if let TypeAnnotation::FunctionSignature = case {
+                          diag.add_note("Only 'macro' functions can use '_' in their signatures");
+                      }
+                      context.env.add_diag(diag);
+                      NT::UnresolvedError
+                  } else {
+                      // replaced with a type variable during type instantiation
+                      NT::Anything
+                  }
+              }
             RT::BuiltinType(bn_) => {
                 let name_f = || format!("{}", &bn_);
                 let arity = bn_.tparam_constraints(loc).len();
