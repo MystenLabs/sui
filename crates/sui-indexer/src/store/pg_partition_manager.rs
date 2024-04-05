@@ -101,7 +101,7 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
         data: &EpochPartitionData,
     ) -> Result<(), IndexerError> {
         if data.next_epoch == 0 {
-            tracing::info!("Epoch 0 partition has been crate in migrations, skipped.");
+            tracing::info!("Epoch 0 partition has been created in the initial setup.");
             return Ok(());
         }
         if last_partition == data.last_epoch {
