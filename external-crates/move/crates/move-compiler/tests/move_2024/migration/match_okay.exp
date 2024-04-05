@@ -1,0 +1,18 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/migration/match_okay.move:3:19
+  │
+3 │     fun t(t: u64, match: u64): bool {
+  │                   ^^^^^
+  │                   │
+  │                   Unexpected 'match'
+  │                   Expected an identifier
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/migration/match_okay.move:7:19
+  │
+7 │     fun t(t: u64, match: u64): bool {
+  │                   ^^^^^
+  │                   │
+  │                   Unexpected 'match'
+  │                   Expected an identifier
+

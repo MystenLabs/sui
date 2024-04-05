@@ -1,0 +1,15 @@
+error[E01002]: unexpected token
+  ┌─ tests/development/enums/matching/invalid_match_unit.move:7:14
+  │
+7 │             () => ()
+  │              ^ Invalid pattern
+
+error[E04005]: expected a single type
+   ┌─ tests/development/enums/matching/invalid_match_unit.move:12:16
+   │
+ 3 │     fun x() { }
+   │         - Expected a single type, but found expression list type: '()'
+   ·
+12 │         match (x()) {
+   │                ^^^ Invalid 'match' subject
+

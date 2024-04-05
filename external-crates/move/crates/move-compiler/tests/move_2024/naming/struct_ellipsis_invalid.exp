@@ -1,0 +1,64 @@
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:6:13
+  │
+6 │         let Y(..) = x;
+  │             ^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:10:13
+   │
+10 │         let Y(x, ..) = x;
+   │             ^^^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:10:13
+   │
+10 │         let Y(x, ..) = x;
+   │             ^^^^^^^^ Unbound field '0' in '0x42::m::Y'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:10:15
+   │
+10 │         let Y(x, ..) = x;
+   │               ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:14:13
+   │
+14 │         let Y() = x;
+   │             ^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:18:13
+   │
+18 │         let X{..} = x;
+   │             ^^^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:22:13
+   │
+22 │         let X{x, ..} = x;
+   │             ^^^^^^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:22:13
+   │
+22 │         let X{x, ..} = x;
+   │             ^^^^^^^^ Unbound field 'x' in '0x42::m::X'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:22:15
+   │
+22 │         let X{x, ..} = x;
+   │               ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:26:13
+   │
+26 │         let X{} = x;
+   │             ^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+

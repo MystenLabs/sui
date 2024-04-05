@@ -8,13 +8,13 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:12:23
    │
 12 │     fun test00(): a::m<u64>::S {
-   │                       ^^^^^ Cannot use type parameters for a module
+   │                       ^^^^^ Cannot use type parameters on a module
 
 error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:13:13
    │
 13 │         a::m<u64>::make_s(0u64)
-   │             ^^^^^ Cannot use type parameters for a module
+   │             ^^^^^ Cannot use type parameters on a module
 
 error[E03008]: too few type arguments
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:16:19
@@ -26,13 +26,13 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:16:20
    │
 16 │     fun test01(): a<u64>::m::S {
-   │                    ^^^^^ Cannot use type parameters for an address
+   │                    ^^^^^ Cannot use type parameters on an address
 
 error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:17:10
    │
 17 │         a<u64>::m::make_s(0u64)
-   │          ^^^^^ Cannot use type parameters for an address
+   │          ^^^^^ Cannot use type parameters on an address
 
 error[E03008]: too few type arguments
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:20:19
@@ -44,7 +44,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:20:20
    │
 20 │     fun test02(): a<u64>::m<u64>::S {
-   │                    ^^^^^ Cannot use type parameters for an address
+   │                    ^^^^^ Cannot use type parameters on an address
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:20:28
@@ -60,7 +60,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:21:10
    │
 21 │         a<u64>::m<u64>::make_s(0u64)
-   │          ^^^^^ Cannot use type parameters for an address
+   │          ^^^^^ Cannot use type parameters on an address
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:21:18
@@ -82,7 +82,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:23
    │
 24 │     fun test03(): a::m<u64>::S<u64> {
-   │                       ^^^^^ Cannot use type parameters for a module
+   │                       ^^^^^ Cannot use type parameters on a module
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:24:31
@@ -98,7 +98,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:25:13
    │
 25 │         a::m<u64>::make_s<u64>(0u64)
-   │             ^^^^^ Cannot use type parameters for a module
+   │             ^^^^^ Cannot use type parameters on a module
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:25:26
@@ -120,7 +120,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:20
    │
 28 │     fun test04(): a<u64>::m<u64>::S<u64> {
-   │                    ^^^^^ Cannot use type parameters for an address
+   │                    ^^^^^ Cannot use type parameters on an address
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:28:28
@@ -146,7 +146,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:10
    │
 29 │         a<u64>::m<u64>::make_s<u64>(0u64)
-   │          ^^^^^ Cannot use type parameters for an address
+   │          ^^^^^ Cannot use type parameters on an address
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:29:18
@@ -178,13 +178,13 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:46:26
    │
 46 │     fun test00(): 0x42::m<u64>::S {
-   │                          ^^^^^ Cannot use type parameters for a module
+   │                          ^^^^^ Cannot use type parameters on a module
 
 error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:47:16
    │
 47 │         0x42::m<u64>::make_s(0u64)
-   │                ^^^^^ Cannot use type parameters for a module
+   │                ^^^^^ Cannot use type parameters on a module
 
 error[E03008]: too few type arguments
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:50:19
@@ -196,7 +196,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:50:23
    │
 50 │     fun test01(): 0x42<u64>::m::S {
-   │                       ^^^^^ Cannot use type parameters for an address
+   │                       ^^^^^ Cannot use type parameters on an address
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:9
@@ -248,7 +248,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:23
    │
 54 │     fun test02(): 0x42<u64>::m<u64>::S {
-   │                       ^^^^^ Cannot use type parameters for an address
+   │                       ^^^^^ Cannot use type parameters on an address
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:54:31
@@ -310,7 +310,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:26
    │
 58 │     fun test03(): 0x42::m<u64>::S<u64> {
-   │                          ^^^^^ Cannot use type parameters for a module
+   │                          ^^^^^ Cannot use type parameters on a module
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:58:34
@@ -326,7 +326,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:16
    │
 59 │         0x42::m<u64>::make_s<u64>(0u64)
-   │                ^^^^^ Cannot use type parameters for a module
+   │                ^^^^^ Cannot use type parameters on a module
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:59:29
@@ -348,7 +348,7 @@ error[E03018]: invalid type parameter
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:23
    │
 62 │     fun test04(): 0x42<u64>::m<u64>::S<u64> {
-   │                       ^^^^^ Cannot use type parameters for an address
+   │                       ^^^^^ Cannot use type parameters on an address
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:62:31

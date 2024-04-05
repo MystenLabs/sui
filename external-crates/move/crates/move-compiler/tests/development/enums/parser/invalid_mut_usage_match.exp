@@ -1,0 +1,6 @@
+error[E01002]: unexpected token
+   ┌─ tests/development/enums/parser/invalid_mut_usage_match.move:10:26
+   │
+10 │          Option::Other { mut x: mut y } => y,
+   │                          ^^^ 'mut' modifier can only be used on variable bindings
+
