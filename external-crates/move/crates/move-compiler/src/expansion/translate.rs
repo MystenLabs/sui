@@ -3333,7 +3333,7 @@ fn check_valid_type_parameter_name(
             if !next_char.is_ascii_alphabetic() {
                 let msg = format!(
                     "Invalid type parameter name '{}'. \
-                    Following the '$', the '{}' fun' type parameter must be have a valid type \
+                    Following the '$', the '{} fun' type parameter must be have a valid type \
                     parameter name starting with a letter 'a'..'z' or 'A'..'Z'",
                     n, MACRO_MODIFIER
                 );
