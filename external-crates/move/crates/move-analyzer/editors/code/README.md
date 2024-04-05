@@ -9,7 +9,7 @@ language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
 2. Open the command palette (`⇧⌘P` on macOS, or use the menu item *View > Command Palette...*) and
    type **Extensions: Install Extensions**. This will open a panel named *Extensions* in the
    sidebar of your Visual Studio Code window.
-3. In the search bar labeled *Search Extensions in Marketplace*, type **Move**. The Move extension 
+3. In the search bar labeled *Search Extensions in Marketplace*, type **Mysten**. The Move extension 
    should appear as one of the option in the list below the search bar. Click **Install**.
 4. Open any file that ends in `.move`.
 
@@ -20,6 +20,13 @@ The move-analyzer binary is responsible for the advanced features of this VSCode
 definition, type on hover). Please see [Troubleshooting](#troubleshooting) for situations when
 the pre-built move-analyzer binary is not available for your platform or if you want to use move-analyzer
 binary stored in a different location.
+
+If you want to build and test Move code using the extension, you must install the `sui` binary on
+your machine - see [here](https://docs.sui.io/guides/developer/getting-started/sui-install) for
+instructions. The extension assumes that the `sui` binary is in your system path, but you can set
+its custom location location using VSCode's settings (`⌘,` on macOS, or use the menu item *Code >
+Preferences > Settings*). Search for the `move.sui.path` user setting, set it to the new location of
+the `sui` binary, and restart VSCode.
 
 # Troubleshooting
 
@@ -47,8 +54,8 @@ If you are on Windows, the following answer assumes that your Windows user name 
 
 If your `move-analyzer` binary is in a different directory than the default one (`~/.sui/bin`
 on macOS or Linux, or `C:\Users\USER\.sui\bin` on Windows), you may have the extension look
-for the binary at this new location by using VSCode's settings (`⌘,` on macOS, or use the menu
-item *Code > Preferences > Settings*). Search for the `move.server.path` workspace setting,
+for the binary at this new location using VSCode's settings (`⌘,` on macOS, or use the menu
+item *Code > Preferences > Settings*). Search for the `move.server.path` user setting,
 set it to the new location of the `move-analyzer` binary, and restart VSCode.
 
 ## What if advanced features (e.g., go to def) do not work, particularly after re-install or upgrade
