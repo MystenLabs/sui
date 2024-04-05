@@ -157,6 +157,17 @@ impl StateSnapshotUploader {
                 )
                 .await?;
                 info!("State snapshot completed for epoch: {epoch}");
+            } else {
+                let bytes = Bytes::from_static(b"success");
+                let state_snapshot_completed_marker =
+                    db_path.child(STATE_SNAPSHOT_COMPLETED_MARKER);
+                put(
+                    &self.db_checkpoint_store.clone(),
+                    &state_snapshot_completed_marker,
+                    bytes.clone(),
+                )
+                .await?;
+                info!("State snapshot skipped for epoch: {epoch}");
             }
         }
         Ok(())
