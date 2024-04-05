@@ -2,13 +2,13 @@ error[E03019]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:3:31
   │
 3 │     public struct P(Pair<u64, _>)
-  │                               ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type
+  │                               ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
 
 error[E03019]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:4:31
   │
 4 │     public struct S { f: Pair<_, bool> }
-  │                               ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type
+  │                               ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
 
 error[E03019]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:5:21
@@ -20,7 +20,7 @@ error[E03019]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:6:21
   │
 6 │     fun foo(p: Pair<_, vector<u8>>): vector<u8> { p.1 }
-  │                     ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type
+  │                     ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
   │
   = Only 'macro' functions can use '_' in their signatures
 
@@ -28,7 +28,7 @@ error[E03019]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:7:21
   │
 7 │     fun bar(): Pair<_, _> { Pair(any(), any()) }
-  │                     ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type
+  │                     ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
   │
   = Only 'macro' functions can use '_' in their signatures
 
@@ -36,7 +36,7 @@ error[E03019]: invalid type annotation
   ┌─ tests/move_2024/naming/type_hole_invalid_location_nested.move:7:24
   │
 7 │     fun bar(): Pair<_, _> { Pair(any(), any()) }
-  │                        ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type
+  │                        ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
   │
   = Only 'macro' functions can use '_' in their signatures
 
