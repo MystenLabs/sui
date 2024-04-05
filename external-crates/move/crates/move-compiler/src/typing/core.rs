@@ -1004,8 +1004,8 @@ pub fn make_struct_field_types(
     );
     match &sdef.fields {
         N::StructFields::Native(loc) => N::StructFields::Native(*loc),
-        N::StructFields::Defined(m) => {
-            N::StructFields::Defined(m.ref_map(|_, (idx, field_ty)| {
+        N::StructFields::Defined(positional, m) => {
+            N::StructFields::Defined(*positional, m.ref_map(|_, (idx, field_ty)| {
                 (*idx, subst_tparams(tparam_subst, field_ty.clone()))
             }))
         }
@@ -1033,7 +1033,7 @@ pub fn make_struct_field_type(
             ));
             return context.error_type(loc);
         }
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
     match fields_map.get(field).cloned() {
         None => {

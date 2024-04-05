@@ -174,7 +174,7 @@ pub struct StructDefinition {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StructFields {
-    Defined(Fields<Type>),
+    Defined(/* positional */ bool, Fields<Type>),
     Native(Loc),
 }
 
@@ -933,6 +933,20 @@ impl Type_ {
             | Type_::UnresolvedError => None,
         }
     }
+
+    // Unwraps refs
+    pub fn base_type_(&self) -> Type_ {
+        match self {
+            Type_::Ref(_, inner) => inner.value.clone(),
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => self.clone(),
+        }
+    }
 }
 
 impl Var_ {
@@ -1242,7 +1256,10 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
+        if let StructFields::Defined(is_positional, fields) = fields {
+            if *is_positional {
+                w.write("#positional");
+            }
             w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;

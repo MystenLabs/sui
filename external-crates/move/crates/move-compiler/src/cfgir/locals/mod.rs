@@ -230,6 +230,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
         | C::VariantSwitch { subject: e, .. } => exp(context, e),
 
         C::Return { exp: e, .. } => {
+            };
             exp(context, e);
             let mut diags = Diagnostics::new();
             for (local, state) in context.local_states.iter() {
@@ -248,8 +249,8 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
                             let available = *available;
                             let stmt = match display_var(local.value()) {
                                 DisplayVar::Tmp => "The value is created but not used".to_owned(),
-                                DisplayVar::MatchTmp(_) => {
-                                    "The match value is created but not used".to_owned()
+                                DisplayVar::MatchTmp(name) => {
+                                    format!("The match value {name} is created but not used").to_owned()
                                 }
                                 DisplayVar::Orig(l) => {
                                     if context.signature.is_parameter(&local) {

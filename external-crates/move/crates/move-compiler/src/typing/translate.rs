@@ -663,7 +663,7 @@ fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
 
     // instantiate types and check constraints
@@ -2182,15 +2182,15 @@ fn match_pattern_(
             );
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
                 let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty);
-                let fty_out = subtype(
+                let fty_ref = rtype!(fty.clone());
+                subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
-                (idx, (fty_out, tpat))
+                (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
@@ -2223,15 +2223,15 @@ fn match_pattern_(
             );
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
                 let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty);
-                let fty_out = subtype(
+                let fty_ref = rtype!(fty.clone());
+                subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
-                (idx, (fty_out, tpat))
+                (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
@@ -2762,7 +2762,7 @@ fn add_struct_field_types<T>(
 ) -> Fields<(Type, T)> {
     let maybe_fields_ty = core::make_struct_field_types(context, loc, m, n, targs);
     let mut fields_ty = match maybe_fields_ty {
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
         N::StructFields::Native(nloc) => {
             let msg = format!(
                 "Invalid {} usage for native struct '{}::{}'. Native structs cannot be directly \

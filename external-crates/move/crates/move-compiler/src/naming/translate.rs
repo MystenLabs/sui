@@ -562,10 +562,18 @@ impl<'env> Context<'env> {
                     ),
                     _ => unreachable!(),
                 };
+                let msg = if self
+                    .env
+                    .supports_feature(self.current_package, FeatureGate::Enums)
+                {
+                    format!("Invalid {}. Expected a datatype name", verb)
+                } else {
+                    format!("Invalid {}. Expected a struct name", verb)
+                };
                 self.env.add_diag(diag!(
                     NameResolution::NamePositionMismatch,
-                    (ma.loc, format!("Invalid {}. Expected a struct name", verb)),
-                    (rtloc, msg)
+                    (ma.loc, msg),
+                    (rtloc, rtmsg)
                 ));
                 None
             }
@@ -1563,9 +1571,9 @@ fn positional_field_name(loc: Loc, idx: usize) -> Field {
 fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFields {
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
-        E::StructFields::Named(em) => N::StructFields::Defined(
-            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))),
-        ),
+        E::StructFields::Named(em) => {
+            N::StructFields::Defined(false, em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))))
+        }
         E::StructFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
@@ -1575,7 +1583,7 @@ fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFi
                     let field_name = positional_field_name(ty.loc, idx);
                     (field_name, (idx, ty))
                 });
-            N::StructFields::Defined(UniqueMap::maybe_from_iter(fields).unwrap())
+            N::StructFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
         }
     }
 }
@@ -2476,13 +2484,17 @@ fn check_constructor_form(
                 "Invalid {ty} {position}. \
                 {upcase} {ty} declarations require {kind} {position}s"
             )
-        }}
+        }};
     }
     macro_rules! posnl_note {
-        () => { format!( "{POSNL_UPCASE} {position}s take arguments using '()'" ) }
+        () => {
+            format!("{POSNL_UPCASE} {position}s take arguments using '()'")
+        };
     }
     macro_rules! named_note {
-        () => { format!( "{NAMED_UPCASE} {position}s take arguments using '{{ }}'" ) }
+        () => {
+            format!("{NAMED_UPCASE} {position}s take arguments using '{{ }}'")
+        };
     }
 
     match ty {
