@@ -193,6 +193,7 @@ enum NominalBlockType {
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 enum TypeAnnotation {
     StructField,
+    VariantField,
     ConstantSignature,
     FunctionSignature,
     MacroSignature,
@@ -557,7 +558,7 @@ impl<'env> Context<'env> {
                     ModuleType::Struct(struct_type) => {
                         let m = struct_type.original_mident;
                         let tys_opt = etys_opt.map(|etys| {
-                            let tys = types(self, etys);
+                            let tys = types(self, TypeAnnotation::Expression, etys);
                             let name_f = || format!("{}::{}", &m, &n);
                             check_type_argument_arity(self, loc, name_f, tys, struct_type.arity)
                         });
@@ -593,7 +594,9 @@ impl<'env> Context<'env> {
                 assert!(self.env.has_errors());
                 None
             }
-            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
                 let (rtloc, msg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
@@ -605,6 +608,10 @@ impl<'env> Context<'env> {
                     ResolvedType::BuiltinType(n) => {
                         (ma.loc, format!("But '{n}' is a builtin type"))
                     }
+                    ResolvedType::Hole => (
+                        ma.loc,
+                        "The '_' is a placeholder for type inference".to_owned(),
+                    ),
                     _ => unreachable!(),
                 };
                 self.env.add_diag(diag!(
@@ -624,7 +631,7 @@ impl<'env> Context<'env> {
                     ModuleType::Enum(enum_type) => {
                         let m = enum_type.original_mident;
                         let tys_opt = etys_opt.map(|etys| {
-                            let tys = types(self, etys);
+                            let tys = types(self, TypeAnnotation::Expression, etys);
                             let name_f = || format!("{}::{}", &m, &n);
                             check_type_argument_arity(self, loc, name_f, tys, enum_type.arity)
                         });
@@ -1613,13 +1620,14 @@ fn variant_def(context: &mut Context, variant: E::VariantDefinition) -> N::Varia
 fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::VariantFields {
     match efields {
         E::VariantFields::Empty => N::VariantFields::Empty,
-        E::VariantFields::Named(em) => {
-            N::VariantFields::Defined(false, em.map(|_f, (idx, t)| (idx, type_(context, t))))
-        }
+        E::VariantFields::Named(em) => N::VariantFields::Defined(
+            false,
+            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::VariantField, t))),
+        ),
         E::VariantFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
-                .map(|ty| type_(context, ty))
+                .map(|ty| type_(context, TypeAnnotation::VariantField, ty))
                 .enumerate()
                 .map(|(idx, ty)| {
                     let field_name = positional_field_name(ty.loc, idx);
@@ -1750,6 +1758,10 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                     TypeAnnotation::StructField => {
                         Some(("Struct fields", " or consider adding a new type parameter"))
                     }
+                    TypeAnnotation::VariantField => Some((
+                        "Enum variant fields",
+                        " or consider adding a new type parameter",
+                    )),
                     TypeAnnotation::ConstantSignature => Some(("Constants", "")),
                     TypeAnnotation::FunctionSignature => {
                         Some(("Functions", " or consider adding a new type parameter"))
