@@ -88,6 +88,21 @@ struct Service has key, store {
 
 All the submitted reviews are stored in `reviews` field, and the top rated reviews are stored in `top_reviews` field, which has `MultiMap<ID>` type. The [multimap module](#multimap) defines the type.
 
+```move
+fun update_top_reviews(
+    service: &mut Service,
+    review_id: ID,
+    total_score: u64
+) {
+  if (should_update_top_reviews(service, total_score)) {
+    multimap::insert<ID>(&mut service.top_reviews, review_id, total_score);
+    prune_top_reviews(service);
+  };
+}
+```
+Whenever a user casts a vote on a review, the `total_score` of the review is updated, and the `top_reviews` field can be updated by calling the `update_top_reviews` function.
+
+#### Reward distribution
 The same amount is rewarded to top reviewers, and the reward is distributed to 10 participants at most.
 The pool of `SUI` tokens that will be distributed to reviewers is stored in `reward_pool` field, and the amount of `SUI` tokens that will be awarded to each participant is configured in `reward` field.
 
@@ -101,6 +116,8 @@ struct Moderator has key {
   service_id: ID,
 }
 ```
+
+#### Authorization
 This guide follows a [capabilities pattern](../../../concepts/sui-move-concepts/patterns/capabilities.mdx) to manage authorizations.
 For example, `SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` such that only they are allowed to perform privileged operations.
 
@@ -163,6 +180,9 @@ struct Review has key, store {
 ```
 
 In addition to the content of a review, all the elements that are required to compute total score are stored in a `Review` object.
+
+A `Review` is a [shared object](../../../concepts/object-ownership/shared.mdx), so anyone can cast a vote on a review and update its `total_score` field.
+After `total_score` is updated, the [`update_top_reviews`](#servicemove) function can be called to update the `top_reviews` field of the `Service` object.
 
 ## Deployment
 
