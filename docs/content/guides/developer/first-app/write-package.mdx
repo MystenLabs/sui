@@ -78,13 +78,13 @@ module my_first_package::my_module {
     use sui::tx_context::{Self, TxContext};
 
     // Part 2: Struct definitions
-    struct Sword has key, store {
+    public struct Sword has key, store {
         id: UID,
         magic: u64,
         strength: u64,
     }
 
-    struct Forge has key, store {
+    public struct Forge has key, store {
         id: UID,
         swords_created: u64,
     }
