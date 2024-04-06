@@ -291,9 +291,9 @@ export class EnokiFlow {
 		return proof;
 	}
 
-	async getKeypair() {
+	async getKeypair({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
 		// Get the proof, so that we ensure it exists in state:
-		await this.getProof();
+		await this.getProof({ network });
 
 		const zkp = await this.getSession();
 
@@ -350,15 +350,17 @@ export class EnokiFlow {
 	}
 
 	async executeTransactionBlock({
+		network,
 		bytes,
 		digest,
 		client,
 	}: {
+		network?: 'mainnet' | 'testnet';
 		bytes: string;
 		digest: string;
 		client: SuiClient;
 	}) {
-		const keypair = await this.getKeypair();
+		const keypair = await this.getKeypair({ network });
 		const userSignature = await keypair.signTransactionBlock(fromB64(bytes));
 
 		await this.#enokiClient.executeSponsoredTransactionBlock({
@@ -386,6 +388,6 @@ export class EnokiFlow {
 			transactionBlock,
 			client,
 		});
-		return await this.executeTransactionBlock({ bytes, digest, client });
+		return await this.executeTransactionBlock({ network, bytes, digest, client });
 	}
 }
