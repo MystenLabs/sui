@@ -8,10 +8,7 @@
 
 use crate::{
     diag,
-    diagnostics::{
-        codes::{Category, Severity, Syntax},
-        Diagnostic, Diagnostics,
-    },
+    diagnostics::{Diagnostic, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::*,
@@ -75,19 +72,6 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     }
 
     fn add_diag(&mut self, diag: Diagnostic) {
-        if diag.info().severity() > Severity::Warning
-            && diag.info().category() == Category::Syntax as u8
-            && diag.info().code() == Syntax::UnexpectedToken as u8
-            && diag.primary_msg() == format!("Unexpected {EOF_ERROR_STR}")
-            && self
-                .env
-                .has_diags_at_or_above_severity(Severity::NonblockingError)
-        {
-            // do not report the unexpected EOF token if other (parsing errors) are already present
-            // as it is most likely going to be redundant and confusing to the programmer
-            return;
-        }
-
         self.env.add_diag(diag);
     }
 }
