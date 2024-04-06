@@ -24,7 +24,7 @@ pub fn generate_pkce_code() -> PKCECode {
         .collect();
     let sha256_digest = Sha256::digest(code_verifier.as_bytes());
 
-    let code_challenge = URL_SAFE_NO_PAD.encode(&sha256_digest);
+    let code_challenge = URL_SAFE_NO_PAD.encode(sha256_digest);
 
     PKCECode {
         code_verifier,
