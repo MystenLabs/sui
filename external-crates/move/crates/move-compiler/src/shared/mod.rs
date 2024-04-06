@@ -975,7 +975,7 @@ macro_rules! format_oxford_list {
 pub(crate) use format_oxford_list;
 
 //**************************************************************************************************
-// Format a comma list correctly for error reporting and other messages.
+// Debug Printing
 //**************************************************************************************************
 
 /// Debug formatter based on provided `fmt` option:
