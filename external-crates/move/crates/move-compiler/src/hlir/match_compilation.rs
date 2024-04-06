@@ -10,7 +10,7 @@ use crate::{
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
     shared::{
         ast_debug::{AstDebug, AstWriter},
-        format_oxford_list,
+        debug_print, format_oxford_list,
         unique_map::UniqueMap,
     },
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
@@ -526,7 +526,6 @@ fn combine_pattern_fields(
     fn combine_recur(vec: &mut VVFields) -> Vec<VFields> {
         if let Some((f, (ndx, (ty, pats)))) = vec.pop() {
             let rec_fields = combine_recur(vec);
-            // println!("rec fields: {:?}", rec_fields);
             let mut output = vec![];
             for entry in rec_fields {
                 for pat in pats.clone() {
@@ -535,7 +534,6 @@ fn combine_pattern_fields(
                     output.push(entry);
                 }
             }
-            // println!("output: {:?}", output);
             output
         } else {
             // Base case: a single match of no fields. We must have at least one, or else we would
@@ -544,11 +542,8 @@ fn combine_pattern_fields(
         }
     }
 
-    // println!("init fields: {:?}", fields);
     let mut vvfields: VVFields = fields.into_iter().collect::<Vec<_>>();
-    // println!("vv fields: {:?}", vvfields);
     let output_vec = combine_recur(&mut vvfields);
-    // println!("output: {:?}", output_vec);
     output_vec
         .into_iter()
         .map(|vfields| UniqueMap::maybe_from_iter(vfields.into_iter()).unwrap())
@@ -676,14 +671,12 @@ pub fn compile_match(
     };
 
     while let Some((cur_id, init_fringe, matrix)) = work_queue.pop() {
-        // println!("---\nwork queue entry: {}", cur_id);
-        // println!("fringe:");
-        // for elem in &init_fringe {
-        //     print!("  ");
-        //     elem.print_verbose();
-        // }
-        // println!("matrix:");
-        // matrix.print_verbose();
+        debug_print!(
+            context.debug.match_work_queue,
+            ("work queue entry" => cur_id; fmt),
+            (lines "fringe" => &init_fringe; sdbg),
+            ("matrix" => matrix; verbose)
+        );
         let redefined: Option<WorkResult> =
             match compile_match_head(context, init_fringe.clone(), matrix) {
                 MatchStep::Leaf(leaf) => compilation_results.insert(cur_id, WorkResult::Leaf(leaf)),
@@ -769,8 +762,10 @@ fn compile_match_head(
     mut fringe: VecDeque<FringeEntry>,
     mut matrix: PatternMatrix,
 ) -> MatchStep {
-    // println!("------\ncompilning with fringe:");
-    // println!("{:#?}", fringe);
+    debug_print!(
+        context.debug.match_specialization,
+        ("-----\ncompiling with fringe dueue entry" => fringe; dbg)
+    );
     if matrix.is_empty() {
         MatchStep::Failure
     } else if let Some(leaf) = matrix.wild_arm_opt(&fringe) {
@@ -785,12 +780,13 @@ fn compile_match_head(
         let mut arms = BTreeMap::new();
         for lit in lits {
             let lit_loc = lit.loc;
-            // println!("specializing to {:?}", lit);
+            debug_print!(context.debug.match_specialization, ("specializing to" => lit ; fmt));
             let (mut new_binders, inner_matrix) = matrix.specialize_literal(&lit);
-            // println!("binders: {:#?}", new_binders);
+            debug_print!(
+                context.debug.match_specialization,
+                ("binders" => &new_binders; dbg), ("specialized" => inner_matrix)
+            );
             subject_binders.append(&mut new_binders);
-            // println!("specialized:");
-            // inner_matrix.print();
             ice_assert!(
                 context.env,
                 arms.insert(lit, inner_matrix).is_none(),
@@ -799,7 +795,7 @@ fn compile_match_head(
             );
         }
         let (mut new_binders, default) = matrix.specialize_default();
-        // println!("default binders: {:#?}", new_binders);
+        debug_print!(context.debug.match_specialization, ("default binders" => &new_binders; dbg));
         subject_binders.append(&mut new_binders);
         MatchStep::LiteralSwitch {
             subject,
@@ -813,12 +809,11 @@ fn compile_match_head(
             .pop_front()
             .expect("ICE empty fringe in match compilation");
         let mut subject_binders = vec![];
-        // println!("------\nsubject:");
-        // subject.print();
-        // println!("--\ncompile match head:");
-        // subject.print();
-        // println!("--\nmatrix;");
-        // matrix.print();
+        debug_print!(
+            context.debug.match_specialization,
+            ("subject" => subject),
+            ("matrix" => matrix)
+        );
 
         let (mident, datatype_name) = subject
             .ty
@@ -837,9 +832,8 @@ fn compile_match_head(
         }
 
         let tyargs = subject.ty.value.type_arguments().unwrap().clone();
-        // treat it as a head constructor
-        // assert!(!ctors.is_empty());
 
+        // treat it as a head constructor
         let mut unmatched_variants = context
             .enum_variants(&mident, &datatype_name)
             .into_iter()
@@ -860,12 +854,13 @@ fn compile_match_head(
                 .iter()
                 .map(|(_, _, ty)| ty)
                 .collect::<Vec<_>>();
-            // println!("specializing to {:?}", ctor);
+            debug_print!(context.debug.match_specialization, ("specializing to" => ctor; dbg));
             let (mut new_binders, inner_matrix) = matrix.specialize(context, &ctor, bind_tys);
-            // println!("binders: {:#?}", new_binders);
+            debug_print!(
+                context.debug.match_specialization,
+                ("binders" => &new_binders; dbg), ("specialized" => inner_matrix)
+            );
             subject_binders.append(&mut new_binders);
-            // println!("specialized:");
-            // inner_matrix.print();
             ice_assert!(
                 context.env,
                 arms.insert(ctor, (fringe_binders, inner_fringe, inner_matrix))
@@ -1717,11 +1712,10 @@ fn find_counterexample(
         mident: ModuleIdent,
         datatype_name: DatatypeName,
     ) -> Option<Vec<CounterExample>> {
-        // println!("matrix types:");
-        // for ty in &matrix.tys {
-        //     ty.print_verbose();
-        // }
-
+        debug_print!(
+            context.debug.match_counterexample,
+            (lines "matrix types" => &matrix.tys; verbose)
+        );
         // TODO: if we ever want to match against structs, this needs to behave differently
         if context.is_struct(&mident, &datatype_name) {
             let (_, default) = matrix.specialize_default();
@@ -1829,8 +1823,7 @@ fn find_counterexample(
         arity: u32,
         ndx: &mut u32,
     ) -> Option<Vec<CounterExample>> {
-        // println!("checking matrix");
-        // matrix.print_verbose();
+        debug_print!(context.debug.match_counterexample, ("checking matrix" => matrix; verbose));
         let result = if matrix.patterns_empty() {
             None
         } else if let Some(ty) = matrix.tys.first() {
@@ -1863,21 +1856,17 @@ fn find_counterexample(
             assert!(matrix.is_empty());
             Some(make_wildcards(arity as usize))
         };
-        // print!("result:");
-        // match result {
-        //     Some(ref n) => println!("{:#?}", n),
-        //     None => println!("NONE"),
-        // }
-        // println!();
+        debug_print!(context.debug.match_counterexample, (opt "result" => &result; sdbg));
         result
     }
 
     let mut ndx = 0;
     if let Some(mut counterexample) = find_counterexample(context, matrix, 1, &mut ndx) {
-        // println!("counterexamples: {}", counterexample.len());
-        // for ce in &counterexample {
-        //     println!("{}", ce);
-        // }
+        debug_print!(
+            context.debug.match_counterexample,
+            ("counterexamples #" => counterexample.len(); fmt),
+            (lines "counterexamples" => &counterexample; fmt)
+        );
         assert!(counterexample.len() == 1);
         let counterexample = counterexample.remove(0);
         let msg = format!("Pattern '{}' not covered", counterexample);
