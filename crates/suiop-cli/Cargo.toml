@@ -24,6 +24,7 @@ base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
 colored.workspace = true
+dirs.workspace = true
 docker-api.workspace = true
 field_names.workspace = true
 include_dir.workspace = true
