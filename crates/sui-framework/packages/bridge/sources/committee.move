@@ -402,9 +402,22 @@ module bridge::committee {
         assert_eq(5000, member0.voting_power);
         assert_eq(5000, member1.voting_power);
 
+        let members = committee_members(&committee);
+        assert!(members.size() == 2, 0); // must succeed
+
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ENotSystemAddress)]
+    fun test_init_non_system_sender() {
+        let mut scenario = test_scenario::begin(@0x1);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let _committee = create(ctx);
+
+        abort 0
     }
 
     #[test]
@@ -577,6 +590,61 @@ module bridge::committee {
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = ECommitteeAlreadyInitiated)]
+    fun test_register_already_initialized() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+
+        test_scenario::next_tx(&mut scenario, @0x0);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
+        assert!(vec_map::is_empty(&committee.members), 0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
+        try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
+
+        test_scenario::next_tx(&mut scenario, @0x0);
+        assert!(vec_map::size(&committee.members) == 2, 1000); // must succeed
+        // this fails because committee is already initiated
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+
+        abort 0
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EInvalidPubkeyLength)]
+    fun test_register_bad_pubkey() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+
+        test_scenario::next_tx(&mut scenario, @0x0);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
+        // this fails with invalid public key
+        register(&mut committee, &mut system_state, b"029bef8", b"", &tx(@0xA, 0));
+
+        abort 0
+    }
+
 
     #[test_only]
     fun tx(sender: address, hint: u64): TxContext {

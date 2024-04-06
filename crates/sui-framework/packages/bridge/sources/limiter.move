@@ -541,38 +541,66 @@ module bridge::limiter {
         // default routes, default notion values
         let mut limiter = new();
         assert_eq(
-            *vec_map::get(
-                &limiter.transfer_limits,
+            limiter.transfer_limits[
                 &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
-            ),
+            ],
             5_000_000 * USD_VALUE_MULTIPLIER,
         );
 
         assert_eq(
-            *vec_map::get(
-                &limiter.transfer_limits,
+            limiter.transfer_limits[
                 &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
-            ),
+            ],
             MAX_TRANSFER_LIMIT,
         );
 
         // shrink testnet limit
         update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()), 1_000 * USD_VALUE_MULTIPLIER);
         assert_eq(
-            *vec_map::get(
-                &limiter.transfer_limits,
+            limiter.transfer_limits[
                 &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
-            ),
+            ],
             1_000 * USD_VALUE_MULTIPLIER,
         );
         // mainnet route does not change
         assert_eq(
-            *vec_map::get(
-                &limiter.transfer_limits,
+            limiter.transfer_limits[
                 &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
-            ),
+            ],
             5_000_000 * USD_VALUE_MULTIPLIER,
         );
+        destroy(limiter);
+    }
+
+    #[test]
+    fun test_update_route_limit_all_paths() {
+        let mut limiter = new();
+        // pick an existing route limit
+        assert_eq(
+            limiter.transfer_limits[
+                &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
+            ],
+            MAX_TRANSFER_LIMIT,
+        );
+        let new_limit = 1_000 * USD_VALUE_MULTIPLIER;
+        update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()), new_limit);
+        assert_eq(
+            limiter.transfer_limits[
+                &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
+            ],
+            new_limit,
+        );
+        
+        // pick a new route limit
+        update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia()), new_limit);
+        assert_eq(
+            limiter.transfer_limits[
+                &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
+            ],
+            new_limit,
+        );
+        
+
         destroy(limiter);
     }
 
