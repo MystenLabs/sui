@@ -19,12 +19,12 @@ pub struct IAMArgs {
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum IAMAction {
     #[command(name = "whoami", aliases=["w"])]
-    WhoAMI {},
+    WhoAmI {},
 }
 
 pub async fn iam_cmd(args: &IAMArgs) -> Result<()> {
     match &args.action {
-        IAMAction::WhoAMI {} => {
+        IAMAction::WhoAmI {} => {
             let token_resp = get_oauth_token().await;
             match token_resp {
                 Ok(token) => {

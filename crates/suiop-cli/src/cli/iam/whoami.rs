@@ -17,8 +17,8 @@ pub async fn get_identity(base_url: &str, token: &str) -> Result<String> {
     body.insert("token", token);
 
     let req = client.post(full_url).json(&body);
-
     debug!("req: {:?}", req);
+
     let resp = req.send().await?;
     debug!("resp: {:?}", resp);
 
