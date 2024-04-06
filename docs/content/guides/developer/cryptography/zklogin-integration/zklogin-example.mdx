@@ -7,7 +7,7 @@ The Sui community created an example to facilitate a comprehensive understanding
 
 - [Sui zkLogin Example](https://sui-zklogin.vercel.app/)
 
-![ZKLogin Overview](./images/overview.png "ZKLogin Overview")
+![ZKLogin Overview](images/overview.png "ZKLogin Overview")
 This example breaks down the complete process of Sui zkLogin into seven steps, as follows:
 
 1. Generate ephemeral key pair
@@ -22,7 +22,7 @@ Each step includes corresponding code snippets, providing instructions on how to
 
 ## Operating environment
 
-The example runs in Sui Devnet. All data the user generates is stored locally on the client-side (browser). The acquisition of the zero-knowledge proof (ZK proof) is done through a call to the [Mysten Labs-maintained proving service](../zklogin.mdx#call-the-mysten-labs-maintained-proving-service). Therefore, running the example does not require an additional deployed backend server (or a Docker container).
+The example runs in Sui Devnet. All data the user generates is stored locally on the client-side (browser). The acquisition of the zero-knowledge proof (ZK proof) is done through a call to the [Mysten Labs-maintained proving service](../zklogin-integration.mdx#call-the-mysten-labs-maintained-proving-service). Therefore, running the example does not require an additional deployed backend server (or a Docker container).
 
 ## Storage locations for key data
 
@@ -35,7 +35,7 @@ The following table lists the storage location for key data the example uses:
 | User salt | `window.localStorage` | 
 | Max epoch | `window.localStorage` | 
 
-Because the user salt is stored long-term in the browser's `localStorage`, as long as the `localStorage` is not cleared manually, you can use the same JWT (in this example, logging in with the same Google account) to access the corresponding zkLogin address generated from the current salt value at any time.
+The user salt is stored long-term in the browser's `localStorage`. Consequently, provided the `localStorage` is not cleared manually, you can use the same JWT (in this example, logging in with the same Google account) to access the corresponding zkLogin address generated from the current salt value at any time.
 
 :::caution
 
@@ -54,4 +54,8 @@ Changing browsers or devices results in the inability to access previously gener
 
 - Any suggestions are welcome on the project's GitHub repo through raised issues, and of course, pull requests are highly appreciated.
 
-- For more FAQs about zkLogin, you can check [zkLogin FAQ](../zklogin.mdx#faq).
+## Related links
+
+- [zkLogin Integration Guide](../zklogin-integration.mdx)
+- [zkLogin FAQ](../../../../concepts/cryptography/zklogin.mdx#faq)
+- [Configure OpenID Providers](./developer-account.mdx)
