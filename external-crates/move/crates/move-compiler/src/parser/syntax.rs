@@ -552,19 +552,25 @@ fn parse_name_access_chain<'a, F: Fn() -> &'a str>(
     item_description: F,
 ) -> Result<NameAccessChain, Box<Diagnostic>> {
     ok_with_loc!(context, {
-        let global_name = if context.tokens.peek() == Tok::ColonColon {
-            context.tokens.advance()?;
-            true
-        } else {
-            false
-        };
         parse_name_access_chain_(
             context,
             macros_allowed,
             tyargs_allowed,
-            global_name,
+            false,
             item_description,
         )?
+    })
+}
+
+// Parse a module access allowing whitespace for type arguments.
+// Implicitly allows parsing of type arguments.
+fn parse_name_access_chain_with_tyarg_whitespace<'a, F: Fn() -> &'a str>(
+    context: &mut Context,
+    macros_allowed: bool,
+    item_description: F,
+) -> Result<NameAccessChain, Box<Diagnostic>> {
+    ok_with_loc!(context, {
+        parse_name_access_chain_(context, macros_allowed, true, true, item_description)?
     })
 }
 
@@ -573,13 +579,22 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
     context: &mut Context,
     macros_allowed: bool,
     tyargs_allowed: bool,
-    global_name: bool,
+    tyargs_whitespace_allowed: bool,
     item_description: F,
 ) -> Result<NameAccessChain_, Box<Diagnostic>> {
     use LeadingNameAccess_ as LN;
+
+    let global_name = if context.tokens.peek() == Tok::ColonColon {
+        context.tokens.advance()?;
+        true
+    } else {
+        false
+    };
+
     let ln = parse_leading_name_access_(context, global_name, &item_description)?;
 
-    let (mut is_macro, mut tys) = parse_macro_opt_and_tyargs_opt(context, ln.loc)?;
+    let (mut is_macro, mut tys) =
+        parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, ln.loc)?;
     if let Some(loc) = &is_macro {
         if !macros_allowed {
             let msg = format!(
@@ -660,7 +675,8 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             " after an address in a module access chain",
         )?;
         let name = parse_identifier(context)?;
-        let (mut is_macro, mut tys) = parse_macro_opt_and_tyargs_opt(context, name.loc)?;
+        let (mut is_macro, mut tys) =
+            parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc)?;
         if let Some(loc) = &is_macro {
             if !macros_allowed {
                 context.env.add_diag(diag!(
@@ -695,6 +711,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
 
 fn parse_macro_opt_and_tyargs_opt(
     context: &mut Context,
+    tyargs_whitespace_allowed: bool,
     end_loc: Loc,
 ) -> Result<(Option<Loc>, Option<Spanned<Vec<Type>>>), Box<Diagnostic>> {
     let mut is_macro = None;
@@ -711,7 +728,9 @@ fn parse_macro_opt_and_tyargs_opt(
     //   treat it as the start of a list of type arguments.
     // Otherwise, assume that the '<' is a boolean operator.
     let _start_loc = context.tokens.start_loc();
-    if context.tokens.peek() == Tok::Less && (context.at_end(end_loc) || is_macro.is_some()) {
+    if context.tokens.peek() == Tok::Less
+        && (context.at_end(end_loc) || is_macro.is_some() || tyargs_whitespace_allowed)
+    {
         let start_loc = context.tokens.start_loc();
         let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
         let tys_ = parse_optional_type_args(context)
@@ -1076,12 +1095,9 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     // The item description specified here should include the special case above for
     // variable names, because if the current context cannot be parsed as a struct name
     // it is possible that the user intention was to use a variable name.
-    let ty = parse_name_access_chain(
-        context,
-        /* macros */ false,
-        /* tyargs */ true,
-        || "a variable or struct name",
-    )?;
+    let ty = parse_name_access_chain_with_tyarg_whitespace(context, /* macros */ false, || {
+        "a variable or struct name"
+    })?;
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
         context.env.check_feature(
@@ -2584,7 +2600,7 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
 
 fn parse_type_(
     context: &mut Context,
-    _whitespace_sensitive_ty_args: bool,
+    whitespace_sensitive_ty_args: bool,
 ) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let t = match context.tokens.peek() {
@@ -2643,12 +2659,20 @@ fn parse_type_(
             ));
         }
         _ => {
-            let tn = parse_name_access_chain(
-                context,
-                /* macros */ false,
-                /* tyargs */ true,
-                || "a type name",
-            )?;
+            let tn = if whitespace_sensitive_ty_args {
+                parse_name_access_chain(
+                    context,
+                    /* macros */ false,
+                    /* tyargs */ true,
+                    || "a type name",
+                )?
+            } else {
+                parse_name_access_chain_with_tyarg_whitespace(
+                    context,
+                    /* macros */ false,
+                    || "a type name",
+                )?
+            };
             Type_::Apply(Box::new(tn))
         }
     };
