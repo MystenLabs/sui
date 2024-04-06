@@ -77,7 +77,7 @@ Mysten Labs maintains a backend service hosted at `https://source.mystenlabs.com
 
 **Production Usage and Best Practices Tips*
 
-On occasion `https://source.mystenlabs.com` may return a `502` response or experience downtime. When using `https://source.mystenlabs` to determine source authenticity, it is recommended interface with the service in such a way that it can robustly handle a non-`200` response or downtime. For example, when a non-`200` response is received, a tab showing verified source may temporarily show a message like `"Not available at this time"` when used in an explorer. Once the source verification resumes, requests will continue to allow clients to show source as normal.
+On occasion `https://source.mystenlabs.com` may return a `502` response or experience downtime. When using `https://source.mystenlabs.com` to determine source authenticity, it is recommended interface with the service in such a way that it can robustly handle a non-`200` response or downtime. For example, when a non-`200` response is received, a tab showing verified source may temporarily show a message like `"Not available at this time"` when used in an explorer. Once the source verification resumes, requests will continue to allow clients to show source as normal.
 
 The source service may experience transient downtime for at least the following reasons:
 
