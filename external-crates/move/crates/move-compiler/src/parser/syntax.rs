@@ -1492,7 +1492,6 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     let mut seq: Vec<SequenceItem> = vec![];
     let mut last_semicolon_loc = None;
     let mut eopt = None;
-    let mut parsing_error = false;
     while context.tokens.peek() != Tok::RBrace {
         // this helps when a sequence contains a comma-separated list without the ending token (in
         // which case the parser would be likely fast-forwarded to EOF)
@@ -1531,7 +1530,9 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                 }
             }
             Err(diag) => {
-                parsing_error = true;
+                let err_exp = sp(context.tokens.current_token_loc(), Exp_::UnresolvedError);
+                let err_seq_item = SequenceItem_::Seq(Box::new(err_exp));
+                seq.push(sp(context.tokens.current_token_loc(), err_seq_item));
                 context.stop_set.remove(Tok::Semicolon);
                 advance_separated_items_error(
                     context,
@@ -1572,16 +1573,6 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     // sequence and proceed with parsing top-level definition (assume the second scenario).
     if !context.at_stop_set() || context.tokens.at(Tok::RBrace) {
         context.advance(); // consume (the RBrace)
-    }
-    if parsing_error && seq.is_empty() && eopt.is_none() {
-        // If there was a sequence item to parse and its parsing failed, return an error in the
-        // sequence rather than an empty sequence. We have to put error into `eopt`, otherwise later
-        // translation passes will make this into a sequence with only one sequence item having an
-        // error rather which can still trigger typing errors on incorrect returned values.
-        eopt = Some(sp(
-            context.tokens.current_token_loc(),
-            Exp_::UnresolvedError,
-        ));
     }
     Ok((uses, seq, last_semicolon_loc, Box::new(eopt)))
 }
