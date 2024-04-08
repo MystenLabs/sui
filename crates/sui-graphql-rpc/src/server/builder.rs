@@ -10,7 +10,6 @@ use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
-use crate::server::background_tasks::{epoch_boundary_listener, update_watermark};
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -62,14 +61,13 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use super::background_tasks::{ServiceWatermark, WatchSender};
+use super::background_tasks::{ServiceWatermark, ServiceWatermarkTask};
 
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     /// The following fields are internally used for background tasks
-    watermark: ServiceWatermark,
+    watermark: ServiceWatermarkTask,
     state: AppState,
-    db_reader: Db,
 }
 
 impl Server {
@@ -84,30 +82,10 @@ impl Server {
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
         let watermark_task = {
-            let metrics = self.state.metrics.clone();
-            let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
-            let cancellation_token = self.state.cancellation_token.clone();
-            let db_reader = self.db_reader.clone();
             let rx_clone = rx.clone();
             info!("Starting watermark update task");
             spawn_monitored_task!(async move {
-                update_watermark(
-                    &db_reader,
-                    self.watermark,
-                    metrics,
-                    tokio::time::Duration::from_millis(sleep_ms),
-                    cancellation_token,
-                    WatchSender { tx, rx: rx_clone },
-                )
-                .await;
-            })
-        };
-
-        // A handle for tasks that are dependent on the epoch boundary signal.
-        let epoch_boundary_task_listener = {
-            let cancellation_token = self.state.cancellation_token.clone();
-            spawn_monitored_task!(async move {
-                epoch_boundary_listener(cancellation_token, rx).await;
+                self.watermark.run(tx, rx_clone).await;
             })
         };
 
@@ -127,7 +105,7 @@ impl Server {
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, epoch_boundary_task_listener, server_task);
+        let _ = join!(watermark_task, server_task);
 
         Ok(())
     }
@@ -312,15 +290,19 @@ impl ServerBuilder {
         let state = self.state.clone();
         let (address, schema, db_reader, router) = self.build_components();
 
-        // Initialize the watermark for the background task to update.
-        let watermark = ServiceWatermark {
-            checkpoint: Arc::new(AtomicU64::new(0)),
-            epoch: Arc::new(AtomicU64::new(0)),
-        };
+        // Initialize the watermark background task struct..
+        let watermark = ServiceWatermarkTask::new(
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(AtomicU64::new(0)),
+            db_reader.clone(),
+            state.metrics.clone(),
+            std::time::Duration::from_millis(state.service.background_tasks.watermark_update_ms),
+            state.cancellation_token.clone(),
+        );
 
         let app = router
             .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(watermark.clone()))
+            .layer(axum::extract::Extension(watermark.get_watermark()))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -332,7 +314,6 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
             watermark,
             state,
-            db_reader,
         })
     }
 
