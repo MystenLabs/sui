@@ -145,7 +145,12 @@ const ATTR_STARTS: &[Tok] = &[Tok::Identifier, Tok::For];
 
 pub static ATTR_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(ATTR_STARTS));
 
-const FIELD_BINDING_STARTS: &[Tok] = &[Tok::Mut, Tok::Identifier, Tok::RestrictedIdentifier];
+const FIELD_BINDING_STARTS: &[Tok] = &[
+    Tok::Mut,
+    Tok::Identifier,
+    Tok::RestrictedIdentifier,
+    Tok::PeriodPeriod,
+];
 
 pub static FIELD_BINDING_START_SET: Lazy<TokenSet> =
     Lazy::new(|| TokenSet::from(FIELD_BINDING_STARTS));

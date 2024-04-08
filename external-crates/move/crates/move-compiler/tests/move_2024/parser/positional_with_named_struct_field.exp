@@ -3,3 +3,4 @@ error[E01002]: unexpected token
   │
 3 │     public struct Foo(f: u64) has copy, drop;
   │                       ^ Cannot use named fields in a positional definition
+

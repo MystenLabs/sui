@@ -1,10 +1,10 @@
 module a::m {
 
-    fun t(t: u64, match: u64): bool {
+    fun t1(t: u64, match: u64): bool {
         t == match
     }
 
-    fun t(t: u64, match: u64): bool {
+    fun t2(t: u64, match: u64): bool {
         if (t == match) { true } else { false }
     }
 

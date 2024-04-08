@@ -23,7 +23,7 @@ module 0x42::m {
     }
 
     fun t1(): u64 {
-        let o: Option<u64> = Option::None;
+        let mut o: Option<u64> = Option::None;
         match (&mut o) {
             Option::Some(n) if n == &5 => *n,
             Option::None => 3,

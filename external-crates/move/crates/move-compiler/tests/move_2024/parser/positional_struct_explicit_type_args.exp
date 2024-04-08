@@ -24,7 +24,7 @@ error[E04007]: incompatible types
    │
 16 │         let _ = Foo <u64>(0);
    │                 --------^ - Found: integer. It is not compatible with the other type.
-   │                 │       │
+   │                 │       │  
    │                 │       Incompatible arguments to '>'
    │                 Found: 'bool'. It is not compatible with the other type.
 
@@ -33,5 +33,6 @@ error[E04003]: built-in operation not supported
    │
 16 │         let _ = Foo <u64>(0);
    │                 --------  ^ Invalid argument to '>'
-   │                 │
+   │                 │          
    │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
