@@ -5,12 +5,12 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.11
-    image: mysten/sui-node:mainnet-v1.19.1
+    image: mysten/sui-node:mainnet
     container_name: validator1
     hostname: validator1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -32,12 +32,12 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.12
-    image: mysten/sui-node:mainnet-v1.19.1
+    image: mysten/sui-node:mainnet
     container_name: validator2
     hostname: validator2
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -59,12 +59,12 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.13
-    image: mysten/sui-node:mainnet-v1.19.1
+    image: mysten/sui-node:mainnet
     container_name: validator3
     hostname: validator3
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -86,12 +86,12 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.14
-    image: mysten/sui-node:mainnet-v1.19.1
+    image: mysten/sui-node:mainnet
     container_name: validator4
     hostname: validator4
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -113,12 +113,12 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.15
-    image: mysten/sui-node:mainnet-v1.19.1
+    image: mysten/sui-node:mainnet
     hostname: fullnode1
     container_name: fullnode1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
