@@ -10,11 +10,8 @@
 /// can mint new Coins up to a pre-defined per epoch limit. This can be used e.g.
 /// to create a faucet.
 module fungible_tokens::treasury_lock {
-    use sui::object::{Self, UID, ID};
     use sui::coin::{Self, TreasuryCap};
     use sui::balance::{Balance};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
     use sui::vec_set::{Self, VecSet};
 
     /// This mint capability instance is banned.
@@ -168,12 +165,9 @@ module fungible_tokens::treasury_lock {
 
 #[test_only]
 module fungible_tokens::treasury_lock_tests {
-    use std::option;
     use sui::test_scenario::{Self, Scenario};
     use sui::balance::{Self, Balance};
-    use sui::transfer;
     use sui::coin;
-    use sui::object::{Self};
     use sui::test_utils;
     use fungible_tokens::treasury_lock::{Self, TreasuryLock, LockAdminCap, MintCap, create_and_transfer_mint_cap, new_lock, mint_balance};
 

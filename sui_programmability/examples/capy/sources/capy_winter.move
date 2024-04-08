@@ -12,15 +12,11 @@
 module capy::capy_winter {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID, UID};
     use sui::balance::{Self, Balance};
-    use sui::transfer;
-    use sui::tx_context::{TxContext, sender};
     use std::hash::sha3_256 as hash;
     use sui::dynamic_field as df;
     use sui::url::{Self, Url};
     use sui::event::emit;
-    use std::vector as vec;
     use sui::pay;
     use sui::bcs;
 
@@ -111,14 +107,14 @@ module capy::capy_winter {
         let link = get_link_url(&id, `type`);
 
         emit(GiftPurchased { id: object::uid_to_inner(&id), `type` });
-        transfer::transfer(GiftBox { id, `type`, url, link }, sender(ctx));
-        transfer::public_transfer(remainder, sender(ctx))
+        transfer::transfer(GiftBox { id, `type`, url, link }, ctx.sender());
+        transfer::public_transfer(remainder, ctx.sender())
     }
 
     /// Send a GiftBox to a friend or a stranger through CapyPost.
     /// Kindness and generosity will be rewarded!
     entry fun send_gift(post: &mut CapyPost, box: GiftBox, receiver: address, ctx: &mut TxContext) {
-        let sender = sender(ctx);
+        let sender = ctx.sender();
 
         // Can't send gifts to yourself...
         assert!(receiver != sender, 0);
@@ -130,7 +126,7 @@ module capy::capy_winter {
             if (sent == 1) {
                 let id = object::new(ctx);
                 emit(PremiumTicketReceived { id: object::uid_to_inner(&id) });
-                transfer::transfer(PremiumTicket { id }, sender(ctx));
+                transfer::transfer(PremiumTicket { id }, ctx.sender());
                 0
             } else { sent + 1 }
         } else { 0 };
@@ -149,7 +145,7 @@ module capy::capy_winter {
         let attribute = get_attribute(&sequence);
 
         emit(GiftOpened { id: object::uid_to_inner(&id) });
-        transfer::public_transfer(capy::create_capy(reg, sequence, vector[ attribute ], ctx), sender(ctx));
+        transfer::public_transfer(capy::create_capy(reg, sequence, vector[ attribute ], ctx), ctx.sender());
         object::delete(id)
     }
 
@@ -163,8 +159,8 @@ module capy::capy_winter {
         let id = object::new(ctx);
 
         emit(PremiumPurchased { id: object::uid_to_inner(&id) });
-        transfer::transfer(PremiumBox { id, url: get_img_url(99) }, sender(ctx));
-        transfer::public_transfer(remainder, sender(ctx));
+        transfer::transfer(PremiumBox { id, url: get_img_url(99) }, ctx.sender());
+        transfer::public_transfer(remainder, ctx.sender());
         object::delete(ticket_id)
     }
 
@@ -175,7 +171,7 @@ module capy::capy_winter {
         let premium = capy::create_attribute(ATTRIBUTE_NAME, PREMIUM_ATTRIBUTE);
 
         emit(PremiumOpened { id: object::uid_to_inner(&id) });
-        transfer::public_transfer(capy::create_capy(reg, sequence, vector[ premium ], ctx), sender(ctx));
+        transfer::public_transfer(capy::create_capy(reg, sequence, vector[ premium ], ctx), ctx.sender());
         object::delete(id)
     }
 
@@ -184,7 +180,7 @@ module capy::capy_winter {
     fun merge_and_split(
         mut coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext
     ): (Coin<SUI>, Coin<SUI>) {
-        let mut base = vec::pop_back(&mut coins);
+        let mut base = coins.pop_back();
         pay::join_vec(&mut base, coins);
         assert!(coin::value(&base) > amount, 0);
         (coin::split(&mut base, amount, ctx), base)
@@ -198,8 +194,8 @@ module capy::capy_winter {
     fun get_attribute(seed: &vector<u8>): Attribute {
         let attr_values = ATTRIBUTE_VALUES;
         let mut bcs_bytes = bcs::new(hash(*seed));
-        let attr_idx = bcs::peel_u64(&mut bcs_bytes) % vec::length(&attr_values); // get the index of the attribute
-        let attr_value = *vec::borrow(&attr_values, attr_idx);
+        let attr_idx = bcs::peel_u64(&mut bcs_bytes) % attr_values.length(); // get the index of the attribute
+        let attr_value = attr_values[attr_idx];
 
         capy::create_attribute(ATTRIBUTE_NAME, attr_value)
     }
@@ -209,12 +205,12 @@ module capy::capy_winter {
     fun get_img_url(`type`: u8): Url {
         let mut res = b"http://api.capy.art/box_";
         if (`type` == 99) {
-            vec::append(&mut res, b"premium");
+            res.append(b"premium");
         } else {
-            vec::push_back(&mut res, ASCII_OFFSET + `type`);
+            res.push_back(ASCII_OFFSET + `type`);
         };
 
-        vec::append(&mut res, b".svg");
+        res.append(b".svg");
 
         url::new_unsafe_from_bytes(res)
     }
@@ -222,9 +218,9 @@ module capy::capy_winter {
     /// Get a link to the gift on the capy.art.
     fun get_link_url(id: &UID, `type`: u8): Url {
         let mut res = b"http://capy.art/gifts/";
-        vec::append(&mut res, sui::hex::encode(object::uid_to_bytes(id)));
-        vec::append(&mut res, b"?type=");
-        vec::push_back(&mut res, ASCII_OFFSET + `type`);
+        res.append(sui::hex::encode(object::uid_to_bytes(id)));
+        res.append(b"?type=");
+        res.push_back(ASCII_OFFSET + `type`);
 
         url::new_unsafe_from_bytes(res)
     }

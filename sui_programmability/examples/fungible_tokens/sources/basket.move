@@ -10,10 +10,7 @@ module fungible_tokens::basket {
     use fungible_tokens::managed::MANAGED;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance, Supply};
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<BASKET>`.

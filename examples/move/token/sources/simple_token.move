@@ -24,8 +24,8 @@ module examples::simple_token {
 
         set_rules(&mut policy, &cap, ctx);
 
-        transfer::public_transfer(treasury_cap, sender(ctx));
-        transfer::public_transfer(cap, sender(ctx));
+        transfer::public_transfer(treasury_cap, ctx.sender());
+        transfer::public_transfer(cap, ctx.sender());
         token::share_policy(policy);
     }
 

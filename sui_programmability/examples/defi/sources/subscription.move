@@ -33,10 +33,6 @@
 /// charging extensive (and potentially slowing) usage.
 ///
 module defi::dev_pass {
-    use sui::tx_context::{TxContext};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-
     /// For when Subscription object no longer has uses.
     const ENoUses: u64 = 0;
 
@@ -107,7 +103,6 @@ module defi::dev_pass {
 /// show correlation with the `defi/pool.move` example.
 module defi::some_amm {
     use defi::dev_pass::{Self, Subscription, SingleUse};
-    use sui::tx_context::{Self, TxContext};
 
     /// A type to Mark subscription
     public struct DEVPASS has drop {}

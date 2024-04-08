@@ -8,10 +8,7 @@
 module crypto::ecdsa_k1 {
     use sui::ecdsa_k1;
     use sui::event;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-    use std::vector;
+
     /// Event on whether the signature is verified
     public struct VerifiedEvent has copy, drop {
         is_verified: bool,
@@ -22,7 +19,7 @@ module crypto::ecdsa_k1 {
         id: UID,
         value: vector<u8>
     }
-    
+
     /// Hash the data using Keccak256, output an object with the hash to recipient.
     public entry fun keccak256(data: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let hashed = Output {
@@ -33,7 +30,7 @@ module crypto::ecdsa_k1 {
         transfer::public_transfer(hashed, recipient)
     }
 
-    /// Recover the public key using the signature and message, assuming the signature was produced over the 
+    /// Recover the public key using the signature and message, assuming the signature was produced over the
     /// Keccak256 hash of the message. Output an object with the recovered pubkey to recipient.
     public entry fun ecrecover(signature: vector<u8>, msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let pubkey = Output {
@@ -44,8 +41,8 @@ module crypto::ecdsa_k1 {
         transfer::public_transfer(pubkey, recipient)
     }
 
-    /// Recover the Ethereum address using the signature and message, assuming 
-    /// the signature was produced over the Keccak256 hash of the message. 
+    /// Recover the Ethereum address using the signature and message, assuming
+    /// the signature was produced over the Keccak256 hash of the message.
     /// Output an object with the recovered address to recipient.
     public entry fun ecrecover_to_eth_address(mut signature: vector<u8>, msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
         // Normalize the last byte of the signature to be 0 or 1.
@@ -58,7 +55,7 @@ module crypto::ecdsa_k1 {
             *v = (*v - 1) % 2;
         };
 
-        // Ethereum signature is produced with Keccak256 hash of the message, so the last param is 0. 
+        // Ethereum signature is produced with Keccak256 hash of the message, so the last param is 0.
         let pubkey = ecdsa_k1::secp256k1_ecrecover(&signature, &msg, 0);
         let uncompressed = ecdsa_k1::decompress_pubkey(&pubkey);
 
@@ -90,7 +87,7 @@ module crypto::ecdsa_k1 {
         transfer::public_transfer(addr_object, recipient)
     }
 
-    /// Verified the secp256k1 signature using public key and message assuming Keccak was using when 
+    /// Verified the secp256k1 signature using public key and message assuming Keccak was using when
     /// signing. Emit an is_verified event of the verification result.
     public entry fun secp256k1_verify(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>) {
         event::emit(VerifiedEvent {is_verified: ecdsa_k1::secp256k1_verify(&signature, &public_key, &msg, 0)});

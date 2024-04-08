@@ -10,10 +10,7 @@ module crypto::ec_ops {
     use sui::bls12381;
     use sui::group_ops::Element;
     use sui::group_ops;
-    use std::vector;
     use sui::hash::blake2b256;
-    use std::option::Option;
-    use std::option;
     #[test_only]
     use std::hash::sha2_256;
     #[test_only]

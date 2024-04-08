@@ -7,10 +7,6 @@
 /// - everyone can increment a counter by 1
 /// - the owner of the counter can reset it to any value
 module basics::counter {
-    use sui::transfer;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-
     /// A shared counter.
     public struct Counter has key {
         id: UID,

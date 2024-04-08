@@ -6,10 +6,7 @@
 module basics::sandwich {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     public struct Ham has key, store {
         id: UID
@@ -119,9 +116,7 @@ module basics::test_sandwich {
     use sui::test_scenario;
     use sui::coin::{Self};
     use sui::sui::SUI;
-    use sui::transfer;
     use sui::test_utils;
-    use sui::tx_context;
 
     #[test]
     fun test_make_sandwich() {

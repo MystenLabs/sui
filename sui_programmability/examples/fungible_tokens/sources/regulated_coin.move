@@ -11,8 +11,6 @@
 /// Each of the methods of this module requires a Witness struct to be sent.
 module rc::regulated_coin {
     use sui::balance::{Self, Balance};
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
 
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
     /// with all the other Coins and methods, as well as the `creator` field, which
@@ -91,12 +89,8 @@ module rc::regulated_coin {
 /// - has restricted transfers which can not be taken by anyone except the recipient
 module abc::abc {
     use rc::regulated_coin::{Self as rcoin, RegulatedCoin as RCoin};
-    use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Supply, Balance};
-    use sui::object::{Self, UID};
     use sui::coin::{Self, Coin};
-    use sui::transfer;
-    use std::vector;
 
     /// The ticker of Abc regulated token
     public struct Abc has drop {}

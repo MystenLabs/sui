@@ -3,10 +3,6 @@
 
 /// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
 module defi::escrow {
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     /// An object held in escrow
     public struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: UID,

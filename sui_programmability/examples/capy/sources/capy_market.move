@@ -8,16 +8,11 @@
 /// and can be linked off-chain with additional tooling. Kept for usability
 /// and development speed purposes.
 module capy::capy_market {
-    use sui::object::{Self, UID, ID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::pay;
     use sui::sui::SUI;
     use sui::event::emit;
     use sui::coin::{Self, Coin};
     use sui::dynamic_object_field as dof;
-
-    use std::vector as vec;
 
     // The Capy Manager gains all control over admin actions
     // of the capy_marketplace. Modules must be published together
@@ -116,11 +111,11 @@ module capy::capy_market {
         price: u64,
         ctx: &mut TxContext
     ) {
-        while (vec::length(&items) > 0) {
-            list(market, vec::pop_back(&mut items), price, ctx)
+        while (items.length() > 0) {
+            list(market, items.pop_back(), price, ctx)
         };
 
-        vec::destroy_empty(items);
+        items.destroy_empty();
     }
 
     /// List a new item on the CapyMarket.
@@ -263,7 +258,7 @@ module capy::capy_market {
         ctx: &mut TxContext
     ) {
         let listing = dof::borrow<ID, Listing>(&market.id, *&listing_id);
-        let mut coin = vec::pop_back(&mut coins);
+        let mut coin = coins.pop_back();
 
         pay::join_vec(&mut coin, coins);
 

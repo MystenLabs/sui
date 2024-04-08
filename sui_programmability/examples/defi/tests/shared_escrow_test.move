@@ -3,7 +3,6 @@
 
 #[test_only]
 module defi::shared_escrow_tests {
-    use sui::object::{Self, UID};
     use sui::test_scenario::{Self, Scenario};
 
     use defi::shared_escrow::{Self, EscrowedObj};

@@ -202,7 +202,7 @@ module games::small_raffle {
 
         game.participants = game.participants + 1;
         coin::put(&mut game.balance, coin);
-        table::add(&mut game.participants_table, game.participants, sender(ctx));
+        table::add(&mut game.participants_table, game.participants, ctx.sender());
     }
 
     #[test_only]

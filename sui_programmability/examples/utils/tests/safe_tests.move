@@ -6,9 +6,7 @@ module utils::safe_tests {
     use utils::safe::{Self, Safe, TransferCapability, OwnerCapability};
     use sui::test_scenario::{Self as ts, Scenario, ctx};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID};
     use sui::sui::SUI;
-    use sui::transfer;
     use sui::test_utils;
 
     const TEST_SENDER_ADDR: address = @0x1;

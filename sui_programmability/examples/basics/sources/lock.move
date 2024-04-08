@@ -7,11 +7,6 @@
 /// be accessed by putting a 'key' into the 'lock'. Lock is shared and is visible
 /// and discoverable by the key owner.
 module basics::lock {
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::option::{Self, Option};
-
     /// Lock is empty, nothing to take.
     const ELockIsEmpty: u64 = 0;
 
@@ -86,10 +81,7 @@ module basics::lock {
 
 #[test_only]
 module basics::lockTest {
-    use sui::object::{Self, UID};
     use sui::test_scenario;
-    use sui::transfer;
-    use sui::tx_context;
     use basics::lock::{Self, Lock, Key};
 
     /// Custom structure which we will store inside a Lock.

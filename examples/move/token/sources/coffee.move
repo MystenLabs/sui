@@ -60,7 +60,7 @@ module examples::coffee {
         assert!(coin::value(&payment) > COFFEE_PRICE, EIncorrectAmount);
 
         let token = token::mint(&mut app.coffee_points, 1, ctx);
-        let request = token::transfer(token, sender(ctx), ctx);
+        let request = token::transfer(token, ctx.sender(), ctx);
 
         token::confirm_with_treasury_cap(&mut app.coffee_points, request, ctx);
         coin::put(&mut app.balance, payment);

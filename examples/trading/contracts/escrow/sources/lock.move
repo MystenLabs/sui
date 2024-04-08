@@ -15,12 +15,12 @@ module escrow::lock {
     /// The `name` of the DOF that holds the Locked object.
     /// Allows better discoverability for the locked object.
     public struct LockedObjectKey has copy, store, drop {}
-  
+
     /// A wrapper that protects access to `obj` by requiring access to a `Key`.
     ///
     /// Used to ensure an object is not modified if it might be involved in a
-    /// swap. 
-    /// 
+    /// swap.
+    ///
     /// Object is added as a Dynamic Object Field so that it can still be looked-up.
     public struct Locked<phantom T: key + store> has key, store {
         id: UID,
@@ -51,7 +51,7 @@ module escrow::lock {
         event::emit(LockCreated {
             lock_id: object::id(&lock),
             key_id: object::id(&key),
-            creator: sender(ctx),
+            creator: ctx.sender(),
             item_id: object::id(&obj)
         });
 

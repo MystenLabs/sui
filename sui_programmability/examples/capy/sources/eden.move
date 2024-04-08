@@ -7,9 +7,6 @@
 /// Enables "get free capy" functionality. A single account can request
 /// up to 2 capys; then it aborts.
 module capy::eden {
-    use std::option::{Self, Option};
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field as dfield;
 
     use capy::capy::{Self, Capy, CapyRegistry};

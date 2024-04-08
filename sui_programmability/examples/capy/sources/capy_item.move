@@ -8,16 +8,11 @@
 /// as well as allows collecting profits in a single call.
 module capy::capy_item {
     use sui::url::{Self, Url};
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{sender, TxContext};
     use std::string::{Self, String};
     use sui::sui::SUI;
     use sui::balance::{Self, Balance};
-    use std::option::{Self, Option};
     use sui::dynamic_object_field as dof;
     use sui::coin::{Self, Coin};
-    use sui::transfer;
-    use std::vector as vec;
     use sui::event::emit;
     use sui::pay;
 
@@ -73,7 +68,7 @@ module capy::capy_item {
 
         transfer::public_transfer(StoreOwnerCap {
             id: object::new(ctx)
-        }, sender(ctx))
+        }, ctx.sender())
     }
 
     /// Admin action - collect Profits from the `ItemStore`.
@@ -83,7 +78,7 @@ module capy::capy_item {
         let a = balance::value(&s.balance);
         let b = balance::split(&mut s.balance, a);
 
-        transfer::public_transfer(coin::from_balance(b, ctx), sender(ctx))
+        transfer::public_transfer(coin::from_balance(b, ctx), ctx.sender())
     }
 
     /// Change the quantity value for the listing in the `ItemStore`.
@@ -144,7 +139,7 @@ module capy::capy_item {
             id,
             url: listing_mut.url,
             name: listing_mut.name,
-        }, sender(ctx))
+        }, ctx.sender())
     }
 
     /// Buy a CapyItem with a single Coin which may be bigger than the
@@ -162,17 +157,17 @@ module capy::capy_item {
     public entry fun buy_mul_coin(
         s: &mut ItemStore, name: vector<u8>, mut coins: vector<Coin<SUI>>, ctx: &mut TxContext
     ) {
-        let mut paid = vec::pop_back(&mut coins);
+        let mut paid = coins.pop_back();
         pay::join_vec(&mut paid, coins);
         buy_mut(s, name, &mut paid, ctx);
-        transfer::public_transfer(paid, sender(ctx))
+        transfer::public_transfer(paid, ctx.sender())
     }
 
     /// Construct an image URL for the `CapyItem`.
     fun img_url(name: vector<u8>): Url {
         let mut capy_url = IMAGE_URL;
-        vec::append(&mut capy_url, name);
-        vec::append(&mut capy_url, b"/svg");
+        capy_url.append(name);
+        capy_url.append(b"/svg");
 
         url::new_unsafe_from_bytes(capy_url)
     }
