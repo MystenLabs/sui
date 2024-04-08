@@ -6,7 +6,7 @@ Here is the high-level flow the wallet or frontend application must implement to
 
 1. The wallet creates an ephemeral key pair.
 1. The wallet prompts the user to complete an OAuth login flow with the nonce corresponding to the ephemeral public key.
-1. After receiving the JWT, the wallet obtains a zero-knowledge proof.
+1. After receiving the JSON Web Token (JWT), the wallet obtains a zero-knowledge proof.
 1. The wallet obtains a unique user salt based on a JWT. Use the OAuth subject identifier and salt to compute the zkLogin Sui address.
 1. The wallet signs transactions with the ephemeral private key.
 1. The wallet submits the transaction with the ephemeral signature and the zero-knowledge proof.
