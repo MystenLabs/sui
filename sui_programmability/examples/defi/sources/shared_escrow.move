@@ -10,7 +10,7 @@ module defi::shared_escrow {
     use sui::tx_context::{Self, TxContext};
 
     /// An object held in escrow
-    struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
+    public struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: UID,
         /// owner of the escrowed object
         creator: address,

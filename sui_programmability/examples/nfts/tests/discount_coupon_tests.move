@@ -28,7 +28,7 @@ module nfts::discount_coupon_tests {
 
     #[test]
     fun test_mint_then_transfer() {
-        let scenario_val = test_scenario::begin(ISSUER_ADDRESS);
+        let mut scenario_val = test_scenario::begin(ISSUER_ADDRESS);
         let scenario = &mut scenario_val;
         {
             init(test_scenario::ctx(scenario));

@@ -47,7 +47,7 @@ module nfts::auction {
     const EWrongAuction: u64 = 1;
 
     /// Represents a bid sent by a bidder to the auctioneer.
-    struct Bid has key {
+    public struct Bid has key {
         id: UID,
         /// Address of the bidder
         bidder: address,

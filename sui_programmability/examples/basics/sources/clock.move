@@ -8,7 +8,7 @@ module basics::clock {
     use sui::event;
     use sui::tx_context::TxContext;
 
-    struct TimeEvent has copy, drop {
+    public struct TimeEvent has copy, drop {
         timestamp_ms: u64,
     }
 

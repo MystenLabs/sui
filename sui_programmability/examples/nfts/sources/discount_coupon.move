@@ -15,7 +15,7 @@ module nfts::discount_coupon {
     const EOutOfRangeDiscount: u64 = 1;
 
     /// Discount coupon NFT.
-    struct DiscountCoupon has key {
+    public struct DiscountCoupon has key {
         id: UID,
         // coupon issuer
         issuer: address,

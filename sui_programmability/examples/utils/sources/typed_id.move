@@ -20,7 +20,7 @@ module utils::typed_id {
 
     /// An ID of an of type `T`. See `ID` for more details
     /// By construction, it is guaranteed that the `ID` represents an object of type `T`
-    struct TypedID<phantom T: key> has copy, drop, store {
+    public struct TypedID<phantom T: key> has copy, drop, store {
         id: ID,
     }
 

@@ -12,7 +12,7 @@ module fungible_tokens::managed {
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.
-    struct MANAGED has drop {}
+    public struct MANAGED has drop {}
 
     #[allow(unused_function)]
     /// Register the managed currency to acquire its `TreasuryCap`. Because

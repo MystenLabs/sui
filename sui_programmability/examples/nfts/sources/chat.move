@@ -16,7 +16,7 @@ module nfts::chat {
     const ETextOverflow: u64 = 0;
 
     /// Sui Chat NFT (i.e., a post, retweet, like, chat message etc).
-    struct Chat has key, store {
+    public struct Chat has key, store {
         id: UID,
         // The ID of the chat app.
         app_id: address,

@@ -23,13 +23,13 @@ module utils::safe {
     ///
     /// @ownership: Shared
     ///
-    struct Safe<phantom T> has key {
+    public struct Safe<phantom T> has key {
         id: UID,
         balance: Balance<T>,
         allowed_safes: VecSet<ID>,
     }
 
-    struct OwnerCapability<phantom T> has key, store {
+    public struct OwnerCapability<phantom T> has key, store {
         id: UID,
         safe_id: ID,
     }
@@ -39,7 +39,7 @@ module utils::safe {
     ///
     /// @ownership: Owned
     ///
-    struct TransferCapability<phantom T> has store, key {
+    public struct TransferCapability<phantom T> has store, key {
         id: UID,
         safe_id: ID,
         // The amount that the user is able to transfer.

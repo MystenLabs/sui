@@ -13,12 +13,12 @@ module crypto::ecdsa_k1 {
     use sui::transfer;
     use std::vector;
     /// Event on whether the signature is verified
-    struct VerifiedEvent has copy, drop {
+    public struct VerifiedEvent has copy, drop {
         is_verified: bool,
     }
 
     /// Object that holds the output data
-    struct Output has key, store {
+    public struct Output has key, store {
         id: UID,
         value: vector<u8>
     }
@@ -47,7 +47,7 @@ module crypto::ecdsa_k1 {
     /// Recover the Ethereum address using the signature and message, assuming 
     /// the signature was produced over the Keccak256 hash of the message. 
     /// Output an object with the recovered address to recipient.
-    public entry fun ecrecover_to_eth_address(signature: vector<u8>, msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
+    public entry fun ecrecover_to_eth_address(mut signature: vector<u8>, msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
         // Normalize the last byte of the signature to be 0 or 1.
         let v = vector::borrow_mut(&mut signature, 64);
         if (*v == 27) {
@@ -63,8 +63,8 @@ module crypto::ecdsa_k1 {
         let uncompressed = ecdsa_k1::decompress_pubkey(&pubkey);
 
         // Take the last 64 bytes of the uncompressed pubkey.
-        let uncompressed_64 = vector::empty<u8>();
-        let i = 1;
+        let mut uncompressed_64 = vector::empty<u8>();
+        let mut i = 1;
         while (i < 65) {
             let value = vector::borrow(&uncompressed, i);
             vector::push_back(&mut uncompressed_64, *value);
@@ -73,8 +73,8 @@ module crypto::ecdsa_k1 {
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
         let hashed = sui::hash::keccak256(&uncompressed_64);
-        let addr = vector::empty<u8>();
-        let i = 12;
+        let mut addr = vector::empty<u8>();
+        let mut i = 12;
         while (i < 32) {
             let value = vector::borrow(&hashed, i);
             vector::push_back(&mut addr, *value);

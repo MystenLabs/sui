@@ -17,7 +17,7 @@ module rc::regulated_coin {
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
     /// with all the other Coins and methods, as well as the `creator` field, which
     /// can be used for additional security/regulation implementations.
-    struct RegulatedCoin<phantom T> has key, store {
+    public struct RegulatedCoin<phantom T> has key, store {
         id: UID,
         balance: Balance<T>,
         creator: address
@@ -99,24 +99,24 @@ module abc::abc {
     use std::vector;
 
     /// The ticker of Abc regulated token
-    struct Abc has drop {}
+    public struct Abc has drop {}
 
     /// A restricted transfer of Abc to another account.
-    struct Transfer has key {
+    public struct Transfer has key {
         id: UID,
         balance: Balance<Abc>,
         to: address,
     }
 
     /// A registry of addresses banned from using the coin.
-    struct Registry has key {
+    public struct Registry has key {
         id: UID,
         banned: vector<address>,
         swapped_amount: u64,
     }
 
     /// A AbcTreasuryCap for the balance::Supply.
-    struct AbcTreasuryCap has key, store {
+    public struct AbcTreasuryCap has key, store {
         id: UID,
         supply: Supply<Abc>
     }
@@ -165,8 +165,8 @@ module abc::abc {
 
     /// Create an empty `RCoin<Abc>` instance for account `for`. AbcTreasuryCap is passed for
     /// authentication purposes - only admin can create new accounts.
-    public entry fun create(_: &AbcTreasuryCap, for: address, ctx: &mut TxContext) {
-        transfer::public_transfer(zero(for, ctx), for)
+    public entry fun create(_: &AbcTreasuryCap, `for`: address, ctx: &mut TxContext) {
+        transfer::public_transfer(zero(`for`, ctx), `for`)
     }
 
     /// Mint more Abc. Requires AbcTreasuryCap for authorization, so can only be done by admins.
@@ -300,25 +300,25 @@ module abc::tests {
     // === Test handlers; this trick helps reusing scenarios ==
 
     #[test]
-    #[expected_failure(abort_code = abc::abc::EAddressBanned)]
+    #[expected_failure(abort_code = ::abc::abc::EAddressBanned)]
     fun test_address_banned_fail() {
-        let scenario = scenario();
+        let mut scenario = scenario();
         test_address_banned_fail_(&mut scenario);
         test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = abc::abc::EAddressBanned)]
+    #[expected_failure(abort_code = ::abc::abc::EAddressBanned)]
     fun test_different_account_fail() {
-        let scenario = scenario();
+        let mut scenario = scenario();
         test_different_account_fail_(&mut scenario);
         test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = abc::abc::ENotOwner)]
+    #[expected_failure(abort_code = ::abc::abc::ENotOwner)]
     fun test_not_owned_balance_fail() {
-        let scenario = scenario();
+        let mut scenario = scenario();
         test_not_owned_balance_fail_(&mut scenario);
         test_scenario::end(scenario);
     }
@@ -339,8 +339,8 @@ module abc::tests {
 
         next_tx(test, admin);
         {
-            let cap = test_scenario::take_from_sender<AbcTreasuryCap>(test);
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
+            let mut cap = test_scenario::take_from_sender<AbcTreasuryCap>(test);
+            let mut coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
 
             abc::mint(&mut cap, &mut coin, 1000000);
 
@@ -386,7 +386,7 @@ module abc::tests {
 
         next_tx(test, admin);
         {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
+            let mut coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &reg;
 
@@ -398,7 +398,7 @@ module abc::tests {
 
         next_tx(test, user1);
         {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
+            let mut coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let transfer = test_scenario::take_from_sender<abc::Transfer>(test);
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &reg;
@@ -421,7 +421,7 @@ module abc::tests {
         next_tx(test, admin);
         {
             let cap = test_scenario::take_from_sender<AbcTreasuryCap>(test);
-            let reg = test_scenario::take_shared<Registry>(test);
+            let mut reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &mut reg;
 
             abc::ban(&cap, reg_ref, user1);
@@ -439,7 +439,7 @@ module abc::tests {
 
         next_tx(test, user1);
         {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
+            let mut coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &reg;
 
@@ -458,7 +458,7 @@ module abc::tests {
 
         next_tx(test, admin);
         {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
+            let mut coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &reg;
 
@@ -484,7 +484,7 @@ module abc::tests {
 
         next_tx(test, user2);
         {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
+            let mut coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &reg;
 

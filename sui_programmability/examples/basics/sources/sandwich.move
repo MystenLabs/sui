@@ -11,25 +11,25 @@ module basics::sandwich {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct Ham has key, store {
+    public struct Ham has key, store {
         id: UID
     }
 
-    struct Bread has key, store {
+    public struct Bread has key, store {
         id: UID
     }
 
-    struct Sandwich has key, store {
+    public struct Sandwich has key, store {
         id: UID,
     }
 
     // This Capability allows the owner to withdraw profits
-    struct GroceryOwnerCapability has key {
+    public struct GroceryOwnerCapability has key {
         id: UID
     }
 
     // Grocery is created on module init
-    struct Grocery has key {
+    public struct Grocery has key {
         id: UID,
         profits: Balance<SUI>
     }
@@ -128,7 +128,7 @@ module basics::test_sandwich {
         let owner = @0x1;
         let the_guy = @0x2;
 
-        let scenario_val = test_scenario::begin(owner);
+        let mut scenario_val = test_scenario::begin(owner);
         let scenario = &mut scenario_val;
         test_scenario::next_tx(scenario, owner);
         {
@@ -137,7 +137,7 @@ module basics::test_sandwich {
 
         test_scenario::next_tx(scenario, the_guy);
         {
-            let grocery_val = test_scenario::take_shared<Grocery>(scenario);
+            let mut grocery_val = test_scenario::take_shared<Grocery>(scenario);
             let grocery = &mut grocery_val;
             let ctx = test_scenario::ctx(scenario);
 
@@ -160,7 +160,7 @@ module basics::test_sandwich {
 
         test_scenario::next_tx(scenario, owner);
         {
-            let grocery_val = test_scenario::take_shared<Grocery>(scenario);
+            let mut grocery_val = test_scenario::take_shared<Grocery>(scenario);
             let grocery = &mut grocery_val;
             let capability = test_scenario::take_from_sender<GroceryOwnerCapability>(scenario);
 
