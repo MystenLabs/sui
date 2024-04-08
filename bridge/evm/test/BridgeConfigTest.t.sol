@@ -400,7 +400,6 @@ contract BridgeConfigTest is BridgeBaseTest {
         assertEq(config.tokenPrices(BridgeUtils.BTC), 600_000_000);
     }
 
-    // TODO: @lu
     function testAddTokensRegressionTest() public {
         address[] memory _committee = new address[](4);
         uint16[] memory _stake = new uint16[](4);
@@ -429,48 +428,60 @@ contract BridgeConfigTest is BridgeBaseTest {
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
-        // TODO: get payload from the bridge node
-        bytes memory payload = hex"01000000003b9aca00";
+        bytes memory payload = hex"0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00";
 
-        // (
-        //     bool native,
-        //     uint8[] memory tokenIDs,
-        //     address[] memory tokenAddresses,
-        //     uint8[] memory suiDecimals,
-        //     uint64[] memory tokenPrices
-        // ) = BridgeUtils.decodeAddTokensPayload(payload);
+        (
+            bool native,
+            uint8[] memory tokenIDs,
+            address[] memory tokenAddresses,
+            uint8[] memory suiDecimals,
+            uint64[] memory tokenPrices
+        ) = BridgeUtils.decodeAddTokensPayload(payload);
 
-        // assertTrue(native, "token should be native");
-        // assertTrue(tokenIDs.length > 0, "tokenIDs length should be greater than 0");
-        // assertTrue(tokenAddresses.length > 0, "tokenAddresses length should be greater than 0");
-        // assertTrue(suiDecimals.length > 0, "suiDecimals length should be greater than 0");
-        // assertTrue(tokenPrices.length > 0, "tokenPrices length should be greater than 0");
+        assertEq(native, true);
+        assertEq(tokenIDs.length, 3);
+        assertEq(tokenIDs[0], 99);
+        assertEq(tokenIDs[1], 100);
+        assertEq(tokenIDs[2], 101);
 
-        // Create update token price message
+        assertEq(tokenAddresses.length, 3);
+        assertEq(tokenAddresses[0], address(0x0101010101010101010101010101010101010101));
+        assertEq(tokenAddresses[1], address(0x0202020202020202020202020202020202020202));
+        assertEq(tokenAddresses[2], address(0x0303030303030303030303030303030303030303));
+
+        assertEq(suiDecimals.length, 3);
+        assertEq(suiDecimals[0], 5);
+        assertEq(suiDecimals[1], 6);
+        assertEq(suiDecimals[2], 7);
+
+        assertEq(tokenPrices.length, 3);
+        assertEq(tokenPrices[0], 1_000_000_000);
+        assertEq(tokenPrices[1], 2_000_000_000);
+        assertEq(tokenPrices[2], 3_000_000_000);
+
         BridgeUtils.Message memory message = BridgeUtils.Message({
             messageType: BridgeUtils.ADD_EVM_TOKENS,
             version: 1,
-            nonce: 266,
-            chainID: 3,
+            nonce: 0,
+            chainID: 12,
             payload: payload
         });
         bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
-        // TODO: update expected encoded message with actual payload
-        // bytes memory expectedEncodedMessage =
-        //     hex"5355495f4252494447455f4d4553534147450401000000000000010a0301000000003b9aca00";
+        bytes memory expectedEncodedMessage =
+            hex"5355495f4252494447455f4d455353414745070100000000000000000c0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00";
 
-        // assertEq(encodedMessage, expectedEncodedMessage);
+        assertEq(encodedMessage, expectedEncodedMessage);
 
-        // bytes[] memory signatures = new bytes[](4);
+        bytes[] memory signatures = new bytes[](3);
 
-        // // TODO: get signatures from bridge client
-        // signatures[0];
-        // signatures[1];
-        // signatures[2];
-        // signatures[3];
+        signatures[0] = hex"a6d844214b2614b95a89741e97ddf873ff3a07ea82b2cb8f242a85c8cf0373920a1e7882526611eb34add280c0029dc2a2ba411e656f86926593e7c4b41e47c801";
+        signatures[1] = hex"3e7a698df30c74ea00630257d426742d2cd45b2826ebeb82a791498e5e492f6301fb02b7cf80c0e1c5614dcb7f4ca565f0001baa557bb2753b6c08ec0b0cc6da01";
+        signatures[2] = hex"1d30cffbcbf27a8a465a932ba7f69c59380ecf3de9330f2fbd11b1002ff649467ca2db8e63dddb05acba5f471e51c8731052b46e7a00090de75582aec11860c600";
+        committee.verifySignatures(signatures, message);
 
+        // FIXME: @bridger, for some reason the following line fails whilst the above line passes
         // config.addTokensWithSignatures(signatures, message);
-
-        // assertEq(config.tokenPriceOf(1), 100_000_0000);
+        // assertEq(config.tokenPriceOf(99), 1_000_000_000);
+        // FIXME: assert every piece of info about the new token
     }
 }

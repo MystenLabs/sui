@@ -45,6 +45,8 @@ pub enum BridgeError {
     InvalidAuthorityUrl(BridgeAuthorityPublicKeyBytes),
     // Invalid Bridge Client request
     InvalidBridgeClientRequest(String),
+    // Invalid ChainId
+    InvalidChainId,
     // Message is signed by mismatched authority
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
