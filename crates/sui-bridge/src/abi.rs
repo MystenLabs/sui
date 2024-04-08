@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::encoding::{
-    BridgeMessageEncoding, ASSET_PRICE_UPDATE_MESSAGE_VERSION, LIMIT_UPDATE_MESSAGE_VERSION,
+    BridgeMessageEncoding, ADD_TOKENS_ON_EVM_MESSAGE_VERSION, ASSET_PRICE_UPDATE_MESSAGE_VERSION,
+    LIMIT_UPDATE_MESSAGE_VERSION,
 };
 use crate::encoding::{
     COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION,
@@ -10,8 +11,9 @@ use crate::encoding::{
 };
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
-    AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction, BridgeActionType,
-    EmergencyAction, EthLog, EthToSuiBridgeAction, LimitUpdateAction, SuiToEthBridgeAction,
+    AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction,
+    BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, LimitUpdateAction,
+    SuiToEthBridgeAction,
 };
 use ethers::types::Log;
 use ethers::{
@@ -212,11 +214,23 @@ impl From<LimitUpdateAction> for eth_bridge_limiter::Message {
     }
 }
 
-impl From<AssetPriceUpdateAction> for eth_bridge_limiter::Message {
+impl From<AssetPriceUpdateAction> for eth_bridge_config::Message {
     fn from(action: AssetPriceUpdateAction) -> Self {
-        eth_bridge_limiter::Message {
+        eth_bridge_config::Message {
             message_type: BridgeActionType::AssetPriceUpdate as u8,
             version: ASSET_PRICE_UPDATE_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
+
+impl From<AddTokensOnEvmAction> for eth_bridge_config::Message {
+    fn from(action: AddTokensOnEvmAction) -> Self {
+        eth_bridge_config::Message {
+            message_type: BridgeActionType::AddTokensOnEvm as u8,
+            version: ADD_TOKENS_ON_EVM_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
             payload: action.as_payload_bytes().into(),
@@ -319,15 +333,44 @@ mod tests {
             token_id: TOKEN_ID_ETH,
             new_usd_price: 80000000,
         };
-        let message: eth_bridge_limiter::Message = action.into();
+        let message: eth_bridge_config::Message = action.into();
         assert_eq!(
             message,
-            eth_bridge_limiter::Message {
+            eth_bridge_config::Message {
                 message_type: BridgeActionType::AssetPriceUpdate as u8,
                 version: ASSET_PRICE_UPDATE_MESSAGE_VERSION,
                 nonce: 2,
                 chain_id: BridgeChainId::EthSepolia as u8,
                 payload: Hex::decode("020000000004c4b400").unwrap().into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth_message_conversion_add_tokens_on_evm_action_regression() -> anyhow::Result<()> {
+        let action = AddTokensOnEvmAction {
+            nonce: 5,
+            chain_id: BridgeChainId::EthLocalTest,
+            native: true,
+            token_ids: vec![99, 100, 101],
+            token_addresses: vec![
+                EthAddress::repeat_byte(1),
+                EthAddress::repeat_byte(2),
+                EthAddress::repeat_byte(3),
+            ],
+            token_sui_decimals: vec![5, 6, 7],
+            token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
+        };
+        let message: eth_bridge_config::Message = action.into();
+        assert_eq!(
+            message,
+            eth_bridge_config::Message {
+                message_type: BridgeActionType::AddTokensOnEvm as u8,
+                version: ADD_TOKENS_ON_EVM_MESSAGE_VERSION,
+                nonce: 5,
+                chain_id: BridgeChainId::EthLocalTest as u8,
+                payload: Hex::decode("0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00").unwrap().into(),
             }
         );
         Ok(())

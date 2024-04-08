@@ -206,11 +206,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "_config",
-        "type": "address"
-      },
-      {
         "internalType": "address[]",
         "name": "committee",
         "type": "address[]"
@@ -219,9 +214,27 @@
         "internalType": "uint16[]",
         "name": "stake",
         "type": "uint16[]"
+      },
+      {
+        "internalType": "uint16",
+        "name": "minStakeRequired",
+        "type": "uint16"
       }
     ],
     "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_config",
+        "type": "address"
+      }
+    ],
+    "name": "initializeConfig",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -293,7 +306,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }
@@ -356,7 +369,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }
@@ -401,7 +414,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }

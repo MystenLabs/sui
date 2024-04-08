@@ -329,7 +329,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }
@@ -479,7 +479,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }
@@ -542,7 +542,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }

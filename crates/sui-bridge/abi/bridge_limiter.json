@@ -89,25 +89,6 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "uint8",
-        "name": "tokenId",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "price",
-        "type": "uint64"
-      }
-    ],
-    "name": "AssetPriceUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
         "internalType": "uint32",
         "name": "hourUpdated",
         "type": "uint32"
@@ -338,11 +319,6 @@
         "type": "address"
       },
       {
-        "internalType": "uint256[]",
-        "name": "_tokenPrices",
-        "type": "uint256[]"
-      },
-      {
         "internalType": "uint8[]",
         "name": "chainIDs",
         "type": "uint8[]"
@@ -455,25 +431,6 @@
   {
     "inputs": [
       {
-        "internalType": "uint8",
-        "name": "tokenID",
-        "type": "uint8"
-      }
-    ],
-    "name": "tokenPrices",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "tokenPrice",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "newOwner",
         "type": "address"
@@ -519,57 +476,12 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }
     ],
     "name": "updateLimitWithSignatures",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes[]",
-        "name": "signatures",
-        "type": "bytes[]"
-      },
-      {
-        "components": [
-          {
-            "internalType": "uint8",
-            "name": "messageType",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint8",
-            "name": "version",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint64",
-            "name": "nonce",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint8",
-            "name": "chainID",
-            "type": "uint8"
-          },
-          {
-            "internalType": "bytes",
-            "name": "payload",
-            "type": "bytes"
-          }
-        ],
-        "internalType": "struct BridgeMessage.Message",
-        "name": "message",
-        "type": "tuple"
-      }
-    ],
-    "name": "updateTokenPriceWithSignatures",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -627,7 +539,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct BridgeMessage.Message",
+        "internalType": "struct BridgeUtils.Message",
         "name": "message",
         "type": "tuple"
       }
