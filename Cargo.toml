@@ -79,7 +79,6 @@ members = [
   "crates/mysten-metrics",
   "crates/mysten-network",
   "crates/mysten-service",
-  "crates/mysten-service-boilerplate",
   "crates/mysten-util-mem",
   "crates/mysten-util-mem-derive",
   "crates/prometheus-closure-metric",
@@ -369,10 +368,13 @@ leb128 = "0.2.5"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
-miette = {version = "7", features = ["fancy"] }
+miette = { version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
-moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
+moka = { version = "0.12", default-features = false, features = [
+  "sync",
+  "atomic64",
+] }
 more-asserts = "0.3.1"
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim" }
 msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim-macros" }
@@ -574,7 +576,6 @@ mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
 mysten-service = { path = "crates/mysten-service" }
-mysten-service-boilerplate = { path = "crates/mysten-service-boilerplate" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }
 mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
