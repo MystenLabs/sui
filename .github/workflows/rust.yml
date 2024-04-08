@@ -99,7 +99,7 @@ jobs:
           node-version: 16
           cache: "pnpm"
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
       - name: Run npm test
         working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
         shell: bash
