@@ -7,10 +7,7 @@
 module nfts::devnet_nft {
     use sui::url::{Self, Url};
     use std::string;
-    use sui::object::{Self, ID, UID};
     use sui::event;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
     public struct DevNetNFT has key, store {
@@ -89,7 +86,6 @@ module nfts::devnet_nft {
 module nfts::devnet_nftTests {
     use nfts::devnet_nft::{Self, DevNetNFT};
     use sui::test_scenario as ts;
-    use sui::transfer;
     use std::string;
 
     #[test]

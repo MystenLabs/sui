@@ -3,14 +3,9 @@
 
 #[test_only]
 module nfts::auction_tests {
-    use std::vector;
-
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::object::{Self, UID};
     use sui::test_scenario::Self;
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
     use nfts::auction::{Self, Bid};
     use nfts::auction_lib::Auction;

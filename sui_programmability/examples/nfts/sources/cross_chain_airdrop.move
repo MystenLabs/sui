@@ -6,11 +6,6 @@
 /// support a single chain(Ethereum) right now, but this can be extended to other
 /// chains by adding a chain_id field.
 module nfts::cross_chain_airdrop {
-    use std::vector;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     use nfts::erc721_metadata::{Self, ERC721Metadata, TokenID};
 
     /// The oracle manages one `PerContractAirdropInfo` for each Ethereum contract

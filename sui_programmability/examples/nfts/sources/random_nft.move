@@ -5,12 +5,10 @@
 /// The probability of getting a gold, silver, or bronze NFT is 10%, 30%, and 60% respectively.
 module nfts::random_nft_airdrop {
     use std::string;
-    use std::vector;
-    use sui::object::{Self, UID, delete};
+    use sui::object::delete;
     use sui::random;
     use sui::random::{Random, new_generator};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+
 
     const EInvalidParams: u64 = 0;
 
@@ -172,7 +170,6 @@ module nfts::random_nft_airdrop {
 module nfts::random_nft_airdrop_tests {
     use sui::test_scenario;
     use std::string;
-    use std::vector;
     use sui::random;
     use sui::random::{Random, update_randomness_state_for_testing};
     use sui::test_scenario::{ctx, take_from_sender, next_tx, return_to_sender};

@@ -2,16 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::geniteam {
-    use sui::object::{Self, ID, UID};
     use sui::object_bag::{Self, ObjectBag};
     use sui::object_table::{Self, ObjectTable};
     use sui::dynamic_object_field;
     use nfts::typed_id::{Self, TypedID};
-    use sui::tx_context::{Self, TxContext};
-    use std::option::{Self, Option};
-    use sui::transfer;
     use std::ascii::{Self, String};
-    use std::vector;
 
     /// Trying to add more than 1 farm to a Player
     const ETooManyFarms: u64 = 1;
@@ -353,8 +348,6 @@ module nfts::geniteam {
 
 // temp duplicate to unblock
 module nfts::typed_id {
-    use sui::object::{Self, ID};
-
     /// An ID of an of type `T`. See `ID` for more details
     /// By construction, it is guaranteed that the `ID` represents an object of type `T`
     public struct TypedID<phantom T: key> has copy, drop, store {

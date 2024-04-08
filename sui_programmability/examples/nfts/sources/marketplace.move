@@ -23,10 +23,7 @@
 /// ```
 module nfts::marketplace {
     use sui::dynamic_object_field as ofield;
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, ID, UID};
     use sui::coin::{Self, Coin};
-    use sui::transfer;
 
     /// For when amount paid does not match the expected.
     const EAmountIncorrect: u64 = 0;
@@ -168,8 +165,6 @@ module nfts::marketplace {
 
 #[test_only]
 module nfts::marketplaceTests {
-    use sui::object::{Self, UID};
-    use sui::transfer;
     use sui::coin;
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};

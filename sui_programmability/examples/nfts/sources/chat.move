@@ -3,10 +3,7 @@
 
 module nfts::chat {
     use std::ascii::{Self, String};
-    use std::option::{Self, Option, some};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use std::option::some;
     use std::vector::length;
 
     /// Max text length.

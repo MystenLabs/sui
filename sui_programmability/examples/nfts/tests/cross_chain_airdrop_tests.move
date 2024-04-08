@@ -4,7 +4,6 @@
 #[test_only]
 module nfts::cross_chain_airdrop_tests {
     use nfts::cross_chain_airdrop::{Self, CrossChainAirdropOracle, ERC721};
-    use sui::object::{UID};
     use sui::test_scenario::{Self, Scenario};
 
     // Error codes

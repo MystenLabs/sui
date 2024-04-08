@@ -6,14 +6,10 @@
 /// one using single-owner objects only and the other using shared
 /// objects.
 module nfts::auction_lib {
-    use std::option::{Self, Option};
-
     use sui::coin;
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self,TxContext};
+
 
     /* friend nfts::auction; */
     /* friend nfts::shared_auction; */
