@@ -149,7 +149,7 @@ module first_package::example {
             // Extract the Forge object
             let forge = scenario.take_from_sender<Forge>();
             // Verify number of created swords
-            assert!(&forge.swords_created) == 0, 1);
+            assert!(forge.swords_created() == 0, 1);
             // Return the Forge object to the object pool
             scenario.return_to_sender(forge);
         };
