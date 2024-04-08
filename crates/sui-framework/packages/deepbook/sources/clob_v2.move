@@ -16,7 +16,6 @@ module deepbook::clob_v2 {
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
     use deepbook::math::Self as clob_math;
 
-    /* friend deepbook::order_query; */
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EIncorrectPoolOwner: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;

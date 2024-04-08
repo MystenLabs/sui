@@ -10,8 +10,6 @@ module capy::capy {
 
     use std::hash::sha3_256 as hash;
 
-    /* friend capy::capy_winter; */
-
     /// Number of meaningful genes. Also marks the length
     /// of the hash used in the application: sha3_256.
     const GENES: u64 = 32;

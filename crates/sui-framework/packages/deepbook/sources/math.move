@@ -6,10 +6,6 @@ module deepbook::math {
     const FLOAT_SCALING: u64 = 1_000_000_000;
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
 
-    /* friend deepbook::clob; */
-    /* friend deepbook::clob_v2; */
-    /* friend deepbook::critbit; */
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUnderflow: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<

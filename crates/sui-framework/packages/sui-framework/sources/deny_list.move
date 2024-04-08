@@ -9,8 +9,6 @@ module sui::deny_list {
     use sui::bag::{Self, Bag};
     use sui::vec_set::{Self, VecSet};
 
-    /* friend sui::coin; */
-
     /// Trying to create a deny list object when not called by the system address.
     const ENotSystemAddress: u64 = 0;
     /// The specified address to be removed is not already in the deny list.

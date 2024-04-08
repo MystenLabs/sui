@@ -8,9 +8,6 @@ module sui_system::validator_wrapper {
     use sui_system::validator::{Validator, ValidatorV2};
     use sui_system::validator;
 
-    /* friend sui_system::sui_system; */
-    /* friend sui_system::sui_system_state_inner; */
-
     const VALIDATOR_VERSION_V1: u64 = 18446744073709551605;  // u64::MAX - 10
     const VALIDATOR_VERSION_V3: u64 = 18446744073709551607;  // u64::MAX - 8
 

@@ -10,10 +10,6 @@ module nfts::auction_lib {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
 
-
-    /* friend nfts::auction; */
-    /* friend nfts::shared_auction; */
-
     /// Stores information about an auction bid.
     public struct BidData has store {
         /// Coin representing the current (highest) bid.

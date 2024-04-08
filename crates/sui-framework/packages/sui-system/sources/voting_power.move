@@ -6,11 +6,6 @@ module sui_system::voting_power {
     use sui::math;
     use sui::math::divide_and_round_up;
 
-    /* friend sui_system::validator_set; */
-
-    /* #[test_only] */
-    /* friend sui_system::voting_power_tests; */
-
     #[allow(unused_field)]
     /// Deprecated. Use VotingPowerInfoV2 instead.
     public struct VotingPowerInfo has drop {

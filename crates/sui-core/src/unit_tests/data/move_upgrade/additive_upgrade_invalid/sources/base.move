@@ -14,8 +14,6 @@ module base_addr::base {
         f1: T,
     }
 
-    /* friend base_addr::friend_module; */
-
     // new function is fine
     public fun return_1(): u64 { 1 }
 

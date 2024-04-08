@@ -12,8 +12,6 @@ module bridge::committee {
     use bridge::message::{Self, BridgeMessage};
     use bridge::message_types;
 
-    /* friend bridge::bridge; */
-
     const ESignatureBelowThreshold: u64 = 0;
     const EDuplicatedSignature: u64 = 1;
     const EInvalidSignature: u64 = 2;

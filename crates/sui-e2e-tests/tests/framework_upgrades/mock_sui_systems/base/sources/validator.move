@@ -10,10 +10,6 @@ module sui_system::validator {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-    /* friend sui_system::validator_wrapper; */
-
     public struct ValidatorMetadata has store {
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,

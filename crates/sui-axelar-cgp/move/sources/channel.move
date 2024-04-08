@@ -7,8 +7,6 @@ module axelar::channel {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
-    /* friend axelar::validators; */
-
     /// Generic target for the messaging system.
     ///
     /// This struct is required on the Sui side to be the destination for the

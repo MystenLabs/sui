@@ -7,9 +7,6 @@ module sui_system::validator_wrapper {
     use sui::tx_context::TxContext;
     use sui_system::validator::Validator;
 
-    /* friend sui_system::sui_system; */
-    /* friend sui_system::sui_system_state_inner; */
-
     const EInvalidVersion: u64 = 0;
 
     public struct ValidatorWrapper has store {
