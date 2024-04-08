@@ -46,6 +46,7 @@ jobs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Detect Changes
@@ -79,6 +80,29 @@ jobs:
         shell: bash
         run: |
           python ./scripts/release_notes.py check
+
+  move-auto-formatter-ci-test:
+    needs: diff
+    if: needs.diff.outputs.isMoveAutoFormatter == 'true'
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        node-version: [18]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install -D
+      - name: Run npm test
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        shell: bash
+        run: npm run test
 
   test:
     needs: diff
