@@ -52,7 +52,7 @@ module axelar::gateway {
     const SELECTOR_TRANSFER_OPERATORSHIP: vector<u8> = b"transferOperatorship";
 
     /// Emitted when a new message is sent from the SUI network.
-    struct ContractCall has copy, drop {
+    public struct ContractCall has copy, drop {
         source: vector<u8>,
         destination: vector<u8>,
         destination_address: vector<u8>,
@@ -71,7 +71,7 @@ module axelar::gateway {
         validators: &mut AxelarValidators,
         input: vector<u8>
     ) {
-        let bytes = bcs::new(input);
+        let mut bytes = bcs::new(input);
         // Split input into:
         // data: vector<u8> (BCS bytes)
         // proof: vector<u8> (BCS bytes)
@@ -80,10 +80,10 @@ module axelar::gateway {
             bcs::peel_vec_u8(&mut bytes)
         );
 
-        let allow_operatorship_transfer = validate_proof(validators, to_sui_signed(*&data), proof);
+        let mut allow_operatorship_transfer = validate_proof(validators, to_sui_signed(*&data), proof);
 
         // Treat `data` as BCS bytes.
-        let data_bcs = bcs::new(data);
+        let mut data_bcs = bcs::new(data);
 
         // Split data into:
         // chain_id: u64,
@@ -99,7 +99,7 @@ module axelar::gateway {
 
         assert!(chain_id == 1, EInvalidChain);
 
-        let (i, commands_len) = (0, vector::length(&commands));
+        let (mut i, commands_len) = (0, vector::length(&commands));
 
         // make sure number of commands passed matches command IDs
         assert!(vector::length(&command_ids) == commands_len, EInvalidCommands);
@@ -115,7 +115,7 @@ module axelar::gateway {
             // Build a `CallApproval` object from the `params[i]`. BCS serializes data
             // in order, so field reads have to be done carefully and in order!
             if (cmd_selector == &SELECTOR_APPROVE_CONTRACT_CALL) {
-                let payload = bcs::new(payload);
+                let mut payload = bcs::new(payload);
                 validators::add_approval(validators,
                     msg_id,
                     string::utf8(bcs::peel_vec_u8(&mut payload)),
@@ -195,13 +195,13 @@ module axelar::gateway {
             x"037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff599028"
         ];
 
-        let epoch_for_hash = vec_map::empty();
+        let mut epoch_for_hash = vec_map::empty();
         vec_map::insert(&mut epoch_for_hash, operators_hash(&operators, &vector[100u128], 10u128), epoch);
 
-        let test = ts::begin(@0x0);
+        let mut test = ts::begin(@0x0);
 
         // create validators for testing
-        let validators = validators::new(
+        let mut validators = validators::new(
             epoch,
             epoch_for_hash,
             ctx(&mut test)
@@ -224,13 +224,13 @@ module axelar::gateway {
             x"037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff599028"
         ];
 
-        let epoch_for_hash = vec_map::empty();
+        let mut epoch_for_hash = vec_map::empty();
         vec_map::insert(&mut epoch_for_hash, operators_hash(&operators, &vector[100u128], 10u128), epoch);
 
-        let test = ts::begin(@0x0);
+        let mut test = ts::begin(@0x0);
 
         // create validators for testing
-        let validators = validators::new(
+        let mut validators = validators::new(
             epoch,
             epoch_for_hash,
             ctx(&mut test)

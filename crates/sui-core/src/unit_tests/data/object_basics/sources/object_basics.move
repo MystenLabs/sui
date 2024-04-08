@@ -12,17 +12,17 @@ module examples::object_basics {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         o: Object
     }
 
-    struct NewValueEvent has copy, drop {
+    public struct NewValueEvent has copy, drop {
         new_value: u64
     }
 
@@ -113,7 +113,7 @@ module examples::object_basics {
         );
     }
 
-    struct Name has copy, drop, store {
+    public struct Name has copy, drop, store {
         name_str: std::string::String
     }
 

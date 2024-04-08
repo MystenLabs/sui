@@ -3,6 +3,7 @@ name = "CustomPropertiesInManifestDependencyInvalidPublishedAt"
 version = "0.0.0"
 # oops we put a non-ID value for published-at...
 published-at = "mystery"
+edition = "2024.beta"
 
 [addresses]
 main = "0x0"
