@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_graphql::ServerError;
-use tokio::sync::watch;
+use tokio::sync::{watch, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -15,35 +14,27 @@ use crate::{consistency::Watermark, data::Db};
 
 /// Watermark task that periodically updates the current checkpoint and epoch values.
 pub(crate) struct ServiceWatermarkTask {
-    /// The checkpoint upper-bound for the query.
-    checkpoint: Arc<AtomicU64>,
-    /// The current epoch.
-    epoch: Arc<AtomicU64>,
+    /// Thread-safe watermark that avoids writer starvation
+    watermark: ServiceWatermark,
     db: Db,
     metrics: Metrics,
     sleep: Duration,
     cancel: CancellationToken,
 }
 
-#[derive(Clone)]
-pub(crate) struct ServiceWatermark {
-    pub checkpoint: Arc<AtomicU64>,
-    pub epoch: Arc<AtomicU64>,
-}
+pub(crate) type ServiceWatermark = Arc<RwLock<Watermark>>;
 
 /// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
 impl ServiceWatermarkTask {
     pub(crate) fn new(
-        checkpoint: Arc<AtomicU64>,
-        epoch: Arc<AtomicU64>,
         db: Db,
         metrics: Metrics,
         sleep: Duration,
         cancel: CancellationToken,
     ) -> Self {
+        let watermark = Arc::new(RwLock::new(Watermark::default()));
         Self {
-            checkpoint,
-            epoch,
+            watermark,
             db,
             metrics,
             sleep,
@@ -68,10 +59,11 @@ impl ServiceWatermarkTask {
                             continue;
                         }
                     };
-                    self.checkpoint.store(checkpoint, Relaxed);
-                    if epoch > self.epoch.load(Relaxed) {
+                    let mut w = self.watermark.write().await;
+                    w.checkpoint = checkpoint;
+                    if epoch > w.epoch {
+                        w.epoch = epoch;
                         tx.send(epoch).unwrap();
-                        self.epoch.store(epoch, Relaxed);
                     }
                 }
             }
@@ -79,9 +71,6 @@ impl ServiceWatermarkTask {
     }
 
     pub(crate) fn get_watermark(&self) -> ServiceWatermark {
-        ServiceWatermark {
-            checkpoint: self.checkpoint.clone(),
-            epoch: self.epoch.clone(),
-        }
+        self.watermark.clone()
     }
 }

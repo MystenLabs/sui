@@ -47,8 +47,6 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
-use std::sync::Arc;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -292,8 +290,6 @@ impl ServerBuilder {
 
         // Initialize the watermark background task struct..
         let watermark = ServiceWatermarkTask::new(
-            Arc::new(AtomicU64::new(0)),
-            Arc::new(AtomicU64::new(0)),
             db_reader.clone(),
             state.metrics.clone(),
             std::time::Duration::from_millis(state.service.background_tasks.watermark_update_ms),
@@ -465,10 +461,12 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
+    let watermark = service_watermark.read().await;
+
     // This wrapping is done to delineate the watermark from potentially other u64 types.
     req.data.insert(Watermark {
-        checkpoint: service_watermark.checkpoint.load(Relaxed),
-        epoch: service_watermark.epoch.load(Relaxed),
+        checkpoint: watermark.checkpoint,
+        epoch: watermark.epoch,
     });
 
     let result = schema.execute(req).await;

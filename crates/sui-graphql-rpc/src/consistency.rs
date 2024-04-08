@@ -48,7 +48,7 @@ pub(crate) struct ConsistentNamedCursor {
 
 /// Watermark used by graphql queries to ensure cross-query consistency and flag epoch-boundary
 /// changes.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub(crate) struct Watermark {
     /// The checkpoint upper-bound for the query.
     pub checkpoint: u64,
