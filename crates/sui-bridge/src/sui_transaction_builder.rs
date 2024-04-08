@@ -31,6 +31,7 @@ pub fn build_sui_transaction(
     bridge_object_arg: ObjectArg,
     sui_token_type_tags: &HashMap<u8, TypeTag>,
 ) -> BridgeResult<TransactionData> {
+    // TODO: Check chain id?
     match action.data() {
         BridgeAction::EthToSuiBridgeAction(_) => build_token_bridge_approve_transaction(
             client_address,
@@ -82,6 +83,10 @@ pub fn build_sui_transaction(
             action,
             bridge_object_arg,
         ),
+        BridgeAction::AddTokensOnEvmAction(_) => {
+            // It does not need a Sui tranaction to add tokens on EVM
+            unreachable!()
+        }
     }
 }
 
