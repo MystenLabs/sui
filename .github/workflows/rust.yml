@@ -90,15 +90,16 @@ jobs:
         node-version: [18]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
         with:
           version: 8
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
-          node-version: '18'
-          cache: 'pnpm'
+          node-version: 16
+          cache: "pnpm"
       - name: Install dependencies
-        run: pnpm install -D
+        run: pnpm install --frozen-lockfile
       - name: Run npm test
         working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
         shell: bash
