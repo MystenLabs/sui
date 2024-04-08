@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::eth_bridge_limiter;
 use crate::abi::{eth_bridge_committee, eth_sui_bridge, EthBridgeCommittee, EthBridgeLimiter};
+use crate::abi::{eth_bridge_config, eth_bridge_limiter, EthBridgeConfig};
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
-    AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeCommitteeValiditySignInfo,
-    LimitUpdateAction, VerifiedCertifiedBridgeAction,
+    AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction,
+    BridgeCommitteeValiditySignInfo, LimitUpdateAction, VerifiedCertifiedBridgeAction,
 };
 use crate::utils::EthSigner;
 use crate::{
@@ -26,8 +26,15 @@ pub async fn build_eth_transaction(
             action.data().clone(),
         ));
     }
+    // TODO: Check chain id?
     let sigs = action.auth_sig();
     match action.data() {
+        BridgeAction::SuiToEthBridgeAction(_) => {
+            unreachable!()
+        }
+        BridgeAction::EthToSuiBridgeAction(_) => {
+            unreachable!()
+        }
         BridgeAction::EmergencyAction(action) => {
             build_emergency_op_approve_transaction(contract_address, signer, action.clone(), sigs)
                 .await
@@ -54,7 +61,17 @@ pub async fn build_eth_transaction(
             )
             .await
         }
-        _ => unreachable!(),
+        BridgeAction::EvmContractUpgradeAction(_) => {
+            // TODO
+            unimplemented!();
+        }
+        BridgeAction::AddTokensOnSuiAction(_) => {
+            unreachable!();
+        }
+        BridgeAction::AddTokensOnEvmAction(action) => {
+            build_add_tokens_on_evm_transaction(contract_address, signer, action.clone(), sigs)
+                .await
+        }
     }
 }
 
@@ -115,14 +132,30 @@ pub async fn build_asset_price_update_approve_transaction(
     action: AssetPriceUpdateAction,
     sigs: &BridgeCommitteeValiditySignInfo,
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
-    let contract = EthBridgeLimiter::new(contract_address, signer.into());
-    let message: eth_bridge_limiter::Message = action.clone().into();
+    let contract = EthBridgeConfig::new(contract_address, signer.into());
+    let message: eth_bridge_config::Message = action.clone().into();
     let signatures = sigs
         .signatures
         .values()
         .map(|sig| Bytes::from(sig.as_ref().to_vec()))
         .collect::<Vec<_>>();
     Ok(contract.update_token_price_with_signatures(signatures, message))
+}
+
+pub async fn build_add_tokens_on_evm_transaction(
+    contract_address: EthAddress,
+    signer: EthSigner,
+    action: AddTokensOnEvmAction,
+    sigs: &BridgeCommitteeValiditySignInfo,
+) -> BridgeResult<ContractCall<EthSigner, ()>> {
+    let contract = EthBridgeConfig::new(contract_address, signer.into());
+    let message: eth_bridge_config::Message = action.clone().into();
+    let signatures = sigs
+        .signatures
+        .values()
+        .map(|sig| Bytes::from(sig.as_ref().to_vec()))
+        .collect::<Vec<_>>();
+    Ok(contract.add_tokens_with_signatures(signatures, message))
 }
 
 // TODO contract upgrade

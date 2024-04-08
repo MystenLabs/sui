@@ -134,6 +134,38 @@ impl BridgeClient {
                     "sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}"
                 )
             }
+            BridgeAction::AddTokensOnEvmAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let native = if a.native { "1" } else { "0" };
+                let token_ids = a
+                    .token_ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_addresses = a
+                    .token_addresses
+                    .iter()
+                    .map(|name| format!("{:?}", name))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_sui_decimals = a
+                    .token_sui_decimals
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let token_prices = a
+                    .token_prices
+                    .iter()
+                    .map(|price| price.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(
+                    "sign/add_tokens_on_evm/{chain_id}/{nonce}/{native}/{token_ids}/{token_addresses}/{token_sui_decimals}/{token_prices}"
+                )
+            }
         }
     }
 
@@ -566,6 +598,24 @@ mod tests {
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
             "sign/add_tokens_on_sui/1/3/0/99,100,101/0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3/1000000000,2000000000,3000000000",
+        );
+
+        let action = BridgeAction::AddTokensOnEvmAction(crate::types::AddTokensOnEvmAction {
+            nonce: 0,
+            chain_id: BridgeChainId::EthLocalTest,
+            native: true,
+            token_ids: vec![99, 100, 101],
+            token_addresses: vec![
+                EthAddress::repeat_byte(1),
+                EthAddress::repeat_byte(2),
+                EthAddress::repeat_byte(3),
+            ],
+            token_sui_decimals: vec![5, 6, 7],
+            token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/add_tokens_on_evm/12/0/1/99,100,101/0x0101010101010101010101010101010101010101,0x0202020202020202020202020202020202020202,0x0303030303030303030303030303030303030303/5,6,7/1000000000,2000000000,3000000000",
         );
     }
 }
