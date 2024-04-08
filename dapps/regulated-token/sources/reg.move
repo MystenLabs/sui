@@ -35,8 +35,8 @@ module regulated_token::reg {
             &mut policy, &policy_cap, token::spend_action(), ctx
         );
 
-        transfer::public_transfer(treasury_cap, sender(ctx));
-        transfer::public_transfer(policy_cap, sender(ctx));
+        transfer::public_transfer(treasury_cap, ctx.sender());
+        transfer::public_transfer(policy_cap, ctx.sender());
         transfer::public_freeze_object(coin_metadata);
         token::share_policy(policy);
     }

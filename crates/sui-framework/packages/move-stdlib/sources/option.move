@@ -3,8 +3,6 @@
 
 /// This module defines the Option type and its methods to represent and handle an optional value.
 module std::option {
-    use std::vector;
-
     /// Abstraction of a value that may or may not be present. Implemented with a vector of size
     /// zero or one because Move bytecode does not have ADTs.
     public struct Option<Element> has copy, drop, store {

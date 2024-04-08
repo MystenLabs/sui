@@ -14,6 +14,7 @@ module move_benchmark::benchmark {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
+    #[allow(lint(self_transfer))]
     public fun transfer_coin(coin: Coin<SUI>, ctx: &TxContext) {
         transfer::public_transfer(coin, tx_context::sender(ctx));
     }
