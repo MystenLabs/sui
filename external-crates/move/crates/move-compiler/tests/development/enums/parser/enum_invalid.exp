@@ -20,3 +20,12 @@ error[E01002]: unexpected token
 13 │        Done(x: u64),
    │             ^ Cannot use named fields in a positional definition
 
+error[E01002]: unexpected token
+   ┌─ tests/development/enums/parser/enum_invalid.move:14:18
+   │
+14 │        Add { u64 },
+   │                  ^
+   │                  │
+   │                  Unexpected '}'
+   │                  Expected ':'
+

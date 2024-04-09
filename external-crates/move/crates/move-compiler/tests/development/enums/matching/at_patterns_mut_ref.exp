@@ -1,3 +1,9 @@
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/development/enums/matching/at_patterns_mut_ref.move:30:16
+   │
+30 │         match (x) {
+   │                ^ Pattern 'Maybe::Just(_)' not covered
+
 error[E01002]: unexpected token
    ┌─ tests/development/enums/matching/at_patterns_mut_ref.move:31:13
    │

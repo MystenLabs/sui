@@ -20,3 +20,12 @@ error[E01002]: unexpected token
 3 │     struct Foo has copy {} has;
   │                               ^ Unexpected ';'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
 
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:5:1
+  │
+5 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
+

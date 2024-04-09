@@ -2312,6 +2312,7 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             let result = type_(context, *result);
             ET::Fun(args, Box::new(result))
         }
+        PT::UnresolvedError => ET::UnresolvedError,
     };
     sp(loc, t_)
 }
@@ -2343,6 +2344,20 @@ fn optional_types(context: &mut Context, pts_opt: Option<Vec<P::Type>>) -> Optio
 
 #[growing_stack]
 fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
+    // removes an unresolved sequence item if it is the only item in the sequence
+    fn remove_single_unresolved(items: &mut VecDeque<E::SequenceItem>) -> Option<Box<E::Exp>> {
+        if items.len() != 1 {
+            return None;
+        }
+        let seq_item = items.pop_front().unwrap();
+        if let E::SequenceItem_::Seq(exp) = &seq_item.value {
+            if exp.value == E::Exp_::UnresolvedError {
+                return Some(exp.clone());
+            }
+        }
+        items.push_front(seq_item);
+        None
+    }
     let (puses, pitems, maybe_last_semicolon_loc, pfinal_item) = seq;
 
     let (new_scope, use_funs_builder) = uses(context, puses);
@@ -2355,11 +2370,17 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     let final_e_opt = pfinal_item.map(|item| exp(context, Box::new(item)));
     let final_e = match final_e_opt {
         None => {
-            let last_semicolon_loc = match maybe_last_semicolon_loc {
-                Some(l) => l,
-                None => loc,
-            };
-            Box::new(sp(last_semicolon_loc, E::Exp_::Unit { trailing: true }))
+            // if there is only one item in the sequence and it is unresolved, do not generated the
+            // final sequence unit-typed expression
+            if let Some(unresolved) = remove_single_unresolved(&mut items) {
+                unresolved
+            } else {
+                let last_semicolon_loc = match maybe_last_semicolon_loc {
+                    Some(l) => l,
+                    None => loc,
+                };
+                Box::new(sp(last_semicolon_loc, E::Exp_::Unit { trailing: true }))
+            }
         }
         Some(e) => e,
     };
