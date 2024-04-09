@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::any::Any;
+use std::any::Any as StdAny;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -11,17 +11,19 @@ use std::time::Instant;
 use async_trait::async_trait;
 use core::result::Result::Ok;
 use diesel::dsl::max;
+use diesel::r2d2::R2D2Connection;
 use diesel::upsert::excluded;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
+use downcast::Any;
 use itertools::Itertools;
 use tap::TapFallible;
 use tracing::info;
 
 use sui_types::base_types::ObjectID;
 
-use crate::db::PgConnectionPool;
+use crate::db::ConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
@@ -40,8 +42,8 @@ use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
     transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
-use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
+use crate::{read_only_blocking, transactional_blocking_with_retry};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
@@ -101,17 +103,28 @@ SET object_version = EXCLUDED.object_version,
     df_object_id = EXCLUDED.df_object_id;
 ";
 
-#[derive(Clone)]
-pub struct PgIndexerStore {
-    blocking_cp: PgConnectionPool,
+pub struct PgIndexerStore<T: R2D2Connection + 'static> {
+    blocking_cp: ConnectionPool<T>,
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
-    partition_manager: PgPartitionManager,
+    partition_manager: PgPartitionManager<T>,
 }
 
-impl PgIndexerStore {
-    pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
+impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
+    fn clone(&self) -> PgIndexerStore<T> {
+        Self {
+            blocking_cp: self.blocking_cp.clone(),
+            metrics: self.metrics.clone(),
+            parallel_chunk_size: self.parallel_chunk_size,
+            parallel_objects_chunk_size: self.parallel_objects_chunk_size,
+            partition_manager: self.partition_manager.clone(),
+        }
+    }
+}
+
+impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
+    pub fn new(blocking_cp: ConnectionPool<T>, metrics: IndexerMetrics) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
@@ -132,7 +145,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub fn blocking_cp(&self) -> PgConnectionPool {
+    pub fn blocking_cp(&self) -> ConnectionPool<T> {
         self.blocking_cp.clone()
     }
 
@@ -943,7 +956,7 @@ impl PgIndexerStore {
 }
 
 #[async_trait]
-impl IndexerStore for PgIndexerStore {
+impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_latest_checkpoint_sequence_number())
             .await
@@ -1334,7 +1347,7 @@ impl IndexerStore for PgIndexerStore {
         .await
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn StdAny {
         self
     }
 }

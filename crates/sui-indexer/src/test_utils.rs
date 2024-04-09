@@ -7,13 +7,14 @@ use secrecy::ExposeSecret;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use diesel::r2d2::R2D2Connection;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
-use crate::db::{new_pg_connection_pool_with_config, reset_database, PgConnectionPoolConfig};
+use crate::db::{new_connection_pool_with_config, ConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
@@ -39,12 +40,12 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer(
+pub async fn start_test_indexer<T: R2D2Connection + Send>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     data_ingestion_path: PathBuf,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
+) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
     start_test_indexer_impl(
         db_url,
         rpc_url,
@@ -56,14 +57,14 @@ pub async fn start_test_indexer(
     .await
 }
 
-pub async fn start_test_indexer_impl(
+pub async fn start_test_indexer_impl<T: R2D2Connection>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
+) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     info!("Setting DB_POOL_SIZE to 10");
@@ -76,7 +77,7 @@ pub async fn start_test_indexer_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    let pool_config = PgConnectionPoolConfig::default();
+    let pool_config = ConnectionPoolConfig::default();
 
     // Default to writer mode
     let mut config = IndexerConfig {
@@ -104,7 +105,7 @@ pub async fn start_test_indexer_impl(
 
         // Open in default mode
         let blocking_pool =
-            new_pg_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();
+            new_connection_pool_with_config::<T>(&default_db_url, Some(5), pool_config).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -122,7 +123,7 @@ pub async fn start_test_indexer_impl(
     }
 
     let blocking_pool =
-        new_pg_connection_pool_with_config(parsed_url.expose_secret(), Some(5), pool_config)
+        new_connection_pool_with_config::<T>(parsed_url.expose_secret(), Some(5), pool_config)
             .unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
@@ -137,16 +138,18 @@ pub async fn start_test_indexer_impl(
             config.rpc_server_worker = true;
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
-            tokio::spawn(async move { Indexer::start_reader(&config, &registry, db_url).await })
+            tokio::spawn(
+                async move { Indexer::start_reader::<T>(&config, &registry, db_url).await },
+            )
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
             if config.reset_db {
-                reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
+                crate::db::reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
             }
             let store_clone = store.clone();
 
             tokio::spawn(async move {
-                Indexer::start_writer_with_config(
+                Indexer::start_writer_with_config::<PgIndexerStore<T>, T>(
                     &config,
                     store_clone,
                     indexer_metrics,
@@ -171,15 +174,15 @@ fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
     )
 }
 
-pub async fn force_delete_database(db_url: String) {
+pub async fn force_delete_database<T: R2D2Connection + 'static>(db_url: String) {
     // Replace the database name with the default `postgres`, which should be the last string after `/`
     // This is necessary because you can't drop a database while being connected to it.
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
-    let pool_config = PgConnectionPoolConfig::default();
+    let pool_config = ConnectionPoolConfig::default();
 
     let blocking_pool =
-        new_pg_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();
+        new_connection_pool_with_config::<T>(&default_db_url, Some(5), pool_config).unwrap();
     blocking_pool
         .get()
         .unwrap()

@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_binary_format::normalized::Module as NormalizedModule;
@@ -22,18 +23,18 @@ use sui_types::base_types::ObjectID;
 
 use crate::indexer_reader::IndexerReader;
 
-pub struct MoveUtilsApi {
-    inner: IndexerReader,
+pub struct MoveUtilsApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
 }
 
-impl MoveUtilsApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection> MoveUtilsApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait]
-impl MoveUtilsServer for MoveUtilsApi {
+impl<T: R2D2Connection + 'static> MoveUtilsServer for MoveUtilsApi<T> {
     async fn get_normalized_move_modules_by_package(
         &self,
         package_id: ObjectID,
@@ -132,7 +133,7 @@ impl MoveUtilsServer for MoveUtilsApi {
     }
 }
 
-impl SuiRpcModule for MoveUtilsApi {
+impl<T: R2D2Connection> SuiRpcModule for MoveUtilsApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

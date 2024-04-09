@@ -310,14 +310,12 @@ derive_builder = "0.12.0"
 derive_more = "0.99.17"
 diesel = { version = "2.1.0", features = [
   "chrono",
-  "postgres",
   "r2d2",
   "serde_json",
   "64-column-tables",
   "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
-  "postgres_backend",
 ] }
-diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
+diesel-derive-enum = { version = "2.0.1" }
 diesel_migrations = { version = "2.0.0" }
 dirs = "4.0.0"
 duration-str = "0.5.0"

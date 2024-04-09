@@ -10,7 +10,7 @@ mod ingestion_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_indexer::db::get_pg_pool_connection;
+    use sui_indexer::db::get_pool_connection;
     use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::transactions::StoredTransaction;
@@ -25,7 +25,7 @@ mod ingestion_tests {
 
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = get_pg_pool_connection($pool)?;
+            let mut pg_pool_conn = get_pool_connection::<diesel::PgConnection>($pool)?;
             pg_pool_conn
                 .build_transaction()
                 .read_only()
@@ -43,7 +43,7 @@ mod ingestion_tests {
         data_ingestion_path: PathBuf,
     ) -> (
         JoinHandle<()>,
-        PgIndexerStore,
+        PgIndexerStore<diesel::PgConnection>,
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let server_url: SocketAddr = format!("127.0.0.1:{}", DEFAULT_SERVER_PORT)
@@ -75,7 +75,7 @@ mod ingestion_tests {
 
     /// Wait for the indexer to catch up to the given checkpoint sequence number.
     async fn wait_for_checkpoint(
-        pg_store: &PgIndexerStore,
+        pg_store: &PgIndexerStore<diesel::PgConnection>,
         checkpoint_sequence_number: u64,
     ) -> Result<(), IndexerError> {
         tokio::time::timeout(Duration::from_secs(10), async {
