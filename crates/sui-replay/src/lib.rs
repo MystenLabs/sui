@@ -104,8 +104,6 @@ pub enum ReplayToolCommand {
         path: PathBuf,
         #[arg(long, short)]
         terminate_early: bool,
-        #[arg(long, short, default_value = "16")]
-        batch_size: u64,
     },
 
     /// Replay a transaction from a node state dump
@@ -256,113 +254,40 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayBatch {
             path,
             terminate_early,
-            batch_size,
         } => {
-            async fn exec_batch(
-                rpc_url: Option<String>,
-                safety: ExpensiveSafetyCheckConfig,
-                use_authority: bool,
-                cfg_path: Option<PathBuf>,
-                tx_digests: &[TransactionDigest],
-            ) -> anyhow::Result<()> {
-                let mut handles = vec![];
-                for tx_digest in tx_digests {
-                    let tx_digest = *tx_digest;
-                    let rpc_url = rpc_url.clone();
-                    let cfg_path = cfg_path.clone();
-                    let safety = safety.clone();
-                    handles.push(tokio::spawn(async move {
-                        info!("Executing tx: {}", tx_digest);
-                        let sandbox_state = LocalExec::replay_with_network_config(
-                            rpc_url,
-                            cfg_path.map(|p| p.to_str().unwrap().to_string()),
-                            tx_digest,
-                            safety,
-                            use_authority,
-                            None,
-                            None,
-                            None,
-                        )
-                        .await?;
-
-                        sandbox_state.check_effects()?;
-
-                        info!("Execution finished successfully: {}. Local and on-chain effects match.", tx_digest);
-                        Ok::<_, anyhow::Error>(())
-                    }));
-                }
-                futures::future::join_all(handles)
-                    .await
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()
-                    .expect("Join all failed")
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(())
-            }
-
-            // While file end not reached, read up to max_tasks lines from path
             let file = std::fs::File::open(path).unwrap();
             let reader = std::io::BufReader::new(file);
 
-            let mut chunk = Vec::new();
             for tx_digest in reader.lines() {
-                chunk.push(
+                let tx_digest =
                     match TransactionDigest::from_str(&tx_digest.expect("Unable to readline")) {
                         Ok(digest) => digest,
                         Err(e) => {
                             panic!("Error parsing tx digest: {:?}", e);
                         }
-                    },
-                );
-                if chunk.len() == batch_size as usize {
-                    println!("Executing batch: {:?}", chunk);
-                    // execute all in chunk
-                    match exec_batch(
-                        rpc_url.clone(),
-                        safety.clone(),
-                        use_authority,
-                        cfg_path.clone(),
-                        &chunk,
-                    )
-                    .await
-                    {
-                        Ok(_) => info!("Batch executed successfully: {:?}", chunk),
-                        Err(e) => {
-                            error!("Error executing batch: {:?}", e);
-                            if terminate_early {
-                                return Err(e);
-                            }
-                        }
-                    }
-                    println!("Finished batch execution");
+                    };
 
-                    chunk.clear();
-                }
-            }
-            if !chunk.is_empty() {
-                println!("Executing batch: {:?}", chunk);
-                match exec_batch(
-                    rpc_url.clone(),
-                    safety,
-                    use_authority,
-                    cfg_path.clone(),
-                    &chunk,
-                )
-                .await
-                {
-                    Ok(_) => info!("Batch executed successfully: {:?}", chunk),
+                info!("Executing tx: {}", tx_digest);
+                let cmd = ReplayToolCommand::ReplayTransaction {
+                    tx_digest: tx_digest.to_string(),
+                    show_effects: true,
+                    diag: false,
+                    executor_version: None,
+                    protocol_version: None,
+                };
+
+                match execute_replay_command(rpc_url.clone(), false, false, None, cmd).await {
                     Err(e) => {
-                        error!("Error executing batch: {:?}", e);
                         if terminate_early {
-                            return Err(e);
+                            panic!("{}", e);
                         }
                     }
+                    _ => {}
                 }
-                println!("Finished batch execution");
             }
 
-            // TODO: clean this up
+            println!("Finished batch execution");
+
             Some((0u64, 0u64))
         }
         ReplayToolCommand::ProfileTransaction {
