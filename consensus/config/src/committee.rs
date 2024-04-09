@@ -160,6 +160,10 @@ impl AuthorityIndex {
     // Minimum committee size is 1, so 0 index is always valid.
     pub const ZERO: AuthorityIndex = AuthorityIndex(0);
 
+    // For scanning rows in the database.
+    pub const MIN: AuthorityIndex = AuthorityIndex(0);
+    pub const MAX: AuthorityIndex = AuthorityIndex(u32::MAX);
+
     pub fn value(&self) -> usize {
         self.0 as usize
     }

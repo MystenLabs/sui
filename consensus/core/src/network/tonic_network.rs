@@ -39,7 +39,7 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::tonic_gen::consensus_service_server::ConsensusServiceServer,
-    Round,
+    CommitIndex, Round,
 };
 
 const AUTHORITY_INDEX_METADATA_KEY: &str = "authority-index";
@@ -205,6 +205,29 @@ impl NetworkClient for TonicClient {
             }
         }
         Ok(blocks)
+    }
+
+    async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(FetchCommitsRequest { start, end });
+        request.set_timeout(timeout);
+        // TODO: remove below after adding authentication.
+        request.metadata_mut().insert(
+            AUTHORITY_INDEX_METADATA_KEY,
+            self.context.own_index.value().to_string().parse().unwrap(),
+        );
+        let response = client
+            .fetch_commits(request)
+            .await
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_commits failed: {e:?}")))?;
+        let response = response.into_inner();
+        Ok((response.commits, response.certifier_blocks))
     }
 }
 
@@ -394,6 +417,40 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 .into_iter();
         let stream = iter(responses);
         Ok(Response::new(stream))
+    }
+
+    async fn fetch_commits(
+        &self,
+        request: Request<FetchCommitsRequest>,
+    ) -> Result<Response<FetchCommitsResponse>, tonic::Status> {
+        // TODO: switch to using authenticated peer identity.
+        let Some(peer_index) = request
+            .metadata()
+            .get(AUTHORITY_INDEX_METADATA_KEY)
+            .and_then(|s| s.to_str().ok())
+            .and_then(|s| s.parse().ok())
+            .and_then(|index| self.context.committee.to_authority_index(index))
+        else {
+            return Err(tonic::Status::invalid_argument("Invalid authority index"));
+        };
+        let request = request.into_inner();
+        let (commits, certifier_blocks) = self
+            .service
+            .handle_fetch_commits(peer_index, request.start, request.end)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        let commits = commits
+            .into_iter()
+            .map(|c| c.serialized().clone())
+            .collect();
+        let certifier_blocks = certifier_blocks
+            .into_iter()
+            .map(|b| b.serialized().clone())
+            .collect();
+        Ok(Response::new(FetchCommitsResponse {
+            commits,
+            certifier_blocks,
+        }))
     }
 }
 
@@ -585,6 +642,24 @@ pub(crate) struct FetchBlocksResponse {
     // Serialized SignedBlock.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchCommitsRequest {
+    #[prost(uint32, tag = "1")]
+    start: CommitIndex,
+    #[prost(uint32, tag = "2")]
+    end: CommitIndex,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchCommitsResponse {
+    // Serialized Commit.
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    commits: Vec<Bytes>,
+    // Serialized SignedBlock.
+    #[prost(bytes = "bytes", repeated, tag = "2")]
+    certifier_blocks: Vec<Bytes>,
 }
 
 fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {

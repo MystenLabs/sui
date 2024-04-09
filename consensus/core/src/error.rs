@@ -8,7 +8,11 @@ use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
-use crate::block::{BlockRef, BlockTimestampMs, Round};
+use crate::{
+    block::{BlockRef, BlockTimestampMs, Round},
+    commit::Commit,
+    CommitIndex,
+};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[derive(Clone, Debug, Error)]
@@ -93,6 +97,44 @@ pub enum ConsensusError {
     BlockTooFarInFuture {
         block_timestamp: BlockTimestampMs,
         forward_time_drift: Duration,
+    },
+
+    #[error("No available authority to fetch commits")]
+    NoAvailableAuthorityToFetchCommits,
+
+    #[error("Received no commit from peer {peer}")]
+    NoCommitReceived { peer: AuthorityIndex },
+
+    #[error(
+        "Received unexpected start commit from peer {peer}: request {start}, received {commit:?}"
+    )]
+    UnexpectedStartCommit {
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        commit: Box<Commit>,
+    },
+
+    #[error(
+        "Received unexpected commit sequence from peer {peer}: {prev_commit:?}, {curr_commit:?}"
+    )]
+    UnexpectedCommitSequence {
+        peer: AuthorityIndex,
+        prev_commit: Box<Commit>,
+        curr_commit: Box<Commit>,
+    },
+
+    #[error("Not enough votes ({stake}) on end commit from peer {peer}: {commit:?}")]
+    NotEnoughCommitVotes {
+        stake: Stake,
+        peer: AuthorityIndex,
+        commit: Box<Commit>,
+    },
+
+    #[error("Received unexpected block from from peer {peer}: {requested:?} vs {received:?}")]
+    UnexpectedBlockForCommit {
+        peer: AuthorityIndex,
+        requested: BlockRef,
+        received: BlockRef,
     },
 
     #[error("RocksDB failure: {0}")]

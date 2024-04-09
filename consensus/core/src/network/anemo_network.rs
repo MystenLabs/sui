@@ -39,7 +39,7 @@ use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
-    Round,
+    CommitIndex, Round,
 };
 
 /// Implements Anemo RPC client for Consensus.
@@ -176,6 +176,23 @@ impl NetworkClient for AnemoClient {
             .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
         Ok(response.into_body().blocks)
     }
+
+    async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = FetchCommitsRequest { start, end };
+        let response = client
+            .fetch_commits(anemo::Request::new(request).with_timeout(timeout))
+            .await
+            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
+        let response = response.into_body();
+        Ok((response.commits, response.certifier_blocks))
+    }
 }
 
 /// Proxies Anemo requests to NetworkService with actual handler implementation.
@@ -268,6 +285,47 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 )
             })?;
         Ok(Response::new(FetchBlocksResponse { blocks }))
+    }
+
+    async fn fetch_commits(
+        &self,
+        request: anemo::Request<FetchCommitsRequest>,
+    ) -> Result<anemo::Response<FetchCommitsResponse>, anemo::rpc::Status> {
+        let Some(peer_id) = request.peer_id() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer_id not found",
+            ));
+        };
+        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+            anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer not found",
+            )
+        })?;
+        let request = request.into_body();
+        let (commits, certifier_blocks) = self
+            .service
+            .handle_fetch_commits(*index, request.start, request.end)
+            .await
+            .map_err(|e| {
+                anemo::rpc::Status::new_with_message(
+                    anemo::types::response::StatusCode::InternalServerError,
+                    format!("{e}"),
+                )
+            })?;
+        let commits = commits
+            .into_iter()
+            .map(|c| c.serialized().clone())
+            .collect();
+        let certifier_blocks = certifier_blocks
+            .into_iter()
+            .map(|b| b.serialized().clone())
+            .collect();
+        Ok(Response::new(FetchCommitsResponse {
+            commits,
+            certifier_blocks,
+        }))
     }
 }
 
@@ -519,6 +577,20 @@ pub(crate) struct FetchBlocksRequest {
 pub(crate) struct FetchBlocksResponse {
     // Serialized SignedBlock.
     blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchCommitsRequest {
+    start: CommitIndex,
+    end: CommitIndex,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchCommitsResponse {
+    // Serialized Commit.
+    commits: Vec<Bytes>,
+    // Serialized SignedBlock.
+    certifier_blocks: Vec<Bytes>,
 }
 
 #[derive(Clone)]

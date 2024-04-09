@@ -104,6 +104,13 @@ pub(crate) struct NodeMetrics {
     pub unsuspended_blocks: IntCounterVec,
     pub subscriber_connection_attempts: IntCounterVec,
     pub subscriber_connections: IntGaugeVec,
+    pub commit_sync_inflight_fetches: IntGauge,
+    pub commit_sync_pending_fetches: IntGauge,
+    pub commit_sync_fetched_commits: IntCounter,
+    pub commit_sync_fetched_blocks: IntCounter,
+    pub commit_sync_highest_index: IntGauge,
+    pub commit_sync_fetch_loop_latency: Histogram,
+    pub commit_sync_fetch_once_latency: Histogram,
     pub uptime: Histogram,
 }
 
@@ -281,6 +288,43 @@ impl NodeMetrics {
                 "subscriber_connections",
                 "The number of block stream connections breaking down by peer",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            commit_sync_inflight_fetches: register_int_gauge_with_registry!(
+                "commit_sync_inflight_fetches",
+                "The number of inflight fetches in commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_pending_fetches: register_int_gauge_with_registry!(
+                "commit_sync_pending_fetches",
+                "The number of pending fetches in commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_commits: register_int_counter_with_registry!(
+                "commit_sync_fetched_commits",
+                "The number of commits fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_blocks: register_int_counter_with_registry!(
+                "commit_sync_fetched_blocks",
+                "The number of blocks fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_highest_index: register_int_gauge_with_registry!(
+                "commit_sync_highest_index",
+                "The highest index between local and fetched commits",
+                registry,
+            ).unwrap(),
+            commit_sync_fetch_loop_latency: register_histogram_with_registry!(
+                "commit_sync_fetch_loop_latency",
+                "The time taken to finish fetching commits and blocks from a given range",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            commit_sync_fetch_once_latency: register_histogram_with_registry!(
+                "commit_sync_fetch_once_latency",
+                "The time taken to fetch commits and blocks once",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             uptime: register_histogram_with_registry!(

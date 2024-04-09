@@ -13,43 +13,53 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{info, warn};
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock},
+    block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
+    commit::{CommitAPI as _, TrustedCommit},
+    commit_syncer::HighestCommitMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{BlockStream, NetworkService},
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
+    storage::Store,
     synchronizer::SynchronizerHandle,
-    Round,
+    CommitIndex, Round,
 };
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
+    highest_commit_monitor: Arc<HighestCommitMonitor>,
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
     dag_state: Arc<RwLock<DagState>>,
+    store: Arc<dyn Store>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
+        highest_commit_monitor: Arc<HighestCommitMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
         dag_state: Arc<RwLock<DagState>>,
+        store: Arc<dyn Store>,
     ) -> Self {
         Self {
             context,
             block_verifier,
+            highest_commit_monitor,
             synchronizer,
             core_dispatcher,
             rx_block_broadcaster,
             dag_state,
+            store,
         }
     }
 }
@@ -124,6 +134,10 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             sleep(forward_time_drift).await;
         }
 
+        // Observe the block for the highest commit. When local commit is lagging too much,
+        // commit sync will be triggered.
+        self.highest_commit_monitor.observe(&verified_block);
+
         self.context
             .metrics
             .node_metrics
@@ -178,9 +192,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>> {
-        const MAX_ALLOWED_FETCH_BLOCKS: usize = 200;
-
-        if block_refs.len() > MAX_ALLOWED_FETCH_BLOCKS {
+        if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
         }
 
@@ -192,7 +204,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     max: self.context.committee.size(),
                 });
             }
-            if block.round == 0 {
+            if block.round == GENESIS_ROUND {
                 return Err(ConsensusError::UnexpectedGenesisBlockRequested);
             }
         }
@@ -208,6 +220,38 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .collect::<Vec<_>>();
 
         Ok(result)
+    }
+
+    async fn handle_fetch_commits(
+        &self,
+        _peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        // start and end are inclusive.
+        let mut commits = self.store.scan_commits(start..(end + 1))?;
+        let mut certifier_block_refs = vec![];
+        'commit: while let Some(c) = commits.last() {
+            let index = c.index();
+            let votes = self.store.read_commit_votes(index)?;
+            let mut stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
+            for v in &votes {
+                stake_aggregator.add(v.author, &self.context.committee);
+            }
+            if stake_aggregator.reached_threshold(&self.context.committee) {
+                certifier_block_refs = votes;
+                break 'commit;
+            } else {
+                commits.pop();
+            }
+        }
+        let certifier_blocks = self
+            .store
+            .read_blocks(&certifier_block_refs)?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok((commits, certifier_blocks))
     }
 }
 

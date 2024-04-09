@@ -15,6 +15,7 @@ use crate::{
     block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
+    commit_syncer::{CommitSyncer, HighestCommitMonitor},
     context::Context,
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
@@ -125,6 +126,7 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
+    commit_syncer: CommitSyncer<N::Client>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -185,7 +187,15 @@ where
             ))
         };
 
-        let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
+        let store_path = context
+            .parameters
+            .db_path
+            .as_ref()
+            .expect("DB path is not set")
+            .as_path()
+            .to_str()
+            .unwrap();
+        let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
@@ -196,8 +206,12 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
-        let commit_observer =
-            CommitObserver::new(context.clone(), commit_consumer, dag_state.clone(), store);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+        );
 
         let core = Core::new(
             context.clone(),
@@ -222,13 +236,25 @@ where
             block_verifier.clone(),
         );
 
+        let highest_commit_monitor = Arc::new(HighestCommitMonitor::new(&context));
+        let commit_syncer = CommitSyncer::new(
+            context.clone(),
+            core_dispatcher.clone(),
+            highest_commit_monitor.clone(),
+            network_client.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+        );
+
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
+            highest_commit_monitor,
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
             dag_state.clone(),
+            store,
         ));
 
         let subscriber = if N::Client::SUPPORT_STREAMING {
@@ -257,6 +283,7 @@ where
             start_time,
             transaction_client: Arc::new(tx_client),
             synchronizer,
+            commit_syncer,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -273,6 +300,7 @@ where
 
         // First shutdown components calling into Core.
         self.synchronizer.stop().await;
+        self.commit_syncer.stop();
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
@@ -397,6 +425,16 @@ mod tests {
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
+
+        async fn fetch_commits(
+            &self,
+            _peer: AuthorityIndex,
+            _start: Round,
+            _end: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[rstest]
@@ -451,7 +489,7 @@ mod tests {
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -461,10 +499,12 @@ mod tests {
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
+            Arc::new(HighestCommitMonitor::new(&context)),
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
             dag_state,
+            store,
         ));
 
         // Test delaying blocks with time drift.

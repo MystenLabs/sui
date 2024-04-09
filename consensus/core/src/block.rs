@@ -19,14 +19,14 @@ use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
-use crate::error::ConsensusResult;
-use crate::{commit::CommitRef, context::Context};
-use crate::{ensure, error::ConsensusError};
-
-pub(crate) const GENESIS_ROUND: Round = 0;
+use crate::{
+    commit::CommitVote, context::Context, ensure, error::ConsensusError, error::ConsensusResult,
+};
 
 /// Round number of a block.
 pub type Round = u32;
+
+pub(crate) const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
@@ -77,7 +77,7 @@ pub trait BlockAPI {
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
-    fn commit_votes(&self) -> &[CommitRef];
+    fn commit_votes(&self) -> &[CommitVote];
     fn slot(&self) -> Slot;
 }
 
@@ -90,7 +90,7 @@ pub struct BlockV1 {
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
-    commit_votes: Vec<CommitRef>,
+    commit_votes: Vec<CommitVote>,
 }
 
 impl BlockV1 {
@@ -101,7 +101,7 @@ impl BlockV1 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
-        commit_votes: Vec<CommitRef>,
+        commit_votes: Vec<CommitVote>,
     ) -> BlockV1 {
         Self {
             epoch,
@@ -152,7 +152,7 @@ impl BlockAPI for BlockV1 {
         &self.transactions
     }
 
-    fn commit_votes(&self) -> &[CommitRef] {
+    fn commit_votes(&self) -> &[CommitVote] {
         &self.commit_votes
     }
 
@@ -171,6 +171,18 @@ pub struct BlockRef {
 }
 
 impl BlockRef {
+    pub const MIN: Self = Self {
+        round: 0,
+        author: AuthorityIndex::MIN,
+        digest: BlockDigest::MIN,
+    };
+
+    pub const MAX: Self = Self {
+        round: u32::MAX,
+        author: AuthorityIndex::MAX,
+        digest: BlockDigest::MAX,
+    };
+
     pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
         Self {
             round,
@@ -468,7 +480,7 @@ impl VerifiedBlock {
     }
 
     /// Computes digest from the serialized block with signature.
-    fn compute_digest(serialized: &[u8]) -> BlockDigest {
+    pub(crate) fn compute_digest(serialized: &[u8]) -> BlockDigest {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(serialized);
         BlockDigest(hasher.finalize().into())

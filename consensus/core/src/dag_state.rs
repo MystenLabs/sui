@@ -16,7 +16,7 @@ use crate::block::GENESIS_ROUND;
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
 use crate::{
     block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRef, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
     context::Context,
     storage::{Store, WriteBatch},
 };
@@ -54,9 +54,9 @@ pub(crate) struct DagState {
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
-    // Commits to be voted on in new blocks.
+    // Commit votes pending to be included in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
-    commits_to_vote: VecDeque<CommitRef>,
+    pending_commit_votes: VecDeque<CommitVote>,
 
     // Data to be flushed to storage.
     blocks_to_write: Vec<VerifiedBlock>,
@@ -103,7 +103,7 @@ impl DagState {
             last_commit,
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
-            commits_to_vote: VecDeque::new(),
+            pending_commit_votes: VecDeque::new(),
             blocks_to_write: vec![],
             commits_to_write: vec![],
             store,
@@ -524,14 +524,14 @@ impl DagState {
             );
         }
 
-        self.commits_to_vote.push_back(commit.reference());
+        self.pending_commit_votes.push_back(commit.reference());
         self.commits_to_write.push(commit);
     }
 
-    pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitRef> {
+    pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitVote> {
         let mut votes = Vec::new();
-        while !self.commits_to_vote.is_empty() && votes.len() < limit {
-            votes.push(self.commits_to_vote.pop_front().unwrap());
+        while !self.pending_commit_votes.is_empty() && votes.len() < limit {
+            votes.push(self.pending_commit_votes.pop_front().unwrap());
         }
         votes
     }
@@ -563,6 +563,14 @@ impl DagState {
                 .map(|(genesis_ref, _)| *genesis_ref)
                 .expect("Genesis blocks should always be available.")
                 .into(),
+        }
+    }
+
+    /// Highest round where a block is committed, which is last commit's leader round.
+    pub(crate) fn last_commit_round(&self) -> Round {
+        match &self.last_commit {
+            Some(commit) => commit.leader().round,
+            None => 0,
         }
     }
 
@@ -645,14 +653,6 @@ impl DagState {
 
     pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
         self.genesis.values().cloned().collect()
-    }
-
-    /// Highest round where a block is committed, which is last commit's leader round.
-    fn last_commit_round(&self) -> Round {
-        match &self.last_commit {
-            Some(commit) => commit.leader().round,
-            None => 0,
-        }
     }
 
     /// The last round that got evicted after a cache clean up operation. After this round we are

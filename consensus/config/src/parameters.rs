@@ -14,12 +14,9 @@ use serde::{Deserialize, Serialize};
 /// should not need to specify any field, except db_path.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// The number of rounds of blocks to be kept in the Dag state cache per authority. The larger
-    /// the number the more the blocks that will be kept in memory allowing minimising any potential
-    /// disk access. Should be careful when tuning this parameter as it could be quite memory expensive.
-    /// Value should be at minimum 50 rounds to ensure node performance and protocol advance.
-    #[serde(default = "Parameters::default_dag_state_cached_rounds")]
-    pub dag_state_cached_rounds: u32,
+    /// The database path.
+    /// Required.
+    pub db_path: Option<PathBuf>,
 
     /// Time to wait for parent round leader before sealing a block.
     #[serde(default = "Parameters::default_leader_timeout")]
@@ -36,9 +33,30 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_forward_time_drift")]
     pub max_forward_time_drift: Duration,
 
-    /// The database path.
-    /// Required.
-    pub db_path: Option<PathBuf>,
+    // Number of blocks to fetch per request.
+    #[serde(default = "Parameters::default_max_blocks_per_fetch")]
+    pub max_blocks_per_fetch: usize,
+
+    /// The number of rounds of blocks to be kept in the Dag state cache per authority. The larger
+    /// the number the more the blocks that will be kept in memory allowing minimising any potential
+    /// disk access.
+    /// Value should be at minimum 50 rounds to ensure node performance, but being too large can be
+    /// expensive in memory usage.
+    #[serde(default = "Parameters::default_dag_state_cached_rounds")]
+    pub dag_state_cached_rounds: u32,
+
+    // Number of parallel fetches to be issued to different authorities.
+    #[serde(default = "Parameters::default_commit_sync_parallel_fetches")]
+    pub commit_sync_parallel_fetches: usize,
+
+    // Number of commits to fetch in a batch.
+    // Usually should be <= dag_state_cached_rounds.
+    #[serde(default = "Parameters::default_commit_sync_batch_size")]
+    pub commit_sync_batch_size: u32,
+
+    // Number of batches ahead of last accepted batch, before throttling starts.
+    #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
+    pub commit_sync_batches_ahead: usize,
 
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]
@@ -50,15 +68,11 @@ pub struct Parameters {
 }
 
 impl Parameters {
-    pub fn default_dag_state_cached_rounds() -> u32 {
-        100
-    }
-
-    pub fn default_leader_timeout() -> Duration {
+    pub(crate) fn default_leader_timeout() -> Duration {
         Duration::from_millis(250)
     }
 
-    pub fn default_min_round_delay() -> Duration {
+    pub(crate) fn default_min_round_delay() -> Duration {
         if cfg!(msim) {
             // Checkpoint building and execution cannot keep up with high commit rate in simtests,
             // leading to long reconfiguration delays. This is because simtest is single threaded,
@@ -69,29 +83,58 @@ impl Parameters {
         }
     }
 
-    pub fn default_max_forward_time_drift() -> Duration {
+    pub(crate) fn default_max_forward_time_drift() -> Duration {
         Duration::from_millis(500)
     }
 
-    pub fn db_path_str_unsafe(&self) -> String {
-        self.db_path
-            .clone()
-            .expect("DB path is not set")
-            .as_path()
-            .to_str()
-            .unwrap()
-            .to_string()
+    pub(crate) fn default_dag_state_cached_rounds() -> u32 {
+        if cfg!(msim) {
+            // Exercise reading blocks from store.
+            5
+        } else {
+            500
+        }
+    }
+
+    pub(crate) fn default_commit_sync_parallel_fetches() -> usize {
+        20
+    }
+
+    pub(crate) fn default_commit_sync_batch_size() -> u32 {
+        if cfg!(msim) {
+            // Exercise commit sync.
+            5
+        } else {
+            100
+        }
+    }
+
+    pub(crate) fn default_max_blocks_per_fetch() -> usize {
+        if cfg!(msim) {
+            // Exercise hitting blocks per fetch limit.
+            10
+        } else {
+            1000
+        }
+    }
+
+    pub(crate) fn default_commit_sync_batches_ahead() -> usize {
+        200
     }
 }
 
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
+            db_path: None,
             leader_timeout: Parameters::default_leader_timeout(),
             min_round_delay: Parameters::default_min_round_delay(),
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
-            db_path: None,
+            dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
+            max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
+            commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
+            commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
+            commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             anemo: AnemoParameters::default(),
             tonic: TonicParameters::default(),
         }
