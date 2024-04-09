@@ -952,9 +952,9 @@ mod tests {
             native: true,
             token_ids: vec![99, 100, 101],
             token_addresses: vec![
-                EthAddress::repeat_byte(1),
-                EthAddress::repeat_byte(2),
-                EthAddress::repeat_byte(3),
+                EthAddress::from_str("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap(),
+                EthAddress::from_str("0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84").unwrap(),
+                EthAddress::from_str("0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72").unwrap(),
             ],
             token_sui_decimals: vec![5, 6, 7],
             token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
@@ -963,7 +963,7 @@ mod tests {
 
         assert_eq!(
             Hex::encode(encoded_bytes),
-            "5355495f4252494447455f4d455353414745070100000000000000000c0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00",
+            "5355495f4252494447455f4d455353414745070100000000000000000c0103636465036b175474e89094c44da98b954eedeac495271d0fae7ab96520de3a18e5e111b5eaab095312d7fe84c18360217d8f7ab5e7c516566761ea12ce7f9d720305060703000000003b9aca00000000007735940000000000b2d05e00",
         );
         // To generate regression test for sol contracts
         let keys = get_bridge_encoding_regression_test_keys();

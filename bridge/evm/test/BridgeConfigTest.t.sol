@@ -413,13 +413,18 @@ contract BridgeConfigTest is BridgeBaseTest {
         _stake[3] = 2500;
         committee = new BridgeCommittee();
         committee.initialize(_committee, _stake, minStakeRequired);
+        uint8[] memory _supportedDestinationChains = new uint8[](1);
+        _supportedDestinationChains[0] = 0;
+        config = new BridgeConfig();
+        config.initialize(
+            address(committee), 12, supportedTokens, tokenPrices, _supportedDestinationChains
+        );
         committee.initializeConfig(address(config));
         vault = new BridgeVault(wETH);
 
         uint64[] memory totalLimits = new uint64[](1);
         totalLimits[0] = 1000000;
-        uint8[] memory _supportedDestinationChains = new uint8[](1);
-        _supportedDestinationChains[0] = 0;
+
         skip(2 days);
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
@@ -428,7 +433,8 @@ contract BridgeConfigTest is BridgeBaseTest {
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
-        bytes memory payload = hex"0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00";
+        bytes memory payload =
+            hex"0103636465036b175474e89094c44da98b954eedeac495271d0fae7ab96520de3a18e5e111b5eaab095312d7fe84c18360217d8f7ab5e7c516566761ea12ce7f9d720305060703000000003b9aca00000000007735940000000000b2d05e00";
 
         (
             bool native,
@@ -445,9 +451,9 @@ contract BridgeConfigTest is BridgeBaseTest {
         assertEq(tokenIDs[2], 101);
 
         assertEq(tokenAddresses.length, 3);
-        assertEq(tokenAddresses[0], address(0x0101010101010101010101010101010101010101));
-        assertEq(tokenAddresses[1], address(0x0202020202020202020202020202020202020202));
-        assertEq(tokenAddresses[2], address(0x0303030303030303030303030303030303030303));
+        assertEq(tokenAddresses[0], 0x6B175474E89094C44Da98b954EedeAC495271d0F); // dai
+        assertEq(tokenAddresses[1], 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84); // lido
+        assertEq(tokenAddresses[2], 0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72); // ENS
 
         assertEq(suiDecimals.length, 3);
         assertEq(suiDecimals[0], 5);
@@ -468,20 +474,29 @@ contract BridgeConfigTest is BridgeBaseTest {
         });
         bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes memory expectedEncodedMessage =
-            hex"5355495f4252494447455f4d455353414745070100000000000000000c0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00";
+            hex"5355495f4252494447455f4d455353414745070100000000000000000c0103636465036b175474e89094c44da98b954eedeac495271d0fae7ab96520de3a18e5e111b5eaab095312d7fe84c18360217d8f7ab5e7c516566761ea12ce7f9d720305060703000000003b9aca00000000007735940000000000b2d05e00";
 
         assertEq(encodedMessage, expectedEncodedMessage);
 
         bytes[] memory signatures = new bytes[](3);
 
-        signatures[0] = hex"a6d844214b2614b95a89741e97ddf873ff3a07ea82b2cb8f242a85c8cf0373920a1e7882526611eb34add280c0029dc2a2ba411e656f86926593e7c4b41e47c801";
-        signatures[1] = hex"3e7a698df30c74ea00630257d426742d2cd45b2826ebeb82a791498e5e492f6301fb02b7cf80c0e1c5614dcb7f4ca565f0001baa557bb2753b6c08ec0b0cc6da01";
-        signatures[2] = hex"1d30cffbcbf27a8a465a932ba7f69c59380ecf3de9330f2fbd11b1002ff649467ca2db8e63dddb05acba5f471e51c8731052b46e7a00090de75582aec11860c600";
-        committee.verifySignatures(signatures, message);
+        signatures[0] =
+            hex"98b064aa172d0a66142f2fc45d9cd3255fb096cb92e0fcc9be4688b425aad6b53251c9044de4475e64e85b38b32cd3c813a8010281b00811d40fce9b3b372f2200";
+        signatures[1] =
+            hex"275037d70185c835b0d1ee70a118d1cc5da90db2468fab1fa24517eeec3055d814f0ca65db7e6274dbda92d33c9df914db7ada4901a283ec1d3e8c126827923600";
+        signatures[2] =
+            hex"ebb6669c8fb4b000fd41dde6e464c44c009ddcb47c05e7e5ea3deba71b21bd28156b23b6e7813a0603c57553ce484771c142ba6c981c4753035655e89006c0ee01";
 
-        // FIXME: @bridger, for some reason the following line fails whilst the above line passes
-        // config.addTokensWithSignatures(signatures, message);
-        // assertEq(config.tokenPriceOf(99), 1_000_000_000);
-        // FIXME: assert every piece of info about the new token
+        config.addTokensWithSignatures(signatures, message);
+
+        assertEq(config.tokenPriceOf(99), 1_000_000_000);
+        assertEq(config.tokenPriceOf(100), 2_000_000_000);
+        assertEq(config.tokenPriceOf(101), 3_000_000_000);
+        assertEq(config.tokenSuiDecimalOf(99), 5);
+        assertEq(config.tokenSuiDecimalOf(100), 6);
+        assertEq(config.tokenSuiDecimalOf(101), 7);
+        assertEq(config.tokenAddressOf(99), 0x6B175474E89094C44Da98b954EedeAC495271d0F);
+        assertEq(config.tokenAddressOf(100), 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
+        assertEq(config.tokenAddressOf(101), 0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72);
     }
 }
