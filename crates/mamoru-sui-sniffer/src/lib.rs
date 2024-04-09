@@ -38,8 +38,6 @@ use sui_types::{
     transaction::{Command, ProgrammableTransaction, TransactionDataAPI, TransactionKind},
 };
 
-//use mamoru_core::daemon::wit::component::guest::sui_ctx::SuiEvent;
-
 mod error;
 
 pub struct SuiSniffer {
@@ -99,6 +97,21 @@ impl SuiSniffer {
             success: effects.status().is_ok(),
         });
 
+        ctx_builder
+            .data_mut()
+            .set_wit_tx(mamoru_sui_types::SuiTransaction {
+                seq,
+                digest: tx_hash,
+                time: time.timestamp(),
+                gas_used: gas_cost_summary.gas_used(),
+                gas_computation_cost: gas_cost_summary.computation_cost,
+                gas_storage_cost: gas_cost_summary.storage_cost,
+                gas_budged: tx_data.gas_budget(), //TODO fix name
+                sender: format_object_id(certificate.sender_address()),
+                kind: tx_data.kind().to_string(),
+                success: effects.status().is_ok(),
+            });
+
         let events_timer = Instant::now();
         register_events(ctx_builder.data_mut(), layout_resolver, seq, events);
         register_wit_events(ctx_builder.data_mut(), layout_resolver, seq, events);
@@ -125,6 +138,13 @@ impl SuiSniffer {
             inner_temporary_store,
         );
 
+        wit_register_object_changes(
+            ctx_builder.data_mut(),
+            layout_resolver,
+            &effects,
+            inner_temporary_store,
+        );
+
         info!(
             duration_ms = object_changes_timer.elapsed().as_millis(),
             "sniffer.register_object_changes() executed",
@@ -132,6 +152,7 @@ impl SuiSniffer {
 
         if let TransactionKind::ProgrammableTransaction(programmable_tx) = &tx_data.kind() {
             register_programmable_transaction(ctx_builder.data_mut(), programmable_tx);
+            wit_register_programmable_transaction(ctx_builder.data_mut(), programmable_tx);
         }
 
         ctx_builder.set_statistics(0, 1, events_len as u64, call_traces_len as u64);
@@ -235,11 +256,107 @@ fn register_programmable_transaction(ctx: &mut SuiCtx, tx: &ProgrammableTransact
     }
 }
 
+fn wit_register_programmable_transaction(ctx: &mut SuiCtx, tx: &ProgrammableTransaction) {
+    let mut publish_command_seq = 0u64;
+    let mut publish_command_module_seq = 0u64;
+    let mut publish_command_dependency_seq = 0u64;
+
+    let mut upgrade_command_seq = 0u64;
+    let mut upgrade_command_module_seq = 0u64;
+    let mut upgrade_command_dependency_seq = 0u64;
+
+    for (seq, command) in tx.commands.iter().enumerate() {
+        let kind: &'static str = command.into();
+
+        ctx.wit_programmable_transaction_commands.push(
+            mamoru_sui_types::SuiProgrammableTransactionCommand {
+                seq: seq as u64,
+                kind: kind.to_owned(),
+            },
+        );
+
+        match command {
+            Command::Publish(modules, dependencies) => {
+                ctx.wit_publish_commands.push(
+                    mamoru_sui_types::SuiProgrammableTransactionPublishCommand {
+                        seq: publish_command_seq,
+                        command_seq: seq as u64,
+                    },
+                );
+
+                for module in modules {
+                    ctx.wit_publish_command_modules.push(
+                        mamoru_sui_types::SuiProgrammableTransactionPublishCommandModule {
+                            seq: publish_command_module_seq,
+                            publish_seq: publish_command_seq,
+                            contents: module.clone(),
+                        },
+                    );
+
+                    publish_command_module_seq += 1;
+                }
+
+                for dependency in dependencies {
+                    ctx.wit_publish_command_dependencies.push(
+                        mamoru_sui_types::SuiProgrammableTransactionPublishCommandDependency {
+                            seq: publish_command_dependency_seq,
+                            upgrade_seq: publish_command_seq, //TODO fix params
+                            object_id: format_object_id(dependency),
+                        },
+                    );
+
+                    publish_command_dependency_seq += 1;
+                }
+
+                publish_command_seq += 1;
+            }
+            Command::Upgrade(modules, dependencies, package_id, _) => {
+                ctx.wit_upgrade_commands.push(
+                    mamoru_sui_types::SuiProgrammableTransactionUpgradeCommand {
+                        seq: upgrade_command_seq,
+                        command_seq: seq as u64,
+                        package_id: format_object_id(package_id),
+                    },
+                );
+
+                for module in modules {
+                    ctx.wit_upgrade_command_modules.push(
+                        mamoru_sui_types::SuiProgrammableTransactionUpgradeCommandModule {
+                            seq: upgrade_command_module_seq,
+                            publish_seq: upgrade_command_seq, //TODO fix param
+                            contents: module.clone(),
+                        },
+                    );
+
+                    upgrade_command_module_seq += 1;
+                }
+
+                for dependency in dependencies {
+                    ctx.wit_upgrade_command_dependencies.push(
+                        mamoru_sui_types::SuiProgrammableTransactionUpgradeCommandDependency {
+                            seq: upgrade_command_dependency_seq,
+                            upgrade_seq: upgrade_command_seq, //TODO fix param
+                            object_id: format_object_id(dependency),
+                        },
+                    );
+
+                    upgrade_command_dependency_seq += 1;
+                }
+
+                upgrade_command_seq += 1;
+            }
+            _ => continue,
+        }
+    }
+}
+
 fn register_wit_call_traces(ctx: &mut SuiCtx, tx_seq: u64, move_call_traces: Vec<MoveCallTrace>) {
-    let call_traces: Vec<_> = move_call_traces
+    move_call_traces
         .into_iter()
         .zip(0..)
-        .map(|(trace, trace_seq)| {
+        .for_each(|(trace, trace_seq)| {
+            let call_trace_args_len = ctx.wit_calltrace_args.len();
+            let call_trace_type_args_len = ctx.wit_calltrace_type_args.len();
             let trace_seq = trace_seq as u64;
 
             let call_trace = mamoru_sui_types::SuiCalltrace {
@@ -254,11 +371,45 @@ fn register_wit_call_traces(ctx: &mut SuiCtx, tx_seq: u64, move_call_traces: Vec
                 transaction_module: trace.module_id.map(|module| module.short_str_lossless()),
                 function: trace.function.to_string(),
             };
-            call_trace
-        })
-        .collect();
+            ctx.wit_calltraces.push(call_trace);
 
-    ctx.wit_calltraces.extend(call_traces);
+            for (arg, seq) in trace
+                .ty_args
+                .into_iter()
+                .zip(call_trace_type_args_len as u64..)
+            {
+                ctx.wit_calltrace_type_args
+                    .push(mamoru_sui_types::SuiCalltraceTypeArg {
+                        seq,
+                        calltrace_seq: trace_seq,
+                        arg: arg.to_canonical_string(true),
+                    });
+            }
+
+            for (arg, seq) in trace.args.into_iter().zip(call_trace_args_len as u64..) {
+                let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
+                let Ok(object_data) = to_wit_value_data(&arg, &mut stack_data) else {
+                    warn!("Can't make ValueData from move value");
+                    continue;
+                };
+
+                let value_data = mamoru_sui_types::ValueData {
+                    data: if stack_data.is_empty() {
+                        None
+                    } else {
+                        Some(stack_data)
+                    },
+                    value: object_data,
+                };
+
+                ctx.wit_calltrace_args
+                    .push(mamoru_sui_types::SuiCalltraceArg {
+                        seq,
+                        calltrace_seq: trace_seq,
+                        arg: value_data,
+                    });
+            }
+        })
 }
 
 fn register_call_traces(ctx: &mut SuiCtx, tx_seq: u64, move_call_traces: Vec<MoveCallTrace>) {
@@ -582,6 +733,185 @@ fn register_object_changes(
                 seq: seq as u64,
                 id: format_object_id(unwrapped_then_deleted.0),
             });
+    }
+}
+
+fn wit_register_object_changes(
+    data: &mut SuiCtx,
+    layout_resolver: &mut dyn LayoutResolver,
+    effects: &TransactionEffects,
+    inner_temporary_store: &InnerTemporaryStore,
+) {
+    let written = &inner_temporary_store.written;
+
+    let mut fetch_move_value = |object_ref: &ObjectRef| {
+        let object_id = object_ref.0;
+
+        match written.get_object(&object_id) {
+            Ok(Some(object)) => {
+                if let Data::Move(move_object) = &object.as_inner().data {
+                    let struct_tag = move_object.type_().clone().into();
+                    let Ok(layout) = layout_resolver.get_annotated_layout(&struct_tag) else {
+                        warn!(%object_id, "Can't fetch layout by struct tag");
+                        return None;
+                    };
+
+                    let Ok(move_value) = move_object.to_move_struct(&layout) else {
+                        warn!(%object_id, "Can't convert to move value");
+                        return None;
+                    };
+
+                    return Some((object, MoveValue::Struct(move_value)));
+                }
+
+                None
+            }
+            Ok(None) => {
+                warn!(%object_id, "Can't fetch object by object id");
+
+                None
+            }
+            Err(err) => {
+                warn!(%err, "Can't fetch object by object id, error");
+
+                None
+            }
+        }
+    };
+
+    let mut object_owner_seq = 0u64;
+
+    for (seq, (created, owner)) in effects.created().iter().enumerate() {
+        let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
+        if let Some((object, move_value)) = fetch_move_value(created) {
+            let Ok(object_data) = to_wit_value_data(&move_value, &mut stack_data) else {
+                warn!("Can't make ValueData from move value");
+                continue;
+            };
+
+            let value_data = mamoru_sui_types::ValueData {
+                data: if stack_data.is_empty() {
+                    None
+                } else {
+                    Some(stack_data)
+                },
+                value: object_data,
+            };
+
+            data.wit_object_changes
+                .created
+                .push(mamoru_sui_types::SuiCreatedObject {
+                    seq: seq as u64,
+                    owner_seq: object_owner_seq,
+                    id: format_object_id(object.id()),
+                    data: value_data,
+                });
+
+            data.wit_object_changes
+                .owners
+                .push(wit_sui_owner_to_mamoru(object_owner_seq, *owner));
+            object_owner_seq += 1;
+        }
+    }
+
+    for (seq, (mutated, owner)) in effects.mutated().iter().enumerate() {
+        let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
+        if let Some((object, move_value)) = fetch_move_value(mutated) {
+            let Ok(object_data) = to_wit_value_data(&move_value, &mut stack_data) else {
+                warn!("Can't make ValueData from move value");
+                continue;
+            };
+
+            let value_data = mamoru_sui_types::ValueData {
+                data: if stack_data.is_empty() {
+                    None
+                } else {
+                    Some(stack_data)
+                },
+                value: object_data,
+            };
+
+            data.wit_object_changes
+                .mutated
+                .push(mamoru_sui_types::SuiMutatedObject {
+                    seq: seq as u64,
+                    owner_seq: object_owner_seq,
+                    id: format_object_id(object.id()),
+                    data: value_data,
+                });
+
+            data.wit_object_changes
+                .owners
+                .push(wit_sui_owner_to_mamoru(object_owner_seq, *owner));
+            object_owner_seq += 1;
+        }
+    }
+
+    for (seq, deleted) in effects.deleted().iter().enumerate() {
+        data.wit_object_changes
+            .deleted
+            .push(mamoru_sui_types::SuiDeletedObject {
+                seq: seq as u64,
+                id: format_object_id(deleted.0),
+            });
+    }
+
+    for (seq, wrapped) in effects.wrapped().iter().enumerate() {
+        data.wit_object_changes
+            .wrapped
+            .push(mamoru_sui_types::SuiWrappedObject {
+                seq: seq as u64,
+                id: format_object_id(wrapped.0),
+            });
+    }
+
+    for (seq, (unwrapped, _)) in effects.unwrapped().iter().enumerate() {
+        data.wit_object_changes
+            .unwrapped
+            .push(mamoru_sui_types::SuiUnwrappedObject {
+                seq: seq as u64,
+                id: format_object_id(unwrapped.0),
+            });
+    }
+
+    for (seq, unwrapped_then_deleted) in effects.unwrapped_then_deleted().iter().enumerate() {
+        data.wit_object_changes.unwrapped_then_deleted.push(
+            mamoru_sui_types::SuiUnwrappedThenDeletedObject {
+                seq: seq as u64,
+                id: format_object_id(unwrapped_then_deleted.0),
+            },
+        );
+    }
+}
+
+fn wit_sui_owner_to_mamoru(seq: u64, owner: Owner) -> mamoru_sui_types::SuiObjectOwner {
+    match owner {
+        Owner::AddressOwner(address) => mamoru_sui_types::SuiObjectOwner {
+            seq,
+            owner_kind: ObjectOwnerKind::Address as u32,
+            owner_address: Some(format_object_id(address)),
+            initial_shared_version: None,
+        },
+        Owner::ObjectOwner(address) => mamoru_sui_types::SuiObjectOwner {
+            seq,
+            owner_kind: ObjectOwnerKind::Object as u32,
+            owner_address: Some(format_object_id(address)),
+            initial_shared_version: None,
+        },
+        Owner::Shared {
+            initial_shared_version,
+        } => mamoru_sui_types::SuiObjectOwner {
+            seq,
+            owner_kind: ObjectOwnerKind::Shared as u32,
+            owner_address: None,
+            initial_shared_version: Some(initial_shared_version.into()),
+        },
+        Owner::Immutable => mamoru_sui_types::SuiObjectOwner {
+            seq,
+            owner_kind: ObjectOwnerKind::Immutable as u32,
+            owner_address: None,
+            initial_shared_version: None,
+        },
     }
 }
 
