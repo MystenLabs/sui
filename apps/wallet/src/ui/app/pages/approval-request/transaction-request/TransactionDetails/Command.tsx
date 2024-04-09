@@ -4,22 +4,28 @@
 import { Text } from '_src/ui/app/shared/text';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 import { TypeTagSerializer, type TypeTag } from '@mysten/sui.js/bcs';
-import { type TransactionArgument, type Transactions } from '@mysten/sui.js/transactions';
-import { formatAddress, normalizeSuiAddress, toB64 } from '@mysten/sui.js/utils';
+import {
+	type TransactionArgument,
+	type TransactionBlockState,
+	type Transactions,
+} from '@mysten/sui.js/transactions';
+import { toB64 } from '@mysten/sui.js/utils';
 import { useState } from 'react';
 
-type TransactionType = ReturnType<(typeof Transactions)[keyof typeof Transactions]>;
+type TransactionType = TransactionBlockState['transactions'][0];
 type MakeMoveVecTransaction = ReturnType<(typeof Transactions)['MakeMoveVec']>;
 type PublishTransaction = ReturnType<(typeof Transactions)['Publish']>;
+type Argument = Exclude<TransactionArgument, (...args: any) => unknown>;
 
 function convertCommandArgumentToString(
 	arg:
+		| null
 		| string
 		| number
 		| string[]
 		| number[]
-		| TransactionArgument
-		| TransactionArgument[]
+		| Argument
+		| Argument[]
 		| MakeMoveVecTransaction['MakeMoveVec'][0]
 		| PublishTransaction['Publish'][0],
 ): string | null {
@@ -64,20 +70,72 @@ function convertCommandArgumentToString(
 	}
 }
 
-function convertCommandToString({ $kind, ...command }: TransactionType) {
-	const commandArguments = Object.entries(command);
+function convertCommandToString(command: TransactionType) {
+	let normalizedCommand;
+	switch (command.$kind) {
+		case 'MoveCall':
+			normalizedCommand = {
+				kind: 'MoveCall',
+				...command.MoveCall,
+				typeArguments: command.MoveCall.typeArguments.map((typeArg) =>
+					TypeTagSerializer.tagToString(typeArg),
+				),
+			};
+			break;
+		case 'MakeMoveVec':
+			normalizedCommand = {
+				kind: 'MakeMoveVec',
+				type: command.MakeMoveVec[0].Some
+					? TypeTagSerializer.tagToString(command.MakeMoveVec[0].Some)
+					: null,
+				objects: command.MakeMoveVec[1],
+			};
+			break;
+		case 'MergeCoins':
+			normalizedCommand = {
+				kind: 'MergeCoins',
+				destination: command.MergeCoins[0],
+				sources: command.MergeCoins[1],
+			};
+			break;
+		case 'TransferObjects':
+			normalizedCommand = {
+				kind: 'TransferObjects',
+				objects: command.TransferObjects[0],
+				address: command.TransferObjects[1],
+			};
+			break;
+		case 'SplitCoins':
+			normalizedCommand = {
+				kind: 'SplitCoins',
+				coin: command.SplitCoins[0],
+				amounts: command.SplitCoins[1],
+			};
+			break;
+		case 'Publish':
+			normalizedCommand = {
+				kind: 'Publish',
+				module: command.Publish[0],
+				dependencies: command.Publish[1],
+			};
+			break;
+		case 'Upgrade':
+			normalizedCommand = {
+				kind: 'Upgrade',
+				modules: command.Upgrade[0],
+				dependencies: command.Upgrade[1],
+				packageId: command.Upgrade[2],
+				ticket: command.Upgrade[3],
+			};
+			break;
+		case 'TransactionIntent': {
+			throw new Error('TransactionIntent is not supported');
+		}
+	}
 
+	const commandArguments = Object.entries(normalizedCommand);
 	return commandArguments
 		.map(([key, value]) => {
-			if (key === 'target') {
-				const [packageId, moduleName, functionName] = value.split('::');
-				return [
-					`package: ${formatAddress(normalizeSuiAddress(packageId))}`,
-					`module: ${moduleName}`,
-					`function: ${functionName}`,
-				].join(', ');
-			}
-
 			const stringValue = convertCommandArgumentToString(value);
 
 			if (!stringValue) return null;

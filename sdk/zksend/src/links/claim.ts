@@ -7,7 +7,7 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import type { CoinStruct, SuiTransaction } from '@mysten/sui.js/client';
 import type { Keypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
 import {
 	fromB64,
 	normalizeStructTag,
@@ -591,7 +591,7 @@ export class ZkSendLink {
 		const txb = new TransactionBlock();
 		txb.setSender(this.keypair.toSuiAddress());
 
-		const objectsToTransfer = this.#ownedObjects
+		const objectsToTransfer: TransactionObjectArgument[] = this.#ownedObjects
 			.filter((object) => {
 				if (this.#gasCoin) {
 					if (object.objectId === this.#gasCoin.coinObjectId) {

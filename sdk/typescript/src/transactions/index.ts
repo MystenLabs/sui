@@ -18,3 +18,5 @@ export {
 	type TransactionObjectArgument,
 	type TransactionResult,
 } from './TransactionBlock.js';
+
+export { type TransactionBlockState } from './blockData/v2.js';
