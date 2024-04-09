@@ -1,7 +1,6 @@
 ---
 title: On-Chain Randomness
-description: Randomness is a valuable tool to simulate chance on chain, but can also expose flaws in your logic. Understanding the vulnerabilities and accounting for them can mitigate the threat exposure for your smart contracts. 
-draft: true
+description: Randomness is a valuable tool to simulate chance on chain, but can also expose flaws in your logic. Understanding the vulnerabilities and accounting for them can mitigate the threat exposure for your smart contracts.
 ---
 
 Generating pseudo-random values in Move is similar to solutions in other languages. A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types, for example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)`, or,
