@@ -8,12 +8,6 @@ module sui_system::stake_subsidy {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
-
     public struct StakeSubsidy has store {
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
         balance: Balance<SUI>,

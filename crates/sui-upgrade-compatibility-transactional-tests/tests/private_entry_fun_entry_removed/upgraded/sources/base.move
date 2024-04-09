@@ -7,10 +7,8 @@ module base::base_module {
         field1: u64,
     }
 
-    /* friend base::friend_module; */
-
     public fun public_fun(): u64 { 0 }
     fun private_fun(): u64 { 0 }
     fun private_entry_fun(_x: u64) { }
-    public(package) fun friend_fun(): u64 { 0 } 
+    public(package) fun friend_fun(): u64 { 0 }
 }

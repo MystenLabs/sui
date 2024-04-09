@@ -13,8 +13,6 @@ module bridge::treasury {
     use bridge::usdt::USDT;
     use sui::coin::TreasuryCap;
 
-    /* friend bridge::bridge; */
-
     const EUnsupportedTokenType: u64 = 0;
     // const ENotSystemAddress: u64 = 1;
 
@@ -35,7 +33,6 @@ module bridge::treasury {
     }
 
     public(package) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>, ctx: &TxContext) {
-    // public(friend) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>, ctx: &mut TxContext) {
         create_treasury_if_not_exist<T>(self, ctx);
         let treasury = object_bag::borrow_mut(&mut self.treasuries, type_name::get<T>());
         coin::burn(treasury, token);

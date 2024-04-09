@@ -15,8 +15,6 @@ module sui_system::sui_system_state_inner {
     use sui_system::validator;
     use sui::object;
 
-    /* friend sui_system::sui_system; */
-
     const SYSTEM_STATE_VERSION_V1: u64 = 18446744073709551605;  // u64::MAX - 10
 
     public struct SystemParameters has store {

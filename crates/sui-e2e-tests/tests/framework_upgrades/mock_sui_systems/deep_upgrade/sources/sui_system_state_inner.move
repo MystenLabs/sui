@@ -17,8 +17,6 @@ module sui_system::sui_system_state_inner {
     use sui::object;
     use sui_system::validator;
 
-    /* friend sui_system::sui_system; */
-
     const SYSTEM_STATE_VERSION_V1: u64 = 18446744073709551605;  // u64::MAX - 10
     // Not using MAX - 9 since it's already used in the shallow upgrade test.
     const SYSTEM_STATE_VERSION_V2: u64 = 18446744073709551607;  // u64::MAX - 8

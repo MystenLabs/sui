@@ -14,9 +14,6 @@ module base_addr::base {
         x: u64,
     }
 
-    /* friend base_addr::friend_module; */
-
-
     public fun return_0(): u64 { abort 42 }
 
     public fun plus_1(x: u64): u64 { x + 1 }

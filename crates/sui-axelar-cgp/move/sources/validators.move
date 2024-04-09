@@ -20,8 +20,6 @@ module axelar::validators {
     use axelar::channel::{Self, ApprovedCall};
     use axelar::utils::{normalize_signature, operators_hash};
 
-    /* friend axelar::gateway; */
-
     const EInvalidWeights: u64 = 0;
     const EInvalidThreshold: u64 = 1;
     /// For when operators have changed, and proof is no longer valid.

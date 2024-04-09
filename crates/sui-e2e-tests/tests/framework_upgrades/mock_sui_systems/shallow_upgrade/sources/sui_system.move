@@ -12,8 +12,6 @@ module sui_system::sui_system {
     use sui_system::validator::Validator;
     use sui_system::sui_system_state_inner::{Self, SuiSystemStateInner, SuiSystemStateInnerV2};
 
-    /* friend sui_system::genesis; */
-
     public struct SuiSystemState has key {
         id: UID,
         version: u64,

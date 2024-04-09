@@ -13,8 +13,6 @@ module sui_system::sui_system {
     use sui_system::sui_system_state_inner::SuiSystemStateInner;
     use sui_system::sui_system_state_inner;
 
-    /* friend sui_system::genesis; */
-
     public struct SuiSystemState has key {
         id: UID,
         version: u64,
