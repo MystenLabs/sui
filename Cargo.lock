@@ -13285,7 +13285,9 @@ version = "1.23.0"
 dependencies = [
  "anyhow",
  "move-package",
+ "move-symbol-pool",
  "sui-json-rpc-types",
+ "sui-move-build",
  "sui-sdk",
  "tracing",
 ]
