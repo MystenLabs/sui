@@ -1,5 +1,4 @@
 # Prettier Move Plugin
-test
 
 This is a Move language plugin for the
 [Prettier](https://prettier.io/) code formatter. It uses a Move
