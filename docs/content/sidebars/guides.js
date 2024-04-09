@@ -99,6 +99,18 @@ const guides = [
 					'guides/developer/cryptography/groth16',
 					'guides/developer/cryptography/hashing',
 					'guides/developer/cryptography/ecvrf',
+					{
+						type: 'category',
+						label: 'zkLogin Integration Guide',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/cryptography/zklogin-integration',
+						},
+						items: [
+							'guides/developer/cryptography/zklogin-integration/developer-account',
+							'guides/developer/cryptography/zklogin-integration/zklogin-example',
+						],
+					},
 				],
 			},
 			{
