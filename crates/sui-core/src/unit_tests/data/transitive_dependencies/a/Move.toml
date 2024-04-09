@@ -8,4 +8,7 @@ B = { local = "../b" }
 Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
+a = "_"
+
+[dev-addresses]
 a = "0x0"

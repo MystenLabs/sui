@@ -7,4 +7,7 @@ edition = "2024.beta"
 Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
+c = "_"
+
+[dev-addresses]
 c = "0x0"
