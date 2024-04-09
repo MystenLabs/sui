@@ -153,6 +153,6 @@ export class Configuration {
 
 }
 
-export function lint(): boolean {
-    return vscode.workspace.getConfiguration('move').get('lint') ?? true;
+export function lint(): string {
+    return vscode.workspace.getConfiguration('move').get('lint') ?? 'default';
 }
