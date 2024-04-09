@@ -85,7 +85,7 @@ The source service may experience transient downtime for at least the following 
 
 - The on-chain package content has changed (e.g., due to a protocol upgrade) and the source repository does not yet reflect the new on-chain bytecode. 
   - This can happen when the branch containing we track for the source-to-be-verified as diverged from on-chain bytecode, or does not yet correspond to the new on-chain bytecode. This is especially the case for Sui framework packages that are upgraded _in-place_ at protocol upgrades (e.g., `0x1`, `0x2`, `0x3`, and `0xdee9`).
-    - While usually transient, there may be extended periods of mismatched source and bytecode due to Mysten's internal release process.
+    - While usually transient, there may be extended periods of mismatched source and bytecode due to Sui's release process.
 	
 - A new version of Move compiler is released, requiring service redeployment.
   - For example, when framework packages are upgraded and require a more recent compiler version, the Mysten source service will need to be redeployed and will experience transient downtime.
