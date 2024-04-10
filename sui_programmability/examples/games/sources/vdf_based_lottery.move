@@ -68,10 +68,10 @@ module games::vdf_based_lottery {
     public fun create(iterations: u64, submission_phase_length: u64, clock: &Clock, ctx: &mut TxContext) {
         let game = Game {
             id: object::new(ctx),
-            iterations: iterations,
+            iterations,
             status: IN_PROGRESS,
             timestamp_start: clock.timestamp_ms(),
-            submission_phase_length: submission_phase_length,
+            submission_phase_length,
             vdf_input_seed: vector::empty<u8>(),
             participants: 0,
             winner: option::none(),
@@ -92,59 +92,54 @@ module games::vdf_based_lottery {
         // Verify output and proof
         assert!(vdf_verify(&discriminant, &vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfOutput);
 
-        self.status = COMPLETED;
-
         // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
         let randomness = sha2_256(vdf_output);
 
-        let winner = safe_selection(self.participants, &randomness);
-        self.winner = option::some(winner);
+        // Set winner and mark lottery completed
+        self.winner = option::some(safe_selection(self.participants, &randomness));
+        self.status = COMPLETED;
     }
 
-    #[allow(lint(self_transfer))]
     /// Anyone can participate in the game and receive a ticket.
-    public fun participate(self: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
+    public fun participate(self: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext): Ticket {
         assert!(self.status == IN_PROGRESS, EGameNotInProgress);
         assert!(clock.timestamp_ms() - self.timestamp_start < self.submission_phase_length, ESubmissionPhaseFinished);
 
         // Update combined randomness
-        let mut pack = vector::empty<u8>();
-        pack.append(self.vdf_input_seed);
-        pack.append(my_randomness);
-        self.vdf_input_seed = sha2_256(pack);
+        self.vdf_input_seed.append(my_randomness);
+        self.vdf_input_seed = sha2_256(self.vdf_input_seed);
 
         // Assign index to this participant
         let participant_index = self.participants;
         self.participants = self.participants + 1;
 
-        let ticket = Ticket {
+        Ticket {
             id: object::new(ctx),
             game_id: object::id(self),
             participant_index,
-        };
-        transfer::public_transfer(ticket, ctx.sender());
+        }
     }
 
-    #[allow(lint(self_transfer))]
     /// The winner can redeem its ticket.
-    public fun redeem(self: &Game, ticket: &Ticket, ctx: &mut TxContext) {
+    public fun redeem(self: &Game, ticket: &Ticket, ctx: &mut TxContext): GameWinner {
         assert!(self.status == COMPLETED, ESubmissionPhaseInProgress);
         assert!(object::id(self) == ticket.game_id, EInvalidTicket);
         assert!(self.winner.contains(&ticket.participant_index), EInvalidTicket);
 
-        let winner = GameWinner {
+        GameWinner {
             id: object::new(ctx),
             game_id: ticket.game_id,
-        };
-        transfer::public_transfer(winner, ctx.sender());
+        }
     }
 
     // Note that a ticket can be deleted before the game was completed.
+    public use fun delete_ticket as Ticket.delete;
     public fun delete_ticket(ticket: Ticket) {
         let Ticket { id, game_id:  _, participant_index: _} = ticket;
         object::delete(id);
     }
 
+    public use fun delete_game_winner as GameWinner.delete;
     public fun delete_game_winner(ticket: GameWinner) {
         let GameWinner { id, game_id:  _} = ticket;
         object::delete(id);

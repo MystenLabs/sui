@@ -5,7 +5,7 @@
 module games::vdf_based_lottery_tests {
     use sui::test_scenario as ts;
     use sui::clock;
-    use games::vdf_based_lottery::{Self, Game, GameWinner, Ticket};
+    use games::vdf_based_lottery::{Self, Game, GameWinner};
 
     #[test]
     #[expected_failure(abort_code = games::vdf_based_lottery::ESubmissionPhaseInProgress)]
@@ -21,7 +21,7 @@ module games::vdf_based_lottery_tests {
 
         // User1 buys a ticket.
         ts.next_tx(user1);
-        game.participate(b"user1 randomness", &clock, ts.ctx());
+        let t1 = game.participate(b"user1 randomness", &clock, ts.ctx());
 
         // Increment time but still in submission phase
         clock.increment_for_testing(500);
@@ -33,6 +33,8 @@ module games::vdf_based_lottery_tests {
             x"00407930e28468f98c241876505183d2cc09f8f631d69e8e1b43b822c6044a2f2018d7ff2388191d155ddcf1a88408eba12c392ef8040016289a355fa621c22cfbbc00409d46ad1ac7cd056f324a6877beee586bb847d1080359b2a86a65771c48feb7e572625a63b99dd1592a64f0798c11d455eaf286ec715e4bb80edc9c7b5bc32d47",
             &clock
         );
+
+        t1.delete_ticket();
 
         sui::clock::destroy_for_testing(clock);
         ts::return_shared(game);
@@ -55,16 +57,16 @@ module games::vdf_based_lottery_tests {
 
         // User1 buys a ticket.
         ts.next_tx(user1);
-        game.participate(b"user1 randomness", &clock, ts.ctx());
+        let t1 = game.participate(b"user1 randomness", &clock, ts.ctx());
         // User2 buys a ticket.
         ts.next_tx(user2);
-        game.participate(b"user2 randomness", &clock, ts.ctx());
+        let t2 = game.participate(b"user2 randomness", &clock, ts.ctx());
         // User3 buys a ticket
         ts.next_tx(user3);
-        game.participate(b"user3 randomness", &clock, ts.ctx());
+        let t3 = game.participate(b"user3 randomness", &clock, ts.ctx());
         // User4 buys a ticket
         ts.next_tx(user4);
-        game.participate(b"user4 randomness", &clock, ts.ctx());
+        let t4 = game.participate(b"user4 randomness", &clock, ts.ctx());
 
         // Increment time to after submission phase has ended
         clock.increment_for_testing(1000);
@@ -80,17 +82,19 @@ module games::vdf_based_lottery_tests {
         // User1 is the winner since the mod of the hash results in 0.
         ts.next_tx(user1);
         assert!(!ts::has_most_recent_for_address<GameWinner>(user1), 1);
-        let ticket = ts.take_from_address<Ticket>(user1);
-        game.redeem(&ticket, ts.ctx());
+        let winner = game.redeem(&t1, ts.ctx());
 
         // Make sure User1 now has a winner ticket for the right game id.
         ts.next_tx(user1);
-        let winner = ts.take_from_address<GameWinner>(user1);
-        assert!(winner.game_id() == ticket.game_id(), 1);
-        ts::return_to_address(user1, winner);
+        assert!(winner.game_id() == t1.game_id(), 1);
+
+        t1.delete();
+        t2.delete();
+        t3.delete();
+        t4.delete();
+        winner.delete();
 
         clock.destroy_for_testing();
-        ticket.delete_ticket();
         ts::return_shared(game);
         ts.end();
     }
@@ -112,16 +116,16 @@ module games::vdf_based_lottery_tests {
 
         // User1 buys a ticket.
         ts.next_tx(user1);
-        game.participate(b"user1 randomness", &clock, ts.ctx());
+        let t1 = game.participate(b"user1 randomness", &clock, ts.ctx());
         // User2 buys a ticket.
         ts.next_tx(user2);
-        game.participate(b"user2 randomness", &clock, ts.ctx());
+        let t2 = game.participate(b"user2 randomness", &clock, ts.ctx());
         // User3 buys a ticket
         ts.next_tx(user3);
-        game.participate(b"user3 randomness", &clock, ts.ctx());
+        let t3 = game.participate(b"user3 randomness", &clock, ts.ctx());
         // User4 buys a ticket
         ts.next_tx(user4);
-        game.participate(b"user4 randomness", &clock, ts.ctx());
+        let t4 = game.participate(b"user4 randomness", &clock, ts.ctx());
 
         // Increment time to after submission phase has ended
         clock.increment_for_testing(1000);
@@ -133,6 +137,11 @@ module games::vdf_based_lottery_tests {
             x"00407930e28468f98c241876505183d2cc09f8f631d69e8e1b43b822c6044a2f2018d7ff2388191d155ddcf1a88408eba12c392ef8040016289a355fa621c22cfbbc00409d46ad1ac7cd056f324a6877beee586bb847d1080359b2a86a65771c48feb7e572625a63b99dd1592a64f0798c11d455eaf286ec715e4bb80edc9c7b5bc32d47",
             &clock
         );
+
+        t1.delete();
+        t2.delete();
+        t3.delete();
+        t4.delete();
 
         clock.destroy_for_testing();
         ts::return_shared(game);
