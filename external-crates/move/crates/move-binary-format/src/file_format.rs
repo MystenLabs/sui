@@ -940,10 +940,9 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
 
                     StructInstantiation(struct_inst) => {
                         let (_, inner_toks) = &**struct_inst;
-                        self
-                            .stack
+                        self.stack
                             .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev())
-                    },
+                    }
 
                     Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Struct(_)
                     | TypeParameter(_) => (),
@@ -1107,7 +1106,9 @@ impl SignatureToken {
     pub fn debug_set_sh_idx(&mut self, sh_idx: StructHandleIndex) {
         match self {
             SignatureToken::Struct(ref mut wrapped) => *wrapped = sh_idx,
-            SignatureToken::StructInstantiation(ref mut struct_inst) => Box::as_mut(struct_inst).0 = sh_idx,
+            SignatureToken::StructInstantiation(ref mut struct_inst) => {
+                Box::as_mut(struct_inst).0 = sh_idx
+            }
             SignatureToken::Reference(ref mut token)
             | SignatureToken::MutableReference(ref mut token) => token.debug_set_sh_idx(sh_idx),
             other => panic!(
@@ -1777,153 +1778,6 @@ impl Bytecode {
     }
 }
 
-/// Contains the main function to execute and its dependencies.
-///
-/// A CompiledScript does not have definition tables because it can only have a `main(args)`.
-/// A CompiledScript defines the constant pools (string, address, signatures, etc.), the handle
-/// tables (external code references) and it has a `main` definition.
-#[derive(Clone, Default, Eq, PartialEq, Debug)]
-#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
-pub struct CompiledScript {
-    /// Version number found during deserialization
-    pub version: u32,
-    /// Handles to all modules referenced.
-    pub module_handles: Vec<ModuleHandle>,
-    /// Handles to external/imported types.
-    pub struct_handles: Vec<StructHandle>,
-    /// Handles to external/imported functions.
-    pub function_handles: Vec<FunctionHandle>,
-
-    /// Function instantiations.
-    pub function_instantiations: Vec<FunctionInstantiation>,
-
-    pub signatures: SignaturePool,
-
-    /// All identifiers used in this transaction.
-    pub identifiers: IdentifierPool,
-    /// All address identifiers used in this transaction.
-    pub address_identifiers: AddressIdentifierPool,
-    /// Constant pool. The constant values used in the transaction.
-    pub constant_pool: ConstantPool,
-
-    pub metadata: Vec<Metadata>,
-
-    pub code: CodeUnit,
-    pub type_parameters: Vec<AbilitySet>,
-
-    pub parameters: SignatureIndex,
-}
-
-impl CompiledScript {
-    /// Returns the index of `main` in case a script is converted to a module.
-    pub const MAIN_INDEX: FunctionDefinitionIndex = FunctionDefinitionIndex(0);
-}
-
-/// A `CompiledModule` defines the structure of a module which is the unit of published code.
-///
-/// A `CompiledModule` contains a definition of types (with their fields) and functions.
-/// It is a unit of code that can be used by transactions or other modules.
-///
-/// A module is published as a single entry and it is retrieved as a single blob.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
-#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
-pub struct CompiledModule {
-    /// Version number found during deserialization
-    pub version: u32,
-    /// Handle to self.
-    pub self_module_handle_idx: ModuleHandleIndex,
-    /// Handles to external dependency modules and self.
-    pub module_handles: Vec<ModuleHandle>,
-    /// Handles to external and internal types.
-    pub struct_handles: Vec<StructHandle>,
-    /// Handles to external and internal functions.
-    pub function_handles: Vec<FunctionHandle>,
-    /// Handles to fields.
-    pub field_handles: Vec<FieldHandle>,
-    /// Friend declarations, represented as a collection of handles to external friend modules.
-    pub friend_decls: Vec<ModuleHandle>,
-
-    /// Struct instantiations.
-    pub struct_def_instantiations: Vec<StructDefInstantiation>,
-    /// Function instantiations.
-    pub function_instantiations: Vec<FunctionInstantiation>,
-    /// Field instantiations.
-    pub field_instantiations: Vec<FieldInstantiation>,
-
-    /// Locals signature pool. The signature for all locals of the functions defined in the module.
-    pub signatures: SignaturePool,
-
-    /// All identifiers used in this module.
-    pub identifiers: IdentifierPool,
-    /// All address identifiers used in this module.
-    pub address_identifiers: AddressIdentifierPool,
-    /// Constant pool. The constant values used in the module.
-    pub constant_pool: ConstantPool,
-
-    pub metadata: Vec<Metadata>,
-
-    /// Types defined in this module.
-    pub struct_defs: Vec<StructDefinition>,
-    /// Function defined in this module.
-    pub function_defs: Vec<FunctionDefinition>,
-}
-
-// Need a custom implementation of Arbitrary because as of proptest-derive 0.1.1, the derivation
-// doesn't work for structs with more than 10 fields.
-#[cfg(any(test, feature = "fuzzing"))]
-impl Arbitrary for CompiledScript {
-    type Strategy = BoxedStrategy<Self>;
-    /// The size of the compiled script.
-    type Parameters = usize;
-
-    fn arbitrary_with(size: Self::Parameters) -> Self::Strategy {
-        (
-            (
-                vec(any::<ModuleHandle>(), 0..=size),
-                vec(any::<StructHandle>(), 0..=size),
-                vec(any::<FunctionHandle>(), 0..=size),
-            ),
-            vec(any_with::<Signature>(size), 0..=size),
-            (
-                vec(any::<Identifier>(), 0..=size),
-                vec(any::<AccountAddress>(), 0..=size),
-            ),
-            vec(any::<AbilitySet>(), 0..=size),
-            any::<SignatureIndex>(),
-            any::<CodeUnit>(),
-        )
-            .prop_map(
-                |(
-                    (module_handles, struct_handles, function_handles),
-                    signatures,
-                    (identifiers, address_identifiers),
-                    type_parameters,
-                    parameters,
-                    code,
-                )| {
-                    // TODO actual constant generation
-                    CompiledScript {
-                        version: file_format_common::VERSION_MAX,
-                        module_handles,
-                        struct_handles,
-                        function_handles,
-                        function_instantiations: vec![],
-                        signatures,
-                        identifiers,
-                        address_identifiers,
-                        constant_pool: vec![],
-                        metadata: vec![],
-                        type_parameters,
-                        parameters,
-                        code,
-                    }
-                },
-            )
-            .boxed()
-    }
-}
-
 #[cfg(any(test, feature = "fuzzing"))]
 impl Arbitrary for CompiledModule {
     type Strategy = BoxedStrategy<Self>;
@@ -1982,6 +1836,56 @@ impl Arbitrary for CompiledModule {
             )
             .boxed()
     }
+}
+
+/// A `CompiledModule` defines the structure of a module which is the unit of published code.
+///
+/// A `CompiledModule` contains a definition of types (with their fields) and functions.
+/// It is a unit of code that can be used by transactions or other modules.
+///
+/// A module is published as a single entry and it is retrieved as a single blob.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "wasm", derive(Serialize, Deserialize))]
+pub struct CompiledModule {
+    /// Version number found during deserialization
+    pub version: u32,
+    /// Handle to self.
+    pub self_module_handle_idx: ModuleHandleIndex,
+    /// Handles to external dependency modules and self.
+    pub module_handles: Vec<ModuleHandle>,
+    /// Handles to external and internal types.
+    pub struct_handles: Vec<StructHandle>,
+    /// Handles to external and internal functions.
+    pub function_handles: Vec<FunctionHandle>,
+    /// Handles to fields.
+    pub field_handles: Vec<FieldHandle>,
+    /// Friend declarations, represented as a collection of handles to external friend modules.
+    pub friend_decls: Vec<ModuleHandle>,
+
+    /// Struct instantiations.
+    pub struct_def_instantiations: Vec<StructDefInstantiation>,
+    /// Function instantiations.
+    pub function_instantiations: Vec<FunctionInstantiation>,
+    /// Field instantiations.
+    pub field_instantiations: Vec<FieldInstantiation>,
+
+    /// Locals signature pool. The signature for all locals of the functions defined in the module.
+    pub signatures: SignaturePool,
+
+    /// All identifiers used in this module.
+    pub identifiers: IdentifierPool,
+    /// All address identifiers used in this module.
+    pub address_identifiers: AddressIdentifierPool,
+    /// Constant pool. The constant values used in the module.
+    pub constant_pool: ConstantPool,
+
+    pub metadata: Vec<Metadata>,
+
+    /// Types defined in this module.
+    pub struct_defs: Vec<StructDefinition>,
+    /// Function defined in this module.
+    pub function_defs: Vec<FunctionDefinition>,
 }
 
 impl CompiledModule {
@@ -2110,34 +2014,4 @@ pub fn basic_test_module() -> CompiledModule {
         .push(Identifier::new("x".to_string()).unwrap());
 
     m
-}
-
-/// Return a simple script that contains only a return in the main()
-pub fn empty_script() -> CompiledScript {
-    CompiledScript {
-        version: file_format_common::VERSION_MAX,
-        module_handles: vec![],
-        struct_handles: vec![],
-        function_handles: vec![],
-
-        function_instantiations: vec![],
-
-        signatures: vec![Signature(vec![])],
-
-        identifiers: vec![],
-        address_identifiers: vec![],
-        constant_pool: vec![],
-        metadata: vec![],
-
-        type_parameters: vec![],
-        parameters: SignatureIndex(0),
-        code: CodeUnit {
-            locals: SignatureIndex(0),
-            code: vec![Bytecode::Ret],
-        },
-    }
-}
-
-pub fn basic_test_script() -> CompiledScript {
-    empty_script()
 }

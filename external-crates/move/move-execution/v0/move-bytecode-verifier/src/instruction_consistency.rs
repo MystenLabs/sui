@@ -11,8 +11,8 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, FieldHandleIndex,
-        FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex, TableIndex,
+        Bytecode, CodeOffset, CodeUnit, CompiledModule, FieldHandleIndex, FunctionDefinitionIndex,
+        FunctionHandleIndex, StructDefinitionIndex, TableIndex,
     },
 };
 use move_core_types::vm_status::StatusCode;
@@ -43,18 +43,6 @@ impl<'a> InstructionConsistency<'a> {
             }
         }
         Ok(())
-    }
-
-    pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(module).map_err(|e| e.finish(Location::Script))
-    }
-
-    pub fn verify_script_impl(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let checker = Self {
-            resolver: BinaryIndexedView::Script(script),
-            current_function: None,
-        };
-        checker.check_instructions(&script.code)
     }
 
     fn check_instructions(&self, code: &CodeUnit) -> PartialVMResult<()> {

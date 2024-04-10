@@ -492,9 +492,6 @@ impl SourceMap {
     /// with generated or real names depending upon if the source map is available or not.
     pub fn dummy_from_view(view: &BinaryIndexedView, default_loc: Loc) -> Result<Self> {
         let module_ident = match view {
-            BinaryIndexedView::Script(..) => {
-                anyhow::bail!("Scripts are no longer supported for dummy source map")
-            }
             BinaryIndexedView::Module(..) => {
                 let module_handle = view.module_handle_at(ModuleHandleIndex::new(0));
                 let module_name = ModuleName(Symbol::from(
@@ -507,26 +504,6 @@ impl SourceMap {
         let mut empty_source_map = Self::new(default_loc, module_ident);
 
         match view {
-            BinaryIndexedView::Script(script) => {
-                empty_source_map.add_top_level_function_mapping(
-                    FunctionDefinitionIndex(0_u16),
-                    default_loc,
-                    false,
-                )?;
-                empty_source_map
-                    .function_map
-                    .get_mut(&(0_u16))
-                    .ok_or_else(|| {
-                        format_err!("Unable to get function map while generating dummy")
-                    })?
-                    .dummy_function_map(
-                        view,
-                        &script.type_parameters,
-                        script.parameters,
-                        Some(script.code.clone()),
-                        default_loc,
-                    )?;
-            }
             BinaryIndexedView::Module(module) => {
                 for (function_idx, function_def) in module.function_defs.iter().enumerate() {
                     empty_source_map.add_top_level_function_mapping(

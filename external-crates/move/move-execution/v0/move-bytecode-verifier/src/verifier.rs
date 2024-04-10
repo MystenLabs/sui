@@ -14,7 +14,7 @@ use crate::{
 use move_binary_format::{
     check_bounds::BoundsChecker,
     errors::{Location, VMResult},
-    file_format::{CompiledModule, CompiledScript},
+    file_format::CompiledModule,
 };
 use move_bytecode_verifier_meter::{dummy::DummyMeter, Meter};
 use move_vm_config::verifier::VerifierConfig;
@@ -95,40 +95,4 @@ pub fn verify_module_with_config_unmetered(
     module: &CompiledModule,
 ) -> VMResult<()> {
     verify_module_with_config_metered(config, module, &mut DummyMeter)
-}
-
-/// Helper for a "canonical" verification of a script.
-///
-/// Clients that rely on verification should call the proper passes
-/// internally rather than using this function.
-///
-/// This function is intended to provide a verification path for clients
-/// that do not require full control over verification. It is advised to
-/// call this umbrella function instead of each individual checkers to
-/// minimize the code locations that need to be updated should a new checker
-/// is introduced.
-pub fn verify_script_unmetered(script: &CompiledScript) -> VMResult<()> {
-    verify_script_with_config_unmetered(&VerifierConfig::default(), script)
-}
-
-pub fn verify_script_with_config_metered(
-    config: &VerifierConfig,
-    script: &CompiledScript,
-    meter: &mut (impl Meter + ?Sized),
-) -> VMResult<()> {
-    BoundsChecker::verify_script(script).map_err(|e| e.finish(Location::Script))?;
-    LimitsVerifier::verify_script(config, script)?;
-    DuplicationChecker::verify_script(script)?;
-    SignatureChecker::verify_script(script)?;
-    InstructionConsistency::verify_script(script)?;
-    constants::verify_script(script)?;
-    CodeUnitVerifier::verify_script(config, script, meter)?;
-    script_signature::verify_script(script, no_additional_script_signature_checks)
-}
-
-pub fn verify_script_with_config_unmetered(
-    config: &VerifierConfig,
-    script: &CompiledScript,
-) -> VMResult<()> {
-    verify_script_with_config_metered(config, script, &mut DummyMeter)
 }
