@@ -52,12 +52,17 @@
 			"type": "object",
 			"title": "Move",
 			"properties": {
-				"move.lint": {
-                    "type": "boolean",
-                    "default": true,
-                    "markdownDescription": "Enable Move source code linting."
+                "move.lint": {
+                    "type": "string",
+                    "enum": [
+                        "default",
+                        "all",
+                        "none"
+                    ],
+                    "default": "default",
+                    "markdownDescription": "Move source code linting level."
                 },
-				"move.server.path": {
+                "move.server.path": {
                     "type": [
                         "null",
                         "string"

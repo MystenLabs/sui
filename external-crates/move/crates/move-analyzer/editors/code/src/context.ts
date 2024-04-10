@@ -14,7 +14,7 @@ import { IndentAction } from 'vscode';
 export class Context {
     private client: lc.LanguageClient | undefined;
 
-    private lintOpt: boolean;
+    private lintLevel: string;
 
     // The vscode-languageclient module reads a configuration option named
     // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
@@ -30,7 +30,7 @@ export class Context {
         client: lc.LanguageClient | undefined = undefined,
     ) {
         this.client = client;
-        this.lintOpt = lint();
+        this.lintLevel = lint();
         this.traceOutputChannel = vscode.window.createOutputChannel(
             'Move Language Server Trace',
         );
@@ -129,7 +129,7 @@ export class Context {
             documentSelector: [{ scheme: 'file', language: 'move' }],
             traceOutputChannel: this.traceOutputChannel,
             initializationOptions: {
-                lintOpt: this.lintOpt,
+                lintLevel: this.lintLevel,
             },
         };
 
@@ -175,9 +175,9 @@ export class Context {
         vscode.workspace.onDidChangeConfiguration(async event => {
             const changed = event.affectsConfiguration('move.lint');
             if (changed) {
-                const newLintFlag = lint();
-                if (this.lintOpt !== newLintFlag) {
-                    this.lintOpt = newLintFlag;
+                const newLintLevel = lint();
+                if (this.lintLevel !== newLintLevel) {
+                    this.lintLevel = newLintLevel;
                     try {
                         await this.stopClient();
                         await this.startClient();

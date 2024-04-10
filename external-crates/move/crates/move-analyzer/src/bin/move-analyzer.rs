@@ -25,6 +25,10 @@ use move_analyzer::{
 use url::Url;
 use vfs::{impls::memory::MemoryFS, VfsPath};
 
+const LINT_NONE: &str = "none";
+const LINT_DEFAULT: &str = "default";
+const LINT_ALL: &str = "all";
+
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Options {}
@@ -118,18 +122,21 @@ fn main() {
 
         // determine if linting is on or off based on what the editor requested
         let lint = {
-            let lint_all = initialize_params
+            let lint_level = initialize_params
                 .initialization_options
                 .as_ref()
-                .and_then(|init_options| init_options.get("lintOpt"))
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            if lint_all {
+                .and_then(|init_options| init_options.get("lintLevel"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(LINT_DEFAULT);
+            if lint_level == LINT_ALL {
                 LintLevel::All
-            } else {
+            } else if lint_level == LINT_NONE {
                 LintLevel::None
+            } else {
+                LintLevel::Default
             }
         };
+        eprintln!("linting level {:?}", lint);
 
         symbolicator_runner = symbols::SymbolicatorRunner::new(
             ide_files_root.clone(),
