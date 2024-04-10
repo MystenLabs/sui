@@ -86,7 +86,7 @@ impl SuiSniffer {
 
         ctx_builder.data_mut().set_tx(Transaction {
             seq,
-            digest: tx_hash.clone(),
+            digest: tx_hash,
             time: time.timestamp(),
             gas_used: gas_cost_summary.gas_used(),
             gas_computation_cost: gas_cost_summary.computation_cost,
@@ -97,24 +97,8 @@ impl SuiSniffer {
             success: effects.status().is_ok(),
         });
 
-        ctx_builder
-            .data_mut()
-            .set_wit_tx(mamoru_sui_types::SuiTransaction {
-                seq,
-                digest: tx_hash.clone(),
-                time: time.timestamp(),
-                gas_used: gas_cost_summary.gas_used(),
-                gas_computation_cost: gas_cost_summary.computation_cost,
-                gas_storage_cost: gas_cost_summary.storage_cost,
-                gas_budget: tx_data.gas_budget(),
-                sender: format_object_id(certificate.sender_address()),
-                kind: tx_data.kind().to_string(),
-                success: effects.status().is_ok(),
-            });
-
         let events_timer = Instant::now();
         register_events(ctx_builder.data_mut(), layout_resolver, seq, events);
-        register_wit_events(ctx_builder.data_mut(), layout_resolver, seq, events);
 
         info!(
             duration_ms = events_timer.elapsed().as_millis(),
@@ -123,7 +107,6 @@ impl SuiSniffer {
 
         let call_traces_timer = Instant::now();
         register_call_traces(ctx_builder.data_mut(), seq, call_traces.clone());
-        register_wit_call_traces(ctx_builder.data_mut(), seq, call_traces);
 
         info!(
             duration_ms = call_traces_timer.elapsed().as_millis(),
@@ -138,13 +121,6 @@ impl SuiSniffer {
             inner_temporary_store,
         );
 
-        wit_register_object_changes(
-            ctx_builder.data_mut(),
-            layout_resolver,
-            &effects,
-            inner_temporary_store,
-        );
-
         info!(
             duration_ms = object_changes_timer.elapsed().as_millis(),
             "sniffer.register_object_changes() executed",
@@ -152,7 +128,6 @@ impl SuiSniffer {
 
         if let TransactionKind::ProgrammableTransaction(programmable_tx) = &tx_data.kind() {
             register_programmable_transaction(ctx_builder.data_mut(), programmable_tx);
-            wit_register_programmable_transaction(ctx_builder.data_mut(), programmable_tx);
         }
 
         ctx_builder.set_statistics(0, 1, events_len as u64, call_traces_len as u64);
@@ -254,162 +229,6 @@ fn register_programmable_transaction(ctx: &mut SuiCtx, tx: &ProgrammableTransact
             _ => continue,
         }
     }
-}
-
-fn wit_register_programmable_transaction(ctx: &mut SuiCtx, tx: &ProgrammableTransaction) {
-    let mut publish_command_seq = 0u64;
-    let mut publish_command_module_seq = 0u64;
-    let mut publish_command_dependency_seq = 0u64;
-
-    let mut upgrade_command_seq = 0u64;
-    let mut upgrade_command_module_seq = 0u64;
-    let mut upgrade_command_dependency_seq = 0u64;
-
-    for (seq, command) in tx.commands.iter().enumerate() {
-        let kind: &'static str = command.into();
-
-        ctx.wit_programmable_transaction_commands.push(
-            mamoru_sui_types::SuiProgrammableTransactionCommand {
-                seq: seq as u64,
-                kind: kind.to_owned(),
-            },
-        );
-
-        match command {
-            Command::Publish(modules, dependencies) => {
-                ctx.wit_publish_commands.push(
-                    mamoru_sui_types::SuiProgrammableTransactionPublishCommand {
-                        seq: publish_command_seq,
-                        command_seq: seq as u64,
-                    },
-                );
-
-                for module in modules {
-                    ctx.wit_publish_command_modules.push(
-                        mamoru_sui_types::SuiProgrammableTransactionPublishCommandModule {
-                            seq: publish_command_module_seq,
-                            publish_seq: publish_command_seq,
-                            contents: module.clone(),
-                        },
-                    );
-
-                    publish_command_module_seq += 1;
-                }
-
-                for dependency in dependencies {
-                    ctx.wit_publish_command_dependencies.push(
-                        mamoru_sui_types::SuiProgrammableTransactionPublishCommandDependency {
-                            seq: publish_command_dependency_seq,
-                            publish_seq: publish_command_seq,
-                            object_id: format_object_id(dependency),
-                        },
-                    );
-
-                    publish_command_dependency_seq += 1;
-                }
-
-                publish_command_seq += 1;
-            }
-            Command::Upgrade(modules, dependencies, package_id, _) => {
-                ctx.wit_upgrade_commands.push(
-                    mamoru_sui_types::SuiProgrammableTransactionUpgradeCommand {
-                        seq: upgrade_command_seq,
-                        command_seq: seq as u64,
-                        package_id: format_object_id(package_id),
-                    },
-                );
-
-                for module in modules {
-                    ctx.wit_upgrade_command_modules.push(
-                        mamoru_sui_types::SuiProgrammableTransactionUpgradeCommandModule {
-                            seq: upgrade_command_module_seq,
-                            upgrade_seq: upgrade_command_seq,
-                            contents: module.clone(),
-                        },
-                    );
-
-                    upgrade_command_module_seq += 1;
-                }
-
-                for dependency in dependencies {
-                    ctx.wit_upgrade_command_dependencies.push(
-                        mamoru_sui_types::SuiProgrammableTransactionUpgradeCommandDependency {
-                            seq: upgrade_command_dependency_seq,
-                            upgrade_seq: upgrade_command_seq, //TODO fix param
-                            object_id: format_object_id(dependency),
-                        },
-                    );
-
-                    upgrade_command_dependency_seq += 1;
-                }
-
-                upgrade_command_seq += 1;
-            }
-            _ => continue,
-        }
-    }
-}
-
-fn register_wit_call_traces(ctx: &mut SuiCtx, tx_seq: u64, move_call_traces: Vec<MoveCallTrace>) {
-    move_call_traces
-        .into_iter()
-        .zip(0..)
-        .for_each(|(trace, trace_seq)| {
-            let call_trace_args_len = ctx.wit_calltrace_args.len();
-            let call_trace_type_args_len = ctx.wit_calltrace_type_args.len();
-            let trace_seq = trace_seq as u64;
-
-            let call_trace = mamoru_sui_types::SuiCalltrace {
-                seq: trace_seq,
-                tx_seq,
-                depth: trace.depth,
-                call_type: match trace.call_type {
-                    MoveCallType::Call => 0,
-                    MoveCallType::CallGeneric => 1,
-                },
-                gas_used: trace.gas_used,
-                transaction_module: trace.module_id.map(|module| module.short_str_lossless()),
-                function: trace.function.to_string(),
-            };
-            ctx.wit_calltraces.push(call_trace);
-
-            for (arg, seq) in trace
-                .ty_args
-                .into_iter()
-                .zip(call_trace_type_args_len as u64..)
-            {
-                ctx.wit_calltrace_type_args
-                    .push(mamoru_sui_types::SuiCalltraceTypeArg {
-                        seq,
-                        calltrace_seq: trace_seq,
-                        arg: arg.to_canonical_string(true),
-                    });
-            }
-
-            for (arg, seq) in trace.args.into_iter().zip(call_trace_args_len as u64..) {
-                let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
-                let Ok(object_data) = to_wit_value_data(&arg, &mut stack_data) else {
-                    warn!("Can't make ValueData from move value");
-                    continue;
-                };
-
-                let value_data = mamoru_sui_types::ValueData {
-                    data: if stack_data.is_empty() {
-                        None
-                    } else {
-                        Some(stack_data)
-                    },
-                    value: object_data,
-                };
-
-                ctx.wit_calltrace_args
-                    .push(mamoru_sui_types::SuiCalltraceArg {
-                        seq,
-                        calltrace_seq: trace_seq,
-                        arg: value_data,
-                    });
-            }
-        })
 }
 
 fn register_call_traces(ctx: &mut SuiCtx, tx_seq: u64, move_call_traces: Vec<MoveCallTrace>) {
@@ -515,107 +334,6 @@ fn register_events(
         .collect();
 
     data.events.extend(mamoru_events);
-}
-
-fn register_wit_events(
-    data: &mut SuiCtx,
-    layout_resolver: &mut dyn LayoutResolver,
-    tx_seq: u64,
-    events: &[Event],
-) {
-    let mamoru_events: Vec<_> = events
-        .iter()
-        .filter_map(|event| {
-            let Ok(event_struct_layout) = layout_resolver.get_annotated_layout(&event.type_) else {
-                warn!(%event.type_, "Can't fetch layout by type");
-                return None;
-            };
-
-            let Ok(event_struct) =
-                Event::move_event_to_move_struct(&event.contents, event_struct_layout)
-            else {
-                warn!(%event.type_, "Can't parse event contents");
-                return None;
-            };
-
-            let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
-            match to_wit_value_data(&MoveValue::Struct(event_struct), &mut stack_data) {
-                Ok(value_data) => Some(mamoru_sui_types::SuiEvent {
-                    tx_seq,
-                    package_id: format_object_id(event.package_id),
-                    transaction_module: event.transaction_module.clone().into_string(),
-                    sender: format_object_id(event.sender),
-                    typ: event.type_.to_canonical_string(true),
-                    contents: mamoru_sui_types::ValueData {
-                        data: if stack_data.is_empty() {
-                            None
-                        } else {
-                            Some(stack_data)
-                        },
-                        value: value_data,
-                    },
-                }),
-                Err(mesg) => {
-                    warn!(%event.type_, "Can't convert event contents to wit: ValueData");
-                    warn!(mesg);
-                    return None;
-                }
-            }
-        })
-        .collect();
-
-    data.wit_events.extend(mamoru_events);
-    println!("{:}", data.wit_events.len());
-}
-
-const MAX_STACK: usize = 500;
-
-fn to_wit_value_data(
-    data: &MoveValue,
-    stack: &mut Vec<mamoru_sui_types::ValueType>,
-) -> Result<mamoru_sui_types::ValueType, &'static str> {
-    if stack.len() > MAX_STACK {
-        return Err("Maximum stack capacity achieved");
-    }
-
-    let result = match data {
-        MoveValue::Bool(value) => mamoru_sui_types::ValueType::Bool(*value),
-        MoveValue::U8(value) => mamoru_sui_types::ValueType::U64(*value as u64),
-        MoveValue::U16(value) => mamoru_sui_types::ValueType::U64(*value as u64),
-        MoveValue::U32(value) => mamoru_sui_types::ValueType::U64(*value as u64),
-        MoveValue::U64(value) => mamoru_sui_types::ValueType::U64(*value),
-        MoveValue::U128(value) => mamoru_sui_types::ValueType::String(format!("{:#x}", value)),
-        MoveValue::U256(value) => mamoru_sui_types::ValueType::String(format!("{:#x}", value)),
-        MoveValue::Address(addr) | MoveValue::Signer(addr) => {
-            mamoru_sui_types::ValueType::String(format_object_id(addr))
-        }
-        MoveValue::Vector(value) => {
-            let list_values = value
-                .iter()
-                .map(|elem| -> Result<u64, &'static str> {
-                    let parsed_type = to_wit_value_data(elem, stack)?;
-                    let index = stack.len();
-                    (*stack).push(parsed_type);
-                    Ok(index as u64)
-                })
-                .collect::<Result<Vec<u64>, &'static str>>()?;
-            mamoru_sui_types::ValueType::List(list_values)
-        }
-        MoveValue::Struct(value) => {
-            let MoveStruct { type_, fields } = value;
-            let elems: Vec<(String, u64)> = fields
-                .iter()
-                .map(|(field, value)| {
-                    let parsed_type = to_wit_value_data(&value, stack)?;
-                    let index = stack.len();
-                    (*stack).push(parsed_type);
-                    Ok((field.clone().into_string(), index as u64))
-                })
-                .collect::<Result<Vec<(String, u64)>, &'static str>>()?;
-            mamoru_sui_types::ValueType::Struct((type_.to_canonical_string(true), elems))
-        }
-    };
-    return Ok(result);
 }
 
 fn register_object_changes(
@@ -733,185 +451,6 @@ fn register_object_changes(
                 seq: seq as u64,
                 id: format_object_id(unwrapped_then_deleted.0),
             });
-    }
-}
-
-fn wit_register_object_changes(
-    data: &mut SuiCtx,
-    layout_resolver: &mut dyn LayoutResolver,
-    effects: &TransactionEffects,
-    inner_temporary_store: &InnerTemporaryStore,
-) {
-    let written = &inner_temporary_store.written;
-
-    let mut fetch_move_value = |object_ref: &ObjectRef| {
-        let object_id = object_ref.0;
-
-        match written.get_object(&object_id) {
-            Ok(Some(object)) => {
-                if let Data::Move(move_object) = &object.as_inner().data {
-                    let struct_tag = move_object.type_().clone().into();
-                    let Ok(layout) = layout_resolver.get_annotated_layout(&struct_tag) else {
-                        warn!(%object_id, "Can't fetch layout by struct tag");
-                        return None;
-                    };
-
-                    let Ok(move_value) = move_object.to_move_struct(&layout) else {
-                        warn!(%object_id, "Can't convert to move value");
-                        return None;
-                    };
-
-                    return Some((object, MoveValue::Struct(move_value)));
-                }
-
-                None
-            }
-            Ok(None) => {
-                warn!(%object_id, "Can't fetch object by object id");
-
-                None
-            }
-            Err(err) => {
-                warn!(%err, "Can't fetch object by object id, error");
-
-                None
-            }
-        }
-    };
-
-    let mut object_owner_seq = 0u64;
-
-    for (seq, (created, owner)) in effects.created().iter().enumerate() {
-        let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
-        if let Some((object, move_value)) = fetch_move_value(created) {
-            let Ok(object_data) = to_wit_value_data(&move_value, &mut stack_data) else {
-                warn!("Can't make ValueData from move value");
-                continue;
-            };
-
-            let value_data = mamoru_sui_types::ValueData {
-                data: if stack_data.is_empty() {
-                    None
-                } else {
-                    Some(stack_data)
-                },
-                value: object_data,
-            };
-
-            data.wit_object_changes
-                .created
-                .push(mamoru_sui_types::SuiCreatedObject {
-                    seq: seq as u64,
-                    owner_seq: object_owner_seq,
-                    id: format_object_id(object.id()),
-                    data: value_data,
-                });
-
-            data.wit_object_changes
-                .owners
-                .push(wit_sui_owner_to_mamoru(object_owner_seq, *owner));
-            object_owner_seq += 1;
-        }
-    }
-
-    for (seq, (mutated, owner)) in effects.mutated().iter().enumerate() {
-        let mut stack_data: Vec<mamoru_sui_types::ValueType> = Vec::new();
-        if let Some((object, move_value)) = fetch_move_value(mutated) {
-            let Ok(object_data) = to_wit_value_data(&move_value, &mut stack_data) else {
-                warn!("Can't make ValueData from move value");
-                continue;
-            };
-
-            let value_data = mamoru_sui_types::ValueData {
-                data: if stack_data.is_empty() {
-                    None
-                } else {
-                    Some(stack_data)
-                },
-                value: object_data,
-            };
-
-            data.wit_object_changes
-                .mutated
-                .push(mamoru_sui_types::SuiMutatedObject {
-                    seq: seq as u64,
-                    owner_seq: object_owner_seq,
-                    id: format_object_id(object.id()),
-                    data: value_data,
-                });
-
-            data.wit_object_changes
-                .owners
-                .push(wit_sui_owner_to_mamoru(object_owner_seq, *owner));
-            object_owner_seq += 1;
-        }
-    }
-
-    for (seq, deleted) in effects.deleted().iter().enumerate() {
-        data.wit_object_changes
-            .deleted
-            .push(mamoru_sui_types::SuiDeletedObject {
-                seq: seq as u64,
-                id: format_object_id(deleted.0),
-            });
-    }
-
-    for (seq, wrapped) in effects.wrapped().iter().enumerate() {
-        data.wit_object_changes
-            .wrapped
-            .push(mamoru_sui_types::SuiWrappedObject {
-                seq: seq as u64,
-                id: format_object_id(wrapped.0),
-            });
-    }
-
-    for (seq, (unwrapped, _)) in effects.unwrapped().iter().enumerate() {
-        data.wit_object_changes
-            .unwrapped
-            .push(mamoru_sui_types::SuiUnwrappedObject {
-                seq: seq as u64,
-                id: format_object_id(unwrapped.0),
-            });
-    }
-
-    for (seq, unwrapped_then_deleted) in effects.unwrapped_then_deleted().iter().enumerate() {
-        data.wit_object_changes.unwrapped_then_deleted.push(
-            mamoru_sui_types::SuiUnwrappedThenDeletedObject {
-                seq: seq as u64,
-                id: format_object_id(unwrapped_then_deleted.0),
-            },
-        );
-    }
-}
-
-fn wit_sui_owner_to_mamoru(seq: u64, owner: Owner) -> mamoru_sui_types::SuiObjectOwner {
-    match owner {
-        Owner::AddressOwner(address) => mamoru_sui_types::SuiObjectOwner {
-            seq,
-            owner_kind: ObjectOwnerKind::Address as u32,
-            owner_address: Some(format_object_id(address)),
-            initial_shared_version: None,
-        },
-        Owner::ObjectOwner(address) => mamoru_sui_types::SuiObjectOwner {
-            seq,
-            owner_kind: ObjectOwnerKind::Object as u32,
-            owner_address: Some(format_object_id(address)),
-            initial_shared_version: None,
-        },
-        Owner::Shared {
-            initial_shared_version,
-        } => mamoru_sui_types::SuiObjectOwner {
-            seq,
-            owner_kind: ObjectOwnerKind::Shared as u32,
-            owner_address: None,
-            initial_shared_version: Some(initial_shared_version.into()),
-        },
-        Owner::Immutable => mamoru_sui_types::SuiObjectOwner {
-            seq,
-            owner_kind: ObjectOwnerKind::Immutable as u32,
-            owner_address: None,
-            initial_shared_version: None,
-        },
     }
 }
 
