@@ -12,8 +12,9 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use sui_json_rpc_types::{get_new_package_obj_from_response, SuiTransactionBlockResponse};
-use sui_move_build::PUBLISHED_AT_MANIFEST_FIELD;
 use sui_sdk::{types::base_types::ObjectID, wallet_context::WalletContext};
+
+const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
 
 pub enum LockCommand {
     Publish,
@@ -104,7 +105,7 @@ context
                 .unwrap_or_else(|_| "unknown".into());
     */
 
-/// Given a package path, find the published on-chain ID in the `Move.lock` or
+/// Find the published on-chain ID in the `Move.lock` or
 /// `Move.toml` file for the current environmnent. Resolving from the
 /// `Move.lock` takes precedence, where addresses are automatically managed. The
 /// `Move.toml` is inspected as a fallback. If conflicting IDs are found in the

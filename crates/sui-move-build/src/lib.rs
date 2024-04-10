@@ -41,6 +41,7 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
+use sui_package_management::resolve_published_id;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
@@ -653,6 +654,7 @@ pub fn gather_published_ids(
 
     for (name, package) in &resolution_graph.package_table {
         let property = published_at_property(package);
+        let _ = resolve_published_id(package, None, None);
         if name == &root {
             // Separate out the root package as a special case
             published_at = property;
