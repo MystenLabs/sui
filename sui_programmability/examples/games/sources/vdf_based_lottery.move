@@ -68,7 +68,7 @@ module games::vdf_based_lottery {
     }
 
     /// Create a shared-object Game.
-    public entry fun create(iterations: u64, submission_phase_length: u64, clock: &Clock, ctx: &mut TxContext) {
+    public fun create(iterations: u64, submission_phase_length: u64, clock: &Clock, ctx: &mut TxContext) {
         let game = Game {
             id: object::new(ctx),
             iterations: iterations,
