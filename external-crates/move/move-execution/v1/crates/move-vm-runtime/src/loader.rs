@@ -10,7 +10,6 @@ use crate::{
 use move_binary_format::{
     access::ModuleAccess,
     binary_config::BinaryConfig,
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
@@ -219,7 +218,6 @@ impl ModuleCache {
     ) -> PartialVMResult<&Arc<LoadedModule>> {
         let link_context = data_store.link_context();
         let runtime_id = module.self_id();
-        let module_view = BinaryIndexedView::Module(module);
 
         // Add new structs and collect their field signatures
         let mut field_signatures = vec![];
@@ -271,7 +269,7 @@ impl ModuleCache {
         for signature in field_signatures {
             let tys: Vec<_> = signature
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<_>>()?;
             field_types.push(tys);
         }
@@ -329,19 +327,19 @@ impl ModuleCache {
                 .return_
                 .0
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             function.local_types = function
                 .locals
                 .0
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             function.parameter_types = function
                 .parameters
                 .0
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             self.functions.push(Arc::new(function));
         }
@@ -352,7 +350,7 @@ impl ModuleCache {
     }
 
     // `make_type` is the entry point to "translate" a `SignatureToken` to a `Type`
-    fn make_type(&self, module: BinaryIndexedView, tok: &SignatureToken) -> PartialVMResult<Type> {
+    fn make_type(&self, module: &CompiledModule, tok: &SignatureToken) -> PartialVMResult<Type> {
         let res = match tok {
             SignatureToken::Bool => Type::Bool,
             SignatureToken::U8 => Type::U8,
@@ -630,7 +628,6 @@ impl Loader {
     )> {
         let link_context = data_store.link_context();
         let (compiled, loaded) = self.load_module(runtime_id, data_store)?;
-        let compiled_view = BinaryIndexedView::Module(compiled.as_ref());
         let idx = self
             .module_cache
             .read()
@@ -642,7 +639,7 @@ impl Loader {
             .parameters
             .0
             .iter()
-            .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
+            .map(|tok| self.module_cache.read().make_type(&compiled, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -650,7 +647,7 @@ impl Loader {
             .return_
             .0
             .iter()
-            .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
+            .map(|tok| self.module_cache.read().make_type(&compiled, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -1497,7 +1494,6 @@ impl LoadedModule {
         cache: &ModuleCache,
     ) -> Result<Self, PartialVMError> {
         let self_id = module.self_id();
-        let module_view = BinaryIndexedView::Module(module);
 
         let mut struct_refs = vec![];
         let mut structs = vec![];
@@ -1528,7 +1524,7 @@ impl LoadedModule {
             let field_count = struct_def.field_count;
             let mut instantiation = vec![];
             for ty in &module.signature_at(struct_inst.type_parameters).0 {
-                instantiation.push(cache.make_type(module_view, ty)?);
+                instantiation.push(cache.make_type(module, ty)?);
             }
             struct_instantiations.push(StructInstantiation {
                 field_count,
@@ -1596,7 +1592,7 @@ impl LoadedModule {
                                     Some(sig_token) => sig_token,
                                 };
                                 single_signature_token_map
-                                    .insert(*si, cache.make_type(module_view, ty)?);
+                                    .insert(*si, cache.make_type(module, ty)?);
                             }
                         }
                         _ => {}
@@ -1609,7 +1605,7 @@ impl LoadedModule {
             let handle = function_refs[func_inst.handle.0 as usize];
             let mut instantiation = vec![];
             for ty in &module.signature_at(func_inst.type_parameters).0 {
-                instantiation.push(cache.make_type(module_view, ty)?);
+                instantiation.push(cache.make_type(module, ty)?);
             }
             function_instantiations.push(FunctionInstantiation {
                 handle,
@@ -1630,7 +1626,7 @@ impl LoadedModule {
             let offset = field_handles[fh_idx.0 as usize].offset;
             let mut instantiation = vec![];
             for ty in &module.signature_at(f_inst.type_parameters).0 {
-                instantiation.push(cache.make_type(module_view, ty)?);
+                instantiation.push(cache.make_type(module, ty)?);
             }
             field_instantiations.push(FieldInstantiation { offset, owner });
         }
