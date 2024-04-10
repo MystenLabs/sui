@@ -4,9 +4,7 @@
 use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        CompiledModule, CompiledScript, SignatureToken, StructFieldInformation, TableIndex,
-    },
+    file_format::{CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
     IndexKind,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
@@ -35,22 +33,6 @@ impl<'a> LimitsVerifier<'a> {
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
-    }
-
-    pub fn verify_script(config: &VerifierConfig, module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(config, module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(
-        config: &VerifierConfig,
-        script: &'a CompiledScript,
-    ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Script(script),
-        };
-        limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
-        limit_check.verify_type_nodes(config)
     }
 
     fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {

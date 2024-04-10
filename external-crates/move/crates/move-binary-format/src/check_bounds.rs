@@ -9,9 +9,9 @@ use crate::{
         PartialVMError, PartialVMResult,
     },
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, Constant,
-        FieldHandle, FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandle, FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, FieldHandle,
+        FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex, FunctionHandle,
+        FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
         StructDefInstantiation, StructDefinition, StructFieldInformation, StructHandle, TableIndex,
     },
     internals::ModuleIndex,
@@ -22,7 +22,6 @@ use move_core_types::vm_status::StatusCode;
 enum BoundsCheckingContext {
     Module,
     ModuleFunction(FunctionDefinitionIndex),
-    Script,
 }
 pub struct BoundsChecker<'a> {
     view: BinaryIndexedView<'a>,
@@ -30,40 +29,6 @@ pub struct BoundsChecker<'a> {
 }
 
 impl<'a> BoundsChecker<'a> {
-    pub fn verify_script(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let mut bounds_check = Self {
-            view: BinaryIndexedView::Script(script),
-            context: BoundsCheckingContext::Script,
-        };
-        bounds_check.verify_impl()?;
-
-        let type_param_count = script.type_parameters.len();
-
-        check_bounds_impl(bounds_check.view.signatures(), script.parameters)?;
-        if let Some(sig) = bounds_check
-            .view
-            .signatures()
-            .get(script.parameters.into_index())
-        {
-            for ty in &sig.0 {
-                bounds_check.check_type_parameter(ty, type_param_count)?
-            }
-        }
-
-        // The bounds checker has already checked each function definition's code, but a
-        // script's code exists outside of any function definition. It gets checked here.
-        bounds_check.check_code(
-            &script.code,
-            &script.type_parameters,
-            bounds_check
-                .view
-                .signatures()
-                .get(script.parameters.into_index())
-                .unwrap(),
-            CompiledScript::MAIN_INDEX.into_index(),
-        )
-    }
-
     pub fn verify_module(module: &'a CompiledModule) -> PartialVMResult<()> {
         let mut bounds_check = Self {
             view: BinaryIndexedView::Module(module),
@@ -695,12 +660,6 @@ impl<'a> BoundsChecker<'a> {
                     current_function_index,
                     cur_bytecode_offset,
                 )
-            }
-            BoundsCheckingContext::Script => {
-                let msg = format!(
-        "Index {} out of bounds for {} at bytecode offset {} in script while indexing {}",
-        target_offset, target_pool_len, cur_bytecode_offset, kind);
-                PartialVMError::new(status).with_message(msg)
             }
         }
     }

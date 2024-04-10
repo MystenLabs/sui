@@ -12,12 +12,12 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     effects::{ChangeSet, Event},
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
     runtime_value as R,
-    annotated_value as A
 };
 use move_vm_types::{
     data_store::DataStore,
@@ -112,39 +112,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
-    /// Execute a transaction script.
-    ///
-    /// The Move VM MUST return a user error (in other words, an error that's not an invariant
-    /// violation) if
-    ///   - The script fails to deserialize or verify. Not all expressible signatures are valid.
-    ///     See `move_bytecode_verifier::script_signature` for the rules.
-    ///   - Type arguments refer to a non-existent type.
-    ///   - Arguments (senders included) fail to deserialize or fail to match the signature of the
-    ///     script function.
-    ///
-    /// If any other error occurs during execution, the Move VM MUST propagate that error back to
-    /// the caller.
-    /// Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn execute_script(
-        &mut self,
-        script: impl Borrow<[u8]>,
-        ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
-        self.runtime.execute_script(
-            script,
-            ty_args,
-            args,
-            &mut self.data_cache,
-            gas_meter,
-            &mut self.native_extensions,
-        )
-    }
-
     /// Publish the given module.
     ///
     /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
@@ -221,19 +188,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
-    /// Load a script and all of its types into cache
-    pub fn load_script(
-        &self,
-        script: impl Borrow<[u8]>,
-        ty_args: &[Type],
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let (_, instantiation) =
-            self.runtime
-                .loader()
-                .load_script(script.borrow(), ty_args, &self.data_cache)?;
-        Ok(instantiation)
-    }
-
     /// Load a module, a function, and all of its types into cache
     pub fn load_function(
         &self,
@@ -273,7 +227,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .get_type_layout(type_tag, &self.data_cache)
     }
 
-    pub fn get_fully_annotated_type_layout(&self, type_tag: &TypeTag) -> VMResult<A::MoveTypeLayout> {
+    pub fn get_fully_annotated_type_layout(
+        &self,
+        type_tag: &TypeTag,
+    ) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .get_fully_annotated_type_layout(type_tag, &self.data_cache)

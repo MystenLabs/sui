@@ -1297,18 +1297,6 @@ impl<'a> Disassembler<'a> {
             .collect::<Result<Vec<String>>>()?;
 
         let function_defs: Vec<String> = match self.source_mapper.bytecode {
-            BinaryIndexedView::Script(script) => {
-                vec![self.disassemble_function_def(
-                    self.source_mapper
-                        .source_map
-                        .get_function_source_map(FunctionDefinitionIndex(0_u16))?,
-                    None,
-                    IdentStr::new("main")?,
-                    &script.type_parameters,
-                    script.parameters,
-                    Some(&script.code),
-                )?]
-            }
             BinaryIndexedView::Module(module) => (0..module.function_defs.len())
                 .map(|i| {
                     let function_definition_index = FunctionDefinitionIndex(i as TableIndex);

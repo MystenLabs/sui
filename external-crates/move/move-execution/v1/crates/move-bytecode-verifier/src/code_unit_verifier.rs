@@ -6,11 +6,8 @@
 //! The overall verification is split between stack_usage_verifier.rs and
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
-    acquires_list_verifier::AcquiresVerifier,
-    control_flow, locals_safety,
-    reference_safety,
-    stack_usage_verifier::StackUsageVerifier,
-    type_safety,
+    acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety, reference_safety,
+    stack_usage_verifier::StackUsageVerifier, type_safety,
 };
 use move_binary_format::{
     access::ModuleAccess,
@@ -18,8 +15,7 @@ use move_binary_format::{
     control_flow_graph::ControlFlowGraph,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, FunctionDefinition, FunctionDefinitionIndex,
-        IdentifierIndex, TableIndex,
+        CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
     },
     IndexKind,
 };
@@ -74,47 +70,6 @@ impl<'a> CodeUnitVerifier<'a> {
             }
         }
         Ok(())
-    }
-
-    pub fn verify_script(
-        verifier_config: &VerifierConfig,
-        module: &'a CompiledScript,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> VMResult<()> {
-        Self::verify_script_impl(verifier_config, module, meter)
-            .map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(
-        verifier_config: &VerifierConfig,
-        script: &'a CompiledScript,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<()> {
-        // create `FunctionView` and `BinaryIndexedView`
-        let function_view = control_flow::verify_script(verifier_config, script)?;
-        let resolver = BinaryIndexedView::Script(script);
-        let name_def_map = HashMap::new();
-
-        if let Some(limit) = verifier_config.max_basic_blocks_in_script {
-            if function_view.cfg().blocks().len() > limit {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS));
-            }
-        }
-
-        if let Some(limit) = verifier_config.max_back_edges_per_function {
-            if function_view.cfg().num_back_edges() > limit {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES));
-            }
-        }
-
-        //verify
-        meter.enter_scope("script", Scope::Function);
-        let code_unit_verifier = CodeUnitVerifier {
-            resolver,
-            function_view,
-            name_def_map: &name_def_map,
-        };
-        code_unit_verifier.verify_common(verifier_config, meter)
     }
 
     fn verify_function(

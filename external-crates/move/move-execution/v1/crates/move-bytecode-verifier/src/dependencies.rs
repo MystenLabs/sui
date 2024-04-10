@@ -4,11 +4,11 @@
 
 //! This module contains verification of usage of dependencies for modules and scripts.
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
+    access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CompiledModule, CompiledScript, FunctionDefinitionIndex,
+        AbilitySet, Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex,
         FunctionHandleIndex, ModuleHandleIndex, SignatureToken, StructHandleIndex,
         StructTypeParameter, TableIndex, Visibility,
     },
@@ -42,23 +42,14 @@ impl<'a, 'b> Context<'a, 'b> {
         Self::new(BinaryIndexedView::Module(module), dependencies)
     }
 
-    fn script(
-        script: &'a CompiledScript,
-        dependencies: impl IntoIterator<Item = &'b CompiledModule>,
-    ) -> Self {
-        Self::new(BinaryIndexedView::Script(script), dependencies)
-    }
-
     fn new(
         resolver: BinaryIndexedView<'a>,
         dependencies: impl IntoIterator<Item = &'b CompiledModule>,
     ) -> Self {
         let self_module = resolver.self_id();
         let self_module_idx = resolver.self_handle_idx();
-        let empty_defs = &vec![];
         let self_function_defs = match &resolver {
             BinaryIndexedView::Module(m) => m.function_defs(),
-            BinaryIndexedView::Script(_) => empty_defs,
         };
         let dependency_map = dependencies
             .into_iter()
@@ -173,25 +164,6 @@ fn verify_module_impl<'a>(
     dependencies: impl IntoIterator<Item = &'a CompiledModule>,
 ) -> PartialVMResult<()> {
     let context = &Context::module(module, dependencies);
-
-    verify_imported_modules(context)?;
-    verify_imported_structs(context)?;
-    verify_imported_functions(context)?;
-    verify_all_script_visibility_usage(context)
-}
-
-pub fn verify_script<'a>(
-    script: &CompiledScript,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> VMResult<()> {
-    verify_script_impl(script, dependencies).map_err(|e| e.finish(Location::Script))
-}
-
-pub fn verify_script_impl<'a>(
-    script: &CompiledScript,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> PartialVMResult<()> {
-    let context = &Context::script(script, dependencies);
 
     verify_imported_modules(context)?;
     verify_imported_structs(context)?;
@@ -540,13 +512,6 @@ fn verify_all_script_visibility_usage(context: &Context) -> PartialVMResult<()> 
             }
             Ok(())
         }
-        BinaryIndexedView::Script(s) => verify_script_visibility_usage(
-            &context.resolver,
-            script_functions,
-            true,
-            FunctionDefinitionIndex(0),
-            &s.code().code,
-        ),
     }
 }
 

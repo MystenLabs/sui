@@ -17,8 +17,7 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, FunctionDefinitionIndex, SignatureIndex, SignatureToken,
-        TableIndex,
+        CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
     },
     file_format_common::{VERSION_1, VERSION_5},
     IndexKind,
@@ -31,22 +30,6 @@ pub type FnCheckScriptSignature = fn(
     SignatureIndex,
     Option<SignatureIndex>,
 ) -> PartialVMResult<()>;
-
-/// This function checks the extra requirements on the signature of the main function of a script.
-pub fn verify_script(
-    script: &CompiledScript,
-    check_signature: FnCheckScriptSignature,
-) -> VMResult<()> {
-    if script.version >= VERSION_5 {
-        return Ok(());
-    }
-
-    let resolver = &BinaryIndexedView::Script(script);
-    let parameters = script.parameters;
-    let return_ = None;
-    verify_main_signature_impl(resolver, true, parameters, return_, check_signature)
-        .map_err(|e| e.finish(Location::Script))
-}
 
 pub fn verify_module(
     module: &CompiledModule,
