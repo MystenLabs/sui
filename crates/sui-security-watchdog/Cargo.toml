@@ -13,10 +13,10 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tokio-cron-scheduler = { version = "0.10.0"}
 anyhow.workspace = true
 chrono.workspace = true
 snowflake-api = { version = "0.7.0"}
+tokio-cron-scheduler = "0.10.0"
 clap.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
@@ -24,3 +24,4 @@ async-trait.workspace = true
 uuid.workspace = true
 lexical-util = "0.8.5"
 reqwest = { workspace = true, features = ["json"] }
+env_logger = "0.11.3"

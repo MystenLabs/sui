@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
-
+    env_logger::init();
     let config = SecurityWatchdogConfig::parse();
     let registry_service = mysten_metrics::start_prometheus_server(
         format!(
