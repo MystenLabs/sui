@@ -73,7 +73,7 @@ module games::vdf_based_lottery {
             id: object::new(ctx),
             iterations: iterations,
             status: IN_PROGRESS,
-            timestamp_start: clock::timestamp_ms(clock),
+            timestamp_start: clock.timestamp_ms(),
             submission_phase_length: submission_phase_length,
             vdf_input_seed: std::vector::empty<u8>(),
             participants: 0,
@@ -114,18 +114,18 @@ module games::vdf_based_lottery {
 
         // Update combined randomness
         let pack = std::vector::empty<u8>();
-        std::vector::append(&mut pack, game.vdf_input_seed);
-        std::vector::append(&mut pack, my_randomness);
+        pack.append(game.vdf_input_seed);
+        pack.append(my_randomness);
         game.vdf_input_seed = sha2_256(pack);
 
         game.participants = game.participants + 1;
-        transfer::public_transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(ticket, ctx.sender());
     }
 
     /// The winner can redeem its ticket.
     public fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
         assert!(object::id(game) == ticket.game_id, EInvalidTicket);
-        assert!(option::contains(&game.winner, &ticket.participant_index), EInvalidTicket);
+        assert!(game.winner.contains(&ticket.participant_index), EInvalidTicket);
 
         let winner = GameWinner {
             id: object::new(ctx),
@@ -144,12 +144,13 @@ module games::vdf_based_lottery {
         let GameWinner { id, game_id:  _} = ticket;
         object::delete(id);
     }
-
-    public fun get_ticket_game_id(ticket: &Ticket): &ID {
+    public use fun ticket_game_id as Ticket.game_id;
+    public fun ticket_game_id(ticket: &Ticket): &ID {
         &ticket.game_id
     }
 
-    public fun get_game_winner_game_id(ticket: &GameWinner): &ID {
+    public use fun game_winner_game_id as GameWinner.game_id;
+    public fun game_winner_game_id(ticket: &GameWinner): &ID {
         &ticket.game_id
     }
 

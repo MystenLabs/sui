@@ -3,7 +3,7 @@
 
 #[test_only]
 module games::vdf_based_lottery_tests {
-    use sui::test_scenario::{Self};
+    use sui::test_scenario;
     use games::vdf_based_lottery::{Self, Game, Ticket, GameWinner};
 
     #[test]
