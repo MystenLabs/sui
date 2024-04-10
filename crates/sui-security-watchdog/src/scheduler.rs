@@ -60,13 +60,7 @@ pub struct SchedulerService {
 
 impl SchedulerService {
     pub async fn new(config: &SecurityWatchdogConfig, registry: &Registry) -> anyhow::Result<Self> {
-        let mut scheduler = JobScheduler::new().await?;
-        scheduler.shutdown_on_ctrl_c();
-        scheduler.set_shutdown_handler(Box::new(|| {
-            Box::pin(async move {
-                info!("Scheduler shut down complete");
-            })
-        }));
+        let scheduler = JobScheduler::new().await?;
         Ok(Self {
             scheduler,
             query_runner: Arc::new(SnowflakeQueryRunner::from_config(config)?),
