@@ -34,7 +34,7 @@ module games::vdf_based_lottery_tests {
             &clock
         );
 
-        t1.delete_ticket();
+        t1.delete();
 
         sui::clock::destroy_for_testing(clock);
         ts::return_shared(game);
