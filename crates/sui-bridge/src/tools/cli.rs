@@ -239,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
                 )
             } else {
                 return Err(anyhow!(
-                    "Error returned from bridge committee registration transaction: {:?}",
+                    "Error returned from bridge committee registration transaction: {:?}.",
                     response.effects.as_ref().map(|e| e.status())
                 ));
             }
