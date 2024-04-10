@@ -121,7 +121,7 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_definitions(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        let defs = self.resolver.struct_defs();
+        let defs = self.resolver.function_defs();
         {
             if let Some(max_function_definitions) = config.max_function_definitions {
                 if defs.len() > max_function_definitions {
