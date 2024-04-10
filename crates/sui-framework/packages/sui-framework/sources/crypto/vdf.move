@@ -38,7 +38,7 @@ module sui::vdf {
     /// fastcrypto.
     public fun vdf_verify(discriminant: &vector<u8>, input: &vector<u8>, output: &vector<u8>, proof: &vector<u8>, iterations: u64): bool {
         // We allow up to 3072 bit discriminants
-        assert!(std::vector::length(discriminant) <= MAX_INPUT_LENGTH, EInvalidInput);
+        assert!(discriminant.length() <= MAX_INPUT_LENGTH, EInvalidInput);
         vdf_verify_internal(discriminant, input, output, proof, iterations)
     }
 
