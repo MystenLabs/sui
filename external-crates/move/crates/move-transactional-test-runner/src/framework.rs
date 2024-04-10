@@ -11,9 +11,7 @@ use crate::tasks::{
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use clap::Parser;
-use move_binary_format::{
-    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::CompiledModule,
-};
+use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::{
     address::ParsedAddress,
@@ -198,11 +196,12 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                     let MaybeNamedCompiledModule {
                         module, source_map, ..
                     } = m;
-                    let view = BinaryIndexedView::Module(&module);
                     let source_mapping = match source_map {
-                        Some(m) => SourceMapping::new(m, view),
-                        None => SourceMapping::new_from_view(view, Spanned::unsafe_no_loc(()).loc)
-                            .expect("Unable to build dummy source mapping"),
+                        Some(m) => SourceMapping::new(m, &module),
+                        None => {
+                            SourceMapping::new_from_view(&module, Spanned::unsafe_no_loc(()).loc)
+                                .expect("Unable to build dummy source mapping")
+                        }
                     };
                     let disassembler =
                         Disassembler::new(source_mapping, DisassemblerOptions::new());

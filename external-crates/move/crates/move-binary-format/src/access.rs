@@ -4,7 +4,7 @@
 
 //! Defines accessors for compiled modules.
 
-use crate::{file_format::*, internals::ModuleIndex};
+use crate::{errors::PartialVMResult, file_format::*, internals::ModuleIndex};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -207,6 +207,48 @@ pub trait ModuleAccess: Sync {
             let handle = self.struct_handle_at(def.struct_handle);
             name == self.identifier_at(handle.name)
         })
+    }
+
+    // Return the `AbilitySet` of a `SignatureToken` given a context.
+    // A `TypeParameter` has the abilities of its `constraints`.
+    // `StructInstantiation` abilities are predicated on the particular instantiation
+    fn abilities(
+        &self,
+        ty: &SignatureToken,
+        constraints: &[AbilitySet],
+    ) -> PartialVMResult<AbilitySet> {
+        use SignatureToken::*;
+
+        match ty {
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => Ok(AbilitySet::PRIMITIVES),
+
+            Reference(_) | MutableReference(_) => Ok(AbilitySet::REFERENCES),
+            Signer => Ok(AbilitySet::SIGNER),
+            TypeParameter(idx) => Ok(constraints[*idx as usize]),
+            Vector(ty) => AbilitySet::polymorphic_abilities(
+                AbilitySet::VECTOR,
+                vec![false],
+                vec![self.abilities(ty, constraints)?],
+            ),
+            Struct(idx) => {
+                let sh = self.struct_handle_at(*idx);
+                Ok(sh.abilities)
+            }
+            StructInstantiation(struct_inst) => {
+                let (idx, type_args) = &**struct_inst;
+                let sh = self.struct_handle_at(*idx);
+                let declared_abilities = sh.abilities;
+                let type_arguments = type_args
+                    .iter()
+                    .map(|arg| self.abilities(arg, constraints))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                AbilitySet::polymorphic_abilities(
+                    declared_abilities,
+                    sh.type_parameters.iter().map(|param| param.is_phantom),
+                    type_arguments,
+                )
+            }
+        }
     }
 }
 

@@ -9,7 +9,6 @@ pub mod module_cache;
 use crate::dependency_graph::DependencyGraph;
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{CompiledModule, SignatureToken, StructHandleIndex},
 };
 use move_core_types::{
@@ -102,7 +101,7 @@ impl<'a> Modules<'a> {
 }
 
 pub fn resolve_struct<'a>(
-    view: &'a BinaryIndexedView,
+    view: &'a CompiledModule,
     sidx: StructHandleIndex,
 ) -> (&'a AccountAddress, &'a IdentStr, &'a IdentStr) {
     let shandle = view.struct_handle_at(sidx);
@@ -113,7 +112,7 @@ pub fn resolve_struct<'a>(
     (address, module_name, struct_name)
 }
 
-pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> String {
+pub fn format_signature_token(view: &CompiledModule, t: &SignatureToken) -> String {
     match t {
         SignatureToken::Bool => "bool".to_string(),
         SignatureToken::U8 => "u8".to_string(),
@@ -142,7 +141,7 @@ pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> S
 }
 
 pub fn format_signature_token_struct(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     sidx: StructHandleIndex,
     ty_args: &[SignatureToken],
 ) -> String {

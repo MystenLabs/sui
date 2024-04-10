@@ -14,15 +14,16 @@ use crate::{
 };
 use abstract_state::{AbstractState, LocalState};
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
+    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
+    CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) fn verify<'a>(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     function_view: &'a FunctionView<'a>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {

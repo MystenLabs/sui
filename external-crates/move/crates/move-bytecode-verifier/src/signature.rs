@@ -7,7 +7,6 @@
 //! top-level in all tokens.  Additionally, references cannot occur at all in field types.
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CodeUnit, CompiledModule, FunctionDefinition, FunctionHandle,
@@ -21,7 +20,7 @@ use move_core_types::vm_status::StatusCode;
 use std::collections::{HashMap, HashSet};
 
 pub struct SignatureChecker<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     abilities_cache: HashMap<SignatureIndex, HashSet<Vec<AbilitySet>>>,
 }
 
@@ -32,7 +31,7 @@ impl<'a> SignatureChecker<'a> {
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
         let mut sig_check = Self {
-            resolver: BinaryIndexedView::Module(module),
+            resolver: module,
             abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(module.signatures())?;
@@ -147,8 +146,8 @@ impl<'a> SignatureChecker<'a> {
                 | MoveToGenericDeprecated(idx)
                 | ImmBorrowGlobalGenericDeprecated(idx)
                 | MutBorrowGlobalGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    let struct_def = self.resolver.struct_def_at(struct_inst.def)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
+                    let struct_def = self.resolver.struct_def_at(struct_inst.def);
                     let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
                     let type_arguments = &self.resolver.signature_at(struct_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
@@ -159,9 +158,9 @@ impl<'a> SignatureChecker<'a> {
                     )
                 }
                 ImmBorrowFieldGeneric(idx) | MutBorrowFieldGeneric(idx) => {
-                    let field_inst = self.resolver.field_instantiation_at(*idx)?;
-                    let field_handle = self.resolver.field_handle_at(field_inst.handle)?;
-                    let struct_def = self.resolver.struct_def_at(field_handle.owner)?;
+                    let field_inst = self.resolver.field_instantiation_at(*idx);
+                    let field_handle = self.resolver.field_handle_at(field_inst.handle);
+                    let struct_def = self.resolver.struct_def_at(field_handle.owner);
                     let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
                     let type_arguments = &self.resolver.signature_at(field_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
