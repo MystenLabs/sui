@@ -19,7 +19,7 @@ module sui::vdf {
         hash_to_input_internal(discriminant, message)
     }
 
-    native  fun hash_to_input_internal(discriminant: &vector<u8>, message: &vector<u8>): vector<u8>;
+    native fun hash_to_input_internal(discriminant: &vector<u8>, message: &vector<u8>): vector<u8>;
 
     /// Verify the output and proof of a VDF with the given number of iterations. The `input`, `output` and `proof`
     /// are all class group elements represented by triples `(a,b,c)` such that `b^2 + 4ac = discriminant`. They should
