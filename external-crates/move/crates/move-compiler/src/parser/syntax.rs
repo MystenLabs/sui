@@ -117,12 +117,6 @@ fn unexpected_token_error_(
     ))
 }
 
-fn add_type_args_ambiguity_label(loc: Loc, mut diag: Box<Diagnostic>) -> Box<Diagnostic> {
-    const MSG: &str = "Perhaps you need a blank space before this '<' operator?";
-    diag.add_secondary_label((loc, MSG));
-    diag
-}
-
 // A macro for providing better diagnostics when we expect a specific token and find some other
 // pattern instead. For example, we can use this to handle the case when a const is missing its
 // type annotation as:
@@ -885,9 +879,7 @@ fn parse_macro_opt_and_tyargs_opt(
         && (context.at_end(end_loc) || is_macro.is_some() || tyargs_whitespace_allowed)
     {
         let start_loc = context.tokens.start_loc();
-        let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
-        let tys_ = parse_optional_type_args(context)
-            .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
+        let tys_ = parse_optional_type_args(context);
         let ty_loc = make_loc(
             context.tokens.file_hash(),
             start_loc,
@@ -1626,12 +1618,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             consume_identifier(context.tokens, VECTOR_IDENT)?;
             let vec_end_loc = context.tokens.previous_end_loc();
             let vec_loc = make_loc(context.tokens.file_hash(), start_loc, vec_end_loc);
-            let targs_start_loc = context.tokens.start_loc();
-            let tys_opt = parse_optional_type_args(context).map_err(|diag| {
-                let targ_loc =
-                    make_loc(context.tokens.file_hash(), targs_start_loc, targs_start_loc);
-                add_type_args_ambiguity_label(targ_loc, diag)
-            })?;
+            let tys_opt = parse_optional_type_args(context);
             let args_start_loc = context.tokens.start_loc();
             let args_ = parse_comma_list(
                 context,
@@ -1961,7 +1948,7 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
     match context.tokens.peek() {
         _ if name.value.is_macro().is_some() => {
             // if in a macro, we must have a call
-            let rhs = parse_call_args(context)?;
+            let rhs = parse_call_args(context);
             Ok(Exp_::Call(name, rhs))
         }
 
@@ -1981,7 +1968,7 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
         // Call: "(" Comma<Exp> ")"
         Tok::LParen => {
             debug_assert!(name.value.is_macro().is_none());
-            let rhs = parse_call_args(context)?;
+            let rhs = parse_call_args(context);
             Ok(Exp_::Call(name, rhs))
         }
 
@@ -1991,8 +1978,8 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
 }
 
 // Parse the arguments to a call: "(" Comma<Exp> ")"
-fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagnostic>> {
-    ok_with_loc!(
+fn parse_call_args(context: &mut Context) -> Spanned<Vec<Exp>> {
+    let (loc, args) = with_loc!(
         context,
         parse_comma_list(
             context,
@@ -2002,7 +1989,8 @@ fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagn
             parse_exp,
             "a call argument expression",
         )
-    )
+    );
+    sp(loc, args)
 }
 
 // Parses a series of match arms, such as for a match block body "{" (<MatchArm>,)+ "}"
@@ -2230,7 +2218,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
 }
 
 // Parse the arguments to an index: "[" Comma<Exp> "]"
-fn parse_index_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagnostic>> {
+fn parse_index_args(context: &mut Context) -> Spanned<Vec<Exp>> {
     let start_loc = context.tokens.start_loc();
     let args = parse_comma_list(
         context,
@@ -2241,12 +2229,7 @@ fn parse_index_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diag
         "an index access expression",
     );
     let end_loc = context.tokens.previous_end_loc();
-    Ok(spanned(
-        context.tokens.file_hash(),
-        start_loc,
-        end_loc,
-        args,
-    ))
+    spanned(context.tokens.file_hash(), start_loc, end_loc, args)
 }
 
 // Return true if the current token is one that might occur after an Exp.
@@ -2558,10 +2541,14 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let mut lhs = parse_term(context)?;
+    let mut done_parsing = false;
     loop {
+        if done_parsing {
+            break;
+        }
         let exp = match context.tokens.peek() {
             Tok::Period => {
-                context.tokens.advance()?;
+                context.advance();
                 let loc = current_token_loc(context.tokens);
                 match context.tokens.peek() {
                     Tok::NumValue | Tok::NumTypedValue
@@ -2572,7 +2559,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         ) =>
                     {
                         let contents = context.tokens.content();
-                        context.tokens.advance()?;
+                        context.advance();
                         match parse_u8(contents) {
                             Ok((parsed, NumberFormat::Decimal)) => {
                                 let field_access = Name::new(loc, format!("{parsed}").into());
@@ -2602,12 +2589,22 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         }
                     }
                     _ => {
-                        let n = parse_identifier(context)?;
+                        let start_loc = context.tokens.start_loc();
+                        let n = match parse_identifier(context) {
+                            Ok(id) => id,
+                            Err(diag) => {
+                                done_parsing = true;
+                                context.add_diag(*diag);
+                                let end_loc = context.tokens.previous_end_loc();
+                                let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+                                sp(loc, Symbol::from(""))
+                            }
+                        };
                         if is_start_of_call_after_function_name(context, &n) {
                             let call_start = context.tokens.start_loc();
                             let is_macro = if let Tok::Exclaim = context.tokens.peek() {
                                 let loc = current_token_loc(context.tokens);
-                                context.tokens.advance()?;
+                                context.advance();
                                 Some(loc)
                             } else {
                                 None
@@ -2616,12 +2613,9 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                             if context.tokens.peek() == Tok::Less
                                 && n.loc.end() as usize == call_start
                             {
-                                let loc =
-                                    make_loc(context.tokens.file_hash(), call_start, call_start);
-                                tys = parse_optional_type_args(context)
-                                    .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
+                                tys = parse_optional_type_args(context);
                             }
-                            let args = parse_call_args(context)?;
+                            let args = parse_call_args(context);
                             Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
                         } else {
                             Exp_::Dot(Box::new(lhs), n)
@@ -2630,7 +2624,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                 }
             }
             Tok::LBracket => {
-                let index_args = parse_index_args(context)?;
+                let index_args = parse_index_args(context);
 
                 Exp_::Index(Box::new(lhs), index_args)
             }
@@ -2944,21 +2938,21 @@ fn parse_type_(
 
 // Parse an optional list of type arguments.
 //    OptionalTypeArgs = '<' Comma<Type> ">" | <empty>
-fn parse_optional_type_args(context: &mut Context) -> Result<Option<Vec<Type>>, Box<Diagnostic>> {
+fn parse_optional_type_args(context: &mut Context) -> Option<Vec<Type>> {
     if context.tokens.peek() == Tok::Less {
         context.stop_set.union(&TYPE_STOP_SET);
-        let list = Ok(Some(parse_comma_list(
+        let list = Some(parse_comma_list(
             context,
             Tok::Less,
             Tok::Greater,
             &TYPE_START_SET,
             parse_type,
             "a type",
-        )));
+        ));
         context.stop_set.difference(&TYPE_STOP_SET);
         list
     } else {
-        Ok(None)
+        None
     }
 }
 
