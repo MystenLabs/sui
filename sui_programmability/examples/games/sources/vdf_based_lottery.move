@@ -103,7 +103,7 @@ module games::vdf_based_lottery {
     }
 
     /// Anyone can participate in the game and receive a ticket.
-    public entry fun participate(game: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
+    public fun participate(game: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.status == IN_PROGRESS, EGameNotInProgress);
         assert!(clock::timestamp_ms(clock) - game.timestamp_start < game.submission_phase_length, ESubmissionPhaseFinished);
         let ticket = Ticket {
