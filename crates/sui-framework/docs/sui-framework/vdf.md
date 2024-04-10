@@ -61,7 +61,7 @@ The <code>discriminant</code> defines what class group to use and should be the 
 
 <pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_hash_to_input">hash_to_input</a>(discriminant: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, message: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     // We allow up <b>to</b> 3072 bit discriminants
-    <b>assert</b>!(std::vector::length(discriminant) &lt;= <a href="vdf.md#0x2_vdf_MAX_INPUT_LENGTH">MAX_INPUT_LENGTH</a>, <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>);
+    <b>assert</b>!(discriminant.length() &lt;= <a href="vdf.md#0x2_vdf_MAX_INPUT_LENGTH">MAX_INPUT_LENGTH</a>, <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>);
     <a href="vdf.md#0x2_vdf_hash_to_input_internal">hash_to_input_internal</a>(discriminant, message)
 }
 </code></pre>
@@ -85,7 +85,7 @@ The <code>discriminant</code> defines what class group to use and should be the 
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b>  <b>fun</b> <a href="vdf.md#0x2_vdf_hash_to_input_internal">hash_to_input_internal</a>(discriminant: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, message: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
+<pre><code><b>native</b> <b>fun</b> <a href="vdf.md#0x2_vdf_hash_to_input_internal">hash_to_input_internal</a>(discriminant: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, message: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 
@@ -124,7 +124,7 @@ fastcrypto.
 
 <pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(discriminant: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool {
     // We allow up <b>to</b> 3072 bit discriminants
-    <b>assert</b>!(std::vector::length(discriminant) &lt;= <a href="vdf.md#0x2_vdf_MAX_INPUT_LENGTH">MAX_INPUT_LENGTH</a>, <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>);
+    <b>assert</b>!(discriminant.length() &lt;= <a href="vdf.md#0x2_vdf_MAX_INPUT_LENGTH">MAX_INPUT_LENGTH</a>, <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>);
     <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(discriminant, input, output, proof, iterations)
 }
 </code></pre>

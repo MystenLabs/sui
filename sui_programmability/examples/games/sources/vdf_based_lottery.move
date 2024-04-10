@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(lint(self_transfer))]
 /// A basic lottery game that depends on user-provided randomness which is processed by a verifiable delay function (VDF)
 /// to make sure that it is unbiasable. 
 /// 
@@ -16,11 +17,7 @@
 ///  2) The number of iterations is defined such that it takes at least `submission_phase_length` to compute the VDF.
 module games::vdf_based_lottery {
     use games::drand_lib::safe_selection;
-    use std::option::{Self, Option};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use sui::clock::{Self, Clock};
+    use sui::clock::Clock;
     use std::hash::sha2_256;
 
     /// Error codes
@@ -41,7 +38,7 @@ module games::vdf_based_lottery {
     /// Game represents a set of parameters of a single game.
     /// This game can be extended to require ticket purchase, reward winners, etc.
     ///
-    struct Game has key, store {
+    public struct Game has key, store {
         id: UID,
         iterations: u64,
         status: u8,
@@ -54,7 +51,7 @@ module games::vdf_based_lottery {
 
     /// Ticket represents a participant in a single game.
     /// Can be deconstructed only by the owner.
-    struct Ticket has key, store {
+    public struct Ticket has key, store {
         id: UID,
         game_id: ID,
         participant_index: u64,
@@ -62,7 +59,7 @@ module games::vdf_based_lottery {
 
     /// GameWinner represents a participant that won in a specific game.
     /// Can be deconstructed only by the owner.
-    struct GameWinner has key, store {
+    public struct GameWinner has key, store {
         id: UID,
         game_id: ID,
     }
@@ -85,7 +82,7 @@ module games::vdf_based_lottery {
     /// Anyone can complete the game by providing the randomness of round.
     public fun complete(game: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
         assert!(game.status != COMPLETED, EGameAlreadyCompleted);
-        assert!(clock::timestamp_ms(clock) - game.timestamp_start >= game.submission_phase_length, ESubmissionPhaseInProgress);
+        assert!(clock.timestamp_ms() - game.timestamp_start >= game.submission_phase_length, ESubmissionPhaseInProgress);
 
         // Hash combined randomness to vdf input
         let discriminant = DISCRIMINANT_BYTES;
@@ -99,24 +96,26 @@ module games::vdf_based_lottery {
         // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
         let randomness = sha2_256(vdf_output);
 
-        game.winner = option::some(safe_selection(game.participants, &randomness));
+        let winner = safe_selection(game.participants, &randomness);
+        game.winner = option::some(winner);
     }
 
     /// Anyone can participate in the game and receive a ticket.
     public fun participate(game: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.status == IN_PROGRESS, EGameNotInProgress);
-        assert!(clock::timestamp_ms(clock) - game.timestamp_start < game.submission_phase_length, ESubmissionPhaseFinished);
+        assert!(clock.timestamp_ms() - game.timestamp_start < game.submission_phase_length, ESubmissionPhaseFinished);
+
+        // Update combined randomness
+        let mut pack = std::vector::empty<u8>();
+        pack.append(game.vdf_input_seed);
+        pack.append(my_randomness);
+        game.vdf_input_seed = sha2_256(pack);
+
         let ticket = Ticket {
             id: object::new(ctx),
             game_id: object::id(game),
             participant_index: game.participants,
         };
-
-        // Update combined randomness
-        let pack = std::vector::empty<u8>();
-        pack.append(game.vdf_input_seed);
-        pack.append(my_randomness);
-        game.vdf_input_seed = sha2_256(pack);
 
         game.participants = game.participants + 1;
         transfer::public_transfer(ticket, ctx.sender());
@@ -144,6 +143,7 @@ module games::vdf_based_lottery {
         let GameWinner { id, game_id:  _} = ticket;
         object::delete(id);
     }
+
     public use fun ticket_game_id as Ticket.game_id;
     public fun ticket_game_id(ticket: &Ticket): &ID {
         &ticket.game_id
