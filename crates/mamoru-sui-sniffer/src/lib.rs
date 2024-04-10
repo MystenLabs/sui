@@ -86,7 +86,7 @@ impl SuiSniffer {
 
         ctx_builder.data_mut().set_tx(Transaction {
             seq,
-            digest: tx_hash,
+            digest: tx_hash.clone(),
             time: time.timestamp(),
             gas_used: gas_cost_summary.gas_used(),
             gas_computation_cost: gas_cost_summary.computation_cost,
