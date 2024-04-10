@@ -83,7 +83,7 @@ module games::vdf_based_lottery {
     }
 
     /// Anyone can complete the game by providing the randomness of round.
-    public entry fun complete(game: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
+    public fun complete(game: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
         assert!(game.status != COMPLETED, EGameAlreadyCompleted);
         assert!(clock::timestamp_ms(clock) - game.timestamp_start >= game.submission_phase_length, ESubmissionPhaseInProgress);
 
