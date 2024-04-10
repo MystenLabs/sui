@@ -10,14 +10,7 @@ import type { OpenMoveTypeSignature } from './blockData/v2.js';
 import type { TransactionBlock } from './TransactionBlock.js';
 import type { TransactionBlockDataResolverPlugin } from './TransactionBlockDataResolver.js';
 
-export interface AsyncCache<T> {
-	get(key: string): Promise<T | null>;
-	set(key: string, value: T): Promise<void>;
-	delete(key: string): Promise<void>;
-	clear(): Promise<void>;
-}
-
-interface ObjectCacheEntry {
+export interface ObjectCacheEntry {
 	objectId: string;
 	version: string;
 	digest: string;
@@ -25,64 +18,147 @@ interface ObjectCacheEntry {
 	initialSharedVersion: string | null;
 }
 
-interface MoveFunctionEntry {
+export interface MoveFunctionCacheEntry {
 	package: string;
 	module: string;
 	function: string;
 	parameters: OpenMoveTypeSignature[];
 }
 
-class InMemoryCache<T> implements AsyncCache<T> {
-	#cache = new Map<string, T>();
+export interface CacheEntryTypes {
+	OwnedObject: ObjectCacheEntry;
+	SharedObject: ObjectCacheEntry;
+	MoveFunction: MoveFunctionCacheEntry;
+}
+export abstract class AsyncCache {
+	protected abstract get<T extends keyof CacheEntryTypes>(
+		type: T,
+		key: string,
+	): Promise<CacheEntryTypes[T] | null>;
+	protected abstract set<T extends keyof CacheEntryTypes>(
+		type: T,
+		key: string,
+		value: CacheEntryTypes[T],
+	): Promise<void>;
+	protected abstract delete<T extends keyof CacheEntryTypes>(type: T, key: string): Promise<void>;
+	abstract clear<T extends keyof CacheEntryTypes>(type?: T): Promise<void>;
 
-	async get(key: string): Promise<T | null> {
-		return this.#cache.get(key) ?? null;
+	async getObject(id: string) {
+		const [owned, shared] = await Promise.all([
+			this.get('OwnedObject', id),
+			this.get('SharedObject', id),
+		]);
+
+		return owned ?? shared ?? null;
 	}
 
-	async set(key: string, value: T): Promise<void> {
-		this.#cache.set(key, value);
+	async getObjects(ids: string[]) {
+		return Promise.all([
+			...ids.map((id) => this.get('OwnedObject', id)),
+			...ids.map((id) => this.get('SharedObject', id)),
+		]);
 	}
 
-	async delete(key: string): Promise<void> {
-		this.#cache.delete(key);
+	async addObject(object: ObjectCacheEntry) {
+		if (object.initialSharedVersion) {
+			await this.set('SharedObject', object.objectId, object);
+		} else {
+			await this.set('OwnedObject', object.objectId, object);
+		}
+
+		return object;
 	}
 
-	async clear(): Promise<void> {
-		this.#cache.clear();
+	async deleteObject(id: string) {
+		await Promise.all([
+			await this.delete('OwnedObject', id),
+			await this.delete('SharedObject', id),
+		]);
 	}
 
-	static createCache<T>(): AsyncCache<T> {
-		return new InMemoryCache<T>();
+	async getMoveFunctionDefinition(ref: { package: string; module: string; function: string }) {
+		const functionName = `${normalizeSuiAddress(ref.package)}::${ref.module}::${ref.function}`;
+		return this.get('MoveFunction', functionName);
+	}
+
+	async addMoveFunctionDefinition(functionEntry: MoveFunctionCacheEntry) {
+		const pkg = normalizeSuiAddress(functionEntry.package);
+		const functionName = `${pkg}::${functionEntry.module}::${functionEntry.function}`;
+		const entry = {
+			...functionEntry,
+			package: pkg,
+		};
+
+		await this.set('MoveFunction', functionName, entry);
+
+		return entry;
+	}
+
+	async deleteMoveFunctionDefinition(ref: { package: string; module: string; function: string }) {
+		const functionName = `${normalizeSuiAddress(ref.package)}::${ref.module}::${ref.function}`;
+		await this.delete('MoveFunction', functionName);
+	}
+}
+
+export class InMemoryCache extends AsyncCache {
+	#caches = {
+		OwnedObject: new Map<string, ObjectCacheEntry>(),
+		SharedObject: new Map<string, ObjectCacheEntry>(),
+		MoveFunction: new Map<string, MoveFunctionCacheEntry>(),
+	};
+
+	protected async get<T extends keyof CacheEntryTypes>(type: T, key: string) {
+		return (this.#caches[type].get(key) as CacheEntryTypes[T]) ?? null;
+	}
+
+	protected async set<T extends keyof CacheEntryTypes>(
+		type: T,
+		key: string,
+		value: CacheEntryTypes[T],
+	) {
+		(this.#caches[type] as Map<string, typeof value>).set(key, value as never);
+	}
+
+	protected async delete<T extends keyof CacheEntryTypes>(type: T, key: string) {
+		this.#caches[type].delete(key);
+	}
+
+	async clear<T extends keyof CacheEntryTypes>(type?: T) {
+		if (type) {
+			this.#caches[type].clear();
+		} else {
+			for (const cache of Object.values(this.#caches)) {
+				cache.clear();
+			}
+		}
 	}
 }
 
 interface ObjectCacheOptions {
-	createCache?: <T>(name: string) => AsyncCache<T>;
+	cache?: AsyncCache;
+	address: string;
 }
 
 export class ObjectCache implements TransactionBlockDataResolverPlugin {
-	#createCache: <T>(name: string) => AsyncCache<T>;
-	#objects: AsyncCache<ObjectCacheEntry>;
-	#functions: AsyncCache<MoveFunctionEntry>;
+	#cache: AsyncCache;
+	#address: string;
 
-	constructor({ createCache = InMemoryCache.createCache }: ObjectCacheOptions = {}) {
-		this.#createCache = createCache;
-		this.#objects = this.#createCache('objects');
-		this.#functions = this.#createCache('functions');
+	constructor({ cache = new InMemoryCache(), address }: ObjectCacheOptions) {
+		this.#cache = cache;
+		this.#address = normalizeSuiAddress(address);
 	}
 
 	getObjects: NonNullable<TransactionBlockDataResolverPlugin['getObjects']> = async (ids, next) => {
 		const results = new Map<string, ObjectCacheEntry>();
 
-		await Promise.all(
-			ids.map(async (id) => {
-				const cachedObject = await this.#objects.get(id);
+		const cached = await this.#cache.getObjects(ids);
 
-				if (cachedObject) {
-					results.set(id, cachedObject);
-				}
-			}),
-		);
+		cached.forEach((object) => {
+			if (object) {
+				results.set(object.objectId, object);
+			}
+		});
+
 		const missingIds = ids.filter((id) => !results.has(id));
 
 		if (missingIds.length > 0) {
@@ -90,7 +166,7 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 
 			await Promise.all(
 				newObjects.map(async (newObject) => {
-					await this.addObject(newObject);
+					await this.#cache.addObject(newObject);
 					results.set(newObject.objectId, newObject);
 				}),
 			);
@@ -102,41 +178,22 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 	getMoveFunctionDefinition: NonNullable<
 		TransactionBlockDataResolverPlugin['getMoveFunctionDefinition']
 	> = async (ref, next) => {
-		const functionName = `${normalizeSuiAddress(ref.package)}::${ref.module}::${ref.function}`;
-		const cached = await this.#functions.get(functionName);
+		const cached = await this.#cache.getMoveFunctionDefinition(ref);
 		if (cached) {
 			return cached;
 		}
 
 		const functionDefinition = await next(ref);
 
-		return await this.addFunction(functionDefinition);
+		return await this.#cache.addMoveFunctionDefinition(functionDefinition);
 	};
 
 	async clearCache() {
-		await Promise.all([this.#objects.clear(), this.#functions.clear()]);
+		await this.#cache.clear();
 	}
 
-	async addObject(object: ObjectCacheEntry) {
-		await this.#objects.set(object.objectId, object);
-		return object;
-	}
-
-	async addFunction(functionEntry: MoveFunctionEntry) {
-		const pkg = normalizeSuiAddress(functionEntry.package);
-		const functionName = `${pkg}::${functionEntry.module}::${functionEntry.function}`;
-		const entry = {
-			...functionEntry,
-			package: pkg,
-		};
-
-		await this.#functions.set(functionName, entry);
-
-		return entry;
-	}
-
-	async invalidateObject(id: string) {
-		await this.#objects.delete(id);
+	async clearOwnedObjects() {
+		await this.#cache.clear('OwnedObject');
 	}
 
 	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
@@ -149,11 +206,16 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 		await Promise.all(
 			changedObjects.map(async ([id, change]) => {
 				if (change.outputState.NotExist) {
-					await this.invalidateObject(id);
+					await this.#cache.deleteObject(id);
 				} else if (change.outputState.ObjectWrite) {
 					const [digest, owner] = change.outputState.ObjectWrite;
 
-					await this.addObject({
+					// Remove objects not owned by address after transaction
+					if (owner.ObjectOwner || (owner.AddressOwner && owner.AddressOwner !== this.#address)) {
+						await this.#cache.deleteObject(id);
+					}
+
+					await this.#cache.addObject({
 						objectId: id,
 						digest,
 						version: lamportVersion,
@@ -166,11 +228,18 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 	}
 }
 
-export class CachingTransactionBlockExecutor extends ObjectCache {
+export class CachingTransactionBlockExecutor {
 	#client: SuiClient;
-	constructor(client: SuiClient, options?: ObjectCacheOptions) {
-		super(options);
+	cache: ObjectCache;
+
+	constructor({
+		client,
+		...options
+	}: ObjectCacheOptions & {
+		client: SuiClient;
+	}) {
 		this.#client = client;
+		this.cache = new ObjectCache(options);
 	}
 
 	buildTransactionBlock({
@@ -182,7 +251,7 @@ export class CachingTransactionBlockExecutor extends ObjectCache {
 	}) {
 		return transactionBlock.build({
 			client: this.#client,
-			dataResolvers: [this, ...(dataResolvers ?? [])],
+			dataResolvers: [this.cache, ...(dataResolvers ?? [])],
 		});
 	}
 
@@ -199,7 +268,7 @@ export class CachingTransactionBlockExecutor extends ObjectCache {
 			...input,
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
-				dataResolvers: [this, ...(dataResolvers ?? [])],
+				dataResolvers: [this.cache, ...(dataResolvers ?? [])],
 			}),
 			options: {
 				...options,
@@ -209,7 +278,7 @@ export class CachingTransactionBlockExecutor extends ObjectCache {
 
 		if (results.rawEffects) {
 			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects));
-			await this.applyEffects(effects);
+			await this.cache.applyEffects(effects);
 		}
 
 		return results;
@@ -229,7 +298,7 @@ export class CachingTransactionBlockExecutor extends ObjectCache {
 			...input,
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
-				dataResolvers: [this, ...(dataResolvers ?? [])],
+				dataResolvers: [this.cache, ...(dataResolvers ?? [])],
 			}),
 			options: {
 				...options,
@@ -239,7 +308,7 @@ export class CachingTransactionBlockExecutor extends ObjectCache {
 
 		if (results.rawEffects) {
 			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects));
-			await this.applyEffects(effects);
+			await this.cache.applyEffects(effects);
 		}
 
 		return results;

@@ -22,7 +22,10 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 	beforeEach(async () => {
 		toolbox = await setup();
-		executor = new CachingTransactionBlockExecutor(toolbox.client);
+		executor = new CachingTransactionBlockExecutor({
+			client: toolbox.client,
+			address: toolbox.address(),
+		});
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			target: `${packageId}::tto::start`,
@@ -87,7 +90,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 			},
 		]);
 
-		const receiver = await executor.getMoveFunctionDefinition(
+		const receiver = await executor.cache.getMoveFunctionDefinition(
 			{ package: packageId, module: 'tto', function: 'receiver' },
 			async () => {
 				expect.fail('should not be called');
