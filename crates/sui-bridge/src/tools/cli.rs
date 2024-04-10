@@ -175,8 +175,8 @@ async fn main() -> anyhow::Result<()> {
                 .expect("Couldn't load BridgeNodeConfig");
 
             // Read bridge keypair
-            let key = fs::read_to_string(bridge_config.bridge_authority_key_path_base64_raw)?;
-            let bytes = Base64::decode(&key).unwrap();
+            let key_str = fs::read_to_string(bridge_config.bridge_authority_key_path_base64_raw)?;
+            let bytes = Base64::decode(key_str.trim()).unwrap();
             let key = Secp256k1PrivateKey::from_bytes(&bytes).unwrap();
             let ecdsa_keypair = Secp256k1KeyPair::from(key);
 
