@@ -43,9 +43,9 @@ jobs:
         os:
           [
             windows-ghcloud,
-            ubuntu-ghcloud,
-            macos-latest-xl,
-            macos-arm64-self-hosted
+            # ubuntu-ghcloud,
+            # macos-latest-xl,
+            # macos-arm64-self-hosted
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
