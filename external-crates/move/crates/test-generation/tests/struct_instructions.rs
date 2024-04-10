@@ -4,7 +4,6 @@
 
 extern crate test_generation;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         empty_module, Ability, AbilitySet, Bytecode, CompiledModule, FieldDefinition, FieldHandle,
         FieldHandleIndex, IdentifierIndex, ModuleHandleIndex, SignatureToken, StructDefinition,

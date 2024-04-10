@@ -18,7 +18,6 @@ use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction
 use crate::error::Error;
 use move_binary_format::errors::Location;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
         TableIndex,

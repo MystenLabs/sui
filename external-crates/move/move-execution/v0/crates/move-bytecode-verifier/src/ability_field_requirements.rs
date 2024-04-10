@@ -5,7 +5,6 @@
 //! This module implements a checker for verifying that all of the struct's fields satisfy the
 //! abilities required by the struct's abilities
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CompiledModule, StructFieldInformation, TableIndex},
     IndexKind,

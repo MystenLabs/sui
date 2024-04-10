@@ -11,14 +11,11 @@ use crate::{
     control_flow_graph::CFG,
     substitute, summaries,
 };
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
-        FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
-        StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-    },
+use move_binary_format::file_format::{
+    Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
+    FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
+    FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
+    StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
 };
 use move_core_types::u256::U256;
 use rand::{rngs::StdRng, Rng};

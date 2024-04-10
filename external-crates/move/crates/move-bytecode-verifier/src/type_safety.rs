@@ -9,7 +9,6 @@ use std::num::NonZeroU64;
 
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    access::ModuleAccess,
     binary_views::FunctionView,
     control_flow_graph::ControlFlowGraph,
     errors::{PartialVMError, PartialVMResult},

@@ -19,7 +19,6 @@ use crate::{
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    access::ModuleAccess,
     binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{

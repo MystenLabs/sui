@@ -15,7 +15,6 @@ use tabled::{
 };
 
 use fastcrypto::encoding::Base64;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::MoveTypeLayout;

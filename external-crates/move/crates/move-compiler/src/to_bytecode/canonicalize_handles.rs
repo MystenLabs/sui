@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         Bytecode, CodeUnit, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken, StructDefinition,

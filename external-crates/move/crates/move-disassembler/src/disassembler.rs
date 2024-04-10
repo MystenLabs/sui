@@ -8,7 +8,6 @@ use anyhow::{bail, format_err, Result};
 use clap::Parser;
 use colored::*;
 use move_binary_format::{
-    access::ModuleAccess,
     control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
         Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,

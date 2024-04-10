@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{Constant, FunctionDefinitionIndex, StructDefinitionIndex},
     views::{FunctionHandleView, StructHandleView},
     CompiledModule,

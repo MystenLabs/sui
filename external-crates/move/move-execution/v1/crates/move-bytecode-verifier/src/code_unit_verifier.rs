@@ -10,7 +10,6 @@ use crate::{
     stack_usage_verifier::StackUsageVerifier, type_safety,
 };
 use move_binary_format::{
-    access::ModuleAccess,
     binary_views::FunctionView,
     control_flow_graph::ControlFlowGraph,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},

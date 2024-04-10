@@ -12,7 +12,6 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         Bytecode as MoveBytecode, CodeOffset, CompiledModule, FieldHandleIndex, SignatureIndex,
     },

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    access::ModuleAccess,
     control_flow_graph::VMControlFlowGraph,
     file_format::{AbilitySet, CodeUnit, FunctionDefinitionIndex, FunctionHandle, Signature},
     CompiledModule,

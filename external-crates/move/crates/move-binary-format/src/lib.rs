@@ -6,7 +6,6 @@
 
 use std::fmt;
 
-pub mod access;
 pub mod binary_config;
 pub mod binary_views;
 pub mod check_bounds;
@@ -23,7 +22,6 @@ pub mod normalized;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod proptest_types;
 pub mod serializer;
-pub mod views;
 
 #[cfg(test)]
 mod unit_tests;
