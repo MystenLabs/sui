@@ -106,7 +106,7 @@ impl SuiSniffer {
                 gas_used: gas_cost_summary.gas_used(),
                 gas_computation_cost: gas_cost_summary.computation_cost,
                 gas_storage_cost: gas_cost_summary.storage_cost,
-                gas_budged: tx_data.gas_budget(), //TODO fix name
+                gas_budget: tx_data.gas_budget(),
                 sender: format_object_id(certificate.sender_address()),
                 kind: tx_data.kind().to_string(),
                 success: effects.status().is_ok(),
@@ -300,7 +300,7 @@ fn wit_register_programmable_transaction(ctx: &mut SuiCtx, tx: &ProgrammableTran
                     ctx.wit_publish_command_dependencies.push(
                         mamoru_sui_types::SuiProgrammableTransactionPublishCommandDependency {
                             seq: publish_command_dependency_seq,
-                            upgrade_seq: publish_command_seq, //TODO fix params
+                            publish_seq: publish_command_seq,
                             object_id: format_object_id(dependency),
                         },
                     );
@@ -323,7 +323,7 @@ fn wit_register_programmable_transaction(ctx: &mut SuiCtx, tx: &ProgrammableTran
                     ctx.wit_upgrade_command_modules.push(
                         mamoru_sui_types::SuiProgrammableTransactionUpgradeCommandModule {
                             seq: upgrade_command_module_seq,
-                            publish_seq: upgrade_command_seq, //TODO fix param
+                            upgrade_seq: upgrade_command_seq,
                             contents: module.clone(),
                         },
                     );
