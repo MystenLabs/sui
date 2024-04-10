@@ -15,7 +15,7 @@ module sui::vdf {
     /// `discriminant` should be encoded as a big-endian encoding of the negation of the negative discriminant.
     public fun hash_to_input(discriminant: &vector<u8>, message: &vector<u8>): vector<u8> {
         // We allow up to 3072 bit discriminants
-        assert!(std::vector::length(discriminant) <= MAX_INPUT_LENGTH, EInvalidInput);
+        assert!(discriminant.length() <= MAX_INPUT_LENGTH, EInvalidInput);
         hash_to_input_internal(discriminant, message)
     }
 
