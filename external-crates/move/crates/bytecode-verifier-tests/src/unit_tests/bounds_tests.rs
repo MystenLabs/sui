@@ -21,11 +21,6 @@ fn empty_module_no_errors() {
 }
 
 #[test]
-fn empty_script_no_errors() {
-    BoundsChecker::verify_script(&basic_test_script()).unwrap();
-}
-
-#[test]
 fn invalid_default_module() {
     BoundsChecker::verify_module(&CompiledModule {
         version: file_format_common::VERSION_MAX,
@@ -67,19 +62,6 @@ fn invalid_type_param_in_fn_parameters() {
     m.signatures.push(Signature(vec![TypeParameter(0)]));
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
-fn invalid_type_param_in_script_parameters() {
-    use SignatureToken::*;
-
-    let mut s = basic_test_script();
-    s.parameters = SignatureIndex(1);
-    s.signatures.push(Signature(vec![TypeParameter(0)]));
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
 }
@@ -139,8 +121,10 @@ fn invalid_struct_with_actuals_in_field() {
     let mut m = basic_test_module();
     match &mut m.struct_defs[0].field_information {
         StructFieldInformation::Declared(ref mut fields) => {
-            fields[0].signature.0 =
-                StructInstantiation(Box::new((StructHandleIndex::new(0), vec![TypeParameter(0)])));
+            fields[0].signature.0 = StructInstantiation(Box::new((
+                StructHandleIndex::new(0),
+                vec![TypeParameter(0)],
+            )));
             assert_eq!(
                 BoundsChecker::verify_module(&m).unwrap_err().major_status(),
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH
@@ -168,23 +152,6 @@ fn invalid_locals_id_in_call() {
 }
 
 #[test]
-fn script_invalid_locals_id_in_call() {
-    use Bytecode::*;
-
-    let mut s = basic_test_script();
-    s.function_instantiations.push(FunctionInstantiation {
-        handle: FunctionHandleIndex::new(0),
-        type_parameters: SignatureIndex::new(1),
-    });
-    let func_inst_idx = FunctionInstantiationIndex(s.function_instantiations.len() as u16 - 1);
-    s.code.code = vec![CallGeneric(func_inst_idx)];
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
 fn invalid_type_param_in_call() {
     use Bytecode::*;
     use SignatureToken::*;
@@ -199,25 +166,6 @@ fn invalid_type_param_in_call() {
     m.function_defs[0].code.as_mut().unwrap().code = vec![CallGeneric(func_inst_idx)];
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
-fn script_invalid_type_param_in_call() {
-    use Bytecode::*;
-    use SignatureToken::*;
-
-    let mut s = basic_test_script();
-    s.signatures.push(Signature(vec![TypeParameter(0)]));
-    s.function_instantiations.push(FunctionInstantiation {
-        handle: FunctionHandleIndex::new(0),
-        type_parameters: SignatureIndex::new(1),
-    });
-    let func_inst_idx = FunctionInstantiationIndex(s.function_instantiations.len() as u16 - 1);
-    s.code.code = vec![CallGeneric(func_inst_idx)];
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
 }
@@ -238,26 +186,6 @@ fn invalid_struct_as_type_actual_in_exists() {
     m.function_defs[0].code.as_mut().unwrap().code = vec![CallGeneric(func_inst_idx)];
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
-fn script_invalid_struct_as_type_argument_in_exists() {
-    use Bytecode::*;
-    use SignatureToken::*;
-
-    let mut s = basic_test_script();
-    s.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
-    s.function_instantiations.push(FunctionInstantiation {
-        handle: FunctionHandleIndex::new(0),
-        type_parameters: SignatureIndex::new(1),
-    });
-    let func_inst_idx = FunctionInstantiationIndex(s.function_instantiations.len() as u16 - 1);
-    s.code.code = vec![CallGeneric(func_inst_idx)];
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
 }
@@ -284,19 +212,6 @@ fn invalid_friend_module_name() {
     });
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
-        StatusCode::INDEX_OUT_OF_BOUNDS
-    );
-}
-
-#[test]
-fn script_missing_signature() {
-    // The basic test script includes parameters pointing to an empty signature.
-    let mut s = basic_test_script();
-    // Remove the empty signature from the script.
-    s.signatures.clear();
-    // Bounds-checking the script should now result in an out-of-bounds error.
-    assert_eq!(
-        BoundsChecker::verify_script(&s).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
     );
 }

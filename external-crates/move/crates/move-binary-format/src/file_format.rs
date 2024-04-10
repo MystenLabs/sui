@@ -1778,6 +1778,66 @@ impl Bytecode {
     }
 }
 
+#[cfg(any(test, feature = "fuzzing"))]
+impl Arbitrary for CompiledModule {
+    type Strategy = BoxedStrategy<Self>;
+    /// The size of the compiled module.
+    type Parameters = usize;
+
+    fn arbitrary_with(size: Self::Parameters) -> Self::Strategy {
+        (
+            (
+                vec(any::<ModuleHandle>(), 0..=size),
+                vec(any::<StructHandle>(), 0..=size),
+                vec(any::<FunctionHandle>(), 0..=size),
+            ),
+            any::<ModuleHandleIndex>(),
+            vec(any::<ModuleHandle>(), 0..=size),
+            vec(any_with::<Signature>(size), 0..=size),
+            (
+                vec(any::<Identifier>(), 0..=size),
+                vec(any::<AccountAddress>(), 0..=size),
+            ),
+            (
+                vec(any::<StructDefinition>(), 0..=size),
+                vec(any_with::<FunctionDefinition>(size), 0..=size),
+            ),
+        )
+            .prop_map(
+                |(
+                    (module_handles, struct_handles, function_handles),
+                    self_module_handle_idx,
+                    friend_decls,
+                    signatures,
+                    (identifiers, address_identifiers),
+                    (struct_defs, function_defs),
+                )| {
+                    // TODO actual constant generation
+                    CompiledModule {
+                        version: file_format_common::VERSION_MAX,
+                        module_handles,
+                        struct_handles,
+                        function_handles,
+                        self_module_handle_idx,
+                        field_handles: vec![],
+                        friend_decls,
+                        struct_def_instantiations: vec![],
+                        function_instantiations: vec![],
+                        field_instantiations: vec![],
+                        signatures,
+                        identifiers,
+                        address_identifiers,
+                        constant_pool: vec![],
+                        metadata: vec![],
+                        struct_defs,
+                        function_defs,
+                    }
+                },
+            )
+            .boxed()
+    }
+}
+
 /// A `CompiledModule` defines the structure of a module which is the unit of published code.
 ///
 /// A `CompiledModule` contains a definition of types (with their fields) and functions.
