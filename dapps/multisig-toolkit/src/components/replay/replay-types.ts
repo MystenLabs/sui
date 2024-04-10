@@ -8,20 +8,80 @@ export type ReplayType = {
 };
 
 export type Effects = {
-	messageVersion: string;
-	status: Status;
+	V2: EffectsV2;
+};
+
+export type EffectsV2 = {
+	status: ExecutionStatus;
 	executedEpoch: string;
 	gasUsed: GasUsed;
-	modifiedAtVersions: ModifiedAtVersion[];
-	sharedObjects: Reference[];
 	transactionDigest: string;
-	mutated: EffectsObject[];
-	created: EffectsObject[];
-	deleted: Reference[];
-	wrapped: EffectsObject[];
-	unwrapped: EffectsObject[];
-	gasObject: GasObject;
+	gasObjIndex: number;
+	eventsDigest: string;
 	dependencies: string[];
+	lamportVersion: number;
+	changedObjects: ChangedObject[];
+	unchangedSharedObjects: UnchangedSharedObject[];
+	auxDataDigest: number;
+};
+
+export type UnchangedSharedObject = {
+	objectId: string;
+	unchangedSharedKind: UnchangedSharedKind;
+};
+
+export type UnchangedSharedKind = {
+	ReadOnlyRoot: VersionDigest;
+	MutateDeleted: number;
+	ReadDeleted: number;
+};
+
+export type ExecutionStatus = {
+	success: string;
+	failure: ExecutionFailure;
+};
+
+export type ExecutionFailure = {
+	error: string;
+	command: number;
+};
+
+export type ChangedObject = {
+	objectId: string;
+	effectsObjectChange: EffectsObjectChange;
+};
+
+export type EffectsObjectChange = {
+	inputState: ObjectIn;
+	outputState: ObjectOut;
+	idOperation: IDOperation;
+};
+
+export type IDOperation = {
+	None?: string;
+	Created?: string;
+	Deleted?: string;
+};
+
+export type ObjectIn = {
+	NotExist: string;
+	Exist: Exist;
+};
+
+export type ObjectOut = {
+	NotExist?: string;
+	ObjectWrite?: Exist;
+	PackageWrite?: VersionDigest;
+};
+
+export type VersionDigest = {
+	version: number;
+	digest: string;
+};
+
+export type Exist = {
+	Digest: string;
+	owner: EffectsOwner;
 };
 
 export type GasObject = {
@@ -57,8 +117,9 @@ export type EffectsObject = {
 };
 
 export type EffectsOwner = {
-	ObjectOrAddressOwner?: string;
+	ObjectOwner?: string;
 	Shared?: Shared;
+	AddressOwner?: string;
 };
 
 export type Shared = {
@@ -167,7 +228,6 @@ export type Command = {
 	MakeMoveVec: [any[], (string | Argument)[]];
 	Publish: [number[][], string[]];
 	Upgrade: [number[][], string[], string, Argument];
-	// MergeCoins, Publish, Upgrade, MakeMoveVec etc.
 };
 
 export type MoveCall = {

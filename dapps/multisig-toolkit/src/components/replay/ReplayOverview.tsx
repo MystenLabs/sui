@@ -3,7 +3,7 @@
 
 import { PreviewCard } from '../preview-effects/PreviewCard';
 import { onChainAmountToFloat } from '../preview-effects/utils';
-import { type Effects, type ReplayGasStatus, type ReplayInput } from './replay-types';
+import { type EffectsV2, type ReplayGasStatus, type ReplayInput } from './replay-types';
 import { ReplayInputArgument } from './ReplayInputArgument';
 
 export function ReplayOverview({
@@ -11,10 +11,12 @@ export function ReplayOverview({
 	gasStatus,
 	inputs,
 }: {
-	effects: Effects;
+	effects: EffectsV2;
 	gasStatus: ReplayGasStatus;
 	inputs: ReplayInput[];
 }) {
+	let success: boolean;
+	success = 'success' === effects.status.success;
 	const totalGasCost = () => {
 		return (
 			onChainAmountToFloat(
@@ -32,13 +34,9 @@ export function ReplayOverview({
 		<div>
 			<div>
 				<div className="px-2 py-2 m-1">
-					<p>
-						Execution Status:{' '}
-						{effects.status.status === 'success' ? '.𖥔 ݁ ˖Success ݁ ˖ 𖥔' : 'Failure ❗'}
-					</p>
+					<p>Execution Status: {success ? '.𖥔 ݁ ˖Success ݁ ˖ 𖥔' : 'Failure ❗'}</p>
 					<p> Executed Epoch: {effects.executedEpoch}</p>
 				</div>
-
 				<PreviewCard.Root className="m-2">
 					<PreviewCard.Header> Gas Cost </PreviewCard.Header>
 					<PreviewCard.Body>

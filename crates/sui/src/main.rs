@@ -65,9 +65,14 @@ async fn main() {
             .init(),
 
         SuiCommand::Client {
-            cmd: Some(ReplayTransaction {
-                gas_info, ptb_info, ..
-            }),
+            cmd:
+                Some(ReplayTransaction {
+                    gas_info,
+                    ptb_info,
+                    json,
+                    html,
+                    ..
+                }),
             config: _,
             ..
         } => {

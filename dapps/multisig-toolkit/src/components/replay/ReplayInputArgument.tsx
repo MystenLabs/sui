@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PreviewCard } from '../preview-effects/PreviewCard';
-import { EffectsObject, Reference, ReplayInput} from './replay-types';
+import { EffectsObject, Reference, ReplayInput } from './replay-types';
 import { ReplayLink } from './ReplayLink';
 
 const formatObject = (input: ReplayInput) => {

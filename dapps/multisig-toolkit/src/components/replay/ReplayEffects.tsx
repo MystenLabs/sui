@@ -4,39 +4,18 @@
 import { ReplayLink } from '@/components/replay/ReplayLink';
 
 import { PreviewCard } from '../preview-effects/PreviewCard';
-import { Effects, EffectsObject } from './replay-types';
-import { DeletedItem, EffectsItem } from './ReplayInputArgument';
+import { ChangedObject, EffectsV2, UnchangedSharedObject } from './replay-types';
 
-export function ReplayEffects({ effects }: { effects: Effects }) {
+export function ReplayEffects({ effects }: { effects: EffectsV2 }) {
 	const output = [];
-	if ('created' in effects) {
-		output.push(effectsSection('Created', effects.created));
+
+	if (effects.changedObjects) {
+		output.push(effectsSectionChangedObjects(effects.changedObjects));
 	}
-	if ('mutated' in effects) {
-		output.push(effectsSection('Mutated', effects.mutated));
+	if (effects.unchangedSharedObjects) {
+		output.push(effectsSectionUnchangedSharedObjects(effects.unchangedSharedObjects));
 	}
-	if ('wrapped' in effects) {
-		output.push(effectsSection('Wrapped', effects.wrapped));
-	}
-	if ('unwrapped' in effects) {
-		output.push(effectsSection('Unwrapped', effects.unwrapped));
-	}
-	if ('deleted' in effects) {
-		output.push(
-			<div>
-				<PreviewCard.Root className="m-2">
-					<PreviewCard.Header> Deleted </PreviewCard.Header>
-					<PreviewCard.Body>
-						<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
-							{effects.deleted.map((ref, index) => (
-								<DeletedItem input={ref} key={index} />
-							))}
-						</div>
-					</PreviewCard.Body>
-				</PreviewCard.Root>
-			</div>,
-		);
-	}
+
 	output.push(
 		<div>
 			<PreviewCard.Root className="m-2">
@@ -54,15 +33,32 @@ export function ReplayEffects({ effects }: { effects: Effects }) {
 	return output;
 }
 
-const effectsSection = (name: string, input: EffectsObject[]) => {
+const effectsSectionChangedObjects = (input: ChangedObject[]) => {
 	return (
 		<div>
 			<PreviewCard.Root className="m-2">
-				<PreviewCard.Header> {name} </PreviewCard.Header>
+				<PreviewCard.Header> Changed Objects </PreviewCard.Header>
 				<PreviewCard.Body>
 					<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
 						{input.map((item, index) => (
-							<EffectsItem input={item} key={index} />
+							<ReplayLink text={item.objectId} landing={true} />
+						))}
+					</div>
+				</PreviewCard.Body>
+			</PreviewCard.Root>
+		</div>
+	);
+};
+
+const effectsSectionUnchangedSharedObjects = (input: UnchangedSharedObject[]) => {
+	return (
+		<div>
+			<PreviewCard.Root className="m-2">
+				<PreviewCard.Header> Unchanged Shared Objects </PreviewCard.Header>
+				<PreviewCard.Body>
+					<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
+						{input.map((item, index) => (
+							<ReplayLink landing={true} text={item.objectId} />
 						))}
 					</div>
 				</PreviewCard.Body>

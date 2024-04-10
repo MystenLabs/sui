@@ -48,7 +48,7 @@ export function Replay() {
 			component: () =>
 				data && (
 					<ReplayOverview
-						effects={data.effects}
+						effects={data.effects.V2}
 						gasStatus={data.gasStatus}
 						inputs={data.transactionInfo.ProgrammableTransaction.inputs}
 					/>
@@ -57,7 +57,7 @@ export function Replay() {
 		{
 			name: 'effects',
 			title: 'Effects',
-			component: () => data && <ReplayEffects effects={data.effects} />,
+			component: () => data && <ReplayEffects effects={data.effects.V2} />,
 		},
 		{
 			name: 'transactions',
@@ -86,8 +86,8 @@ export function Replay() {
 			<div className="mb-6">
 				<h1 className="text-lg font-bold">Transaction Replay</h1>
 				<ReplayLink
-					digest={data?.effects.transactionDigest}
-					text={data?.effects.transactionDigest!}
+					digest={data?.effects.V2.transactionDigest}
+					text={data?.effects.V2.transactionDigest!}
 				/>
 			</div>
 

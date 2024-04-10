@@ -9,16 +9,21 @@ export function ReplayLink({
 	module,
 	text,
 	isAddress,
+	landing,
 }: {
 	text: string;
 	digest?: string;
 	id?: string;
 	module?: string;
 	isAddress?: boolean;
+	landing?: boolean;
 }) {
 	const { network } = useReplayData();
 
 	const url = () => {
+		if (landing) {
+			return `https://suiexplorer.com/`;
+		}
 		if (digest) {
 			return `https://suiexplorer.com/txblock/${digest}?network=${network || 'mainnet'}`;
 		}
