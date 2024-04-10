@@ -123,7 +123,7 @@ module games::vdf_based_lottery {
     }
 
     /// The winner can redeem its ticket.
-    public entry fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
+    public fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
         assert!(object::id(game) == ticket.game_id, EInvalidTicket);
         assert!(option::contains(&game.winner, &ticket.participant_index), EInvalidTicket);
 
