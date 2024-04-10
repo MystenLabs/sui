@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(lint(self_transfer))]
 /// A basic lottery game that depends on user-provided randomness which is processed by a verifiable delay function (VDF)
 /// to make sure that it is unbiasable. 
 /// 
@@ -19,6 +18,7 @@ module games::vdf_based_lottery {
     use games::drand_lib::safe_selection;
     use sui::clock::Clock;
     use std::hash::sha2_256;
+    use sui::vdf::{hash_to_input, vdf_verify};
 
     /// Error codes
     const EGameNotInProgress: u64 = 0;
@@ -72,65 +72,71 @@ module games::vdf_based_lottery {
             status: IN_PROGRESS,
             timestamp_start: clock.timestamp_ms(),
             submission_phase_length: submission_phase_length,
-            vdf_input_seed: std::vector::empty<u8>(),
+            vdf_input_seed: vector::empty<u8>(),
             participants: 0,
             winner: option::none(),
         };
         transfer::public_share_object(game);
     }
 
-    /// Anyone can complete the game by providing the randomness of round.
-    public fun complete(game: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
-        assert!(game.status != COMPLETED, EGameAlreadyCompleted);
-        assert!(clock.timestamp_ms() - game.timestamp_start >= game.submission_phase_length, ESubmissionPhaseInProgress);
+    /// Complete this lottery by sending VDF output and proof for the seed created from the
+    /// contributed randomness. Anyone can call this.
+    public fun complete(self: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
+        assert!(self.status != COMPLETED, EGameAlreadyCompleted);
+        assert!(clock.timestamp_ms() - self.timestamp_start >= self.submission_phase_length, ESubmissionPhaseInProgress);
 
         // Hash combined randomness to vdf input
         let discriminant = DISCRIMINANT_BYTES;
-        let vdf_input = sui::vdf::hash_to_input(&discriminant, &game.vdf_input_seed);
+        let vdf_input = hash_to_input(&discriminant, &self.vdf_input_seed);
 
         // Verify output and proof
-        assert!(sui::vdf::vdf_verify(&discriminant, &vdf_input, &vdf_output, &vdf_proof, game.iterations), EInvalidVdfOutput);
+        assert!(vdf_verify(&discriminant, &vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfOutput);
 
-        game.status = COMPLETED;
+        self.status = COMPLETED;
 
         // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
         let randomness = sha2_256(vdf_output);
 
-        let winner = safe_selection(game.participants, &randomness);
-        game.winner = option::some(winner);
+        let winner = safe_selection(self.participants, &randomness);
+        self.winner = option::some(winner);
     }
 
+    #[allow(lint(self_transfer))]
     /// Anyone can participate in the game and receive a ticket.
-    public fun participate(game: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
-        assert!(game.status == IN_PROGRESS, EGameNotInProgress);
-        assert!(clock.timestamp_ms() - game.timestamp_start < game.submission_phase_length, ESubmissionPhaseFinished);
+    public fun participate(self: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
+        assert!(self.status == IN_PROGRESS, EGameNotInProgress);
+        assert!(clock.timestamp_ms() - self.timestamp_start < self.submission_phase_length, ESubmissionPhaseFinished);
 
         // Update combined randomness
-        let mut pack = std::vector::empty<u8>();
-        pack.append(game.vdf_input_seed);
+        let mut pack = vector::empty<u8>();
+        pack.append(self.vdf_input_seed);
         pack.append(my_randomness);
-        game.vdf_input_seed = sha2_256(pack);
+        self.vdf_input_seed = sha2_256(pack);
+
+        // Assign index to this participant
+        let participant_index = self.participants;
+        self.participants = self.participants + 1;
 
         let ticket = Ticket {
             id: object::new(ctx),
-            game_id: object::id(game),
-            participant_index: game.participants,
+            game_id: object::id(self),
+            participant_index,
         };
-
-        game.participants = game.participants + 1;
         transfer::public_transfer(ticket, ctx.sender());
     }
 
+    #[allow(lint(self_transfer))]
     /// The winner can redeem its ticket.
-    public fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
-        assert!(object::id(game) == ticket.game_id, EInvalidTicket);
-        assert!(game.winner.contains(&ticket.participant_index), EInvalidTicket);
+    public fun redeem(self: &Game, ticket: &Ticket, ctx: &mut TxContext) {
+        assert!(self.status == COMPLETED, ESubmissionPhaseInProgress);
+        assert!(object::id(self) == ticket.game_id, EInvalidTicket);
+        assert!(self.winner.contains(&ticket.participant_index), EInvalidTicket);
 
         let winner = GameWinner {
             id: object::new(ctx),
             game_id: ticket.game_id,
         };
-        transfer::public_transfer(winner, tx_context::sender(ctx));
+        transfer::public_transfer(winner, ctx.sender());
     }
 
     // Note that a ticket can be deleted before the game was completed.
