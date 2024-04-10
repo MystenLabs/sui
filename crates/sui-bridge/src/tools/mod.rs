@@ -65,6 +65,8 @@ pub enum BridgeValidatorCommand {
         node_config_path: PathBuf,
         #[clap(long = "bridge-node-config-path")]
         bridge_node_config_path: PathBuf,
+        #[clap(long = "bridge-authority-url")]
+        url: String,
     },
 }
 

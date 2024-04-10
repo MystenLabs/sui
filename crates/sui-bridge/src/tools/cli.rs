@@ -169,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
         BridgeValidatorCommand::CommitteeRegistration {
             node_config_path,
             bridge_node_config_path,
+            url,
         } => {
             let node_config = NodeConfig::load(node_config_path).expect("Couldn't load NodeConfig");
             let bridge_config = BridgeNodeConfig::load(bridge_node_config_path)
@@ -207,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
             let bridge_arg = ptb.obj(bridge)?;
             let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT)?;
             let pub_key_arg = ptb.pure(ecdsa_keypair.public().as_bytes())?;
-            let url_arg = ptb.pure("")?;
+            let url_arg = ptb.pure(url)?;
             ptb.programmable_move_call(
                 BRIDGE_PACKAGE_ID,
                 BRIDGE_MODULE_NAME.into(),
