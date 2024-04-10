@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::IntCounter;
+use prometheus::Registry;
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::AuthorityState;
+use sui_core::authority::{AuthorityMetrics, AuthorityState};
 use sui_core::checkpoints::CheckpointServiceNoop;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_handler::SequencedConsensusTransaction;
@@ -51,11 +51,7 @@ impl MockConsensusClient {
     ) {
         let checkpoint_service = Arc::new(CheckpointServiceNoop {});
         let epoch_store = validator.epoch_store_for_testing();
-        let metrtic_counter = IntCounter::new(
-            "skipped_consensus_txns",
-            "Total number of consensus transactions skipped",
-        )
-        .unwrap();
+        let authority_metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         while let Some(tx) = tx_receiver.recv().await {
             match consensus_mode {
                 ConsensusMode::Noop => {}
@@ -65,7 +61,7 @@ impl MockConsensusClient {
                             vec![SequencedConsensusTransaction::new_test(tx.clone())],
                             &checkpoint_service,
                             validator.get_cache_reader().as_ref(),
-                            &metrtic_counter,
+                            &authority_metrics,
                         )
                         .await
                         .unwrap();

@@ -130,7 +130,7 @@ async fn submit_transaction_to_consensus_adapter() {
                     vec![SequencedConsensusTransaction::new_test(transaction.clone())],
                     &Arc::new(CheckpointServiceNoop {}),
                     self.0.get_cache_reader().as_ref(),
-                    &self.0.metrics.skipped_consensus_txns,
+                    &self.0.metrics,
                 )
                 .await?;
             Ok(())

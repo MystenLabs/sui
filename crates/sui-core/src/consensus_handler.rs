@@ -452,7 +452,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 self.cache_reader.as_ref(),
                 round,
                 timestamp,
-                &self.metrics.skipped_consensus_txns,
+                &self.metrics,
             )
             .await
             .expect("Unrecoverable error in consensus handler");
