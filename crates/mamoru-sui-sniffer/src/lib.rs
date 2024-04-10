@@ -101,7 +101,7 @@ impl SuiSniffer {
             .data_mut()
             .set_wit_tx(mamoru_sui_types::SuiTransaction {
                 seq,
-                digest: tx_hash,
+                digest: tx_hash.clone(),
                 time: time.timestamp(),
                 gas_used: gas_cost_summary.gas_used(),
                 gas_computation_cost: gas_cost_summary.computation_cost,
