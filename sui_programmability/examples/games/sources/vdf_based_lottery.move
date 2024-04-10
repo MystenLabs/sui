@@ -135,12 +135,12 @@ module games::vdf_based_lottery {
     }
 
     // Note that a ticket can be deleted before the game was completed.
-    public entry fun delete_ticket(ticket: Ticket) {
+    public fun delete_ticket(ticket: Ticket) {
         let Ticket { id, game_id:  _, participant_index: _} = ticket;
         object::delete(id);
     }
 
-    public entry fun delete_game_winner(ticket: GameWinner) {
+    public fun delete_game_winner(ticket: GameWinner) {
         let GameWinner { id, game_id:  _} = ticket;
         object::delete(id);
     }
