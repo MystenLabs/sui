@@ -3,7 +3,7 @@
 
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
-import type { ExecuteTransactionBlockParams } from '../client/index.js';
+import type { ExecuteTransactionBlockParams, ProtocolConfig } from '../client/index.js';
 import type { Signer } from '../cryptography/keypair.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature } from './blockData/v2.js';
@@ -227,6 +227,7 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 
 export class CachingTransactionBlockExecutor {
 	#client: SuiClient;
+	#protocolConfig: ProtocolConfig | null = null;
 	cache: ObjectCache;
 
 	constructor({
@@ -239,7 +240,15 @@ export class CachingTransactionBlockExecutor {
 		this.cache = new ObjectCache(options);
 	}
 
-	buildTransactionBlock({
+	async #getProtocolConfig() {
+		if (!this.#protocolConfig) {
+			this.#protocolConfig = await this.#client.getProtocolConfig();
+		}
+
+		return this.#protocolConfig;
+	}
+
+	async buildTransactionBlock({
 		transactionBlock,
 		dataResolvers,
 	}: {
@@ -249,6 +258,7 @@ export class CachingTransactionBlockExecutor {
 		return transactionBlock.build({
 			client: this.#client,
 			dataResolvers: [this.cache, ...(dataResolvers ?? [])],
+			protocolConfig: await this.#getProtocolConfig(),
 		});
 	}
 
@@ -266,6 +276,7 @@ export class CachingTransactionBlockExecutor {
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
 				dataResolvers: [this.cache, ...(dataResolvers ?? [])],
+				protocolConfig: await this.#getProtocolConfig(),
 			}),
 			options: {
 				...options,
@@ -296,6 +307,7 @@ export class CachingTransactionBlockExecutor {
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
 				dataResolvers: [this.cache, ...(dataResolvers ?? [])],
+				protocolConfig: await this.#getProtocolConfig(),
 			}),
 			options: {
 				...options,
