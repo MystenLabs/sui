@@ -81,20 +81,7 @@ pub async fn update_lock_file(
     Ok(())
 }
 
-/// Given a package path, find the published on-chain ID in the `Move.lock` or
-/// `Move.toml` file for the current environmnent. Resolving from the
-/// `Move.lock` takes precedence, where addresses are automatically managed. The
-/// `Move.toml` is inspected as a fallback. If conflicting IDs are found in the
-/// `Move.lock` vs. `Move.toml`, an error message recommends actions to the
-/// user to resolve these.
-pub async fn resolve_published_id(
-    context: &WalletContext,
-    package: &Package,
-) -> Result<ObjectID, anyhow::Error> {
-    let lock = package.package_path.join(SourcePackageLayout::Lock.path());
-    let mut lock_file =
-        std::fs::File::open(lock.clone()).context("Could not read lock file at {lock}.")?;
-    let managed_packages = ManagedPackage::read(&mut lock_file).ok(); // Warn on not successful
+/*
     let chain_id = context
         .get_client()
         .await
@@ -106,11 +93,44 @@ pub async fn resolve_published_id(
         .await
         .context(
             "Network issue: couldn't determine chain identifier for determining environment",
-        )?;
+)?;
+
+
+/// env
+context
+                .config
+                .get_active_env()
+                .map(|e| e.alias.clone())
+                .unwrap_or_else(|_| "unknown".into());
+    */
+
+/// Given a package path, find the published on-chain ID in the `Move.lock` or
+/// `Move.toml` file for the current environmnent. Resolving from the
+/// `Move.lock` takes precedence, where addresses are automatically managed. The
+/// `Move.toml` is inspected as a fallback. If conflicting IDs are found in the
+/// `Move.lock` vs. `Move.toml`, an error message recommends actions to the
+/// user to resolve these.
+pub fn resolve_published_id(
+    package: &Package,
+    chain_id: Option<String>,
+    env_alias: Option<String>,
+) -> Result<ObjectID, anyhow::Error> {
+    let lock = package.package_path.join(SourcePackageLayout::Lock.path());
+    let mut lock_file =
+        std::fs::File::open(lock.clone()).context("Could not read lock file at {lock}.")?;
+    let managed_packages = ManagedPackage::read(&mut lock_file).ok(); // Warn on not successful
 
     // Find the environment and ManagedPackage data for this chain_id.
     let env_for_chain_id = managed_packages
-        .and_then(|m| m.into_iter().find(|(_, v)| v.chain_id == chain_id))
+        .and_then(|m| {
+            m.into_iter().find(|(_, v)| {
+                if let Some(chain_id) = &chain_id {
+                    v.chain_id == *chain_id
+                } else {
+                    false
+                }
+            })
+        })
         .map(|(k, v)| (k, v.original_published_id));
 
     // Look up a valid `published-at` in the `Move.toml`.
@@ -140,11 +160,7 @@ pub async fn resolve_published_id(
         ),
         (Some((_, id_lock)), _) => id_lock,
         (None, Some(id_manifest)) => {
-            let env = context
-                .config
-                .get_active_env()
-                .map(|e| e.alias.clone())
-                .unwrap_or_else(|_| "unknown".into());
+	    let env = env_alias.unwrap_or_else(|| "unknown".into());
             eprintln!(
                 "Resolving published ID from manifest since there is no managed package for the \
                  current environment {env} in `Move.lock` ({}). Consider tracking your published package \
