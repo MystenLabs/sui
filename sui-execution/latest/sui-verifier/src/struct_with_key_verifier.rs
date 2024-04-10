@@ -9,7 +9,6 @@
 use crate::verification_failure;
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{CompiledModule, SignatureToken},
 };
 use sui_types::{
@@ -24,14 +23,13 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
 }
 
 fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
-    let view = BinaryIndexedView::Module(module);
     let struct_defs = &module.struct_defs;
     for def in struct_defs {
         let handle = module.struct_handle_at(def.struct_handle);
         if !handle.abilities.has_key() {
             continue;
         }
-        let name = view.identifier_at(handle.name);
+        let name = module.identifier_at(handle.name);
 
         // Check that the first field of the struct must be named "id".
         let first_field = match def.field(0) {
@@ -43,7 +41,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
                 )))
             }
         };
-        let first_field_name = view.identifier_at(first_field.name).as_str();
+        let first_field_name = module.identifier_at(first_field.name).as_str();
         if first_field_name != "id" {
             return Err(verification_failure(format!(
                 "First field of struct {} must be 'id', {} found",
@@ -64,7 +62,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
         };
         // check that the struct type for "id" field must be SUI_FRAMEWORK_ADDRESS::object::UID.
         let uid_type_struct = module.struct_handle_at(*uid_field_type);
-        let uid_type_struct_name = view.identifier_at(uid_type_struct.name);
+        let uid_type_struct_name = module.identifier_at(uid_type_struct.name);
         let uid_type_module = module.module_handle_at(uid_type_struct.module);
         let uid_type_module_address = module.address_identifier_at(uid_type_module.address);
         let uid_type_module_name = module.identifier_at(uid_type_module.name);
