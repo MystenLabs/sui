@@ -224,7 +224,7 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
 ) -> SuiResult<CompiledPackage> {
-    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
+    let (published_at, dependency_ids) = gather_published_ids(&resolution_graph, None, None);
 
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
@@ -644,6 +644,8 @@ pub enum PublishedAtError {
 /// - The names of packages that have a `published-at` field that isn't filled with a valid address.
 pub fn gather_published_ids(
     resolution_graph: &ResolvedGraph,
+    chain_id: Option<String>,
+    env_alias: Option<String>,
 ) -> (Result<ObjectID, PublishedAtError>, PackageDependencies) {
     let root = resolution_graph.root_package();
 
@@ -654,7 +656,7 @@ pub fn gather_published_ids(
 
     for (name, package) in &resolution_graph.package_table {
         let property = published_at_property(package);
-        let _ = resolve_published_id(package, None, None);
+        let _ = resolve_published_id(package, chain_id.clone(), env_alias.clone());
         if name == &root {
             // Separate out the root package as a special case
             published_at = property;

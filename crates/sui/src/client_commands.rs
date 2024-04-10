@@ -1832,7 +1832,7 @@ pub(crate) async fn compile_package(
         print_diags_to_stderr,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
-    let (package_id, dependencies) = gather_published_ids(&resolution_graph);
+    let (package_id, dependencies) = gather_published_ids(&resolution_graph, None, None); // TODO
     check_invalid_dependencies(&dependencies.invalid)?;
     if !with_unpublished_dependencies {
         check_unpublished_dependencies(&dependencies.unpublished)?;
