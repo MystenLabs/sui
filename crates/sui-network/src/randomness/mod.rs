@@ -5,7 +5,9 @@ use self::{auth::AllowedPeersUpdatable, metrics::Metrics};
 use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{dkg, nodes::PartyId, tbls::ThresholdBls, types::ThresholdBls12381MinSig};
+use fastcrypto_tbls::{
+    dkg, nodes::PartyId, tbls::ThresholdBls, types::ShareIndex, types::ThresholdBls12381MinSig,
+};
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
 use serde::{Deserialize, Serialize};
@@ -138,7 +140,7 @@ struct RandomnessEventLoop {
 
     epoch: EpochId,
     authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
-    peer_share_counts: Option<HashMap<PeerId, u16>>,
+    peer_share_ids: Option<HashMap<PeerId, Vec<ShareIndex>>>,
     dkg_output: Option<dkg::Output<bls12381::G2Element, bls12381::G2Element>>,
     aggregation_threshold: u16,
     pending_tasks: BTreeSet<(EpochId, RandomnessRound)>,
@@ -207,11 +209,11 @@ impl RandomnessEventLoop {
 
         debug!("updating randomness network loop to new epoch");
 
-        self.peer_share_counts = Some(authority_info.iter().try_fold(
+        self.peer_share_ids = Some(authority_info.iter().try_fold(
             HashMap::new(),
             |mut acc, (_name, (peer_id, party_id))| -> Result<_> {
-                let weight = dkg_output.nodes.node_id_to_node(*party_id)?.weight;
-                acc.insert(*peer_id, weight);
+                let ids = dkg_output.nodes.share_ids_of(*party_id);
+                acc.insert(*peer_id, ids);
                 Ok(acc)
             },
         )?);
@@ -319,8 +321,8 @@ impl RandomnessEventLoop {
         sig_bytes: Vec<Vec<u8>>,
     ) {
         // Big slate of validity checks on received partial signatures.
-        let peer_share_counts = if let Some(peer_share_counts) = &self.peer_share_counts {
-            peer_share_counts
+        let peer_share_ids = if let Some(peer_share_ids) = &self.peer_share_ids {
+            peer_share_ids
         } else {
             debug!("can't accept partial signatures until DKG has completed");
             return;
@@ -343,17 +345,16 @@ impl RandomnessEventLoop {
             debug!("skipping received partial sigs, we already have completed this sig");
             return;
         }
-        let expected_share_count = if let Some(count) = peer_share_counts.get(&peer_id) {
-            count
+        let expected_share_ids = if let Some(expected_share_ids) = peer_share_ids.get(&peer_id) {
+            expected_share_ids
         } else {
-            debug!("received partial sigs from unknown peer");
+            warn!("received partial sigs from unknown peer");
             return;
         };
-        if sig_bytes.len() != *expected_share_count as usize {
-            // No need to verify share IDs here as well, since if we receive incorrect IDs, we
-            // will catch it later when aggregating/verifying the partial sigs.
-            debug!(
-                "received partial sigs with wrong share count: expected {expected_share_count}, got {}",
+        if sig_bytes.len() != expected_share_ids.len() as usize {
+            warn!(
+                "received partial sigs with wrong share ids count: expected {}, got {}",
+                expected_share_ids.len(),
                 sig_bytes.len(),
             );
             return;
@@ -383,7 +384,7 @@ impl RandomnessEventLoop {
             return;
         }
 
-        // We passed all the checks, deserialize and save the partial sigs.
+        // Deserialize the partial sigs.
         let partial_sigs =
             match sig_bytes
                 .iter()
@@ -394,10 +395,19 @@ impl RandomnessEventLoop {
                 }) {
                 Ok(partial_sigs) => partial_sigs,
                 Err(e) => {
-                    debug!("failed to deserialize partial sigs: {e:?}");
+                    warn!("failed to deserialize partial sigs: {e:?}");
                     return;
                 }
             };
+        // Verify we received the expected share IDs (to protect against DoS attacks that send
+        // valid signatures of other peers which will be successfully verified below).
+        let received_share_ids = partial_sigs.iter().map(|s| s.index).collect::<Vec<_>>();
+        if received_share_ids != *expected_share_ids {
+            warn!("received partial sigs with wrong share ids: : expected {expected_share_ids:?}, received {received_share_ids:?}");
+            return;
+        }
+
+        // We passed all the checks, deserialize and save the partial sigs.
         debug!("recording received partial signatures");
         self.received_partial_sigs
             .insert((epoch, round, peer_id), partial_sigs);
