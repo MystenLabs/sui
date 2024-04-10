@@ -1831,11 +1831,16 @@ pub fn all_tparams(sp!(_, t_): Type) -> BTreeSet<TParam> {
 pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     match t_ {
-        x @ UnresolvedError | x @ Unit | x @ Anything | x @ Param(_) => sp(loc, x),
+        x @ (UnresolvedError | Unit | Anything | Param(_)) => sp(loc, x),
         Ref(mut_, t) => sp(loc, Ref(mut_, Box::new(ready_tvars(subst, *t)))),
         Apply(k, n, tys) => {
             let tys = tys.into_iter().map(|t| ready_tvars(subst, t)).collect();
             sp(loc, Apply(k, n, tys))
+        }
+        Fun(args, result) => {
+            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
+            let result = Box::new(ready_tvars(subst, *result));
+            sp(loc, Fun(args, result))
         }
         Var(i) => {
             let last_var = forward_tvar(subst, i);
@@ -1845,11 +1850,6 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
                 Some(t) => ready_tvars(subst, t.clone()),
             }
         }
-        Fun(args, result) => {
-            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
-            let result = Box::new(ready_tvars(subst, *result));
-            sp(loc, Fun(args, result))
-        }
     }
 }
 
@@ -1857,23 +1857,71 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
 // Instantiate
 //**************************************************************************************************
 
-pub fn instantiate(context: &mut Context, sp!(loc, t_): Type) -> Type {
+pub fn instantiate(context: &mut Context, ty: Type) -> Type {
+    let keep_tanything = false;
+    instantiate_impl(context, keep_tanything, ty)
+}
+
+pub fn instantiate_keep_tanything(context: &mut Context, ty: Type) -> Type {
+    let keep_tanything = true;
+    instantiate_impl(context, keep_tanything, ty)
+}
+
+fn instantiate_apply(
+    context: &mut Context,
+    loc: Loc,
+    abilities_opt: Option<AbilitySet>,
+    n: TypeName,
+    ty_args: Vec<Type>,
+) -> Type_ {
+    let keep_tanything = false;
+    instantiate_apply_impl(context, keep_tanything, loc, abilities_opt, n, ty_args)
+}
+
+fn instantiate_type_args(
+    context: &mut Context,
+    loc: Loc,
+    case: TArgCase,
+    ty_args: Vec<Type>,
+    constraints: Vec<AbilitySet>,
+) -> Vec<Type> {
+    let keep_tanything = false;
+    instantiate_type_args_impl(context, keep_tanything, loc, case, ty_args, constraints)
+}
+
+/// Instantiates a type, applying constraints to type arguments, and binding type arguments to
+/// type variables
+/// keep_tanything is an annoying case to handle macro signature checking, were we want to delay
+/// instantiating Anything to a type varabile until _after_ the macro is expanded
+fn instantiate_impl(context: &mut Context, keep_tanything: bool, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     let it_ = match t_ {
         Unit => Unit,
         UnresolvedError => UnresolvedError,
-        Anything => make_tvar(context, loc).value,
+        Anything => {
+            if keep_tanything {
+                Anything
+            } else {
+                make_tvar(context, loc).value
+            }
+        }
+
         Ref(mut_, b) => {
             let inner = *b;
             context.add_base_type_constraint(loc, "Invalid reference type", inner.clone());
-            Ref(mut_, Box::new(instantiate(context, inner)))
+            Ref(
+                mut_,
+                Box::new(instantiate_impl(context, keep_tanything, inner)),
+            )
         }
         Apply(abilities_opt, n, ty_args) => {
-            instantiate_apply(context, loc, abilities_opt, n, ty_args)
+            instantiate_apply_impl(context, keep_tanything, loc, abilities_opt, n, ty_args)
         }
         Fun(args, result) => Fun(
-            args.into_iter().map(|t| instantiate(context, t)).collect(),
-            Box::new(instantiate(context, *result)),
+            args.into_iter()
+                .map(|t| instantiate_impl(context, keep_tanything, t))
+                .collect(),
+            Box::new(instantiate_impl(context, keep_tanything, *result)),
         ),
         x @ Param(_) => x,
         // instantiating a var really shouldn't happen... but it does because of macro expansion
@@ -1887,8 +1935,9 @@ pub fn instantiate(context: &mut Context, sp!(loc, t_): Type) -> Type {
 }
 
 // abilities_opt is expected to be None for non primitive types
-fn instantiate_apply(
+fn instantiate_apply_impl(
     context: &mut Context,
+    keep_tanything: bool,
     loc: Loc,
     abilities_opt: Option<AbilitySet>,
     n: TypeName,
@@ -1910,8 +1959,9 @@ fn instantiate_apply(
         }
     };
 
-    let tys = instantiate_type_args(
+    let tys = instantiate_type_args_impl(
         context,
+        keep_tanything,
         loc,
         TArgCase::Apply(&n.value),
         ty_args,
@@ -1925,8 +1975,9 @@ fn instantiate_apply(
 // This might be needed for any variance case, and I THINK that it should be fine without it
 // BUT I'm adding it as a safeguard against instantiating twice. Can always remove once this
 // stabilizes
-fn instantiate_type_args(
+fn instantiate_type_args_impl(
     context: &mut Context,
+    keep_tanything: bool,
     loc: Loc,
     case: TArgCase,
     mut ty_args: Vec<Type>,
@@ -1947,10 +1998,12 @@ fn instantiate_type_args(
         | TArgCase::Apply(TypeName_::ModuleType(_, _)) => TVarCase::Base,
         TArgCase::Macro => TVarCase::Macro,
     };
+    // TODO in many cases we likely immediatley fill these type variables in with the type
+    // arguments. We could maybe just not create them in the first place in some instances
     let tvars = make_tparams(context, loc, tvar_case, locs_constraints);
     ty_args = ty_args
         .into_iter()
-        .map(|t| instantiate(context, t))
+        .map(|t| instantiate_impl(context, keep_tanything, t))
         .collect();
 
     assert!(ty_args.len() == tvars.len());

@@ -3390,8 +3390,7 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
 }
 
 fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
-    use E::LValue_ as EL;
-    use E::ModuleAccess_ as M;
+    use E::{LValue_ as EL, ModuleAccess_ as M};
     use P::Exp_ as PE;
     match e_ {
         PE::Name(name) => {
@@ -3765,6 +3764,13 @@ fn check_valid_type_parameter_name(
     is_macro: Option<Loc>,
     n: &Name,
 ) -> Result<(), ()> {
+    // TODO move these names to a more central place?
+    if n.value == symbol!("_") {
+        let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
+        context.env().add_diag(diag);
+        return Err(());
+    }
+
     const SYNTAX_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
         their arguments do not have to satisfy certain constraints before the macro is expanded, \
         meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.";
@@ -3785,6 +3791,19 @@ fn check_valid_type_parameter_name(
             );
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
+        } else {
+            let next_char = n.value.chars().nth(1).unwrap();
+            if !next_char.is_ascii_alphabetic() {
+                let msg = format!(
+                    "Invalid type parameter name '{}'. \
+                    Following the '$', the '{} fun' type parameter must be have a valid type \
+                    parameter name starting with a letter 'a'..'z' or 'A'..'Z'",
+                    n, MACRO_MODIFIER
+                );
+                let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
+                diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+                context.env().add_diag(diag);
+            }
         }
     } else if is_syntax_ident {
         let msg = format!(
@@ -3798,11 +3817,6 @@ fn check_valid_type_parameter_name(
     }
 
     // TODO move these names to a more central place?
-    if n.value == symbol!("_") {
-        let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
-        context.env().add_diag(diag);
-        return Err(());
-    }
     check_restricted_names(
         context,
         NameCase::TypeParameter,

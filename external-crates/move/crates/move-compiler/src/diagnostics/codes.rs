@@ -240,6 +240,7 @@ codes!(
         InvalidTypeParameter: { msg: "invalid type parameter", severity: NonblockingError },
         InvalidPattern: { msg: "invalid pattern", severity: BlockingError },
         UnboundVariant: { msg: "unbound variant", severity: BlockingError },
+        InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

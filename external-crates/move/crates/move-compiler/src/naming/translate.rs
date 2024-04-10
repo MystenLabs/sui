@@ -39,6 +39,7 @@ pub(super) enum ResolvedType {
     ModuleType(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
+    Hole, // '_' type
     Unbound,
 }
 
@@ -187,6 +188,16 @@ enum NominalBlockType {
     Block,
     LambdaReturn,
     LambdaLoopCapture,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum TypeAnnotation {
+    StructField,
+    VariantField,
+    ConstantSignature,
+    FunctionSignature,
+    MacroSignature,
+    Expression,
 }
 
 pub(super) struct Context<'env> {
@@ -441,6 +452,12 @@ impl<'env> Context<'env> {
     pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
         use E::ModuleAccess_ as EN;
         match ma_ {
+            EN::Name(sp!(_, n)) if n == symbol!("_") => {
+                let current_package = self.current_package;
+                self.env
+                    .check_feature(current_package, FeatureGate::TypeHoles, nloc);
+                ResolvedType::Hole
+            }
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
             EN::ModuleAccess(m, n) | EN::Variant(sp!(_, (m, n)), _) => {
                 let Some(module_type) = self.resolve_module_type(nloc, &m, &n) else {
@@ -504,7 +521,9 @@ impl<'env> Context<'env> {
                 assert!(self.env.has_errors());
                 None
             }
-            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
                 let (rtloc, msg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
@@ -516,6 +535,10 @@ impl<'env> Context<'env> {
                     ResolvedType::BuiltinType(n) => {
                         (ma.loc, format!("But '{n}' is a builtin type"))
                     }
+                    ResolvedType::Hole => (
+                        ma.loc,
+                        "The '_' is a placeholder for type inference".to_owned(),
+                    ),
                     _ => unreachable!(),
                 };
                 self.env.add_diag(diag!(
@@ -535,7 +558,7 @@ impl<'env> Context<'env> {
                     ModuleType::Struct(struct_type) => {
                         let m = struct_type.original_mident;
                         let tys_opt = etys_opt.map(|etys| {
-                            let tys = types(self, etys);
+                            let tys = types(self, TypeAnnotation::Expression, etys);
                             let name_f = || format!("{}::{}", &m, &n);
                             check_type_argument_arity(self, loc, name_f, tys, struct_type.arity)
                         });
@@ -571,7 +594,9 @@ impl<'env> Context<'env> {
                 assert!(self.env.has_errors());
                 None
             }
-            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
                 let (rtloc, msg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
@@ -583,6 +608,10 @@ impl<'env> Context<'env> {
                     ResolvedType::BuiltinType(n) => {
                         (ma.loc, format!("But '{n}' is a builtin type"))
                     }
+                    ResolvedType::Hole => (
+                        ma.loc,
+                        "The '_' is a placeholder for type inference".to_owned(),
+                    ),
                     _ => unreachable!(),
                 };
                 self.env.add_diag(diag!(
@@ -602,7 +631,7 @@ impl<'env> Context<'env> {
                     ModuleType::Enum(enum_type) => {
                         let m = enum_type.original_mident;
                         let tys_opt = etys_opt.map(|etys| {
-                            let tys = types(self, etys);
+                            let tys = types(self, TypeAnnotation::Expression, etys);
                             let name_f = || format!("{}::{}", &m, &n);
                             check_type_argument_arity(self, loc, name_f, tys, enum_type.arity)
                         });
@@ -1171,22 +1200,31 @@ fn explicit_use_fun(
             None
         }
     };
+    let ty_loc = ty.loc;
     let tn_opt = match context.resolve_type(ty) {
         ResolvedType::Unbound => {
             assert!(context.env.has_errors());
             None
         }
+        ResolvedType::Hole => {
+            let msg = "Invalid 'use fun'. Cannot associate a method with an inferred type";
+            let tmsg = "The '_' type is a placeholder for type inference";
+            context.env.add_diag(diag!(
+                Declarations::InvalidUseFun,
+                (loc, msg),
+                (ty_loc, tmsg)
+            ));
+            None
+        }
         ResolvedType::TParam(tloc, tp) => {
+            let msg = "Invalid 'use fun'. Cannot associate a method with a type parameter";
             let tmsg = format!(
                 "But '{}' was declared as a type parameter here",
                 tp.user_specified_name
             );
             context.env.add_diag(diag!(
                 Declarations::InvalidUseFun,
-                (
-                    loc,
-                    "Invalid 'use fun'. Cannot associate a method with a type parameter"
-                ),
+                (loc, msg,),
                 (tloc, tmsg)
             ));
             None
@@ -1363,7 +1401,12 @@ fn function(
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
-    let signature = function_signature(context, signature);
+    let case = if macro_.is_some() {
+        TypeAnnotation::MacroSignature
+    } else {
+        TypeAnnotation::FunctionSignature
+    };
+    let signature = function_signature(context, case, signature);
     let body = function_body(context, body);
 
     if !matches!(body.value, N::FunctionBody_::Native) {
@@ -1402,7 +1445,11 @@ fn function(
     f
 }
 
-fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::FunctionSignature {
+fn function_signature(
+    context: &mut Context,
+    case: TypeAnnotation,
+    sig: E::FunctionSignature,
+) -> N::FunctionSignature {
     let type_parameters = fun_type_parameters(context, sig.type_parameters);
 
     let mut declared = UniqueMap::new();
@@ -1440,11 +1487,11 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
             }
             let is_parameter = true;
             let nparam = context.declare_local(is_parameter, param.0);
-            let nparam_ty = type_(context, param_ty);
+            let nparam_ty = type_(context, case, param_ty);
             (mut_, nparam, nparam_ty)
         })
         .collect();
-    let return_type = type_(context, sig.return_type);
+    let return_type = type_(context, case, sig.return_type);
     N::FunctionSignature {
         type_parameters,
         parameters,
@@ -1501,13 +1548,13 @@ fn positional_field_name(loc: Loc, idx: usize) -> Field {
 fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFields {
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
-        E::StructFields::Named(em) => {
-            N::StructFields::Defined(em.map(|_f, (idx, t)| (idx, type_(context, t))))
-        }
+        E::StructFields::Named(em) => N::StructFields::Defined(
+            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))),
+        ),
         E::StructFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
-                .map(|ty| type_(context, ty))
+                .map(|ty| type_(context, TypeAnnotation::StructField, ty))
                 .enumerate()
                 .map(|(idx, ty)| {
                     let field_name = positional_field_name(ty.loc, idx);
@@ -1573,13 +1620,14 @@ fn variant_def(context: &mut Context, variant: E::VariantDefinition) -> N::Varia
 fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::VariantFields {
     match efields {
         E::VariantFields::Empty => N::VariantFields::Empty,
-        E::VariantFields::Named(em) => {
-            N::VariantFields::Defined(false, em.map(|_f, (idx, t)| (idx, type_(context, t))))
-        }
+        E::VariantFields::Named(em) => N::VariantFields::Defined(
+            false,
+            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::VariantField, t))),
+        ),
         E::VariantFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
-                .map(|ty| type_(context, ty))
+                .map(|ty| type_(context, TypeAnnotation::VariantField, ty))
                 .enumerate()
                 .map(|(idx, ty)| {
                     let field_name = positional_field_name(ty.loc, idx);
@@ -1608,7 +1656,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     assert!(context.used_locals.is_empty());
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
-    let signature = type_(context, esignature);
+    let signature = type_(context, TypeAnnotation::ConstantSignature, esignature);
     let value = *exp(context, Box::new(evalue));
     context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
@@ -1681,20 +1729,21 @@ fn type_parameter(
     tp
 }
 
-fn types(context: &mut Context, tys: Vec<E::Type>) -> Vec<N::Type> {
-    tys.into_iter().map(|t| type_(context, t)).collect()
+fn types(context: &mut Context, case: TypeAnnotation, tys: Vec<E::Type>) -> Vec<N::Type> {
+    tys.into_iter().map(|t| type_(context, case, t)).collect()
 }
 
-fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
+fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -> N::Type {
     use ResolvedType as RT;
     use E::Type_ as ET;
     use N::{TypeName_ as NN, Type_ as NT};
     let ty_ = match ety_ {
         ET::Unit => NT::Unit,
-        ET::Multiple(tys) => {
-            NT::multiple_(loc, tys.into_iter().map(|t| type_(context, t)).collect())
-        }
-        ET::Ref(mut_, inner) => NT::Ref(mut_, Box::new(type_(context, *inner))),
+        ET::Multiple(tys) => NT::multiple_(
+            loc,
+            tys.into_iter().map(|t| type_(context, case, t)).collect(),
+        ),
+        ET::Ref(mut_, inner) => NT::Ref(mut_, Box::new(type_(context, case, *inner))),
         ET::UnresolvedError => {
             assert!(context.env.has_errors());
             NT::UnresolvedError
@@ -1704,10 +1753,41 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                 assert!(context.env.has_errors());
                 NT::UnresolvedError
             }
+            RT::Hole => {
+                let case_str_opt = match case {
+                    TypeAnnotation::StructField => {
+                        Some(("Struct fields", " or consider adding a new type parameter"))
+                    }
+                    TypeAnnotation::VariantField => Some((
+                        "Enum variant fields",
+                        " or consider adding a new type parameter",
+                    )),
+                    TypeAnnotation::ConstantSignature => Some(("Constants", "")),
+                    TypeAnnotation::FunctionSignature => {
+                        Some(("Functions", " or consider adding a new type parameter"))
+                    }
+                    TypeAnnotation::MacroSignature | TypeAnnotation::Expression => None,
+                };
+                if let Some((case_str, help_str)) = case_str_opt {
+                    let msg = format!(
+                          "Invalid usage of a placeholder for type inference '_'. \
+                          {case_str} require fully specified types. Replace '_' with a specific type{help_str}"
+                      );
+                    let mut diag = diag!(NameResolution::InvalidTypeAnnotation, (loc, msg));
+                    if let TypeAnnotation::FunctionSignature = case {
+                        diag.add_note("Only 'macro' functions can use '_' in their signatures");
+                    }
+                    context.env.add_diag(diag);
+                    NT::UnresolvedError
+                } else {
+                    // replaced with a type variable during type instantiation
+                    NT::Anything
+                }
+            }
             RT::BuiltinType(bn_) => {
                 let name_f = || format!("{}", &bn_);
                 let arity = bn_.tparam_constraints(loc).len();
-                let tys = types(context, tys);
+                let tys = types(context, case, tys);
                 let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
                 NT::builtin_(sp(ma.loc, bn_), tys)
             }
@@ -1749,15 +1829,15 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                         (tn, arity)
                     }
                 };
-                let tys = types(context, tys);
+                let tys = types(context, case, tys);
                 let name_f = || format!("{}", tn);
                 let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
                 NT::Apply(None, tn, tys)
             }
         },
         ET::Fun(tys, ty) => {
-            let tys = types(context, tys);
-            let ty = Box::new(type_(context, *ty));
+            let tys = types(context, case, tys);
+            let ty = Box::new(type_(context, case, *ty));
             NT::Fun(tys, ty)
         }
     };
@@ -1820,7 +1900,7 @@ fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::Se
         ES::Seq(e) => NS::Seq(exp(context, e)),
         ES::Declare(b, ty_opt) => {
             let bind_opt = bind_list(context, b);
-            let tys = ty_opt.map(|t| type_(context, t));
+            let tys = ty_opt.map(|t| type_(context, TypeAnnotation::Expression, t));
             match bind_opt {
                 None => {
                     assert!(context.env.has_errors());
@@ -1964,7 +2044,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Lambda(elambda_binds, ety_opt, body) => {
             context.new_local_scope();
             let nlambda_binds_opt = lambda_bind_list(context, elambda_binds);
-            let return_type = ety_opt.map(|t| type_(context, t));
+            let return_type = ety_opt.map(|t| type_(context, TypeAnnotation::Expression, t));
             context.enter_nominal_block(eloc, None, NominalBlockType::LambdaLoopCapture);
             context.enter_nominal_block(eloc, None, NominalBlockType::LambdaReturn);
             let body = exp(context, body);
@@ -2153,8 +2233,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             Some(ndot) => NE::ExpDotted(case, ndot),
         },
 
-        EE::Cast(e, t) => NE::Cast(exp(context, e), type_(context, t)),
-        EE::Annotate(e, t) => NE::Annotate(exp(context, e), type_(context, t)),
+        EE::Cast(e, t) => NE::Cast(
+            exp(context, e),
+            type_(context, TypeAnnotation::Expression, t),
+        ),
+        EE::Annotate(e, t) => NE::Annotate(
+            exp(context, e),
+            type_(context, TypeAnnotation::Expression, t),
+        ),
 
         EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
@@ -2244,7 +2330,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         }
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             use N::BuiltinFunction_ as BF;
-            let ty_args = tys_opt.map(|tys| types(context, tys));
+            let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
             let mut nes = call_args(context, rhs);
             match resolve_function(context, ResolveFunctionCase::Call, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
@@ -2329,7 +2415,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 NE::UnresolvedError
             }
             Some(d) => {
-                let ty_args = tys_opt.map(|tys| types(context, tys));
+                let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
                     context.env.check_feature(
@@ -2342,7 +2428,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
-            let ty_args = tys_opt.map(|tys| types(context, tys));
+            let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
             let nes = call_args(context, rhs);
             let ty_opt = check_builtin_ty_args_impl(
                 context,
@@ -3084,7 +3170,7 @@ fn lambda_bind_list(
         .into_iter()
         .map(|(pbs, ty_opt)| {
             let bs = bind_list(context, pbs)?;
-            let ety = ty_opt.map(|t| type_(context, t));
+            let ety = ty_opt.map(|t| type_(context, TypeAnnotation::Expression, t));
             Some((bs, ety))
         })
         .collect::<Option<_>>()?;

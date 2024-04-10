@@ -30,8 +30,7 @@ use crate::{
     typing::{
         ast as T,
         core::{
-            self, make_tvar, public_testing_visibility, Context, PublicForTesting,
-            ResolvedFunctionType, Subst,
+            self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, recursive_datatypes,
         syntax_methods::validate_syntax_methods,
@@ -4091,16 +4090,16 @@ fn expected_by_name_arg_type(
         .iter()
         .map(|(p, ty_opt)| {
             if let Some(ty) = ty_opt {
-                core::instantiate(context, ty.clone())
+                core::instantiate_keep_tanything(context, ty.clone())
             } else {
-                core::make_tvar(context, p.loc)
+                sp(p.loc, Type_::Anything)
             }
         })
         .collect();
     let ret_ty = if let Some(ty) = lambda.return_type.clone() {
-        core::instantiate(context, ty)
+        core::instantiate_keep_tanything(context, ty)
     } else {
-        make_tvar(context, lambda.body.loc)
+        sp(lambda.body.loc, Type_::Anything)
     };
     let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
     let msg = || {
@@ -4109,9 +4108,14 @@ fn expected_by_name_arg_type(
             m, &f, &param.value.name
         )
     };
-    subtype(context, call_loc, msg, tfun.clone(), param_ty);
-    // prefer the lambda type over the parameters to preserve annotations on the lambda
-    tfun
+    // We need to return the subtyped type to properly remove the `Anything` in the cases
+    // where it should be a specific type, e.g. |_| -> _ <: |'a| -> 'b should return |'a| -> 'b
+    // In the case of an error, we give back tfun so macro expansion continues to know that this
+    // argument is a lambda
+    match subtype_impl(context, call_loc, msg, tfun.clone(), param_ty) {
+        Ok(t) => t,
+        Err(_) => tfun,
+    }
 }
 
 fn expand_macro(
@@ -4123,8 +4127,7 @@ fn expand_macro(
     args: Vec<macro_expand::Arg>,
     return_ty: Type,
 ) -> (Type, T::UnannotatedExp_) {
-    use T::SequenceItem_ as TS;
-    use T::UnannotatedExp_ as TE;
+    use T::{SequenceItem_ as TS, UnannotatedExp_ as TE};
 
     let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {
