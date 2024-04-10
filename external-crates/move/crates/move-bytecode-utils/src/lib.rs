@@ -100,10 +100,10 @@ impl<'a> Modules<'a> {
     }
 }
 
-pub fn resolve_struct<'a>(
-    view: &'a CompiledModule,
+pub fn resolve_struct(
+    view: &CompiledModule,
     sidx: StructHandleIndex,
-) -> (&'a AccountAddress, &'a IdentStr, &'a IdentStr) {
+) -> (&AccountAddress, &IdentStr, &IdentStr) {
     let shandle = view.struct_handle_at(sidx);
     let mhandle = view.module_handle_at(shandle.module);
     let address = view.address_identifier_at(mhandle.address);

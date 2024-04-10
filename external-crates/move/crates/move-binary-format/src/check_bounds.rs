@@ -186,7 +186,7 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_field_handle(&self, field_handle: &FieldHandle) -> PartialVMResult<()> {
-        check_bounds_impl(&self.module.struct_defs(), field_handle.owner)?;
+        check_bounds_impl(self.module.struct_defs(), field_handle.owner)?;
         // field offset must be in bounds, struct def just checked above must exist
         if let Some(struct_def) = &self
             .module
