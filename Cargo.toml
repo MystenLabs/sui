@@ -554,8 +554,8 @@ move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
 # The mamoru
-mamoru-sniffer = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "0592a91c5930d9749fc71545fdce6ffdb49ef99f" }
-mamoru-sui-types = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "0592a91c5930d9749fc71545fdce6ffdb49ef99f" }
+mamoru-sniffer = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "f7440b969ae2c40b298741b164525958e0eb8f13" }
+mamoru-sui-types = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "f7440b969ae2c40b298741b164525958e0eb8f13" }
 #mamoru-sniffer = { path = "../mamoru-core/mamoru-sniffer" }
 #mamoru-sui-types = { path = "../mamoru-core/blockchain-types/mamoru-sui-types" }
 
