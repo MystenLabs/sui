@@ -1,5 +1,5 @@
 [package]
-name = "invalid-mutations"
+name = "invalid-mutations-v0"
 version = "0.1.0"
 edition = "2021"
 authors = ["Diem Association <opensource@diem.com>"]

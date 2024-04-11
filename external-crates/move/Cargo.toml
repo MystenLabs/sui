@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "crates/*",
+    "move-execution/v0/crates/*",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -154,6 +155,23 @@ move-vm-runtime = { path = "crates/move-vm-runtime" }
 move-vm-test-utils = { path = "crates/move-vm-test-utils" }
 move-vm-types = { path = "crates/move-vm-types" }
 prover_bytecode = { path = "crates/move-stackless-bytecode", package="move-stackless-bytecode" }
+
+# v0
+invalid-mutations-v0 = { path = "move-execution/v0/crates/invalid-mutations" }
+move-bytecode-verifier-v0 = { path = "move-execution/v0/crates/move-bytecode-verifier" }
+bytecode-verifier-test-v0 = { path = "move-execution/v0/crates/bytecode-verifier-tests" }
+move-stdlib-v0 = { path = "move-execution/v0/crates/move-stdlib" }
+move-vm-runtime-v0 = { path = "move-execution/v0/crates/move-vm-runtime" }
+
+# v1
+move-bytecode-verifier-v1 = { path = "move-execution/v1/crates/move-bytecode-verifier" }
+move-stdlib-v1 = { path = "move-execution/v1/crates/move-stdlib" }
+move-vm-runtime-v1 = { path = "move-execution/v1/crates/move-vm-runtime" }
+
+# v2
+move-bytecode-verifier-v2 = { path = "move-execution/v2/crates/move-bytecode-verifier" }
+move-stdlib-v2 = { path = "move-execution/v2/crates/move-stdlib" }
+move-vm-runtime-v2 = { path = "move-execution/v2/crates/move-vm-runtime" }
 
 [profile.bench]
 debug = true

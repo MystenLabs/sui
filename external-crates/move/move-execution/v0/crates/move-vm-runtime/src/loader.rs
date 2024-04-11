@@ -20,7 +20,7 @@ use move_binary_format::{
     },
     IndexKind,
 };
-use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
+use move_bytecode_verifier_v0::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
@@ -700,7 +700,7 @@ impl Loader {
     ) -> VMResult<()> {
         // Performs all verification steps to load the module without loading it, i.e., the new
         // module will NOT show up in `module_cache`.
-        move_bytecode_verifier::verify_module_with_config_unmetered(
+        move_bytecode_verifier_v0::verify_module_with_config_unmetered(
             &self.vm_config.verifier,
             module,
         )?;
@@ -955,7 +955,7 @@ impl Loader {
         fail::fail_point!("verifier-failpoint-2", |_| { Ok(module.clone()) });
 
         // bytecode verifier checks that can be performed with the module itself
-        move_bytecode_verifier::verify_module_with_config_unmetered(
+        move_bytecode_verifier_v0::verify_module_with_config_unmetered(
             &self.vm_config.verifier,
             &module,
         )

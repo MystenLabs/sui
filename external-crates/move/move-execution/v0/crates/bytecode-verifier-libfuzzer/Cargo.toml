@@ -1,5 +1,5 @@
 [package]
-name = "bytecode-verifier-libfuzzer"
+name = "bytecode-verifier-libfuzzer-v0"
 version = "0.0.0"
 authors = ["Diem Association <opensource@diem.com>"]
 license = "Apache-2.0"
