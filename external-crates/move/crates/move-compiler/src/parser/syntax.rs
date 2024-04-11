@@ -1568,13 +1568,6 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     // sequence and proceed with parsing top-level definition (assume the second scenario).
     if !context.at_stop_set() || context.tokens.at(Tok::RBrace) {
         context.advance(); // consume (the RBrace)
-        if context.tokens.text.starts_with("module a::m {") {
-            eprintln!(
-                "CONSUME: {:?} DIAGS {}",
-                context.tokens.peek(),
-                context.env.count_diags()
-            );
-        }
     }
     Ok((uses, seq, last_semicolon_loc, Box::new(eopt)))
 }
