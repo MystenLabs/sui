@@ -1,0 +1,24 @@
+warning[Lint W00011]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/linter/impossible_comparisons.move:5:13
+  │
+5 │         if (x < 5 && x > 10) {
+  │             ^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+  │
+  = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00011]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/linter/impossible_comparisons.move:9:13
+  │
+9 │         if (x > 10 && x < 5) {
+  │             ^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+  │
+  = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00011]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/impossible_comparisons.move:18:13
+   │
+18 │         if (x <= 2 && x >= 8) {
+   │             ^^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+   │
+   = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
