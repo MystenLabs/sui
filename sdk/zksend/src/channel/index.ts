@@ -21,24 +21,28 @@ export class ZkSendPopup {
 	#id: string;
 	#origin: string;
 	#name: string;
+	#popup: Window | null;
 
 	#close?: () => void;
+
+	get closed() {
+		return !this.#popup;
+	}
 
 	constructor({ origin = DEFAULT_ZKSEND_ORIGIN, name }: ZkSendPopupOptions) {
 		this.#id = crypto.randomUUID();
 		this.#origin = origin;
 		this.#name = name;
-	}
 
-	async createRequest<T extends ZkSendRequestData>(
-		request: T,
-	): Promise<ZkSendResponseTypes[T['type']]> {
-		const popup = window.open('about:blank', '_blank');
-
-		if (!popup) {
+		this.#popup = window.open('about:blank', '_blank');
+		if (!this.#popup) {
 			throw new Error('Failed to open new window');
 		}
+	}
 
+	async sendRequest<T extends ZkSendRequestData>(
+		request: T,
+	): Promise<ZkSendResponseTypes[T['type']]> {
 		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T['type']]>();
 
 		let interval: NodeJS.Timer | null = null;
@@ -68,14 +72,15 @@ export class ZkSendPopup {
 
 		this.#close = () => {
 			cleanup();
-			popup?.close();
+			this.#popup?.close();
+			this.#popup = null;
 		};
 
 		window.addEventListener('message', listener);
 
 		const { type, ...data } = request;
 
-		popup?.location.assign(
+		this.#popup?.location.assign(
 			`${this.#origin}/dapp/${type}?${new URLSearchParams({
 				id: this.#id,
 				origin: window.origin,
@@ -85,7 +90,7 @@ export class ZkSendPopup {
 
 		interval = setInterval(() => {
 			try {
-				if (popup?.closed) {
+				if (this.#popup?.closed) {
 					cleanup();
 					reject(new Error('User closed the zkSend window'));
 				}

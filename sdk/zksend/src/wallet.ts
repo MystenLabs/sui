@@ -31,11 +31,20 @@ const ZKSEND_RECENT_ADDRESS_KEY = 'zksend:recentAddress';
 
 export const ZKSEND_WALLET_NAME = 'zkSend' as const;
 
+export type ZkSendPreparePopupFeature = {
+	'zksend:preparePopup': {
+		version: '0.0.1';
+		preparePopup: () => void;
+	};
+};
+
 export class ZkSendWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
 	#origin: string;
 	#name: string;
+
+	#preparedPopup: ZkSendPopup | null = null;
 
 	get name() {
 		return ZKSEND_WALLET_NAME;
@@ -61,7 +70,8 @@ export class ZkSendWallet implements Wallet {
 		StandardDisconnectFeature &
 		StandardEventsFeature &
 		SuiSignTransactionBlockFeature &
-		SuiSignPersonalMessageFeature {
+		SuiSignPersonalMessageFeature &
+		ZkSendPreparePopupFeature {
 		return {
 			'standard:connect': {
 				version: '1.0.0',
@@ -82,6 +92,10 @@ export class ZkSendWallet implements Wallet {
 			'sui:signPersonalMessage': {
 				version: '1.0.0',
 				signPersonalMessage: this.#signPersonalMessage,
+			},
+			'zksend:preparePopup': {
+				version: '0.0.1',
+				preparePopup: this.#preparePopup,
 			},
 		};
 	}
@@ -105,13 +119,27 @@ export class ZkSendWallet implements Wallet {
 		}
 	}
 
+	#getPopup() {
+		if (this.#preparedPopup && !this.#preparedPopup.closed) {
+			return this.#preparedPopup;
+		}
+		return new ZkSendPopup({ name: this.#name, origin: this.#origin });
+	}
+
+	#preparePopup() {
+		if (this.#preparedPopup) {
+			this.#preparedPopup.close();
+		}
+		this.#preparedPopup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
+	}
+
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
 		transactionBlock.setSenderIfNotSet(account.address);
 
 		const data = transactionBlock.serialize();
 
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = this.#getPopup();
+		const response = await popup.sendRequest({
 			type: 'sign-transaction-block',
 			data,
 			address: account.address,
@@ -125,8 +153,8 @@ export class ZkSendWallet implements Wallet {
 
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = this.#getPopup();
+		const response = await popup.sendRequest({
 			type: 'sign-personal-message',
 			bytes,
 			address: account.address,
@@ -174,8 +202,8 @@ export class ZkSendWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = this.#getPopup();
+		const response = await popup.sendRequest({
 			type: 'connect',
 		});
 		if (!('address' in response)) {
