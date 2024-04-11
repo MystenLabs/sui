@@ -12,8 +12,7 @@ use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use sui_package_resolver::{PackageStore, Resolver};
-use sui_rest_api::CheckpointData;
-use sui_rest_api::CheckpointTransaction;
+use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -60,6 +59,7 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
 pub async fn new_handlers<S>(
     state: S,
+    client: Client,
     metrics: IndexerMetrics,
 ) -> Result<CheckpointHandler<S>, IndexerError>
 where
@@ -79,10 +79,12 @@ where
         );
 
     let state_clone = state.clone();
+    let client_clone = client.clone();
     let metrics_clone = metrics.clone();
     let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
+        client_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,

@@ -31,7 +31,8 @@ use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
 use crate::models::objects::{
-    StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
+    StoredDeletedHistoryObject, StoredDeletedObject, StoredDeletedObjectSnapshot,
+    StoredHistoryObject, StoredObject, StoredObjectSnapshot,
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
@@ -68,7 +69,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // The amount of rows to update in one DB transcation, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
-const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 1000;
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -134,7 +135,7 @@ impl PgIndexerStore {
         self.blocking_cp.clone()
     }
 
-    fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+    fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .select(max(checkpoints::sequence_number))
@@ -271,6 +272,103 @@ impl PgIndexerStore {
         })
     }
 
+    fn backfill_objects_snapshot_chunk(
+        &self,
+        objects: Vec<ObjectChangeToCommit>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_snapshot_chunks
+            .start_timer();
+        let mut mutated_objects: Vec<StoredObjectSnapshot> = vec![];
+        let mut deleted_object_ids: Vec<StoredDeletedObjectSnapshot> = vec![];
+
+        for object in objects {
+            match object {
+                ObjectChangeToCommit::MutatedObject(stored_object) => {
+                    mutated_objects.push(stored_object.into());
+                }
+                ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
+                    deleted_object_ids.push(stored_deleted_object.into());
+                }
+            }
+        }
+
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for mutated_object_change_chunk in
+                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(objects_snapshot::table)
+                        .values(mutated_object_change_chunk)
+                        .on_conflict(objects_snapshot::object_id)
+                        .do_update()
+                        .set((
+                            objects_snapshot::object_version
+                                .eq(excluded(objects_snapshot::object_version)),
+                            objects_snapshot::object_status
+                                .eq(excluded(objects_snapshot::object_status)),
+                            objects_snapshot::object_digest
+                                .eq(excluded(objects_snapshot::object_digest)),
+                            objects_snapshot::checkpoint_sequence_number
+                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
+                            objects_snapshot::owner_type.eq(excluded(objects_snapshot::owner_type)),
+                            objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
+                            objects_snapshot::object_type
+                                .eq(excluded(objects_snapshot::object_type)),
+                            objects_snapshot::serialized_object
+                                .eq(excluded(objects_snapshot::serialized_object)),
+                            objects_snapshot::coin_type.eq(excluded(objects_snapshot::coin_type)),
+                            objects_snapshot::coin_balance
+                                .eq(excluded(objects_snapshot::coin_balance)),
+                            objects_snapshot::df_kind.eq(excluded(objects_snapshot::df_kind)),
+                            objects_snapshot::df_name.eq(excluded(objects_snapshot::df_name)),
+                            objects_snapshot::df_object_type
+                                .eq(excluded(objects_snapshot::df_object_type)),
+                            objects_snapshot::df_object_id
+                                .eq(excluded(objects_snapshot::df_object_id)),
+                        ))
+                        .execute(conn)
+                        .map_err(IndexerError::from)
+                        .context("Failed to write object mutations to objects_snapshot in DB.")?;
+                }
+
+                for deleted_objects_chunk in
+                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(objects_snapshot::table)
+                        .values(deleted_objects_chunk)
+                        .on_conflict(objects_snapshot::object_id)
+                        .do_update()
+                        .set((
+                            objects_snapshot::object_id.eq(excluded(objects_snapshot::object_id)),
+                            objects_snapshot::object_version
+                                .eq(excluded(objects_snapshot::object_version)),
+                            objects_snapshot::object_status
+                                .eq(excluded(objects_snapshot::object_status)),
+                            objects_snapshot::checkpoint_sequence_number
+                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
+                        ))
+                        .execute(conn)
+                        .map_err(IndexerError::from)
+                        .context("Failed to write object deletions to objects_snapshot in DB.")?;
+                }
+
+                Ok::<(), IndexerError>(())
+            },
+            Duration::from_secs(60)
+        )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked objects snapshot",
+                mutated_objects.len() + deleted_object_ids.len(),
+            )
+        })
+    }
+
     fn persist_objects_history_chunk(
         &self,
         objects: Vec<ObjectChangeToCommit>,
@@ -331,7 +429,7 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_object_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
+    fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -826,8 +924,8 @@ impl PgIndexerStore {
 
 #[async_trait]
 impl IndexerStore for PgIndexerStore {
-    async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
-        self.execute_in_blocking_worker(|this| this.get_latest_tx_checkpoint_sequence_number())
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+        self.execute_in_blocking_worker(|this| this.get_latest_checkpoint_sequence_number())
             .await
     }
 
@@ -874,6 +972,40 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
+    async fn backfill_objects_snapshot(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError> {
+        if object_changes.is_empty() {
+            return Ok(());
+        }
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_snapshot
+            .start_timer();
+        let objects = make_final_list_of_objects_to_commit(object_changes);
+        let len = objects.len();
+        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| self.spawn_blocking_task(move |this| this.backfill_objects_snapshot_chunk(c)))
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all objects snapshot chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} objects snapshot", len);
+        Ok(())
+    }
+
     async fn persist_object_history(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
@@ -917,7 +1049,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn persist_object_snapshot(
+    async fn update_objects_snapshot(
         &self,
         start_cp: u64,
         end_cp: u64,
@@ -932,7 +1064,7 @@ impl IndexerStore for PgIndexerStore {
 
         let guard = self.metrics.update_object_snapshot_latency.start_timer();
 
-        self.spawn_blocking_task(move |this| this.persist_object_snapshot(start_cp, end_cp))
+        self.spawn_blocking_task(move |this| this.update_objects_snapshot(start_cp, end_cp))
             .await
             .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(

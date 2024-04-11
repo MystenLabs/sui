@@ -20,7 +20,7 @@ pub enum ObjectChangeToCommit {
 
 #[async_trait]
 pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
-    async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
@@ -36,7 +36,14 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
-    async fn persist_object_snapshot(&self, start_cp: u64, end_cp: u64)
+    // persist objects snapshot with object changes during backfill
+    async fn backfill_objects_snapshot(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError>;
+
+    // update objects snapshot after backfill is done
+    async fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64)
         -> Result<(), IndexerError>;
 
     async fn persist_checkpoints(
