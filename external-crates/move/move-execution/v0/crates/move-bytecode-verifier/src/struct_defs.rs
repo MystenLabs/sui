@@ -11,7 +11,6 @@ use move_binary_format::{
         CompiledModule, SignatureToken, StructDefinitionIndex, StructHandleIndex, TableIndex,
     },
     internals::ModuleIndex,
-    views::StructDefinitionView,
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
@@ -87,11 +86,10 @@ impl<'a> StructDefGraphBuilder<'a> {
         idx: StructDefinitionIndex,
     ) -> PartialVMResult<()> {
         let struct_def = self.module.struct_def_at(idx);
-        let struct_def = StructDefinitionView::new(self.module, struct_def);
         // The fields iterator is an option in the case of native structs. Flatten makes an empty
         // iterator for that case
         for field in struct_def.fields().into_iter().flatten() {
-            self.add_signature_token(neighbors, idx, field.signature_token())?
+            self.add_signature_token(neighbors, idx, &field.signature.0)?
         }
         Ok(())
     }
