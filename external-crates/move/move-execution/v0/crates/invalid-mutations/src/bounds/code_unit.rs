@@ -149,7 +149,7 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
     pub fn apply(mut self) -> Vec<PartialVMError> {
         let function_def_len = self.module.function_defs.len();
 
-        let mut mutation_map = BTreeMap::new();
+        let mut mutation_map: BTreeMap<_, Vec<_>> = BTreeMap::new();
         for mutation in self
             .mutations
             .take()
@@ -394,16 +394,15 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                     ),
 
                     // Deprecated bytecodes
-                    | ExistsDeprecated(_) | ExistsGenericDeprecated(_) | MutBorrowGlobalDeprecated(_)
-                    | MutBorrowGlobalGenericDeprecated(_) | ImmBorrowGlobalDeprecated(_)
-                    | ImmBorrowGlobalGenericDeprecated(_) | MoveFromDeprecated(_)
-                    | MoveFromGenericDeprecated(_) | MoveToDeprecated(_) | MoveToGenericDeprecated(_) => false,
-                    // List out the other options explicitly so there's a compile error if a new
-                    // bytecode gets added.
-                    ExistsDeprecated(_) | ExistsGenericDeprecated(_) | MutBorrowGlobalDeprecated(_)
-                    | MutBorrowGlobalGenericDeprecated(_) | ImmBorrowGlobalDeprecated(_)
-                    | ImmBorrowGlobalGenericDeprecated(_) | MoveFromDeprecated(_)
-                    | MoveFromGenericDeprecated(_) | MoveToDeprecated(_)
+                    ExistsDeprecated(_)
+                    | ExistsGenericDeprecated(_)
+                    | MutBorrowGlobalDeprecated(_)
+                    | MutBorrowGlobalGenericDeprecated(_)
+                    | ImmBorrowGlobalDeprecated(_)
+                    | ImmBorrowGlobalGenericDeprecated(_)
+                    | MoveFromDeprecated(_)
+                    | MoveFromGenericDeprecated(_)
+                    | MoveToDeprecated(_)
                     | MoveToGenericDeprecated(_) => {
                         panic!("Bytecode deprecated: {:?}", code[bytecode_idx])
                     }
@@ -457,10 +456,16 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | VecSwap(_) => true,
 
         // Deprecated bytecodes
-        | ExistsDeprecated(_) | ExistsGenericDeprecated(_) | MutBorrowGlobalDeprecated(_)
-        | MutBorrowGlobalGenericDeprecated(_) | ImmBorrowGlobalDeprecated(_)
-        | ImmBorrowGlobalGenericDeprecated(_) | MoveFromDeprecated(_)
-        | MoveFromGenericDeprecated(_) | MoveToDeprecated(_) | MoveToGenericDeprecated(_) => false,
+        ExistsDeprecated(_)
+        | ExistsGenericDeprecated(_)
+        | MutBorrowGlobalDeprecated(_)
+        | MutBorrowGlobalGenericDeprecated(_)
+        | ImmBorrowGlobalDeprecated(_)
+        | ImmBorrowGlobalGenericDeprecated(_)
+        | MoveFromDeprecated(_)
+        | MoveFromGenericDeprecated(_)
+        | MoveToDeprecated(_)
+        | MoveToGenericDeprecated(_) => false,
         // List out the other options explicitly so there's a compile error if a new
         // bytecode gets added.
         FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_) | LdU128(_)

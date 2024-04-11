@@ -139,14 +139,9 @@ impl<'a> CodeUnitVerifier<'a> {
         verifier_config: &VerifierConfig,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
-        StackUsageVerifier::verify(verifier_config, &self.resolver, &self.function_view, meter)?;
-        type_safety::verify(&self.resolver, &self.function_view, meter)?;
-        locals_safety::verify(&self.resolver, &self.function_view, meter)?;
-        reference_safety::verify(
-            &self.resolver,
-            &self.function_view,
-            self.name_def_map,
-            meter,
-        )
+        StackUsageVerifier::verify(verifier_config, self.resolver, &self.function_view, meter)?;
+        type_safety::verify(self.resolver, &self.function_view, meter)?;
+        locals_safety::verify(self.resolver, &self.function_view, meter)?;
+        reference_safety::verify(self.resolver, &self.function_view, self.name_def_map, meter)
     }
 }

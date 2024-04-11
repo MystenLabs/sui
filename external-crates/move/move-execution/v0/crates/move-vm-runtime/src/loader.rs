@@ -301,7 +301,7 @@ impl ModuleCache {
 
         let mut depth_cache = BTreeMap::new();
         for struct_type in self.structs.binaries.iter().rev().take(field_types_len) {
-            self.calculate_depth_of_struct(&struct_type, &mut depth_cache)?;
+            self.calculate_depth_of_struct(struct_type, &mut depth_cache)?;
         }
 
         debug_assert!(depth_cache.len() == field_types_len);
@@ -478,8 +478,7 @@ impl ModuleCache {
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
                 let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
-                let subst_struct_formula = struct_formula.subst(ty_arg_map)?;
-                subst_struct_formula
+                struct_formula.subst(ty_arg_map)?
             }
         })
     }
@@ -1578,7 +1577,7 @@ impl LoadedModule {
                         | Bytecode::VecUnpack(si, _)
                         | Bytecode::VecSwap(si) => {
                             if !single_signature_token_map.contains_key(si) {
-                                let ty = match module.signature_at(*si).0.get(0) {
+                                let ty = match module.signature_at(*si).0.first() {
                                     None => {
                                         return Err(PartialVMError::new(
                                             StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -2010,7 +2009,7 @@ impl Loader {
         let info = cache
             .structs
             .entry(gidx)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfo::new);
 
@@ -2138,7 +2137,7 @@ impl Loader {
         let info = cache
             .structs
             .entry(gidx)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfo::new);
         info.struct_layout = Some(struct_layout.clone());
@@ -2240,7 +2239,7 @@ impl Loader {
         let info = cache
             .structs
             .entry(gidx)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfo::new);
         info.annotated_struct_layout = Some(struct_layout.clone());
