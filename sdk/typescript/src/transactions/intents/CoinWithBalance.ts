@@ -13,10 +13,11 @@ import { Transactions } from '../Transactions.js';
 
 const COIN_WITH_BALANCE = 'CoinWithBalance';
 
-export function coinWithBalance(type: string, balance: bigint) {
+export function coinWithBalance(type: string, balance: bigint | number) {
 	return (txb: TransactionBlock) => {
 		txb.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
-		txb.add({
+
+		return txb.add({
 			$kind: 'TransactionIntent',
 			TransactionIntent: {
 				name: COIN_WITH_BALANCE,
@@ -34,7 +35,6 @@ async function resolveCoinBalance(
 	blockData: TransactionBlockDataBuilder,
 	dataResolver: TransactionBlockDataResolver,
 ) {
-	const intentTransactions = [];
 	const coinTypes = new Set<string>();
 	const totalByType = new Map<string, bigint>();
 
@@ -42,7 +42,7 @@ async function resolveCoinBalance(
 		throw new Error('Sender must be set to resolve CoinWithBalance');
 	}
 
-	for (const [index, transaction] of blockData.transactions.entries()) {
+	for (const transaction of blockData.transactions) {
 		if (
 			transaction.$kind === 'TransactionIntent' &&
 			transaction.TransactionIntent.name === COIN_WITH_BALANCE
@@ -56,12 +56,6 @@ async function resolveCoinBalance(
 				coinTypes.add(type);
 			}
 			totalByType.set(type, (totalByType.get(type) ?? 0n) + balance);
-
-			intentTransactions.push({
-				index,
-				type,
-				balance,
-			});
 		}
 	}
 	const usedIds = new Set<string>();
@@ -77,7 +71,11 @@ async function resolveCoinBalance(
 	const coinsByType = new Map<string, CoinStruct[]>();
 	await Promise.all(
 		[...coinTypes].map(async (coinType) => {
-			const result = await dataResolver.getCoins(coinType, blockData.sender!);
+			const result = await dataResolver.getCoins(blockData.sender!, coinType);
+
+			if (result.length === 0) {
+				throw new Error(`No coins of type ${coinType} owned by ${blockData.sender}`);
+			}
 
 			coinsByType.set(
 				coinType,
@@ -89,7 +87,19 @@ async function resolveCoinBalance(
 	const mergedCoins = new Map<string, Argument>();
 	mergedCoins.set('0x2::sui::SUI', { $kind: 'GasCoin', GasCoin: true });
 
-	for (const { index, type, balance } of intentTransactions) {
+	for (const [index, transaction] of blockData.transactions.entries()) {
+		if (
+			transaction.$kind !== 'TransactionIntent' ||
+			transaction.TransactionIntent.name !== COIN_WITH_BALANCE
+		) {
+			continue;
+		}
+
+		const { type, balance } = transaction.TransactionIntent.data as {
+			type: string;
+			balance: bigint;
+		};
+
 		const transactions = [];
 
 		if (!mergedCoins.has(type)) {
@@ -119,17 +129,15 @@ async function resolveCoinBalance(
 
 		blockData.replaceTransaction(index, transactions);
 
-		if (transactions.length > 1) {
-			blockData.mapArguments((arg) => {
-				if (arg.$kind === 'IntentResult' && arg.IntentResult === index) {
-					return {
-						$kind: 'NestedResult',
-						NestedResult: [index + transactions.length - 1, 0],
-					};
-				}
+		blockData.mapArguments((arg) => {
+			if (arg.$kind === 'Result' && arg.Result === index) {
+				return {
+					$kind: 'NestedResult',
+					NestedResult: [index + transactions.length - 1, 0],
+				};
+			}
 
-				return arg;
-			});
-		}
+			return arg;
+		});
 	}
 }

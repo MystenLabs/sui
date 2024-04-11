@@ -445,7 +445,11 @@ export class TransactionBlock {
 
 	async toJSON(options: SerializeTransactionBlockOptions = {}): Promise<string> {
 		await this.#prepareForSerialization(options, await this.getDataResolver(options));
-		return JSON.stringify(this.#blockData.snapshot());
+		return JSON.stringify(
+			this.#blockData.snapshot(),
+			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+			2,
+		);
 	}
 
 	/** Build the transaction to BCS bytes, and sign it with the provided keypair. */
@@ -459,6 +463,7 @@ export class TransactionBlock {
 	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
 		const dataResolver = await this.getDataResolver(options);
 
+		await this.#prepareForSerialization(options, dataResolver);
 		await this.#prepareBuild(options, dataResolver);
 		return this.#blockData.build({
 			maxSizeBytes: dataResolver.getLimit('maxTxSizeBytes'),
