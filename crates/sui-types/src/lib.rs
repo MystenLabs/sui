@@ -8,8 +8,9 @@
 )]
 
 use base_types::{SequenceNumber, SuiAddress};
-use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{AbilitySet, SignatureToken};
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
@@ -273,7 +274,7 @@ impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
 }
 
 pub fn is_primitive(
-    view: &BinaryIndexedView<'_>,
+    view: &CompiledModule,
     function_type_args: &[AbilitySet],
     s: &SignatureToken,
 ) -> bool {
@@ -302,7 +303,7 @@ pub fn is_primitive(
 }
 
 pub fn is_object(
-    view: &BinaryIndexedView<'_>,
+    view: &CompiledModule,
     function_type_args: &[AbilitySet],
     t: &SignatureToken,
 ) -> Result<bool, String> {
@@ -316,7 +317,7 @@ pub fn is_object(
 }
 
 pub fn is_object_vector(
-    view: &BinaryIndexedView<'_>,
+    view: &CompiledModule,
     function_type_args: &[AbilitySet],
     t: &SignatureToken,
 ) -> Result<bool, String> {
@@ -328,7 +329,7 @@ pub fn is_object_vector(
 }
 
 fn is_object_struct(
-    view: &BinaryIndexedView<'_>,
+    view: &CompiledModule,
     function_type_args: &[AbilitySet],
     s: &SignatureToken,
 ) -> Result<bool, String> {

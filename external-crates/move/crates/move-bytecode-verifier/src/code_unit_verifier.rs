@@ -11,7 +11,7 @@ use crate::{
 };
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::{BinaryIndexedView, FunctionView},
+    binary_views::FunctionView,
     control_flow_graph::ControlFlowGraph,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -25,7 +25,7 @@ use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;
 
 pub struct CodeUnitVerifier<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     function_view: FunctionView<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
 }
@@ -119,7 +119,7 @@ impl<'a> CodeUnitVerifier<'a> {
             }
         }
 
-        let resolver = BinaryIndexedView::Module(module);
+        let resolver = module;
         // verify
         let code_unit_verifier = CodeUnitVerifier {
             resolver,
@@ -139,14 +139,9 @@ impl<'a> CodeUnitVerifier<'a> {
         verifier_config: &VerifierConfig,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
-        StackUsageVerifier::verify(verifier_config, &self.resolver, &self.function_view, meter)?;
-        type_safety::verify(&self.resolver, &self.function_view, meter)?;
-        locals_safety::verify(&self.resolver, &self.function_view, meter)?;
-        reference_safety::verify(
-            &self.resolver,
-            &self.function_view,
-            self.name_def_map,
-            meter,
-        )
+        StackUsageVerifier::verify(verifier_config, self.resolver, &self.function_view, meter)?;
+        type_safety::verify(self.resolver, &self.function_view, meter)?;
+        locals_safety::verify(self.resolver, &self.function_view, meter)?;
+        reference_safety::verify(self.resolver, &self.function_view, self.name_def_map, meter)
     }
 }

@@ -16,7 +16,6 @@ use tabled::{
 
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -1774,7 +1773,6 @@ fn get_signature_types(
     use std::borrow::Borrow;
     if let Ok(Some(module)) = module_cache.get_module_by_id(&id) {
         let module: &CompiledModule = module.borrow();
-        let view = BinaryIndexedView::Module(module);
         let func = module
             .function_handles
             .iter()
@@ -1784,7 +1782,7 @@ fn get_signature_types(
                 .signature_at(func.parameters)
                 .0
                 .iter()
-                .map(|s| primitive_type(&view, &[], s).1)
+                .map(|s| primitive_type(module, &[], s).1)
                 .collect(),
         )
     } else {

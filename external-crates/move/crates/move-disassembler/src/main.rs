@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use move_binary_format::{binary_views::BinaryIndexedView, file_format::CompiledModule};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::{mapping::SourceMapping, utils::source_map_from_file};
 use move_command_line_common::files::{
     MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
@@ -83,13 +83,12 @@ fn main() {
     let no_loc = Spanned::unsafe_no_loc(()).loc;
     let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)
         .expect("Module blob can't be deserialized");
-    let bytecode = BinaryIndexedView::Module(&module);
 
     let mut source_mapping = {
         if let Ok(s) = source_map {
-            SourceMapping::new(s, bytecode)
+            SourceMapping::new(s, &module)
         } else {
-            SourceMapping::new_from_view(bytecode, no_loc)
+            SourceMapping::new_from_view(&module, no_loc)
                 .expect("Unable to build dummy source mapping")
         }
     };

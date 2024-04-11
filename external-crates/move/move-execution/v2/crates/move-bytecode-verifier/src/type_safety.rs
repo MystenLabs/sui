@@ -9,13 +9,15 @@ use std::num::NonZeroU64;
 
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
+    access::ModuleAccess,
+    binary_views::FunctionView,
     control_flow_graph::ControlFlowGraph,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, FieldHandleIndex, FunctionDefinitionIndex,
-        FunctionHandle, LocalIndex, Signature, SignatureToken, SignatureToken as ST,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
+        AbilitySet, Bytecode, CodeOffset, CompiledModule, FieldHandleIndex,
+        FunctionDefinitionIndex, FunctionHandle, LocalIndex, Signature, SignatureToken,
+        SignatureToken as ST, StructDefinition, StructDefinitionIndex, StructFieldInformation,
+        StructHandleIndex,
     },
     safe_unwrap_err,
 };
@@ -50,14 +52,14 @@ impl<'a> Locals<'a> {
 }
 
 struct TypeSafetyChecker<'a> {
-    resolver: &'a BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     function_view: &'a FunctionView<'a>,
     locals: Locals<'a>,
     stack: AbstractStack<SignatureToken>,
 }
 
 impl<'a> TypeSafetyChecker<'a> {
-    fn new(resolver: &'a BinaryIndexedView<'a>, function_view: &'a FunctionView<'a>) -> Self {
+    fn new(resolver: &'a CompiledModule, function_view: &'a FunctionView<'a>) -> Self {
         let locals = Locals::new(function_view.parameters(), function_view.locals());
         Self {
             resolver,
@@ -85,7 +87,11 @@ impl<'a> TypeSafetyChecker<'a> {
         )
     }
 
-    fn push(&mut self, meter: &mut (impl Meter + ?Sized), ty: SignatureToken) -> PartialVMResult<()> {
+    fn push(
+        &mut self,
+        meter: &mut (impl Meter + ?Sized),
+        ty: SignatureToken,
+    ) -> PartialVMResult<()> {
         self.charge_ty(meter, &ty)?;
         safe_unwrap_err!(self.stack.push(ty));
         Ok(())
@@ -102,7 +108,11 @@ impl<'a> TypeSafetyChecker<'a> {
         Ok(())
     }
 
-    fn charge_ty(&mut self, meter: &mut (impl Meter + ?Sized), ty: &SignatureToken) -> PartialVMResult<()> {
+    fn charge_ty(
+        &mut self,
+        meter: &mut (impl Meter + ?Sized),
+        ty: &SignatureToken,
+    ) -> PartialVMResult<()> {
         self.charge_ty_(meter, ty, 1)
     }
 
@@ -132,7 +142,7 @@ impl<'a> TypeSafetyChecker<'a> {
 }
 
 pub(crate) fn verify<'a>(
-    resolver: &'a BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     function_view: &'a FunctionView<'a>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
@@ -166,8 +176,8 @@ fn borrow_field(
     // check the reference on the stack is the expected type.
     // Load the type that owns the field according to the instruction.
     // For generic fields access, this step materializes that type
-    let field_handle = verifier.resolver.field_handle_at(field_handle_index)?;
-    let struct_def = verifier.resolver.struct_def_at(field_handle.owner)?;
+    let field_handle = verifier.resolver.field_handle_at(field_handle_index);
+    let struct_def = verifier.resolver.struct_def_at(field_handle.owner);
     let expected_type = materialize_type(struct_def.struct_handle, type_args);
     match operand {
         ST::Reference(inner) | ST::MutableReference(inner) if expected_type == *inner => (),
@@ -236,7 +246,7 @@ fn borrow_global(
         return Err(verifier.error(StatusCode::BORROWGLOBAL_TYPE_MISMATCH_ERROR, offset));
     }
 
-    let struct_def = verifier.resolver.struct_def_at(idx)?;
+    let struct_def = verifier.resolver.struct_def_at(idx);
     let struct_type = materialize_type(struct_def.struct_handle, type_args);
     if !verifier.abilities(&struct_type)?.has_key() {
         return Err(verifier.error(StatusCode::BORROWGLOBAL_WITHOUT_KEY_ABILITY, offset));
@@ -515,9 +525,7 @@ fn verify_instr(
         )?,
 
         Bytecode::MutBorrowFieldGeneric(field_inst_index) => {
-            let field_inst = verifier
-                .resolver
-                .field_instantiation_at(*field_inst_index)?;
+            let field_inst = verifier.resolver.field_instantiation_at(*field_inst_index);
             let type_inst = verifier.resolver.signature_at(field_inst.type_parameters);
             verifier.charge_tys(meter, &type_inst.0)?;
             borrow_field(verifier, meter, offset, true, field_inst.handle, type_inst)?
@@ -533,9 +541,7 @@ fn verify_instr(
         )?,
 
         Bytecode::ImmBorrowFieldGeneric(field_inst_index) => {
-            let field_inst = verifier
-                .resolver
-                .field_instantiation_at(*field_inst_index)?;
+            let field_inst = verifier.resolver.field_instantiation_at(*field_inst_index);
             let type_inst = verifier.resolver.signature_at(field_inst.type_parameters);
             verifier.charge_tys(meter, &type_inst.0)?;
             borrow_field(verifier, meter, offset, false, field_inst.handle, type_inst)?
@@ -609,7 +615,7 @@ fn verify_instr(
         }
 
         Bytecode::Pack(idx) => {
-            let struct_definition = verifier.resolver.struct_def_at(*idx)?;
+            let struct_definition = verifier.resolver.struct_def_at(*idx);
             pack(
                 verifier,
                 meter,
@@ -620,15 +626,15 @@ fn verify_instr(
         }
 
         Bytecode::PackGeneric(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
             pack(verifier, meter, offset, struct_def, type_args)?
         }
 
         Bytecode::Unpack(idx) => {
-            let struct_definition = verifier.resolver.struct_def_at(*idx)?;
+            let struct_definition = verifier.resolver.struct_def_at(*idx);
             unpack(
                 verifier,
                 meter,
@@ -639,8 +645,8 @@ fn verify_instr(
         }
 
         Bytecode::UnpackGeneric(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
             unpack(verifier, meter, offset, struct_def, type_args)?
@@ -774,7 +780,7 @@ fn verify_instr(
         }
 
         Bytecode::MutBorrowGlobalGenericDeprecated(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
             let type_inst = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_inst.0)?;
             borrow_global(verifier, meter, offset, true, struct_inst.def, type_inst)?
@@ -785,46 +791,46 @@ fn verify_instr(
         }
 
         Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
             let type_inst = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_inst.0)?;
             borrow_global(verifier, meter, offset, false, struct_inst.def, type_inst)?
         }
 
         Bytecode::ExistsDeprecated(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.resolver.struct_def_at(*idx);
             exists(verifier, meter, offset, struct_def, &Signature(vec![]))?
         }
 
         Bytecode::ExistsGenericDeprecated(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
             exists(verifier, meter, offset, struct_def, type_args)?
         }
 
         Bytecode::MoveFromDeprecated(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.resolver.struct_def_at(*idx);
             move_from(verifier, meter, offset, struct_def, &Signature(vec![]))?
         }
 
         Bytecode::MoveFromGenericDeprecated(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
             move_from(verifier, meter, offset, struct_def, type_args)?
         }
 
         Bytecode::MoveToDeprecated(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.resolver.struct_def_at(*idx);
             move_to(verifier, offset, struct_def, &Signature(vec![]))?
         }
 
         Bytecode::MoveToGenericDeprecated(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
             move_to(verifier, offset, struct_def, type_args)?
@@ -976,7 +982,7 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
                     .map(|ty| instantiate(ty, subst))
                     .collect(),
             )))
-        },
+        }
         Reference(ty) => Reference(Box::new(instantiate(ty, subst))),
         MutableReference(ty) => MutableReference(Box::new(instantiate(ty, subst))),
         TypeParameter(idx) => {

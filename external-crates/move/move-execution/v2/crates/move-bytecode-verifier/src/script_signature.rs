@@ -14,7 +14,6 @@
 
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
@@ -25,7 +24,7 @@ use move_binary_format::{
 use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
 
 pub type FnCheckScriptSignature = fn(
-    &BinaryIndexedView,
+    &CompiledModule,
     /* is_entry */ bool,
     SignatureIndex,
     Option<SignatureIndex>,
@@ -86,7 +85,7 @@ fn verify_module_function_signature(
 ) -> VMResult<()> {
     let fdef = module.function_def_at(idx);
 
-    let resolver = &BinaryIndexedView::Module(module);
+    let resolver = module;
     let fhandle = module.function_handle_at(fdef.function);
     let parameters = fhandle.parameters;
     let return_ = fhandle.return_;
@@ -104,7 +103,7 @@ fn verify_module_function_signature(
 }
 
 fn verify_main_signature_impl(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     is_entry: bool,
     parameters_idx: SignatureIndex,
     return_idx: Option<SignatureIndex>,
@@ -119,7 +118,7 @@ fn verify_main_signature_impl(
 }
 
 pub fn no_additional_script_signature_checks(
-    _resolver: &BinaryIndexedView,
+    _resolver: &CompiledModule,
     _is_entry: bool,
     _parameters: SignatureIndex,
     _return_type: Option<SignatureIndex>,
@@ -128,7 +127,7 @@ pub fn no_additional_script_signature_checks(
 }
 
 pub fn legacy_script_signature_checks(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     _is_entry: bool,
     parameters_idx: SignatureIndex,
     return_idx: Option<SignatureIndex>,
