@@ -373,6 +373,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytecode-verifier-tests-v2"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "invalid-mutations",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+ "proptest",
+]
+
+[[package]]
 name = "bytecode-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
