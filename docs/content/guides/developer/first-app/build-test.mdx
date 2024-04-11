@@ -269,7 +269,7 @@ fun init(ctx: &mut TxContext) {
 }
 ```
 
-The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, add a `new_sword` function to take the forge as a parameter and to update the number of created swords at the end of the function. If this were an actual module, you'd replace the `create_sword` function with `new_sword`. To keep the existing tests from failing, however, we will keep both functions.
+The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, add a `new_sword` function to take the forge as a parameter and to update the number of created swords at the end of the function. If this were an actual module, you'd replace the `sword_create` function with `new_sword`. To keep the existing tests from failing, however, we will keep both functions.
 
 ```move
 /// Constructor for creating swords
