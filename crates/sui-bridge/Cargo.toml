@@ -44,9 +44,7 @@ tap.workspace = true
 rand.workspace = true
 lru.workspace = true
 shared-crypto.workspace = true
-backoff = { version = "0.4.0", features = [
-  "futures",
-] }
+backoff.workspace = true
 enum_dispatch.workspace = true
 sui-json-rpc-api.workspace = true
 
