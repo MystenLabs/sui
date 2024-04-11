@@ -5,3 +5,4 @@ pub mod graphiql_server;
 
 pub mod builder;
 pub mod version;
+pub(crate) mod watermark_task;
