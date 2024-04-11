@@ -542,20 +542,20 @@ move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
   "tiered-gas",
-] }
-move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
-move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
-move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
-move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
-move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-prover = { path = "external-crates/move/crates/move-prover" }
-move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
-move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
-move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
+  ] }
+  move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
+  move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
+        move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
+  move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
+  move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
+  move-prover = { path = "external-crates/move/crates/move-prover" }
+  move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
+  move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
+  move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-# The mamoru
-mamoru-sniffer = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "8b37df68985b358576b8da62bd268796a26e2d62" }
-mamoru-sui-types = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "8b37df68985b358576b8da62bd268796a26e2d62" }
+  # The mamoru
+  mamoru-sniffer = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "23cb8e9a9b7271a43928c0f59bc711ed8b7dbedb" }
+  mamoru-sui-types = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "23cb8e9a9b7271a43928c0f59bc711ed8b7dbedb" }
 #mamoru-sniffer = { path = "../mamoru-core/mamoru-sniffer" }
 #mamoru-sui-types = { path = "../mamoru-core/blockchain-types/mamoru-sui-types" }
 
