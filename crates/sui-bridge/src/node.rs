@@ -241,7 +241,7 @@ mod tests {
         let client_sui_address = SuiAddress::from(kp.public());
         // send some gas to this address
         test_cluster
-            .transfer_sui_must_exceeed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
@@ -311,7 +311,7 @@ mod tests {
 
         // send some gas to this address
         let gas_obj = test_cluster
-            .transfer_sui_must_exceeed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
