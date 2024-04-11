@@ -5,8 +5,8 @@ use crate::SecurityWatchdogConfig;
 use anyhow::anyhow;
 use arrow_array::cast::AsArray;
 use arrow_array::types::{
-    Float16Type, Float32Type, Float64Type, Int16Type, Int32Type, Int64Type, Int8Type, UInt16Type,
-    UInt32Type, UInt64Type, UInt8Type,
+    Decimal128Type, Float16Type, Float32Type, Float64Type, Int16Type, Int32Type, Int64Type,
+    Int8Type, UInt16Type, UInt32Type, UInt64Type, UInt8Type,
 };
 use arrow_array::{Array, Float32Array, RecordBatch};
 use lexical_util::num::AsPrimitive;
@@ -69,7 +69,13 @@ macro_rules! insert_string_values {
 }
 
 pub struct SnowflakeQueryRunner {
-    api: SnowflakeApi,
+    account_identifier: String,
+    warehouse: String,
+    database: String,
+    schema: String,
+    user: String,
+    role: String,
+    passwd: String,
 }
 
 impl SnowflakeQueryRunner {
@@ -92,17 +98,15 @@ impl SnowflakeQueryRunner {
         role: &str,
         passwd: &str,
     ) -> anyhow::Result<Self> {
-        let api = SnowflakeApi::with_password_auth(
-            account_identifier,
-            Some(warehouse),
-            Some(database),
-            Some(schema),
-            user,
-            Some(role),
-            passwd,
-        )
-        .expect("Failed to build sf api client");
-        Ok(SnowflakeQueryRunner { api })
+        Ok(Self {
+            account_identifier: account_identifier.to_string(),
+            warehouse: warehouse.to_string(),
+            database: database.to_string(),
+            schema: schema.to_string(),
+            user: user.to_string(),
+            role: role.to_string(),
+            passwd: passwd.to_string(),
+        })
     }
 
     pub fn from_config(config: &SecurityWatchdogConfig) -> anyhow::Result<Self> {
@@ -120,6 +124,19 @@ impl SnowflakeQueryRunner {
             config.sf_role.as_ref().cloned().unwrap().as_str(),
             config.sf_password.as_ref().cloned().unwrap().as_str(),
         )
+    }
+
+    pub fn make_snowflake_api(&self) -> anyhow::Result<SnowflakeApi> {
+        let api = SnowflakeApi::with_password_auth(
+            &self.account_identifier,
+            Some(&self.warehouse),
+            Some(&self.database),
+            Some(&self.schema),
+            &self.user,
+            Some(&self.role),
+            &self.passwd,
+        )?;
+        Ok(api)
     }
 
     /// Parses the result of a Snowflake query from a `Vec<RecordBatch>` into a single `f64` value.
@@ -153,9 +170,16 @@ impl SnowflakeQueryRunner {
             insert_primitive_values!(rows, column, name, Float16Type);
             insert_primitive_values!(rows, column, name, Float32Type);
             insert_primitive_values!(rows, column, name, Float64Type);
+            insert_primitive_values!(rows, column, name, Decimal128Type);
             insert_string_values!(rows, column, name, i32);
             insert_string_values!(rows, column, name, i64);
-            info!("Skipping column: {}", name);
+            let schema = batch.schema();
+            let data_type = schema.fields()[index].data_type();
+            let metadata = schema.fields()[index].metadata();
+            info!(
+                "Skipping column: {}, data_type: {:?}, metadata: {:?}",
+                name, data_type, metadata
+            );
         }
         Ok(rows)
     }
@@ -166,6 +190,7 @@ impl SnowflakeQueryRunner {
             let mut batch_rows = self.parse_record_batch(batch)?;
             rows.append(&mut batch_rows);
         }
+        info!("Found {} rows", rows.len());
         Ok(rows)
     }
 }
@@ -173,7 +198,7 @@ impl SnowflakeQueryRunner {
 #[async_trait::async_trait]
 impl QueryRunner for SnowflakeQueryRunner {
     async fn run_single_entry(&self, query: &str) -> anyhow::Result<f64> {
-        let res = self.api.exec(query).await?;
+        let res = self.make_snowflake_api()?.exec(query).await?;
         match res {
             QueryResult::Arrow(records) => self.parse(records),
             // Handle other result types (Json, Empty) with a unified error message
@@ -182,7 +207,8 @@ impl QueryRunner for SnowflakeQueryRunner {
     }
 
     async fn run(&self, query: &str) -> anyhow::Result<Vec<Row>> {
-        let res = self.api.exec(query).await?;
+        info!("Running query: {}", query);
+        let res = self.make_snowflake_api()?.exec(query).await?;
         match res {
             QueryResult::Arrow(records) => self.parse_record_batches(records),
             // Handle other result types (Json, Empty) with a unified error message

@@ -18,6 +18,8 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{error, info};
 use uuid::Uuid;
 
+const MIST_PER_SUI: i128 = 1_000_000_000;
+
 // MonitoringEntry is an enum that represents the types of monitoring entries that can be scheduled.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -123,7 +125,6 @@ impl SchedulerService {
     ) -> anyhow::Result<Uuid> {
         let name = entry.name.clone();
         let cron_schedule = entry.cron_schedule.clone();
-
         let job = Job::new_async(cron_schedule.as_str(), move |_uuid, _lock| {
             let entry = entry.clone();
             let query_runner = query_runner.clone();
@@ -165,12 +166,12 @@ impl SchedulerService {
                 .downcast_ref::<String>()
                 .ok_or(anyhow!("Failed to downcast wallet_id"))?
                 .clone();
-            let current_balance = Self::extract_u64(
+            let current_balance = Self::extract_i128(
                 row.get("CURRENT_BALANCE")
                     .ok_or_else(|| anyhow!("Missing current_balance"))?,
             )
             .ok_or(anyhow!("Failed to downcast current_balance"))?;
-            let lower_bound = Self::extract_u64(
+            let lower_bound = Self::extract_i128(
                 row.get("LOWER_BOUND")
                     .ok_or_else(|| anyhow!("Missing lower_bound"))?,
             )
@@ -190,8 +191,8 @@ impl SchedulerService {
     async fn create_wallet_monitoring_incident(
         pagerduty: &Pagerduty,
         wallet_id: &str,
-        current_balance: u64,
-        lower_bound: u64,
+        current_balance: i128,
+        lower_bound: i128,
         service_id: &str,
     ) -> anyhow::Result<()> {
         let service = Service {
@@ -200,8 +201,9 @@ impl SchedulerService {
         };
         let incident_body = Body {
             details: format!(
-                "Current balance: {}, Lower bound: {}",
-                current_balance, lower_bound
+                "Current balance: {} SUI, Lower bound: {} SUI",
+                current_balance / MIST_PER_SUI,
+                lower_bound / MIST_PER_SUI
             ),
             ..Default::default()
         };
@@ -282,23 +284,23 @@ impl SchedulerService {
         limits.range(..Utc::now()).next_back().map(|(_, val)| *val)
     }
 
-    fn extract_u64(value: &Box<dyn Any + Send>) -> Option<u64> {
-        if let Some(value) = value.downcast_ref::<u64>() {
+    fn extract_i128(value: &Box<dyn Any + Send>) -> Option<i128> {
+        if let Some(value) = value.downcast_ref::<i128>() {
             Some(*value)
         } else if let Some(value) = value.downcast_ref::<u32>() {
-            Some(*value as u64)
+            Some(*value as i128)
         } else if let Some(value) = value.downcast_ref::<u16>() {
-            Some(*value as u64)
+            Some(*value as i128)
         } else if let Some(value) = value.downcast_ref::<u8>() {
-            Some(*value as u64)
+            Some(*value as i128)
         } else if let Some(value) = value.downcast_ref::<i64>() {
-            Some(*value as u64)
+            Some(*value as i128)
         } else if let Some(value) = value.downcast_ref::<i32>() {
-            Some(*value as u64)
+            Some(*value as i128)
         } else if let Some(value) = value.downcast_ref::<i16>() {
-            Some(*value as u64)
+            Some(*value as i128)
         } else {
-            value.downcast_ref::<i8>().map(|value| *value as u64)
+            value.downcast_ref::<i8>().map(|value| *value as i128)
         }
     }
 }
