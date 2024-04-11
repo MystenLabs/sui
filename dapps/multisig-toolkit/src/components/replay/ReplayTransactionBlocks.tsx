@@ -35,11 +35,13 @@ export function ReplayTransactionBlocks({
 							<div className="flex flex-wrap gap-3">
 								Package:{' '}
 								<ReplayLink
+									landing={true}
 									id={command.command.MoveCall.package}
 									text={command.command.MoveCall.package}
 								/>
 								Module:{' '}
 								<ReplayLink
+									landing={true}
 									id={command.command.MoveCall.package}
 									module={command.command.MoveCall.module}
 									text={command.command.MoveCall.module}

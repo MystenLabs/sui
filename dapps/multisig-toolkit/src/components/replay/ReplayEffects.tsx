@@ -23,7 +23,7 @@ export function ReplayEffects({ effects }: { effects: EffectsV2 }) {
 				<PreviewCard.Body>
 					<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
 						{effects.dependencies.map((dep) => (
-							<ReplayLink id={dep} text={dep} />
+							<ReplayLink landing={true} id={dep} text={dep} />
 						))}
 					</div>
 				</PreviewCard.Body>

@@ -37,7 +37,7 @@ export function ReplayInputArgument({ input }: { input: ReplayInput }) {
 						{Object.entries(formatObject(input)).map(([key, value]) => (
 							<div>
 								<span className="capitalize">{key}: </span>
-								{key === 'objectId' && <ReplayLink id={value} text={value} />}
+								{key === 'objectId' && <ReplayLink landing={true} id={value} text={value} />}
 								{key !== 'objectId' && <span>{JSON.stringify(value)}</span>}
 							</div>
 						))}
@@ -52,7 +52,13 @@ export function EffectsItem({ input }: { input: EffectsObject }) {
 	return (
 		<PreviewCard.Root>
 			<PreviewCard.Body>
-				{<ReplayLink id={input.reference.objectId} text={input.reference.objectId} />}
+				{
+					<ReplayLink
+						landing={true}
+						id={input.reference.objectId}
+						text={input.reference.objectId}
+					/>
+				}
 				{'ObjectOwner' in input.owner && <p>Object Owner: {input.owner.ObjectOwner}</p>}
 				{'AddressOwner' in input.owner && <p>Address Owner: {input.owner.AddressOwner}</p>}
 				{'Shared' in input.owner && <p>Shared Object</p>}
