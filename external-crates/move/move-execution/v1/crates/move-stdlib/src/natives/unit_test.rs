@@ -8,7 +8,7 @@ use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::{InternalGas, InternalGasPerArg, NumArgs},
 };
-use move_vm_runtime::{
+use move_vm_runtime_v1::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
 };
