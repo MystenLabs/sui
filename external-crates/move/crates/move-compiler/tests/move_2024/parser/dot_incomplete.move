@@ -13,7 +13,6 @@ module a::m {
         let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
         let _tmp3 = s.another_field.   // incomplete without `;` (unexpected `let`)
         let _tmp4 = s;
+        let _tmp = s.                  // incomplete without `;` (unexpected `}`)
     }
-
-
 }

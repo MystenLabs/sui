@@ -1501,6 +1501,9 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
                             value: e.value,
                         });
                     } else {
+                        // we parsed a valid sequence - even though it should be followed by a
+                        // semicolon, let's not drop it on the floor
+                        seq.push(item);
                         context.add_diag(*unexpected_token_error(context.tokens, "';'"));
                     }
                     break;
@@ -1565,6 +1568,13 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     // sequence and proceed with parsing top-level definition (assume the second scenario).
     if !context.at_stop_set() || context.tokens.at(Tok::RBrace) {
         context.advance(); // consume (the RBrace)
+        if context.tokens.text.starts_with("module a::m {") {
+            eprintln!(
+                "CONSUME: {:?} DIAGS {}",
+                context.tokens.peek(),
+                context.env.count_diags()
+            );
+        }
     }
     Ok((uses, seq, last_semicolon_loc, Box::new(eopt)))
 }
@@ -2541,11 +2551,7 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let mut lhs = parse_term(context)?;
-    let mut done_parsing = false;
     loop {
-        if done_parsing {
-            break;
-        }
         let exp = match context.tokens.peek() {
             Tok::Period => {
                 context.advance();
@@ -2588,39 +2594,34 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                             }
                         }
                     }
-                    _ => {
-                        let start_loc = context.tokens.start_loc();
-                        let n = match parse_identifier(context) {
-                            Ok(id) => id,
-                            Err(diag) => {
-                                done_parsing = true;
-                                context.add_diag(*diag);
-                                let end_loc = context.tokens.previous_end_loc();
-                                let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
-                                sp(loc, Symbol::from(""))
-                            }
-                        };
-                        if is_start_of_call_after_function_name(context, &n) {
-                            let call_start = context.tokens.start_loc();
-                            let is_macro = if let Tok::Exclaim = context.tokens.peek() {
-                                let loc = current_token_loc(context.tokens);
-                                context.advance();
-                                Some(loc)
-                            } else {
-                                None
-                            };
-                            let mut tys = None;
-                            if context.tokens.peek() == Tok::Less
-                                && n.loc.end() as usize == call_start
-                            {
-                                tys = parse_optional_type_args(context);
-                            }
-                            let args = parse_call_args(context);
-                            Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
-                        } else {
-                            Exp_::Dot(Box::new(lhs), n)
+                    _ => match parse_identifier(context) {
+                        Err(diag) => {
+                            context.add_diag(*diag);
+                            Exp_::DotUnresolved(Box::new(lhs))
                         }
-                    }
+                        Ok(n) => {
+                            if is_start_of_call_after_function_name(context, &n) {
+                                let call_start = context.tokens.start_loc();
+                                let is_macro = if let Tok::Exclaim = context.tokens.peek() {
+                                    let loc = current_token_loc(context.tokens);
+                                    context.advance();
+                                    Some(loc)
+                                } else {
+                                    None
+                                };
+                                let mut tys = None;
+                                if context.tokens.peek() == Tok::Less
+                                    && n.loc.end() as usize == call_start
+                                {
+                                    tys = parse_optional_type_args(context);
+                                }
+                                let args = parse_call_args(context);
+                                Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
+                            } else {
+                                Exp_::Dot(Box::new(lhs), n)
+                            }
+                        }
+                    },
                 }
             }
             Tok::LBracket => {

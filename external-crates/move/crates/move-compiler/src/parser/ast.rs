@@ -624,6 +624,8 @@ pub enum Exp_ {
     // Internal node marking an error was added to the error list
     // This is here so the pass can continue even when an error is hit
     UnresolvedError,
+    // e.X (where X is not a valid tok after dot and cannot be parsed)
+    DotUnresolved(Box<Exp>),
 }
 pub type Exp = Spanned<Exp_>;
 
@@ -2103,6 +2105,10 @@ impl AstDebug for Exp_ {
                 w.write(&s.value);
             }
             E::UnresolvedError => w.write("_|_"),
+            E::DotUnresolved(e) => {
+                e.ast_debug(w);
+                w.write(".");
+            }
         }
     }
 }
