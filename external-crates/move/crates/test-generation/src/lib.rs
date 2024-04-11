@@ -416,7 +416,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
 }
 
 pub fn abilities(
-    module: &impl ModuleAccess,
+    module: &CompiledModule,
     ty: &SignatureToken,
     constraints: &[AbilitySet],
 ) -> AbilitySet {

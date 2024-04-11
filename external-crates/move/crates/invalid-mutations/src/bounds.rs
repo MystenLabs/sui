@@ -329,7 +329,7 @@ impl ApplyOutOfBoundsContext {
             .enumerate()
             .flat_map(|(idx, signature)| {
                 let idx = SignatureIndex(idx as u16);
-                Self::find_struct_tokens(signature.tokens(), move |arg_idx| (idx, arg_idx))
+                Self::find_struct_tokens(&signature.0, move |arg_idx| (idx, arg_idx))
             })
     }
 
