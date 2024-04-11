@@ -50,8 +50,6 @@ pub trait ConsensusManagerTrait {
     async fn shutdown(&self);
 
     async fn is_running(&self) -> bool;
-
-    fn get_storage_base_path(&self) -> PathBuf;
 }
 
 // Wrpas the underlying consensus protocol managers to make calling
@@ -102,28 +100,55 @@ impl ProtocolManager {
 
 /// Used by Sui validator to start a consensus protocol for each epoch.
 pub struct ConsensusManager {
-    protocol_manager: ArcSwapOption<ProtocolManager>,
     consensus_config: ConsensusConfig,
-    registry_service: RegistryService,
+    narwhal_manager: ProtocolManager,
+    mysticeti_manager: ProtocolManager,
+    narwhal_client: Arc<LazyNarwhalClient>,
+    mysticeti_client: Arc<LazyMysticetiClient>,
+    active: parking_lot::Mutex<Vec<bool>>,
     consensus_client: Arc<ConsensusClient>,
-    metrics: Arc<ConsensusManagerMetrics>,
 }
 
 impl ConsensusManager {
     pub fn new(
+        node_config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
         consensus_client: Arc<ConsensusClient>,
     ) -> Self {
+        let metrics = Arc::new(ConsensusManagerMetrics::new(
+            &registry_service.default_registry(),
+        ));
+        let narwhal_client = Arc::new(LazyNarwhalClient::new(
+            consensus_config.address().to_owned(),
+        ));
+        let narwhal_manager = ProtocolManager::new_narwhal(
+            node_config,
+            consensus_config,
+            registry_service,
+            metrics.clone(),
+        );
+        let mysticeti_client = Arc::new(LazyMysticetiClient::new());
+        let mysticeti_manager = ProtocolManager::new_mysticeti(
+            node_config,
+            consensus_config,
+            registry_service,
+            metrics,
+            mysticeti_client.clone(),
+        );
         Self {
-            protocol_manager: ArcSwapOption::empty(),
             consensus_config: consensus_config.clone(),
-            registry_service: registry_service.clone(),
+            narwhal_manager,
+            mysticeti_manager,
+            narwhal_client,
+            mysticeti_client,
+            active: parking_lot::Mutex::new(vec![false; 2]),
             consensus_client,
-            metrics: Arc::new(ConsensusManagerMetrics::new(
-                &registry_service.default_registry(),
-            )),
         }
+    }
+
+    pub fn get_storage_base_path(&self) -> PathBuf {
+        self.consensus_config.db_path().to_path_buf()
     }
 
     // Picks the consensus protocol based on the protocol config and the epoch.
@@ -175,32 +200,24 @@ impl ConsensusManagerTrait for ConsensusManager {
         let protocol = self.pick_protocol(&epoch_store);
         info!("Using consensus protocol {protocol:?} ...");
 
-        let protocol_manager = match protocol {
-            ConsensusProtocol::Narwhal => {
-                let client = Arc::new(LazyNarwhalClient::new(
-                    self.consensus_config.address().to_owned(),
-                ));
-                self.consensus_client.set(client);
-                Arc::new(ProtocolManager::new_narwhal(
-                    node_config,
-                    &self.consensus_config,
-                    &self.registry_service,
-                    self.metrics.clone(),
-                ))
-            }
-            ConsensusProtocol::Mysticeti => {
-                let client = Arc::new(LazyMysticetiClient::new());
-                self.consensus_client.set(client.clone());
-                Arc::new(ProtocolManager::new_mysticeti(
-                    node_config,
-                    &self.consensus_config,
-                    &self.registry_service,
-                    self.metrics.clone(),
-                    client,
-                ))
+        let protocol_manager = {
+            let mut active = self.active.lock();
+            active.iter().for_each(|i| {
+                assert!(!*i, "ConsensusManager protocol {i} is already running");
+            });
+            match protocol {
+                ConsensusProtocol::Narwhal => {
+                    active[0] = true;
+                    self.consensus_client.set(self.narwhal_client.clone());
+                    &self.narwhal_manager
+                }
+                ConsensusProtocol::Mysticeti => {
+                    active[1] = true;
+                    self.consensus_client.set(self.mysticeti_client.clone());
+                    &self.mysticeti_manager
+                }
             }
         };
-        self.protocol_manager.store(Some(protocol_manager.clone()));
 
         protocol_manager
             .start(
@@ -213,29 +230,24 @@ impl ConsensusManagerTrait for ConsensusManager {
     }
 
     async fn shutdown(&self) {
-        let protocol_manager = self.protocol_manager.load_full();
-        match &protocol_manager {
-            None => {}
-            Some(manager) => manager.shutdown().await,
+        let prev_active = {
+            let mut active = self.active.lock();
+            let prev_active = active.clone();
+            *active = vec![false; 2];
+            prev_active
         };
-        self.protocol_manager.store(None);
+        if prev_active[0] {
+            self.narwhal_manager.shutdown().await;
+        }
+        if prev_active[1] {
+            self.mysticeti_manager.shutdown().await;
+        }
         self.consensus_client.clear();
     }
 
     async fn is_running(&self) -> bool {
-        let protocol_manager = self.protocol_manager.load_full();
-        match &protocol_manager {
-            None => false,
-            Some(manager) => manager.is_running().await,
-        }
-    }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        let protocol_manager = self.protocol_manager.load_full();
-        match &protocol_manager {
-            None => self.consensus_config.db_path().to_path_buf(),
-            Some(manager) => manager.get_storage_base_path(),
-        }
+        let active = self.active.lock();
+        active.iter().any(|i| *i)
     }
 }
 

@@ -230,8 +230,4 @@ impl ConsensusManagerTrait for NarwhalManager {
         let running = self.running.lock().await;
         Running::False != *running
     }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
-    }
 }

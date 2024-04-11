@@ -199,8 +199,4 @@ impl ConsensusManagerTrait for MysticetiManager {
     async fn is_running(&self) -> bool {
         Running::False != *self.running.lock().await
     }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
-    }
 }

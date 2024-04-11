@@ -1096,7 +1096,8 @@ impl SuiNode {
             client.clone(),
         ));
         // TODO (mysticeti): Move protocol choice to a protocol config flag.
-        let consensus_manager = ConsensusManager::new(consensus_config, registry_service, client);
+        let consensus_manager =
+            ConsensusManager::new(&config, consensus_config, registry_service, client);
 
         let mut consensus_epoch_data_remover =
             EpochDataRemover::new(consensus_manager.get_storage_base_path());
