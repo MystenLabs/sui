@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::consistency::Watermark;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
@@ -52,19 +52,16 @@ use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
-use tokio::sync::{watch, OnceCell};
+use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use super::background_tasks::{ServiceWatermark, ServiceWatermarkTask};
-
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
-    /// The following fields are internally used for background tasks
-    watermark: ServiceWatermarkTask,
+    watermark_task: WatermarkTask,
     state: AppState,
 }
 
@@ -74,16 +71,12 @@ impl Server {
     pub async fn run(self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
-        // Initialize watch channel for epoch boundary.
-        let (tx, rx) = watch::channel(0);
-
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
         let watermark_task = {
-            let rx_clone = rx.clone();
             info!("Starting watermark update task");
             spawn_monitored_task!(async move {
-                self.watermark.run(tx, rx_clone).await;
+                self.watermark_task.run().await;
             })
         };
 
@@ -288,8 +281,8 @@ impl ServerBuilder {
         let state = self.state.clone();
         let (address, schema, db_reader, router) = self.build_components();
 
-        // Initialize the watermark background task struct..
-        let watermark = ServiceWatermarkTask::new(
+        // Initialize the watermark background task struct.
+        let watermark_task = WatermarkTask::new(
             db_reader.clone(),
             state.metrics.clone(),
             std::time::Duration::from_millis(state.service.background_tasks.watermark_update_ms),
@@ -298,7 +291,7 @@ impl ServerBuilder {
 
         let app = router
             .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(watermark.get_watermark()))
+            .layer(axum::extract::Extension(watermark_task.lock()))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -308,7 +301,7 @@ impl ServerBuilder {
                     .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
             )
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
-            watermark,
+            watermark_task,
             state,
         })
     }
@@ -444,11 +437,11 @@ pub fn export_schema() -> String {
 }
 
 /// Entry point for graphql requests. Each request is stamped with a unique ID, a `ShowUsage` flag
-/// if set in the request headers, and the high checkpoint watermark as set by the background task.
+/// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    service_watermark: axum::Extension<ServiceWatermark>,
+    axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -461,13 +454,7 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let watermark = service_watermark.read().await;
-
-    // This wrapping is done to delineate the watermark from potentially other u64 types.
-    req.data.insert(Watermark {
-        checkpoint: watermark.checkpoint,
-        epoch: watermark.epoch,
-    });
+    req.data.insert(Watermark::new(watermark_lock).await);
 
     let result = schema.execute(req).await;
 

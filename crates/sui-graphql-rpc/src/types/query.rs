@@ -35,8 +35,9 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
-use crate::consistency::{consistent_range, Watermark};
+use crate::consistency::consistent_range;
 use crate::data::QueryExecutor;
+use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64 as GraphQLBase64;
 use crate::types::zklogin_verify_signature::verify_zklogin_signature;
 use crate::types::zklogin_verify_signature::ZkLoginIntentScope;
