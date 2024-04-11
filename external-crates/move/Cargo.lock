@@ -320,7 +320,7 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "move-binary-format",
- "move-bytecode-verifier",
+ "move-bytecode-verifier-v0",
  "move-core-types",
 ]
 
