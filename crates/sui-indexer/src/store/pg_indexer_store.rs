@@ -272,7 +272,7 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_objects_snapshot_chunk(
+    fn backfill_objects_snapshot_chunk(
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
@@ -972,7 +972,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn persist_objects_snapshot(
+    async fn backfill_objects_snapshot(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError> {
@@ -988,7 +988,7 @@ impl IndexerStore for PgIndexerStore {
         let chunks = chunk!(objects, self.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_snapshot_chunk(c)))
+            .map(|c| self.spawn_blocking_task(move |this| this.backfill_objects_snapshot_chunk(c)))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)

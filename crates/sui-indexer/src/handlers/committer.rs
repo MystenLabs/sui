@@ -48,7 +48,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         }
 
         let mut latest_fn_cp_res = client.get_latest_checkpoint().await;
-        while let Err(_) = latest_fn_cp_res {
+        while latest_fn_cp_res.is_err() {
             error!("Failed to get latest checkpoint from the network");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             latest_fn_cp_res = client.get_latest_checkpoint().await;
@@ -58,7 +58,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         // unwrap is safe b/c we checked for empty batch above
         let latest_committed_cp = indexed_checkpoint_batch
             .last()
-            .clone()
             .unwrap()
             .checkpoint
             .sequence_number;
@@ -92,6 +91,8 @@ pub async fn start_tx_checkpoint_commit_task<S>(
             )
             .await;
         }
+        // this is a one-way flip in case indexer falls behind again, so that the objects snapshot
+        // table will not be populated by both committer and async snapshot processor at the same time.
         if latest_committed_cp + OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG > latest_fn_cp {
             object_snapshot_backfill_mode = false;
         }
@@ -167,7 +168,7 @@ async fn commit_checkpoints<S>(
             state.persist_object_history(object_history_changes_batch.clone()),
         ];
         if object_snapshot_backfill_mode {
-            persist_tasks.push(state.persist_objects_snapshot(object_changes_batch));
+            persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
         }
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));

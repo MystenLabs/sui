@@ -37,7 +37,7 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     ) -> Result<(), IndexerError>;
 
     // persist objects snapshot with object changes during backfill
-    async fn persist_objects_snapshot(
+    async fn backfill_objects_snapshot(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;

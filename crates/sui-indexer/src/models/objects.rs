@@ -179,9 +179,9 @@ impl From<StoredDeletedObject> for StoredDeletedObjectSnapshot {
     fn from(o: StoredDeletedObject) -> Self {
         Self {
             object_id: o.object_id.to_vec(),
-            object_version: o.object_version as i64,
+            object_version: o.object_version,
             object_status: ObjectStatus::WrappedOrDeleted as i16,
-            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
         }
     }
 }
