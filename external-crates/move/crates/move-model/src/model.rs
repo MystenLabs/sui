@@ -1669,10 +1669,11 @@ impl<'env> ModuleEnv<'env> {
         let module = &self.data.module;
         let fhandle = module.function_handle_at(idx);
         let fname = module.identifier_at(fhandle.name).as_str();
-        let module_name = self.env.to_module_name(&module.self_id());
+        let declaring_module_handle = module.module_handle_at(fhandle.module);
+        let declaring_module = module.module_id_for_handle(declaring_module_handle);
         let module_env = self
             .env
-            .find_module(&module_name)
+            .find_module(&self.env.to_module_name(&declaring_module))
             .expect("unexpected reference to module not found in global env");
         module_env.into_function(FunId::new(self.env.symbol_pool.make(fname)))
     }
@@ -1870,9 +1871,11 @@ impl<'env> ModuleEnv<'env> {
                 let module = &self.data.module;
                 let shandle = module.struct_handle_at(*handle_idx);
                 let sname = module.identifier_at(shandle.name).as_str();
+                let declaring_module_handle = module.module_handle_at(shandle.module);
+                let declaring_module = module.module_id_for_handle(declaring_module_handle);
                 let declaring_module_env = self
                     .env
-                    .find_module(&self.env.to_module_name(&module.self_id()))
+                    .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
                 let struct_env = declaring_module_env
                     .find_struct(self.env.symbol_pool.make(sname))
@@ -1884,9 +1887,11 @@ impl<'env> ModuleEnv<'env> {
                 let module = &self.data.module;
                 let shandle = module.struct_handle_at(*handle_idx);
                 let sname = module.identifier_at(shandle.name).as_str();
+                let declaring_module_handle = module.module_handle_at(shandle.module);
+                let declaring_module = module.module_id_for_handle(declaring_module_handle);
                 let declaring_module_env = self
                     .env
-                    .find_module(&self.env.to_module_name(&module.self_id()))
+                    .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
                 let struct_env = declaring_module_env
                     .find_struct(self.env.symbol_pool.make(sname))
