@@ -6,7 +6,7 @@ use move_binary_format::file_format::{
     empty_module, Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
     IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, Visibility,
 };
-use move_bytecode_verifier_meter::DummyMeter;
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
 
 fn vec_sig(len: usize) -> SignatureToken {
@@ -60,7 +60,7 @@ fn test_vec_pack() {
             .cloned()
             .collect();
 
-    let res = move_bytecode_verifier::verify_module_with_config_for_test(
+    let res = move_bytecode_verifier_v0::verify_module_with_config_for_test(
         "test_vec_pack",
         &production_config().0,
         &m,

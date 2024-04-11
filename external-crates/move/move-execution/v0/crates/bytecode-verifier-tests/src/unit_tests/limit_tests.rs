@@ -3,10 +3,8 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
-use move_bytecode_verifier::{
-    limits::LimitsVerifier, verify_module_with_config_for_test,
-};
 use move_bytecode_verifier_meter::dummy::DummyMeter;
+use move_bytecode_verifier_v0::{limits::LimitsVerifier, verify_module_with_config_for_test};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -30,28 +28,6 @@ fn test_function_handle_type_instantiation() {
                 ..Default::default()
             },
             &m
-        )
-        .unwrap_err()
-        .major_status(),
-        StatusCode::TOO_MANY_TYPE_PARAMETERS
-    );
-
-    let mut s = basic_test_script();
-    s.function_handles.push(FunctionHandle {
-        module: ModuleHandleIndex::new(0),
-        name: IdentifierIndex::new(0),
-        parameters: SignatureIndex(0),
-        return_: SignatureIndex(0),
-        type_parameters: std::iter::repeat(AbilitySet::ALL).take(10).collect(),
-    });
-
-    assert_eq!(
-        LimitsVerifier::verify_script(
-            &VerifierConfig {
-                max_generic_instantiation_length: Some(9),
-                ..Default::default()
-            },
-            &s
         )
         .unwrap_err()
         .major_status(),
@@ -86,32 +62,6 @@ fn test_struct_handle_type_instantiation() {
         .major_status(),
         StatusCode::TOO_MANY_TYPE_PARAMETERS
     );
-
-    let mut s = basic_test_script();
-    s.struct_handles.push(StructHandle {
-        module: ModuleHandleIndex::new(0),
-        name: IdentifierIndex::new(0),
-        abilities: AbilitySet::ALL,
-        type_parameters: std::iter::repeat(StructTypeParameter {
-            constraints: AbilitySet::ALL,
-            is_phantom: false,
-        })
-        .take(10)
-        .collect(),
-    });
-
-    assert_eq!(
-        LimitsVerifier::verify_script(
-            &VerifierConfig {
-                max_generic_instantiation_length: Some(9),
-                ..Default::default()
-            },
-            &s
-        )
-        .unwrap_err()
-        .major_status(),
-        StatusCode::TOO_MANY_TYPE_PARAMETERS
-    );
 }
 
 #[test]
@@ -140,31 +90,6 @@ fn test_function_handle_parameters() {
         .major_status(),
         StatusCode::TOO_MANY_PARAMETERS
     );
-
-    let mut s = basic_test_script();
-    s.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Bool).take(10).collect(),
-    ));
-    s.function_handles.push(FunctionHandle {
-        module: ModuleHandleIndex::new(0),
-        name: IdentifierIndex::new(0),
-        parameters: SignatureIndex(1),
-        return_: SignatureIndex(0),
-        type_parameters: vec![],
-    });
-
-    assert_eq!(
-        LimitsVerifier::verify_script(
-            &VerifierConfig {
-                max_function_parameters: Some(9),
-                ..Default::default()
-            },
-            &s
-        )
-        .unwrap_err()
-        .major_status(),
-        StatusCode::TOO_MANY_PARAMETERS
-    );
 }
 
 #[test]
@@ -172,7 +97,7 @@ fn big_vec_unpacks() {
     const N_TYPE_PARAMS: usize = 16;
     let mut st = SignatureToken::Vector(Box::new(SignatureToken::U8));
     let type_params = vec![st; N_TYPE_PARAMS];
-    st = SignatureToken::StructInstantiation(StructHandleIndex(0), type_params);
+    st = SignatureToken::StructInstantiation(Box::new((StructHandleIndex(0), type_params)));
     const N_VEC_PUSH: u16 = 1000;
     let mut code = vec![];
     // 1. CopyLoc:     ...         -> ... st
@@ -757,7 +682,10 @@ fn max_vec_len() {
         },
         Constant {
             type_: tvec(SignatureToken::Address),
-            data: large_vec(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            data: large_vec(vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ]),
         },
         // double large
         Constant {
@@ -796,7 +724,8 @@ fn max_vec_len() {
         Constant {
             type_: tvec(tvec(SignatureToken::Address)),
             data: double_vec(large_vec(vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
             ])),
         },
     ];

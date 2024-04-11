@@ -12,7 +12,6 @@ pub mod bounds_tests;
 pub mod code_unit_tests;
 pub mod constants_tests;
 pub mod control_flow_tests;
-pub mod dependencies_tests;
 pub mod duplication_tests;
 pub mod generic_ops_tests;
 pub mod large_type_test;
@@ -50,7 +49,8 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
 
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
             max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
-            allow_receiving_object_id: false,
+            allow_receiving_object_id: true,
+            reject_mutable_random_on_entry_functions: true,
         },
         MeterConfig::default(),
     )
