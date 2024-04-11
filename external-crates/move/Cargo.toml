@@ -5,6 +5,7 @@ members = [
     "crates/*",
     "move-execution/v0/crates/*",
     "move-execution/v1/crates/*",
+    "move-execution/v2/crates/*",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
