@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
-use move_bytecode_verifier::{
+use move_bytecode_verifier_v1::{
     ability_field_requirements, constants, instantiation_loops::InstantiationLoopChecker,
     DuplicationChecker, InstructionConsistency, RecursiveStructDefChecker, SignatureChecker,
 };

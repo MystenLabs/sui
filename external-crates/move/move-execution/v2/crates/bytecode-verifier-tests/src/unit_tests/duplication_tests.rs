@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format::*;
-use move_bytecode_verifier::DuplicationChecker;
+use move_bytecode_verifier_v2::DuplicationChecker;
 use proptest::prelude::*;
 
 #[test]

@@ -124,7 +124,7 @@ fn test_bicliques() {
 
     let (verifier_config, meter_config) = production_config();
     let mut meter = BoundMeter::new(meter_config);
-    let result = move_bytecode_verifier::verify_module_with_config_for_test(
+    let result = move_bytecode_verifier_v2::verify_module_with_config_for_test(
         "test_bicliques",
         &verifier_config,
         &m,
@@ -246,7 +246,7 @@ fn test_merge_state_large_graph() {
 
     let (verifier_config, meter_config) = production_config();
     let mut meter = BoundMeter::new(meter_config);
-    let result = move_bytecode_verifier::verify_module_with_config_for_test(
+    let result = move_bytecode_verifier_v2::verify_module_with_config_for_test(
         "test_merge_state_large_graph",
         &verifier_config,
         &m,
@@ -337,7 +337,7 @@ fn test_merge_state() {
 
     let (verifier_config, meter_config) = production_config();
     let mut meter = BoundMeter::new(meter_config);
-    let result = move_bytecode_verifier::verify_module_with_config_for_test(
+    let result = move_bytecode_verifier_v2::verify_module_with_config_for_test(
         "test_merge_state",
         &verifier_config,
         &m,
@@ -422,7 +422,7 @@ fn test_copyloc_pop() {
 
     let (verifier_config, meter_config) = production_config();
     let mut meter = BoundMeter::new(meter_config);
-    let result = move_bytecode_verifier::verify_module_with_config_for_test(
+    let result = move_bytecode_verifier_v2::verify_module_with_config_for_test(
         "test_copyloc_pop",
         &verifier_config,
         &m,
