@@ -342,7 +342,6 @@ pub(crate) fn explain_execution_error(
                         state.resolve_function(id, function.0)?.unwrap()
                     )
                 }
-                Location::Script => "script".to_owned(),
                 Location::Undefined => "UNDEFINED".to_owned(),
             };
             println!(
