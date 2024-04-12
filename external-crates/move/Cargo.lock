@@ -314,17 +314,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bytecode-verifier-libfuzzer-v0"
-version = "0.0.0"
-dependencies = [
- "arbitrary",
- "libfuzzer-sys",
- "move-binary-format",
- "move-bytecode-verifier-v0",
- "move-core-types",
-]
-
-[[package]]
 name = "bytecode-verifier-tests"
 version = "0.1.0"
 dependencies = [
