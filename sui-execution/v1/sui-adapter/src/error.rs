@@ -29,12 +29,6 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
             // this is a Move VM invariant violation, the code should always be there
             ExecutionFailureStatus::VMInvariantViolation
         }
-        (StatusCode::ABORTED, _, Location::Script) => {
-            debug_assert!(false, "Scripts are not used in Sui");
-            // this is a Move VM invariant violation, in the sense that the location
-            // is malformed
-            ExecutionFailureStatus::VMInvariantViolation
-        }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
             let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
