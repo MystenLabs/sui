@@ -214,14 +214,6 @@ async fn commit_checkpoints<S>(
         .send(Some(last_checkpoint_seq))
         .expect("Commit watcher should not be closed");
 
-    metrics
-        .latest_tx_checkpoint_sequence_number
-        .set(last_checkpoint_seq as i64);
-
-    metrics
-        .total_tx_checkpoint_committed
-        .inc_by(checkpoint_num as u64);
-    metrics.total_transaction_committed.inc_by(tx_count as u64);
     info!(
         elapsed,
         "Checkpoint {}-{} committed with {} transactions.",
@@ -229,6 +221,18 @@ async fn commit_checkpoints<S>(
         last_checkpoint_seq,
         tx_count,
     );
+    metrics
+        .latest_tx_checkpoint_sequence_number
+        .set(last_checkpoint_seq as i64);
+    metrics
+        .total_tx_checkpoint_committed
+        .inc_by(checkpoint_num as u64);
+    metrics.total_transaction_committed.inc_by(tx_count as u64);
+    if object_snapshot_backfill_mode {
+        metrics
+            .latest_object_snapshot_sequence_number
+            .set(last_checkpoint_seq as i64);
+    }
     metrics
         .transaction_per_checkpoint
         .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
