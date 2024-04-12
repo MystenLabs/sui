@@ -4,7 +4,7 @@
 
 use crate::{
     context::Context,
-    symbols::{self, DefInfo, SymbolicatorRunner, Symbols},
+    symbols::{self, DefInfo, DefLoc, SymbolicatorRunner, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -12,10 +12,12 @@ use lsp_types::{
 };
 use move_command_line_common::files::FileHash;
 use move_compiler::{
+    command_line::compiler::FullyCompiledProgram,
     editions::Edition,
     expansion::ast::Visibility,
     linters::LintLevel,
     parser::{
+        ast::Ability_,
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
@@ -24,7 +26,8 @@ use move_compiler::{
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, HashSet},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 use vfs::VfsPath;
 
@@ -154,12 +157,64 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
                 Some(Tok::Colon)
             }
         }
+        Some('{') => Some(Tok::LBrace),
         _ => None,
     }
 }
 
-/// Handle context-specific auto-completion requests.
-fn context_specific(
+/// Handle context-specific auto-completion requests with lbrace (`{`) trigger character.
+fn context_specific_lbrace(
+    symbols: &Symbols,
+    use_fpath: &Path,
+    position: &Position,
+) -> Vec<CompletionItem> {
+    let mut completions = vec![];
+
+    // look for a struct definition on the line that contains `{`, check its abilities,
+    // and do auto-completion if `key` ability is present
+    for u in symbols.line_uses(use_fpath, position.line) {
+        let def_loc = u.def_loc();
+        let Some(use_file_mod_definition) = symbols.file_mods().get(use_fpath) else {
+            continue;
+        };
+        let Some(use_file_mod_def) = use_file_mod_definition.first() else {
+            continue;
+        };
+        if !is_definition(
+            position.line,
+            u.col_start(),
+            use_file_mod_def.fhash(),
+            def_loc,
+        ) {
+            continue;
+        }
+        let Some(def_info) = symbols.def_info(&def_loc) else {
+            continue;
+        };
+        let DefInfo::Struct(_, _, _, _, abilities, _, _) = def_info else {
+            continue;
+        };
+        if abilities.has_ability_(Ability_::Key) {
+            let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
+            let init_completion = CompletionItem {
+                label: "id: UID".to_string(),
+                kind: Some(CompletionItemKind::Snippet),
+                documentation: Some(Documentation::String("Object snippet".to_string())),
+                insert_text: Some(obj_snippet),
+                insert_text_format: Some(InsertTextFormat::Snippet),
+                ..Default::default()
+            };
+            completions.push(init_completion);
+            break;
+        }
+    }
+    // on `{` we only auto-complete object declarations
+
+    completions
+}
+
+/// Handle context-specific auto-completion requests with no trigger character.
+fn context_specific_no_trigger(
     symbols: &Symbols,
     use_fpath: &Path,
     buffer: &str,
@@ -167,46 +222,7 @@ fn context_specific(
 ) -> (Vec<CompletionItem>, bool) {
     let mut only_custom_items = false;
     let mut completions = vec![];
-    // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
-    if position.character == 0 {
-        return (completions, only_custom_items);
-    }
-    let line = match buffer.lines().nth(position.line as usize) {
-        Some(line) => line,
-        None => return (completions, only_custom_items), // Our buffer does not contain the line, and so must be out of date.
-    };
-
-    // find white-space separated strings on the line containing auto-completion request
-    // and their locations
-    let mut strings = vec![];
-    let mut chars = line.chars();
-    let mut cur_col = 0;
-    let mut cur_str_start = 0;
-    let mut cur_str = "".to_string();
-    while cur_col < position.character {
-        let Some(c) = chars.next() else {
-            return (completions, only_custom_items);
-        };
-        if c == ' ' || c == '\t' {
-            if !cur_str.is_empty() {
-                // finish an already started string
-                strings.push((cur_str, cur_str_start));
-                cur_str = "".to_string();
-            }
-        } else {
-            if cur_str.is_empty() {
-                // start a new string
-                cur_str_start = cur_col;
-            }
-            cur_str.push(c);
-        }
-
-        cur_col += c.len_utf8() as u32;
-    }
-    if !cur_str.is_empty() {
-        // finish the last string
-        strings.push((cur_str, cur_str_start));
-    }
+    let strings = preceding_strings(buffer, position);
 
     if strings.is_empty() {
         return (completions, only_custom_items);
@@ -219,18 +235,20 @@ fn context_specific(
     for u in symbols.line_uses(use_fpath, position.line) {
         if *use_col >= u.col_start() && *use_col <= u.col_end() {
             let def_loc = u.def_loc();
-            let Some(use_file_mod_definiion) = symbols.file_mods().get(use_fpath) else {
+            let Some(use_file_mod_definition) = symbols.file_mods().get(use_fpath) else {
                 break;
             };
-            let Some(use_file_mod_def) = use_file_mod_definiion.first() else {
+            let Some(use_file_mod_def) = use_file_mod_definition.first() else {
                 break;
             };
-            if use_file_mod_def.fhash() == def_loc.fhash()
-                && position.line == def_loc.start().line
-                && u.col_start() == def_loc.start().character
-            {
-                // it's the define - no point in trying to suggest a name if one is about to
-                // create a fresh identifier
+            if is_definition(
+                position.line,
+                u.col_start(),
+                use_file_mod_def.fhash(),
+                def_loc,
+            ) {
+                // since it's a definition, there is no point in trying to suggest a name
+                // if one is about to create a fresh identifier
                 only_custom_items = true;
             }
             let Some(def_info) = symbols.def_info(&def_loc) else {
@@ -274,7 +292,7 @@ fn context_specific(
                 label: INIT_FN_NAME.to_string(),
                 kind: Some(CompletionItemKind::Snippet),
                 documentation: Some(Documentation::String(
-                    "Snippet for module initializer".to_string(),
+                    "Module initializer snippet".to_string(),
                 )),
                 insert_text: Some(init_snippet),
                 insert_text_format: Some(InsertTextFormat::Snippet),
@@ -287,10 +305,66 @@ fn context_specific(
     (completions, only_custom_items)
 }
 
+/// Checks if a use at a given position is also a definition.
+fn is_definition(use_line: u32, use_col: u32, use_fhash: FileHash, def_loc: DefLoc) -> bool {
+    use_fhash == def_loc.fhash()
+        && use_line == def_loc.start().line
+        && use_col == def_loc.start().character
+}
+
+/// Finds white-space separated strings on the line containing auto-completion request and their
+/// locations.
+fn preceding_strings(buffer: &str, position: &Position) -> Vec<(String, u32)> {
+    let mut strings = vec![];
+    // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
+    if position.character == 0 {
+        return strings;
+    }
+    let line = match buffer.lines().nth(position.line as usize) {
+        Some(line) => line,
+        None => return strings, // Our buffer does not contain the line, and so must be out of date.
+    };
+
+    let mut chars = line.chars();
+    let mut cur_col = 0;
+    let mut cur_str_start = 0;
+    let mut cur_str = "".to_string();
+    while cur_col < position.character {
+        let Some(c) = chars.next() else {
+            return strings;
+        };
+        if c == ' ' || c == '\t' {
+            if !cur_str.is_empty() {
+                // finish an already started string
+                strings.push((cur_str, cur_str_start));
+                cur_str = "".to_string();
+            }
+        } else {
+            if cur_str.is_empty() {
+                // start a new string
+                cur_str_start = cur_col;
+            }
+            cur_str.push(c);
+        }
+
+        cur_col += c.len_utf8() as u32;
+    }
+    if !cur_str.is_empty() {
+        // finish the last string
+        strings.push((cur_str, cur_str_start));
+    }
+    strings
+}
+
 /// Sends the given connection a response to a completion request.
 ///
 /// The completions returned depend upon where the user's cursor is positioned.
-pub fn on_completion_request(context: &Context, request: &Request, ide_files_root: VfsPath) {
+pub fn on_completion_request(
+    context: &Context,
+    request: &Request,
+    ide_files_root: VfsPath,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, Arc<FullyCompiledProgram>>>>,
+) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
@@ -305,7 +379,7 @@ pub fn on_completion_request(context: &Context, request: &Request, ide_files_roo
     let items = match SymbolicatorRunner::root_dir(&path) {
         Some(pkg_path) => {
             match symbols::get_symbols(
-                &mut BTreeMap::new(),
+                pkg_dependencies,
                 ide_files_root.clone(),
                 &pkg_path,
                 LintLevel::None,
@@ -372,11 +446,21 @@ pub fn on_completion_request(context: &Context, request: &Request, ide_files_roo
                     // `.` or `::` must be followed by identifiers, which are added to the completion items
                     // below.
                 }
+                Some(Tok::LBrace) => {
+                    let custom_items = context_specific_lbrace(
+                        &symbols,
+                        path,
+                        &parameters.text_document_position.position,
+                    );
+                    items.extend_from_slice(&custom_items);
+                    // "generic" autocompletion for `{` does not make sense
+                    only_custom_items = true;
+                }
                 _ => {
                     // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
                     // offer them context-specific autocompletion items as well as
                     // Move's keywords, operators, and builtins.
-                    let (custom_items, custom) = context_specific(
+                    let (custom_items, custom) = context_specific_no_trigger(
                         &symbols,
                         path,
                         buffer.as_str(),
