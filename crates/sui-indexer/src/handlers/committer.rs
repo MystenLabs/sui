@@ -217,11 +217,15 @@ async fn commit_checkpoints<S>(
     metrics
         .latest_tx_checkpoint_sequence_number
         .set(last_checkpoint_seq as i64);
-
     metrics
         .total_tx_checkpoint_committed
         .inc_by(checkpoint_num as u64);
     metrics.total_transaction_committed.inc_by(tx_count as u64);
+    if object_snapshot_backfill_mode {
+        metrics
+            .latest_object_snapshot_sequence_number
+            .set(last_checkpoint_seq as i64);
+    }
     info!(
         elapsed,
         "Checkpoint {}-{} committed with {} transactions.",
