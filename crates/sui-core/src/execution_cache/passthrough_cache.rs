@@ -183,8 +183,8 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.get_latest_live_version_for_object_id(object_id)
     }
 
-    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.store.check_owned_object_locks_exist(owned_object_refs)
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        self.store.check_owned_objects_are_live(owned_object_refs)
     }
 
     fn multi_get_transaction_blocks(
@@ -288,7 +288,7 @@ impl ExecutionCacheWrite for PassthroughCache {
             //    been deleted by a concurrent tx that finished first. In that case, check if the
             //    tx effects exist.
             self.store
-                .check_owned_object_locks_exist(&tx_outputs.locks_to_delete)?;
+                .check_owned_objects_are_live(&tx_outputs.locks_to_delete)?;
 
             self.store
                 .write_transaction_outputs(epoch_id, tx_outputs)

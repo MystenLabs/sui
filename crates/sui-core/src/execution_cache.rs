@@ -252,7 +252,9 @@ pub trait ExecutionCacheRead: Send + Sync {
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
     fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
 
-    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
+    // Check that the given set of objects are live at the given version. This is used as a
+    // safety check before execution, and could potentially be deleted or changed to a debug_assert
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
     fn multi_get_transaction_blocks(
         &self,

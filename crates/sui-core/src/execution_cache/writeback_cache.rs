@@ -1271,7 +1271,7 @@ impl ExecutionCacheRead for WritebackCache {
         Ok(obj.compute_object_reference())
     }
 
-    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         do_fallback_lookup(
             owned_object_refs,
             |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
@@ -1294,7 +1294,7 @@ impl ExecutionCacheRead for WritebackCache {
                 CacheResult::Miss => Ok(CacheResult::Miss),
             },
             |remaining| {
-                self.store.check_owned_object_locks_exist(remaining)?;
+                self.store.check_owned_objects_are_live(remaining)?;
                 Ok(vec![(); remaining.len()])
             },
         )?;
