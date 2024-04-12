@@ -41,7 +41,7 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(resolver: &CompiledModule, function_view: &FunctionView) -> PartialVMResult<Self> {
+    pub fn new(module: &CompiledModule, function_view: &FunctionView) -> PartialVMResult<Self> {
         let num_args = function_view.parameters().len();
         let num_locals = num_args + function_view.locals().len();
         let local_states = (0..num_locals)
@@ -53,7 +53,7 @@ impl AbstractState {
             .0
             .iter()
             .chain(function_view.locals().0.iter())
-            .map(|st| resolver.abilities(st, function_view.type_parameters()))
+            .map(|st| module.abilities(st, function_view.type_parameters()))
             .collect::<PartialVMResult<Vec<_>>>()?;
 
         Ok(Self {

@@ -23,11 +23,11 @@ use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) fn verify<'a>(
-    resolver: &CompiledModule,
+    module: &CompiledModule,
     function_view: &'a FunctionView<'a>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(resolver, function_view)?;
+    let initial_state = AbstractState::new(module, function_view)?;
     LocalsSafetyAnalysis().analyze_function(initial_state, function_view, meter)
 }
 
