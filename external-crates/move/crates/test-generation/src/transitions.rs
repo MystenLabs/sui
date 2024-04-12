@@ -476,18 +476,18 @@ pub fn stack_satisfies_struct_signature(
         .struct_handle_at(struct_def.struct_handle);
     // Get the type formals for the struct, and the kinds that they expect.
     let type_parameters = shandle.type_parameters.clone();
-    let field_token_views = struct_def
+    let field_tokens = struct_def
         .fields()
         .into_iter()
         .flatten()
         .map(|field| &field.signature.0);
     let mut satisfied = true;
     let mut substitution = Subst::new();
-    for (i, token_view) in field_token_views.rev().enumerate() {
+    for (i, token) in field_tokens.rev().enumerate() {
         let ty = if let Some(subst) = &instantiation {
-            substitute(token_view, subst)
+            substitute(token, subst)
         } else {
-            token_view.clone()
+            token.clone()
         };
         let has = if let SignatureToken::TypeParameter(idx) = &ty {
             if stack_has_all_abilities(state, i, type_parameters[*idx as usize].constraints) {
@@ -501,7 +501,7 @@ pub fn stack_satisfies_struct_signature(
                 token: ty,
                 abilities: abilities(
                     &state.module.module,
-                    token_view,
+                    token,
                     &type_parameters
                         .iter()
                         .map(|param| param.constraints)
@@ -811,15 +811,15 @@ pub fn stack_unpack_struct(
     };
     let abilities = abilities_for_instantiation(&state_copy, &ty_instantiation);
     let struct_def = state_copy.module.module.struct_def_at(struct_index);
-    let token_views = struct_def
+    let tokens = struct_def
         .fields()
         .into_iter()
         .flatten()
         .map(|field| &field.signature.0);
-    for token_view in token_views {
+    for token in tokens {
         let abstract_value = AbstractValue {
-            token: substitute(token_view, &ty_instantiation),
-            abilities: abilities_for_token(&state, token_view, &abilities),
+            token: substitute(token, &ty_instantiation),
+            abilities: abilities_for_token(&state, token, &abilities),
         };
         state = stack_push(&state, abstract_value)?;
     }

@@ -98,18 +98,18 @@ impl<'a> Modules<'a> {
 }
 
 pub fn resolve_struct(
-    view: &CompiledModule,
+    module: &CompiledModule,
     sidx: StructHandleIndex,
 ) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let shandle = view.struct_handle_at(sidx);
-    let mhandle = view.module_handle_at(shandle.module);
-    let address = view.address_identifier_at(mhandle.address);
-    let module_name = view.identifier_at(mhandle.name);
-    let struct_name = view.identifier_at(shandle.name);
+    let shandle = module.struct_handle_at(sidx);
+    let mhandle = module.module_handle_at(shandle.module);
+    let address = module.address_identifier_at(mhandle.address);
+    let module_name = module.identifier_at(mhandle.name);
+    let struct_name = module.identifier_at(shandle.name);
     (address, module_name, struct_name)
 }
 
-pub fn format_signature_token(view: &CompiledModule, t: &SignatureToken) -> String {
+pub fn format_signature_token(module: &CompiledModule, t: &SignatureToken) -> String {
     match t {
         SignatureToken::Bool => "bool".to_string(),
         SignatureToken::U8 => "u8".to_string(),
@@ -121,28 +121,28 @@ pub fn format_signature_token(view: &CompiledModule, t: &SignatureToken) -> Stri
         SignatureToken::Address => "address".to_string(),
         SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => {
-            format!("vector<{}>", format_signature_token(view, inner))
+            format!("vector<{}>", format_signature_token(module, inner))
         }
-        SignatureToken::Reference(inner) => format!("&{}", format_signature_token(view, inner)),
+        SignatureToken::Reference(inner) => format!("&{}", format_signature_token(module, inner)),
         SignatureToken::MutableReference(inner) => {
-            format!("&mut {}", format_signature_token(view, inner))
+            format!("&mut {}", format_signature_token(module, inner))
         }
         SignatureToken::TypeParameter(i) => format!("T{}", i),
 
-        SignatureToken::Struct(idx) => format_signature_token_struct(view, *idx, &[]),
+        SignatureToken::Struct(idx) => format_signature_token_struct(module, *idx, &[]),
         SignatureToken::StructInstantiation(struct_inst) => {
             let (idx, ty_args) = &**struct_inst;
-            format_signature_token_struct(view, *idx, ty_args)
+            format_signature_token_struct(module, *idx, ty_args)
         }
     }
 }
 
 pub fn format_signature_token_struct(
-    view: &CompiledModule,
+    module: &CompiledModule,
     sidx: StructHandleIndex,
     ty_args: &[SignatureToken],
 ) -> String {
-    let (address, module_name, struct_name) = resolve_struct(view, sidx);
+    let (address, module_name, struct_name) = resolve_struct(module, sidx);
     let s;
     let ty_args_string = if ty_args.is_empty() {
         ""
@@ -151,7 +151,7 @@ pub fn format_signature_token_struct(
             "<{}>",
             ty_args
                 .iter()
-                .map(|t| format_signature_token(view, t))
+                .map(|t| format_signature_token(module, t))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
