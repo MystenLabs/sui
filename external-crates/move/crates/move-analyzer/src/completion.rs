@@ -413,78 +413,78 @@ pub fn on_completion_request(
     {
         eprintln!("could not send completion response: {:?}", err);
     }
+}
 
-    fn completion_items(
-        parameters: CompletionParams,
-        path: &Path,
-        symbols: &Symbols,
-        ide_files_root: &VfsPath,
-    ) -> Vec<CompletionItem> {
-        let mut items = vec![];
-        let mut buffer = String::new();
-        if let Ok(mut f) = ide_files_root
-            .join(path.to_string_lossy())
-            .unwrap()
-            .open_file()
-        {
-            if f.read_to_string(&mut buffer).is_err() {
-                eprintln!(
-                    "Could not read '{:?}' when handling completion request",
-                    path
-                );
-            }
+/// Computes completion items for a given completion request.
+fn completion_items(
+    parameters: CompletionParams,
+    path: &Path,
+    symbols: &Symbols,
+    ide_files_root: &VfsPath,
+) -> Vec<CompletionItem> {
+    let mut items = vec![];
+    let mut buffer = String::new();
+    if let Ok(mut f) = ide_files_root
+        .join(path.to_string_lossy())
+        .unwrap()
+        .open_file()
+    {
+        if f.read_to_string(&mut buffer).is_err() {
+            eprintln!(
+                "Could not read '{:?}' when handling completion request",
+                path
+            );
         }
-        if !buffer.is_empty() {
-            let mut only_custom_items = false;
-            let cursor =
-                get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
-            match cursor {
-                Some(Tok::Colon) => {
-                    items.extend_from_slice(&primitive_types());
-                }
-                Some(Tok::Period) | Some(Tok::ColonColon) => {
-                    // `.` or `::` must be followed by identifiers, which are added to the completion items
-                    // below.
-                }
-                Some(Tok::LBrace) => {
-                    let custom_items = context_specific_lbrace(
-                        symbols,
-                        path,
-                        &parameters.text_document_position.position,
-                    );
-                    items.extend_from_slice(&custom_items);
-                    // "generic" autocompletion for `{` does not make sense
-                    only_custom_items = true;
-                }
-                _ => {
-                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                    // offer them context-specific autocompletion items as well as
-                    // Move's keywords, operators, and builtins.
-                    let (custom_items, custom) = context_specific_no_trigger(
-                        symbols,
-                        path,
-                        buffer.as_str(),
-                        &parameters.text_document_position.position,
-                    );
-                    only_custom_items = custom;
-                    items.extend_from_slice(&custom_items);
-                    if !only_custom_items {
-                        // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                        // offer them Move's keywords, operators, and builtins as completion items.
-                        items.extend_from_slice(&keywords());
-                        items.extend_from_slice(&builtins());
-                    }
-                }
-            }
-            if !only_custom_items {
-                let identifiers = identifiers(buffer.as_str(), symbols, path);
-                items.extend_from_slice(&identifiers);
-            }
-        } else {
-            // no file content
-            items.extend_from_slice(&keywords());
-            items.extend_from_slice(&builtins());
-        }
-        items
     }
+    if !buffer.is_empty() {
+        let mut only_custom_items = false;
+        let cursor = get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
+        match cursor {
+            Some(Tok::Colon) => {
+                items.extend_from_slice(&primitive_types());
+            }
+            Some(Tok::Period) | Some(Tok::ColonColon) => {
+                // `.` or `::` must be followed by identifiers, which are added to the completion items
+                // below.
+            }
+            Some(Tok::LBrace) => {
+                let custom_items = context_specific_lbrace(
+                    symbols,
+                    path,
+                    &parameters.text_document_position.position,
+                );
+                items.extend_from_slice(&custom_items);
+                // "generic" autocompletion for `{` does not make sense
+                only_custom_items = true;
+            }
+            _ => {
+                // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+                // offer them context-specific autocompletion items as well as
+                // Move's keywords, operators, and builtins.
+                let (custom_items, custom) = context_specific_no_trigger(
+                    symbols,
+                    path,
+                    buffer.as_str(),
+                    &parameters.text_document_position.position,
+                );
+                only_custom_items = custom;
+                items.extend_from_slice(&custom_items);
+                if !only_custom_items {
+                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+                    // offer them Move's keywords, operators, and builtins as completion items.
+                    items.extend_from_slice(&keywords());
+                    items.extend_from_slice(&builtins());
+                }
+            }
+        }
+        if !only_custom_items {
+            let identifiers = identifiers(buffer.as_str(), symbols, path);
+            items.extend_from_slice(&identifiers);
+        }
+    } else {
+        // no file content
+        items.extend_from_slice(&keywords());
+        items.extend_from_slice(&builtins());
+    }
+    items
 }
