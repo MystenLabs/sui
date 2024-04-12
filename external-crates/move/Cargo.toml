@@ -3,14 +3,18 @@ resolver = "2"
 
 members = [
     "crates/*",
-    "move-execution/v0/crates/move-bytecode-verifier",
-    "move-execution/v1/crates/move-bytecode-verifier",
-    "move-execution/v2/crates/move-bytecode-verifier",
-    # "move-execution/$CUT/crates/move-bytecode-verifier",
     "move-execution/v0/crates/bytecode-verifier-tests",
     "move-execution/v1/crates/bytecode-verifier-tests",
     "move-execution/v2/crates/bytecode-verifier-tests",
     # "move-execution/$CUT/crates/bytecode-verifier-tests",
+    "move-execution/v0/crates/invalid-mutations",
+    "move-execution/v1/crates/invalid-mutations",
+    "move-execution/v2/crates/invalid-mutations",
+    # "move-execution/$CUT/crates/invalid-mutations",
+    "move-execution/v0/crates/move-bytecode-verifier",
+    "move-execution/v1/crates/move-bytecode-verifier",
+    "move-execution/v2/crates/move-bytecode-verifier",
+    # "move-execution/$CUT/crates/move-bytecode-verifier",
     "move-execution/v0/crates/move-vm-runtime",
     "move-execution/v1/crates/move-vm-runtime",
     "move-execution/v2/crates/move-vm-runtime",
@@ -171,14 +175,18 @@ move-vm-test-utils = { path = "crates/move-vm-test-utils" }
 move-vm-types = { path = "crates/move-vm-types" }
 prover_bytecode = { path = "crates/move-stackless-bytecode", package="move-stackless-bytecode" }
 
-move-bytecode-verifier-v0 = { path = "move-execution/v0/crates/move-bytecode-verifier" }
-move-bytecode-verifier-v1 = { path = "move-execution/v1/crates/move-bytecode-verifier" }
-move-bytecode-verifier-v2 = { path = "move-execution/v2/crates/move-bytecode-verifier" }
-# move-bytecode-verifier-$CUT = { path = "move-execution/$CUT/crates/move-bytecode-verifier" }
 bytecode-verifier-test-v0 = { path = "move-execution/v0/crates/bytecode-verifier-tests" }
 bytecode-verifier-test-v1 = { path = "move-execution/v1/crates/bytecode-verifier-tests" }
 bytecode-verifier-test-v2 = { path = "move-execution/v2/crates/bytecode-verifier-tests" }
 # bytecode-verifier-test-$CUT = { path = "move-execution/$CUT/crates/bytecode-verifier-tests" }
+invalid-mutations-v0 = { path = "move-execution/v0/crates/invalid-mutations" }
+invalid-mutations-v1 = { path = "move-execution/v1/crates/invalid-mutations" }
+invalid-mutations-v2 = { path = "move-execution/v2/crates/invalid-mutations" }
+# invalid-mutations-$CUT = { path = "move-execution/$CUT/crates/invalid-mutations" }
+move-bytecode-verifier-v0 = { path = "move-execution/v0/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v1 = { path = "move-execution/v1/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v2 = { path = "move-execution/v2/crates/move-bytecode-verifier" }
+# move-bytecode-verifier-$CUT = { path = "move-execution/$CUT/crates/move-bytecode-verifier" }
 move-vm-runtime-v0 = { path = "move-execution/v0/crates/move-vm-runtime" }
 move-vm-runtime-v1 = { path = "move-execution/v1/crates/move-vm-runtime" }
 move-vm-runtime-v2 = { path = "move-execution/v2/crates/move-vm-runtime" }
@@ -187,10 +195,6 @@ move-stdlib-v0 = { path = "move-execution/v0/crates/move-stdlib" }
 move-stdlib-v1 = { path = "move-execution/v1/crates/move-stdlib" }
 move-stdlib-v2 = { path = "move-execution/v2/crates/move-stdlib" }
 # move-stdlib-$CUT = { path = "move-execution/$CUT/crates/move-stdlib" }
-
-# v0
-invalid-mutations-v0 = { path = "move-execution/v0/crates/invalid-mutations" }
-
 
 [profile.bench]
 debug = true
