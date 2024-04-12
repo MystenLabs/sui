@@ -21,7 +21,7 @@ use move_binary_format::{
     },
 };
 use move_bytecode_verifier::absint::{
-    AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions,
+    AbstractDomain, AbstractInterpreter, FunctionContext, JoinResult, TransferFunctions,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{
@@ -136,7 +136,7 @@ fn verify_id_leak(
         };
         let handle = module.function_handle_at(func_def.function);
         let func_view =
-            FunctionContext::function(module, FunctionDefinitionIndex(index as u16), code, handle);
+            FunctionContext::new(module, FunctionDefinitionIndex(index as u16), code, handle);
         let initial_state = AbstractState::new(&func_view);
         let mut verifier = IDLeakAnalysis::new(module, &func_view);
         let function_to_verify = verifier.cur_function();
