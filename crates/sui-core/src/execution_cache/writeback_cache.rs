@@ -60,7 +60,7 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
@@ -196,6 +196,20 @@ impl UncommittedData {
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
         self.transaction_events.clear();
+    }
+
+    fn is_empty(&self) -> bool {
+        let empty = self.pending_transaction_writes.is_empty();
+        if empty && cfg!(debug_assertions) {
+            assert!(
+                self.objects.is_empty()
+                    && self.markers.is_empty()
+                    && self.transaction_effects.is_empty()
+                    && self.executed_effects_digests.is_empty()
+                    && self.transaction_events.is_empty()
+            );
+        }
+        empty
     }
 }
 
@@ -349,7 +363,7 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        tracing::trace!("inserting object entry {:?}: {:?}", object_id, version);
+        debug!("inserting object entry {:?}: {:?}", object_id, version);
         fail_point_async!("write_object_entry");
         self.dirty
             .objects
@@ -880,6 +894,10 @@ impl ExecutionCacheRead for WritebackCache {
         if let Some(p) = ExecutionCacheRead::get_object(self, package_id)? {
             if p.is_package() {
                 let p = PackageObject::new(p);
+                tracing::trace!(
+                    "caching package: {:?}",
+                    p.object().compute_object_reference()
+                );
                 self.packages.insert(*package_id, p.clone());
                 Ok(Some(p))
             } else {
@@ -1379,6 +1397,50 @@ impl AccumulatorStore for WritebackCache {
         // The only time it is safe to iterate the live object set is at an epoch boundary,
         // at which point the db is consistent and the dirty cache is empty. So this does
         // read the cache
+        assert!(
+            self.dirty.is_empty(),
+            "cannot iterate live object set with dirty data"
+        );
         self.store.iter_live_object_set(include_wrapped_tombstone)
+    }
+
+    // A version of iter_live_object_set that reads the cache. Only use for testing. If used
+    // on a live validator, can cause the server to block for as long as it takes to iterate
+    // the entire live object set.
+    fn iter_cached_live_object_set_for_testing(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Box<dyn Iterator<Item = LiveObject> + '_> {
+        // hold iter until we are finished to prevent any concurrent inserts/deletes
+        let iter = self.dirty.objects.iter();
+        let mut dirty_objects = BTreeMap::new();
+
+        // add everything from the store
+        for obj in self.store.iter_live_object_set(include_wrapped_tombstone) {
+            dirty_objects.insert(obj.object_id(), obj);
+        }
+
+        // add everything from the cache, but also remove deletions
+        for entry in iter {
+            let id = *entry.key();
+            let value = entry.value();
+            match value.get_highest().unwrap() {
+                (_, ObjectEntry::Object(object)) => {
+                    dirty_objects.insert(id, LiveObject::Normal(object.clone()));
+                }
+                (version, ObjectEntry::Wrapped) => {
+                    if include_wrapped_tombstone {
+                        dirty_objects.insert(id, LiveObject::Wrapped(ObjectKey(id, *version)));
+                    } else {
+                        dirty_objects.remove(&id);
+                    }
+                }
+                (_, ObjectEntry::Deleted) => {
+                    dirty_objects.remove(&id);
+                }
+            }
+        }
+
+        Box::new(dirty_objects.into_values())
     }
 }
