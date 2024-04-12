@@ -215,6 +215,21 @@ impl ObjectLocks {
         let mut locks_to_write: Vec<(_, LockDetails)> =
             Vec::with_capacity(owned_input_objects.len());
 
+        // Sort the objects before locking. This is not required by the protocol (since it's okay to
+        // reject any equivocating tx). However, this does prevent a confusing error on the client.
+        // Consider the case:
+        //   TX1: [o1, o2];
+        //   TX2: [o2, o1];
+        // If two threads race to acquire these locks, they might both acquire the first object, then
+        // error when trying to acquire the second. The error returned to the client would say that there
+        // is a conflicting tx on that object, but in fact neither object was locked and the tx was never
+        // signed. If one client then retries, they will succeed (counterintuitively).
+        let owned_input_objects = {
+            let mut o = owned_input_objects.to_vec();
+            o.sort_by_key(|o| o.0);
+            o
+        };
+
         // Note that this function does not have to operate atomically. If there are two racing threads,
         // then they are either trying to lock the same transaction (in which case both will succeed),
         // or they are trying to lock the same object in two different transactions, in which case
