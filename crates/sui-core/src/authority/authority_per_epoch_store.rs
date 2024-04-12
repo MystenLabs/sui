@@ -238,6 +238,10 @@ pub struct AuthorityPerEpochStore {
     /// This is an ArcSwapOption because it needs to be used concurrently,
     /// and it needs to be cleared at the end of the epoch.
     tables: ArcSwapOption<AuthorityEpochTables>,
+    // Keeps track of the number of components still using tables.
+    // Initialized to 2 for ConsensusHandler and monitor_reconfiguration().
+    // When it reaches 0, tables can be cleared.
+    tables_release_barrier: Mutex<usize>,
 
     protocol_config: ProtocolConfig,
 
@@ -928,6 +932,7 @@ impl AuthorityPerEpochStore {
             committee,
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
+            tables_release_barrier: Mutex::new(2),
             parent_path: parent_path.to_path_buf(),
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
@@ -965,7 +970,11 @@ impl AuthorityPerEpochStore {
     pub fn release_db_handles(&self) {
         // When force releasing DB handle is no longer needed, it will still be useful
         // to make sure AuthorityPerEpochStore is not used after the next epoch starts.
-        self.tables.store(None);
+        let mut tables_release_barrier = self.tables_release_barrier.lock();
+        *tables_release_barrier = tables_release_barrier.saturating_sub(1);
+        if *tables_release_barrier == 0 {
+            self.tables.store(None);
+        }
     }
 
     // Returns true if authenticator state is enabled in the protocol config *and* the
@@ -1375,7 +1384,13 @@ impl AuthorityPerEpochStore {
     /// Deletes one pending certificate.
     #[instrument(level = "trace", skip_all)]
     pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables()?.pending_execution.remove(digest)?;
+        let tables = match self.tables() {
+            Ok(tables) => tables,
+            // After Epoch ends, it is no longer necessary to remove pending transactions.
+            Err(SuiError::EpochEnded) => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        tables.pending_execution.remove(digest)?;
         Ok(())
     }
 

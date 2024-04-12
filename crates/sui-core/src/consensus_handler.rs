@@ -200,6 +200,12 @@ fn update_index_and_hash(
     true
 }
 
+impl<C> Drop for ConsensusHandler<C> {
+    fn drop(&mut self) {
+        self.epoch_store.release_db_handles();
+    }
+}
+
 #[async_trait]
 impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandler<C> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
