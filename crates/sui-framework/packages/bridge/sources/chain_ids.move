@@ -6,8 +6,7 @@ module bridge::chain_ids {
     // Chain IDs
     const SuiMainnet: u8 = 0;
     const SuiTestnet: u8 = 1;
-    const SuiDevnet: u8 = 2;
-    const SuiLocalTest: u8 = 3;
+    const SuiCustom: u8 = 3;
 
     const EthMainnet: u8 = 10;
     const EthSepolia: u8 = 11;
@@ -22,8 +21,7 @@ module bridge::chain_ids {
 
     public fun sui_mainnet(): u8 { SuiMainnet }
     public fun sui_testnet(): u8 { SuiTestnet }
-    public fun sui_devnet(): u8 { SuiDevnet }
-    public fun sui_local_test(): u8 { SuiLocalTest }
+    public fun sui_custom(): u8 { SuiCustom }
 
     public fun eth_mainnet(): u8 { EthMainnet }
     public fun eth_sepolia(): u8 { EthSepolia }
@@ -43,8 +41,7 @@ module bridge::chain_ids {
         assert!(
             id == SuiMainnet ||
             id == SuiTestnet ||
-            id == SuiDevnet ||
-            id == SuiLocalTest ||
+            id == SuiCustom ||
             id == EthMainnet ||
             id == EthSepolia ||
             id == EthLocalTest,
@@ -57,18 +54,14 @@ module bridge::chain_ids {
             BridgeRoute { source: SuiMainnet, destination: EthMainnet },
             BridgeRoute { source: EthMainnet, destination: SuiMainnet },
 
-            BridgeRoute { source: SuiDevnet, destination: EthSepolia },
-            BridgeRoute { source: SuiDevnet, destination: EthLocalTest },
             BridgeRoute { source: SuiTestnet, destination: EthSepolia },
             BridgeRoute { source: SuiTestnet, destination: EthLocalTest },
-            BridgeRoute { source: SuiLocalTest, destination: EthLocalTest },
-            BridgeRoute { source: SuiLocalTest, destination: EthSepolia },
-            BridgeRoute { source: EthSepolia, destination: SuiDevnet },
+            BridgeRoute { source: SuiCustom, destination: EthLocalTest },
+            BridgeRoute { source: SuiCustom, destination: EthSepolia },
             BridgeRoute { source: EthSepolia, destination: SuiTestnet },
-            BridgeRoute { source: EthSepolia, destination: SuiLocalTest },
-            BridgeRoute { source: EthLocalTest, destination: SuiDevnet },
+            BridgeRoute { source: EthSepolia, destination: SuiCustom },
             BridgeRoute { source: EthLocalTest, destination: SuiTestnet },
-            BridgeRoute { source: EthLocalTest, destination: SuiLocalTest }
+            BridgeRoute { source: EthLocalTest, destination: SuiCustom }
         ]
     }
 
@@ -88,8 +81,7 @@ module bridge::chain_ids {
     fun test_chains_ok() {
         assert_valid_chain_id(SuiMainnet);
         assert_valid_chain_id(SuiTestnet);
-        assert_valid_chain_id(SuiDevnet);
-        assert_valid_chain_id(SuiLocalTest);
+        assert_valid_chain_id(SuiCustom);
         assert_valid_chain_id(EthMainnet);
         assert_valid_chain_id(EthSepolia);
         assert_valid_chain_id(EthLocalTest);        
@@ -121,18 +113,14 @@ module bridge::chain_ids {
             BridgeRoute { source: SuiMainnet, destination: EthMainnet },
             BridgeRoute { source: EthMainnet, destination: SuiMainnet },
 
-            BridgeRoute { source: SuiDevnet, destination: EthSepolia },
-            BridgeRoute { source: SuiDevnet, destination: EthLocalTest },
             BridgeRoute { source: SuiTestnet, destination: EthSepolia },
             BridgeRoute { source: SuiTestnet, destination: EthLocalTest },
-            BridgeRoute { source: SuiLocalTest, destination: EthLocalTest },
-            BridgeRoute { source: SuiLocalTest, destination: EthSepolia },
-            BridgeRoute { source: EthSepolia, destination: SuiDevnet },
+            BridgeRoute { source: SuiCustom, destination: EthLocalTest },
+            BridgeRoute { source: SuiCustom, destination: EthSepolia },
             BridgeRoute { source: EthSepolia, destination: SuiTestnet },
-            BridgeRoute { source: EthSepolia, destination: SuiLocalTest },
-            BridgeRoute { source: EthLocalTest, destination: SuiDevnet },
+            BridgeRoute { source: EthSepolia, destination: SuiCustom },
             BridgeRoute { source: EthLocalTest, destination: SuiTestnet },
-            BridgeRoute { source: EthLocalTest, destination: SuiLocalTest }
+            BridgeRoute { source: EthLocalTest, destination: SuiCustom }
         ];
         let mut size = valid_routes.length();
         while (size > 0) {
@@ -181,18 +169,12 @@ module bridge::chain_ids {
     #[test]
     #[expected_failure(abort_code = EInvalidBridgeRoute)]
     fun test_routes_err_eth_3() {
-        get_route(EthMainnet, SuiDevnet);
+        get_route(EthMainnet, SuiCustom);
     }
 
     #[test]
     #[expected_failure(abort_code = EInvalidBridgeRoute)]
     fun test_routes_err_eth_4() {
-        get_route(EthMainnet, SuiLocalTest);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = EInvalidBridgeRoute)]
-    fun test_routes_err_eth_5() {
         get_route(EthMainnet, SuiTestnet);
     }
 }
