@@ -48,11 +48,11 @@ impl AssertInserted for bool {
 
 type ActionCb = Box<dyn Fn(&mut Scenario) + Send>;
 
-struct Scenario {
-    authority: Arc<AuthorityState>,
-    store: Arc<AuthorityStore>,
-    epoch_store: Arc<AuthorityPerEpochStore>,
-    cache: Arc<WritebackCache>,
+pub(crate) struct Scenario {
+    pub authority: Arc<AuthorityState>,
+    pub store: Arc<AuthorityStore>,
+    pub epoch_store: Arc<AuthorityPerEpochStore>,
+    pub cache: Arc<WritebackCache>,
 
     id_map: BTreeMap<u32, ObjectID>,
     objects: BTreeMap<ObjectID, Object>,
@@ -105,7 +105,7 @@ impl Scenario {
 
     // This method runs a test scenario multiple times, and each time it clears the
     // evictable caches after a different step.
-    async fn iterate<F, Fut>(f: F)
+    pub async fn iterate<F, Fut>(f: F)
     where
         F: Fn(Scenario) -> Fut,
         Fut: Future<Output = ()>,
@@ -208,7 +208,7 @@ impl Scenario {
         inner.into()
     }
 
-    fn with_child(&mut self, short_id: u32, owner: u32) {
+    pub fn with_child(&mut self, short_id: u32, owner: u32) {
         let owner_id = self.id_map.get(&owner).expect("no such object");
         let object = Self::new_child(*owner_id);
         self.outputs
@@ -220,7 +220,7 @@ impl Scenario {
         self.objects.insert(id, object).assert_inserted();
     }
 
-    fn with_created(&mut self, short_ids: &[u32]) {
+    pub fn with_created(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, create an object with that id if it doesn't exist
         for short_id in short_ids {
             let object = Self::new_object();
@@ -234,7 +234,7 @@ impl Scenario {
         }
     }
 
-    fn with_events(&mut self) {
+    pub fn with_events(&mut self) {
         let mut events: TransactionEvents = Default::default();
         events.data.push(Event::random_for_testing());
 
@@ -245,7 +245,7 @@ impl Scenario {
         self.outputs.effects = effects;
     }
 
-    fn with_packages(&mut self, short_ids: &[u32]) {
+    pub fn with_packages(&mut self, short_ids: &[u32]) {
         for short_id in short_ids {
             let object = Self::new_package();
             let id = object.id();
@@ -255,7 +255,7 @@ impl Scenario {
         }
     }
 
-    fn with_mutated(&mut self, short_ids: &[u32]) {
+    pub fn with_mutated(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, and
         // mutate it
         for short_id in short_ids {
@@ -273,7 +273,7 @@ impl Scenario {
         }
     }
 
-    fn with_deleted(&mut self, short_ids: &[u32]) {
+    pub fn with_deleted(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, and
         // delete it
         for short_id in short_ids {
@@ -287,7 +287,7 @@ impl Scenario {
         }
     }
 
-    fn with_wrapped(&mut self, short_ids: &[u32]) {
+    pub fn with_wrapped(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, and
         // wrap it
         for short_id in short_ids {
@@ -301,7 +301,7 @@ impl Scenario {
         }
     }
 
-    fn with_received(&mut self, short_ids: &[u32]) {
+    pub fn with_received(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, that
         // it has a new lock (which proves it was mutated) and then write a received
         // marker for it
@@ -320,7 +320,7 @@ impl Scenario {
         }
     }
 
-    fn take_outputs(&mut self) -> Arc<TransactionOutputs> {
+    pub fn take_outputs(&mut self) -> Arc<TransactionOutputs> {
         let mut outputs = Self::new_outputs();
         std::mem::swap(&mut self.outputs, &mut outputs);
         Arc::new(outputs)
@@ -328,7 +328,7 @@ impl Scenario {
 
     // Commit the current tx to the cache, return its digest, and reset the transaction
     // outputs to a new empty one.
-    async fn do_tx(&mut self) -> TransactionDigest {
+    pub async fn do_tx(&mut self) -> TransactionDigest {
         // Resets outputs, but not objects, so that subsequent runs must respect
         // the state so far.
         let outputs = self.take_outputs();
@@ -346,23 +346,23 @@ impl Scenario {
     }
 
     // commit a transaction to the database
-    async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
+    pub async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
         let res = self.cache().commit_transaction_outputs(1, &tx).await;
         self.count_action();
         res
     }
 
-    async fn clear_state_end_of_epoch(&self) {
+    pub async fn clear_state_end_of_epoch(&self) {
         let execution_guard = tokio::sync::RwLock::new(1u64);
         let lock = execution_guard.write().await;
         self.cache().clear_state_end_of_epoch(&lock);
     }
 
-    fn evict_caches(&self) {
+    pub fn evict_caches(&self) {
         self.cache.clear_caches();
     }
 
-    fn reset_cache(&mut self) {
+    pub fn reset_cache(&mut self) {
         self.cache = Arc::new(WritebackCache::new(
             self.store.clone(),
             self.cache.metrics.clone(),
@@ -384,7 +384,7 @@ impl Scenario {
         });
     }
 
-    fn assert_live(&self, short_ids: &[u32]) {
+    pub fn assert_live(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
             let expected = self.objects.get(id).expect("no such object");
@@ -409,7 +409,7 @@ impl Scenario {
         }
     }
 
-    fn assert_packages(&self, short_ids: &[u32]) {
+    pub fn assert_packages(&self, short_ids: &[u32]) {
         self.assert_live(short_ids);
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
@@ -419,7 +419,7 @@ impl Scenario {
         }
     }
 
-    fn get_from_dirty_cache(&self, short_id: u32) -> Option<Object> {
+    pub fn get_from_dirty_cache(&self, short_id: u32) -> Option<Object> {
         let id = self.id_map.get(&short_id).expect("no such object");
         let object = self.objects.get(id).expect("no such object");
         self.cache
@@ -430,7 +430,7 @@ impl Scenario {
             .map(|e| e.unwrap_object().clone())
     }
 
-    fn assert_dirty(&self, short_ids: &[u32]) {
+    pub fn assert_dirty(&self, short_ids: &[u32]) {
         // assert that all ids are in the dirty cache
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
@@ -443,7 +443,7 @@ impl Scenario {
         }
     }
 
-    fn assert_not_dirty(&self, short_ids: &[u32]) {
+    pub fn assert_not_dirty(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             assert!(
                 self.get_from_dirty_cache(*short_id).is_none(),
@@ -452,7 +452,7 @@ impl Scenario {
         }
     }
 
-    fn assert_cached(&self, short_ids: &[u32]) {
+    pub fn assert_cached(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
             let object = self.objects.get(id).expect("no such object");
@@ -472,7 +472,7 @@ impl Scenario {
         }
     }
 
-    fn assert_received(&self, short_ids: &[u32]) {
+    pub fn assert_received(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
             let object = self.objects.get(id).expect("no such object");
@@ -490,7 +490,7 @@ impl Scenario {
         }
     }
 
-    fn assert_not_exists(&self, short_ids: &[u32]) {
+    pub fn assert_not_exists(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such id");
 
@@ -501,22 +501,22 @@ impl Scenario {
         }
     }
 
-    fn obj_id(&self, short_id: u32) -> ObjectID {
+    pub fn obj_id(&self, short_id: u32) -> ObjectID {
         *self.id_map.get(&short_id).expect("no such id")
     }
 
-    fn object(&self, short_id: u32) -> Object {
+    pub fn object(&self, short_id: u32) -> Object {
         self.objects
             .get(&self.obj_id(short_id))
             .expect("no such object")
             .clone()
     }
 
-    fn obj_ref(&self, short_id: u32) -> ObjectRef {
+    pub fn obj_ref(&self, short_id: u32) -> ObjectRef {
         self.object(short_id).compute_object_reference()
     }
 
-    fn make_signed_transaction(&self, tx: &VerifiedTransaction) -> VerifiedSignedTransaction {
+    pub fn make_signed_transaction(&self, tx: &VerifiedTransaction) -> VerifiedSignedTransaction {
         VerifiedSignedTransaction::new(
             self.epoch_store.epoch(),
             tx.clone(),
@@ -747,162 +747,6 @@ async fn test_write_transaction_outputs_is_sync() {
         // fail_point_async! macros above to be elided
         s.cache
             .write_transaction_outputs(1, outputs)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_transaction_locks_are_exclusive() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1, 2, 3]);
-        s.do_tx().await;
-
-        s.with_mutated(&[1, 2, 3]);
-        s.do_tx().await;
-
-        let new1 = s.obj_ref(1);
-        let new2 = s.obj_ref(2);
-        let new3 = s.obj_ref(3);
-
-        s.with_mutated(&[1, 2, 3]); // begin forming a tx but never execute it
-        let outputs = s.take_outputs();
-
-        let tx1 = s.make_signed_transaction(&outputs.transaction);
-
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx1)
-            .await
-            .expect("locks should be available");
-
-        // this tx doesn't use the actual objects in question, but we just need something
-        // to insert into the table.
-        s.with_created(&[4, 5]);
-        let tx2 = s.take_outputs().transaction.clone();
-        let tx2 = s.make_signed_transaction(&tx2);
-
-        // both locks are held by tx1, so this should fail
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2.clone())
-            .await
-            .unwrap_err();
-
-        // new3 is lockable, but new2 is not, so this should fail
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new3, new2], tx2.clone())
-            .await
-            .unwrap_err();
-
-        // new3 is unlocked
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new3], tx2)
-            .await
-            .expect("new3 should be unlocked");
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_transaction_locks_are_durable() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1, 2]);
-        s.do_tx().await;
-
-        let old2 = s.obj_ref(2);
-
-        s.with_mutated(&[1, 2]);
-        s.do_tx().await;
-
-        let new1 = s.obj_ref(1);
-        let new2 = s.obj_ref(2);
-
-        s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
-        let outputs = s.take_outputs();
-
-        let tx = s.make_signed_transaction(&outputs.transaction);
-
-        // fails because we are referring to an old object
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx.clone())
-            .await
-            .unwrap_err();
-
-        // succeeds because the above call releases the lock on new1 after failing
-        // to get the lock on old2
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx)
-            .await
-            .expect("new1 should be unlocked after revert");
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_acquire_transaction_locks_revert() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1, 2]);
-        s.do_tx().await;
-
-        let old2 = s.obj_ref(2);
-
-        s.with_mutated(&[1, 2]);
-        s.do_tx().await;
-
-        let new1 = s.obj_ref(1);
-        let new2 = s.obj_ref(2);
-
-        s.with_mutated(&[1, 2]); // begin forming a tx but never execute it
-        let outputs = s.take_outputs();
-
-        let tx = s.make_signed_transaction(&outputs.transaction);
-
-        // fails because we are referring to an old object
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new1, old2], tx)
-            .await
-            .unwrap_err();
-
-        // this tx doesn't use the actual objects in question, but we just need something
-        // to insert into the table.
-        s.with_created(&[4, 5]);
-        let tx2 = s.take_outputs().transaction.clone();
-        let tx2 = s.make_signed_transaction(&tx2);
-
-        // succeeds because the above call releases the lock on new1 after failing
-        // to get the lock on old2
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &[new1, new2], tx2)
-            .await
-            .expect("new1 should be unlocked after revert");
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_acquire_transaction_locks_is_sync() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1, 2]);
-        s.do_tx().await;
-
-        let objects: Vec<_> = vec![s.object(1), s.object(2)]
-            .into_iter()
-            .map(|o| o.compute_object_reference())
-            .collect();
-
-        s.with_mutated(&[1, 2]);
-        let outputs = s.take_outputs();
-
-        let tx2 = s.make_signed_transaction(&outputs.transaction);
-        // assert that acquire_transaction_locks is sync in non-simtest, which causes the
-        // fail_point_async! macros above to be elided
-        s.cache
-            .acquire_transaction_locks(&s.epoch_store, &objects, tx2)
             .now_or_never()
             .unwrap()
             .unwrap();
