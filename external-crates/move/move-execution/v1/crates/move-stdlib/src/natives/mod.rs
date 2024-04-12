@@ -15,7 +15,7 @@ pub mod vector;
 mod helpers;
 
 use move_core_types::account_address::AccountAddress;
-use move_vm_runtime_v1::native_functions::{make_table_from_iter, NativeFunctionTable};
+use move_vm_runtime::native_functions::{make_table_from_iter, NativeFunctionTable};
 
 #[derive(Debug, Clone)]
 pub struct GasParameters {

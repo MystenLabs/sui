@@ -146,7 +146,7 @@ fn test_large_types() {
 
     let (verifier_config, meter_config) = production_config();
     let mut meter = BoundMeter::new(meter_config);
-    let result = move_bytecode_verifier_v2::verify_module_with_config_for_test(
+    let result = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_large_types",
         &verifier_config,
         &m,

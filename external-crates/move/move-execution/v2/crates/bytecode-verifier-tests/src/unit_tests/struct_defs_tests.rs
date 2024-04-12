@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format::CompiledModule;
-use move_bytecode_verifier_v2::RecursiveStructDefChecker;
+use move_bytecode_verifier::RecursiveStructDefChecker;
 use proptest::prelude::*;
 
 proptest! {

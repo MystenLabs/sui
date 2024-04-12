@@ -3,8 +3,8 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
+use move_bytecode_verifier::{limits::LimitsVerifier, verify_module_with_config_for_test};
 use move_bytecode_verifier_meter::dummy::DummyMeter;
-use move_bytecode_verifier_v1::{limits::LimitsVerifier, verify_module_with_config_for_test};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };

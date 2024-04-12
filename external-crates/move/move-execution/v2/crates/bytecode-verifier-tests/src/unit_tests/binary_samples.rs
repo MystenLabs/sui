@@ -8,8 +8,8 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::{errors::VMResult, CompiledModule};
+use move_bytecode_verifier::verifier;
 use move_bytecode_verifier_meter::bound::BoundMeter;
-use move_bytecode_verifier_v2::verifier;
 
 #[allow(unused)]
 fn run_binary_test(name: &str, bytes: &str) -> VMResult<()> {

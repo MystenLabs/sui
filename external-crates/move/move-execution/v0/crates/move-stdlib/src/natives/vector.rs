@@ -8,7 +8,7 @@ use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
     vm_status::StatusCode,
 };
-use move_vm_runtime_v0::{
+use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
 };

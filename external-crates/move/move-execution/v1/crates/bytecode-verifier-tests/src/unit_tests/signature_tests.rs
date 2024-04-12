@@ -7,10 +7,10 @@ use invalid_mutations::signature::{FieldRefMutation, SignatureRefMutation};
 use move_binary_format::file_format::{
     Bytecode::*, CompiledModule, SignatureToken::*, Visibility::Public, *,
 };
-use move_bytecode_verifier_meter::dummy::DummyMeter;
-use move_bytecode_verifier_v1::{
+use move_bytecode_verifier::{
     verify_module_unmetered, verify_module_with_config_for_test, SignatureChecker,
 };
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };

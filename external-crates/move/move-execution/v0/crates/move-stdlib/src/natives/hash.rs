@@ -5,7 +5,7 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
-use move_vm_runtime_v0::{
+use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
 };

@@ -60,7 +60,7 @@ fn test_vec_pack() {
             .cloned()
             .collect();
 
-    let res = move_bytecode_verifier_v2::verify_module_with_config_for_test(
+    let res = move_bytecode_verifier::verify_module_with_config_for_test(
         "test_vec_pack",
         &production_config().0,
         &m,

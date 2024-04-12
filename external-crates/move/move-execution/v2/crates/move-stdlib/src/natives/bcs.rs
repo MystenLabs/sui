@@ -8,7 +8,7 @@ use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
 };
-use move_vm_runtime_v2::{
+use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
 };

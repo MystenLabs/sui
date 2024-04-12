@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use invalid_mutations_v0::bounds::{
+use invalid_mutations::bounds::{
     ApplyCodeUnitBoundsContext, ApplyOutOfBoundsContext, CodeUnitBoundsMutation,
     OutOfBoundsMutation,
 };

@@ -16,7 +16,7 @@ use move_binary_format::{
     file_format::{AbilitySet, LocalIndex},
     CompiledModule, IndexKind,
 };
-use move_bytecode_verifier_v2::script_signature;
+use move_bytecode_verifier::script_signature;
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
@@ -401,7 +401,7 @@ impl VMRuntime {
         }
 
         let additional_signature_checks = if bypass_declared_entry_check {
-            move_bytecode_verifier_v2::no_additional_script_signature_checks
+            move_bytecode_verifier::no_additional_script_signature_checks
         } else {
             check_is_entry
         };

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{control_flow_graph::VMControlFlowGraph, file_format::Bytecode};
-use move_bytecode_verifier_v2::loop_summary::{LoopPartition, LoopSummary};
+use move_bytecode_verifier::loop_summary::{LoopPartition, LoopSummary};
 
 macro_rules! assert_node {
     ( $summary:ident, $node:expr ; $block:expr, $preds:expr, $descs:expr, $backs:expr ) => {

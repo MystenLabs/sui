@@ -5,7 +5,7 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime_v2::native_functions::{NativeContext, NativeFunction};
+use move_vm_runtime::native_functions::{NativeContext, NativeFunction};
 #[allow(unused_imports)]
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -194,7 +194,7 @@ mod testing {
         account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
         runtime_value as R, vm_status::StatusCode,
     };
-    use move_vm_runtime_v2::native_functions::NativeContext;
+    use move_vm_runtime::native_functions::NativeContext;
     use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
     use std::{fmt, fmt::Write};
 
