@@ -216,10 +216,8 @@ fn main() {
                             },
                         }
                     },
-                    Err(error) => {
-                        assert!(false);
-                        eprintln!("symbolicator message error: {:?}", error);
-                    }
+                    Err(error) =>
+                        eprintln!("symbolicator message error: {:?}", error),
                 }
             },
             recv(context.connection.receiver) -> message => {
