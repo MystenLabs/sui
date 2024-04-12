@@ -253,6 +253,8 @@ module bridge::message {
         // bcs serialzies u64 as 8 bytes
         payload.append(reverse_bytes(bcs::to_bytes(&amount)));
 
+        assert!(vector::length(&payload) == 64, 0);
+
         BridgeMessage {
             message_type: message_types::token(),
             message_version: CURRENT_MESSAGE_VERSION,
