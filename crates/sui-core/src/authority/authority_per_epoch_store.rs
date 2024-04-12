@@ -50,6 +50,7 @@ use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
+use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
@@ -2436,13 +2437,16 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
         commit_timestamp: TimestampMs,
-        skipped_consensus_txns: &IntCounter,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         // Split transactions into different types for processing.
         let verified_transactions: Vec<_> = transactions
             .into_iter()
             .filter_map(|transaction| {
-                self.verify_consensus_transaction(transaction, skipped_consensus_txns)
+                self.verify_consensus_transaction(
+                    transaction,
+                    &authority_metrics.skipped_consensus_txns,
+                )
             })
             .collect();
         let mut system_transactions = Vec::with_capacity(verified_transactions.len());
@@ -2623,6 +2627,7 @@ impl AuthorityPerEpochStore {
                 randomness_manager.as_deref_mut(),
                 dkg_closed,
                 generate_randomness,
+                authority_metrics,
             )
             .await?;
         self.finish_consensus_certificate_process_with_batch(
@@ -2781,7 +2786,7 @@ impl AuthorityPerEpochStore {
         transactions: Vec<SequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ExecutionCacheRead,
-        skipped_consensus_txns: &IntCounter,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         self.process_consensus_transactions_and_commit_boundary(
             transactions,
@@ -2790,7 +2795,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             self.get_highest_pending_checkpoint_height() + 1,
             0,
-            skipped_consensus_txns,
+            authority_metrics,
         )
         .await
     }
@@ -2827,6 +2832,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generate_randomness: bool,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
@@ -2925,9 +2931,14 @@ impl AuthorityPerEpochStore {
         }
 
         let commit_has_deferred_txns = !deferred_txns.is_empty();
+        let mut total_deferred_txns = 0;
         for (key, txns) in deferred_txns.into_iter() {
+            total_deferred_txns += txns.len();
             self.defer_transactions(batch, key, txns)?;
         }
+        authority_metrics
+            .consensus_handler_deferred_transactions
+            .inc_by(total_deferred_txns as u64);
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
