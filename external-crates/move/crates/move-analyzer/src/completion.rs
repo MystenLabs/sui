@@ -470,8 +470,6 @@ fn completion_items(
                 only_custom_items = custom;
                 items.extend_from_slice(&custom_items);
                 if !only_custom_items {
-                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                    // offer them Move's keywords, operators, and builtins as completion items.
                     items.extend_from_slice(&keywords());
                     items.extend_from_slice(&builtins());
                 }
