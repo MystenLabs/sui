@@ -448,7 +448,7 @@ pub fn on_completion_request(
                 }
                 Some(Tok::LBrace) => {
                     let custom_items = context_specific_lbrace(
-                        &symbols,
+                        symbols,
                         path,
                         &parameters.text_document_position.position,
                     );
@@ -461,7 +461,7 @@ pub fn on_completion_request(
                     // offer them context-specific autocompletion items as well as
                     // Move's keywords, operators, and builtins.
                     let (custom_items, custom) = context_specific_no_trigger(
-                        &symbols,
+                        symbols,
                         path,
                         buffer.as_str(),
                         &parameters.text_document_position.position,
@@ -477,7 +477,7 @@ pub fn on_completion_request(
                 }
             }
             if !only_custom_items {
-                let identifiers = identifiers(buffer.as_str(), &symbols, path);
+                let identifiers = identifiers(buffer.as_str(), symbols, path);
                 items.extend_from_slice(&identifiers);
             }
         } else {
