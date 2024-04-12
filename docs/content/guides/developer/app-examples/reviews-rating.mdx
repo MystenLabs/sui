@@ -22,21 +22,23 @@ sequenceDiagram
 
 ### Service owners
 
-Service owners are entities like restaurants that list their services on the platform. Service owners allocate a specific amount of SUI as a reward pool. Assets from the pool are used to provide rewards for high-rated reviews. A Proof of Experience (PoE) NFT confirms the reviewer used the service, which they burn to provide a verified review. Service owners can provide their customers with unique identifiers, perhaps using QR codes, to identify individual reviewers.
+Service owners are entities like restaurants that list their services on the platform. They want to attract more customers by receiving high-rated reviews for their services.
+
+Service owners allocate a specific amount of SUI as a reward pool. Assets from the pool are used to provide rewards for high-rated reviews. A Proof of Experience (PoE) NFT confirms a reviewer used the service, which the reviewer can burn later to provide a verified review. Service owners provide their customers with unique identifiers, perhaps using QR codes, to identify individual reviewers.
 
 ### Reviewers
 
-Reviewers are consumers of services that use the review system. Reviewers provide feedback in the form of comments that detail specific aspects of the service as well as a star rating to inform others. The reviews are rated, with the most effective reviews getting the highest rating. Service owners award the 10 highest rated reviews for their service. How often the rewards are distributed is up to the service owner's discretion; for example, it can be distributed once a day or once a month.
+Reviewers are consumers of services that use the review system. Reviewers provide feedback in the form of comments that detail specific aspects of the service as well as a star rating to inform others. The reviews are rated, with the most effective reviews getting the highest rating. Service owners award the 10 highest rated reviews for their service. How often the rewards are distributed is up to the service owner's discretion; for example, the rewards can be distributed once a week or once a month.
 
 ### Review readers
 
-Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting awarded. Although it is not implemented as part of this guide, a proportion of the review reward may be awarded to review readers who has participated in rating reviews by casting their votes.
+Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting rewarded. Although it is not implemented as part of this guide, a proportion of the review rewards may be awarded to review readers who has participated in rating reviews by casting their votes.
 
 ### Moderators
 
 Moderators monitor content of the reviews and can delete any reviews that contain inappropriate content.
 
-The incentive mechanism is not implemented for this guide, but service owners can all pay into a pool that goes to moderators, on a rolling basis. People can stake moderators to influence what proportion of the reward each moderator gets, up to a limit (imagine how validators are staked on-chain), and moderator decisions are decided by quorum of stake weight. This is a way to ensure that moderators have incentives to do their job well.
+The incentive mechanism for moderators is not implemented for this guide, but service owners can all pay into a pool that goes to moderators, on a rolling basis. People can stake moderators to influence what proportion of the reward each moderator gets, up to a limit (imagine how validators are staked on-chain), and moderator decisions are decided by quorum of stake weight. This is a way to ensure that moderators have incentives to do their job well.
 
 ## How reviews are rated
 
@@ -62,100 +64,147 @@ The `dashboard.move` module defines the `Dashboard` struct that is used to group
 
 ```move
 struct Dashboard has key, store {
-  id: UID,
-  service_type: String
+    id: UID,
+    service_type: String
 }
 ```
 
 The services are grouped by attributes, which can be cuisine type, geographical location, operating hours, google maps ID, and so on. To keep it basic, the example stores only `service_type` (for example, fast food, Chinese, Italian).
+
+```move
+public entry fun create_dashboard(
+    service_type: String,
+    ctx: &mut TxContext,
+) {
+    let db = Dashboard {
+        id: object::new(ctx),
+        service_type
+    };
+    transfer::share_object(db);
+}
+
+public fun register_service(db: &mut Dashboard, service_id: ID) {
+    df::add(&mut db.id, service_id, service_id);
+}
+```
+
+A `Dashboard` is a [shared object](../../../concepts/object-ownership/shared.mdx), so any service owner can register his/her service to a dashboard.
+And a [dynamic field](../../../concepts/dynamic-fields.mdx) is used to store the list of services that are registered to a dashboard.
+:::info
+
+See [Shared versus Owned Objects](../sui-101/shared-owned.mdx) for more information on the differences between object types.
+
+:::
 
 ### service.move
 
 This module defines the `Service` struct, which service owners manage.
 
 ```move
+const MAX_REVIEWERS_TO_REWARD: u64 = 10;
+
 struct Service has key, store {
-  id: UID,
-  reward_pool: Balance<SUI>,
-  reward: u64,
-  top_reviews: MultiMap<ID>,
-  reviews: Table<ID, ID>,
-  moderators: Table<address, address>,
-  overall_rate: u64,
-  name: String
+    id: UID,
+    reward_pool: Balance<SUI>,
+    reward: u64,
+    top_reviews: vector<ID>,
+    reviews: ObjectTable<ID, Review>,
+    overall_rate: u64,
+    name: String
 }
 ```
-
-All the submitted reviews are stored in `reviews` field, and the top rated reviews are stored in `top_reviews` field, which has `MultiMap<ID>` type. The [multimap module](#multimap) defines the type.
-
-```move
-fun update_top_reviews(
-    service: &mut Service,
-    review_id: ID,
-    total_score: u64
-) {
-  if (should_update_top_reviews(service, total_score)) {
-    multimap::insert<ID>(&mut service.top_reviews, review_id, total_score);
-    prune_top_reviews(service);
-  };
-}
-```
-Whenever a user casts a vote on a review, the `total_score` of the review is updated, and the `top_reviews` field can be updated by calling the `update_top_reviews` function.
 
 #### Reward distribution
 The same amount is rewarded to top reviewers, and the reward is distributed to 10 participants at most.
 The pool of `SUI` tokens that will be distributed to reviewers is stored in `reward_pool` field, and the amount of `SUI` tokens that will be awarded to each participant is configured in `reward` field.
 
+#### Storage for reviews
+Since anyone can submit a review for a service, a `Service` should be defined as a shared object.
+All the reviews are stored in `reviews` field, which has [ObjectTable](../../../concepts/sui-move-concepts/collections.mdx#object_table)`<ID, Review>` type.
+Note that `reviews` are stored as children of the shared object, but they are still accessible by their `ID`.
+:::info
+
+See [Table and Bag](../../../concepts/dynamic-fields/tables-bags.mdx) for more information on the differences between `Table` and `ObjectTable`.
+
+:::
+
+The top rated reviews are stored in `top_reviews` field, which has `vector<ID>` type.
+A simple vector can be used to store the top rated reviews because the maximum number of reviews that can be rewarded is 10.
+The elements of `top_reviews` are sorted by the `total_score` of the reviews, with the highest rated reviews coming first, and contain
+the `ID` of the reviews (whose content and vote count can be looked up from the `reviews`).
+
+#### Casting votes
 ```move
-struct AdminCap has key, store {
-  id: UID,
-  service_id: ID
+public fun upvote(service: &mut Service, review_id: ID) {
+    let review = object_table::borrow_mut(&mut service.reviews, review_id);
+    review::upvote(review);
+    reorder(service, review_id, review::get_total_score(review));
 }
-struct Moderator has key {
-  id: UID,
-  service_id: ID,
+
+public fun downvote(service: &mut Service, review_id: ID) {
+    let review = object_table::borrow_mut(&mut service.reviews, review_id);
+    review::downvote(review);
+    reorder(service, review_id, review::get_total_score(review));
+}
+
+fun reorder(
+    service: &mut Service,
+    review_id: ID,
+    total_score: u64
+) {
+    let (contains, idx) = vector::index_of(&service.top_reviews, &review_id);
+    if (!contains) {
+        update_top_reviews(service, review_id, total_score);
+    } else {
+        vector::remove(&mut service.top_reviews, idx);
+        let idx = find_idx(service, total_score);
+        vector::insert(&mut service.top_reviews, review_id, idx);
+    }
+}
+
+fun update_top_reviews(
+    service: &mut Service,
+    review_id: ID,
+    total_score: u64
+) {
+    if (should_update_top_reviews(service, total_score)) {
+        let idx = find_idx(service, total_score);
+        vector::insert(&mut service.top_reviews, review_id, idx);
+        prune_top_reviews(service);
+    };
+}
+
+fun find_idx(service: &Service, total_score: u64): u64 {
+    let idx = 0;
+    let len = vector::length(&service.top_reviews);
+    while (idx < len) {
+        let review_id = *vector::borrow(&service.top_reviews, idx);
+        if (get_total_score(service, review_id) < total_score) {
+            break
+        };
+        idx = idx + 1;
+    };
+    idx
 }
 ```
+
+Whenever someone casts a vote on a review, the `total_score` of the review is updated, and the `top_reviews` field can be updated by calling the `update_top_reviews` function.
+Note that casting a vote also triggers a reordering of the `top_reviews` field to ensure that the top rated reviews are always at the top.
 
 #### Authorization
-This guide follows a [capabilities pattern](../../../concepts/sui-move-concepts/patterns/capabilities.mdx) to manage authorizations.
+```move
+struct AdminCap has key, store {
+    id: UID,
+    service_id: ID
+}
+struct Moderator has key {
+    id: UID,
+}
+```
+
+This example follows a [capabilities pattern](../../../concepts/sui-move-concepts/patterns/capabilities.mdx) to manage authorizations.
 For example, `SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` such that only they are allowed to perform privileged operations.
 
-### multimap.move {#multimap}
-
-`MultiMap` is an implementation of the `multimap` data structure (https://en.wikipedia.org/wiki/Multimap), which keeps all the reviews sorted. Using `MultiMap`, all the reviews are ordered by rating, with the highest rated reviews coming first.
-
-```move
-struct MultiMap<K: copy> has copy, drop, store {
-  contents: vector<Entry<K>>,
-}
-struct Entry<K: copy> has copy, drop, store {
-  key: K,
-  priority: u64,
-}
-```
-The `object_id` of a `review` object is used as a `key` and `total_score` is used as `priority` for a new entry.
-
-Note that `vector` is used to store the contents of the `MultiMap`. This is acceptable in our use case because the rewards are distributed to 10 participants at most.
-
-```move
-public fun insert<K: copy>(self: &mut MultiMap<K>, key: K, priority: u64) {
-  assert!(!contains(self, &key), EKeyAlreadyExists);
-  let len = vector::length(&self.contents);
-  let (lo, hi) = (0, len);
-  while (lo < hi) {
-    let mid = (hi - lo) / 2 + lo;
-    let ele = vector::borrow(&self.contents, mid);
-    if (priority > ele.priority) {
-      hi = mid;
-    } else {
-      lo = mid + 1;
-    }
-  };
-  vector::insert(&mut self.contents, Entry { key, priority }, lo);
-}
-```
-`Binary Search` is implemented to insert a new entry in the `MultiMap`. The `insert` function is used to insert a new entry in the `MultiMap`.
 
 ### review.move
 
@@ -163,26 +212,26 @@ This module defines the `Review` struct.
 
 ```move
 struct Review has key, store {
-  id: UID,
-  owner: address,
-  service_id: ID,
-  content: String,
-  // intrinsic score
-  len: u64,
-  // extrinsic score
-  votes: u64,
-  time_issued: u64,
-  // proof of experience
-  has_poe: bool,
-  total_score: u64,
-  overall_rate: u8,
+    id: UID,
+    owner: address,
+    service_id: ID,
+    content: String,
+    // intrinsic score
+    len: u64,
+    // extrinsic score
+    votes: u64,
+    time_issued: u64,
+    // proof of experience
+    has_poe: bool,
+    total_score: u64,
+    overall_rate: u8,
 }
 ```
 
 In addition to the content of a review, all the elements that are required to compute total score are stored in a `Review` object.
 
 A `Review` is a [shared object](../../../concepts/object-ownership/shared.mdx), so anyone can cast a vote on a review and update its `total_score` field.
-After `total_score` is updated, the [`update_top_reviews`](#servicemove) function can be called to update the `top_reviews` field of the `Service` object.
+After `total_score` is updated, the [`update_top_reviews`](#casting-votes) function can be called to update the `top_reviews` field of the `Service` object.
 
 ## Deployment
 
@@ -190,7 +239,7 @@ Navigate to the [setup folder](https://github.com/MystenLabs/reviews-ratings-poc
 
 ## Frontend
 The frontend module is written in React, and is structured to provide a responsive user experience for interacting with a review rating platform.
-On the [`page` component](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/page.tsx), a user can be logged in as a `SERVICE OWNER` or a `USER`.
+On the [`page` component](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/page.tsx), a user can be logged in as a `SERVICE OWNER`, a `MODERATOR`, or a `USER`.
 
 ### Directories structure
 
@@ -200,6 +249,7 @@ The main sub-directories are:
   - [app/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/): The main code of the pages and the global styles.
   - [components/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
   - [hooks/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks): The custom hooks used in the app.
+  - [moderator/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/moderator): The pages for `MODERATOR`.
   - [serviceOwner/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/serviceOwner): The pages for `SERVICE OWNER`.
   - [types/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/types): The types/interfaces used in the app.
   - [user/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/user): The pages for `USER`.
