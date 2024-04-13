@@ -6,7 +6,7 @@ use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::context_data::package_cache::DbPackageStore;
+use crate::data::package_resolver::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
