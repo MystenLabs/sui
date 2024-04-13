@@ -1,4 +1,3 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -47,7 +46,6 @@ impl NodeFwTestServer {
 
         let shutdown_signal = self.shutdown_signal.clone();
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
-
         let server = axum::Server::bind(&addr)
             .serve(app.into_make_service())
             .with_graceful_shutdown(async move {

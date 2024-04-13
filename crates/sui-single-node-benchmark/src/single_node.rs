@@ -18,6 +18,7 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::state_accumulator::AccumulatorStore;
 use sui_core::state_accumulator::StateAccumulator;
+use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
@@ -28,7 +29,6 @@ use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointConte
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::object::Object;
-use sui_types::traffic_control::PolicyConfig;
 use sui_types::transaction::{
     CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
     VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
@@ -66,19 +66,17 @@ impl SingleValidator {
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
         ));
-        let validator_service = Arc::new(
-            ValidatorService::new(
-                validator,
-                consensus_adapter,
-                Arc::new(ValidatorServiceMetrics::new_for_tests()),
-                // TODO: for validator benchmarking purposes, we should allow for this
-                // to be configurable and introduce traffic control benchmarks to test
-                // against different policies
-                PolicyConfig::default(),
-                None, /* RemoteFirewallConfig */
-            )
-            .await,
-        );
+        let validator_service = Arc::new(ValidatorService::new(
+            validator,
+            consensus_adapter,
+            Arc::new(ValidatorServiceMetrics::new_for_tests()),
+            TrafficControllerMetrics::new_for_tests(),
+            // TODO: for validator benchmarking purposes, we should allow for this
+            // to be configurable and introduce traffic control benchmarks to test
+            // against different policies
+            None, /* PolicyConfig */
+            None, /* RemoteFirewallConfig */
+        ));
         Self {
             validator_service,
             epoch_store,

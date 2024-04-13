@@ -1184,7 +1184,6 @@ async fn test_handle_certificate_errors() {
         .handle_certificate_v2(ct.clone(), Some(socket_addr))
         .await
         .unwrap_err();
-
     assert_matches!(
         err,
         SuiError::WrongEpoch {

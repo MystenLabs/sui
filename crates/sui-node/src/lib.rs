@@ -29,6 +29,7 @@ use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
+use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
@@ -683,7 +684,8 @@ impl SuiNode {
             &prometheus_registry,
             custom_rpc_runtime,
             software_version,
-        )?;
+        )
+        .await?;
 
         let accumulator = Arc::new(StateAccumulator::new(execution_cache));
 
@@ -1400,10 +1402,10 @@ impl SuiNode {
             state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
-            config.policy_config.clone().unwrap_or_default(),
+            TrafficControllerMetrics::new(prometheus_registry),
+            config.policy_config.clone(),
             config.firewall_config.clone(),
-        )
-        .await;
+        );
 
         let mut server_conf = mysten_network::config::Config::new();
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
@@ -1861,7 +1863,7 @@ fn build_kv_store(
     )))
 }
 
-pub fn build_http_server(
+pub async fn build_http_server(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -1880,7 +1882,12 @@ pub fn build_http_server(
     let mut router = axum::Router::new();
 
     let json_rpc_router = {
-        let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+        let mut server = JsonRpcServerBuilder::new(
+            env!("CARGO_PKG_VERSION"),
+            prometheus_registry,
+            config.policy_config.clone(),
+            config.firewall_config.clone(),
+        );
 
         let kv_store = build_kv_store(&state, config, prometheus_registry)?;
 
@@ -1941,7 +1948,7 @@ pub fn build_http_server(
         } else {
             None
         };
-        server.to_router(server_type)?
+        server.to_router(server_type).await?
     };
 
     router = router.merge(json_rpc_router);

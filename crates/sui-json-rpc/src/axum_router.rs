@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
+use sui_types::traffic_control::RemoteFirewallConfig;
+use sui_types::traffic_control::ServiceResponse;
 
 use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
@@ -16,12 +19,17 @@ use jsonrpsee::types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT
 use jsonrpsee::types::{ErrorObject, Id, InvalidRequest, Params, Request};
 use jsonrpsee::{core::server::rpc_module::Methods, server::logger::Logger};
 use serde_json::value::{RawValue, Value};
+use sui_core::traffic_controller::{
+    metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
+};
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::traffic_control::PolicyConfig;
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
 
 pub const MAX_RESPONSE_SIZE: u32 = 2 << 30;
+const TOO_MANY_REQUESTS_MSG: &str = "Too many requests";
 
 #[derive(Clone, Debug)]
 pub struct JsonRpcService<L> {
@@ -32,15 +40,30 @@ pub struct JsonRpcService<L> {
     /// Registered server methods.
     methods: Methods,
     rpc_router: RpcRouter,
+    traffic_controller: Option<Arc<TrafficController>>,
 }
 
 impl<L> JsonRpcService<L> {
-    pub fn new(methods: Methods, rpc_router: RpcRouter, logger: L) -> Self {
+    pub fn new(
+        methods: Methods,
+        rpc_router: RpcRouter,
+        logger: L,
+        remote_fw_config: Option<RemoteFirewallConfig>,
+        policy_config: Option<PolicyConfig>,
+        traffic_controller_metrics: TrafficControllerMetrics,
+    ) -> Self {
         Self {
             methods,
             rpc_router,
             logger,
             id_provider: Arc::new(RandomIntegerIdProvider),
+            traffic_controller: policy_config.map(|policy| {
+                Arc::new(TrafficController::spawn(
+                    policy,
+                    remote_fw_config,
+                    traffic_controller_metrics,
+                ))
+            }),
         }
     }
 }
@@ -119,7 +142,22 @@ async fn process_raw_request<L: Logger>(
     client_addr: SocketAddr,
 ) -> MethodResponse {
     if let Ok(request) = serde_json::from_str::<Request>(raw_request) {
-        process_request(request, api_version, service.call_data(), client_addr).await
+        // check if either IP is blocked, in which case return early
+        if let Some(traffic_controller) = &service.traffic_controller {
+            if let Err(blocked_response) =
+                handle_traffic_req(traffic_controller.clone(), client_addr).await
+            {
+                return blocked_response;
+            }
+        }
+        let response =
+            process_request(request, api_version, service.call_data(), client_addr).await;
+
+        // handle response tallying
+        if let Some(traffic_controller) = &service.traffic_controller {
+            handle_traffic_resp(traffic_controller.clone(), client_addr, &response);
+        }
+        response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
         MethodResponse::error(
             Id::Null,
@@ -129,6 +167,33 @@ async fn process_raw_request<L: Logger>(
         let (id, code) = prepare_error(raw_request);
         MethodResponse::error(id, ErrorObject::from(code))
     }
+}
+
+async fn handle_traffic_req(
+    traffic_controller: Arc<TrafficController>,
+    client_ip: SocketAddr,
+) -> Result<(), MethodResponse> {
+    if !traffic_controller.check(Some(client_ip), None).await {
+        // Entity in blocklist
+        let err_obj =
+            ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), &TOO_MANY_REQUESTS_MSG, None);
+        Err(MethodResponse::error(Id::Null, err_obj))
+    } else {
+        Ok(())
+    }
+}
+
+fn handle_traffic_resp(
+    traffic_controller: Arc<TrafficController>,
+    client_ip: SocketAddr,
+    response: &MethodResponse,
+) {
+    traffic_controller.tally(TrafficTally {
+        connection_ip: Some(client_ip.ip()),
+        proxy_ip: None,
+        result: ServiceResponse::Fullnode(response.clone()),
+        timestamp: SystemTime::now(),
+    });
 }
 
 async fn process_request<L: Logger>(
