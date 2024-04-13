@@ -38,7 +38,9 @@
 //! The above design is used for both objects and markers.
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store::{
+    ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
+};
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
@@ -83,14 +85,14 @@ use tracing::{debug, info, instrument, trace};
 
 use super::ExecutionCacheAPI;
 use super::{
-    cache_types::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
-    ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
+    cache_types::CachedVersionMap, implement_passthrough_traits, object_locks::ObjectLocks,
+    CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
 };
 
 #[cfg(test)]
 #[path = "unit_tests/writeback_cache_tests.rs"]
-mod writeback_cache_tests;
+pub mod writeback_cache_tests;
 
 #[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
@@ -296,6 +298,8 @@ pub struct WritebackCache {
     // - note that we removed any unfinalized packages from the cache during revert_state_update().
     packages: MokaCache<ObjectID, PackageObject>,
 
+    object_locks: ObjectLocks,
+
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
     metrics: Arc<ExecutionCacheMetrics>,
@@ -341,6 +345,7 @@ impl WritebackCache {
             dirty: UncommittedData::new(),
             cached: CachedCommittedData::new(),
             packages,
+            object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             store,
             metrics,
@@ -821,6 +826,8 @@ impl WritebackCache {
             "should be empty due to revert_state_update"
         );
         self.dirty.clear();
+        info!("clearing old transaction locks");
+        self.object_locks.clear();
     }
 
     fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
@@ -1233,32 +1240,96 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    fn get_lock(
-        &self,
-        _obj_ref: ObjectRef,
-        _epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiLockResult {
-        todo!()
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
+        let cur_epoch = epoch_store.epoch();
+        match self.get_object_by_id_cache_only(&obj_ref.0) {
+            CacheResult::Hit((_, obj)) => {
+                let actual_objref = obj.compute_object_reference();
+                if obj_ref != actual_objref {
+                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
+                        locked_ref: actual_objref,
+                    })
+                } else {
+                    // requested object ref is live, check if there is a lock
+                    Ok(
+                        match self
+                            .object_locks
+                            .get_transaction_lock(&obj_ref, epoch_store)?
+                        {
+                            Some(tx_digest) => ObjectLockStatus::LockedToTx {
+                                locked_by_tx: LockDetailsDeprecated {
+                                    epoch: cur_epoch,
+                                    tx_digest,
+                                },
+                            },
+                            None => ObjectLockStatus::Initialized,
+                        },
+                    )
+                }
+            }
+            CacheResult::NegativeHit => {
+                Err(SuiError::from(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    // even though we know the requested version, we leave it as None to indicate
+                    // that the object does not exist at any version
+                    version: None,
+                }))
+            }
+            CacheResult::Miss => self.store.get_lock(obj_ref, epoch_store),
+        }
     }
 
-    fn _get_latest_lock_for_object_id(&self, _object_id: ObjectID) -> SuiResult<ObjectRef> {
-        todo!()
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+        let obj = ExecutionCacheRead::get_object(self, &object_id)?.ok_or(
+            UserInputError::ObjectNotFound {
+                object_id,
+                version: None,
+            },
+        )?;
+        Ok(obj.compute_object_reference())
     }
 
-    fn check_owned_object_locks_exist(&self, _owned_object_refs: &[ObjectRef]) -> SuiResult {
-        todo!()
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        do_fallback_lookup(
+            owned_object_refs,
+            |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
+                CacheResult::Hit((version, obj)) => {
+                    if obj.compute_object_reference() != *obj_ref {
+                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: version,
+                        }
+                        .into())
+                    } else {
+                        Ok(CacheResult::Hit(()))
+                    }
+                }
+                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: None,
+                }
+                .into()),
+                CacheResult::Miss => Ok(CacheResult::Miss),
+            },
+            |remaining| {
+                self.store.check_owned_objects_are_live(remaining)?;
+                Ok(vec![(); remaining.len()])
+            },
+        )?;
+        Ok(())
     }
 }
 
 impl ExecutionCacheWrite for WritebackCache {
-    #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
-        _epoch_store: &AuthorityPerEpochStore,
-        _owned_input_objects: &'a [ObjectRef],
-        _tx_digest: VerifiedSignedTransaction,
+        epoch_store: &'a AuthorityPerEpochStore,
+        owned_input_objects: &'a [ObjectRef],
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
-        todo!()
+        self.object_locks
+            .acquire_transaction_locks(self, epoch_store, owned_input_objects, transaction)
+            .boxed()
     }
 
     fn write_transaction_outputs(

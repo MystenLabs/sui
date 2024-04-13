@@ -1218,7 +1218,7 @@ impl AuthorityState {
 
     fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         self.execution_cache
-            .check_owned_object_locks_exist(owned_object_refs)
+            .check_owned_objects_are_live(owned_object_refs)
     }
 
     /// This function captures the required state to debug a forked transaction.

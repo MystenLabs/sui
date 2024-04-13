@@ -913,17 +913,6 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
-        // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
-        // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-        // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-        //    (But the lock should exist which means previous transactions finished)
-        // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
-        //    fine
-        // 4. Locks may have existed when we started processing this tx, but could have since
-        //    been deleted by a concurrent tx that finished first. In that case, check if the
-        //    tx effects exist.
-        self.check_owned_object_locks_exist(locks_to_delete)?;
-
         self.initialize_live_object_markers_impl(&mut write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
@@ -1134,7 +1123,7 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            epoch_tables.write_transaction_locks(transaction, locks_to_write)?;
+            epoch_tables.write_transaction_locks(transaction, locks_to_write.into_iter())?;
         }
 
         Ok(())
@@ -1255,7 +1244,7 @@ impl AuthorityStore {
     /// Returns UserInputError::ObjectNotFound if cannot find lock record for at least one of the objects.
     /// Returns UserInputError::ObjectVersionUnavailableForConsumption if at least one object lock is not initialized
     ///     at the given version.
-    pub fn check_owned_object_locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
+    pub fn check_owned_objects_are_live(&self, objects: &[ObjectRef]) -> SuiResult {
         let locks = self
             .perpetual_tables
             .live_owned_object_markers
