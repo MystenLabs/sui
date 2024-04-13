@@ -1218,7 +1218,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         ];
 
     assert!(client
-        .handle_transaction(bad_signature_transfer_transaction)
+        .handle_transaction(bad_signature_transfer_transaction, None)
         .await
         .is_err());
 

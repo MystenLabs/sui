@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::*;
@@ -38,7 +39,7 @@ async fn receive_object_feature_deny() {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(txn)
+        .handle_transaction(txn, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
         .await
         .map(|_| ())
         .unwrap_err();
