@@ -200,6 +200,14 @@ fn update_index_and_hash(
     true
 }
 
+impl<C> Drop for ConsensusHandler<C> {
+    fn drop(&mut self) {
+        // Assuming ConsensusHandler only gets dropped at process shutdown and epoch change,
+        // it is safe to try to release db handles if epoch has advanced.
+        self.epoch_store.release_db_handles();
+    }
+}
+
 #[async_trait]
 impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandler<C> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.

@@ -35,7 +35,7 @@ pub struct MysticetiManager {
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     running: Mutex<Running>,
-    metrics: ConsensusManagerMetrics,
+    metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
@@ -51,8 +51,8 @@ impl MysticetiManager {
         protocol_keypair: ed25519::Ed25519KeyPair,
         network_keypair: ed25519::Ed25519KeyPair,
         storage_base_path: PathBuf,
-        metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
+        metrics: Arc<ConsensusManagerMetrics>,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
         Self {
@@ -198,9 +198,5 @@ impl ConsensusManagerTrait for MysticetiManager {
 
     async fn is_running(&self) -> bool {
         Running::False != *self.running.lock().await
-    }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
     }
 }

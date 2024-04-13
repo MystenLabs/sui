@@ -238,6 +238,12 @@ pub struct AuthorityPerEpochStore {
     /// This is an ArcSwapOption because it needs to be used concurrently,
     /// and it needs to be cleared at the end of the epoch.
     tables: ArcSwapOption<AuthorityEpochTables>,
+    // Keeps track of the number of components still using tables.
+    // Initialized for monitor_reconfiguration() and ConsensusHandler if on validator.
+    // When it reaches 0, tables can be cleared.
+    // NOTE: a better way to release tables should be to avoid holding Arc<AuthorityPerEpochStore>
+    // after epoch change and use weak references if necessary.
+    tables_release_barrier: Mutex<usize>,
 
     protocol_config: ProtocolConfig,
 
@@ -928,6 +934,7 @@ impl AuthorityPerEpochStore {
             committee,
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
+            tables_release_barrier: Mutex::new(if is_validator { 2 } else { 1 }),
             parent_path: parent_path.to_path_buf(),
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
@@ -958,14 +965,18 @@ impl AuthorityPerEpochStore {
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         match self.tables.load_full() {
             Some(tables) => Ok(tables),
-            None => Err(SuiError::EpochEnded),
+            None => Err(SuiError::EpochEnded(self.epoch())),
         }
     }
 
     pub fn release_db_handles(&self) {
-        // When force releasing DB handle is no longer needed, it will still be useful
-        // to make sure AuthorityPerEpochStore is not used after the next epoch starts.
-        self.tables.store(None);
+        // When the logic to release DB handles becomes obsolete, it may still be useful
+        // to make sure AuthorityEpochTables is not used after the next epoch starts.
+        let mut tables_release_barrier = self.tables_release_barrier.lock();
+        *tables_release_barrier = tables_release_barrier.saturating_sub(1);
+        if *tables_release_barrier == 0 {
+            self.tables.store(None);
+        }
     }
 
     // Returns true if authenticator state is enabled in the protocol config *and* the
@@ -1375,7 +1386,14 @@ impl AuthorityPerEpochStore {
     /// Deletes one pending certificate.
     #[instrument(level = "trace", skip_all)]
     pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables()?.pending_execution.remove(digest)?;
+        let tables = match self.tables() {
+            Ok(tables) => tables,
+            // After Epoch ends, it is no longer necessary to remove pending transactions
+            // because the table will not be used anymore and be deleted eventually.
+            Err(SuiError::EpochEnded(_)) => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        tables.pending_execution.remove(digest)?;
         Ok(())
     }
 

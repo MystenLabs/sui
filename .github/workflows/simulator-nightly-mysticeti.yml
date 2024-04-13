@@ -20,8 +20,8 @@ on:
         default: "30"
 
 env:
-  # Enable Mysticeti in tests.
-  CONSENSUS: "mysticeti"
+  # Swap between Narwhal and Mysticeti each epoch.
+  CONSENSUS: "swap_each_epoch"
 
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
   TEST_NUM: "${{ github.event.inputs.test_num || '30' }}"

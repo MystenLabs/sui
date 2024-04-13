@@ -83,6 +83,8 @@ pub struct PendingCertificate {
     pub waiting_input_objects: BTreeSet<InputKey>,
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
+    // Epoch when enqueued, after which the certificate should no longer be executed.
+    pub epoch: EpochId,
 }
 
 struct CacheInner {
@@ -550,6 +552,7 @@ impl TransactionManager {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
+                epoch: epoch_store.epoch(),
             });
         }
 
