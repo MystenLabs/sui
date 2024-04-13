@@ -17,6 +17,15 @@ pub struct TrafficTally {
     pub timestamp: SystemTime,
 }
 
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct RemoteFirewallConfig {
+    pub remote_fw_url: String,
+    pub delegate_spam_blocking: bool,
+    pub delegate_error_blocking: bool,
+    pub destination_port: u16,
+}
+
 // Serializable representation of policy types, used in config
 // in order to easily change in tests or to killswitch
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -219,7 +228,7 @@ impl TestPanicOnInvocationPolicy {
     }
 
     fn handle_tally(&mut self, _: TrafficTally) -> PolicyResponse {
-        panic!("This policy should never be invoked")
+        panic!("Tally for this policy should never be invoked")
     }
 
     fn policy_config(&self) -> &PolicyConfig {
