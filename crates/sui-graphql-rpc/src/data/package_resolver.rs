@@ -4,17 +4,19 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::account_address::AccountAddress;
-use sui_indexer::errors::IndexerError;
-use sui_indexer::{indexer_reader::IndexerReader, schema::objects};
+use sui_indexer::schema::objects;
 use sui_package_resolver::Resolver;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
 use sui_types::base_types::SequenceNumber;
 use sui_types::object::Object;
-use thiserror::Error;
+
+use crate::error::Error;
+
+use super::{Db, DbConnection, QueryExecutor};
 
 const STORE: &str = "PostgresDB";
 
@@ -23,59 +25,63 @@ pub(crate) type PackageResolver = Resolver<PackageCache>;
 
 /// Store which fetches package for the given address from the backend db on every call
 /// to `fetch`
-pub struct DbPackageStore(pub IndexerReader);
+pub struct DbPackageStore(Db);
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("{0}")]
-    Indexer(#[from] IndexerError),
+impl DbPackageStore {
+    pub fn new(db: Db) -> Self {
+        Self(db)
+    }
 }
 
 #[async_trait]
 impl PackageStore for DbPackageStore {
     async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        let query = objects::dsl::objects
-            .select(objects::dsl::object_version)
-            .filter(objects::dsl::object_id.eq(id.to_vec()));
+        let Self(db) = self;
+        let version: Option<i64> = db
+            .execute(move |conn| {
+                conn.result(move || {
+                    objects::dsl::objects
+                        .select(objects::dsl::object_version)
+                        .filter(objects::dsl::object_id.eq(id.to_vec()))
+                })
+                .optional()
+            })
+            .await?;
 
-        let Some(version) = self
-            .0
-            .run_query_async(move |conn| query.get_result::<i64>(conn).optional())
-            .await
-            .map_err(Error::Indexer)?
-        else {
-            return Err(PackageResolverError::PackageNotFound(id));
-        };
-
-        Ok(SequenceNumber::from_u64(version as u64))
+        if let Some(version) = version {
+            Ok(SequenceNumber::from_u64(version as u64))
+        } else {
+            Err(PackageResolverError::PackageNotFound(id))
+        }
     }
 
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        let query = objects::dsl::objects
-            .select(objects::dsl::serialized_object)
-            .filter(objects::dsl::object_id.eq(id.to_vec()));
+        let Self(db) = self;
+        let bcs: Option<Vec<u8>> = db
+            .execute(move |conn| {
+                conn.result(move || {
+                    objects::dsl::objects
+                        .select(objects::dsl::serialized_object)
+                        .filter(objects::dsl::object_id.eq(id.to_vec()))
+                })
+                .optional()
+            })
+            .await?;
 
-        let Some(bcs) = self
-            .0
-            .run_query_async(move |conn| query.get_result::<Vec<u8>>(conn).optional())
-            .await
-            .map_err(Error::Indexer)?
-        else {
-            return Err(PackageResolverError::PackageNotFound(id));
-        };
-
-        let object = bcs::from_bytes::<Object>(&bcs)?;
-        Ok(Arc::new(Package::read(&object)?))
+        if let Some(bcs) = bcs {
+            let object = bcs::from_bytes::<Object>(&bcs)?;
+            Ok(Arc::new(Package::read(&object)?))
+        } else {
+            Err(PackageResolverError::PackageNotFound(id))
+        }
     }
 }
 
 impl From<Error> for PackageResolverError {
     fn from(source: Error) -> Self {
-        match source {
-            Error::Indexer(indexer_error) => Self::Store {
-                store: STORE,
-                source: Box::new(indexer_error),
-            },
+        Self::Store {
+            store: STORE,
+            source: Box::new(source),
         }
     }
 }
