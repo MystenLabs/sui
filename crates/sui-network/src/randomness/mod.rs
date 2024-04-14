@@ -399,7 +399,7 @@ impl RandomnessEventLoop {
                     return;
                 }
             };
-        // Verify we received the expected share IDs (to protect against DoS attacks that send
+        // Verify we received the expected share IDs (to protect against a validator that sends
         // valid signatures of other peers which will be successfully verified below).
         let received_share_ids = partial_sigs.iter().map(|s| s.index).collect::<Vec<_>>();
         if received_share_ids != *expected_share_ids {
@@ -407,7 +407,7 @@ impl RandomnessEventLoop {
             return;
         }
 
-        // We passed all the checks, deserialize and save the partial sigs.
+        // We passed all the checks, save the partial sigs.
         debug!("recording received partial signatures");
         self.received_partial_sigs
             .insert((epoch, round, peer_id), partial_sigs);
