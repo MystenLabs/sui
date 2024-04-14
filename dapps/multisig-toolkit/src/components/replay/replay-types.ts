@@ -12,7 +12,7 @@ export type Effects = {
 };
 
 export type EffectsV2 = {
-	status: ExecutionStatus;
+	status: string | ExecutionFailure;
 	executedEpoch: string;
 	gasUsed: GasUsed;
 	transactionDigest: string;
@@ -20,15 +20,13 @@ export type EffectsV2 = {
 	eventsDigest: string;
 	dependencies: string[];
 	lamportVersion: number;
-	changedObjects: ChangedObject[];
-	unchangedSharedObjects: UnchangedSharedObject[];
+	changedObjects: ChangedObjects;
+	unchangedSharedObjects: UnchangedSharedObjects;
 	auxDataDigest: number;
 };
 
-export type UnchangedSharedObject = {
-	objectId: string;
-	unchangedSharedKind: UnchangedSharedKind;
-};
+export type ChangedObjects = [string, EffectsObjectChange][];
+export type UnchangedSharedObjects = [string, UnchangedSharedKind][];
 
 export type UnchangedSharedKind = {
 	ReadOnlyRoot: VersionDigest;
@@ -36,19 +34,9 @@ export type UnchangedSharedKind = {
 	ReadDeleted: number;
 };
 
-export type ExecutionStatus = {
-	success: string;
-	failure: ExecutionFailure;
-};
-
 export type ExecutionFailure = {
 	error: string;
 	command: number;
-};
-
-export type ChangedObject = {
-	objectId: string;
-	effectsObjectChange: EffectsObjectChange;
 };
 
 export type EffectsObjectChange = {
@@ -69,9 +57,9 @@ export type ObjectIn = {
 };
 
 export type ObjectOut = {
-	NotExist?: string;
-	ObjectWrite?: Exist;
-	PackageWrite?: VersionDigest;
+	NotExist: string;
+	ObjectWrite: Exist;
+	PackageWrite: VersionDigest;
 };
 
 export type VersionDigest = {
@@ -216,9 +204,11 @@ export type ReplayProgrammableTransactions = {
 
 export type CommandWithOutput = {
 	command: Command;
-	MRef: any[];
+	MutableRefs: MutableReference;
 	RetVals: any[];
 };
+
+export type MutableReference = [Argument, MoveValue][];
 
 export type Command = {
 	MoveCall: MoveCall;
@@ -238,21 +228,8 @@ export type MoveCall = {
 	arguments: Argument[];
 };
 
-export type TransactionResults = {
-	MutableReferences: any[];
-	ReturnValues: any[];
-};
-
-export type MutableReference = {
-	Argument: Argument;
-	MoveValue: MoveValue;
-};
-
 export type MoveValue = {
-	numeric?: number;
-	bool?: boolean;
-	vector?: MoveValue[];
-	struct?: MoveStruct;
+	value: [number | boolean | MoveStruct | MoveValue[]];
 };
 
 export type MoveStruct = {

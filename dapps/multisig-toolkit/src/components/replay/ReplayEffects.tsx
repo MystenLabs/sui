@@ -4,7 +4,7 @@
 import { ReplayLink } from '@/components/replay/ReplayLink';
 
 import { PreviewCard } from '../preview-effects/PreviewCard';
-import { ChangedObject, EffectsV2, UnchangedSharedObject } from './replay-types';
+import { ChangedObjects, EffectsV2, UnchangedSharedObjects } from './replay-types';
 
 export function ReplayEffects({ effects }: { effects: EffectsV2 }) {
 	const output = [];
@@ -33,7 +33,7 @@ export function ReplayEffects({ effects }: { effects: EffectsV2 }) {
 	return output;
 }
 
-const effectsSectionChangedObjects = (input: ChangedObject[]) => {
+const effectsSectionChangedObjects = (input: ChangedObjects) => {
 	return (
 		<div>
 			<PreviewCard.Root className="m-2">
@@ -41,7 +41,9 @@ const effectsSectionChangedObjects = (input: ChangedObject[]) => {
 				<PreviewCard.Body>
 					<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
 						{input.map((item, index) => (
-							<ReplayLink text={item.objectId} landing={true} />
+							<>
+								<ReplayLink landing={true} text={item[0]} />
+							</>
 						))}
 					</div>
 				</PreviewCard.Body>
@@ -50,7 +52,7 @@ const effectsSectionChangedObjects = (input: ChangedObject[]) => {
 	);
 };
 
-const effectsSectionUnchangedSharedObjects = (input: UnchangedSharedObject[]) => {
+const effectsSectionUnchangedSharedObjects = (input: UnchangedSharedObjects) => {
 	return (
 		<div>
 			<PreviewCard.Root className="m-2">
@@ -58,7 +60,9 @@ const effectsSectionUnchangedSharedObjects = (input: UnchangedSharedObject[]) =>
 				<PreviewCard.Body>
 					<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
 						{input.map((item, index) => (
-							<ReplayLink landing={true} text={item.objectId} />
+							<>
+								<ReplayLink landing={true} text={item[0]} />
+							</>
 						))}
 					</div>
 				</PreviewCard.Body>

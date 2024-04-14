@@ -16,7 +16,7 @@ export function ReplayOverview({
 	inputs: ReplayInput[];
 }) {
 	let success: boolean;
-	success = 'success' === effects.status.success;
+	success = effects.status === 'Success';
 	const totalGasCost = () => {
 		return (
 			onChainAmountToFloat(
