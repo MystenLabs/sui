@@ -23,6 +23,7 @@ module bridge::message {
     const EEmptyList: u64 = 2;
     const EInvalidMessageType: u64 = 3;
     const EInvalidEmergencyOpType: u64 = 4;
+    const EInvalidPayloadLength: u64 = 5;
 
     // Emergency Op types
     const PAUSE: u8 = 0;
@@ -253,7 +254,7 @@ module bridge::message {
         // bcs serialzies u64 as 8 bytes
         payload.append(reverse_bytes(bcs::to_bytes(&amount)));
 
-        assert!(vector::length(&payload) == 64, 0);
+        assert!(vector::length(&payload) == 64, EInvalidPayloadLength);
 
         BridgeMessage {
             message_type: message_types::token(),
