@@ -577,7 +577,6 @@ impl<'env> Context<'env> {
                     ..
                 } = *mt;
                 let mident_name = module_type.original_mident();
-                // Some((module_type.original_mident(), DatatypeName(name), module_type))
                 match (&ma.value, module_type) {
                     (EN::Name(_) | EN::ModuleAccess(_, _), ModuleType::Struct(struct_type)) => {
                         Some((
