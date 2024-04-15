@@ -540,6 +540,27 @@ module bridge::bridge {
         TRANSFER_STATUS_PENDING
     }
 
+    #[allow(unused_function)]
+    fun get_token_transfer_action_signatures(
+        self: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): Option<vector<vector<u8>>> {
+        let inner = load_inner_mut(self);
+        let key = message::create_key(
+            source_chain,
+            message_types::token(),
+            bridge_seq_num
+        );
+
+        if (!inner.token_transfer_records.contains(key)) {
+            return option::none()
+        };
+
+        let record = &inner.token_transfer_records[key];
+        record.verified_signatures
+    }
+
     #[test_only]
     fun new_for_testing(ctx: &mut TxContext, chain_id: u8): Bridge {
         let bridge_inner = BridgeInner {
@@ -855,6 +876,7 @@ module bridge::bridge {
             claimed: false,
         });
         assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 10), TRANSFER_STATUS_PENDING);
+        assert_eq(get_token_transfer_action_signatures(&mut bridge, chain_id, 10), option::none());
 
         // Test when ready for claim
         let message = message::create_token_bridge_message(
@@ -873,6 +895,7 @@ module bridge::bridge {
             claimed: false,
         });
         assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 11), TRANSFER_STATUS_APPROVED);
+        assert_eq(get_token_transfer_action_signatures(&mut bridge, chain_id, 11), option::some(vector[]));
 
         // Test when already claimed
         let message = message::create_token_bridge_message(
@@ -887,13 +910,15 @@ module bridge::bridge {
         let key = message::key(&message);
         linked_table::push_back(&mut load_inner_mut(&mut bridge).token_transfer_records, key, BridgeRecord {
             message,
-            verified_signatures: option::some(vector[]),
+            verified_signatures: option::some(vector[b"1234"]),
             claimed: true,
         });
         assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 12), TRANSFER_STATUS_CLAIMED);
+        assert_eq(get_token_transfer_action_signatures(&mut bridge, chain_id, 12), option::some(vector[b"1234"]));
 
         // Test when message not found
         assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 13), TRANSFER_STATUS_NOT_FOUND);
+        assert_eq(get_token_transfer_action_signatures(&mut bridge, chain_id, 13), option::none());
 
         destroy(bridge);
         coin::burn_for_testing(coin);

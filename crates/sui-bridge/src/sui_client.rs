@@ -303,6 +303,40 @@ where
         }
     }
 
+    pub async fn get_token_transfer_action_onchain_signatures_until_success(
+        &self,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Option<Vec<Vec<u8>>> {
+        let now = std::time::Instant::now();
+        loop {
+            let Ok(Ok(bridge_object_arg)) = retry_with_max_elapsed_time!(
+                self.get_mutable_bridge_object_arg(),
+                Duration::from_secs(30)
+            ) else {
+                // TODO: add metrics and fire alert
+                error!("Failed to get bridge object arg");
+                continue;
+            };
+            let Ok(Ok(sigs)) = retry_with_max_elapsed_time!(
+                self.inner.get_token_transfer_action_onchain_signatures(
+                    bridge_object_arg,
+                    source_chain_id,
+                    seq_number
+                ),
+                Duration::from_secs(30)
+            ) else {
+                // TODO: add metrics and fire alert
+                error!(
+                    source_chain_id,
+                    seq_number, "Failed to get token transfer action onchain signatures"
+                );
+                continue;
+            };
+            return sigs;
+        }
+    }
+
     pub async fn get_gas_data_panic_if_not_gas(
         &self,
         gas_object_id: ObjectID,
@@ -347,6 +381,13 @@ pub trait SuiClientInner: Send + Sync {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError>;
+
+    async fn get_token_transfer_action_onchain_signatures(
+        &self,
+        bridge_object_arg: ObjectArg,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<Option<Vec<Vec<u8>>>, BridgeError>;
 
     async fn get_gas_data_panic_if_not_gas(
         &self,
@@ -401,7 +442,6 @@ impl SuiClientInner for SuiSdkClient {
         self.http().get_latest_bridge().await.map_err(|e| e.into())
     }
 
-    // FIXME: pass in source chain id and seq number instead of the entire action
     async fn get_token_transfer_action_onchain_status(
         &self,
         bridge_object_arg: ObjectArg,
@@ -462,6 +502,60 @@ impl SuiClientInner for SuiSdkClient {
         })?;
 
         return Ok(status);
+    }
+
+    async fn get_token_transfer_action_onchain_signatures(
+        &self,
+        bridge_object_arg: ObjectArg,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
+        let pt = ProgrammableTransaction {
+            inputs: vec![
+                CallArg::Object(bridge_object_arg),
+                CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
+            ],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: BRIDGE_PACKAGE_ID,
+                module: Identifier::new("bridge").unwrap(),
+                function: Identifier::new("get_token_transfer_action_signatures").unwrap(),
+                type_arguments: vec![],
+                arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+            }))],
+        };
+        let kind = TransactionKind::programmable(pt.clone());
+        let resp = self
+            .read_api()
+            .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
+            .await?;
+        let DevInspectResults {
+            results, effects, ..
+        } = resp;
+        let Some(results) = results else {
+            return Err(BridgeError::Generic(format!(
+                "Can't get token transfer action signatures (empty results). effects: {:?}",
+                effects
+            )));
+        };
+        let return_values = &results
+            .first()
+            .ok_or(BridgeError::Generic(format!(
+                "Can't get token transfer action signatures, results: {:?}",
+                results
+            )))?
+            .return_values;
+        let (value_bytes, _type_tag) =
+            return_values.first().ok_or(BridgeError::Generic(format!(
+                "Can't get token transfer action signatures, results: {:?}",
+                results
+            )))?;
+        bcs::from_bytes::<Option<Vec<Vec<u8>>>>(value_bytes).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Can't parse token transfer action signatures as Option<Vec<Vec<u8>>>: {:?}",
+                results
+            ))
+        })
     }
 
     async fn execute_transaction_block_with_effects(
