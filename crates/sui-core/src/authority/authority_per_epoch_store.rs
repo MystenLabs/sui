@@ -238,14 +238,6 @@ pub struct AuthorityPerEpochStore {
     /// This is an ArcSwapOption because it needs to be used concurrently,
     /// and it needs to be cleared at the end of the epoch.
     tables: ArcSwapOption<AuthorityEpochTables>,
-    // Keeps track of the number of components which tables must out live.
-    // The components include monitor_reconfiguration(), and ConsensusHandler if on validator.
-    // So the value is initialized to 2 on validators, and 1 on fullnode.
-    // When the value reaches 0, tables can be dropped.
-    // NOTE: a better way to release tables should be to avoid holding Arc<AuthorityPerEpochStore>
-    // after epoch change and use weak references if necessary.
-    // See release_db_handles() for more details.
-    tables_release_barrier: Mutex<usize>,
 
     protocol_config: ProtocolConfig,
 
@@ -936,7 +928,6 @@ impl AuthorityPerEpochStore {
             committee,
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
-            tables_release_barrier: Mutex::new(if is_validator { 2 } else { 1 }),
             parent_path: parent_path.to_path_buf(),
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
@@ -977,11 +968,7 @@ impl AuthorityPerEpochStore {
     pub fn release_db_handles(&self) {
         // When the logic to release DB handles becomes obsolete, it may still be useful
         // to make sure AuthorityEpochTables is not used after the next epoch starts.
-        let mut tables_release_barrier = self.tables_release_barrier.lock();
-        *tables_release_barrier = tables_release_barrier.saturating_sub(1);
-        if *tables_release_barrier == 0 {
-            self.tables.store(None);
-        }
+        self.tables.store(None);
     }
 
     // Returns true if authenticator state is enabled in the protocol config *and* the

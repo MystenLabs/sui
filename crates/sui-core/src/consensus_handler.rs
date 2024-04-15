@@ -200,14 +200,6 @@ fn update_index_and_hash(
     true
 }
 
-impl<C> Drop for ConsensusHandler<C> {
-    fn drop(&mut self) {
-        // Assuming ConsensusHandler only gets dropped at process shutdown and epoch change,
-        // it is safe to try to release db handles if epoch has advanced.
-        self.epoch_store.release_db_handles();
-    }
-}
-
 #[async_trait]
 impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandler<C> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
@@ -519,7 +511,7 @@ impl AsyncTransactionScheduler {
 /// During initialization, the sender is passed into Mysticeti which can send consensus output
 /// to the channel.
 pub struct MysticetiConsensusHandler {
-    handle: tokio::task::JoinHandle<()>,
+    handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl MysticetiConsensusHandler {
@@ -534,13 +526,24 @@ impl MysticetiConsensusHandler {
                     .await;
             }
         });
-        Self { handle }
+        Self {
+            handle: Some(handle),
+        }
+    }
+
+    pub async fn abort(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
     }
 }
 
 impl Drop for MysticetiConsensusHandler {
     fn drop(&mut self) {
-        self.handle.abort();
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
     }
 }
 
