@@ -1034,13 +1034,14 @@ fn compile_match_head(
                     .iter()
                     .map(|(_, _, ty)| ty)
                     .collect::<Vec<_>>();
-                // println!("specializing to {:?}", datatype_name);
-                // Note that these binders will include the default binders
+                debug_print!(
+                    context.debug.match_specialization, ("specialized to" => datatype_name; dbg)
+                );
                 let (mut new_binders, inner_matrix) = matrix.specialize_struct(context, bind_tys);
-                // println!("binders: {:#?}", new_binders);
+                debug_print!(context.debug.match_specialization,
+                             ("binders" => new_binders; dbg),
+                             ("specialized" => inner_matrix));
                 subject_binders.append(&mut new_binders);
-                // println!("specialized:");
-                // inner_matrix.print();
                 StructUnpack::Unpack(fringe_binders, (inner_fringe, inner_matrix))
             } else {
                 let (mut new_binders, default_matrix) = matrix.specialize_default();
@@ -1074,13 +1075,15 @@ fn compile_match_head(
                     .iter()
                     .map(|(_, _, ty)| ty)
                     .collect::<Vec<_>>();
-                // println!("specializing to {:?}", ctor);
+                debug_print!(
+                    context.debug.match_specialization, ("specialized to" => datatype_name; dbg)
+                );
                 let (mut new_binders, inner_matrix) =
                     matrix.specialize_variant(context, &ctor, bind_tys);
-                // println!("binders: {:#?}", new_binders);
+                debug_print!(context.debug.match_specialization,
+                             ("binders" => new_binders; dbg),
+                             ("specialized" => inner_matrix));
                 subject_binders.append(&mut new_binders);
-                // println!("specialized:");
-                // inner_matrix.print();
                 ice_assert!(
                     context.env,
                     arms.insert(ctor, (fringe_binders, inner_fringe, inner_matrix))
@@ -1776,7 +1779,6 @@ fn make_match_struct_unpack(
             .add(field_name, (ndx, (lhs_ty, var_lvalue)))
             .unwrap();
     }
-    println!("lvalue fields: {:#?}", lvalue_fields);
 
     let unpack_lvalue = sp(
         rhs_loc,

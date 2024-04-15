@@ -2463,8 +2463,6 @@ fn assign(
     sp!(loc, ta_): T::LValue,
     rvalue_ty: &H::SingleType,
 ) -> (H::LValue, Block) {
-    print!("unpacking ");
-    ta_.print_verbose();
     use H::{LValue_ as L, UnannotatedExp_ as E};
     use T::LValue_ as A;
     let mut after = Block::new();
