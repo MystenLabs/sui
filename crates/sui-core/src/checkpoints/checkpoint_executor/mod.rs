@@ -361,6 +361,10 @@ impl CheckpointExecutor {
             .await
             .expect("commit_transaction_outputs cannot fail");
 
+        epoch_store
+            .multi_remove_pending_execution(all_tx_digests)
+            .expect("cannot fail");
+
         if !checkpoint.is_last_checkpoint_of_epoch() {
             self.bump_highest_executed_checkpoint(checkpoint);
         }

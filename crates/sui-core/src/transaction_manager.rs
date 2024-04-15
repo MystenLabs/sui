@@ -412,12 +412,6 @@ impl TransactionManager {
                         panic!("Failed to check if tx is already executed: {:?}", err)
                     })
                 {
-                    // also ensure the transaction will not be retried after restart.
-                    epoch_store
-                        .remove_pending_execution(&digest)
-                        .unwrap_or_else(|err| {
-                            panic!("remove_pending_execution should not fail: {:?}", err)
-                        });
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -559,12 +553,6 @@ impl TransactionManager {
                     "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
                     inner.epoch, pending_cert.certificate
                 );
-                // also ensure the transaction will not be retried after restart.
-                epoch_store
-                    .remove_pending_execution(&digest)
-                    .unwrap_or_else(|err| {
-                        panic!("remove_pending_execution should not fail: {:?}", err)
-                    });
                 continue;
             }
 
@@ -590,10 +578,6 @@ impl TransactionManager {
                 .is_tx_already_executed(&digest)
                 .expect("Check if tx is already executed should not fail");
             if is_tx_already_executed {
-                // also ensure the transaction will not be retried after restart.
-                epoch_store
-                    .remove_pending_execution(&digest)
-                    .expect("remove_pending_execution should not fail");
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -749,8 +733,6 @@ impl TransactionManager {
 
             inner.maybe_shrink_capacity();
         }
-
-        let _ = epoch_store.remove_pending_execution(digest);
     }
 
     /// Sends the ready certificate for execution.
