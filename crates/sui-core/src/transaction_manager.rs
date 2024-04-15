@@ -43,14 +43,6 @@ mod transaction_manager_tests;
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
 
-// Reject a transaction if transaction manager queue length is above this threshold.
-// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
-
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
 /// It receives certificates from Narwhal, validator RPC handlers, and checkpoint executor.
@@ -824,10 +816,10 @@ impl TransactionManager {
         // Too many transactions are pending execution.
         let inflight_queue_len = self.inflight_queue_len();
         fp_ensure!(
-            inflight_queue_len < MAX_TM_QUEUE_LENGTH,
+            inflight_queue_len < overload_config.max_transaction_manager_queue_length,
             SuiError::TooManyTransactionsPendingExecution {
                 queue_len: inflight_queue_len,
-                threshold: MAX_TM_QUEUE_LENGTH,
+                threshold: overload_config.max_transaction_manager_queue_length,
             }
         );
         tx_data.digest();
@@ -841,7 +833,7 @@ impl TransactionManager {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
+            if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
                 info!(
                     "Overload detected on object {:?} with {} pending transactions",
                     object_id, queue_len
@@ -849,7 +841,7 @@ impl TransactionManager {
                 fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
-                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
+                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
                 });
             }
             if let Some(age) = txn_age {

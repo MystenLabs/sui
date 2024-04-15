@@ -993,7 +993,7 @@ impl AuthorityState {
             self.check_authority_overload(tx_data)?;
         }
         self.transaction_manager
-            .check_execution_overload(&self.overload_config(), tx_data)?;
+            .check_execution_overload(self.overload_config(), tx_data)?;
         consensus_adapter.check_consensus_overload()?;
         Ok(())
     }
