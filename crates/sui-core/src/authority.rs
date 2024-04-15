@@ -826,8 +826,8 @@ impl AuthorityState {
         self.committee_store.clone()
     }
 
-    pub fn max_txn_age_in_queue(&self) -> Duration {
-        self.authority_overload_config.max_txn_age_in_queue
+    pub fn overload_config(&self) -> &AuthorityOverloadConfig {
+        &self.authority_overload_config
     }
 
     pub fn get_epoch_state_commitments(
@@ -993,7 +993,7 @@ impl AuthorityState {
             self.check_authority_overload(tx_data)?;
         }
         self.transaction_manager
-            .check_execution_overload(self.max_txn_age_in_queue(), tx_data)?;
+            .check_execution_overload(self.overload_config(), tx_data)?;
         consensus_adapter.check_consensus_overload()?;
         Ok(())
     }

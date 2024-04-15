@@ -21,7 +21,6 @@ use crate::test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
     make_transfer_object_move_transaction,
 };
-use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 use sui_types::error::SuiError;
 
 use std::collections::BTreeSet;
@@ -545,7 +544,10 @@ async fn test_per_object_overload() {
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
     // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
     // txn is needed.
-    let num_txns = MAX_PER_OBJECT_QUEUE_LENGTH + 1;
+    let num_txns = authorities[3]
+        .overload_config()
+        .max_transaction_manager_per_object_queue_length
+        + 1;
     for gas_object in gas_objects.iter().take(num_txns) {
         let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_object.id()).await;
         let shared_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
@@ -579,7 +581,7 @@ async fn test_per_object_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+        .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooManyTransactionsPendingOnObject"),
@@ -707,7 +709,7 @@ async fn test_txn_age_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+        .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooOldTransactionPendingOnObject"),

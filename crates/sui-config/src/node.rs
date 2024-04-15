@@ -742,8 +742,16 @@ pub struct AuthorityOverloadConfig {
     // is overloaded.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub check_system_overload_at_execution: bool,
-    // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
-    // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
+
+    // Reject a transaction if transaction manager queue length is above this threshold.
+    // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
+    #[serde(default = "default_max_transaction_manager_queue_length")]
+    pub max_transaction_manager_queue_length: usize,
+
+    // Reject a transaction if the number of pending transactions depending on the object
+    // is above the threshold.
+    #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
+    pub max_transaction_manager_per_object_queue_length: usize,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -778,6 +786,14 @@ fn default_check_system_overload_at_signing() -> bool {
     true
 }
 
+fn default_max_transaction_manager_queue_length() -> usize {
+    100_000
+}
+
+fn default_max_transaction_manager_per_object_queue_length() -> usize {
+    200
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -791,6 +807,9 @@ impl Default for AuthorityOverloadConfig {
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
             check_system_overload_at_signing: true,
             check_system_overload_at_execution: false,
+            max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
+            max_transaction_manager_per_object_queue_length:
+                default_max_transaction_manager_per_object_queue_length(),
         }
     }
 }

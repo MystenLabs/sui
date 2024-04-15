@@ -32,6 +32,7 @@ use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     execution_cache::ExecutionCacheRead,
 };
+use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
@@ -41,14 +42,6 @@ mod transaction_manager_tests;
 
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
-
-// Reject a transaction if transaction manager queue length is above this threshold.
-// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
@@ -817,16 +810,16 @@ impl TransactionManager {
 
     pub(crate) fn check_execution_overload(
         &self,
-        txn_age_threshold: Duration,
+        overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
         // Too many transactions are pending execution.
         let inflight_queue_len = self.inflight_queue_len();
         fp_ensure!(
-            inflight_queue_len < MAX_TM_QUEUE_LENGTH,
+            inflight_queue_len < overload_config.max_transaction_manager_queue_length,
             SuiError::TooManyTransactionsPendingExecution {
                 queue_len: inflight_queue_len,
-                threshold: MAX_TM_QUEUE_LENGTH,
+                threshold: overload_config.max_transaction_manager_queue_length,
             }
         );
         tx_data.digest();
@@ -840,7 +833,7 @@ impl TransactionManager {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
+            if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
                 info!(
                     "Overload detected on object {:?} with {} pending transactions",
                     object_id, queue_len
@@ -848,17 +841,17 @@ impl TransactionManager {
                 fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
-                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
+                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
                 });
             }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
-                if age >= txn_age_threshold {
+                if age >= overload_config.max_txn_age_in_queue {
                     info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
-                        threshold: txn_age_threshold.as_secs(),
+                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
                     });
                 }
             }
