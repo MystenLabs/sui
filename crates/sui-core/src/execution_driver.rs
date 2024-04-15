@@ -51,14 +51,12 @@ pub async fn execution_process(
         let certificate;
         let expected_effects_digest;
         let txn_ready_time;
-        let epoch;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
                 if let Some(pending_cert) = result {
                     certificate = pending_cert.certificate;
                     expected_effects_digest = pending_cert.expected_effects_digest;
                     txn_ready_time = pending_cert.stats.ready_time.unwrap();
-                    epoch = pending_cert.epoch;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
@@ -82,25 +80,11 @@ pub async fn execution_process(
         };
         authority.metrics.execution_driver_dispatch_queue.dec();
 
+        // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+
         let digest = *certificate.digest();
         trace!(?digest, "Pending certificate execution activated.");
-
-        // A single execution driver process runs across epochs. After epoch change,
-        // transactions from the previous epoch cannot be executed correctly so it is better
-        // to skip execution gracefully.
-        // Mismatched epoch should not happen on validators or on fullnode with checkpoint executions.
-        // But it is possibe in tests on fullnodes with local executions. The execution failure because
-        // of mismatched epoch would not be graceful downstream, so it is better to skip execution here.
-        let epoch_store = authority.load_epoch_store_one_call_per_task();
-        if epoch != epoch_store.epoch() {
-            // This certificate is for a different epoch. Ignore it.
-            error!(
-                ?digest,
-                "Ignoring certificate from different epoch ({epoch} instead of {}) for execution ...",
-                epoch_store.epoch()
-            );
-            continue;
-        }
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close

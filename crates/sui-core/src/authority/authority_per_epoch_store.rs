@@ -2490,7 +2490,7 @@ impl AuthorityPerEpochStore {
         }
         let mut batch = self
             .db_batch()
-            .expect("Consensus should not be processed past end of epoch");
+            .expect("Failed to create DBBatch for processing consensus transactions");
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
