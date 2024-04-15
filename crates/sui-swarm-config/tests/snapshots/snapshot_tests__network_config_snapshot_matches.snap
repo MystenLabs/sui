@@ -112,6 +112,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -239,6 +240,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -366,6 +368,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -493,6 +496,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -620,6 +624,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -747,6 +752,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -874,6 +880,7 @@ validator_configs:
         - Google
         - Kakao
         - Slack
+        - TestIssuer
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:

@@ -200,6 +200,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Kakao".to_string(),
         "Apple".to_string(),
         "Slack".to_string(),
+        "TestIssuer".to_string(),
     ]);
     let providers = BTreeSet::from([
         "Google".to_string(),
