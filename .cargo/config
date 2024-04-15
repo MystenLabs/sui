@@ -22,8 +22,6 @@ move-clippy = [
     "-Aclippy::upper_case_acronyms",
     "-Aclippy::type_complexity",
     "-Aclippy::new_without_default",
-    "-Aclippy::box_default",
-    "-Aclippy::manual_slice_size_calculation",
 ]
 
 [build]
