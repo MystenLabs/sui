@@ -1,5 +1,5 @@
 [package]
-name = "move-stdlib-v1"
+name = "move-stdlib-natives-v1"
 version = "0.1.1"
 edition = "2021"
 authors = ["Diem Association <opensource@diem.com>"]
