@@ -222,16 +222,14 @@ fn invalid_signature_for_vector_operation() {
 
     let skeleton = basic_test_module();
     let sig_index = SignatureIndex(skeleton.signatures.len() as u16);
-    for bytecode in vec![
-        VecPack(sig_index, 0),
+    for bytecode in [VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
         VecMutBorrow(sig_index),
         VecPushBack(sig_index),
         VecPopBack(sig_index),
         VecUnpack(sig_index, 0),
-        VecSwap(sig_index),
-    ] {
+        VecSwap(sig_index)] {
         let mut m = skeleton.clone();
         m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
         assert_eq!(
@@ -251,16 +249,14 @@ fn invalid_struct_for_vector_operation() {
         .signatures
         .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
-    for bytecode in vec![
-        VecPack(sig_index, 0),
+    for bytecode in [VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
         VecMutBorrow(sig_index),
         VecPushBack(sig_index),
         VecPopBack(sig_index),
         VecUnpack(sig_index, 0),
-        VecSwap(sig_index),
-    ] {
+        VecSwap(sig_index)] {
         let mut m = skeleton.clone();
         m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
         assert_eq!(
@@ -278,16 +274,14 @@ fn invalid_type_param_for_vector_operation() {
     let mut skeleton = basic_test_module();
     skeleton.signatures.push(Signature(vec![TypeParameter(0)]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
-    for bytecode in vec![
-        VecPack(sig_index, 0),
+    for bytecode in [VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
         VecMutBorrow(sig_index),
         VecPushBack(sig_index),
         VecPopBack(sig_index),
         VecUnpack(sig_index, 0),
-        VecSwap(sig_index),
-    ] {
+        VecSwap(sig_index)] {
         let mut m = skeleton.clone();
         m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
         assert_eq!(
