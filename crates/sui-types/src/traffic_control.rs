@@ -65,7 +65,7 @@ pub struct RemoteFirewallConfig {
     /// Time in secs, after which no registered ingress traffic
     /// will trigger dead mans switch to disable any firewalls
     #[serde(default = "default_killswitch_timeout")]
-    pub killswitch_timeout: u64,
+    pub killswitch_timeout_secs: u64,
 }
 
 fn default_killswitch_timeout() -> u64 {

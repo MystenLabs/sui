@@ -7,8 +7,9 @@ pub mod nodefw_test_server;
 pub mod policies;
 
 use dashmap::DashMap;
+use fs::File;
 use prometheus::IntGauge;
-use std::fs::File;
+use std::fs;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -28,12 +29,30 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, error, info, warn};
 
+pub const KILLSWITCH_FILENAME: &str = "__FW_KILLSWITCH__";
+
 type BlocklistT = Arc<DashMap<IpAddr, SystemTime>>;
 
 #[derive(Clone)]
 struct Blocklists {
     connection_ips: BlocklistT,
     proxy_ips: BlocklistT,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum KillswitchState {
+    On,
+    Off,
+}
+
+impl From<String> for KillswitchState {
+    fn from(s: String) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "on" => KillswitchState::On,
+            "off" => KillswitchState::Off,
+            _ => panic!("Invalid killswitch state: {}", s),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -71,6 +90,12 @@ impl TrafficController {
     ) -> Self {
         let metrics = Arc::new(metrics);
         let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
+        // Memoized killswitch state. This is passed into delegation
+        // funtions to prevent them from continuing to populate blocklists
+        // if killswitch is enabled, as otherwise it will grow without bounds
+        // without the firewall running to periodically clear it.
+        let killswitch_mem = fw_config.as_ref().map(Self::intialize_killswitch);
+
         let ret = Self {
             tally_channel: tx,
             blocklists: Blocklists {
@@ -85,7 +110,8 @@ impl TrafficController {
             policy_config,
             fw_config,
             blocklists,
-            metrics
+            metrics,
+            killswitch_mem,
         ));
         ret
     }
@@ -107,7 +133,7 @@ impl TrafficController {
         match self.tally_channel.try_send(tally) {
             Err(TrySendError::Full(_)) => {
                 warn!("TrafficController tally channel full, dropping tally");
-                // TODO: metric
+                self.metrics.tally_channel_overflow.inc();
                 // TODO: once we've verified this doesn't happen under normal
                 // conditions, we can consider dropping the request itself given
                 // that clearly the system is overloaded
@@ -164,6 +190,24 @@ impl TrafficController {
             }
         }
     }
+
+    fn intialize_killswitch(fw_config: &RemoteFirewallConfig) -> KillswitchState {
+        let killswitch_filename = fw_config.killswitch_path.join(KILLSWITCH_FILENAME);
+        match get_killswitch_state(&killswitch_filename) {
+            Some(KillswitchState::On) => {
+                warn!(
+                    "Nodefw killswitch currently enabled, therefore there will be no enforcement delegation. \
+                    To disable, delete the killswitch file at {killswitch_filename:?} and restart the node",
+                );
+                KillswitchState::On
+            }
+            Some(KillswitchState::Off) => KillswitchState::Off,
+            None => {
+                write_killswitch(&killswitch_filename, KillswitchState::Off);
+                KillswitchState::Off
+            }
+        }
+    }
 }
 
 // TODO: Needs thorough testing/auditing before this can be used in error policy
@@ -200,24 +244,19 @@ async fn run_tally_loop(
     fw_config: Option<RemoteFirewallConfig>,
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
+    mut killswitch_mem: Option<KillswitchState>,
 ) {
     let mut spam_policy = TrafficControlPolicy::from_spam_config(policy_config.clone()).await;
     let mut error_policy = TrafficControlPolicy::from_error_config(policy_config.clone()).await;
     let spam_blocklists = Arc::new(blocklists.clone());
     let error_blocklists = Arc::new(blocklists);
-    let node_fw_client = if let Some(fw_config) = &fw_config {
-        if !(fw_config.delegate_spam_blocking || fw_config.delegate_error_blocking) {
-            None
-        } else {
-            Some(NodeFWClient::new(fw_config.remote_fw_url.clone()))
-        }
-    } else {
-        None
-    };
+    let node_fw_client = fw_config
+        .as_ref()
+        .map(|fw_config| NodeFWClient::new(fw_config.remote_fw_url.clone()));
 
     let timeout = fw_config
         .as_ref()
-        .map(|fw_config| fw_config.killswitch_timeout)
+        .map(|fw_config| fw_config.killswitch_timeout_secs)
         .unwrap_or(300);
 
     loop {
@@ -226,6 +265,7 @@ async fn run_tally_loop(
                 metrics.tallies.inc();
                 match received {
                     Some(tally) => {
+                        // TODO: spawn a task to handle tallying concurrently
                         if let Err(err) = handle_spam_tally(
                             &mut spam_policy,
                             &policy_config,
@@ -234,11 +274,11 @@ async fn run_tally_loop(
                             tally.clone(),
                             spam_blocklists.clone(),
                             metrics.clone(),
+                            &killswitch_mem,
                         )
                         .await {
                             warn!("Error handling spam tally: {}", err);
                         }
-
                         if let Err(err) = handle_error_tally(
                             &mut error_policy,
                             &policy_config,
@@ -247,6 +287,7 @@ async fn run_tally_loop(
                             tally,
                             error_blocklists.clone(),
                             metrics.clone(),
+                            &killswitch_mem,
                         )
                         .await {
                             warn!("Error handling error tally: {}", err);
@@ -261,17 +302,48 @@ async fn run_tally_loop(
             // Dead man's switch - if we suspect something is sinking all traffic to node, disable nodefw
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout)) => {
                 if let Some(fw_config) = &fw_config {
-                    if fw_config.delegate_spam_blocking || fw_config.delegate_error_blocking {
-                        error!("No traffic tallies received in {} seconds! Disabling BPF.", fw_config.killswitch_timeout);
-                        let killswitch_path = fw_config.killswitch_path.join("__KILLSWITCH__");
-                        let mut file = File::create(killswitch_path).expect("Failed to create nodefw killswitch file");
-                        file.write_all(b"disable").expect("Failed to write to nodefw killswitch file");
-                        file.flush().expect("Failed to flush nodefw killswitch file");
+                    killswitch_mem = Some(KillswitchState::On);
+
+                    let killswitch_filename = fw_config.killswitch_path.join(KILLSWITCH_FILENAME);
+                    match get_killswitch_state(&killswitch_filename) {
+                        Some(KillswitchState::On) => {}
+                        Some(KillswitchState::Off) => {
+                            error!("No traffic tallies received in {} seconds! Enabling nodefw killswitch.", fw_config.killswitch_timeout_secs);
+                            write_killswitch(&killswitch_filename, KillswitchState::On);
+                        }
+                        None => {
+                            error!("Expected killswitch file at {killswitch_filename:?} to be either on or off");
+                            error!("No traffic tallies received in {} seconds! Enabling nodefw killswitch.", fw_config.killswitch_timeout_secs);
+                            write_killswitch(&killswitch_filename, KillswitchState::On);
+                        }
                     }
                 }
             }
         }
     }
+}
+
+pub fn get_killswitch_state(path: &std::path::Path) -> Option<KillswitchState> {
+    if path.exists() {
+        match fs::read_to_string(path) {
+            Ok(state) => Some(state.into()),
+            Err(err) => panic!("Failed to read nodefw killswitch file: {}", err),
+        }
+    } else {
+        None
+    }
+}
+
+fn write_killswitch(path: &std::path::Path, state: KillswitchState) {
+    let mut file = File::options()
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(path)
+        .expect("Failed to open nodefw killswitch file");
+    write!(file, "{state:?}").expect("Failed to write to nodefw killswitch file");
+    file.flush()
+        .expect("Failed to flush nodefw killswitch file");
 }
 
 async fn handle_error_tally(
@@ -282,6 +354,7 @@ async fn handle_error_tally(
     tally: TrafficTally,
     blocklists: Arc<Blocklists>,
     metrics: Arc<TrafficControllerMetrics>,
+    killswitch_mem: &Option<KillswitchState>,
 ) -> Result<(), reqwest::Error> {
     if tally.result.is_ok() {
         return Ok(());
@@ -291,7 +364,9 @@ async fn handle_error_tally(
     }
     let resp = policy.handle_tally(tally.clone());
     if let Some(fw_config) = fw_config {
-        if fw_config.delegate_error_blocking {
+        if fw_config.delegate_error_blocking
+            && matches!(*killswitch_mem, Some(KillswitchState::Off))
+        {
             let client = nodefw_client
                 .as_ref()
                 .expect("Expected NodeFWClient for blocklist delegation");
@@ -317,10 +392,12 @@ async fn handle_spam_tally(
     tally: TrafficTally,
     blocklists: Arc<Blocklists>,
     metrics: Arc<TrafficControllerMetrics>,
+    killswitch_mem: &Option<KillswitchState>,
 ) -> Result<(), reqwest::Error> {
     let resp = policy.handle_tally(tally.clone());
     if let Some(fw_config) = fw_config {
-        if fw_config.delegate_spam_blocking {
+        if fw_config.delegate_spam_blocking && matches!(*killswitch_mem, Some(KillswitchState::Off))
+        {
             let client = nodefw_client
                 .as_ref()
                 .expect("Expected NodeFWClient for blocklist delegation");
