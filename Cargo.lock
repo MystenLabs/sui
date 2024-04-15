@@ -7735,7 +7735,6 @@ dependencies = [
  "tokio",
  "tracing",
  "wasi-common",
- "wasmer",
  "wasmtime",
  "wasmtime-wasi",
 ]
