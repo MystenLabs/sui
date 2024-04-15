@@ -10,7 +10,7 @@ use crate::events::SuiBridgeEvent;
 use crate::node::run_bridge_node;
 use crate::sui_client::SuiBridgeClient;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
-use crate::types::{BridgeAction, BridgeActionStatus, BridgeActionType, SuiToEthBridgeAction};
+use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
 use crate::utils::EthSigner;
 use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use eth_sui_bridge::EthSuiBridgeEvents;
@@ -27,21 +27,16 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::local_ip_utils::get_available_port;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponse};
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::bridge::{
-    BridgeChainId, BridgeTokenMetadata, MoveTypeBridgeMessageKey, MoveTypeBridgeRecord,
-    BRIDGE_MODULE_NAME, TOKEN_ID_ETH,
-};
-use sui_types::collection_types::LinkedTableNode;
+use sui_types::bridge::{BridgeChainId, BridgeTokenMetadata, BRIDGE_MODULE_NAME, TOKEN_ID_ETH};
 use sui_types::committee::TOTAL_VOTING_POWER;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
-use sui_types::dynamic_field::{DynamicFieldName, Field};
-use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
@@ -219,39 +214,10 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     info!("Sui to Eth bridge transfer approved");
 
     // Now collect sigs from the bridge record and submit to eth to claim
-    // TODO: add a function to grab validator sigs
-    let summary = sui_bridge_client.get_bridge_summary().await.unwrap();
-    let records_id = summary.bridge_records_id;
-    let key = serde_json::json!(
-        {
-            // u64 is represented as string
-            "bridge_seq_num": nonce.to_string(),
-            "message_type": BridgeActionType::TokenTransfer as u8,
-            "source_chain": sui_chain_id,
-        }
-    );
-    let status_object_id = sui_client.read_api().get_dynamic_field_object(records_id,
-        DynamicFieldName {
-            type_: TypeTag::from_str("0x000000000000000000000000000000000000000000000000000000000000000b::message::BridgeMessageKey").unwrap(),
-            value: key.clone(),
-        },
-    ).await.unwrap().into_object().unwrap().object_id;
-
-    let object_resp = sui_client
-        .read_api()
-        .get_object_with_options(
-            status_object_id,
-            SuiObjectDataOptions::full_content().with_bcs(),
-        )
+    let sigs = sui_bridge_client
+        .get_token_transfer_action_onchain_signatures_until_success(sui_chain_id, nonce)
         .await
         .unwrap();
-
-    let object: Object = object_resp.into_object().unwrap().try_into().unwrap();
-    let record: Field<
-        MoveTypeBridgeMessageKey,
-        LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
-    > = object.to_rust().unwrap();
-    let sigs = record.value.value.verified_signatures.unwrap();
 
     let signatures: Vec<Bytes> = sigs
         .into_iter()
