@@ -3026,7 +3026,7 @@ fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::
             let mut args = args.map(|_, (idx, p)| (idx, *match_pattern(context, Box::new(p))));
             // If we have an ellipsis fill in any missing patterns
             if let Some(ellipsis_loc) = ellipsis {
-                expand_named_ellipsis(&field_info, ploc, ellipsis_loc, &mut args, |eloc| {
+                expand_named_ellipsis(field_info, ploc, ellipsis_loc, &mut args, |eloc| {
                     sp(eloc, NP::Wildcard)
                 });
             }

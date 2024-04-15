@@ -2541,7 +2541,7 @@ fn assign(
             for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 assert!(fields.len() == decl_idx);
                 let st = &H::SingleType_::base(bt);
-                let (fa, mut fafter) = assign(context, case, tfa, &st);
+                let (fa, mut fafter) = assign(context, case, tfa, st);
                 after.append(&mut fafter);
                 fields.push((f, fa))
             }

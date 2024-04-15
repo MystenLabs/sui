@@ -2261,7 +2261,7 @@ fn find_counterexample(
                         is_positional,
                         names
                             .into_iter()
-                            .zip(ctor_args.into_iter())
+                            .zip(ctor_args)
                             .collect::<Vec<_>>(),
                     )]
                     .into_iter()
