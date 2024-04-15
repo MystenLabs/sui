@@ -184,8 +184,7 @@ fn update_lock_file_toolchain_version() {
         lock_file: Some(lock_path.clone()),
         ..Default::default()
     };
-    let _ =
-        build_config.update_lock_file_toolchain_version(pkg.path(), "0.0.1".into());
+    let _ = build_config.update_lock_file_toolchain_version(pkg.path(), "0.0.1".into());
 
     let mut lock_file = File::open(lock_path).unwrap();
     let toolchain_version =
