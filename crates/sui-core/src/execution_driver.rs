@@ -88,8 +88,9 @@ pub async fn execution_process(
         // A single execution driver process runs across epochs. After epoch change,
         // transactions from the previous epoch cannot be executed correctly so it is better
         // to skip execution gracefully.
-        // This should not happen on validators, but possibe on fullnodes with local execution
-        // in tests.
+        // Mismatched epoch should not happen on validators or on fullnode with checkpoint executions.
+        // But it is possibe in tests on fullnodes with local executions. The execution failure because
+        // of mismatched epoch would not be graceful downstream, so it is better to skip execution here.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
         if epoch != epoch_store.epoch() {
             // This certificate is for a different epoch. Ignore it.

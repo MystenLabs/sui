@@ -61,7 +61,7 @@ enum ProtocolManager {
 }
 
 impl ProtocolManager {
-    /// Creates a new narwhal manager enum.
+    /// Creates a new narwhal manager.
     pub fn new_narwhal(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
@@ -79,7 +79,7 @@ impl ProtocolManager {
         Self::Narwhal(NarwhalManager::new(narwhal_config, metrics))
     }
 
-    /// Creates a new mysticeti manager enum.
+    /// Creates a new mysticeti manager.
     pub fn new_mysticeti(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
