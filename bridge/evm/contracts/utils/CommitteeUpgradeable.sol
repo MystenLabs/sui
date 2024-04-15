@@ -51,8 +51,6 @@ abstract contract CommitteeUpgradeable is
         _upgradeAuthorized = true;
         // upgrade contract
         upgradeToAndCall(implementation, callData); // Upgraded event emitted with new implementation address
-        // reset upgrade authorization
-        _upgradeAuthorized = false;
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -60,7 +58,8 @@ abstract contract CommitteeUpgradeable is
     /// @notice Authorizes the upgrade of the inheriting contract.
     /// @dev The _upgradeAuthorized state variable can only be set with the upgradeWithSignatures
     /// function, meaning that the upgrade can only be authorized by the committee.
-    function _authorizeUpgrade(address) internal view override {
+    function _authorizeUpgrade(address) internal override {
         require(_upgradeAuthorized, "CommitteeUpgradeable: Unauthorized upgrade");
+        _upgradeAuthorized = false;
     }
 }
