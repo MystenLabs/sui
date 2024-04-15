@@ -38,7 +38,7 @@ impl Build {
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
-        let build_config = resolve_lock_file_path(build_config, rerooted_path.clone())?;
+        let build_config = resolve_lock_file_path(build_config, Some(rerooted_path.clone()))?;
         Self::execute_internal(
             rerooted_path,
             build_config,
