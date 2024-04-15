@@ -27,7 +27,6 @@ FROM debian:bullseye-slim AS runtime
 # Use jemalloc as memory allocator
 RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
-ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
 RUN apt update && apt install -y libpq5 ca-certificates libpq-dev postgresql
