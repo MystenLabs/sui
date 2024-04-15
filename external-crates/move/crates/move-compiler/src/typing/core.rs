@@ -1004,11 +1004,10 @@ pub fn make_struct_field_types(
     );
     match &sdef.fields {
         N::StructFields::Native(loc) => N::StructFields::Native(*loc),
-        N::StructFields::Defined(positional, m) => {
-            N::StructFields::Defined(*positional, m.ref_map(|_, (idx, field_ty)| {
-                (*idx, subst_tparams(tparam_subst, field_ty.clone()))
-            }))
-        }
+        N::StructFields::Defined(positional, m) => N::StructFields::Defined(
+            *positional,
+            m.ref_map(|_, (idx, field_ty)| (*idx, subst_tparams(tparam_subst, field_ty.clone()))),
+        ),
     }
 }
 

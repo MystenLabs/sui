@@ -4,6 +4,7 @@ module 0x42::m {
 
     fun test(b: Box<u8>) {
         match (b) {
+            Box { x: 0 } => (),
             Box { x: _ } => (),
         }
     }

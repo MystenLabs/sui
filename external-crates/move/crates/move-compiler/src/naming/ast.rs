@@ -935,7 +935,7 @@ impl Type_ {
     }
 
     // Unwraps refs
-    pub fn base_type_(&self) -> Type_ {
+    pub fn base_type_(&self) -> Self {
         match self {
             Type_::Ref(_, inner) => inner.value.clone(),
             Type_::Unit

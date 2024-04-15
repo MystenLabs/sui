@@ -1017,37 +1017,6 @@ fn body(
     }
 }
 
-
-macro_rules! print_internal {
-    () => {};
-    (($name:expr => $val:expr)) => {
-        {
-        print!("{}: ", $name);
-        $val.print_verbose();
-        }
-    };
-    ((sp $name:expr => $val:expr)) => {
-        {
-        print!("{}: ", $name);
-        $val.value.print_verbose();
-        }
-    };
-    ((lines $name:expr => $val:expr)) => { {
-        println!("\n{}: ", $name);
-        for n in $val {
-            n.print_verbose()
-        }
-
-    }
-    };
-    ($fst:tt, $($rest:tt),+) => { {
-        print_internal!($fst);
-        print_internal!($($rest),+);
-    }
-    };
-
-}
-
 #[growing_stack]
 fn tail(
     context: &mut Context,
@@ -1126,7 +1095,9 @@ fn tail(
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
             debug_print!(context.debug.match_translation, ("compiled" => compiled));
             let result = tail(context, block, expected_type, compiled);
-            debug_print!(context.debug.match_variant_translation, (opt "result" => &result));
+            debug_print!(context.debug.match_variant_translation,
+                         (lines "block" => block),
+                         (opt "result" => &result));
             result
         }
 
@@ -2537,6 +2508,8 @@ fn assign(
                 .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
+            let unused_assignment = tfields.is_empty();
+
             let tmp = context.new_temp(loc, rvalue_ty.clone());
             let copy_tmp = || {
                 let copy_tmp_ = E::Copy {
@@ -2560,7 +2533,7 @@ fn assign(
             L::Var {
                 var: tmp,
                 ty: Box::new(rvalue_ty.clone()),
-                unused_assignment: false,
+                unused_assignment,
             }
         }
         A::UnpackVariant(m, e, v, tbs, tfields) => {
@@ -2635,7 +2608,6 @@ fn assign_variant_fields(
     v: &VariantName,
     tfields: Fields<(N::Type, T::LValue)>,
 ) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
-
     let decl_fields = context.enum_variant_fields(m, e, v).cloned();
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields

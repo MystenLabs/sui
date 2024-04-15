@@ -5,7 +5,7 @@ use crate::{
     diag,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
     hlir::translate::Context,
-    ice_assert,
+    ice, ice_assert,
     naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
     shared::{
@@ -16,6 +16,7 @@ use crate::{
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::Display,
@@ -883,7 +884,7 @@ pub fn compile_match(
                         StructUnpack::Default((fringe, matrix)) => {
                             work_queue.push((unpack_work_id, fringe, matrix));
                             StructUnpack::Default(unpack_work_id)
-                        },
+                        }
                         StructUnpack::Unpack(dtor_fields, (fringe, matrix)) => {
                             work_queue.push((unpack_work_id, fringe, matrix));
                             StructUnpack::Unpack(dtor_fields, unpack_work_id)
@@ -1035,8 +1036,7 @@ fn compile_match_head(
                     .collect::<Vec<_>>();
                 // println!("specializing to {:?}", datatype_name);
                 // Note that these binders will include the default binders
-                let (mut new_binders, inner_matrix) =
-                    matrix.specialize_struct(context, bind_tys);
+                let (mut new_binders, inner_matrix) = matrix.specialize_struct(context, bind_tys);
                 // println!("binders: {:#?}", new_binders);
                 subject_binders.append(&mut new_binders);
                 // println!("specialized:");
@@ -1169,6 +1169,7 @@ impl<'ctxt, 'call> ResolutionContext<'ctxt, 'call> {
     }
 }
 
+#[growing_stack]
 fn resolve_result(
     context: &mut ResolutionContext,
     init_subject: &FringeEntry,
@@ -1224,7 +1225,12 @@ fn resolve_result(
             let body_exp = T::exp(context.output_type(), sp(context.arms_loc(), out_exp));
             make_copy_bindings(bindings, body_exp)
         }
-        WorkResult::StructUnpack { subject, subject_binders, tyargs, unpack } => {
+        WorkResult::StructUnpack {
+            subject,
+            subject_binders,
+            tyargs,
+            unpack,
+        } => {
             let (m, s) = subject
                 .ty
                 .value
@@ -1239,7 +1245,7 @@ fn resolve_result(
                 StructUnpack::Default(result_ndx) => {
                     let work_result = context.work_result(result_ndx);
                     resolve_result(context, init_subject, work_result)
-                },
+                }
                 StructUnpack::Unpack(unpack_fields, result_ndx) => {
                     let work_result = context.work_result(result_ndx);
                     let rest_result = resolve_result(context, init_subject, work_result);
@@ -1251,7 +1257,7 @@ fn resolve_result(
                         subject.clone(),
                         rest_result,
                     )
-                },
+                }
             };
             make_copy_bindings(bindings, unpack_exp)
         }
@@ -1403,67 +1409,58 @@ fn make_arm_unpack(
 
     // TODO(cgswords): we can coalese patterns a bit here, but don't for now.
     while let Some((entry, pat)) = queue.pop_front() {
+        let ploc = pat.pat.loc;
         match pat.pat.value {
-            TP::Variant(mident, enum_, variant, tyargs, fields) => {
-                println!("handling plain variant");
-                let (queue_entries, fields) =
-                    make_arm_variant_unpack_fields(context, pat.pat.loc, mident, enum_, variant, fields);
-                for entry in queue_entries.into_iter().rev() {
-                    queue.push_front(entry);
-                }
-                let unpack =
-                    make_arm_variant_unpack_stmt(None, mident, enum_, variant, tyargs, fields, entry);
-                seq.push_back(unpack);
-            }
-            TP::BorrowVariant(mut_, mident, enum_, variant, tyargs, fields) => {
-                println!("handling borrowed variant");
-                let all_wild = fields
-                    .iter()
-                    .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
-                    || fields.is_empty();
-                // If we are  matching a  ref with no fields under it, we aren't going to drop so
-                // we just continue on.
-                if all_wild {
+            TP::Variant(m, e, v, tys, fs) => {
+                let Some((queue_entries, unpack)) =
+                    arm_variant_unpack(context, None, ploc, m, e, tys, v, fs, entry)
+                else {
+                    context.hlir_context.env.add_diag(ice!((
+                        ploc,
+                        "Did not build an arm unpack for a value variant"
+                    )));
                     continue;
-                }
-
-                let (queue_entries, fields) =
-                    make_arm_variant_unpack_fields(context, pat.pat.loc, mident, enum_, variant, fields);
+                };
                 for entry in queue_entries.into_iter().rev() {
                     queue.push_front(entry);
                 }
-                let unpack =
-                    make_arm_variant_unpack_stmt(Some(mut_), mident, enum_, variant, tyargs, fields, entry);
                 seq.push_back(unpack);
             }
-            TP::Struct(mident, struct_, tyargs, fields) => {
-                let (queue_entries, fields) =
-                    make_arm_struct_unpack_fields(context, pat.pat.loc, mident, struct_, fields);
-                for entry in queue_entries.into_iter().rev() {
-                    queue.push_front(entry);
-                }
-                let unpack =
-                    make_arm_struct_unpack_stmt(None, mident, struct_, tyargs, fields, entry);
-                seq.push_back(unpack);
-            }
-            TP::BorrowStruct(mut_, mident, struct_, tyargs, fields) => {
-                let all_wild = fields
-                    .iter()
-                    .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
-                    || fields.is_empty();
-                // If we are  matching a  ref with no fields under it, we aren't going to drop so
-                // we just continue on.
-                if all_wild {
+            TP::BorrowVariant(mut_, m, e, v, tys, fs) => {
+                let Some((queue_entries, unpack)) =
+                    arm_variant_unpack(context, Some(mut_), ploc, m, e, tys, v, fs, entry)
+                else {
                     continue;
-                }
-
-                let (queue_entries, fields) =
-                    make_arm_struct_unpack_fields(context, pat.pat.loc, mident, struct_, fields);
+                };
                 for entry in queue_entries.into_iter().rev() {
                     queue.push_front(entry);
                 }
-                let unpack =
-                    make_arm_struct_unpack_stmt(Some(mut_), mident, struct_, tyargs, fields, entry);
+                seq.push_back(unpack);
+            }
+            TP::Struct(m, s, tys, fs) => {
+                let Some((queue_entries, unpack)) =
+                    arm_struct_unpack(context, None, ploc, m, s, tys, fs, entry)
+                else {
+                    context.hlir_context.env.add_diag(ice!((
+                        ploc,
+                        "Did not build an arm unpack for a value struct"
+                    )));
+                    continue;
+                };
+                for entry in queue_entries.into_iter().rev() {
+                    queue.push_front(entry);
+                }
+                seq.push_back(unpack);
+            }
+            TP::BorrowStruct(mut_, m, s, tys, fs) => {
+                let Some((queue_entries, unpack)) =
+                    arm_struct_unpack(context, Some(mut_), ploc, m, s, tys, fs, entry)
+                else {
+                    continue;
+                };
+                for entry in queue_entries.into_iter().rev() {
+                    queue.push_front(entry);
+                }
                 seq.push_back(unpack);
             }
             TP::Literal(_) => (),
@@ -1531,8 +1528,66 @@ fn match_pattern_has_binders(pat: &T::MatchPattern, rhs_binders: &BTreeSet<Var>)
     }
 }
 
+fn arm_variant_unpack(
+    context: &mut ResolutionContext,
+    mut_ref: Option<bool>,
+    pat_loc: Loc,
+    mident: ModuleIdent,
+    enum_: DatatypeName,
+    tyargs: Vec<Type>,
+    variant: VariantName,
+    fields: Fields<(Type, MatchPattern)>,
+    rhs: FringeEntry,
+) -> Option<(Vec<(FringeEntry, MatchPattern)>, T::SequenceItem)> {
+    let all_wild = fields
+        .iter()
+        .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
+        || fields.is_empty();
+    // If we are  matching a  ref with no fields under it, we aren't going to drop so
+    // we just continue on.
+    if all_wild && mut_ref.is_some() {
+        return None;
+    }
+
+    let (queue_entries, fields) =
+        make_arm_variant_unpack_fields(context, mut_ref, pat_loc, mident, enum_, variant, fields);
+    let unpack = make_arm_variant_unpack_stmt(mut_ref, mident, enum_, variant, tyargs, fields, rhs);
+    Some((queue_entries, unpack))
+}
+
+fn arm_struct_unpack(
+    context: &mut ResolutionContext,
+    mut_ref: Option<bool>,
+    pat_loc: Loc,
+    mident: ModuleIdent,
+    struct_: DatatypeName,
+    tyargs: Vec<Type>,
+    fields: Fields<(Type, MatchPattern)>,
+    rhs: FringeEntry,
+) -> Option<(Vec<(FringeEntry, MatchPattern)>, T::SequenceItem)> {
+    let all_wild = fields
+        .iter()
+        .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
+        || fields.is_empty();
+    // If we are  matching a  ref with no fields under it, we aren't going to drop so
+    // we just continue on.
+    if all_wild && mut_ref.is_some() {
+        return None;
+    }
+
+    let (queue_entries, fields) =
+        make_arm_struct_unpack_fields(context, mut_ref, pat_loc, mident, struct_, fields);
+    let unpack = make_arm_struct_unpack_stmt(mut_ref, mident, struct_, tyargs, fields, rhs);
+    Some((queue_entries, unpack))
+}
+
+//------------------------------------------------
+// Unpack Field Builders
+//------------------------------------------------
+
 fn make_arm_variant_unpack_fields(
     context: &mut ResolutionContext,
+    mut_ref: Option<bool>,
     pat_loc: Loc,
     mident: ModuleIdent,
     enum_: DatatypeName,
@@ -1541,7 +1596,19 @@ fn make_arm_variant_unpack_fields(
 ) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
-    let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
+    let field_tys = {
+        let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
+        if let Some(mut_) = mut_ref {
+            field_tys.map(|_field, (ndx, sp!(loc, ty))| {
+                (
+                    ndx,
+                    sp(loc, N::Type_::Ref(mut_, Box::new(sp(loc, ty.base_type_())))),
+                )
+            })
+        } else {
+            field_tys
+        }
+    };
     let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
@@ -1569,6 +1636,7 @@ fn make_arm_variant_unpack_fields(
 
 fn make_arm_struct_unpack_fields(
     context: &mut ResolutionContext,
+    mut_ref: Option<bool>,
     pat_loc: Loc,
     mident: ModuleIdent,
     struct_: DatatypeName,
@@ -1576,13 +1644,23 @@ fn make_arm_struct_unpack_fields(
 ) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
-    let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
+    let field_tys = {
+        let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
+        if let Some(mut_) = mut_ref {
+            field_tys.map(|_field, (ndx, sp!(loc, ty))| {
+                (
+                    ndx,
+                    sp(loc, N::Type_::Ref(mut_, Box::new(sp(loc, ty.base_type_())))),
+                )
+            })
+        } else {
+            field_tys
+        }
+    };
     let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let decl_fields = context
-        .hlir_context
-        .struct_fields(&mident, &struct_);
+    let decl_fields = context.hlir_context.struct_fields(&mident, &struct_);
     let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
@@ -1601,7 +1679,6 @@ fn make_arm_struct_unpack_fields(
 
     (queue_entries, unpack_fields)
 }
-
 
 //------------------------------------------------
 // Expression Creation Helpers

@@ -404,17 +404,14 @@ impl BorrowState {
             full_borrows,
             &BTreeMap::new(),
             code,
-            move || {
-                let local_str = match display_var(local.value()) {
-                    DisplayVar::Tmp => panic!(
-                        "ICE invalid use of tmp local {} with borrows {:#?}",
-                        local.value(),
-                        borrows
-                    ),
-                    DisplayVar::MatchTmp(s) => s,
-                    DisplayVar::Orig(s) => s,
-                };
-                format!("Invalid {} of variable '{}'", verb, local_str)
+            move || match display_var(local.value()) {
+                DisplayVar::Tmp => panic!(
+                    "ICE invalid use of tmp local {} with borrows {:#?}",
+                    local.value(),
+                    borrows
+                ),
+                DisplayVar::MatchTmp(s) => format!("Invalid {} of match temporary {}", verb, s),
+                DisplayVar::Orig(s) => format!("Invalid {} of variable '{}'", verb, s),
             },
         )
     }

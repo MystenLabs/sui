@@ -189,13 +189,6 @@ impl ResolvedConstructor {
             ResolvedConstructor::Variant(_, _, _, field_info) => field_info,
         }
     }
-
-    fn datatype_kind_str(&self) -> &'static str {
-        match self {
-            ResolvedConstructor::Struct(_) => "struct",
-            ResolvedConstructor::Variant(_, _, _, _) => "variant",
-        }
-    }
 }
 
 enum ResolvedFunction {
