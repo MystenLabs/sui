@@ -280,16 +280,14 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_snapshot_chunks
             .start_timer();
-        let mut mutated_objects: Vec<StoredObjectSnapshot> = vec![];
-        let mut deleted_object_ids: Vec<StoredDeletedObjectSnapshot> = vec![];
-
+        let mut objects_snapshot = vec![];
         for object in objects {
             match object {
                 ObjectChangeToCommit::MutatedObject(stored_object) => {
-                    mutated_objects.push(stored_object.into());
+                    objects_snapshot.push(stored_object.into());
                 }
                 ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
-                    deleted_object_ids.push(stored_deleted_object.into());
+                    objects_snapshot.push(stored_deleted_object.into());
                 }
             }
         }
@@ -297,8 +295,8 @@ impl PgIndexerStore {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for mutated_object_change_chunk in
-                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                for objects_snapshot_chunk in
+                    objects_snapshot.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     diesel::insert_into(objects_snapshot::table)
                         .values(mutated_object_change_chunk)
@@ -333,28 +331,6 @@ impl PgIndexerStore {
                         .map_err(IndexerError::from)
                         .context("Failed to write object mutations to objects_snapshot in DB.")?;
                 }
-
-                for deleted_objects_chunk in
-                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(objects_snapshot::table)
-                        .values(deleted_objects_chunk)
-                        .on_conflict(objects_snapshot::object_id)
-                        .do_update()
-                        .set((
-                            objects_snapshot::object_id.eq(excluded(objects_snapshot::object_id)),
-                            objects_snapshot::object_version
-                                .eq(excluded(objects_snapshot::object_version)),
-                            objects_snapshot::object_status
-                                .eq(excluded(objects_snapshot::object_status)),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
-                        ))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write object deletions to objects_snapshot in DB.")?;
-                }
-
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -364,7 +340,7 @@ impl PgIndexerStore {
             info!(
                 elapsed,
                 "Persisted {} chunked objects snapshot",
-                mutated_objects.len() + deleted_object_ids.len(),
+                objects_snapshot.len(),
             )
         })
     }
