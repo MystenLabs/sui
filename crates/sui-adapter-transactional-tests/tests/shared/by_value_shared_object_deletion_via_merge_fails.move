@@ -13,9 +13,6 @@
 //# publish
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
     use sui::sui::SUI;

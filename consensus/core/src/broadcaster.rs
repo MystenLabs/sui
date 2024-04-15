@@ -198,6 +198,8 @@ mod test {
     use crate::{
         block::{BlockRef, TestBlock},
         core::CoreSignals,
+        network::BlockStream,
+        Round,
     };
 
     struct FakeNetworkClient {
@@ -221,6 +223,8 @@ mod test {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
+        const SUPPORT_STREAMING: bool = false;
+
         async fn send_block(
             &self,
             peer: AuthorityIndex,
@@ -231,6 +235,15 @@ mod test {
             let blocks = blocks_sent.entry(peer).or_default();
             blocks.push(block.serialized().clone());
             Ok(())
+        }
+
+        async fn subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<BlockStream> {
+            unimplemented!("Unimplemented")
         }
 
         async fn fetch_blocks(

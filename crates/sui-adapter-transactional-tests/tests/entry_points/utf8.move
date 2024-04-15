@@ -6,9 +6,6 @@
 //# publish
 module Test::M {
     use std::string;
-    use sui::tx_context::TxContext;
-    use std::vector;
-
 
     public entry fun utf8_arg(s: string::String, _: &mut TxContext) {
         assert!(string::length(&s) == 24, 0);

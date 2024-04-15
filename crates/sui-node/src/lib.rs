@@ -16,6 +16,7 @@ use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -28,6 +29,7 @@ use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
+use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
@@ -582,7 +584,8 @@ impl SuiNode {
                 .await?;
 
         // Start uploading state snapshot to remote store
-        let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
+        let state_snapshot_handle =
+            Self::start_state_snapshot(&config, &prometheus_registry, checkpoint_store.clone())?;
 
         // Start uploading db checkpoints to remote store
         let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
@@ -605,7 +608,7 @@ impl SuiNode {
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
-            execution_cache,
+            execution_cache.clone(),
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
@@ -681,9 +684,10 @@ impl SuiNode {
             &prometheus_registry,
             custom_rpc_runtime,
             software_version,
-        )?;
+        )
+        .await?;
 
-        let accumulator = Arc::new(StateAccumulator::new(store));
+        let accumulator = Arc::new(StateAccumulator::new(execution_cache));
 
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_state()
@@ -857,6 +861,7 @@ impl SuiNode {
     fn start_state_snapshot(
         config: &NodeConfig,
         prometheus_registry: &Registry,
+        checkpoint_store: Arc<CheckpointStore>,
     ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
         if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
             let snapshot_uploader = StateSnapshotUploader::new(
@@ -865,6 +870,7 @@ impl SuiNode {
                 remote_store_config.clone(),
                 60,
                 prometheus_registry,
+                checkpoint_store,
             )?;
             Ok(Some(snapshot_uploader.start()))
         } else {
@@ -1396,6 +1402,9 @@ impl SuiNode {
             state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
+            TrafficControllerMetrics::new(prometheus_registry),
+            config.policy_config.clone(),
+            config.firewall_config.clone(),
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1854,7 +1863,7 @@ fn build_kv_store(
     )))
 }
 
-pub fn build_http_server(
+pub async fn build_http_server(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -1873,7 +1882,12 @@ pub fn build_http_server(
     let mut router = axum::Router::new();
 
     let json_rpc_router = {
-        let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+        let mut server = JsonRpcServerBuilder::new(
+            env!("CARGO_PKG_VERSION"),
+            prometheus_registry,
+            config.policy_config.clone(),
+            config.firewall_config.clone(),
+        );
 
         let kv_store = build_kv_store(&state, config, prometheus_registry)?;
 
@@ -1934,7 +1948,7 @@ pub fn build_http_server(
         } else {
             None
         };
-        server.to_router(server_type)?
+        server.to_router(server_type).await?
     };
 
     router = router.merge(json_rpc_router);
@@ -1946,7 +1960,8 @@ pub fn build_http_server(
         router = router.nest("/rest", rest_router);
     }
 
-    let server = axum::Server::bind(&config.json_rpc_address).serve(router.into_make_service());
+    let server = axum::Server::bind(&config.json_rpc_address)
+        .serve(router.into_make_service_with_connect_info::<SocketAddr>());
 
     let addr = server.local_addr();
     let handle = tokio::spawn(async move { server.await.unwrap() });

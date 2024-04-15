@@ -26,7 +26,6 @@ use move_compiler::{
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
 };
@@ -69,6 +68,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
@@ -217,6 +217,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             default_gas_price,
             object_snapshot_min_checkpoint_lag,
             object_snapshot_max_checkpoint_lag,
+            flavor,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -231,6 +232,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -269,6 +271,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 )
             }
             None => {
@@ -279,6 +282,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     protocol_config,
                     false,
                     false,
+                    None,
                     None,
                     None,
                     None,
@@ -329,6 +333,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     NumberFormat::Hex,
                 )),
                 Some(Edition::E2024_ALPHA),
+                flavor.or(Some(Flavor::Sui)),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,
@@ -643,10 +648,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
-                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
+                                .unwrap();
 
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {:#}",
                             &obj.owner,
                             obj.version().value(),
                             move_struct

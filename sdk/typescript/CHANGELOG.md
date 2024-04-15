@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 0.51.2
+
+### Patch Changes
+
+- b4ecdb5860: Fix fetch being incorrectly bound to GraphQL client
+
+## 0.51.1
+
+### Patch Changes
+
+- 6984dd1e38: Update gql.tada and add type definitions for custom scalars
+
 ## 0.51.0
 
 ### Minor Changes

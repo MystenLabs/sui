@@ -12,14 +12,12 @@ module sui_system::sui_system {
     use sui_system::validator::Validator;
     use sui_system::sui_system_state_inner::{Self, SuiSystemStateInnerV2, SuiSystemStateInner};
 
-    friend sui_system::genesis;
-
-    struct SuiSystemState has key {
+    public struct SuiSystemState has key {
         id: UID,
         version: u64,
     }
 
-    public(friend) fun create(
+    public(package) fun create(
         id: UID,
         validators: vector<Validator>,
         storage_fund: Balance<SUI>,
@@ -37,7 +35,7 @@ module sui_system::sui_system {
             ctx,
         );
         let version = sui_system_state_inner::genesis_system_state_version();
-        let self = SuiSystemState {
+        let mut self = SuiSystemState {
             id,
             version,
         };
@@ -79,7 +77,7 @@ module sui_system::sui_system {
     }
 
     fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
-        let version = self.version;
+        let mut version = self.version;
         if (version == sui_system_state_inner::genesis_system_state_version()) {
             let inner: SuiSystemStateInner = dynamic_field::remove(&mut self.id, version);
             let new_inner = sui_system_state_inner::v1_to_v2(inner);

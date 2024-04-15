@@ -6,10 +6,13 @@
 
 use crate::absint::{AbstractDomain, JoinResult};
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
+    access::ModuleAccess,
+    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},
+    CompiledModule,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 /// LocalState represents the current assignment state of a local
@@ -23,7 +26,6 @@ pub(crate) enum LocalState {
     /// The local has a value
     Available,
 }
-use crate::meter::{Meter, Scope};
 use LocalState::*;
 
 pub(crate) const STEP_BASE_COST: u128 = 15;
@@ -40,10 +42,7 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(
-        resolver: &BinaryIndexedView,
-        function_view: &FunctionView,
-    ) -> PartialVMResult<Self> {
+    pub fn new(resolver: &CompiledModule, function_view: &FunctionView) -> PartialVMResult<Self> {
         let num_args = function_view.parameters().len();
         let num_locals = num_args + function_view.locals().len();
         let local_states = (0..num_locals)
@@ -139,7 +138,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
         meter.add_items(

@@ -14,11 +14,9 @@
 
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, FunctionDefinitionIndex, SignatureIndex, SignatureToken,
-        TableIndex,
+        CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
     },
     file_format_common::{VERSION_1, VERSION_5},
     IndexKind,
@@ -26,27 +24,11 @@ use move_binary_format::{
 use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
 
 pub type FnCheckScriptSignature = fn(
-    &BinaryIndexedView,
+    &CompiledModule,
     /* is_entry */ bool,
     SignatureIndex,
     Option<SignatureIndex>,
 ) -> PartialVMResult<()>;
-
-/// This function checks the extra requirements on the signature of the main function of a script.
-pub fn verify_script(
-    script: &CompiledScript,
-    check_signature: FnCheckScriptSignature,
-) -> VMResult<()> {
-    if script.version >= VERSION_5 {
-        return Ok(());
-    }
-
-    let resolver = &BinaryIndexedView::Script(script);
-    let parameters = script.parameters;
-    let return_ = None;
-    verify_main_signature_impl(resolver, true, parameters, return_, check_signature)
-        .map_err(|e| e.finish(Location::Script))
-}
 
 pub fn verify_module(
     module: &CompiledModule,
@@ -103,7 +85,7 @@ fn verify_module_function_signature(
 ) -> VMResult<()> {
     let fdef = module.function_def_at(idx);
 
-    let resolver = &BinaryIndexedView::Module(module);
+    let resolver = module;
     let fhandle = module.function_handle_at(fdef.function);
     let parameters = fhandle.parameters;
     let return_ = fhandle.return_;
@@ -121,7 +103,7 @@ fn verify_module_function_signature(
 }
 
 fn verify_main_signature_impl(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     is_entry: bool,
     parameters_idx: SignatureIndex,
     return_idx: Option<SignatureIndex>,
@@ -136,7 +118,7 @@ fn verify_main_signature_impl(
 }
 
 pub fn no_additional_script_signature_checks(
-    _resolver: &BinaryIndexedView,
+    _resolver: &CompiledModule,
     _is_entry: bool,
     _parameters: SignatureIndex,
     _return_type: Option<SignatureIndex>,
@@ -145,7 +127,7 @@ pub fn no_additional_script_signature_checks(
 }
 
 pub fn legacy_script_signature_checks(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     _is_entry: bool,
     parameters_idx: SignatureIndex,
     return_idx: Option<SignatureIndex>,

@@ -35,8 +35,9 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
-use crate::consistency::{consistent_range, CheckpointViewedAt};
+use crate::consistency::consistent_range;
 use crate::data::QueryExecutor;
+use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64 as GraphQLBase64;
 use crate::types::zklogin_verify_signature::verify_zklogin_signature;
 use crate::types::zklogin_verify_signature::ZkLoginIntentScope;
@@ -60,10 +61,10 @@ impl Query {
     /// Range of checkpoints that the RPC has data available for (for data
     /// that can be tied to a particular checkpoint).
     async fn available_range(&self, ctx: &Context<'_>) -> Result<AvailableRange> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
         let result = ctx
             .data_unchecked::<Db>()
-            .execute(move |conn| consistent_range(conn, Some(checkpoint_viewed_at)))
+            .execute(move |conn| consistent_range(conn, Some(checkpoint)))
             .await
             .extend()?;
 
@@ -187,11 +188,11 @@ impl Query {
     }
 
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Owner>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         Ok(Some(Owner {
             address,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at: Some(checkpoint),
         }))
     }
 
@@ -203,7 +204,7 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         match version {
             Some(version) => Object::query(
@@ -211,7 +212,7 @@ impl Query {
                 address,
                 ObjectLookupKey::VersionAt {
                     version,
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at: Some(checkpoint),
                 },
             )
             .await
@@ -219,7 +220,7 @@ impl Query {
             None => Object::query(
                 ctx.data_unchecked(),
                 address,
-                ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                ObjectLookupKey::LatestAt(checkpoint),
             )
             .await
             .extend(),
@@ -228,11 +229,11 @@ impl Query {
 
     /// Look-up an Account by its SuiAddress.
     async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Address>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         Ok(Some(Address {
             address,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at: Some(checkpoint),
         }))
     }
 
@@ -248,11 +249,9 @@ impl Query {
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
-        Epoch::query(ctx, id, Some(checkpoint_viewed_at))
-            .await
-            .extend()
+        Epoch::query(ctx, id, Some(checkpoint)).await.extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
@@ -262,9 +261,9 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
-        Checkpoint::query(ctx, id.unwrap_or_default(), Some(checkpoint_viewed_at))
+        Checkpoint::query(ctx, id.unwrap_or_default(), Some(checkpoint))
             .await
             .extend()
     }
@@ -275,9 +274,9 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
-        TransactionBlock::query(ctx.data_unchecked(), digest, Some(checkpoint_viewed_at))
+        TransactionBlock::query(ctx.data_unchecked(), digest, Some(checkpoint))
             .await
             .extend()
     }
@@ -295,7 +294,7 @@ impl Query {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
@@ -304,7 +303,7 @@ impl Query {
             page,
             coin,
             /* owner */ None,
-            Some(checkpoint_viewed_at),
+            Some(checkpoint),
         )
         .await
         .extend()
@@ -319,14 +318,14 @@ impl Query {
         last: Option<u64>,
         before: Option<checkpoint::Cursor>,
     ) -> Result<Connection<String, Checkpoint>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         Checkpoint::paginate(
             ctx.data_unchecked(),
             page,
             /* epoch */ None,
-            Some(checkpoint_viewed_at),
+            Some(checkpoint),
         )
         .await
         .extend()
@@ -342,14 +341,14 @@ impl Query {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Connection<String, TransactionBlock>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         TransactionBlock::paginate(
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            Some(checkpoint_viewed_at),
+            Some(checkpoint),
         )
         .await
         .extend()
@@ -365,14 +364,14 @@ impl Query {
         before: Option<event::Cursor>,
         filter: Option<EventFilter>,
     ) -> Result<Connection<String, Event>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         Event::paginate(
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            Some(checkpoint_viewed_at),
+            Some(checkpoint),
         )
         .await
         .extend()
@@ -388,14 +387,14 @@ impl Query {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         Object::paginate(
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            Some(checkpoint_viewed_at),
+            Some(checkpoint),
         )
         .await
         .extend()
@@ -419,15 +418,15 @@ impl Query {
         ctx: &Context<'_>,
         domain: Domain,
     ) -> Result<Option<Address>> {
-        let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
+        let Watermark { checkpoint, .. } = *ctx.data()?;
         Ok(
-            NameService::resolve_to_record(ctx, &domain, Some(checkpoint_viewed_at))
+            NameService::resolve_to_record(ctx, &domain, Some(checkpoint))
                 .await
                 .extend()?
                 .and_then(|r| r.target_address)
                 .map(|a| Address {
                     address: a.into(),
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at: Some(checkpoint),
                 }),
         )
     }

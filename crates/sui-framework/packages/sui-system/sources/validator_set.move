@@ -20,15 +20,6 @@ module sui_system::validator_set {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-
-    /* #[test_only] */
-    /* friend sui_system::validator_set_tests; */
-
-    /* #[test_only] */
-    /* friend sui_system::stake_tests; */
-
     public struct ValidatorSet has store {
         /// Total amount of stake from all active validators at the beginning of the epoch.
         total_stake: u64,

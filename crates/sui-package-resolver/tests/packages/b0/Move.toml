@@ -2,6 +2,7 @@
 name = "B"
 version = "0.0.1"
 published-at = "0xb0"
+edition = "2024.beta"
 
 [dependencies]
 A = { local = "../a0" }

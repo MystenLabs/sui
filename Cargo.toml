@@ -18,6 +18,7 @@ exclude = [
   "external-crates/move/crates/move-bytecode-source-map",
   "external-crates/move/crates/move-bytecode-utils",
   "external-crates/move/crates/move-bytecode-verifier",
+  "external-crates/move/crates/move-bytecode-verifier-meter",
   "external-crates/move/crates/move-bytecode-viewer",
   "external-crates/move/crates/move-cli",
   "external-crates/move/crates/move-command-line-common",
@@ -126,6 +127,7 @@ members = [
   "crates/sui-open-rpc",
   "crates/sui-open-rpc-macros",
   "crates/sui-oracle",
+  "crates/sui-package-management",
   "crates/sui-package-resolver",
   "crates/sui-proc-macros",
   "crates/sui-protocol-config",
@@ -136,6 +138,7 @@ members = [
   "crates/sui-rosetta",
   "crates/sui-rpc-loadgen",
   "crates/sui-sdk",
+  "crates/sui-security-watchdog",
   "crates/sui-simulator",
   "crates/sui-single-node-benchmark",
   "crates/sui-snapshot",
@@ -193,7 +196,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.22.0"
+version = "1.24.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -532,6 +535,7 @@ shlex = "1.3.0"
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
 move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
+move-bytecode-verifier-meter = { path = "external-crates/move/crates/move-bytecode-verifier-meter" }
 move-cli = { path = "external-crates/move/crates/move-cli" }
 move-compiler = { path = "external-crates/move/crates/move-compiler" }
 move-core-types = { path = "external-crates/move/crates/move-core-types" }
@@ -552,9 +556,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "52d00a506a965883f0904ee64bbd5fb9471c42b3" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "52d00a506a965883f0904ee64bbd5fb9471c42b3" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "52d00a506a965883f0904ee64bbd5fb9471c42b3", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7b224e374cb73cb78104948939f8fa2be980eaac" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7b224e374cb73cb78104948939f8fa2be980eaac" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7b224e374cb73cb78104948939f8fa2be980eaac", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
@@ -612,6 +616,7 @@ sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
 sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
+sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }

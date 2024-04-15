@@ -9,7 +9,10 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
         Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters,
     },
-    editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
+    editions::{
+        check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
+        FeatureGate, Flavor,
+    },
     expansion::ast as E,
     naming::ast as N,
     sui_mode,
@@ -166,6 +169,7 @@ pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
 pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
+pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -303,6 +307,7 @@ impl CompilationEnv {
             known_code_filter!(FILTER_UNUSED_MUT_REF, UnusedItem::MutReference),
             known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
+            known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
         ]);
         let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
@@ -363,6 +368,19 @@ impl CompilationEnv {
     }
 
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
+        if diag.info().severity() <= Severity::NonblockingError
+            && self
+                .diags
+                .any_syntax_error_with_primary_loc(diag.primary_loc())
+        {
+            // do not report multiple diags for the same location (unless they are blocking) to
+            // avoid noise that is likely to confuse the developer trying to localize the problem
+            //
+            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
+            // becomes one
+            return;
+        }
+
         if !self.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
@@ -538,6 +556,15 @@ impl CompilationEnv {
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
+    }
+
+    // Returns an error string if if the feature isn't supported, or None otherwise.
+    pub fn feature_edition_error_msg(
+        &mut self,
+        feature: FeatureGate,
+        package: Option<Symbol>,
+    ) -> Option<String> {
+        feature_edition_error_msg(self.package_config(package).edition, feature)
     }
 
     pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {
@@ -926,7 +953,7 @@ impl IndexedPhysicalPackagePath {
 }
 
 //**************************************************************************************************
-// Format a comma list correctly for error reporting and other messages.
+// String Construction Helpers
 //**************************************************************************************************
 
 macro_rules! format_oxford_list {

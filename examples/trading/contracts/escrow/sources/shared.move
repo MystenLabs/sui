@@ -37,12 +37,12 @@ module escrow::shared {
 
     /// The `name` of the DOF that holds the Escrowed object.
     /// Allows easy discoverability for the escrowed object.
-    struct EscrowedObjectKey has copy, store, drop {}
+    public struct EscrowedObjectKey has copy, store, drop {}
 
     /// An object held in escrow
     /// 
     /// The escrowed object is added as a Dynamic Object Field so it can still be looked-up.
-    struct Escrow<phantom T: key + store> has key, store {
+    public struct Escrow<phantom T: key + store> has key, store {
         id: UID,
 
         /// Owner of `escrowed`
@@ -72,7 +72,7 @@ module escrow::shared {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let escrow = Escrow<T> {
+        let mut escrow = Escrow<T> {
             id: object::new(ctx),
             sender: tx_context::sender(ctx),
             recipient,
@@ -94,7 +94,7 @@ module escrow::shared {
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
     public fun swap<T: key + store, U: key + store>(
-        escrow: Escrow<T>,
+        mut escrow: Escrow<T>,
         key: Key,
         locked: Locked<U>,
         ctx: &TxContext,
@@ -125,7 +125,7 @@ module escrow::shared {
 
     /// The `creator` can cancel the escrow and get back the escrowed item
     public fun return_to_sender<T: key + store>(
-        escrow: Escrow<T>,
+        mut escrow: Escrow<T>,
         ctx: &TxContext
     ): T {
 
@@ -148,7 +148,7 @@ module escrow::shared {
     }
 
     // === Events ===
-    struct EscrowCreated has copy, drop {
+    public struct EscrowCreated has copy, drop {
         /// the ID of the escrow that was created
         escrow_id: ID,
         /// The ID of the `Key` that unlocks the requested object.
@@ -161,11 +161,11 @@ module escrow::shared {
         item_id: ID,
     }
 
-    struct EscrowSwapped has copy, drop {
+    public struct EscrowSwapped has copy, drop {
         escrow_id: ID
     }
 
-    struct EscrowCancelled has copy, drop {
+    public struct EscrowCancelled has copy, drop {
         escrow_id: ID
     }
 
@@ -185,7 +185,7 @@ module escrow::shared {
 
     #[test]
     fun test_successful_swap() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         // Bob locks the object they want to trade.
         let (i2, ik2) = {
@@ -247,7 +247,7 @@ module escrow::shared {
     #[test]
     #[expected_failure(abort_code = EMismatchedSenderRecipient)]
     fun test_mismatch_sender() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         let ik2 = {
             ts::next_tx(&mut ts, DIANE);
@@ -289,7 +289,7 @@ module escrow::shared {
     #[test]
     #[expected_failure(abort_code = EMismatchedExchangeObject)]
     fun test_mismatch_object() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         {
             ts::next_tx(&mut ts, BOB);
@@ -331,7 +331,7 @@ module escrow::shared {
     #[test]
     #[expected_failure(abort_code = EMismatchedExchangeObject)]
     fun test_object_tamper() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         // Bob locks their object.
         let ik2 = {
@@ -358,7 +358,7 @@ module escrow::shared {
             ts::next_tx(&mut ts, BOB);
             let k: Key = ts::take_from_sender(&ts);
             let l: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            let c = lock::unlock(l, k);
+            let mut c = lock::unlock(l, k);
 
             let _dust = coin::split(&mut c, 1, ts::ctx(&mut ts));
             let (l, k) = lock::lock(c, ts::ctx(&mut ts));
@@ -379,7 +379,7 @@ module escrow::shared {
 
     #[test]
     fun test_return_to_sender() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         // Alice puts up the object they want to trade
         let cid = {
@@ -414,7 +414,7 @@ module escrow::shared {
     #[test]
     #[expected_failure]
     fun test_return_to_sender_failed_swap() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
 
         // Bob locks their object.
         let ik2 = {

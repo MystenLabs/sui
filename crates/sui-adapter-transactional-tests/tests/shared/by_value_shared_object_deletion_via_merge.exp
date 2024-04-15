@@ -3,102 +3,168 @@ processed 21 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 13-63:
+task 1 'publish'. lines 13-60:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 9264400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 65-65:
+task 2 'run'. lines 62-62:
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 67-67:
+task 3 'run'. lines 64-64:
 created: object(3,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 69-69:
+task 4 'view-object'. lines 66-66:
 Owner: Shared
 Version: 3
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
-task 5 'view-object'. lines 71-74:
+task 5 'view-object'. lines 68-71:
 Owner: Account Address ( A )
 Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
-task 6 'programmable'. lines 75-79:
+task 6 'programmable'. lines 72-76:
 mutated: object(0,0), object(3,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 7 'run'. lines 81-81:
+task 7 'run'. lines 78-78:
 created: object(7,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'run'. lines 83-83:
+task 8 'run'. lines 80-80:
 created: object(8,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9 'run'. lines 85-85:
+task 9 'run'. lines 82-82:
 created: object(9,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10 'view-object'. lines 87-87:
+task 10 'view-object'. lines 84-84:
 Owner: Account Address ( A )
 Version: 5
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
-task 11 'view-object'. lines 89-89:
+task 11 'view-object'. lines 86-86:
 Owner: Shared
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
-task 12 'view-object'. lines 91-93:
+task 12 'view-object'. lines 88-90:
 Owner: Shared
 Version: 7
-Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(9,0)}}}
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(9,0),
+        },
+    },
+}
 
-task 13 'programmable'. lines 94-98:
+task 13 'programmable'. lines 91-95:
 mutated: object(0,0), object(9,0)
 deleted: object(7,0), object(8,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 4160772, non_refundable_storage_fee: 42028
 
-task 14 'run'. lines 100-100:
+task 14 'run'. lines 97-97:
 created: object(14,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15 'run'. lines 102-102:
+task 15 'run'. lines 99-99:
 created: object(15,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 16 'run'. lines 104-104:
+task 16 'run'. lines 101-101:
 created: object(16,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 17 'view-object'. lines 106-106:
+task 17 'view-object'. lines 103-103:
 Owner: Shared
 Version: 8
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(14,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(14,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
-task 18 'view-object'. lines 108-108:
+task 18 'view-object'. lines 105-105:
 Owner: Shared
 Version: 9
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
-task 19 'view-object'. lines 110-112:
+task 19 'view-object'. lines 107-109:
 Owner: Shared
 Version: 10
-Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(16,0)}}}
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(16,0),
+        },
+    },
+}
 
-task 20 'programmable'. lines 113-115:
+task 20 'programmable'. lines 110-112:
 mutated: object(0,0), object(16,0)
 deleted: object(14,0), object(15,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 4160772, non_refundable_storage_fee: 42028

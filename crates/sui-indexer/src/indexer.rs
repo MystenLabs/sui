@@ -46,7 +46,7 @@ impl Indexer {
 
         // None will be returned when checkpoints table is empty.
         let last_seq_from_db = store
-            .get_latest_tx_checkpoint_sequence_number()
+            .get_latest_checkpoint_sequence_number()
             .await
             .expect("Failed to get latest tx checkpoint sequence number from DB");
         let download_queue_size = env::var("DOWNLOAD_QUEUE_SIZE")
@@ -73,13 +73,14 @@ impl Indexer {
         spawn_monitored_task!(fetcher.run());
 
         let objects_snapshot_processor = ObjectsSnapshotProcessor::new_with_config(
+            rest_client.clone(),
             store.clone(),
             metrics.clone(),
             snapshot_config,
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, metrics.clone()).await?;
+        let checkpoint_handler = new_handlers(store, rest_client.clone(), metrics.clone()).await?;
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,

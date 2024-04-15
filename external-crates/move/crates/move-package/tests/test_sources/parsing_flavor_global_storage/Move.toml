@@ -2,4 +2,4 @@
 name = "name"
 license = "license"
 authors = ["some author"]
-flavor = "global-storage"
+flavor = "core"

@@ -6,13 +6,12 @@
 //! parameters, locals, and fields of structs are well-formed. References can only occur at the
 //! top-level in all tokens.  Additionally, references cannot occur at all in field types.
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
-    binary_views::BinaryIndexedView,
+    access::ModuleAccess,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeUnit, CompiledModule, CompiledScript, FunctionDefinition,
-        FunctionHandle, Signature, SignatureIndex, SignatureToken, StructDefinition,
-        StructFieldInformation, StructTypeParameter, TableIndex,
+        AbilitySet, Bytecode, CodeUnit, CompiledModule, FunctionDefinition, FunctionHandle,
+        Signature, SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
+        StructTypeParameter, TableIndex,
     },
     file_format_common::VERSION_6,
     IndexKind,
@@ -20,7 +19,7 @@ use move_binary_format::{
 use move_core_types::vm_status::StatusCode;
 
 pub struct SignatureChecker<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
 }
 
 impl<'a> SignatureChecker<'a> {
@@ -29,27 +28,11 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
-        let sig_check = Self {
-            resolver: BinaryIndexedView::Module(module),
-        };
+        let sig_check = Self { resolver: module };
         sig_check.verify_signature_pool(module.signatures())?;
         sig_check.verify_function_signatures(module.function_handles())?;
         sig_check.verify_fields(module.struct_defs())?;
         sig_check.verify_code_units(module.function_defs())
-    }
-
-    pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let sig_check = Self {
-            resolver: BinaryIndexedView::Script(script),
-        };
-        sig_check.verify_signature_pool(script.signatures())?;
-        sig_check.verify_function_signatures(script.function_handles())?;
-        sig_check.check_instantiation(script.parameters, &script.type_parameters)?;
-        sig_check.verify_code(script.code(), &script.type_parameters)
     }
 
     fn verify_signature_pool(&self, signatures: &[Signature]) -> PartialVMResult<()> {
@@ -155,8 +138,8 @@ impl<'a> SignatureChecker<'a> {
                 | MoveToGenericDeprecated(idx)
                 | ImmBorrowGlobalGenericDeprecated(idx)
                 | MutBorrowGlobalGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    let struct_def = self.resolver.struct_def_at(struct_inst.def)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
+                    let struct_def = self.resolver.struct_def_at(struct_inst.def);
                     let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
                     let type_arguments = &self.resolver.signature_at(struct_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
@@ -167,9 +150,9 @@ impl<'a> SignatureChecker<'a> {
                     )
                 }
                 ImmBorrowFieldGeneric(idx) | MutBorrowFieldGeneric(idx) => {
-                    let field_inst = self.resolver.field_instantiation_at(*idx)?;
-                    let field_handle = self.resolver.field_handle_at(field_inst.handle)?;
-                    let struct_def = self.resolver.struct_def_at(field_handle.owner)?;
+                    let field_inst = self.resolver.field_instantiation_at(*idx);
+                    let field_handle = self.resolver.field_handle_at(field_inst.handle);
+                    let struct_def = self.resolver.struct_def_at(field_handle.owner);
                     let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
                     let type_arguments = &self.resolver.signature_at(field_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;

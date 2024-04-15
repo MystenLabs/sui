@@ -4,7 +4,6 @@
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
@@ -273,9 +272,8 @@ impl MoveModule {
 
     /// Textual representation of the module's bytecode.
     async fn disassembly(&self) -> Result<Option<String>> {
-        let view = BinaryIndexedView::Module(self.parsed.bytecode());
         Ok(Some(
-            Disassembler::from_view(view, Loc::invalid())
+            Disassembler::from_view(self.parsed.bytecode(), Loc::invalid())
                 .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
                 .extend()?
                 .disassemble()

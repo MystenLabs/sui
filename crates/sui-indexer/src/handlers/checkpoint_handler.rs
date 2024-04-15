@@ -12,8 +12,7 @@ use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use sui_package_resolver::{PackageStore, Resolver};
-use sui_rest_api::CheckpointData;
-use sui_rest_api::CheckpointTransaction;
+use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -43,7 +42,7 @@ use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::PgConnectionPool;
-use crate::store::module_resolver::{IndexerStorePackageModuleResolver, InterimPackageResolver};
+use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
     IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
@@ -60,6 +59,7 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
 pub async fn new_handlers<S>(
     state: S,
+    client: Client,
     metrics: IndexerMetrics,
 ) -> Result<CheckpointHandler<S>, IndexerError>
 where
@@ -79,10 +79,12 @@ where
         );
 
     let state_clone = state.clone();
+    let client_clone = client.clone();
     let metrics_clone = metrics.clone();
     let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
+        client_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,
@@ -142,9 +144,9 @@ where
         let package_objects = Self::get_package_objects(checkpoints);
 
         let pg_blocking_cp = self.pg_blocking_cp()?;
-        let module_package_db_resolver = IndexerStorePackageModuleResolver::new(pg_blocking_cp);
+        let package_db_resolver = IndexerStorePackageResolver::new(pg_blocking_cp);
         let in_mem_package_resolver = InterimPackageResolver::new(
-            module_package_db_resolver,
+            package_db_resolver,
             self.package_buffer.clone(),
             &package_objects,
             self.metrics.clone(),
@@ -345,6 +347,10 @@ where
             )
         };
         info!(checkpoint_seq, "Indexed one checkpoint.");
+        metrics
+            .index_lag_ms
+            .set(chrono::Utc::now().timestamp_millis() - checkpoint.timestamp_ms as i64);
+
         Ok(CheckpointDataToCommit {
             checkpoint,
             transactions: db_transactions,

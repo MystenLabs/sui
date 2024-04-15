@@ -6,8 +6,6 @@ module sui::group_ops {
 
     use sui::bcs;
 
-    /* friend sui::bls12381; */
-
     #[allow(unused_const)]
     const ENotSupported: u64 = 0; // Operation is not supported by the network.
     const EInvalidInput: u64 = 1;

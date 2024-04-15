@@ -2129,6 +2129,7 @@ async fn prep_network(
         protocol_config.version.as_u64(),
     )
     .await;
+    *authority_state.execution_lock_for_reconfiguration().await = executed_epoch;
 
     (authority_state, epoch_store)
 }

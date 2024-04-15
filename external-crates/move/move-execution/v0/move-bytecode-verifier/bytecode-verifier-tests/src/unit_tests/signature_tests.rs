@@ -8,9 +8,10 @@ use move_binary_format::file_format::{
     Bytecode::*, CompiledModule, SignatureToken::*, Visibility::Public, *,
 };
 use move_bytecode_verifier::{
-    meter::DummyMeter, verify_module_unmetered, verify_module_with_config_for_test,
+    verify_module_unmetered, verify_module_with_config_for_test,
     SignatureChecker,
 };
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -218,7 +219,7 @@ fn big_signature_test() {
 
     let res = verify_module_with_config_for_test(
         "big_signature_test",
-        &production_config(),
+        &production_config().0,
         &module,
         &mut DummyMeter,
     )

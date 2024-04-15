@@ -24,6 +24,7 @@ use sui_config::{
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
@@ -35,6 +36,8 @@ pub struct ValidatorConfigBuilder {
     jwk_fetch_interval: Option<Duration>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: Option<RemoteFirewallConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -74,6 +77,16 @@ impl ValidatorConfigBuilder {
 
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.firewall_config = config;
         self
     }
 
@@ -196,6 +209,8 @@ impl ValidatorConfigBuilder {
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
             websocket_only: false,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
         }
     }
 
@@ -228,6 +243,8 @@ pub struct FullnodeConfigBuilder {
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
     run_with_range: Option<RunWithRange>,
+    policy_config: Option<PolicyConfig>,
+    fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -322,6 +339,16 @@ impl FullnodeConfigBuilder {
         if let Some(run_with_range) = run_with_range {
             self.run_with_range = Some(run_with_range);
         }
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fw_config = config;
         self
     }
 
@@ -449,6 +476,8 @@ impl FullnodeConfigBuilder {
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
             websocket_only: false,
+            policy_config: self.policy_config,
+            firewall_config: self.fw_config,
         }
     }
 }

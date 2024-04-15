@@ -14,21 +14,21 @@ module escrow::lock {
 
     /// The `name` of the DOF that holds the Locked object.
     /// Allows better discoverability for the locked object.
-    struct LockedObjectKey has copy, store, drop {}
-  
+    public struct LockedObjectKey has copy, store, drop {}
+
     /// A wrapper that protects access to `obj` by requiring access to a `Key`.
     ///
     /// Used to ensure an object is not modified if it might be involved in a
-    /// swap. 
-    /// 
+    /// swap.
+    ///
     /// Object is added as a Dynamic Object Field so that it can still be looked-up.
-    struct Locked<phantom T: key + store> has key, store {
+    public struct Locked<phantom T: key + store> has key, store {
         id: UID,
         key: ID,
     }
 
     /// Key to open a locked object (consuming the `Key`)
-    struct Key has key, store { id: UID }
+    public struct Key has key, store { id: UID }
 
     // === Error codes ===
 
@@ -43,7 +43,7 @@ module escrow::lock {
         ctx: &mut TxContext,
     ): (Locked<T>, Key) {
         let key = Key { id: object::new(ctx) };
-        let lock = Locked {
+        let mut lock = Locked {
             id: object::new(ctx),
             key: object::id(&key),
         };
@@ -51,7 +51,7 @@ module escrow::lock {
         event::emit(LockCreated {
             lock_id: object::id(&lock),
             key_id: object::id(&key),
-            creator: sender(ctx),
+            creator: ctx.sender(),
             item_id: object::id(&obj)
         });
 
@@ -63,7 +63,7 @@ module escrow::lock {
 
     /// Unlock the object in `locked`, consuming the `key`.  Fails if the wrong
     /// `key` is passed in for the locked object.
-    public fun unlock<T: key + store>(locked: Locked<T>, key: Key): T {
+    public fun unlock<T: key + store>(mut locked: Locked<T>, key: Key): T {
         assert!(locked.key == object::id(&key), ELockKeyMismatch);
         let Key { id } = key;
         object::delete(id);
@@ -78,7 +78,7 @@ module escrow::lock {
     }
 
     // === Events ===
-    struct LockCreated has copy, drop {
+    public struct LockCreated has copy, drop {
         /// The ID of the `Locked` object.
         lock_id: ID,
         /// The ID of the key that unlocks a locked object in a `Locked`.
@@ -89,7 +89,7 @@ module escrow::lock {
         item_id: ID,
     }
 
-    struct LockDestroyed has copy, drop {
+    public struct LockDestroyed has copy, drop {
         /// The ID of the `Locked` object.
         lock_id: ID
     }
@@ -106,7 +106,7 @@ module escrow::lock {
 
     #[test]
     fun test_lock_unlock() {
-        let ts = ts::begin(@0xA);
+        let mut ts = ts::begin(@0xA);
         let coin = test_coin(&mut ts);
 
         let (lock, key) = lock(coin, ts::ctx(&mut ts));
@@ -119,7 +119,7 @@ module escrow::lock {
     #[test]
     #[expected_failure(abort_code = ELockKeyMismatch)]
     fun test_lock_key_mismatch() {
-        let ts = ts::begin(@0xA);
+        let mut ts = ts::begin(@0xA);
         let coin = test_coin(&mut ts);
         let another_coin = test_coin(&mut ts);
         let (l, _k) = lock(coin, ts::ctx(&mut ts));

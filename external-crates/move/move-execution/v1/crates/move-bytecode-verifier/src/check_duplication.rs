@@ -10,12 +10,12 @@
 //! - the handles in struct and function definitions point to the self module index
 //! - all struct and function handles pointing to the self module index have a definition
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
+    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, Constant, FunctionHandle, FunctionHandleIndex,
-        FunctionInstantiation, ModuleHandle, Signature, StructFieldInformation, StructHandle,
-        StructHandleIndex, TableIndex,
+        CompiledModule, Constant, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
+        ModuleHandle, Signature, StructFieldInformation, StructHandle, StructHandleIndex,
+        TableIndex,
     },
     IndexKind,
 };
@@ -50,21 +50,6 @@ impl<'a> DuplicationChecker<'a> {
         checker.check_function_defintions()?;
         checker.check_struct_definitions()?;
         checker.check_struct_instantiations()
-    }
-
-    pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(script: &'a CompiledScript) -> PartialVMResult<()> {
-        Self::check_identifiers(script.identifiers())?;
-        Self::check_address_identifiers(script.address_identifiers())?;
-        Self::check_constants(script.constant_pool())?;
-        Self::check_signatures(script.signatures())?;
-        Self::check_module_handles(script.module_handles())?;
-        Self::check_struct_handles(script.struct_handles())?;
-        Self::check_function_handles(script.function_handles())?;
-        Self::check_function_instantiations(script.function_instantiations())
     }
 
     fn check_identifiers(identifiers: &[Identifier]) -> PartialVMResult<()> {

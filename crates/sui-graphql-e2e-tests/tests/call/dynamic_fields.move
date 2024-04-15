@@ -14,8 +14,6 @@
 module Test::m {
     use sui::dynamic_field as field;
     use sui::dynamic_object_field as ofield;
-    use sui::object;
-    use sui::tx_context::{sender, TxContext};
 
     public struct Wrapper has key {
         id: object::UID,
@@ -32,7 +30,7 @@ module Test::m {
 
     public entry fun create_obj(ctx: &mut TxContext){
         let id = object::new(ctx);
-        sui::transfer::public_transfer(Parent { id }, sender(ctx))
+        sui::transfer::public_transfer(Parent { id }, ctx.sender())
     }
 
     public entry fun add_df(obj: &mut Parent) {
@@ -49,7 +47,7 @@ module Test::m {
 
     public entry fun wrap(parent: Parent, ctx: &mut TxContext) {
         let wrapper = Wrapper { id: object::new(ctx), o: parent };
-        sui::transfer::transfer(wrapper, sender(ctx))
+        sui::transfer::transfer(wrapper, ctx.sender())
     }
 }
 

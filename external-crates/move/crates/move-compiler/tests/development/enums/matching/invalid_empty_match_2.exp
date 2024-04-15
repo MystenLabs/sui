@@ -1,0 +1,8 @@
+error[E03013]: positional call mismatch
+  ┌─ tests/development/enums/matching/invalid_empty_match_2.move:9:13
+  │
+9 │             Empty::None() => ()
+  │             ^^^^^^^^^^^^^ Invalid variant pattern. Empty variants are not matched with positional variant syntax
+  │
+  = Remove '()' after the variant name
+

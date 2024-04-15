@@ -14,6 +14,7 @@ petgraph.workspace = true
 
 move-borrow-graph.workspace = true
 move-binary-format.workspace = true
+move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
 move-abstract-stack.workspace = true

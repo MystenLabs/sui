@@ -6,7 +6,7 @@ use crate::tx_generator::TxGenerator;
 use move_core_types::identifier::Identifier;
 use std::collections::HashMap;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 
@@ -16,6 +16,7 @@ pub struct MoveTxGenerator {
     use_native_transfer: bool,
     computation: u8,
     root_objects: HashMap<SuiAddress, ObjectRef>,
+    shared_objects: Vec<(ObjectID, SequenceNumber)>,
 }
 
 impl MoveTxGenerator {
@@ -25,6 +26,7 @@ impl MoveTxGenerator {
         use_native_transfer: bool,
         computation: u8,
         root_objects: HashMap<SuiAddress, ObjectRef>,
+        shared_objects: Vec<(ObjectID, SequenceNumber)>,
     ) -> Self {
         Self {
             move_package,
@@ -32,6 +34,7 @@ impl MoveTxGenerator {
             use_native_transfer,
             computation,
             root_objects,
+            shared_objects,
         }
     }
 }
@@ -57,6 +60,21 @@ impl TxGenerator for MoveTxGenerator {
                         )
                         .unwrap();
                 }
+            }
+            for shared_object in &self.shared_objects {
+                builder
+                    .move_call(
+                        self.move_package,
+                        Identifier::new("benchmark").unwrap(),
+                        Identifier::new("increment_shared_counter").unwrap(),
+                        vec![],
+                        vec![CallArg::Object(ObjectArg::SharedObject {
+                            id: shared_object.0,
+                            initial_shared_version: shared_object.1,
+                            mutable: true,
+                        })],
+                    )
+                    .unwrap();
             }
 
             if !self.root_objects.is_empty() {

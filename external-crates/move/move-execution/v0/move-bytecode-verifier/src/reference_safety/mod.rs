@@ -12,7 +12,6 @@ mod abstract_state;
 
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
-    meter::{Meter, Scope},
     reference_safety::abstract_state::{
         STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
     },
@@ -20,14 +19,16 @@ use crate::{
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
+    access::ModuleAccess,
+    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, IdentifierIndex,
         SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
     },
-    safe_assert, safe_unwrap, safe_unwrap_err,
+    safe_assert, safe_unwrap, safe_unwrap_err, CompiledModule,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -35,7 +36,7 @@ use std::{
 };
 
 struct ReferenceSafetyAnalysis<'a> {
-    resolver: &'a BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     function_view: &'a FunctionView<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     stack: AbstractStack<AbstractValue>,
@@ -43,7 +44,7 @@ struct ReferenceSafetyAnalysis<'a> {
 
 impl<'a> ReferenceSafetyAnalysis<'a> {
     fn new(
-        resolver: &'a BinaryIndexedView<'a>,
+        resolver: &'a CompiledModule,
         function_view: &'a FunctionView<'a>,
         name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     ) -> Self {
@@ -67,10 +68,10 @@ impl<'a> ReferenceSafetyAnalysis<'a> {
 }
 
 pub(crate) fn verify<'a>(
-    resolver: &'a BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     function_view: &FunctionView,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let initial_state = AbstractState::new(function_view);
 
@@ -83,7 +84,7 @@ fn call(
     state: &mut AbstractState,
     offset: CodeOffset,
     function_handle: &FunctionHandle,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let parameters = verifier.resolver.signature_at(function_handle.parameters);
     let arguments = parameters
@@ -95,7 +96,7 @@ fn call(
 
     let acquired_resources = match verifier.name_def_map.get(&function_handle.name) {
         Some(idx) => {
-            let func_def = verifier.resolver.function_def_at(*idx)?;
+            let func_def = verifier.resolver.function_def_at(*idx);
             let fh = verifier.resolver.function_handle_at(func_def.function);
             if function_handle == fh {
                 func_def.acquires_global_resources.iter().cloned().collect()
@@ -146,7 +147,7 @@ fn vec_element_type(
     verifier: &mut ReferenceSafetyAnalysis,
     idx: SignatureIndex,
 ) -> PartialVMResult<SignatureToken> {
-    match verifier.resolver.signature_at(idx).0.get(0) {
+    match verifier.resolver.signature_at(idx).0.first() {
         Some(ty) => Ok(ty.clone()),
         None => Err(PartialVMError::new(
             StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -159,7 +160,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     meter.add_items(Scope::Function, STEP_PER_LOCAL_COST, state.local_count())?;
@@ -221,9 +222,7 @@ fn execute_inner(
             verifier.push(value)?
         }
         Bytecode::MutBorrowFieldGeneric(field_inst_index) => {
-            let field_inst = verifier
-                .resolver
-                .field_instantiation_at(*field_inst_index)?;
+            let field_inst = verifier.resolver.field_instantiation_at(*field_inst_index);
             let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
             let value = state.borrow_field(offset, true, id, field_inst.handle)?;
             verifier.push(value)?
@@ -234,9 +233,7 @@ fn execute_inner(
             verifier.push(value)?
         }
         Bytecode::ImmBorrowFieldGeneric(field_inst_index) => {
-            let field_inst = verifier
-                .resolver
-                .field_instantiation_at(*field_inst_index)?;
+            let field_inst = verifier.resolver.field_instantiation_at(*field_inst_index);
             let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
             let value = state.borrow_field(offset, false, id, field_inst.handle)?;
             verifier.push(value)?
@@ -249,7 +246,7 @@ fn execute_inner(
         }
         Bytecode::MutBorrowGlobalGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
             let value = state.borrow_global(offset, true, struct_inst.def)?;
             verifier.push(value)?
         }
@@ -260,7 +257,7 @@ fn execute_inner(
         }
         Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
             let value = state.borrow_global(offset, false, struct_inst.def)?;
             verifier.push(value)?
         }
@@ -271,7 +268,7 @@ fn execute_inner(
         }
         Bytecode::MoveFromGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
             let value = state.move_from(offset, struct_inst.def)?;
             verifier.push(value)?
         }
@@ -355,21 +352,21 @@ fn execute_inner(
         }
 
         Bytecode::Pack(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.resolver.struct_def_at(*idx);
             pack(verifier, struct_def)?
         }
         Bytecode::PackGeneric(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             pack(verifier, struct_def)?
         }
         Bytecode::Unpack(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.resolver.struct_def_at(*idx);
             unpack(verifier, struct_def)?
         }
         Bytecode::UnpackGeneric(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.resolver.struct_instantiation_at(*idx);
+            let struct_def = verifier.resolver.struct_def_at(struct_inst.def);
             unpack(verifier, struct_def)?
         }
 
@@ -444,7 +441,7 @@ impl<'a> TransferFunctions for ReferenceSafetyAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         execute_inner(self, state, bytecode, index, meter)?;
         if index == last_index {

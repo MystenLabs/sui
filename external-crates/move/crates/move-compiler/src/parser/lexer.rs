@@ -6,13 +6,16 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    parser::syntax::make_loc,
+    parser::{syntax::make_loc, token_set::TokenSet},
     shared::CompilationEnv,
     FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
+
+// This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
+pub const TOK_COUNT: usize = 77;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -47,6 +50,7 @@ pub enum Tok {
     LessLess,
     Equal,
     EqualEqual,
+    EqualGreater,
     EqualEqualGreater,
     LessEqualEqualGreater,
     Greater,
@@ -126,11 +130,12 @@ impl fmt::Display for Tok {
             Semicolon => ";",
             Less => "<",
             LessEqual => "<=",
-            LessLess => "<<",
             Equal => "=",
             EqualEqual => "==",
             EqualEqualGreater => "==>",
+            EqualGreater => "=>",
             LessEqualEqualGreater => "<==>",
+            LessLess => "<<",
             Greater => ">",
             GreaterEqual => ">=",
             GreaterGreater => ">>",
@@ -180,7 +185,7 @@ impl fmt::Display for Tok {
 }
 
 pub struct Lexer<'input> {
-    text: &'input str,
+    pub text: &'input str,
     file_hash: FileHash,
     edition: Edition,
     doc_comments: FileCommentMap,
@@ -208,6 +213,22 @@ impl<'input> Lexer<'input> {
 
     pub fn peek(&self) -> Tok {
         self.token
+    }
+
+    pub fn remaining(&self) -> &'input str {
+        &self.text[self.cur_start..]
+    }
+
+    pub fn at(&self, tok: Tok) -> bool {
+        self.token == tok
+    }
+
+    pub fn at_any(&self, toks: &BTreeSet<Tok>) -> bool {
+        toks.contains(&self.token)
+    }
+
+    pub fn at_set(&self, set: &TokenSet) -> bool {
+        set.contains(self.token, self.content())
     }
 
     pub fn content(&self) -> &'input str {
@@ -714,6 +735,8 @@ fn find_token(
         '=' => {
             if text.starts_with("==>") {
                 (Ok(Tok::EqualEqualGreater), 3)
+            } else if text.starts_with("=>") && edition.supports(FeatureGate::Enums) {
+                (Ok(Tok::EqualGreater), 2)
             } else if text.starts_with("==") {
                 (Ok(Tok::EqualEqual), 2)
             } else {

@@ -4,11 +4,7 @@
 module deepbook::custodian {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID, ID};
     use sui::table::{Self, Table};
-    use sui::tx_context::TxContext;
-
-    /* friend deepbook::clob; */
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     #[test_only]
@@ -160,12 +156,8 @@ module deepbook::custodian {
         table::borrow(&custodian.account_balances, user)
     }
 
-    /* #[test_only] */
-    /* friend deepbook::clob_test; */
     #[test_only]
     use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
-    #[test_only]
-    use sui::transfer;
     #[test_only]
     use sui::coin::{mint_for_testing};
     #[test_only]
