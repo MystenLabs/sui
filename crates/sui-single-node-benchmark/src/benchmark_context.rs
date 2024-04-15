@@ -261,7 +261,7 @@ impl BenchmarkContext {
         if print_sample_tx {
             // We must use remove(0) in case there are shared objects and the transactions
             // must be executed in order.
-            self.execute_sample_transaction(transactions.remove(0))
+            self.execute_sample_transaction(transactions[0].clone())
                 .await;
         }
 
@@ -309,7 +309,7 @@ impl BenchmarkContext {
         print_sample_tx: bool,
     ) {
         if print_sample_tx {
-            self.execute_sample_transaction(transactions.remove(0))
+            self.execute_sample_transaction(transactions[0].clone())
                 .await;
         }
 
@@ -343,7 +343,7 @@ impl BenchmarkContext {
         );
         let effects = self
             .validator()
-            .execute_raw_transaction(sample_transaction.into_unsigned())
+            .execute_dry_run(sample_transaction.into_unsigned())
             .await;
         info!("Sample effects: {:?}\n\n", effects);
         assert!(effects.status().is_ok());
@@ -376,7 +376,7 @@ impl BenchmarkContext {
         mut transactions: Vec<CertifiedTransaction>,
         checkpoint_size: usize,
     ) {
-        self.execute_sample_transaction(transactions.remove(0))
+        self.execute_sample_transaction(transactions[0].clone())
             .await;
 
         info!("Executing all transactions to generate effects");

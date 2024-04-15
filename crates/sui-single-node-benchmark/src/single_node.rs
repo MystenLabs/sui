@@ -25,6 +25,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
@@ -124,6 +125,20 @@ impl SingleValidator {
             .await
             .unwrap()
             .0;
+        assert!(effects.status().is_ok());
+        effects
+    }
+
+    pub async fn execute_dry_run(&self, transaction: Transaction) -> TransactionEffects {
+        let effects = self
+            .get_validator()
+            .dry_exec_transaction_for_benchmark(
+                transaction.data().intent_message().value.clone(),
+                *transaction.digest(),
+            )
+            .await
+            .unwrap()
+            .2;
         assert!(effects.status().is_ok());
         effects
     }
