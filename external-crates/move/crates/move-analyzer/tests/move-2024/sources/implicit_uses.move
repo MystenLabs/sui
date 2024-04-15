@@ -1,10 +1,10 @@
 module Move2024::implicit_uses {
 
-    public struct Obj {
-        id: UID
+    public struct SomeStruct {
+        opt: Option<u8>,
     }
 
-    public fun foo(ctx: &mut TxContext): Obj {
-        Obj { id: object::new(ctx) }
+    public fun foo(): SomeStruct {
+        SomeStruct { opt: option::some(42) }
     }
 }

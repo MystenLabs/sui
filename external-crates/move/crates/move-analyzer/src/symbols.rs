@@ -6629,27 +6629,13 @@ fn implicit_uses_test() {
         &symbols,
         1,
         3,
-        12,
+        13,
         "implicit_uses.move",
-        64,
-        18,
-        "object.move",
-        "public struct sui::object::UID has store {\n\tid: sui::object::ID\n}",
-        Some((64, 18, "object.move")),
-    );
-    // implicit struct as parameter type
-    assert_use_def(
-        mod_symbols,
-        &symbols,
-        2,
         6,
-        29,
-        "implicit_uses.move",
-        20,
-        18,
-        "tx_context.move",
-        "public struct sui::tx_context::TxContext has drop {\n\tepoch: u64,\n\tepoch_timestamp_ms: u64,\n\tids_created: u64,\n\tsender: address,\n\ttx_hash: vector<u8>\n}",
-        Some((20, 18, "tx_context.move")),
+        11,
+        "option.move",
+        "public struct std::option::Option<Element> has copy, drop, store {\n\tvec: vector<Element>\n}",
+        Some((6, 11, "option.move")),
     );
     // implicit module name in function call
     assert_use_def(
@@ -6657,12 +6643,12 @@ fn implicit_uses_test() {
         &symbols,
         2,
         7,
-        18,
+        26,
         "implicit_uses.move",
-        4,
+        1,
         12,
-        "object.move",
-        "module sui::object",
+        "option.move",
+        "module std::option",
         None,
     );
 }
