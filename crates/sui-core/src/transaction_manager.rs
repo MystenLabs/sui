@@ -32,6 +32,7 @@ use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     execution_cache::ExecutionCacheRead,
 };
+use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
@@ -817,7 +818,7 @@ impl TransactionManager {
 
     pub(crate) fn check_execution_overload(
         &self,
-        txn_age_threshold: Duration,
+        overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
         // Too many transactions are pending execution.
@@ -853,12 +854,12 @@ impl TransactionManager {
             }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
-                if age >= txn_age_threshold {
+                if age >= overload_config.max_txn_age_in_queue {
                     info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
-                        threshold: txn_age_threshold.as_secs(),
+                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
                     });
                 }
             }

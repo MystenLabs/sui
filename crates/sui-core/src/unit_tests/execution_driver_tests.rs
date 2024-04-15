@@ -579,7 +579,7 @@ async fn test_per_object_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+        .check_execution_overload(&authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooManyTransactionsPendingOnObject"),
@@ -707,7 +707,7 @@ async fn test_txn_age_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+        .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooOldTransactionPendingOnObject"),
