@@ -4,7 +4,7 @@
 
 //! Implementation of native functions for utf8 strings.
 
-use crate::natives::helpers::make_module_natives;
+use crate::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
 use move_vm_runtime::{

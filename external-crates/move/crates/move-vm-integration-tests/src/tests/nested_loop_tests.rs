@@ -39,9 +39,9 @@ fn test_publish_module_with_nested_loops() {
     {
         let storage = InMemoryStorage::new();
         let vm = MoveVM::new_with_config(
-            move_stdlib::natives::all_natives(
+            move_stdlib_natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib::natives::GasParameters::zeros(),
+                move_stdlib_natives::GasParameters::zeros(),
             ),
             VMConfig {
                 verifier: VerifierConfig {
@@ -62,9 +62,9 @@ fn test_publish_module_with_nested_loops() {
     {
         let storage = InMemoryStorage::new();
         let vm = MoveVM::new_with_config(
-            move_stdlib::natives::all_natives(
+            move_stdlib_natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib::natives::GasParameters::zeros(),
+                move_stdlib_natives::GasParameters::zeros(),
             ),
             VMConfig {
                 verifier: VerifierConfig {

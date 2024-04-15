@@ -11,29 +11,16 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-move-errmapgen.workspace = true
-move-docgen.workspace = true
-move-command-line-common.workspace = true
-move-prover.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-vm-runtime = { path = "../move-vm-runtime", package = "move-vm-runtime-v0" }
-log.workspace = true
 walkdir.workspace = true
 smallvec.workspace = true
 sha2.workspace = true
 sha3.workspace = true
-anyhow.workspace = true
 hex.workspace = true
 
-[dev-dependencies]
-move-unit-test.workspace = true
-tempfile.workspace = true
-dir-diff.workspace = true
-file_diff.workspace = true
-move-cli.workspace = true
-move-package.workspace = true
-
 [features]
+default = []
 testing = []

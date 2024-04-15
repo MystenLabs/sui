@@ -22,6 +22,7 @@ itertools.workspace = true
 
 move-command-line-common.workspace = true
 move-stdlib = { workspace = true, features = ["testing"] }
+move-stdlib-natives = { workspace = true, features = ["testing"] }
 move-core-types.workspace = true
 move-compiler.workspace = true
 move-ir-types.workspace = true

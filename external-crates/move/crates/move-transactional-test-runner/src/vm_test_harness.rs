@@ -267,10 +267,10 @@ impl SimpleVMTestAdapter {
     ) -> VMResult<Ret> {
         // start session
         let vm = MoveVM::new_with_config(
-            move_stdlib::natives::all_natives(
+            move_stdlib_natives::all_natives(
                 STD_ADDR,
                 // TODO: come up with a suitable gas schedule
-                move_stdlib::natives::GasParameters::zeros(),
+                move_stdlib_natives::GasParameters::zeros(),
             ),
             vm_config,
         )
