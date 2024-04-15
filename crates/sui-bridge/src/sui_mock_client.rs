@@ -216,6 +216,15 @@ impl SuiClientInner for SuiMockClient {
             .unwrap_or(BridgeActionStatus::Pending))
     }
 
+    async fn get_token_transfer_action_onchain_signatures(
+        &self,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
+        unimplemented!()
+    }
+
     async fn execute_transaction_block_with_effects(
         &self,
         tx: Transaction,
