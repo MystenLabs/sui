@@ -10,6 +10,6 @@ use move_ir_types::location::Spanned;
 fn test_empty_module() {
     let module = empty_module();
     let location = Spanned::unsafe_no_loc(()).loc;
-    SourceMapping::new_from_view(&module, location)
+    SourceMapping::new_without_source_map(&module, location)
         .expect("unable to build source mapping for empty script");
 }
