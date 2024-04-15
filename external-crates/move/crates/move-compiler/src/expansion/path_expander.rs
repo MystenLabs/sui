@@ -776,7 +776,7 @@ fn unexpected_access_error(loc: Loc, result: String, access: Access) -> Diagnost
         Access::Type | Access::ApplyNamed => "type",
         Access::ApplyPositional => "expression",
         Access::Term => "expression",
-        Access::Pattern => "variant",
+        Access::Pattern => "pattern constructor",
         Access::Module => "module",
     };
     let unexpected_msg = if result.starts_with('a') | result.starts_with('e') {
@@ -1167,7 +1167,7 @@ fn unexpected_address_module_error(loc: Loc, nloc: Loc, access: Access) -> Diagn
     let case = match access {
         Access::Type | Access::ApplyNamed | Access::ApplyPositional => "type",
         Access::Term => "expression",
-        Access::Pattern => "variant",
+        Access::Pattern => "pattern constructor",
         Access::Module => {
             return ice!(
                 (

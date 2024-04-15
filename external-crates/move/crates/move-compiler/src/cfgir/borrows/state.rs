@@ -410,7 +410,7 @@ impl BorrowState {
                     local.value(),
                     borrows
                 ),
-                DisplayVar::MatchTmp(s) => format!("Invalid {} of match temporary {}", verb, s),
+                DisplayVar::MatchTmp(_s) => format!("Invalid {} of temporary match variable", verb),
                 DisplayVar::Orig(s) => format!("Invalid {} of variable '{}'", verb, s),
             },
         )
