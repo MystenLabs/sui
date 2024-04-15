@@ -1660,7 +1660,7 @@ impl AuthorityState {
             });
         }
 
-        self.dry_exec_transaction_impl(&*epoch_store, transaction, transaction_digest)
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
             .await
     }
 
@@ -1675,7 +1675,7 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        self.dry_exec_transaction_impl(&*epoch_store, transaction, transaction_digest)
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
             .await
     }
 
