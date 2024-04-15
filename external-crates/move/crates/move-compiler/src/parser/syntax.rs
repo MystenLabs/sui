@@ -2590,7 +2590,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                     _ => match parse_identifier(context) {
                         Err(diag) => {
                             context.add_diag(*diag);
-                            Exp_::DotUnresolved(Box::new(lhs))
+                            Exp_::DotUnresolved(loc, Box::new(lhs))
                         }
                         Ok(n) => {
                             if is_start_of_call_after_function_name(context, &n) {

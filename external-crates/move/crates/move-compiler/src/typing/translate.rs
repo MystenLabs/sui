@@ -476,7 +476,11 @@ mod check_valid_constant {
             //*****************************************
             // Error cases handled elsewhere
             //*****************************************
-            E::Use(_) | E::Continue(_) | E::Give(_, _) | E::UnresolvedError => return,
+            E::Use(_)
+            | E::Continue(_)
+            | E::Give(_, _)
+            | E::UnresolvedError
+            | E::InvalidAccess(_) => return,
 
             //*****************************************
             // Valid cases
@@ -2977,7 +2981,7 @@ enum ExpDottedAccess {
         args: Spanned<Vec<T::Exp>>,
         base_type: Type, /* base (non-ref) return type */
     },
-    UnresolvedError,
+    UnresolvedError(/* dot's location */ Loc), // whatever came after dot could not be parsed
 }
 
 #[derive(Debug)]
@@ -3006,7 +3010,7 @@ impl ExpDotted {
             match accessor {
                 ExpDottedAccess::Field(_, ty) => ty.clone(),
                 ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
-                ExpDottedAccess::UnresolvedError => sp(Loc::invalid(), Type_::UnresolvedError),
+                ExpDottedAccess::UnresolvedError(_) => sp(Loc::invalid(), Type_::UnresolvedError),
             }
         } else {
             self.base_type.clone()
@@ -3058,9 +3062,9 @@ fn process_exp_dotted(
                 .push(ExpDottedAccess::Field(field, field_type));
             inner
         }
-        N::ExpDotted_::DotUnresolved(ndot) => {
+        N::ExpDotted_::DotUnresolved(loc, ndot) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
-            inner.accessors.push(ExpDottedAccess::UnresolvedError);
+            inner.accessors.push(ExpDottedAccess::UnresolvedError(loc));
             inner
         }
         N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
@@ -3102,7 +3106,7 @@ fn exp_dotted_usage(
     let constraint_verb = match &ndotted.value {
         N::ExpDotted_::Exp(_) => None,
         _ if matches!(usage, DottedUsage::Borrow(_)) => Some("borrow"),
-        N::ExpDotted_::Dot(_, _) | N::ExpDotted_::DotUnresolved(_) => Some("dot access"),
+        N::ExpDotted_::Dot(_, _) | N::ExpDotted_::DotUnresolved(_, _) => Some("dot access"),
         N::ExpDotted_::Index(_, _) => Some("index"),
     };
     let edotted = process_exp_dotted(context, constraint_verb, ndotted);
@@ -3340,8 +3344,7 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
         BaseRefKind::ImmRef | BaseRefKind::MutRef => Box::new(base),
     };
 
-    let num_accessors = accessors.len();
-    for (idx, accessor) in accessors.into_iter().enumerate() {
+    for accessor in accessors {
         check_mut(context, loc, exp.ty.clone(), mut_);
         match accessor {
             ExpDottedAccess::Field(name, ty) => {
@@ -3397,8 +3400,9 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 }
                 exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
             }
-            ExpDottedAccess::UnresolvedError => {
-                assert!(idx == num_accessors - 1);
+            ExpDottedAccess::UnresolvedError(loc) => {
+                let t = sp(Loc::invalid(), Type_::UnresolvedError);
+                exp = Box::new(T::exp(t, sp(loc, T::UnannotatedExp_::InvalidAccess(exp))));
                 break;
             }
         }
@@ -3429,7 +3433,7 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
             ExpDottedAccess::Index { base_type, .. } => {
                 ("index result".to_string(), base_type.clone())
             }
-            ExpDottedAccess::UnresolvedError => (
+            ExpDottedAccess::UnresolvedError(_) => (
                 "unresolved field".to_string(),
                 sp(Loc::invalid(), Type_::UnresolvedError),
             ),
