@@ -24,7 +24,7 @@ use std::collections::HashMap;
 
 pub struct CodeUnitVerifier<'a> {
     module: &'a CompiledModule,
-    function: FunctionContext<'a>,
+    function_context: FunctionContext<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
 }
 
@@ -120,7 +120,7 @@ impl<'a> CodeUnitVerifier<'a> {
         // verify
         let code_unit_verifier = CodeUnitVerifier {
             module,
-            function: function_context,
+            function_context,
             name_def_map,
         };
         code_unit_verifier.verify_common(verifier_config, meter)?;
@@ -136,9 +136,14 @@ impl<'a> CodeUnitVerifier<'a> {
         verifier_config: &VerifierConfig,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
-        StackUsageVerifier::verify(verifier_config, self.module, &self.function, meter)?;
-        type_safety::verify(self.module, &self.function, meter)?;
-        locals_safety::verify(self.module, &self.function, meter)?;
-        reference_safety::verify(self.module, &self.function, self.name_def_map, meter)
+        StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;
+        type_safety::verify(self.module, &self.function_context, meter)?;
+        locals_safety::verify(self.module, &self.function_context, meter)?;
+        reference_safety::verify(
+            self.module,
+            &self.function_context,
+            self.name_def_map,
+            meter,
+        )
     }
 }

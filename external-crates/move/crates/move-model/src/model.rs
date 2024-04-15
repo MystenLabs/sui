@@ -2654,7 +2654,7 @@ impl<'env> FunctionEnv<'env> {
             .any(|Parameter(_, ty)| ty.is_mutable_reference())
     }
 
-    /// Returns the type parametzers associated with this function.
+    /// Returns the type parameters associated with this function.
     pub fn get_type_parameters(&self) -> Vec<TypeParameter> {
         // TODO: currently the translation scheme isn't working with using real type
         //   parameter names, so use indices instead.

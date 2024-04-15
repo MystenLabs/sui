@@ -1694,7 +1694,7 @@ pub(crate) struct Function {
     type_parameters: Vec<AbilitySet>,
     native: Option<NativeFunction>,
     def_is_native: bool,
-    scope: ModuleId,
+    module: ModuleId,
     name: Identifier,
     return_types: Vec<Type>,
     local_types: Vec<Type>,
@@ -1723,7 +1723,6 @@ impl Function {
         } else {
             (None, false)
         };
-        let scope = module_id;
         let parameters = module.signature_at(handle.parameters).clone();
         // Native functions do not have a code unit
         let (code, locals) = match &def.code {
@@ -1752,7 +1751,7 @@ impl Function {
             type_parameters,
             native,
             def_is_native,
-            scope,
+            module: module_id,
             name,
             local_types: vec![],
             return_types: vec![],
@@ -1766,7 +1765,7 @@ impl Function {
     }
 
     pub(crate) fn module_id(&self) -> &ModuleId {
-        &self.scope
+        &self.module
     }
 
     pub(crate) fn index(&self) -> FunctionDefinitionIndex {
@@ -1778,7 +1777,7 @@ impl Function {
         link_context: AccountAddress,
         loader: &'a Loader,
     ) -> Resolver<'a> {
-        let module_id = &self.scope;
+        let module_id = &self.module;
         let (compiled, loaded) = loader.get_module(link_context, module_id);
         Resolver::for_module(loader, compiled, loaded)
     }
@@ -1823,7 +1822,7 @@ impl Function {
     }
 
     pub(crate) fn pretty_string(&self) -> String {
-        let id = &self.scope;
+        let id = &self.module;
         format!(
             "0x{}::{}::{}",
             id.address(),
