@@ -362,25 +362,25 @@ module sui::test_scenario {
         sui::transfer::share_object_impl(t)
     }
 
-    /// Return the IDs of the child objects that `parent` owns.
-    public fun child_object_ids_for_parent_object_id<T: key>(parent: ID): vector<ID> {
-        ids_for_address<T>(object::id_to_address(&parent))
+    /// Return the IDs of the receivalbe objects that `object` owns.
+    public fun receivable_object_ids_for_owner_object_id<T: key>(object: ID): vector<ID> {
+        ids_for_address<T>(object::id_to_address(&object))
     }
 
-    /// Create a `Receiving<T>` receiving ticket for the most recent child
-    /// object of type `T` that is owned by the `parent` object ID. 
-    public fun receiving_ticket_for_most_recent_child_object<T: key>(
-        parent: &ID
+    /// Create a `Receiving<T>` receiving ticket for the most recent 
+    /// object of type `T` that is owned by the `owner` object ID. 
+    public fun receiving_ticket_for_most_recent_object<T: key>(
+        owner: &ID
     ): sui::transfer::Receiving<T> {
-        let id_opt = most_recent_id_for_address<T>(object::id_to_address(parent));
+        let id_opt = most_recent_id_for_address<T>(object::id_to_address(owner));
         assert!(option::is_some(&id_opt), EEmptyInventory);
         let id = option::destroy_some(id_opt);
-        receiving_ticket_for_child_object_by_id<T>(id)
+        receiving_ticket_for_object_by_id<T>(id)
     }
 
-    /// Create a `Receiving<T>` receiving ticket for the child object of type
+    /// Create a `Receiving<T>` receiving ticket for the object of type
     /// `T` with the given `object_id`.
-    public fun receiving_ticket_for_child_object_by_id<T: key>(
+    public fun receiving_ticket_for_object_by_id<T: key>(
         object_id: ID
     ): sui::transfer::Receiving<T> {
         let version = allocate_receiving_ticket_for_object<T>(object_id);
@@ -398,8 +398,12 @@ module sui::test_scenario {
     /// Returns true if the object with `ID` id was an shared object in the global inventory
     native fun was_taken_shared(id: ID): bool;
 
+    /// Allocate the receiving ticket for the object of type `T` with the given
+    /// `object_id`. Returns the current version of object.
     native fun allocate_receiving_ticket_for_object<T: key>(object_id: ID): u64;
-    native fun deallocate_receiving_ticket_for_object(id: ID);
+
+    /// Deallocate the receiving ticket for the object with the given `object_id`.
+    native fun deallocate_receiving_ticket_for_object(object_id: ID);
 
     // == internal ==
 

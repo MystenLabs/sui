@@ -409,14 +409,14 @@ module sui::test_scenario_tests {
     #[test]
     fun test_receive_object() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        let uid3 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
-        let id1_addr = object::uid_to_address(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let uid3 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
+        let id2 = uid2.uid_to_inner();
+        let id3 = uid3.uid_to_inner();
+        let id1_addr = uid1.to_address();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -425,92 +425,92 @@ module sui::test_scenario_tests {
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
         };
-        ts::next_tx(&mut scenario, sender);
+        test_scenario::next_tx(&mut scenario, sender);
         {
 
-            let parent = ts::take_from_sender_by_id<Object>(&scenario, id1);
-            let t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id2);
-            let t3 = ts::receiving_ticket_for_child_object_by_id<Object>(id3);
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            let t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
             let obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
             assert!(obj3.value == 30, EValueMismatch);
-            ts::return_to_sender(&scenario, parent);
+            scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
-    // Happy path test: Receive a single from an object in a transaction.
+    // Happy path test: Receive a single object from an object in a transaction.
     #[test]
     fun test_receive_for_object() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
-        let id1_addr = object::uid_to_address(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
+        let id1_addr = uid1.to_address();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
             transfer::public_transfer(obj1, sender);
             transfer::public_transfer(obj2, id1_addr);
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
 
-            let parent = ts::take_from_sender_by_id<Object>(&scenario, id1);
-            let t2 = ts::receiving_ticket_for_most_recent_child_object<Object>(&id1);
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::receiving_ticket_for_most_recent_object<Object>(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
-            ts::return_to_sender(&scenario, parent);
+            scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     // Try to receive an object that has been shared. We should be unable to
     // allocate the receiving ticket for this object. 
     #[test]
-    #[expected_failure(abort_code = ts::EObjectNotFound)]
+    #[expected_failure(abort_code = test_scenario::EObjectNotFound)]
     fun test_receive_object_shared() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
         {
             let obj1 = Object { id: uid1, value: 20 };
             transfer::public_share_object(obj1);
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
-            let _t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     // Try to allocate multiple receiving tickets for the same object in a
     // single transaction. We should be unable to allocate the second ticket.
     #[test]
-    #[expected_failure(abort_code = ts::EReceivingTicketAlreadyAllocated)]
+    #[expected_failure(abort_code = test_scenario::EReceivingTicketAlreadyAllocated)]
     fun test_receive_object_double_allocate_ticket() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
         {
             let obj1 = Object { id: uid1, value: 20 };
             transfer::public_transfer(obj1, sender);
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
-            let _t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id1);
-            let _t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     // Test that we can allocate a receiving ticket, return it, and then
@@ -518,20 +518,20 @@ module sui::test_scenario_tests {
     #[test]
     fun test_receive_double_allocate_ticket_return_between() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
         {
             let obj1 = Object { id: uid1, value: 20 };
             transfer::public_transfer(obj1, sender);
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
-            let t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id1);
-            ts::return_receiving_ticket(t2);
-            let _t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id1);
+            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
+            test_scenario::return_receiving_ticket(t2);
+            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     // Test that we can allocate a receiving ticket, return it, and then
@@ -540,14 +540,14 @@ module sui::test_scenario_tests {
     #[test]
     fun test_receive_double_allocate_ticket_return_between_then_use() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        let uid3 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
-        let id1_addr = object::uid_to_address(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let uid3 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
+        let id2 = uid2.uid_to_inner();
+        let id3 = uid3.uid_to_inner();
+        let id1_addr = uid1.to_address();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -556,24 +556,24 @@ module sui::test_scenario_tests {
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
 
-            let parent = ts::take_from_sender_by_id<Object>(&scenario, id1);
-            let t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id2);
-            ts::return_receiving_ticket(t2);
-            let t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id2);
-            let t3 = ts::receiving_ticket_for_child_object_by_id<Object>(id3);
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            test_scenario::return_receiving_ticket(t2);
+            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            let t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
             let obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
             assert!(obj3.value == 30, EValueMismatch);
-            ts::return_to_sender(&scenario, parent);
+            scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     // Test that we can allocate a receiving ticket, return it, allocate it
@@ -583,14 +583,14 @@ module sui::test_scenario_tests {
     #[test]
     fun test_receive_double_allocate_ticket_return_between_then_use_then_check() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        let uid3 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
-        let id1_addr = object::uid_to_address(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let uid3 = scenario.new_object();
+        let id1 = uid1.uid_to_inner();
+        let id2 = uid2.uid_to_inner();
+        let id3 = uid3.uid_to_inner();
+        let id1_addr = uid1.to_address();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -599,44 +599,44 @@ module sui::test_scenario_tests {
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
 
-            let parent = ts::take_from_sender_by_id<Object>(&scenario, id1);
-            let t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id2);
-            ts::return_receiving_ticket(t2);
-            let t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id2);
-            let t3 = ts::receiving_ticket_for_child_object_by_id<Object>(id3);
-            let obj2 = transfer::receive(&mut parent.id, t2);
+            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
+            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            test_scenario::return_receiving_ticket(t2);
+            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            let t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
+            let mut obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
             assert!(obj3.value == 30, EValueMismatch);
             obj2.value = 42;
-            ts::return_to_sender(&scenario, parent);
+            scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, sender);
             transfer::public_transfer(obj3, sender)
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
-            let obj = ts::take_from_sender_by_id<Object>(&scenario, id2);
+            let obj = scenario.take_from_sender_by_id<Object>(id2);
             assert!(obj.value == 42, EValueMismatch);
-            ts::return_to_sender(&scenario, obj);
+            scenario.return_to_sender(obj);
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
     // Test that we can allocate a receiving ticket, and then drop it. 
     #[test]
     fun test_unused_receive_ticket() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        let uid3 = ts::new_object(&mut scenario);
-        let id2 = object::uid_to_inner(&uid2);
-        let id3 = object::uid_to_inner(&uid3);
-        let id1_addr = object::uid_to_address(&uid1);
+        let mut scenario = test_scenario::begin(sender);
+        let uid1 = scenario.new_object();
+        let uid2 = scenario.new_object();
+        let uid3 = scenario.new_object();
+        let id2 = uid2.uid_to_inner();
+        let id3 = uid3.uid_to_inner();
+        let id1_addr = uid1.to_address();
         {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
@@ -645,12 +645,12 @@ module sui::test_scenario_tests {
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
         };
-        ts::next_tx(&mut scenario, sender);
+        scenario.next_tx(sender);
         {
-            let _t2 = ts::receiving_ticket_for_child_object_by_id<Object>(id2);
-            let _t3 = ts::receiving_ticket_for_child_object_by_id<Object>(id3);
+            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            let _t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
         };
-        ts::end(scenario);
+        scenario.end();
     }
 
 
