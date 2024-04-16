@@ -1913,12 +1913,8 @@ checksum = "3b829e4e32b91e643de6eafe82b1d90675f5874230191a4ffbc1b336dec4d6bf"
 dependencies = [
  "async-trait",
  "axum-core",
-<<<<<<< HEAD
- "base64 0.21.7",
-=======
  "axum-macros",
  "base64 0.21.2",
->>>>>>> testnet-v1.23.0
  "bitflags 1.3.2",
  "bytes",
  "futures-util",
@@ -6481,15 +6477,12 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 [[package]]
 name = "heck"
 version = "0.5.0"
-<<<<<<< HEAD
-=======
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hermit-abi"
 version = "0.2.6"
->>>>>>> testnet-v1.23.0
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
