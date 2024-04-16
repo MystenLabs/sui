@@ -359,7 +359,7 @@ fn struct_handle(token: &SignatureToken) -> Option<StructHandleIndex> {
         StructInstantiation(struct_inst) => {
             let (sh_idx, _) = &**struct_inst;
             Some(*sh_idx)
-        },
+        }
         Reference(token) | MutableReference(token) => struct_handle(token),
         Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | Vector(_)
         | TypeParameter(_) => None,

@@ -222,7 +222,7 @@ fn invalid_signature_for_vector_operation() {
 
     let skeleton = basic_test_module();
     let sig_index = SignatureIndex(skeleton.signatures.len() as u16);
-    for bytecode in vec![
+    for bytecode in [
         VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
@@ -251,7 +251,7 @@ fn invalid_struct_for_vector_operation() {
         .signatures
         .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
-    for bytecode in vec![
+    for bytecode in [
         VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),
@@ -278,7 +278,7 @@ fn invalid_type_param_for_vector_operation() {
     let mut skeleton = basic_test_module();
     skeleton.signatures.push(Signature(vec![TypeParameter(0)]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
-    for bytecode in vec![
+    for bytecode in [
         VecPack(sig_index, 0),
         VecLen(sig_index),
         VecImmBorrow(sig_index),

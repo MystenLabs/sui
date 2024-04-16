@@ -14,7 +14,11 @@ use std::collections::BTreeMap;
 /// Trait for finite-height abstract domains. Infinite height domains would require a more complex
 /// trait with widening and a partial order.
 pub trait AbstractDomain: Clone + Sized {
-    fn join(&mut self, other: &Self, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<JoinResult>;
+    fn join(
+        &mut self,
+        other: &Self,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<JoinResult>;
 }
 
 #[derive(Debug)]
