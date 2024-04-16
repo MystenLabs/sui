@@ -84,7 +84,7 @@ The object model of the `nft_rental` module provides the structure of the app, b
 struct Rentables has drop {}
 ```
 
-The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. It is used as the DF key in the borrower's `Bag <key, value>` entry when someone is actively borrowing an item.
+The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. It is used as the DF key in the borrower's `Bag` entry when someone is actively borrowing an item.
 
 ```move
 struct Rented has store, copy, drop { 
@@ -92,7 +92,7 @@ struct Rented has store, copy, drop {
 }
 ```
 
-The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object. It is used as the DF key in the renter's `Bag <key, value>` entry after an item is listed for renting. 
+The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object. It is used as the DF key in the renter's `Bag` entry after an item is listed for renting. 
 
 ```move
 struct Listed has store, copy, drop { 
