@@ -95,9 +95,9 @@ impl ConsensusManagerTrait for MysticetiManager {
             Ok(type_str) => match type_str.to_lowercase().as_str() {
                 "tonic" => NetworkType::Tonic,
                 "anemo" => NetworkType::Anemo,
-                _ => NetworkType::Anemo,
+                _ => NetworkType::Tonic,
             },
-            Err(_) => NetworkType::Anemo,
+            Err(_) => NetworkType::Tonic,
         };
 
         let Some(_guard) = RunningLockGuard::acquire_start(
