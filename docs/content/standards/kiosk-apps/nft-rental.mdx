@@ -142,7 +142,10 @@ struct RentalPolicy<phantom T> has key, store {
 }
 ```
 
-The `ProtectedTP` object is a shared object that creators mint to enable renting, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
+The `ProtectedTP` object is a shared object that creators mint to enable renting. The object provides authorized access to an empty `TransferPolicy`.
+This is in part required because of the restrictions that Kiosk imposes around royalty enforced items and their tradability. 
+Additionally it allows the rental module to operate within the Extension framework while maintaining the guarantee that the assets 
+handled will always be tradable.
 
 A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to resolve (like lock rule, loyalty rule, and so on). If creators want to enforce royalties on rentals, they can use the `RentalPolicy` detailed previously.
 
@@ -426,3 +429,5 @@ rect rgba(191, 223, 255, 0.2)
 - [Kiosk Apps](../kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk. 
 - [Hot Potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx): The hot potato coding pattern the `Promise` struct uses. 
 - [Custom Transfer Rules](../../concepts/transfers/custom-rules.mdx): Custom transfer rules are used in this example to define rental policies.
+import { Extension } from "typescript"
+
