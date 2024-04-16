@@ -79,7 +79,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
-        // Specified peer can be trusted to be a valid authority index.
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.

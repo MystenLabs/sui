@@ -61,7 +61,8 @@ impl Parameters {
     pub fn default_min_round_delay() -> Duration {
         if cfg!(msim) {
             // Checkpoint building and execution cannot keep up with high commit rate in simtests,
-            // leading to long reconfiguration delays.
+            // leading to long reconfiguration delays. This is because simtest is single threaded,
+            // and spending too much time in consensus can lead to starvation elsewhere.
             Duration::from_millis(200)
         } else {
             Duration::from_millis(50)
@@ -123,9 +124,9 @@ impl Default for AnemoParameters {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TonicParameters {
-    /// Keepalive interval and timeouts for both client and server, tcp and http2.
+    /// Keepalive interval and timeouts for both client and server.
     ///
-    /// If unspecified, this will default to 10s.
+    /// If unspecified, this will default to 5s.
     #[serde(default = "TonicParameters::default_keepalive_interval")]
     pub keepalive_interval: Duration,
 
@@ -138,7 +139,7 @@ pub struct TonicParameters {
 
 impl TonicParameters {
     fn default_keepalive_interval() -> Duration {
-        Duration::from_secs(10)
+        Duration::from_secs(5)
     }
 
     fn default_message_size_limit() -> usize {
