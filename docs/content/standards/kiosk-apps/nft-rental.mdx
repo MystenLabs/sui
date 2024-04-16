@@ -164,19 +164,46 @@ The NFT Rental example includes the following functions that define the project'
 The `install` function enables installation of the `Rentables` extension in a kiosk. The party facilitating the rental process is responsible for making sure that the user installs the extension in the their kiosk.
 
 ```move
-public fun install(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext)
+public fun install(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext){
+    kiosk_extension::add(Rentables {}, kiosk, cap, PERMISSIONS, ctx);
+}
 ```
 
 The `remove` function enables the owner (and only the owner) of the kiosk to remove the extension. The extension storage must be empty for the transaction to succeed. The extension storage empties after the user is no longer borrowing or renting any items.
 
 ```move
-public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, _ctx: &mut TxContext)
+public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, _ctx: &mut TxContext){
+    kiosk_extension::remove<Rentables>(kiosk, cap);
+}
 ```
 
 The `setup_renting` function mints and shares a `ProtectedTP` and a `RentalPolicy` object for type `T`. The publisher of type `T` is the only entity that can perform the action.
 
 ```move
-public fun setup_renting<T>(publisher: &Publisher, amount_bp: u64, ctx: &mut TxContext)
+public fun setup_renting<T>(publisher: &Publisher, amount_bp: u64, ctx: &mut TxContext) {
+    // Creates an empty TP and shares a ProtectedTP<T> object.
+    // This can be used to bypass the lock rule under specific conditions.
+    let (transfer_policy, policy_cap) = transfer_policy::new<T>(publisher, ctx);
+    
+    // Stores inside the ProtectedTP the policy_cap with no way to access it
+    // to prevent future modifications.
+    let protected_tp = ProtectedTP {
+        id: object::new(ctx),
+        transfer_policy,
+        policy_cap
+    };
+
+    // Creates a RentalPolicy that will be used to attribute royalties, if desired, to the 
+    // item's T publisher.
+    let rental_policy = RentalPolicy<T> {
+        id: object::new(ctx),
+        balance: balance::zero<SUI>(),
+        amount_bp
+    };
+
+    transfer::share_object(protected_tp);
+    transfer::share_object(rental_policy);
+}
 ```
 
 The `list` function enables listing of an asset within the `Rentables` extension's bag, creating a bag entry with the asset's ID as the key and a `Rentable` wrapper object as the value. Requires the existence of a `ProtectedTP` transfer policy that only the creator of type `T` can create. The function assumes an item is already placed (and optionally locked) in a kiosk.
@@ -189,18 +216,72 @@ public fun list<T: key + store>(
     item_id: ID,
     duration: u64,
     price_per_day: u64,
-    ctx: &mut TxContext)
+    ctx: &mut TxContext) {
+        
+    // Sets the Kiosk owner to the transaction sender to keep metadata fields up to date.
+    // This is also crucial to ensure the correct person will receive the payment.
+    // Prevents unexpected results in cases where the kiosk could have been transfered between users without the owner being updated.
+    kiosk::set_owner(kiosk, cap, ctx);
+    // Aborts if Rentables extension is not installed.
+    assert!(kiosk_extension::is_installed<Rentables>(kiosk), EExtensionNotInstalled);
+
+    // Lists the item for zero SUI.
+    kiosk::list<T>(kiosk, cap, item_id, 0);
+    // Constructs a zero coin.
+    let coin = coin::zero<SUI>(ctx);
+    // Purchases the item with 0 SUI.
+    let (object, request) = kiosk::purchase<T>(kiosk, item_id, coin);
+
+    // Resolves the TransferRequest with the empty TransferPolicy which is protected and accessible only via this module.
+    let (_item, _paid, _from) = transfer_policy::confirm_request(&protected_tp.transfer_policy, request);
+
+    // Wraps the item in the Rentable struct along with relevant metadata.
+    let rentable = Rentable {
+        object,
+        duration,
+        start_date: option::none<u64>(),
+        price_per_day,
+        kiosk_id: object::id(kiosk)
+    };
+
+    // Places the rentable as listed in the extension's bag (place_in_bag is a helper method defined in nft_rental.move file).
+    place_in_bag<T, Listed>(kiosk, Listed { id: item_id }, rentable);
+}
 ```
 
 The `delist` function allows the renter to delist an item, as long as it's not currently being rented. The function also places (or locks, if a lock rule is present) the object back to owner's kiosk. You should mint an empty `TransferPolicy` even if you don't want to apply any royalties.
 
 ```move
 public fun delist<T: key + store>(
-		kiosk: &mut Kiosk, 
-		cap: &KioskOwnerCap, 
-		transfer_policy: &TransferPolicy<T>, 
-		item_id: ID, 
-		_ctx: &mut TxContext)
+    kiosk: &mut Kiosk, 
+    cap: &KioskOwnerCap, 
+    transfer_policy: &TransferPolicy<T>, 
+    item_id: ID, 
+    _ctx: &mut TxContext) {
+    
+    // Aborts if the cap doesn't match the Kiosk.
+    assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+
+    // Removes the rentable item from the extension's Bag (take_from_bag is a helper method defined in nft_rental.move file). 
+    let rentable = take_from_bag<T, Listed>(kiosk, Listed { id: item_id });
+    
+    // Deconstructs the Rentable object.
+    let Rentable {
+        object,
+        duration: _,
+        start_date: _,
+        price_per_day: _,
+        kiosk_id: _
+    } = rentable;
+
+    // Respects the lock rule, if present, by re-locking the asset in the owner's Kiosk.
+    if (has_rule<T, LockRule>(transfer_policy)) {
+        kiosk::lock(kiosk, cap, transfer_policy, object);
+    }
+    else {
+        kiosk::place(kiosk, cap, object);
+    };
+}
 ```
 
 The `rent` function enables renting a listed `Rentable`. It permits anyone to borrow an item on behalf of another user, provided they have the `Rentables` extension installed. The `rental_policy` defines the portion of the coin that is retained as fees and added to the rental policy's balance.
@@ -213,7 +294,36 @@ public fun rent<T: key + store>(
     item_id: ID,
     coin: Coin<SUI>,
     clock: &Clock,
-    ctx: &mut TxContext)
+    ctx: &mut TxContext) {
+        
+    // Aborts if Rentables extension is not installed.
+    assert!(kiosk_extension::is_installed<Rentables>(borrower_kiosk), EExtensionNotInstalled);
+
+    let rentable = take_from_bag<T, Listed>(renter_kiosk, Listed { id: item_id });
+    
+    // Calculates the price of the rental based on the days it was rented for by ensuring the outcome can be stored as a u64.
+    let max_price_per_day = MAX_VALUE_U64 / rentable.duration;
+    assert!(rentable.price_per_day <= max_price_per_day, ETotalPriceOverflow);
+    let total_price = rentable.price_per_day * rentable.duration;
+
+    // Accepts only exact balance for the payment and does not give change.
+    let coin_value = coin::value(&coin);
+    assert!(coin_value == total_price, ENotEnoughCoins);
+    
+    // Calculate fees_amount using the given basis points amount (percentage), ensuring the result fits into a 64-bit unsigned integer.
+    let fees_amount = (((coin_value as u128) * (rental_policy.amount_bp as u128) / (MAX_BASIS_POINTS as u128)) as u64);
+    let fees = coin::split<SUI>(&mut coin, fees_amount, ctx);
+
+    // Merges the fee balance of the given coin with the RentalPolicy balance.
+    coin::put(&mut rental_policy.balance, fees);
+    // Transfers the payment to the renter.
+    transfer::public_transfer(coin, kiosk::owner(renter_kiosk));
+    
+    // Updates the rentables start_date.
+    option::fill(&mut rentable.start_date, clock::timestamp_ms(clock));
+    
+    place_in_bag<T, Rented>(borrower_kiosk, Rented { id: item_id }, rentable);         
+}
 ```
 
 The `borrow` function enables the borrower to acquire the `Rentable` by reference from their bag.
@@ -224,7 +334,14 @@ public fun borrow<T: key + store>(
 		cap: &KioskOwnerCap, 
 		item_id: ID, 
 		_ctx: &mut TxContext
-): &T
+): &T {
+    // Aborts if the cap doesn't match the Kiosk.
+    assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+    let ext_storage_mut = kiosk_extension::storage_mut(Rentables {}, kiosk);
+    let rentable = bag::borrow<Rented, Rentable<T>>(ext_storage_mut, Rented { id: item_id });
+
+    &rentable.object
+}
 ```
 
 The `borrow_val` function enables the borrower to temporarily acquire the `Rentable` with an agreement or promise to return it. The `Promise` stores all the information about the `Rentable`, facilitating the reconstruction of the `Rentable` upon object return.
@@ -235,7 +352,33 @@ public fun borrow_val<T: key + store>(
 		cap: &KioskOwnerCap, 
 		item_id: ID, 
 		_ctx: &mut TxContext
-): (T, Promise)
+): (T, Promise) {
+    // Aborts if the cap doesn't match the Kiosk.
+    assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+    let borrower_kiosk = object::id(kiosk);
+
+    let rentable = take_from_bag<T, Rented>(kiosk, Rented { id: item_id });
+
+    // Construct a Promise struct containing the Rentable's metadata.
+    let promise = Promise {
+        item: Rented { id: item_id },
+        duration: rentable.duration,
+        start_date: *option::borrow(&rentable.start_date),
+        price_per_day: rentable.price_per_day,
+        renter_kiosk: rentable.kiosk_id,
+        borrower_kiosk
+    };
+    
+    // Deconstructs the rentable and returns the promise along with the wrapped item T.
+    let Rentable {
+        object,
+        duration: _,
+        start_date: _,
+        price_per_day: _,
+        kiosk_id: _} = rentable;
+
+    (object, promise)
+}
 ```
 
 The `return_val` function enables the borrower to return the borrowed item.
@@ -245,7 +388,34 @@ public fun return_val<T: key + store>(
 		kiosk: &mut Kiosk, 
 		object: T, 
 		promise: Promise, 
-		_ctx: &mut TxContext)
+		_ctx: &mut TxContext) {
+
+    // Aborts if Rentables extension is not installed.
+    assert!(kiosk_extension::is_installed<Rentables>(kiosk), EExtensionNotInstalled);
+
+    // Destructures the Promise and reconstructs the Rentable, placing it in the borrower's Rentables extension bag.
+    let Promise {    
+        item,        
+        duration,
+        start_date,
+        price_per_day,
+        renter_kiosk,
+        borrower_kiosk} = promise;
+
+    let kiosk_id = object::id(kiosk);
+    // Aborts if provided Kiosk is different that the initial Kiosk the item was borrowed from.
+    assert!(kiosk_id == borrower_kiosk, EInvalidKiosk);
+
+    let rentable = Rentable {
+        object,
+        duration,
+        start_date: option::some(start_date),
+        price_per_day,
+        kiosk_id: renter_kiosk
+    };
+
+    place_in_bag(kiosk, item, rentable);
+}
 ```
 :::note
 
@@ -257,12 +427,44 @@ The `reclaim` function enables an owner to claim back their asset after the rent
 
 ```move
 public fun reclaim<T: key + store>(
-        renter_kiosk: &mut Kiosk, 
-        borrower_kiosk: &mut Kiosk, 
-        transfer_policy: &TransferPolicy<T>, 
-        clock: &Clock,
-        item_id: ID,
-        _ctx: &mut TxContext)
+    renter_kiosk: &mut Kiosk, 
+    borrower_kiosk: &mut Kiosk, 
+    transfer_policy: &TransferPolicy<T>, 
+    clock: &Clock,
+    item_id: ID,
+    _ctx: &mut TxContext) {
+
+    // Aborts if Rentables extension is not installed.
+    assert!(kiosk_extension::is_installed<Rentables>(renter_kiosk), EExtensionNotInstalled);
+
+    let rentable = take_from_bag<T, Rented>(borrower_kiosk, Rented { id: item_id });
+
+    // Destructures the Rentable struct to place it back to the renter's Kiosk.
+    let Rentable {            
+        object,
+        duration,
+        start_date,
+        price_per_day: _,
+        kiosk_id } = rentable;
+
+    // Aborts if provided Kiosk is different that the initial Kiosk the item was borrowed from.
+    assert!(object::id(renter_kiosk) == kiosk_id, EInvalidKiosk);
+
+    let start_date_u64 = *option::borrow(&start_date);
+    let current_timestamp = clock::timestamp_ms(clock);
+    let final_timestamp = start_date_u64 + duration*SECONDS_IN_A_DAY;
+
+    // Aborts if rental duration has not elapsed.
+    assert!(current_timestamp > final_timestamp, ERentingPeriodNotOver);
+
+    // Respects the lock rule, if present, by re-locking the asset in the owner's Kiosk.
+    if (has_rule<T, LockRule>(transfer_policy)) {
+        kiosk_extension::lock<Rentables, T>(Rentables {}, renter_kiosk, object, transfer_policy);
+    }
+    else {
+        kiosk_extension::place<Rentables, T>(Rentables {}, renter_kiosk, object, transfer_policy);
+    };
+}
 ```
 
 ## Sequence diagrams
@@ -429,5 +631,3 @@ rect rgba(191, 223, 255, 0.2)
 - [Kiosk Apps](../kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk. 
 - [Hot Potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx): The hot potato coding pattern the `Promise` struct uses. 
 - [Custom Transfer Rules](../../concepts/transfers/custom-rules.mdx): Custom transfer rules are used in this example to define rental policies.
-import { Extension } from "typescript"
-
