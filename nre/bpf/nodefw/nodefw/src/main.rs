@@ -15,12 +15,16 @@ use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
+pub const KILLSWITCH_FILENAME: &str = "__FW_KILLSWITCH__";
+
 #[derive(Debug, Parser)]
 struct Opt {
     #[clap(short, long, default_value = "lo")]
     iface: String,
     #[clap(short, long, value_enum, default_value_t=Mode::Default)]
     mode: Mode,
+    #[clap(short, long)]
+    killswitch_path: String,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -103,7 +107,36 @@ async fn main() -> Result<(), anyhow::Error> {
         listener,
         router,
     };
-    let _ = server::serve(sc).await;
+    loop {
+        tokio::select! {
+            biased;
+
+            _ = server::serve(sc) => {},
+            _ = return_on_killswitch(opt.killswitch_path) => {
+                warn!("firewall killswitch set, cancelling server...");
+                ctx.cancel();
+            },
+        }
+    }
     info!("firewall has stopped, exiting.");
     Ok(())
+}
+
+async fn return_on_killswitch(path: String) {
+    let path = std::path::Path::new(&path).join(KILLSWITCH_FILENAME);
+    loop {
+        match fs::read_to_string(path.clone()) {
+            Ok(state) => {
+                if state.trim().to_lowercase().as_str() == "on" {
+                    return;
+                }
+            }
+            Err(err) => {
+                if path.exists() {
+                    panic!("Failed to read firewall killswitch file: {}", err);
+                }
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    }
 }
