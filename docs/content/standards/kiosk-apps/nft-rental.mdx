@@ -216,8 +216,8 @@ public fun list<T: key + store>(
   item_id: ID,
   duration: u64,
   price_per_day: u64,
-  ctx: &mut TxContext
-  ) {
+  ctx: &mut TxContext,
+) {
         
   // Sets the Kiosk owner to the transaction sender to keep metadata fields up to date.
   // This is also crucial to ensure the correct person will receive the payment.
@@ -258,8 +258,8 @@ public fun delist<T: key + store>(
   cap: &KioskOwnerCap, 
   transfer_policy: &TransferPolicy<T>, 
   item_id: ID, 
-  _ctx: &mut TxContext
-  ) {
+  _ctx: &mut TxContext,
+) {
     
   // Aborts if the cap doesn't match the Kiosk.
   assert!(kiosk::has_access(kiosk, cap), ENotOwner);
@@ -296,8 +296,8 @@ public fun rent<T: key + store>(
   item_id: ID,
   coin: Coin<SUI>,
   clock: &Clock,
-  ctx: &mut TxContext
-  ) {
+  ctx: &mut TxContext,
+) {
         
   // Aborts if Rentables extension is not installed.
   assert!(kiosk_extension::is_installed<Rentables>(borrower_kiosk), EExtensionNotInstalled);
@@ -393,7 +393,7 @@ public fun return_val<T: key + store>(
   object: T, 
   promise: Promise, 
   _ctx: &mut TxContext
-  ) {
+) {
 
   // Aborts if Rentables extension is not installed.
   assert!(kiosk_extension::is_installed<Rentables>(kiosk), EExtensionNotInstalled);
@@ -437,8 +437,8 @@ public fun reclaim<T: key + store>(
   transfer_policy: &TransferPolicy<T>, 
   clock: &Clock,
   item_id: ID,
-  _ctx: &mut TxContext
-  ) {
+  _ctx: &mut TxContext,
+) {
 
   // Aborts if Rentables extension is not installed.
   assert!(kiosk_extension::is_installed<Rentables>(renter_kiosk), EExtensionNotInstalled);
