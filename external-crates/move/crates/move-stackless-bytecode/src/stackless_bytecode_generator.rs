@@ -382,8 +382,11 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types.push(Type::Primitive(PrimitiveType::U256));
-                self.code
-                    .push(Bytecode::Load(attr_id, temp_index, Constant::from(&**number)));
+                self.code.push(Bytecode::Load(
+                    attr_id,
+                    temp_index,
+                    Constant::from(&**number),
+                ));
                 self.temp_count += 1;
             }
 
@@ -391,8 +394,11 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types.push(Type::Primitive(PrimitiveType::U128));
-                self.code
-                    .push(Bytecode::Load(attr_id, temp_index, Constant::U128(**number)));
+                self.code.push(Bytecode::Load(
+                    attr_id,
+                    temp_index,
+                    Constant::U128(**number),
+                ));
                 self.temp_count += 1;
             }
 
