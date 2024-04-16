@@ -128,6 +128,20 @@ impl SingleValidator {
         effects
     }
 
+    pub async fn execute_dry_run(&self, transaction: Transaction) -> TransactionEffects {
+        let effects = self
+            .get_validator()
+            .dry_exec_transaction_for_benchmark(
+                transaction.data().intent_message().value.clone(),
+                *transaction.digest(),
+            )
+            .await
+            .unwrap()
+            .2;
+        assert!(effects.status().is_ok());
+        effects
+    }
+
     pub async fn execute_certificate(
         &self,
         cert: CertifiedTransaction,

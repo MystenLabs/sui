@@ -1667,6 +1667,36 @@ impl AuthorityState {
             });
         }
 
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
+            .await
+    }
+
+    pub async fn dry_exec_transaction_for_benchmark(
+        &self,
+        transaction: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
+            .await
+    }
+
+    async fn dry_exec_transaction_impl(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        transaction: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
         // Cheap validity checks for a transaction, including input size limits.
         transaction.check_version_supported(epoch_store.protocol_config())?;
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
