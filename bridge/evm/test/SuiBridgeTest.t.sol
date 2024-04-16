@@ -427,15 +427,90 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
     }
 
     function testBridgeUSDC() public {
-        // TODO test and make sure adjusted amount in event is correct
+        changePrank(USDCWhale);
+
+        uint256 usdcAmount = 1000000;
+
+        // approve
+        IERC20(USDC).approve(address(bridge), usdcAmount);
+
+        assertEq(IERC20(USDC).balanceOf(address(vault)), 0);
+        uint256 balance = IERC20(USDC).balanceOf(USDCWhale);
+
+        // assert emitted event
+        vm.expectEmit(true, true, true, false);
+        emit TokensDeposited(
+            chainID,
+            0, // nonce
+            0, // destination chain id
+            BridgeUtils.USDC,
+            1_000_000, // 1 ether
+            USDCWhale,
+            abi.encode("suiAddress")
+        );
+        bridge.bridgeERC20(BridgeUtils.USDC, usdcAmount, abi.encode("suiAddress"), 0);
+
+        assertEq(IERC20(USDC).balanceOf(USDCWhale), balance - usdcAmount);
+        assertEq(IERC20(USDC).balanceOf(address(vault)), usdcAmount);
     }
 
     function testBridgeUSDT() public {
-        // TODO test and make sure adjusted amount in event is correct
+        changePrank(USDTWhale);
+
+        uint256 usdtAmount = 1000000;
+
+        // approve
+        bytes4 selector = bytes4(keccak256("approve(address,uint256)"));
+        bytes memory data = abi.encodeWithSelector(selector, address(bridge), usdtAmount);
+        (bool success, bytes memory returnData) = USDT.call(data);
+        require(success, "Call failed");
+
+        assertEq(IERC20(USDT).balanceOf(address(vault)), 0);
+        uint256 balance = IERC20(USDT).balanceOf(USDTWhale);
+
+        // assert emitted event
+        vm.expectEmit(true, true, true, false);
+        emit TokensDeposited(
+            chainID,
+            0, // nonce
+            0, // destination chain id
+            BridgeUtils.USDT,
+            1_000_000, // 1 ether
+            USDTWhale,
+            abi.encode("suiAddress")
+        );
+        bridge.bridgeERC20(BridgeUtils.USDT, usdtAmount, abi.encode("suiAddress"), 0);
+
+        assertEq(IERC20(USDT).balanceOf(USDTWhale), balance - usdtAmount);
+        assertEq(IERC20(USDT).balanceOf(address(vault)), usdtAmount);
     }
 
     function testBridgeBTC() public {
-        // TODO test and make sure adjusted amount in event is correct
+        changePrank(wBTCWhale);
+
+        uint256 wbtcAmount = 1000000;
+
+        // approve
+        IERC20(wBTC).approve(address(bridge), wbtcAmount);
+
+        assertEq(IERC20(wBTC).balanceOf(address(vault)), 0);
+        uint256 balance = IERC20(wBTC).balanceOf(wBTCWhale);
+
+        // assert emitted event
+        vm.expectEmit(true, true, true, false);
+        emit TokensDeposited(
+            chainID,
+            0, // nonce
+            0, // destination chain id
+            BridgeUtils.BTC,
+            1_000_000, // 1 ether
+            wBTCWhale,
+            abi.encode("suiAddress")
+        );
+        bridge.bridgeERC20(BridgeUtils.BTC, wbtcAmount, abi.encode("suiAddress"), 0);
+
+        assertEq(IERC20(wBTC).balanceOf(wBTCWhale), balance - wbtcAmount);
+        assertEq(IERC20(wBTC).balanceOf(address(vault)), wbtcAmount);
     }
 
     function testBridgeEth() public {
