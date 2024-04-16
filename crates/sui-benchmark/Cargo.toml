@@ -11,6 +11,7 @@ async-trait.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 futures.workspace = true
 serde.workspace = true
+fastcrypto.workspace = true
 serde_json.workspace = true
 itertools.workspace = true
 tokio = { workspace = true, features = ["full"] }
@@ -47,6 +48,7 @@ mysten-metrics.workspace = true
 narwhal-node.workspace = true
 test-cluster.workspace = true
 sysinfo.workspace = true
+memoize = "0.4.2"
 
 [target.'cfg(msim)'.dependencies]
 sui-framework.workspace = true

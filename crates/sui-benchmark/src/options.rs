@@ -158,6 +158,10 @@ pub enum RunSpec {
         // benchmark set. If an argument doesn't contain the right number of values then it will panic.
         #[clap(long, default_value = "1")]
         num_of_benchmark_groups: u32,
+        // relative weight of mint
+        // transaction in the benchmark workload
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        mint: Vec<u32>,
         // relative weight of shared counter
         // transaction in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
@@ -198,6 +202,9 @@ pub enum RunSpec {
         // The actual increment for each transaction is chosen at random a value between 0 and this value.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         shared_counter_max_tip: Vec<u64>,
+        // nft contents size
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        nft_contents_size: Vec<u64>,
         // batch size use for batch payment workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [15])]
         batch_payment_size: Vec<u32>,

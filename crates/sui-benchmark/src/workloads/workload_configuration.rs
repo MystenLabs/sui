@@ -7,6 +7,7 @@ use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
+use crate::workloads::nft_mint::NFTMintWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::{GroupID, WorkloadBuilderInfo, WorkloadInfo};
@@ -34,6 +35,7 @@ impl WorkloadConfiguration {
             RunSpec::Bench {
                 num_of_benchmark_groups,
                 shared_counter,
+                mint,
                 shared_deletion,
                 transfer_object,
                 delegation,
@@ -42,6 +44,7 @@ impl WorkloadConfiguration {
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
+                nft_contents_size,
                 batch_payment_size,
                 adversarial_cfg,
                 target_qps,
@@ -63,6 +66,7 @@ impl WorkloadConfiguration {
                         num_workers[i],
                         opts.num_transfer_accounts,
                         shared_counter[i],
+                        mint[i],
                         transfer_object[i],
                         delegation[i],
                         batch_payment[i],
@@ -74,6 +78,7 @@ impl WorkloadConfiguration {
                         num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip[i],
                         target_qps[i],
+                        nft_contents_size[i],
                         in_flight_ratio[i],
                         duration[i],
                         system_state_observer.clone(),
@@ -140,6 +145,7 @@ impl WorkloadConfiguration {
         num_workers: u64,
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
+        mint_weight: u32,
         transfer_object_weight: u32,
         delegation_weight: u32,
         batch_payment_weight: u32,
@@ -150,6 +156,7 @@ impl WorkloadConfiguration {
         shared_counter_hotness_factor: u32,
         num_shared_counters: Option<u64>,
         shared_counter_max_tip: u64,
+        nft_contents_size: u64,
         target_qps: u64,
         in_flight_ratio: u64,
         duration: Interval,
@@ -175,6 +182,17 @@ impl WorkloadConfiguration {
             workload_group,
         );
         workload_builders.push(shared_workload);
+        let mint_workload = NFTMintWorkloadBuilder::from(
+            mint_weight as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            nft_contents_size,
+            reference_gas_price,
+            duration,
+            workload_group,
+        );
+        workload_builders.push(mint_workload);
         let shared_deletion_workload = SharedCounterDeletionWorkloadBuilder::from(
             shared_deletion_weight as f32 / total_weight as f32,
             target_qps,

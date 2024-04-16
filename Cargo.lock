@@ -6437,6 +6437,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoize"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5df4051db13d0816cf23196d3baa216385ae099339f5d0645a8d9ff2305e82b8"
+dependencies = [
+ "lazy_static",
+ "lru 0.7.8",
+ "memoize-inner",
+]
+
+[[package]]
+name = "memoize-inner"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27bdece7e91f0d1e33df7b46ec187a93ea0d4e642113a1039ac8bfdd4a3273ac"
+dependencies = [
+ "lazy_static",
+ "proc-macro2 1.0.78",
+ "quote 1.0.35",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "miette"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12044,11 +12067,13 @@ dependencies = [
  "clap",
  "comfy-table",
  "duration-str",
+ "fastcrypto",
  "fastcrypto-zkp",
  "futures",
  "hdrhistogram",
  "indicatif",
  "itertools 0.10.5",
+ "memoize",
  "move-core-types",
  "mysten-metrics",
  "narwhal-node",

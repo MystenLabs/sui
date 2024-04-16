@@ -70,3 +70,22 @@ pub async fn publish_basics_package(
         .map(|(reference, _)| *reference)
         .unwrap()
 }
+
+pub async fn publish_nfts_package(
+    gas: ObjectRef,
+    proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    gas_price: u64,
+) -> ObjectRef {
+    let transaction = TestTransactionBuilder::new(sender, gas, gas_price)
+        .publish_examples("nfts")
+        .build_and_sign(keypair);
+    let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+    effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .map(|(reference, _)| *reference)
+        .unwrap()
+}

@@ -4,6 +4,7 @@
 pub mod adversarial;
 pub mod batch_payment;
 pub mod delegation;
+pub mod nft_mint;
 pub mod payload;
 pub mod shared_counter;
 pub mod shared_object_deletion;
