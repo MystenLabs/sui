@@ -77,8 +77,8 @@ impl WorkloadConfiguration {
                         shared_counter_hotness_factor[i],
                         num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip[i],
-                        target_qps[i],
                         nft_contents_size[i],
+                        target_qps[i],
                         in_flight_ratio[i],
                         duration[i],
                         system_state_observer.clone(),
@@ -166,7 +166,8 @@ impl WorkloadConfiguration {
             + transfer_object_weight
             + delegation_weight
             + batch_payment_weight
-            + adversarial_weight;
+            + adversarial_weight
+            + mint_weight;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
