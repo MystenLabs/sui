@@ -7787,6 +7787,7 @@ dependencies = [
  "futures",
  "lru 0.10.0",
  "mysten-common",
+ "mysten-metrics",
  "narwhal-config",
  "narwhal-test-utils",
  "narwhal-types",

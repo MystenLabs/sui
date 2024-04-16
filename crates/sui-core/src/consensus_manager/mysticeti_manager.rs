@@ -34,14 +34,16 @@ pub struct MysticetiManager {
     protocol_keypair: ProtocolKeyPair,
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
+    // TODO: switch to parking_lot::Mutex.
     running: Mutex<Running>,
-    metrics: ConsensusManagerMetrics,
+    metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
-    consensus_handler: ArcSwapOption<MysticetiConsensusHandler>,
+    // TODO: switch to parking_lot::Mutex.
+    consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
 }
 
 impl MysticetiManager {
@@ -51,8 +53,8 @@ impl MysticetiManager {
         protocol_keypair: ed25519::Ed25519KeyPair,
         network_keypair: ed25519::Ed25519KeyPair,
         storage_base_path: PathBuf,
-        metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
+        metrics: Arc<ConsensusManagerMetrics>,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
         Self {
@@ -64,7 +66,7 @@ impl MysticetiManager {
             registry_service,
             authority: ArcSwapOption::empty(),
             client,
-            consensus_handler: ArcSwapOption::empty(),
+            consensus_handler: Mutex::new(None),
         }
     }
 
@@ -171,7 +173,8 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
         let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
-        self.consensus_handler.store(Some(Arc::new(handler)));
+        let mut consensus_handler = self.consensus_handler.lock().await;
+        *consensus_handler = Some(handler);
     }
 
     async fn shutdown(&self) {
@@ -190,7 +193,10 @@ impl ConsensusManagerTrait for MysticetiManager {
         authority.stop().await;
 
         // drop the old consensus handler to force stop any underlying task running.
-        self.consensus_handler.store(None);
+        let mut consensus_handler = self.consensus_handler.lock().await;
+        if let Some(mut handler) = consensus_handler.take() {
+            handler.abort().await;
+        }
 
         // unregister the registry id
         self.registry_service.remove(registry_id);
@@ -198,9 +204,5 @@ impl ConsensusManagerTrait for MysticetiManager {
 
     async fn is_running(&self) -> bool {
         Running::False != *self.running.lock().await
-    }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
     }
 }

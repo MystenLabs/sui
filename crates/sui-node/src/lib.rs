@@ -12,7 +12,6 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
-use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -26,6 +25,7 @@ use std::time::Duration;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_core::consensus_manager::ConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
@@ -33,7 +33,6 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -57,7 +56,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
-use sui_config::node::{ConsensusProtocol, DBCheckpointConfig, RunWithRange};
+use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -209,7 +208,6 @@ use simulator::*;
 #[cfg(msim)]
 pub use simulator::set_jwk_injector;
 use sui_core::consensus_handler::ConsensusHandlerInitializer;
-use sui_core::mysticeti_adapter::LazyMysticetiClient;
 use sui_types::execution_config_utils::to_binary_config;
 
 pub struct SuiNode {
@@ -1090,70 +1088,18 @@ impl SuiNode {
             .as_mut()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        // Only allow overriding the consensus protocol, if the protocol version supports
-        // fields needed by Mysticeti.
-        if epoch_store.protocol_config().version >= ProtocolVersion::new(36) {
-            if let Ok(consensus_choice) = std::env::var("CONSENSUS") {
-                let consensus_protocol = match consensus_choice.as_str() {
-                    "narwhal" => ConsensusProtocol::Narwhal,
-                    "mysticeti" => ConsensusProtocol::Mysticeti,
-                    "swap_each_epoch" => {
-                        if epoch_store.epoch() % 2 == 0 {
-                            ConsensusProtocol::Narwhal
-                        } else {
-                            ConsensusProtocol::Mysticeti
-                        }
-                    }
-                    _ => {
-                        let consensus = consensus_config.protocol.clone();
-                        warn!("Consensus env var was set to an invalid choice, using default consensus protocol {consensus:?}");
-                        consensus
-                    }
-                };
-                info!("Constructing consensus protocol {consensus_protocol:?}...");
-                consensus_config.protocol = consensus_protocol;
-            }
-        }
-
-        // TODO (mysticeti): Move protocol choice to a protocol config flag.
-        let (consensus_adapter, consensus_manager) = match consensus_config.protocol {
-            ConsensusProtocol::Narwhal => {
-                let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
-                    &committee,
-                    consensus_config,
-                    state.name,
-                    connection_monitor_status.clone(),
-                    &registry_service.default_registry(),
-                    epoch_store.protocol_config().clone(),
-                    Arc::new(LazyNarwhalClient::new(
-                        consensus_config.address().to_owned(),
-                    )),
-                ));
-                let consensus_manager =
-                    ConsensusManager::new_narwhal(&config, consensus_config, registry_service);
-                (consensus_adapter, consensus_manager)
-            }
-            ConsensusProtocol::Mysticeti => {
-                let client = Arc::new(LazyMysticetiClient::new());
-
-                let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
-                    &committee,
-                    consensus_config,
-                    state.name,
-                    connection_monitor_status.clone(),
-                    &registry_service.default_registry(),
-                    epoch_store.protocol_config().clone(),
-                    client.clone(),
-                ));
-                let consensus_manager = ConsensusManager::new_mysticeti(
-                    &config,
-                    consensus_config,
-                    registry_service,
-                    client,
-                );
-                (consensus_adapter, consensus_manager)
-            }
-        };
+        let client = Arc::new(ConsensusClient::new());
+        let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
+            &committee,
+            consensus_config,
+            state.name,
+            connection_monitor_status.clone(),
+            &registry_service.default_registry(),
+            epoch_store.protocol_config().clone(),
+            client.clone(),
+        ));
+        let consensus_manager =
+            ConsensusManager::new(&config, consensus_config, registry_service, client);
 
         let mut consensus_epoch_data_remover =
             EpochDataRemover::new(consensus_manager.get_storage_base_path());

@@ -126,7 +126,7 @@ async fn test_narwhal_manager() {
             registry_service,
         };
 
-        let metrics = ConsensusManagerMetrics::new(&Registry::new());
+        let metrics = Arc::new(ConsensusManagerMetrics::new(&Registry::new()));
         let epoch_store = state.epoch_store_for_testing();
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);

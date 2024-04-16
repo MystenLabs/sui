@@ -957,13 +957,16 @@ impl AuthorityPerEpochStore {
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         match self.tables.load_full() {
             Some(tables) => Ok(tables),
-            None => Err(SuiError::EpochEnded),
+            None => Err(SuiError::EpochEnded(self.epoch())),
         }
     }
 
+    // Ideally the epoch tables handle should have the same lifetime as the outer AuthorityPerEpochStore,
+    // and this function should be unnecesary. But unfortunately, Arc<AuthorityPerEpochStore> outlives the
+    // epoch significantly right now, so we need to manually release the tables to release its memory usage.
     pub fn release_db_handles(&self) {
-        // When force releasing DB handle is no longer needed, it will still be useful
-        // to make sure AuthorityPerEpochStore is not used after the next epoch starts.
+        // When the logic to release DB handles becomes obsolete, it may still be useful
+        // to make sure AuthorityEpochTables is not used after the next epoch starts.
         self.tables.store(None);
     }
 
@@ -1374,7 +1377,14 @@ impl AuthorityPerEpochStore {
     /// Deletes one pending certificate.
     #[instrument(level = "trace", skip_all)]
     pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables()?.pending_execution.remove(digest)?;
+        let tables = match self.tables() {
+            Ok(tables) => tables,
+            // After Epoch ends, it is no longer necessary to remove pending transactions
+            // because the table will not be used anymore and be deleted eventually.
+            Err(SuiError::EpochEnded(_)) => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        tables.pending_execution.remove(digest)?;
         Ok(())
     }
 
@@ -2468,7 +2478,7 @@ impl AuthorityPerEpochStore {
         }
         let mut batch = self
             .db_batch()
-            .expect("Consensus should not be processed past end of epoch");
+            .expect("Failed to create DBBatch for processing consensus transactions");
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self

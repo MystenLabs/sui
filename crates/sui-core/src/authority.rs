@@ -1028,6 +1028,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
+        // NOTE: the fullnode can change epoch during local execution. It should not cause
+        // data inconsistency, but can be problematic for certain tests.
+        // The check below mitigates the issue, but it is not a fundamental solution to
+        // avoid race between local execution and reconfiguration.
+        if self.epoch_store.load().epoch() != epoch_store.epoch() {
+            return Err(SuiError::EpochEnded(epoch_store.epoch()));
+        }
         let _metrics_guard = self
             .metrics
             .execute_certificate_with_effects_latency

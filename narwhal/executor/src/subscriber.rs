@@ -112,7 +112,6 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
             _ = rx_shutdown.receiver.recv() => {
                 return
             }
-
         }
     }
 }

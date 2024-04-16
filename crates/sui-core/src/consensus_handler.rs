@@ -511,7 +511,7 @@ impl AsyncTransactionScheduler {
 /// During initialization, the sender is passed into Mysticeti which can send consensus output
 /// to the channel.
 pub struct MysticetiConsensusHandler {
-    handle: tokio::task::JoinHandle<()>,
+    handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl MysticetiConsensusHandler {
@@ -526,13 +526,24 @@ impl MysticetiConsensusHandler {
                     .await;
             }
         });
-        Self { handle }
+        Self {
+            handle: Some(handle),
+        }
+    }
+
+    pub async fn abort(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
     }
 }
 
 impl Drop for MysticetiConsensusHandler {
     fn drop(&mut self) {
-        self.handle.abort();
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
     }
 }
 
