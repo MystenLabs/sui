@@ -96,6 +96,23 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_nft_batch_mint(
+        self,
+        package_id: ObjectID,
+        nft_contents: Vec<u8>,
+        recipients: Vec<SuiAddress>,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "mint_nft",
+            "batch_mint",
+            vec![
+                CallArg::Pure(bcs::to_bytes(&recipients).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&nft_contents).unwrap()),
+            ],
+        )
+    }
+
     pub fn call_counter_create(self, package_id: ObjectID) -> Self {
         self.move_call(package_id, "counter", "create", vec![])
     }

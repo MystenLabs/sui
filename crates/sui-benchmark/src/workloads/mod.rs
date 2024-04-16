@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod adversarial;
+pub mod batch_nft_mint;
 pub mod batch_payment;
 pub mod delegation;
 pub mod nft_mint;

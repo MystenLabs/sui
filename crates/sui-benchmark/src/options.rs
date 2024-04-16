@@ -162,6 +162,10 @@ pub enum RunSpec {
         // transaction in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         mint: Vec<u32>,
+        // relative weight of batch mint
+        // transaction in the benchmark workload
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        batch_mint: Vec<u32>,
         // relative weight of shared counter
         // transaction in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
@@ -205,6 +209,9 @@ pub enum RunSpec {
         // nft contents size
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         nft_contents_size: Vec<u64>,
+        // num mint recipients
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        num_mint_recipients: Vec<u64>,
         // batch size use for batch payment workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [15])]
         batch_payment_size: Vec<u32>,
