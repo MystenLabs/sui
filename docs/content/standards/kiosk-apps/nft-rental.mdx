@@ -54,7 +54,7 @@ Transferring kiosks might result in unexpected behaviors while an asset is being
 
 :::
 
-The smart contract design leverages the Kiosk Apps standard to create a framework enabling transactions between lenders and borrowers. Both parties are required to install this extension to facilitate lending or borrowing activities. Moreover, the creator of the rented asset must establish a rental policy and a `ProtectedTP` object, granting authorization to the renting extension for managing assets subject to royalty enforcement.
+The rental smart contract uses the [Kiosk Apps](../kiosk-apps.mdx) standard. Both the lender and borrower must install a Kiosk extension to take part, and the creator of the borrowed asset type must create a rental policy and `ProtectedTP` object to allow the extension to manage rentals while enforcing royalties.
 
 :::info
 
@@ -220,7 +220,7 @@ public fun list<T: key + store>(
         
     // Sets the Kiosk owner to the transaction sender to keep metadata fields up to date.
     // This is also crucial to ensure the correct person will receive the payment.
-    // Prevents unexpected results in cases where the kiosk could have been transfered between users without the owner being updated.
+    // Prevents unexpected results in cases where the kiosk could have been transferred between users without the owner being updated.
     kiosk::set_owner(kiosk, cap, ctx);
     // Aborts if Rentables extension is not installed.
     assert!(kiosk_extension::is_installed<Rentables>(kiosk), EExtensionNotInstalled);
