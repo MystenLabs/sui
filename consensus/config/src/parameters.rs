@@ -43,6 +43,10 @@ pub struct Parameters {
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]
     pub anemo: AnemoParameters,
+
+    /// Tonic network settings.
+    #[serde(default = "TonicParameters::default")]
+    pub tonic: TonicParameters,
 }
 
 impl Parameters {
@@ -55,7 +59,14 @@ impl Parameters {
     }
 
     pub fn default_min_round_delay() -> Duration {
-        Duration::from_millis(50)
+        if cfg!(msim) {
+            // Checkpoint building and execution cannot keep up with high commit rate in simtests,
+            // leading to long reconfiguration delays. This is because simtest is single threaded,
+            // and spending too much time in consensus can lead to starvation elsewhere.
+            Duration::from_millis(200)
+        } else {
+            Duration::from_millis(50)
+        }
     }
 
     pub fn default_max_forward_time_drift() -> Duration {
@@ -82,6 +93,7 @@ impl Default for Parameters {
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             db_path: None,
             anemo: AnemoParameters::default(),
+            tonic: TonicParameters::default(),
         }
     }
 }
@@ -93,7 +105,13 @@ pub struct AnemoParameters {
     ///
     /// If unspecified, this will default to 8 MiB.
     #[serde(default = "AnemoParameters::default_excessive_message_size")]
-    excessive_message_size: usize,
+    pub excessive_message_size: usize,
+}
+
+impl AnemoParameters {
+    fn default_excessive_message_size() -> usize {
+        8 << 20
+    }
 }
 
 impl Default for AnemoParameters {
@@ -104,12 +122,36 @@ impl Default for AnemoParameters {
     }
 }
 
-impl AnemoParameters {
-    pub fn excessive_message_size(&self) -> usize {
-        self.excessive_message_size
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TonicParameters {
+    /// Keepalive interval and timeouts for both client and server.
+    ///
+    /// If unspecified, this will default to 5s.
+    #[serde(default = "TonicParameters::default_keepalive_interval")]
+    pub keepalive_interval: Duration,
+
+    /// Message size limits for both requests and responses.
+    ///
+    /// If unspecified, this will default to 8MiB.
+    #[serde(default = "TonicParameters::default_message_size_limit")]
+    pub message_size_limit: usize,
+}
+
+impl TonicParameters {
+    fn default_keepalive_interval() -> Duration {
+        Duration::from_secs(5)
     }
 
-    fn default_excessive_message_size() -> usize {
+    fn default_message_size_limit() -> usize {
         8 << 20
+    }
+}
+
+impl Default for TonicParameters {
+    fn default() -> Self {
+        Self {
+            keepalive_interval: TonicParameters::default_keepalive_interval(),
+            message_size_limit: TonicParameters::default_message_size_limit(),
+        }
     }
 }
