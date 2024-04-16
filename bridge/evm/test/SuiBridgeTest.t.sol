@@ -679,7 +679,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         });
         bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes memory expectedEncodedMessage =
-            hex"5355495f4252494447455f4d455353414745020100000000000000370300";
+            hex"5355495f4252494447455f4d455353414745020100000000000000370200";
 
         assertEq(encodedMessage, expectedEncodedMessage);
     }
