@@ -2244,7 +2244,7 @@ impl<'a> ParsingSymbolicator<'a> {
 
 impl<'a> TypingSymbolicator<'a> {
     /// Get symbols for the whole module
-    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &String) {
+    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &str) {
         for (pos, name, fun) in &mod_def.functions {
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
@@ -2355,8 +2355,8 @@ impl<'a> TypingSymbolicator<'a> {
     fn struct_symbols(
         &mut self,
         struct_def: &StructDefinition,
-        struct_name: &Symbol,
-        mod_ident_str: &String,
+        _struct_name: &Symbol,
+        _mod_ident_str: &str,
     ) {
         // create scope designated to contain type parameters (if any)
         let mut tp_scope = BTreeMap::new();
