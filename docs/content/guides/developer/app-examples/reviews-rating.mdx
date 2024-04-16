@@ -44,11 +44,11 @@ The incentive mechanism for moderators is not implemented for this guide, but se
 
 The reviews are rated (scored) on-chain using following criteria
 - Intrinsic score (IS)
-  - Length of content
+  - Length of a review content
 - Extrinsic score (ES)
-  - Number of votes received
+  - Number of votes a review received
 - Verification multiplier (VM)
-  - Reviews with PoE get a multiplier to improve rating
+  - Reviews with Proof of Experience (PoE) get a multiplier to improve rating
 
 ```
 Total Score = (IS + ES) * VM
@@ -138,6 +138,8 @@ The elements of `top_reviews` are sorted by the `total_score` of the reviews, wi
 the `ID` of the reviews (whose content and vote count can be looked up from the `reviews`).
 
 #### Casting votes
+A vote can be casted on a review by a reader to rate the review as follows:
+
 ```move
 /// Upvotes a review and reorders top_reviews
 public fun upvote(service: &mut Service, review_id: ID) {
@@ -255,6 +257,7 @@ Navigate to the [setup folder](https://github.com/MystenLabs/reviews-ratings-poc
 ## Frontend
 The frontend module is written in React, and is structured to provide a responsive user experience for interacting with a review rating platform.
 On the [`page` component](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/page.tsx), a user can be logged in as a `SERVICE OWNER`, a `MODERATOR`, or a `REVIEWER`.
+A `REVIEW READER` role is not implemented for this example, but a `REVIEWER` can also read reviews and cast votes.
 
 ### Directories structure
 
