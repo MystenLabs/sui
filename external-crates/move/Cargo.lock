@@ -330,6 +330,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytecode-verifier-tests-v0"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "invalid-mutations-v0",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+ "proptest",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v1"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "invalid-mutations-v1",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v1",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+ "proptest",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v2"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "invalid-mutations-v2",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v2",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+ "proptest",
+]
+
+[[package]]
 name = "bytecode-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -1256,6 +1304,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "invalid-mutations-v0"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-core-types",
+ "proptest",
+]
+
+[[package]]
+name = "invalid-mutations-v1"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-core-types",
+ "proptest",
+]
+
+[[package]]
+name = "invalid-mutations-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-core-types",
+ "proptest",
+]
+
+[[package]]
 name = "io-lifetimes"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1593,6 +1668,51 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-config",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v0"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "invalid-mutations-v0",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v1"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "invalid-mutations-v1",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v2"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "invalid-mutations-v2",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
 ]
 
 [[package]]
@@ -2064,6 +2184,87 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-v0"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "dir-diff",
+ "file_diff",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime-v0",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-v1"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "dir-diff",
+ "file_diff",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime-v1",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-v2"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "dir-diff",
+ "file_diff",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime-v2",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -2185,6 +2386,78 @@ dependencies = [
  "hex",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v0"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v0",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v1"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v1",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v2",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",

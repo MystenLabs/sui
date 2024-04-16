@@ -18,6 +18,7 @@ move-prover.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+# referred to via path for execution versioning
 move-vm-runtime = { path = "../move-vm-runtime" }
 log.workspace = true
 walkdir.workspace = true

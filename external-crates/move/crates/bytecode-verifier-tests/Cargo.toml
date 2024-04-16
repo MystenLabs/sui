@@ -15,7 +15,8 @@ proptest.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 hex.workspace = true
 
-invalid-mutations.workspace = true
+# referred to via path for execution versioning
+invalid-mutations = { path = "../invalid-mutations" }
 move-binary-format = { workspace = true, features = ["fuzzing"] }
 move-bytecode-verifier.workspace = true
 move-bytecode-verifier-meter.workspace = true

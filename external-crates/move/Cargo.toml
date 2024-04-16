@@ -3,6 +3,26 @@ resolver = "2"
 
 members = [
     "crates/*",
+    "move-execution/v0/crates/bytecode-verifier-tests",
+    "move-execution/v1/crates/bytecode-verifier-tests",
+    "move-execution/v2/crates/bytecode-verifier-tests",
+    # "move-execution/$CUT/crates/bytecode-verifier-tests",
+    "move-execution/v0/crates/invalid-mutations",
+    "move-execution/v1/crates/invalid-mutations",
+    "move-execution/v2/crates/invalid-mutations",
+    # "move-execution/$CUT/crates/invalid-mutations",
+    "move-execution/v0/crates/move-bytecode-verifier",
+    "move-execution/v1/crates/move-bytecode-verifier",
+    "move-execution/v2/crates/move-bytecode-verifier",
+    # "move-execution/$CUT/crates/move-bytecode-verifier",
+    "move-execution/v0/crates/move-vm-runtime",
+    "move-execution/v1/crates/move-vm-runtime",
+    "move-execution/v2/crates/move-vm-runtime",
+    # "move-execution/$CUT/crates/move-vm-runtime",
+    "move-execution/v0/crates/move-stdlib",
+    "move-execution/v1/crates/move-stdlib",
+    "move-execution/v2/crates/move-stdlib",
+    # "move-execution/$CUT/crates/move-stdlib",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
