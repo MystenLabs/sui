@@ -2658,12 +2658,12 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_type_parameters(&self) -> Vec<TypeParameter> {
         // TODO: currently the translation scheme isn't working with using real type
         //   parameter names, so use indices instead.
-        let view = self.definition();
+        let fdef = self.definition();
         let fhandle = self
             .module_env
             .data
             .module
-            .function_handle_at(view.function);
+            .function_handle_at(fdef.function);
         fhandle
             .type_parameters
             .iter()
@@ -2679,12 +2679,12 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the type parameters with the real names.
     pub fn get_named_type_parameters(&self) -> Vec<TypeParameter> {
-        let view = self.definition();
+        let fdef = self.definition();
         let fhandle = self
             .module_env
             .data
             .module
-            .function_handle_at(view.function);
+            .function_handle_at(fdef.function);
         fhandle
             .type_parameters
             .iter()
@@ -2708,20 +2708,20 @@ impl<'env> FunctionEnv<'env> {
     }
 
     pub fn get_parameter_count(&self) -> usize {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
-        let fhandle = module.function_handle_at(view.function);
+        let fhandle = module.function_handle_at(fdef.function);
         module.signature_at(fhandle.parameters).0.len()
     }
 
     /// Return the number of type parameters for self
     pub fn get_type_parameter_count(&self) -> usize {
-        let view = self.definition();
+        let fdef = self.definition();
         let fhandle = self
             .module_env
             .data
             .module
-            .function_handle_at(view.function);
+            .function_handle_at(fdef.function);
         fhandle.type_parameters.len()
     }
 
@@ -2739,9 +2739,9 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the parameter types associated with this function
     pub fn get_parameter_types(&self) -> Vec<Type> {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
-        let fhandle = module.function_handle_at(view.function);
+        let fhandle = module.function_handle_at(fdef.function);
         module
             .signature_at(fhandle.parameters)
             .0
@@ -2752,9 +2752,9 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the regular parameters associated with this function.
     pub fn get_parameters(&self) -> Vec<Parameter> {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
-        let fhandle = module.function_handle_at(view.function);
+        let fhandle = module.function_handle_at(fdef.function);
         module
             .signature_at(fhandle.parameters)
             .0
@@ -2767,9 +2767,9 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns return types of this function.
     pub fn get_return_types(&self) -> Vec<Type> {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
-        let fhandle = module.function_handle_at(view.function);
+        let fhandle = module.function_handle_at(fdef.function);
         module
             .signature_at(fhandle.return_)
             .0
@@ -2785,9 +2785,9 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the number of return values of this function.
     pub fn get_return_count(&self) -> usize {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
-        let fhandle = module.function_handle_at(view.function);
+        let fhandle = module.function_handle_at(fdef.function);
         module.signature_at(fhandle.return_).0.len()
     }
 
@@ -2832,10 +2832,10 @@ impl<'env> FunctionEnv<'env> {
     /// by the user and also have a user assigned name which can be discovered via `get_local_name`.
     /// Note we may have more anonymous locals generated e.g by the 'stackless' transformation.
     pub fn get_local_count(&self) -> usize {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
         let num_params = self.get_parameter_count();
-        let num_locals = view
+        let num_locals = fdef
             .code
             .as_ref()
             .map(|code| module.signature_at(code.locals).0.len())
@@ -2846,14 +2846,14 @@ impl<'env> FunctionEnv<'env> {
     /// Gets the type of the local at index. This must use an index in the range as determined by
     /// `get_local_count`.
     pub fn get_local_type(&self, idx: usize) -> Type {
-        let view = self.definition();
+        let fdef = self.definition();
         let module = &self.module_env.data.module;
-        let fhandle = module.function_handle_at(view.function);
+        let fhandle = module.function_handle_at(fdef.function);
         let parameters = &module.signature_at(fhandle.parameters).0;
         let st = if idx < parameters.len() {
             &parameters[idx]
         } else {
-            let locals = &module.signature_at(view.code.as_ref().unwrap().locals).0;
+            let locals = &module.signature_at(fdef.code.as_ref().unwrap().locals).0;
             &locals[idx - parameters.len()]
         };
         self.module_env.globalize_signature(st)

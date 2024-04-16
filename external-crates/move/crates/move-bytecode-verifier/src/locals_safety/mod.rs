@@ -9,12 +9,11 @@
 mod abstract_state;
 
 use crate::{
-    absint::{AbstractInterpreter, TransferFunctions},
+    absint::{AbstractInterpreter, FunctionContext, TransferFunctions},
     locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
 };
 use abstract_state::{AbstractState, LocalState};
 use move_binary_format::{
-    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
     CompiledModule,
@@ -23,12 +22,12 @@ use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) fn verify<'a>(
-    resolver: &CompiledModule,
-    function_view: &'a FunctionView<'a>,
+    module: &CompiledModule,
+    function_context: &'a FunctionContext<'a>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(resolver, function_view)?;
-    LocalsSafetyAnalysis().analyze_function(initial_state, function_view, meter)
+    let initial_state = AbstractState::new(module, function_context)?;
+    LocalsSafetyAnalysis().analyze_function(initial_state, function_context, meter)
 }
 
 fn execute_inner(

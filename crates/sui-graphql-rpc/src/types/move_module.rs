@@ -272,7 +272,7 @@ impl MoveModule {
     /// Textual representation of the module's bytecode.
     async fn disassembly(&self) -> Result<Option<String>> {
         Ok(Some(
-            Disassembler::from_view(self.parsed.bytecode(), Loc::invalid())
+            Disassembler::from_module(self.parsed.bytecode(), Loc::invalid())
                 .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
                 .extend()?
                 .disassemble()

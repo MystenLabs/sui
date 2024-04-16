@@ -1681,12 +1681,6 @@ impl LoadedModule {
     }
 }
 
-// A simple wrapper for the "owner" of the function (Module or Script)
-#[derive(Debug)]
-enum Scope {
-    Module(ModuleId),
-}
-
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
@@ -1701,7 +1695,7 @@ pub(crate) struct Function {
     type_parameters: Vec<AbilitySet>,
     native: Option<NativeFunction>,
     def_is_native: bool,
-    scope: Scope,
+    module: ModuleId,
     name: Identifier,
     return_types: Vec<Type>,
     local_types: Vec<Type>,
@@ -1730,7 +1724,6 @@ impl Function {
         } else {
             (None, false)
         };
-        let scope = Scope::Module(module_id);
         let parameters = module.signature_at(handle.parameters).clone();
         // Native functions do not have a code unit
         let (code, locals) = match &def.code {
@@ -1759,7 +1752,7 @@ impl Function {
             type_parameters,
             native,
             def_is_native,
-            scope,
+            module: module_id,
             name,
             local_types: vec![],
             return_types: vec![],
@@ -1772,10 +1765,8 @@ impl Function {
         self.file_format_version
     }
 
-    pub(crate) fn module_id(&self) -> Option<&ModuleId> {
-        match &self.scope {
-            Scope::Module(module_id) => Some(module_id),
-        }
+    pub(crate) fn module_id(&self) -> &ModuleId {
+        &self.module
     }
 
     pub(crate) fn index(&self) -> FunctionDefinitionIndex {
@@ -1787,12 +1778,9 @@ impl Function {
         link_context: AccountAddress,
         loader: &'a Loader,
     ) -> Resolver<'a> {
-        match &self.scope {
-            Scope::Module(module_id) => {
-                let (compiled, loaded) = loader.get_module(link_context, module_id);
-                Resolver::for_module(loader, compiled, loaded)
-            }
-        }
+        let module_id = &self.module;
+        let (compiled, loaded) = loader.get_module(link_context, module_id);
+        Resolver::for_module(loader, compiled, loaded)
     }
 
     pub(crate) fn local_count(&self) -> usize {
@@ -1835,14 +1823,13 @@ impl Function {
     }
 
     pub(crate) fn pretty_string(&self) -> String {
-        match &self.scope {
-            Scope::Module(id) => format!(
-                "0x{}::{}::{}",
-                id.address(),
-                id.name().as_str(),
-                self.name.as_str()
-            ),
-        }
+        let id = &self.module;
+        format!(
+            "0x{}::{}::{}",
+            id.address(),
+            id.name().as_str(),
+            self.name.as_str()
+        )
     }
 
     pub(crate) fn is_native(&self) -> bool {

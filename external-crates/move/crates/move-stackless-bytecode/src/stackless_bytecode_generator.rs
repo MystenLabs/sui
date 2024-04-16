@@ -560,12 +560,12 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     let arg_temp_index = self.temp_stack.pop().unwrap();
                     arg_temp_indices.push(arg_temp_index);
                 }
-                for return_type_view in &return_.0 {
+                for return_signature_token in &return_.0 {
                     let return_temp_index = self.temp_count;
                     let return_type = self
                         .func_env
                         .module_env
-                        .globalize_signature(return_type_view);
+                        .globalize_signature(return_signature_token);
                     return_temp_indices.push(return_temp_index);
                     self.temp_stack.push(return_temp_index);
                     self.local_types.push(return_type);
@@ -597,13 +597,13 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     let arg_temp_index = self.temp_stack.pop().unwrap();
                     arg_temp_indices.push(arg_temp_index);
                 }
-                for return_type_view in &return_.0 {
+                for return_signature_token in &return_.0 {
                     let return_temp_index = self.temp_count;
                     // instantiate type parameters
                     let return_type = self
                         .func_env
                         .module_env
-                        .globalize_signature(return_type_view)
+                        .globalize_signature(return_signature_token)
                         .instantiate(&type_sigs);
                     return_temp_indices.push(return_temp_index);
                     self.temp_stack.push(return_temp_index);

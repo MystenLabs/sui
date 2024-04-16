@@ -7,7 +7,6 @@
 use std::fmt;
 
 pub mod binary_config;
-pub mod binary_views;
 pub mod check_bounds;
 pub mod compatibility;
 #[macro_use]
