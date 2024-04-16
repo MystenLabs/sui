@@ -50,6 +50,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{
     CertifiedTransaction, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
 };
@@ -577,9 +578,13 @@ impl TestCluster {
     pub async fn create_certificate(
         &self,
         tx: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<CertifiedTransaction> {
         let agg = self.authority_aggregator();
-        Ok(agg.process_transaction(tx).await?.into_cert_for_testing())
+        Ok(agg
+            .process_transaction(tx, client_addr)
+            .await?
+            .into_cert_for_testing())
     }
 
     /// Execute a transaction on specified list of validators, and bypassing authority aggregator.
@@ -593,7 +598,10 @@ impl TestCluster {
         pubkeys: &[AuthorityName],
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        let certificate = agg.process_transaction(tx).await?.into_cert_for_testing();
+        let certificate = agg
+            .process_transaction(tx, None)
+            .await?
+            .into_cert_for_testing();
         let replies = loop {
             let futures: Vec<_> = agg
                 .authority_clients
@@ -607,7 +615,7 @@ impl TestCluster {
                 })
                 .map(|client| {
                     let cert = certificate.clone();
-                    async move { client.handle_certificate_v2(cert).await }
+                    async move { client.handle_certificate_v2(cert, None).await }
                 })
                 .collect();
 
@@ -760,6 +768,8 @@ pub struct TestClusterBuilder {
     authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
+    fullnode_policy_config: Option<PolicyConfig>,
+    fullnode_fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl TestClusterBuilder {
@@ -782,6 +792,8 @@ impl TestClusterBuilder {
             authority_overload_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
+            fullnode_policy_config: None,
+            fullnode_fw_config: None,
         }
     }
 
@@ -789,6 +801,16 @@ impl TestClusterBuilder {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
         }
+        self
+    }
+
+    pub fn with_fullnode_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.fullnode_policy_config = config;
+        self
+    }
+
+    pub fn with_fullnode_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fullnode_fw_config = config;
         self
     }
 
@@ -1019,7 +1041,9 @@ impl TestClusterBuilder {
                     .unwrap_or(self.validator_supported_protocol_versions_config.clone()),
             )
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
-            .with_fullnode_run_with_range(self.fullnode_run_with_range);
+            .with_fullnode_run_with_range(self.fullnode_run_with_range)
+            .with_fullnode_policy_config(self.fullnode_policy_config.clone())
+            .with_fullnode_fw_config(self.fullnode_fw_config.clone());
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);

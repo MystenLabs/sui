@@ -7,6 +7,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
@@ -306,12 +307,13 @@ where
     pub async fn handle_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone())
+            .handle_transaction(transaction.clone(), client_addr)
             .await?;
         let response = check_error!(
             self.address,
@@ -340,12 +342,13 @@ where
     pub async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
-            .handle_certificate_v2(certificate)
+            .handle_certificate_v2(certificate, client_addr)
             .await?;
 
         let verified = check_error!(

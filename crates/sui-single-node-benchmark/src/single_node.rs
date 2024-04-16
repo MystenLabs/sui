@@ -18,6 +18,7 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::state_accumulator::AccumulatorStore;
 use sui_core::state_accumulator::StateAccumulator;
+use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
@@ -69,6 +70,12 @@ impl SingleValidator {
             validator,
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
+            TrafficControllerMetrics::new_for_tests(),
+            // TODO: for validator benchmarking purposes, we should allow for this
+            // to be configurable and introduce traffic control benchmarks to test
+            // against different policies
+            None, /* PolicyConfig */
+            None, /* RemoteFirewallConfig */
         ));
         Self {
             validator_service,
@@ -117,6 +124,20 @@ impl SingleValidator {
             .await
             .unwrap()
             .0;
+        assert!(effects.status().is_ok());
+        effects
+    }
+
+    pub async fn execute_dry_run(&self, transaction: Transaction) -> TransactionEffects {
+        let effects = self
+            .get_validator()
+            .dry_exec_transaction_for_benchmark(
+                transaction.data().intent_message().value.clone(),
+                *transaction.digest(),
+            )
+            .await
+            .unwrap()
+            .2;
         assert!(effects.status().is_ok());
         effects
     }
@@ -213,7 +234,7 @@ impl SingleValidator {
 
     pub async fn sign_transaction(&self, transaction: Transaction) -> HandleTransactionResponse {
         self.validator_service
-            .handle_transaction_for_testing(transaction)
+            .handle_transaction_for_benchmarking(transaction)
             .await
             .unwrap()
             .into_inner()
@@ -268,7 +289,7 @@ impl SingleValidator {
         let objects: HashMap<_, _> = self
             .get_validator()
             .get_execution_cache()
-            .iter_live_object_set(false)
+            .iter_cached_live_object_set_for_testing(false)
             .map(|o| match o {
                 LiveObject::Normal(object) => (object.id(), object),
                 LiveObject::Wrapped(_) => unreachable!(),

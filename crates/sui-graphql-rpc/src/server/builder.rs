@@ -6,7 +6,7 @@ use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::context_data::package_cache::DbPackageStore;
+use crate::data::package_resolver::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
@@ -363,7 +363,7 @@ impl ServerBuilder {
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore(reader.clone());
+        let package_store = DbPackageStore::new(db.clone());
         let package_cache = PackageStoreWithLruCache::new(package_store);
         builder.db_reader = Some(db.clone());
 

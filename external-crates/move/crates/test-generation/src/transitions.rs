@@ -735,7 +735,10 @@ pub fn create_struct(
         None => SignatureToken::Struct(struct_def.struct_handle),
         Some(inst) => {
             let ty_instantiation = state.module.instantiantiation_at(inst);
-            SignatureToken::StructInstantiation(Box::new((struct_def.struct_handle, ty_instantiation.clone())))
+            SignatureToken::StructInstantiation(Box::new((
+                struct_def.struct_handle,
+                ty_instantiation.clone(),
+            )))
         }
     };
     let struct_kind = abilities_for_token(&state, &sig_tok, &state.instantiation);

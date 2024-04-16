@@ -986,3 +986,101 @@ macro_rules! format_oxford_list {
 }
 
 pub(crate) use format_oxford_list;
+
+//**************************************************************************************************
+// Debug Printing
+//**************************************************************************************************
+
+/// Debug formatter based on provided `fmt` option:
+///
+/// - None: calls `val.print()`
+/// - `verbose`: calls `val.print_verbose()`
+/// - `fmt`: calls `println!("{}", val)`
+/// - `dbg`: calls `println!("{:?}", val)`
+/// - `sdbg`: calls `println!("{:#?}", val)`
+macro_rules! debug_print_format {
+    ($val:expr) => {{
+        $val.print();
+    }};
+    ($val:expr ; verbose) => {{
+        $val.print_verbose();
+    }};
+    ($val:expr ; fmt) => {{
+        println!("{}", $val);
+    }};
+    ($val:expr ; dbg) => {{
+        println!("{:?}", $val);
+    }};
+    ($val:expr ; sdbg) => {{
+        println!("{:#?}", $val);
+    }};
+}
+
+pub(crate) use debug_print_format;
+
+/// Print formatter for debugging. Allows a few different forms:
+///
+/// `(msg `s`)`                        as println!(s);
+/// `(name => val [; fmt])`            as "name: " + debug_fprint_ormat!(vall fmt)
+/// `(opt name => val [; fmt])`        as "name: " + "Some " debug_print_format!(val; fmt) or "None"
+/// `(lines name => val [; fmt]) ` as "name: " + for n in val { debug_print_format!(n; fmt) }
+///
+/// See `debug_print_format` for different `fmt` options.
+macro_rules! debug_print_internal {
+    () => {};
+    (($name:expr => $val:expr $(; $fmt:ident)?)) => {
+        {
+        print!("{}: ", $name);
+        crate::shared::debug_print_format!($val $(; $fmt)*);
+        }
+    };
+    ((opt $name:expr => $val:expr $(; $fmt:ident)?)) => {
+        {
+        print!("{}: ", $name);
+        match $val {
+            Some(value) => { print!("Some "); crate::shared::debug_print_format!(value $(; $fmt)*); }
+            None => { print!("None"); }
+        }
+        }
+    };
+    ((lines $name:expr => $val:expr $(; $fmt:ident)?)) => { {
+        println!("\n{}: ", $name);
+        for n in $val {
+            crate::shared::debug_print_format!(n $(; $fmt)*);
+        }
+    }
+    };
+    ($fst:tt, $($rest:tt),+) => { {
+        crate::shared::debug_print_internal!($fst);
+        crate::shared::debug_print_internal!($($rest),+);
+    }
+    };
+}
+
+pub(crate) use debug_print_internal;
+
+/// Macro for a small DSL for compactling printing debug information based on the provided flag.
+///
+///  ```
+///  debug_print!(
+///      context.debug_flags.match_compilation,
+///      ("subject" => subject),
+///      (opt "flag" => flag; dbg)
+///      (lines "arms" => &arms.value; verbose)
+///  );
+///  ```
+///
+/// See `debug_print_internal` for the available syntax.
+///
+/// Feature gates the print and check against the `debug_assertions` feature.
+macro_rules! debug_print {
+    ($flag:expr, $($arg:tt),+) => {
+        #[cfg(debug_assertions)]
+        if $flag {
+            println!("\n------------------");
+            crate::shared::debug_print_internal!($($arg),+)
+        }
+    }
+}
+
+pub(crate) use debug_print;

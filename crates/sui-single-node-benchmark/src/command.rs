@@ -110,6 +110,27 @@ pub enum WorkloadKind {
             Otherwise `v` shared objects will be created and each transaction will use these `v` shared objects."
         )]
         num_shared_objects: usize,
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "How many NFTs to mint/transfer during the transaction.\
+            If 0, no NFTs will be minted.\
+            Otherwise `v` NFTs with the specified size will be created and transferred to the sender"
+        )]
+        num_mints: u16,
+        #[arg(
+            long,
+            default_value_t = 32,
+            help = "Size of the Move contents of the NFT to be minted, in bytes.\
+            Defaults to 32 bytes (i.e., NFT with ID only)."
+        )]
+        nft_size: u16,
+        #[arg(
+            long,
+            help = "If true, call a single batch_mint Move function.\
+            Otherwise, batch via a PTB with multiple commands"
+        )]
+        use_batch_mint: bool,
     },
     Publish {
         #[arg(

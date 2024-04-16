@@ -356,7 +356,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
-                self.context.parameters.anemo.excessive_message_size(),
+                self.context.parameters.anemo.excessive_message_size,
             )))
             .layer(SetResponseHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -372,7 +372,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
-                self.context.parameters.anemo.excessive_message_size(),
+                self.context.parameters.anemo.excessive_message_size,
             )))
             .layer(SetRequestHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -637,64 +637,16 @@ impl Drop for MetricsResponseHandler {
 mod test {
     use std::{sync::Arc, time::Duration};
 
-    use async_trait::async_trait;
-    use bytes::Bytes;
-    use consensus_config::AuthorityIndex;
     use parking_lot::Mutex;
     use tokio::time::sleep;
 
     use crate::{
-        block::{BlockRef, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         context::Context,
-        error::ConsensusResult,
         network::{
-            anemo_network::AnemoManager, BlockStream, NetworkClient, NetworkManager, NetworkService,
+            anemo_network::AnemoManager, test_network::TestService, NetworkClient, NetworkManager,
         },
-        Round,
     };
-
-    struct TestService {
-        handle_send_block: Vec<(AuthorityIndex, Bytes)>,
-        handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
-    }
-
-    impl TestService {
-        pub(crate) fn new() -> Self {
-            Self {
-                handle_send_block: Vec::new(),
-                handle_fetch_blocks: Vec::new(),
-            }
-        }
-    }
-
-    #[async_trait]
-    impl NetworkService for Mutex<TestService> {
-        async fn handle_send_block(
-            &self,
-            peer: AuthorityIndex,
-            block: Bytes,
-        ) -> ConsensusResult<()> {
-            self.lock().handle_send_block.push((peer, block));
-            Ok(())
-        }
-
-        async fn handle_subscribe_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            _last_received: Round,
-        ) -> ConsensusResult<BlockStream> {
-            unimplemented!()
-        }
-
-        async fn handle_fetch_blocks(
-            &self,
-            peer: AuthorityIndex,
-            block_refs: Vec<BlockRef>,
-        ) -> ConsensusResult<Vec<Bytes>> {
-            self.lock().handle_fetch_blocks.push((peer, block_refs));
-            Ok(vec![])
-        }
-    }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn anemo_send_block() {

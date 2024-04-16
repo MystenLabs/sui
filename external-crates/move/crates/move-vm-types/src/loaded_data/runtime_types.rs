@@ -245,10 +245,9 @@ impl Type {
             Struct(_) => Self::LEGACY_BASE_MEMORY_SIZE,
             StructInstantiation(struct_inst) => {
                 let (_, tys) = &**struct_inst;
-                tys
-                    .iter()
+                tys.iter()
                     .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size())
-            },
+            }
         }
     }
 

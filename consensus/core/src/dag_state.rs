@@ -327,7 +327,10 @@ impl DagState {
     }
 
     /// Returns cached recent blocks from the specified authority.
-    /// Blocks returned is limited by both the `start` round, and if the blocks are cached.
+    /// Blocks returned are limited to round >= `start`, and cached.
+    /// NOTE: caller should not assume returned blocks are always chained.
+    /// "Disconnected" blocks can be returned when there are byzantine blocks,
+    /// or when received blocks are not deduped.
     pub(crate) fn get_cached_blocks(
         &self,
         authority: AuthorityIndex,

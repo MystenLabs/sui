@@ -41,6 +41,9 @@ impl Workload {
                 num_dynamic_fields,
                 computation,
                 num_shared_objects,
+                num_mints,
+                nft_size,
+                use_batch_mint,
             } => {
                 let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 path.extend(["move_package"]);
@@ -58,6 +61,9 @@ impl Workload {
                     *computation,
                     root_objects,
                     shared_objects,
+                    *num_mints,
+                    *nft_size,
+                    *use_batch_mint,
                 ))
             }
             WorkloadKind::Publish {

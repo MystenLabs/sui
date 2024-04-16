@@ -60,6 +60,7 @@ const SINGLETON_KEY: u64 = 0;
 //    partial signatures for it.
 pub struct RandomnessManager {
     epoch_store: Weak<AuthorityPerEpochStore>,
+    epoch: EpochId,
     consensus_adapter: Arc<ConsensusAdapter>,
     network_handle: randomness::Handle,
     authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
@@ -190,6 +191,7 @@ impl RandomnessManager {
         // Load existing data from store.
         let mut rm = RandomnessManager {
             epoch_store: epoch_store_weak,
+            epoch: committee.epoch(),
             consensus_adapter,
             network_handle: network_handle.clone(),
             authority_info,
@@ -570,12 +572,15 @@ impl RandomnessManager {
     pub fn reporter(&self) -> RandomnessReporter {
         RandomnessReporter {
             epoch_store: self.epoch_store.clone(),
+            epoch: self.epoch,
             network_handle: self.network_handle.clone(),
         }
     }
 
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
-        self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)
+        self.epoch_store
+            .upgrade()
+            .ok_or(SuiError::EpochEnded(self.epoch))
     }
 
     fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
@@ -622,6 +627,7 @@ impl RandomnessManager {
 #[derive(Clone)]
 pub struct RandomnessReporter {
     epoch_store: Weak<AuthorityPerEpochStore>,
+    epoch: EpochId,
     network_handle: randomness::Handle,
 }
 
@@ -630,7 +636,10 @@ impl RandomnessReporter {
     /// durably committed in a checkpoint. This completes the process of generating randomness for
     /// the round.
     pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
-        let epoch_store = self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)?;
+        let epoch_store = self
+            .epoch_store
+            .upgrade()
+            .ok_or(SuiError::EpochEnded(self.epoch))?;
         epoch_store
             .tables()?
             .randomness_rounds_pending

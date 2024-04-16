@@ -6,7 +6,6 @@ use async_graphql::*;
 use move_core_types::annotated_value::{self as A, MoveStruct};
 use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
-use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 use super::cursor::{Page, Target};
@@ -16,7 +15,7 @@ use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
 use crate::consistency::{build_objects_query, consistent_range, View};
-use crate::context_data::package_cache::PackageCache;
+use crate::data::package_resolver::PackageResolver;
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::filter;
@@ -58,7 +57,7 @@ impl DynamicField {
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
     /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
-        let resolver: &Resolver<PackageCache> = ctx
+        let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
@@ -116,7 +115,7 @@ impl DynamicField {
             .extend()?;
             Ok(obj.map(DynamicFieldValue::MoveObject))
         } else {
-            let resolver: &Resolver<PackageCache> = ctx
+            let resolver: &PackageResolver = ctx
                 .data()
                 .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
                 .extend()?;

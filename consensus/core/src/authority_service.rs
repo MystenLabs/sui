@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    pin::{pin, Pin},
-    sync::Arc,
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use futures::{ready, stream, task, Future as _, Stream, StreamExt};
+use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
 use tokio::{sync::broadcast, time::sleep};
+use tokio_util::sync::ReusableBoxFuture;
 use tracing::{info, warn};
 
 use crate::{
@@ -33,7 +30,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
-    tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
+    rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
     dag_state: Arc<RwLock<DagState>>,
 }
 
@@ -43,7 +40,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_verifier: Arc<dyn BlockVerifier>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
-        tx_block_broadcaster: broadcast::Sender<VerifiedBlock>,
+        rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         Self {
@@ -51,17 +48,21 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             block_verifier,
             synchronizer,
             core_dispatcher,
-            tx_block_broadcaster,
+            rx_block_broadcaster,
             dag_state,
         }
     }
+}
 
-    /// Handling the block sent from the peer via either unicast RPC or subscription stream.
-    pub(crate) async fn handle_received_block(
+#[async_trait]
+impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
+    async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
         serialized_block: Bytes,
     ) -> ConsensusResult<()> {
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+
         // TODO: dedup block verifications, here and with fetched blocks.
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
@@ -72,12 +73,13 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
+                .with_label_values(&[peer_hostname, "send_block"])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
         if let Err(e) = self.block_verifier.verify(&signed_block) {
@@ -85,7 +87,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
+                .with_label_values(&[peer_hostname, "send_block"])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -99,6 +101,12 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .saturating_sub(timestamp_utc_ms()),
         );
         if forward_time_drift > self.context.parameters.max_forward_time_drift {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_future_blocks
+                .with_label_values(&[&peer_hostname])
+                .inc();
             return Err(ConsensusError::BlockTooFarInFuture {
                 block_timestamp: verified_block.timestamp_ms(),
                 forward_time_drift,
@@ -111,17 +119,23 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[&peer.to_string()])
+                .with_label_values(&[peer_hostname])
                 .inc_by(forward_time_drift.as_millis() as u64);
             sleep(forward_time_drift).await;
         }
+
+        self.context
+            .metrics
+            .node_metrics
+            .verified_blocks
+            .with_label_values(&[&peer_hostname])
+            .inc();
 
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
-
         if !missing_ancestors.is_empty() {
             // schedule the fetching of them from this peer
             if let Err(err) = self
@@ -134,17 +148,6 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         }
 
         Ok(())
-    }
-}
-
-#[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
-    async fn handle_send_block(
-        &self,
-        peer: AuthorityIndex,
-        serialized_block: Bytes,
-    ) -> ConsensusResult<()> {
-        self.handle_received_block(peer, serialized_block).await
     }
 
     async fn handle_subscribe_blocks(
@@ -162,11 +165,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .into_iter()
                 .map(|block| block.serialized().clone()),
         );
-        let broadcasted_blocks = BroadcastedBlockStream {
-            peer,
-            receiver: self.tx_block_broadcaster.subscribe(),
-        };
-        Ok(Box::pin(missed_blocks.chain(broadcasted_blocks)))
+        let broadcasted_blocks =
+            BroadcastedBlockStream::new(peer, self.rx_block_broadcaster.resubscribe());
+        // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
+        Ok(Box::pin(missed_blocks.chain(
+            broadcasted_blocks.map(|block| block.serialized().clone()),
+        )))
     }
 
     async fn handle_fetch_blocks(
@@ -208,36 +212,70 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 }
 
 /// Each broadcasted block stream wraps a broadcast receiver for blocks.
-/// It yields serialized blocks that are broadcasted after the stream is created.
-struct BroadcastedBlockStream {
+/// It yields blocks that are broadcasted after the stream is created.
+pub(crate) type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
+
+/// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
+/// this tolerates lags with only logging, without yielding errors.
+pub(crate) struct BroadcastStream<T> {
     peer: AuthorityIndex,
-    receiver: broadcast::Receiver<VerifiedBlock>,
+    // Stores the receiver across poll_next() calls.
+    inner: ReusableBoxFuture<
+        'static,
+        (
+            Result<T, broadcast::error::RecvError>,
+            broadcast::Receiver<T>,
+        ),
+    >,
 }
 
-impl Stream for BroadcastedBlockStream {
-    type Item = Bytes;
+impl<T: 'static + Clone + Send> BroadcastStream<T> {
+    pub fn new(peer: AuthorityIndex, rx: broadcast::Receiver<T>) -> Self {
+        Self {
+            peer,
+            inner: ReusableBoxFuture::new(make_recv_future(rx)),
+        }
+    }
+}
+
+impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
+    type Item = T;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
         cx: &mut task::Context<'_>,
     ) -> task::Poll<Option<Self::Item>> {
         let peer = self.peer;
-        loop {
-            let block = match ready!(pin!(self.receiver.recv()).poll(cx)) {
-                Ok(block) => Some(block.serialized().clone()),
+        let maybe_item = loop {
+            let (result, rx) = ready!(self.inner.poll(cx));
+            self.inner.set(make_recv_future(rx));
+            match result {
+                Ok(item) => break Some(item),
                 Err(broadcast::error::RecvError::Closed) => {
                     info!("Block BroadcastedBlockStream {} closed", peer);
-                    None
+                    break None;
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    info!(
-                        "Block BroadcastedBlockStream {} lagged by {n} messages",
-                        peer
+                    warn!(
+                        "Block BroadcastedBlockStream {} lagged by {} messages",
+                        peer, n
                     );
                     continue;
                 }
-            };
-            return task::Poll::Ready(block);
-        }
+            }
+        };
+        task::Poll::Ready(maybe_item)
     }
 }
+
+async fn make_recv_future<T: Clone>(
+    mut rx: broadcast::Receiver<T>,
+) -> (
+    Result<T, broadcast::error::RecvError>,
+    broadcast::Receiver<T>,
+) {
+    let result = rx.recv().await;
+    (result, rx)
+}
+
+// TODO: add a unit test for BroadcastStream.

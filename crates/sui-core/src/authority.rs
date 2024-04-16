@@ -267,6 +267,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
+    pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -642,6 +643,11 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            consensus_handler_deferred_transactions: register_int_counter_with_registry!(
+                "consensus_handler_deferred_transactions",
+                "Number of transactions deferred by consensus handler",
+                registry,
+            ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
@@ -820,8 +826,8 @@ impl AuthorityState {
         self.committee_store.clone()
     }
 
-    pub fn max_txn_age_in_queue(&self) -> Duration {
-        self.authority_overload_config.max_txn_age_in_queue
+    pub fn overload_config(&self) -> &AuthorityOverloadConfig {
+        &self.authority_overload_config
     }
 
     pub fn get_epoch_state_commitments(
@@ -987,7 +993,7 @@ impl AuthorityState {
             self.check_authority_overload(tx_data)?;
         }
         self.transaction_manager
-            .check_execution_overload(self.max_txn_age_in_queue(), tx_data)?;
+            .check_execution_overload(self.overload_config(), tx_data)?;
         consensus_adapter.check_consensus_overload()?;
         Ok(())
     }
@@ -1022,6 +1028,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
+        // NOTE: the fullnode can change epoch during local execution. It should not cause
+        // data inconsistency, but can be problematic for certain tests.
+        // The check below mitigates the issue, but it is not a fundamental solution to
+        // avoid race between local execution and reconfiguration.
+        if self.epoch_store.load().epoch() != epoch_store.epoch() {
+            return Err(SuiError::EpochEnded(epoch_store.epoch()));
+        }
         let _metrics_guard = self
             .metrics
             .execute_certificate_with_effects_latency
@@ -1212,7 +1225,7 @@ impl AuthorityState {
 
     fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         self.execution_cache
-            .check_owned_object_locks_exist(owned_object_refs)
+            .check_owned_objects_are_live(owned_object_refs)
     }
 
     /// This function captures the required state to debug a forked transaction.
@@ -1654,6 +1667,36 @@ impl AuthorityState {
             });
         }
 
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
+            .await
+    }
+
+    pub async fn dry_exec_transaction_for_benchmark(
+        &self,
+        transaction: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
+            .await
+    }
+
+    async fn dry_exec_transaction_impl(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        transaction: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
         // Cheap validity checks for a transaction, including input size limits.
         transaction.check_version_supported(epoch_store.protocol_config())?;
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;

@@ -50,6 +50,7 @@ use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
+use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
@@ -786,14 +787,12 @@ impl AuthorityEpochTables {
     pub fn write_transaction_locks(
         &self,
         transaction: VerifiedSignedTransaction,
-        locks_to_write: impl IntoIterator<Item = (ObjectRef, LockDetails)>,
+        locks_to_write: impl Iterator<Item = (ObjectRef, LockDetails)>,
     ) -> SuiResult {
         let mut batch = self.owned_object_locked_transactions.batch();
         batch.insert_batch(
             &self.owned_object_locked_transactions,
-            locks_to_write
-                .into_iter()
-                .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+            locks_to_write.map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
         )?;
         batch.insert_batch(
             &self.signed_transactions,
@@ -958,13 +957,16 @@ impl AuthorityPerEpochStore {
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         match self.tables.load_full() {
             Some(tables) => Ok(tables),
-            None => Err(SuiError::EpochEnded),
+            None => Err(SuiError::EpochEnded(self.epoch())),
         }
     }
 
+    // Ideally the epoch tables handle should have the same lifetime as the outer AuthorityPerEpochStore,
+    // and this function should be unnecesary. But unfortunately, Arc<AuthorityPerEpochStore> outlives the
+    // epoch significantly right now, so we need to manually release the tables to release its memory usage.
     pub fn release_db_handles(&self) {
-        // When force releasing DB handle is no longer needed, it will still be useful
-        // to make sure AuthorityPerEpochStore is not used after the next epoch starts.
+        // When the logic to release DB handles becomes obsolete, it may still be useful
+        // to make sure AuthorityEpochTables is not used after the next epoch starts.
         self.tables.store(None);
     }
 
@@ -1375,7 +1377,14 @@ impl AuthorityPerEpochStore {
     /// Deletes one pending certificate.
     #[instrument(level = "trace", skip_all)]
     pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables()?.pending_execution.remove(digest)?;
+        let tables = match self.tables() {
+            Ok(tables) => tables,
+            // After Epoch ends, it is no longer necessary to remove pending transactions
+            // because the table will not be used anymore and be deleted eventually.
+            Err(SuiError::EpochEnded(_)) => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        tables.pending_execution.remove(digest)?;
         Ok(())
     }
 
@@ -1466,8 +1475,7 @@ impl AuthorityPerEpochStore {
 
     pub fn object_lock_split_tables_enabled(&self) -> bool {
         self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::ObjectLockSplitTables)
+            .object_lock_split_tables_enabled()
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the
@@ -2436,13 +2444,16 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
         commit_timestamp: TimestampMs,
-        skipped_consensus_txns: &IntCounter,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         // Split transactions into different types for processing.
         let verified_transactions: Vec<_> = transactions
             .into_iter()
             .filter_map(|transaction| {
-                self.verify_consensus_transaction(transaction, skipped_consensus_txns)
+                self.verify_consensus_transaction(
+                    transaction,
+                    &authority_metrics.skipped_consensus_txns,
+                )
             })
             .collect();
         let mut system_transactions = Vec::with_capacity(verified_transactions.len());
@@ -2467,7 +2478,7 @@ impl AuthorityPerEpochStore {
         }
         let mut batch = self
             .db_batch()
-            .expect("Consensus should not be processed past end of epoch");
+            .expect("Failed to create DBBatch for processing consensus transactions");
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
@@ -2623,6 +2634,7 @@ impl AuthorityPerEpochStore {
                 randomness_manager.as_deref_mut(),
                 dkg_closed,
                 generate_randomness,
+                authority_metrics,
             )
             .await?;
         self.finish_consensus_certificate_process_with_batch(
@@ -2781,7 +2793,7 @@ impl AuthorityPerEpochStore {
         transactions: Vec<SequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ExecutionCacheRead,
-        skipped_consensus_txns: &IntCounter,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         self.process_consensus_transactions_and_commit_boundary(
             transactions,
@@ -2790,7 +2802,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             self.get_highest_pending_checkpoint_height() + 1,
             0,
-            skipped_consensus_txns,
+            authority_metrics,
         )
         .await
     }
@@ -2827,6 +2839,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_closed: bool,
         generate_randomness: bool,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
@@ -2925,9 +2938,14 @@ impl AuthorityPerEpochStore {
         }
 
         let commit_has_deferred_txns = !deferred_txns.is_empty();
+        let mut total_deferred_txns = 0;
         for (key, txns) in deferred_txns.into_iter() {
+            total_deferred_txns += txns.len();
             self.defer_transactions(batch, key, txns)?;
         }
+        authority_metrics
+            .consensus_handler_deferred_transactions
+            .inc_by(total_deferred_txns as u64);
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {

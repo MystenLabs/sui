@@ -21,8 +21,12 @@ use crate::{
     dag_state::DagState,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager},
+    network::{
+        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
+        NetworkManager,
+    },
     storage::rocksdb_store::RocksDBStore,
+    subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     CommitConsumer,
@@ -123,8 +127,10 @@ where
     synchronizer: Arc<SynchronizerHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    // Not created when using block streaming.
+    // Only one of broadcaster and subscriber gets created, depending on
+    // if streaming is supported.
     broadcaster: Option<Broadcaster>,
+    subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
 }
 
@@ -163,17 +169,21 @@ where
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
-        let tx_block_broadcast = core_signals.block_broadcast_sender();
 
         let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
-        // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster = Some(Broadcaster::new(
-            context.clone(),
-            network_client.clone(),
-            &signals_receivers,
-        ));
+        // REQUIRED: Broadcaster must be created before Core, to start listening on the
+        // broadcast channel in order to not miss blocks and cause test failures.
+        let broadcaster = if N::Client::SUPPORT_STREAMING {
+            None
+        } else {
+            Some(Broadcaster::new(
+                context.clone(),
+                network_client.clone(),
+                &signals_receivers,
+            ))
+        };
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -206,7 +216,7 @@ where
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
         let synchronizer = Synchronizer::start(
-            network_client,
+            network_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
@@ -217,9 +227,27 @@ where
             block_verifier,
             synchronizer.clone(),
             core_dispatcher,
-            tx_block_broadcast,
-            dag_state,
+            signals_receivers.block_broadcast_receiver(),
+            dag_state.clone(),
         ));
+
+        let subscriber = if N::Client::SUPPORT_STREAMING {
+            let s = Subscriber::new(
+                context.clone(),
+                network_client,
+                network_service.clone(),
+                dag_state,
+            );
+            for (peer, _) in context.committee.authorities() {
+                if peer != context.own_index {
+                    s.subscribe(peer);
+                }
+            }
+            Some(s)
+        } else {
+            None
+        };
+
         network_manager
             .install_service(network_keypair, network_service)
             .await;
@@ -232,6 +260,7 @@ where
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
+            subscriber,
             network_manager,
         }
     }
@@ -242,13 +271,20 @@ where
             self.start_time.elapsed()
         );
 
-        self.network_manager.stop().await;
-        if let Some(mut broadcaster) = self.broadcaster {
+        // First shutdown components calling into Core.
+        self.synchronizer.stop().await;
+        self.leader_timeout_handle.stop().await;
+        // Shutdown Core to stop block productions and broadcast.
+        // When using streaming, all subscribers to broadcasted blocks stop after this.
+        self.core_thread_handle.stop().await;
+        if let Some(mut broadcaster) = self.broadcaster.take() {
             broadcaster.stop();
         }
-        self.core_thread_handle.stop().await;
-        self.leader_timeout_handle.stop().await;
-        self.synchronizer.stop().await;
+        // Stop outgoing long lived streams before stopping network server.
+        if let Some(subscriber) = self.subscriber.take() {
+            subscriber.stop();
+        }
+        self.network_manager.stop().await;
 
         self.context
             .metrics
@@ -287,7 +323,7 @@ mod tests {
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         error::ConsensusResult,
-        network::{BlockStream, NetworkClient},
+        network::{BlockStream, NetworkClient, NetworkService as _},
         storage::mem_store::MemStore,
         transaction::NoopTransactionVerifier,
     };
@@ -412,7 +448,7 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
-        let (tx_block_broadcast, _rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
@@ -427,7 +463,7 @@ mod tests {
             block_verifier,
             synchronizer,
             core_dispatcher.clone(),
-            tx_block_broadcast,
+            rx_block_broadcast,
             dag_state,
         ));
 
@@ -444,7 +480,7 @@ mod tests {
         let serialized = input_block.serialized().clone();
         tokio::spawn(async move {
             service
-                .handle_received_block(context.committee.to_authority_index(0).unwrap(), serialized)
+                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
                 .await
                 .unwrap();
         });
