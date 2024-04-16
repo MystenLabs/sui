@@ -706,21 +706,3 @@ impl StateAccumulatorV2 {
         accumulate_effects(&*self.store, effects, protocol_config)
     }
 }
-
-pub fn accumulate_live_object_iter(iter: Box<dyn Iterator<Item = LiveObject> + '_>) -> Accumulator {
-    let mut acc = Accumulator::default();
-    for live_object in iter {
-        match live_object {
-            LiveObject::Normal(object) => {
-                acc.insert(object.compute_object_reference().2);
-            }
-            LiveObject::Wrapped(key) => {
-                acc.insert(
-                    bcs::to_bytes(&WrappedObject::new(key.0, key.1))
-                        .expect("Failed to serialize WrappedObject"),
-                );
-            }
-        }
-    }
-    acc
-}

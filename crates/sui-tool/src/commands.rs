@@ -6,9 +6,8 @@ use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
-    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, 
-    ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
-    VerboseObjectOutput,
+    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
 };
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};

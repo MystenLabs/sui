@@ -861,8 +861,8 @@ pub async fn download_formal_snapshot(
     verify: SnapshotVerifyMode,
 ) -> Result<(), anyhow::Error> {
     eprintln!(
-        "Beginning formal snapshot restore to end of epoch {}, network: {:?}",
-        epoch, network,
+        "Beginning formal snapshot restore to end of epoch {}, network: {:?}, verification mode: {:?}",
+        epoch, network, verify,
     );
     let path = path.join("staging").to_path_buf();
     if path.exists() {
@@ -906,6 +906,7 @@ pub async fn download_formal_snapshot(
     // TODO if verify is false, we should skip generating these and
     // not pass in a channel to the reader
     let (sender, mut receiver) = mpsc::channel(num_parallel_downloads);
+    let m_clone = m.clone();
 
     let snapshot_handle = tokio::spawn(async move {
         let local_store_config = ObjectStoreConfig {
@@ -919,7 +920,7 @@ pub async fn download_formal_snapshot(
             &local_store_config,
             usize::MAX,
             NonZeroUsize::new(num_parallel_downloads).unwrap(),
-            m,
+            m_clone,
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
@@ -930,7 +931,9 @@ pub async fn download_formal_snapshot(
         Ok::<(), anyhow::Error>(())
     });
     let mut root_accumulator = Accumulator::default();
-    while let Some(partial_acc) = receiver.recv().await {
+    let mut num_live_objects = 0;
+    while let Some((partial_acc, num_objects)) = receiver.recv().await {
+        num_live_objects += num_objects;
         root_accumulator.union(&partial_acc);
     }
     summaries_handle
@@ -1002,6 +1005,8 @@ pub async fn download_formal_snapshot(
         committee_store,
         network,
         verify == SnapshotVerifyMode::Strict,
+        num_live_objects,
+        m,
     )
     .await?;
 
