@@ -363,7 +363,7 @@ impl ServerBuilder {
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore(reader.clone());
+        let package_store = DbPackageStore::new(db.clone());
         let package_cache = PackageStoreWithLruCache::new(package_store);
         builder.db_reader = Some(db.clone());
 
