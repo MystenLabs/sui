@@ -255,7 +255,7 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_transaction_execution(
         &self,
-        mut transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<CertifiedTransaction>,
         print_sample_tx: bool,
     ) {
         if print_sample_tx {
@@ -305,7 +305,7 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_transaction_execution_in_memory(
         &self,
-        mut transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<CertifiedTransaction>,
         print_sample_tx: bool,
     ) {
         if print_sample_tx {
@@ -373,7 +373,7 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_checkpoint_executor(
         &self,
-        mut transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<CertifiedTransaction>,
         checkpoint_size: usize,
     ) {
         self.execute_sample_transaction(transactions[0].clone())
