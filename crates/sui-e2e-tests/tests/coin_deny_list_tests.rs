@@ -36,7 +36,11 @@ async fn test_coin_deny_list_creation() {
                 .coin_deny_list_state_exists());
         });
     }
-    test_cluster.wait_for_epoch_all_nodes(2).await;
+    test_cluster
+        .wait_for_all_nodes_upgrade_to_min_version(35)
+        .await;
+    // Need to wait for one more epoch change to make sure that deny list state is initiated.
+    test_cluster.wait_for_next_epoch_all_nodes().await;
     let mut prev_tx = None;
     for handle in test_cluster.all_node_handles() {
         handle.with(|node| {
@@ -88,7 +92,7 @@ async fn test_coin_deny_list_creation() {
         tx.data.transaction(),
         SuiTransactionBlockKind::EndOfEpochTransaction(_)
     ));
-    test_cluster.wait_for_epoch_all_nodes(3).await;
+    test_cluster.wait_for_next_epoch_all_nodes().await;
     // Check that we are not re-creating the same object again.
     for handle in test_cluster.all_node_handles() {
         handle.with(|node| {

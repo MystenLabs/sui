@@ -433,6 +433,16 @@ impl TestCluster {
             .expect("timed out waiting for reconfiguration to complete");
     }
 
+    pub async fn wait_for_next_epoch_all_nodes(&self) {
+        let current_epoch = self
+            .all_node_handles()
+            .iter()
+            .map(|node| node.state().epoch_store_for_testing().epoch())
+            .max()
+            .unwrap();
+        self.wait_for_epoch_all_nodes(current_epoch + 1).await;
+    }
+
     /// Upgrade the network protocol version, by restarting every validator with a new
     /// supported versions.
     /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
@@ -465,6 +475,25 @@ impl TestCluster {
                     .protocol_version()
                     .as_u64()
                     != protocol_version
+                {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            })
+            .await;
+        }
+    }
+
+    /// Wait for all nodes in the network to upgrade to at least `min_protocol_version`.
+    pub async fn wait_for_all_nodes_upgrade_to_min_version(&self, min_protocol_version: u64) {
+        for h in self.all_node_handles() {
+            h.with_async(|node| async {
+                while node
+                    .state()
+                    .epoch_store_for_testing()
+                    .epoch_start_state()
+                    .protocol_version()
+                    .as_u64()
+                    < min_protocol_version
                 {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
