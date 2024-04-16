@@ -8,7 +8,6 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,

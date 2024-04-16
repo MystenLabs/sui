@@ -7,10 +7,7 @@ pub mod layout;
 pub mod module_cache;
 
 use crate::dependency_graph::DependencyGraph;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CompiledModule, SignatureToken, StructHandleIndex},
-};
+use move_binary_format::file_format::{CompiledModule, SignatureToken, StructHandleIndex};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };

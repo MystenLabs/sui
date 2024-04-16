@@ -4,7 +4,6 @@
 
 use crate::support::dummy_procedure_module;
 use move_binary_format::{
-    access::ModuleAccess,
     errors::PartialVMResult,
     file_format::{Bytecode, CompiledModule, FunctionDefinitionIndex, TableIndex},
 };

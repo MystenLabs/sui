@@ -6,7 +6,6 @@
 
 use crate::absint::{AbstractDomain, JoinResult};
 use move_binary_format::{
-    access::ModuleAccess,
     binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},

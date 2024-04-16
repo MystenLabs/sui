@@ -19,7 +19,6 @@ use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use getrandom::getrandom;
 use module_generation::generate_module;
 use move_binary_format::{
-    access::ModuleAccess,
     errors::VMError,
     file_format::{
         AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken, StructHandleIndex,
@@ -417,7 +416,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
 }
 
 pub fn abilities(
-    module: &impl ModuleAccess,
+    module: &CompiledModule,
     ty: &SignatureToken,
     constraints: &[AbilitySet],
 ) -> AbilitySet {

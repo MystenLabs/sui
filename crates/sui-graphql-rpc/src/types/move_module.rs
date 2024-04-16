@@ -3,7 +3,6 @@
 
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use move_binary_format::access::ModuleAccess;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 

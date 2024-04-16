@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    access::ModuleAccess,
     errors::{
         bounds_error, offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
         PartialVMError, PartialVMResult,

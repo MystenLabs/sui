@@ -5,7 +5,6 @@ use anyhow::{anyhow, bail, ensure};
 use colored::Colorize;
 use core::fmt;
 use futures::future;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_compiler::editions::{Edition, Flavor};

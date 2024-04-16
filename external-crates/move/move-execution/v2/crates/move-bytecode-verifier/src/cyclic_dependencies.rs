@@ -4,7 +4,6 @@
 
 //! This module contains verification of usage of dependencies for modules
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::CompiledModule,
 };

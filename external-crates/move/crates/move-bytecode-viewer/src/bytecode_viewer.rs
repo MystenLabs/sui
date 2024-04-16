@@ -4,10 +4,7 @@
 
 #![forbid(unsafe_code)]
 use crate::interfaces::LeftScreen;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CodeOffset, CompiledModule, FunctionDefinitionIndex},
-};
+use move_binary_format::file_format::{CodeOffset, CompiledModule, FunctionDefinitionIndex};
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use regex::Regex;

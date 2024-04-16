@@ -17,7 +17,6 @@ use crate::{
     loop_summary::{LoopPartition, LoopSummary},
 };
 use move_binary_format::{
-    access::ModuleAccess,
     binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{CodeOffset, CodeUnit, FunctionDefinition, FunctionDefinitionIndex},

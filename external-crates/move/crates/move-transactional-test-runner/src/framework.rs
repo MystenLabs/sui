@@ -11,7 +11,7 @@ use crate::tasks::{
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use clap::Parser;
-use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::{
     address::ParsedAddress,

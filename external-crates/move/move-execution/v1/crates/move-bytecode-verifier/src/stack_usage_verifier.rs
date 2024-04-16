@@ -10,7 +10,6 @@
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
 use move_binary_format::{
-    access::ModuleAccess,
     binary_views::FunctionView,
     control_flow_graph::{BlockId, ControlFlowGraph},
     errors::{PartialVMError, PartialVMResult},

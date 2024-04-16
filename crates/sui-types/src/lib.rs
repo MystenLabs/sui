@@ -8,7 +8,6 @@
 )]
 
 use base_types::{SequenceNumber, SuiAddress};
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{AbilitySet, SignatureToken};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::resolve_struct;
