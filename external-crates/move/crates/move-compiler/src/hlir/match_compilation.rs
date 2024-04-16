@@ -2259,10 +2259,7 @@ fn find_counterexample(
                     let output = [CounterExample::Struct(
                         datatype_name,
                         is_positional,
-                        names
-                            .into_iter()
-                            .zip(ctor_args)
-                            .collect::<Vec<_>>(),
+                        names.into_iter().zip(ctor_args).collect::<Vec<_>>(),
                     )]
                     .into_iter()
                     .chain(counterexample)

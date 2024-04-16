@@ -537,7 +537,9 @@ impl<'env> Context<'env> {
                 assert!(self.env.has_errors());
                 None
             }
-            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _) | ResolvedType::Hole) =>{
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
                 let (rtloc, rtmsg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
@@ -1563,9 +1565,10 @@ fn positional_field_name(loc: Loc, idx: usize) -> Field {
 fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFields {
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
-        E::StructFields::Named(em) => {
-            N::StructFields::Defined(false, em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))))
-        }
+        E::StructFields::Named(em) => N::StructFields::Defined(
+            false,
+            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))),
+        ),
         E::StructFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
