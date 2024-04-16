@@ -228,8 +228,10 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         start: CommitIndex,
         end: CommitIndex,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        // start and end are inclusive.
-        let mut commits = self.store.scan_commits(start..(end + 1))?;
+        // Compute an exclusive end index and bound the maximum number of commits scanned.
+        let exclusive_end =
+            (end + 1).min(start + self.context.parameters.commit_sync_batch_size as CommitIndex);
+        let mut commits = self.store.scan_commits(start..exclusive_end)?;
         let mut certifier_block_refs = vec![];
         'commit: while let Some(c) = commits.last() {
             let index = c.index();

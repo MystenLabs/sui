@@ -106,7 +106,7 @@ pub enum ConsensusError {
     NoCommitReceived { peer: AuthorityIndex },
 
     #[error(
-        "Received unexpected start commit from peer {peer}: request {start}, received {commit:?}"
+        "Received unexpected start commit from peer {peer}: requested {start}, received {commit:?}"
     )]
     UnexpectedStartCommit {
         peer: AuthorityIndex,

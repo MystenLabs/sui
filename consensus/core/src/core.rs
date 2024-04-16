@@ -502,12 +502,11 @@ pub(crate) struct CoreSignals {
 }
 
 impl CoreSignals {
-    // TODO: move to Parameters.
-    const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
-
     pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
-        let (tx_block_broadcast, rx_block_broadcast) =
-            broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
+        // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state.
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<VerifiedBlock>(
+            context.parameters.dag_state_cached_rounds as usize,
+        );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {

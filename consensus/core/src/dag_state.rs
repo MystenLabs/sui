@@ -143,7 +143,7 @@ impl DagState {
             let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
             assert!(
                 existing_blocks.is_empty(),
-                "Block Rejected! Attempted to add block {block} to own slot where \
+                "Block Rejected! Attempted to add block {block:#?} to own slot where \
                 block(s) {existing_blocks:#?} already exists."
             );
         }

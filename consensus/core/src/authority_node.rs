@@ -541,14 +541,21 @@ mod tests {
         #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+        let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
+
         let mut output_receivers = vec![];
         let mut authorities = vec![];
-        for (index, _authority_info) in committee.authorities() {
+
+        let make_authority = |index: AuthorityIndex| {
+            let committee = committee.clone();
             let registry = Registry::new();
 
-            let temp_dir = TempDir::new().unwrap();
+            // Cache less blocks to exercise commit sync.
             let parameters = Parameters {
-                db_path: Some(temp_dir.into_path()),
+                db_path: Some(temp_dirs[index.value()].path().to_path_buf()),
+                dag_state_cached_rounds: 5,
+                commit_sync_parallel_fetches: 3,
+                commit_sync_batch_size: 3,
                 ..Default::default()
             };
             let txn_verifier = NoopTransactionVerifier {};
@@ -558,21 +565,28 @@ mod tests {
 
             let (sender, receiver) = unbounded_channel();
             let commit_consumer = CommitConsumer::new(sender, 0, 0);
-            output_receivers.push(receiver);
 
-            let authority = ConsensusAuthority::start(
-                network_type,
-                index,
-                committee.clone(),
-                parameters,
-                ProtocolConfig::get_for_max_version_UNSAFE(),
-                protocol_keypair,
-                network_keypair,
-                Arc::new(txn_verifier),
-                commit_consumer,
-                registry,
-            )
-            .await;
+            async move {
+                let authority = ConsensusAuthority::start(
+                    network_type,
+                    index,
+                    committee,
+                    parameters,
+                    ProtocolConfig::get_for_max_version_UNSAFE(),
+                    protocol_keypair,
+                    network_keypair,
+                    Arc::new(txn_verifier),
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                (authority, receiver)
+            }
+        };
+
+        for (index, _authority_info) in committee.authorities() {
+            let (authority, receiver) = make_authority(index).await;
+            output_receivers.push(receiver);
             authorities.push(authority);
         }
 
@@ -588,7 +602,7 @@ mod tests {
                 .unwrap();
         }
 
-        for mut receiver in output_receivers {
+        for receiver in &mut output_receivers {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
                 let committed_subdag =
@@ -611,6 +625,18 @@ mod tests {
             }
         }
 
+        // Stop authority 1.
+        let index = committee.to_authority_index(1).unwrap();
+        authorities.remove(index.value()).stop().await;
+        sleep(Duration::from_secs(30)).await;
+
+        // Restart authority 1 and let it run.
+        let (authority, receiver) = make_authority(index).await;
+        output_receivers[index] = receiver;
+        authorities.insert(index.value(), authority);
+        sleep(Duration::from_secs(30)).await;
+
+        // Stop all authorities and exit.
         for authority in authorities {
             authority.stop().await;
         }

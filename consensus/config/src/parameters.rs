@@ -49,8 +49,9 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_parallel_fetches")]
     pub commit_sync_parallel_fetches: usize,
 
-    // Number of commits to fetch in a batch.
-    // Usually should be <= dag_state_cached_rounds.
+    // Number of commits to fetch in a batch, also the maximum number of commits returned per fetch.
+    // If this value is set too small, fetching becomes inefficient.
+    // If this value is set too large, it can result in load imbalance and stragglers.
     #[serde(default = "Parameters::default_commit_sync_batch_size")]
     pub commit_sync_batch_size: u32,
 

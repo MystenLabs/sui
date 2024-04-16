@@ -5,7 +5,7 @@
 //!
 //! During the operation of a committee of authorities for consensus, one or more authorities
 //! can fall behind the quorum in their received and accepted blocks. This can happen due to
-//! network disruptions, host crash, or other reasons. Authories fell behind need to catch up to
+//! network disruptions, host crash, or other reasons. Authorities fell behind need to catch up to
 //! the quorum to be able to vote on the latest leaders. So efficient synchronization is necessary
 //! to minimize the impact of temporary disruptions and maintain smooth operations of the network.
 //!  
@@ -106,22 +106,21 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // Fetched commits and blocks by commit indices.
         let mut fetched_blocks = BTreeMap::<(CommitIndex, CommitIndex), Vec<VerifiedBlock>>::new();
         // The commit index that is the max of local last commit index and highest commit index of blocks sent to Core.
-        let mut sycned_commit_index = inner.dag_state.read().last_commit_index();
+        let mut synced_commit_index = inner.dag_state.read().last_commit_index();
 
         'run: loop {
             tokio::select! {
-                // Periodially, clean up inflight fetches that are no longer needed, and schedule new
-                // fetches if the node is falling behind.
+                // Periodially, schedule new fetches if the node is falling behind.
                 _ = interval.tick() => {
                     let highest_valid_index = inner.highest_commit_monitor.highest_valid_index(&inner.context);
-                    // Update sycned_commit_index periodically to make sure it is no smaller than
+                    // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
-                    sycned_commit_index = sycned_commit_index.max(inner.dag_state.read().last_commit_index());
+                    synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
                     // TODO: cleanup inflight fetches that are no longer needed.
-                    let fetch_after_index = sycned_commit_index.max(highest_scheduled_index.unwrap_or(0));
+                    let fetch_after_index = synced_commit_index.max(highest_scheduled_index.unwrap_or(0));
                     info!(
-                        "Checking to schedule fetches: sycned_commit_index={}, fetch_after_index={}, highest_valid_index={}",
-                        sycned_commit_index, fetch_after_index, highest_valid_index
+                        "Checking to schedule fetches: synced_commit_index={}, fetch_after_index={}, highest_valid_index={}",
+                        synced_commit_index, fetch_after_index, highest_valid_index
                     );
                     // When the node is falling behind, schedule pending fetches which will be executed on later.
                     'pending: for prev_end in (fetch_after_index..=highest_valid_index).step_by(inner.context.parameters.commit_sync_batch_size as usize) {
@@ -154,25 +153,27 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     let (commit_start, commit_end) = (commits.first().unwrap().index(), commits.last().unwrap().index());
                     // Allow returning partial results, and try fetching the rest separately.
                     if commit_end < target_end {
-                        pending_fetches.push_front((commit_end, target_end));
+                        pending_fetches.push_front((commit_end + 1, target_end));
                     }
-                    // Make sure sycned_commit_index is up to date.
-                    sycned_commit_index = sycned_commit_index.max(inner.dag_state.read().last_commit_index());
+                    // Make sure synced_commit_index is up to date.
+                    synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
                     // Only add new blocks if at least some of them are not already committed.
-                    if sycned_commit_index < commit_end {
+                    if synced_commit_index < commit_end {
                         fetched_blocks.insert((commit_start, commit_end), blocks);
                     }
                     // Try to process as many blocks as possible, as long as there is no gap between
                     'fetched: while let Some(((fetched_start, _end), _blocks)) = fetched_blocks.first_key_value() {
                         // Only pop fetched_blocks if there is no gap with blocks already sent to Core.
-                        // Note: start is exclusive and sycned_commit_index is inclusive.
-                        let ((_start, fetched_end), blocks) = if *fetched_start <= sycned_commit_index {
+                        // Note: start, end and synced_commit_index are all inclusive.
+                        let ((_start, fetched_end), blocks) = if *fetched_start <= synced_commit_index + 1 {
                             fetched_blocks.pop_first().unwrap()
                         } else {
+                            // Found gap between earliest fetched block and latest synced block,
+                            // so not sending additional blocks to Core.
                             break 'fetched;
                         };
-                        // Only send blocks that are not already sent to Core.
-                        if fetched_end <= sycned_commit_index {
+                        // Avoid sending to Core a complete batch of duplicated blocks.
+                        if fetched_end <= synced_commit_index {
                             continue 'fetched;
                         }
                         // If core thread cannot handle the incoming blocks, it is ok to block here.
@@ -180,8 +181,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             debug!("Failed to add blocks, shutting down: {}", e);
                             return;
                         }
-                        // Once commits and blocks are sent to Core, rachet up sycned_commit_index
-                        sycned_commit_index = sycned_commit_index.max(fetched_end);
+                        // Once commits and blocks are sent to Core, rachet up synced_commit_index
+                        synced_commit_index = synced_commit_index.max(fetched_end);
                     }
                 }
             }
@@ -227,7 +228,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .set(pending_fetches.len() as i64);
             metrics
                 .commit_sync_highest_index
-                .set(sycned_commit_index as i64);
+                .set(synced_commit_index as i64);
         }
     }
 
@@ -244,16 +245,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
             .commit_sync_fetch_loop_latency
             .start_timer();
         info!(
-            "Starting to fetch commits from index {} (exclusive) to {} ...",
+            "Starting to fetch commits from {} to {} (inclusive) ...",
             start, end
         );
         loop {
             match Self::fetch_once(inner.clone(), fetch_state.clone(), start, end).await {
                 Ok((commits, blocks)) => {
-                    info!(
-                        "Finished fetching commits from index {} (exclusive) to {} ...",
-                        start, end
-                    );
+                    info!("Finished fetching commits from {} to {}", start, end);
                     return (end, commits, blocks);
                 }
                 Err(e) => {
@@ -333,7 +331,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         let mut requests: FuturesOrdered<_> = block_refs
             .chunks(inner.context.parameters.max_blocks_per_fetch)
             .enumerate()
-            .map(|(i, reqeust_block_refs)| {
+            .map(|(i, request_block_refs)| {
                 let i = i as u32;
                 let inner = inner.clone();
                 async move {
@@ -344,7 +342,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         .network_client
                         .fetch_blocks(
                             target_authority,
-                            reqeust_block_refs.to_vec(),
+                            request_block_refs.to_vec(),
                             FETCH_BLOCKS_TIMEOUT,
                         )
                         .await?;
@@ -359,7 +357,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     // Fetched blocks matching the requested block refs are verified, because the
                     // requested block refs come from verified commits.
                     let mut blocks = Vec::new();
-                    for ((requested_block_ref, signed_block), serialized) in reqeust_block_refs
+                    for ((requested_block_ref, signed_block), serialized) in request_block_refs
                         .iter()
                         .zip(signed_blocks.into_iter())
                         .zip(serialized_blocks.into_iter())
@@ -527,8 +525,8 @@ impl<C: NetworkClient> Inner<C> {
 }
 
 struct FetchState {
-    // Tuple of the first time an authority is available to be fetched, authority index and
-    // previous consequtive failures count.
+    // Tuple of the next time the authority is available to be fetched from, authority index and
+    // count of previous consecutive failures fetching from the authority.
     available_authorities: BTreeSet<(Instant, AuthorityIndex, u32)>,
 }
 
