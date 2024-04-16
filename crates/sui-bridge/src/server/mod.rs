@@ -436,7 +436,7 @@ mod tests {
         .unwrap();
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 129,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
             blocklisted_members: vec![pub_key_bytes.clone()],
         });
@@ -449,7 +449,7 @@ mod tests {
 
         let action = BridgeAction::EmergencyAction(EmergencyAction {
             nonce: 55,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             action_type: EmergencyActionType::Pause,
         });
         client.request_sign_bridge_action(action).await.unwrap();
@@ -461,8 +461,8 @@ mod tests {
 
         let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
             nonce: 15,
-            chain_id: BridgeChainId::SuiLocalTest,
-            sending_chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
+            sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 1_000_000_0000, // $1M USD
         });
         client.request_sign_bridge_action(action).await.unwrap();
@@ -474,7 +474,7 @@ mod tests {
 
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000_0000, // $100k USD
         });
@@ -487,7 +487,7 @@ mod tests {
 
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![],
@@ -496,7 +496,7 @@ mod tests {
 
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![12, 34, 56],
@@ -510,7 +510,7 @@ mod tests {
 
         let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
             nonce: 266,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             native: false,
             token_ids: vec![100, 101, 102],
             token_type_names: vec![
@@ -529,7 +529,7 @@ mod tests {
 
         let action = BridgeAction::AddTokensOnEvmAction(crate::types::AddTokensOnEvmAction {
             nonce: 0,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             native: false,
             token_ids: vec![99, 100, 101],
             token_addresses: vec![

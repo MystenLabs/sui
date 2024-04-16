@@ -802,7 +802,7 @@ module bridge::message {
         let update_bridge_limit = create_update_bridge_limit_message(
             chain_ids::sui_custom(), // source chain
             15, // seq_num
-            chain_ids::eth_local_test(),
+            chain_ids::eth_custom(),
             10_000_000_000 // 1M USD
         );
 
@@ -817,7 +817,7 @@ module bridge::message {
 
         let bridge_limit = extract_update_bridge_limit(&update_bridge_limit);
         assert!(bridge_limit.receiving_chain == chain_ids::sui_custom(), 0);
-        assert!(bridge_limit.sending_chain == chain_ids::eth_local_test(), 0);
+        assert!(bridge_limit.sending_chain == chain_ids::eth_custom(), 0);
         assert!(bridge_limit.limit == 10_000_000_000, 0);
     }
 

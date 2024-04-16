@@ -187,12 +187,12 @@ module bridge::limiter {
         );
 
         transfer_limits.insert(
-            chain_ids::get_route(chain_ids::eth_local_test(), chain_ids::sui_testnet()),
+            chain_ids::get_route(chain_ids::eth_custom(), chain_ids::sui_testnet()),
             MAX_TRANSFER_LIMIT
         );
 
         transfer_limits.insert(
-            chain_ids::get_route(chain_ids::eth_local_test(), chain_ids::sui_custom()),
+            chain_ids::get_route(chain_ids::eth_custom(), chain_ids::sui_custom()),
             MAX_TRANSFER_LIMIT
         );
 

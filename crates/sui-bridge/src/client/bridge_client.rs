@@ -432,7 +432,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
-                sui_chain_id: BridgeChainId::SuiDevnet,
+                sui_chain_id: BridgeChainId::SuiCustom,
                 nonce: 1,
                 sui_address: SuiAddress::random_for_testing_only(),
                 eth_chain_id: BridgeChainId::EthSepolia,
@@ -458,7 +458,7 @@ mod tests {
                 eth_chain_id: BridgeChainId::EthSepolia,
                 nonce: 1,
                 eth_address: EthAddress::random(),
-                sui_chain_id: BridgeChainId::SuiDevnet,
+                sui_chain_id: BridgeChainId::SuiCustom,
                 sui_address: SuiAddress::random_for_testing_only(),
                 token_id: TOKEN_ID_USDT,
                 sui_adjusted_amount: 1,
@@ -509,28 +509,28 @@ mod tests {
         );
 
         let action = BridgeAction::EmergencyAction(crate::types::EmergencyAction {
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             nonce: 5,
             action_type: crate::types::EmergencyActionType::Pause,
         });
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
-            "sign/emergency_button/3/5/0",
+            "sign/emergency_button/2/5/0",
         );
 
         let action = BridgeAction::LimitUpdateAction(crate::types::LimitUpdateAction {
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             nonce: 10,
-            sending_chain_id: BridgeChainId::EthLocalTest,
+            sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 100,
         });
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
-            "sign/update_limit/3/10/12/100",
+            "sign/update_limit/2/10/12/100",
         );
 
         let action = BridgeAction::AssetPriceUpdateAction(crate::types::AssetPriceUpdateAction {
-            chain_id: BridgeChainId::SuiDevnet,
+            chain_id: BridgeChainId::SuiCustom,
             nonce: 8,
             token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000_000,
@@ -543,7 +543,7 @@ mod tests {
         let action =
             BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
                 nonce: 123,
-                chain_id: BridgeChainId::EthLocalTest,
+                chain_id: BridgeChainId::EthCustom,
                 proxy_address: EthAddress::repeat_byte(6),
                 new_impl_address: EthAddress::repeat_byte(9),
                 call_data: vec![],
@@ -559,7 +559,7 @@ mod tests {
         let action =
             BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
                 nonce: 123,
-                chain_id: BridgeChainId::EthLocalTest,
+                chain_id: BridgeChainId::EthCustom,
                 proxy_address: EthAddress::repeat_byte(6),
                 new_impl_address: EthAddress::repeat_byte(9),
                 call_data: call_data.clone(),
@@ -573,7 +573,7 @@ mod tests {
         let action =
             BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
                 nonce: 123,
-                chain_id: BridgeChainId::EthLocalTest,
+                chain_id: BridgeChainId::EthCustom,
                 proxy_address: EthAddress::repeat_byte(6),
                 new_impl_address: EthAddress::repeat_byte(9),
                 call_data,
@@ -585,7 +585,7 @@ mod tests {
 
         let action = BridgeAction::AddTokensOnSuiAction(crate::types::AddTokensOnSuiAction {
             nonce: 3,
-            chain_id: BridgeChainId::SuiTestnet,
+            chain_id: BridgeChainId::SuiCustom,
             native: false,
             token_ids: vec![99, 100, 101],
             token_type_names: vec![
@@ -597,12 +597,12 @@ mod tests {
         });
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
-            "sign/add_tokens_on_sui/1/3/0/99,100,101/0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3/1000000000,2000000000,3000000000",
+            "sign/add_tokens_on_sui/2/3/0/99,100,101/0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2,0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3/1000000000,2000000000,3000000000",
         );
 
         let action = BridgeAction::AddTokensOnEvmAction(crate::types::AddTokensOnEvmAction {
             nonce: 0,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             native: true,
             token_ids: vec![99, 100, 101],
             token_addresses: vec![

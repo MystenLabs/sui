@@ -1131,8 +1131,8 @@ pub fn generate_genesis_system_object(
                 .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
                 .unwrap();
             // TODO(bridge): this needs to be passed in as a parameter for next testnet regenesis
-            // Hardcoding chain id to SuiLocalTest
-            let bridge_chain_id = builder.pure(BridgeChainId::SuiLocalTest).unwrap();
+            // Hardcoding chain id to SuiCustom
+            let bridge_chain_id = builder.pure(BridgeChainId::SuiCustom).unwrap();
             builder.programmable_move_call(
                 BRIDGE_ADDRESS.into(),
                 BRIDGE_MODULE_NAME.to_owned(),
