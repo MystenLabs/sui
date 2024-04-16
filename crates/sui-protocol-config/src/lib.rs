@@ -2196,14 +2196,7 @@ impl ProtocolConfig {
     pub fn set_accept_zklogin_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_zklogin_in_multisig = val
     }
-    #[cfg(msim)]
-    pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
-        self.feature_flags.simplified_unwrap_then_delete = val;
-        if val == false {
-            // Given that we will never enable effect V2 before turning on simplified_unwrap_then_delete, we also need to disable effect V2 here.
-            self.set_enable_effects_v2(false);
-        }
-    }
+
     pub fn set_shared_object_deletion(&mut self, val: bool) {
         self.feature_flags.shared_object_deletion = val;
     }
