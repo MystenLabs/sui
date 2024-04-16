@@ -63,6 +63,7 @@ There are several modules that create the backend logic for the example.
 The `dashboard.move` module defines the `Dashboard` struct that is used to group services.
 
 ```move
+/// Dashboard is a collection of services
 struct Dashboard has key, store {
     id: UID,
     service_type: String
@@ -72,6 +73,7 @@ struct Dashboard has key, store {
 The services are grouped by attributes, which can be cuisine type, geographical location, operating hours, google maps ID, and so on. To keep it basic, the example stores only `service_type` (for example, fast food, Chinese, Italian).
 
 ```move
+/// Creates a new dashboard
 public entry fun create_dashboard(
     service_type: String,
     ctx: &mut TxContext,
@@ -83,6 +85,7 @@ public entry fun create_dashboard(
     transfer::share_object(db);
 }
 
+/// Registers a service to a dashboard
 public fun register_service(db: &mut Dashboard, service_id: ID) {
     df::add(&mut db.id, service_id, service_id);
 }
@@ -103,6 +106,7 @@ This module defines the `Service` struct, which service owners manage.
 ```move
 const MAX_REVIEWERS_TO_REWARD: u64 = 10;
 
+/// Represents a service
 struct Service has key, store {
     id: UID,
     reward_pool: Balance<SUI>,
@@ -135,18 +139,23 @@ the `ID` of the reviews (whose content and vote count can be looked up from the 
 
 #### Casting votes
 ```move
+/// Upvotes a review and reorders top_reviews
 public fun upvote(service: &mut Service, review_id: ID) {
     let review = object_table::borrow_mut(&mut service.reviews, review_id);
     review::upvote(review);
     reorder(service, review_id, review::get_total_score(review));
 }
 
+/// Downvotes a review and reorders top_reviews
 public fun downvote(service: &mut Service, review_id: ID) {
     let review = object_table::borrow_mut(&mut service.reviews, review_id);
     review::downvote(review);
     reorder(service, review_id, review::get_total_score(review));
 }
 
+/// Reorders top_reviews after a review is updated
+/// If the review is not in top_reviews, it will be added if it is in the top 10
+/// Otherwise, it will be reordered
 fun reorder(
     service: &mut Service,
     review_id: ID,
@@ -162,6 +171,7 @@ fun reorder(
     }
 }
 
+/// Updates top_reviews if necessary
 fun update_top_reviews(
     service: &mut Service,
     review_id: ID,
@@ -174,6 +184,7 @@ fun update_top_reviews(
     };
 }
 
+/// Finds the index of a new review to place within top_reviews
 fun find_idx(service: &Service, total_score: u64): u64 {
     let idx = 0;
     let len = vector::length(&service.top_reviews);
@@ -193,10 +204,13 @@ Note that casting a vote also triggers a reordering of the `top_reviews` field t
 
 #### Authorization
 ```move
+/// A capability that can be used to perform admin operations on a service
 struct AdminCap has key, store {
     id: UID,
     service_id: ID
 }
+
+/// Represents a moderator that can be used to delete reviews
 struct Moderator has key {
     id: UID,
 }
@@ -211,6 +225,7 @@ For example, `SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `M
 This module defines the `Review` struct.
 
 ```move
+/// Represents a review of a service
 struct Review has key, store {
     id: UID,
     owner: address,
