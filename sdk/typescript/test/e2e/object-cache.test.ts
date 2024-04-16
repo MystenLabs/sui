@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OwnedObjectRef } from '../../src/client';
 import { CachingTransactionBlockExecutor, TransactionBlock } from '../../src/transactions';
@@ -27,6 +27,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 			address: toolbox.address(),
 		});
 		const txb = new TransactionBlock();
+		vi.spyOn(toolbox.client, 'getProtocolConfig');
 		txb.moveCall({
 			target: `${packageId}::tto::start`,
 			typeArguments: [],
@@ -48,6 +49,10 @@ describe('CachingTransactionBlockExecutor', async () => {
 		parentObjectId = (x.effects?.created)!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
 		)[0];
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
 	});
 
 	it('caches move function definitions', async () => {
@@ -198,6 +203,50 @@ describe('CachingTransactionBlockExecutor', async () => {
 			],
 		});
 		expect(result2.effects?.status.status).toBe('success');
+	});
+
+	it('caches protocol config', async () => {
+		const txb = new TransactionBlock();
+
+		txb.setSender(toolbox.address());
+
+		const result = await executor.signAndExecuteTransactionBlock({
+			transactionBlock: txb,
+			signer: toolbox.keypair,
+			options: {
+				showEffects: true,
+			},
+		});
+		expect(result.effects?.status.status).toBe('success');
+		expect(toolbox.client.getProtocolConfig).toHaveBeenCalledTimes(1);
+
+		const txb2 = new TransactionBlock();
+		txb2.setSender(toolbox.address());
+
+		const result2 = await executor.signAndExecuteTransactionBlock({
+			transactionBlock: txb2,
+			signer: toolbox.keypair,
+			options: {
+				showEffects: true,
+			},
+		});
+		expect(result2.effects?.status.status).toBe('success');
+		expect(toolbox.client.getProtocolConfig).toHaveBeenCalledTimes(1);
+
+		const txb3 = new TransactionBlock();
+		txb3.setSender(toolbox.address());
+
+		await executor.reset();
+		const result3 = await executor.signAndExecuteTransactionBlock({
+			transactionBlock: txb3,
+			signer: toolbox.keypair,
+			options: {
+				showEffects: true,
+			},
+		});
+
+		expect(result3.effects?.status.status).toBe('success');
+		expect(toolbox.client.getProtocolConfig).toHaveBeenCalledTimes(2);
 	});
 });
 

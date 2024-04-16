@@ -27,7 +27,7 @@ export interface MoveFunctionCacheEntry {
 
 export interface CacheEntryTypes {
 	OwnedObject: ObjectCacheEntry;
-	SharedObject: ObjectCacheEntry;
+	SharedOrImmutableObject: ObjectCacheEntry;
 	MoveFunction: MoveFunctionCacheEntry;
 }
 export abstract class AsyncCache {
@@ -46,7 +46,7 @@ export abstract class AsyncCache {
 	async getObject(id: string) {
 		const [owned, shared] = await Promise.all([
 			this.get('OwnedObject', id),
-			this.get('SharedObject', id),
+			this.get('SharedOrImmutableObject', id),
 		]);
 
 		return owned ?? shared ?? null;
@@ -57,10 +57,10 @@ export abstract class AsyncCache {
 	}
 
 	async addObject(object: ObjectCacheEntry) {
-		if (object.initialSharedVersion) {
-			await this.set('SharedObject', object.objectId, object);
-		} else {
+		if (object.owner) {
 			await this.set('OwnedObject', object.objectId, object);
+		} else {
+			await this.set('SharedOrImmutableObject', object.objectId, object);
 		}
 
 		return object;
@@ -69,7 +69,7 @@ export abstract class AsyncCache {
 	async deleteObject(id: string) {
 		await Promise.all([
 			await this.delete('OwnedObject', id),
-			await this.delete('SharedObject', id),
+			await this.delete('SharedOrImmutableObject', id),
 		]);
 	}
 
@@ -100,7 +100,7 @@ export abstract class AsyncCache {
 export class InMemoryCache extends AsyncCache {
 	#caches = {
 		OwnedObject: new Map<string, ObjectCacheEntry>(),
-		SharedObject: new Map<string, ObjectCacheEntry>(),
+		SharedOrImmutableObject: new Map<string, ObjectCacheEntry>(),
 		MoveFunction: new Map<string, MoveFunctionCacheEntry>(),
 	};
 
@@ -185,7 +185,7 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 		return await this.#cache.addMoveFunctionDefinition(functionDefinition);
 	};
 
-	async clearCache() {
+	async clear() {
 		await this.#cache.clear();
 	}
 
@@ -238,6 +238,15 @@ export class CachingTransactionBlockExecutor {
 	}) {
 		this.#client = client;
 		this.cache = new ObjectCache(options);
+	}
+
+	/**
+	 * Clears the cached protocol config and all owned objects
+	 * Immutable objects, Shared objects, and Move function definitions will be preserved
+	 */
+	async reset() {
+		this.#protocolConfig = null;
+		await this.cache.clearOwnedObjects();
 	}
 
 	async #getProtocolConfig() {
