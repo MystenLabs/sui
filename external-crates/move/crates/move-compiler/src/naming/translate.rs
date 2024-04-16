@@ -538,7 +538,7 @@ impl<'env> Context<'env> {
                 None
             }
             rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _) | ResolvedType::Hole) =>{
-                let (rtloc, msg) = match rt {
+                let (rtloc, rtmsg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
                         format!(
