@@ -7,7 +7,8 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import type { CoinStruct, SuiTransaction } from '@mysten/sui.js/client';
 import type { Keypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import type { TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	fromB64,
 	normalizeStructTag,

@@ -20,3 +20,4 @@ export {
 } from './TransactionBlock.js';
 
 export { type TransactionBlockState } from './blockData/v2.js';
+export { ObjectCache, CachingTransactionBlockExecutor, AsyncCache } from './ObjectCache.js';
