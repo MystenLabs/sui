@@ -23,7 +23,7 @@ use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
 use crate::consistency::{build_objects_query, consistent_range, Checkpointed, View};
-use crate::context_data::package_cache::PackageCache;
+use crate::data::package_resolver::PackageResolver;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
@@ -42,7 +42,6 @@ use sui_indexer::models_v2::objects::{
 use sui_indexer::schema_v2::{objects, objects_history, objects_snapshot};
 use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types_v2::OwnerType;
-use sui_package_resolver::Resolver;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
@@ -1332,7 +1331,7 @@ fn addr(bytes: impl AsRef<[u8]>) -> Result<SuiAddress, Error> {
 
 pub(crate) async fn deserialize_move_struct(
     move_object: &NativeMoveObject,
-    resolver: &Resolver<PackageCache>,
+    resolver: &PackageResolver,
 ) -> Result<(StructTag, MoveStruct), Error> {
     let struct_tag = StructTag::from(move_object.type_().clone());
     let contents = move_object.contents();
