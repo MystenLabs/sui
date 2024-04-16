@@ -226,11 +226,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked objects",
-                len,
-            )
+            info!(elapsed, "Persisted {} chunked objects", len,)
         })
     }
 
@@ -266,11 +262,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Deleted {} chunked objects",
-                len,
-            )
+            info!(elapsed, "Deleted {} chunked objects", len,)
         })
     }
 

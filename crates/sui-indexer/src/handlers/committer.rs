@@ -164,10 +164,20 @@ async fn commit_checkpoints<S>(
             state.persist_events(events_batch),
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
-            state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
         ];
-        if object_snapshot_backfill_mode {
+        let env_skip_object_commit = std::env::var("SUI_SKIP_OBJECT_COMMIT")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .unwrap();
+        let env_skip_object_snapshot_backfill = std::env::var("SUI_SKIP_OBJECT_SNAPSHOT_BACKFILL")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .unwrap();
+        if !env_skip_object_commit {
+            persist_tasks.push(state.persist_objects(object_changes_batch.clone()));
+        }
+        if object_snapshot_backfill_mode && !env_skip_object_snapshot_backfill {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
         }
         if let Some(epoch_data) = epoch.clone() {
