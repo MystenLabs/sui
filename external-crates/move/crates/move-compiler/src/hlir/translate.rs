@@ -122,8 +122,18 @@ type VariantFieldIndicies = UniqueMap<
 
 type VariantPositionalMap =
     UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<VariantName, bool>>>;
-pub struct Context<'env> {
+
+pub(super) struct HLIRDebugFlags {
+    pub(super) match_translation: bool,
+    pub(super) match_variant_translation: bool,
+    pub(super) match_specialization: bool,
+    pub(super) match_counterexample: bool,
+    pub(super) match_work_queue: bool,
+}
+
+pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
+    pub debug: HLIRDebugFlags,
     current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
     enum_variants: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
@@ -277,8 +287,16 @@ impl<'env> Context<'env> {
                 &mdef.enums,
             );
         }
+        let debug = HLIRDebugFlags {
+            match_translation: false,
+            match_variant_translation: false,
+            match_specialization: false,
+            match_counterexample: false,
+            match_work_queue: false,
+        };
         Context {
             env,
+            debug,
             current_package: None,
             structs,
             enum_variants,
@@ -1027,28 +1045,16 @@ fn tail(
             }
         }
 
-        // FIXME: print is left intentionally for development.
-        // Remove before merging into main.
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
-            // let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            // println!("-----\ncompiled:");
-            // compiled.print();
-            // let result = tail(context, block, expected_type, compiled);
-            // println!("-----\nblock:");
-            // block.print();
-            // print!("result: ");
-            // result.clone().unwrap().print_verbose();
-            // result
-
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            tail(context, block, expected_type, compiled)
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = tail(context, block, expected_type, compiled);
+            debug_print!(context.debug.match_variant_translation, (opt "result" => &result));
+            result
         }
 
         E::VariantMatch(subject, enum_name, arms) => {
@@ -1377,19 +1383,16 @@ fn value(
             }
         }
 
-        // FIXME: print is left intentionally for development.
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            // println!("-----\ncompiled:");
-            // compiled.print_verbose();
-            value(context, block, None, compiled)
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = value(context, block, None, compiled);
+            debug_print!(context.debug.match_variant_translation, ("result" => &result));
+            result
         }
 
         E::VariantMatch(subject, enum_name, arms) => {
@@ -2012,20 +2015,16 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
         }
-        // FIXME: print is left intentionally for development.
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
             let subject_type = subject.ty.clone();
             let compiled = match_compilation::compile_match(context, &subject_type, *subject, arms);
-            // println!("-----\ncompiled:");
-            // compiled.print_verbose();
-            statement(context, block, compiled)
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            statement(context, block, compiled);
+            debug_print!(context.debug.match_variant_translation, (lines "block" => block));
         }
         E::VariantMatch(subject, enum_name, arms) => {
             let subject = Box::new(value(context, block, None, *subject));
