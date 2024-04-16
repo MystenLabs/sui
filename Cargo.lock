@@ -3000,11 +3000,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
-<<<<<<< HEAD
- "strsim 0.11.1",
-=======
  "strsim 0.11.0",
->>>>>>> testnet-v1.23.0
  "terminal_size",
 ]
 
@@ -3015,11 +3011,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "528131438037fd55894f62d6e9f068b8f45ac57ffa77517819645d10aed04f64"
 dependencies = [
  "heck 0.5.0",
-<<<<<<< HEAD
- "proc-macro2 1.0.79",
-=======
  "proc-macro2 1.0.78",
->>>>>>> testnet-v1.23.0
  "quote 1.0.35",
  "syn 2.0.58",
 ]
@@ -4002,11 +3994,7 @@ dependencies = [
  "proc-macro2 1.0.79",
  "quote 1.0.35",
  "strsim 0.10.0",
-<<<<<<< HEAD
- "syn 1.0.109",
-=======
  "syn 1.0.107",
->>>>>>> testnet-v1.23.0
 ]
 
 [[package]]
@@ -4020,11 +4008,7 @@ dependencies = [
  "proc-macro2 1.0.79",
  "quote 1.0.35",
  "strsim 0.10.0",
-<<<<<<< HEAD
- "syn 1.0.109",
-=======
  "syn 1.0.107",
->>>>>>> testnet-v1.23.0
 ]
 
 [[package]]
@@ -4038,11 +4022,7 @@ dependencies = [
  "proc-macro2 1.0.79",
  "quote 1.0.35",
  "strsim 0.10.0",
-<<<<<<< HEAD
- "syn 2.0.58",
-=======
  "syn 2.0.48",
->>>>>>> testnet-v1.23.0
 ]
 
 [[package]]
@@ -4491,11 +4471,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81c5131a2895ef64741dad1d483f358c2a229a3a2d1b256778cdc5e146db64d4"
 dependencies = [
  "heck 0.4.1",
-<<<<<<< HEAD
- "proc-macro2 1.0.79",
-=======
  "proc-macro2 1.0.78",
->>>>>>> testnet-v1.23.0
  "quote 1.0.35",
  "syn 2.0.58",
 ]
@@ -7349,13 +7325,8 @@ version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
 dependencies = [
  "heck 0.4.1",
-<<<<<<< HEAD
- "proc-macro-crate 1.1.3",
- "proc-macro2 1.0.79",
-=======
  "proc-macro-crate",
  "proc-macro2 1.0.78",
->>>>>>> testnet-v1.23.0
  "quote 1.0.35",
  "syn 1.0.109",
 ]
@@ -7411,11 +7382,7 @@ version = "8.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6971da4d9c3aa03c3d8f3ff0f4155b534aad021292003895a469716b2a230378"
 dependencies = [
-<<<<<<< HEAD
- "base64 0.21.7",
-=======
  "base64 0.21.2",
->>>>>>> testnet-v1.23.0
  "pem",
  "ring 0.16.20",
  "serde",
@@ -9784,10 +9751,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "num-conv"
-version = "0.1.0"
-=======
 name = "num-derive"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9801,7 +9764,6 @@ dependencies = [
 [[package]]
 name = "num-integer"
 version = "0.1.45"
->>>>>>> testnet-v1.23.0
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 
@@ -9814,15 +9776,6 @@ dependencies = [
  "proc-macro2 1.0.79",
  "quote 1.0.35",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "num-integer"
-version = "0.1.46"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -13421,11 +13374,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "990079665f075b699031e9c08fd3ab99be5029b96f3b78dc0709e8f77e4efebf"
 dependencies = [
  "heck 0.4.1",
-<<<<<<< HEAD
- "proc-macro2 1.0.79",
-=======
  "proc-macro2 1.0.78",
->>>>>>> testnet-v1.23.0
  "quote 1.0.35",
  "syn 1.0.109",
 ]
@@ -13666,15 +13615,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "strsim"
-<<<<<<< HEAD
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-=======
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ee073c9e4cd00e28217186dbe12796d692868f432bf2e97ee73bed0c56dfa01"
->>>>>>> testnet-v1.23.0
 
 [[package]]
 name = "strum"
@@ -13710,11 +13653,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
 dependencies = [
  "heck 0.4.1",
-<<<<<<< HEAD
- "proc-macro2 1.0.79",
-=======
  "proc-macro2 1.0.78",
->>>>>>> testnet-v1.23.0
  "quote 1.0.35",
  "rustversion",
  "syn 1.0.109",
@@ -13727,11 +13666,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
 dependencies = [
  "heck 0.4.1",
-<<<<<<< HEAD
- "proc-macro2 1.0.79",
-=======
  "proc-macro2 1.0.78",
->>>>>>> testnet-v1.23.0
  "quote 1.0.35",
  "rustversion",
  "syn 2.0.58",
@@ -17528,11 +17463,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2 1.0.79",
  "quote 1.0.35",
-<<<<<<< HEAD
- "syn 2.0.58",
-=======
  "syn 2.0.48",
->>>>>>> testnet-v1.23.0
 ]
 
 [[package]]
