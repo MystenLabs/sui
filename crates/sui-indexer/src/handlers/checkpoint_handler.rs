@@ -318,6 +318,20 @@ where
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
+        
+        let package_objects = Self::get_package_objects(&vec![data.clone()])
+        .into_iter().map(|(_, o)| o).collect::<Vec<_>>();
+        let changed_package_objects = package_objects
+            .into_iter()
+            .map(|o| {
+                IndexedObject::from_object(checkpoint_seq, o, None)
+            })
+            .collect::<Vec<_>>();
+        let package_object_changes = TransactionObjectChangesToCommit {
+            changed_objects: changed_package_objects,
+            deleted_objects: vec![],
+        };
+
         let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
                 transactions,
@@ -357,6 +371,7 @@ where
             events: db_events,
             tx_indices: db_indices,
             display_updates: db_displays,
+            package_object_changes,
             object_changes,
             object_history_changes,
             packages,

@@ -119,6 +119,7 @@ async fn commit_checkpoints<S>(
     let mut events_batch = vec![];
     let mut tx_indices_batch = vec![];
     let mut display_updates_batch = BTreeMap::new();
+    let mut package_object_changes_batch = vec![];
     let mut object_changes_batch = vec![];
     let mut object_history_changes_batch = vec![];
     let mut packages_batch = vec![];
@@ -130,6 +131,7 @@ async fn commit_checkpoints<S>(
             events,
             tx_indices,
             display_updates,
+            package_object_changes,
             object_changes,
             object_history_changes,
             packages,
@@ -140,6 +142,7 @@ async fn commit_checkpoints<S>(
         events_batch.push(events);
         tx_indices_batch.push(tx_indices);
         display_updates_batch.extend(display_updates.into_iter());
+        package_object_changes_batch.push(package_object_changes);
         object_changes_batch.push(object_changes);
         object_history_changes_batch.push(object_history_changes);
         packages_batch.push(packages);
@@ -175,7 +178,7 @@ async fn commit_checkpoints<S>(
             .parse::<bool>()
             .unwrap();
         if !env_skip_object_commit {
-            persist_tasks.push(state.persist_objects(object_changes_batch.clone()));
+            persist_tasks.push(state.persist_objects(package_object_changes_batch.clone()));
         }
         if object_snapshot_backfill_mode && !env_skip_object_snapshot_backfill {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
