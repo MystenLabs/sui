@@ -413,7 +413,6 @@ mod tests {
     use sui_types::bridge::TOKEN_ID_BTC;
     use sui_types::bridge::TOKEN_ID_USDC;
     use sui_types::TypeTag;
-    use tracing::info;
 
     use super::*;
 
