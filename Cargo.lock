@@ -4671,6 +4671,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -13430,6 +13431,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap",
+ "flate2",
  "futures",
  "http",
  "jsonrpsee",
@@ -13438,6 +13440,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-config",
+ "open",
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",

@@ -18,7 +18,9 @@ use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
 use move_vm_config::runtime::get_default_output_filepath;
 use std::env;
-use std::io::BufRead;
+use std::ffi::OsString;
+use std::fs::File;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
@@ -95,6 +97,12 @@ pub enum ReplayToolCommand {
         /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
         #[arg(long, short, allow_hyphen_values = true)]
         protocol_version: Option<i64>,
+        /// Write a json that contains comprehensive data about this transaction, in a file `replay_output_{tx_digest}.json` to the working directory.
+        #[arg(long)]
+        json: bool,
+        /// Write html that contains comprehensive data about this transaction, in a file `replay_output_{tx_digest}.html` to the working directory.
+        #[arg(long)]
+        html: bool,
     },
 
     /// Replay transactions listed in a file
@@ -376,7 +384,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let _sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
+                rpc_url.clone(),
                 cfg_path.map(|p| p.to_str().unwrap().to_string()),
                 tx_digest,
                 safety,
@@ -397,11 +405,13 @@ pub async fn execute_replay_command(
             diag,
             executor_version,
             protocol_version,
+            json,
+            html,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
+                rpc_url.clone(),
                 cfg_path.map(|p| p.to_str().unwrap().to_string()),
                 tx_digest,
                 safety,
@@ -417,6 +427,36 @@ pub async fn execute_replay_command(
             }
             if show_effects {
                 println!("{}", sandbox_state.local_exec_effects);
+            }
+
+            if json {
+                write_to_file(tx_digest, &sandbox_state.output, "json");
+            }
+
+            if html {
+                use flate2::write::ZlibEncoder;
+                use flate2::Compression;
+
+                let input = sandbox_state.output.clone();
+
+                let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+                e.write_all(input.as_bytes())?;
+                let compressed = e.finish()?;
+
+                let local_prefix = "http://localhost:5173";
+                let _remote_prefix = "https://multisig-toolkit-amz9iwckn-mysten-labs.vercel.app";
+                let url = format!(
+                    "{}/replay?network={}#{:?}",
+                    local_prefix,
+                    &rpc_url.unwrap_or("local".parse()?),
+                    compressed
+                )
+                .replace(" ", "")
+                .replace("[", "")
+                .replace("]", "");
+
+                info!("{:?}", url);
+                open::that(url).ok();
             }
 
             sandbox_state.check_effects()?;
@@ -582,6 +622,26 @@ pub async fn execute_replay_command(
             }
         }
     })
+}
+
+fn get_filepath(tx_digest: TransactionDigest, extension: &str) -> PathBuf {
+    let mut filename = OsString::new();
+    filename.push("replay_output_");
+    filename.push(tx_digest.to_string());
+    filename.push(".");
+    filename.push(extension);
+    let mut output_path = std::path::PathBuf::from(".");
+    output_path.set_file_name(filename);
+    output_path
+}
+
+fn write_to_file(tx_digest: TransactionDigest, content: &String, extension: &str) {
+    let output_path = get_filepath(tx_digest, extension);
+    let mut out_file = File::create(&output_path).expect("Unable to create file");
+    out_file
+        .write_all(content.as_bytes())
+        .expect("Unable to write file");
+    info!("Wrote file to {:?}", output_path);
 }
 
 pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
