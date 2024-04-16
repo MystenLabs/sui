@@ -791,7 +791,7 @@ fn default_max_transaction_manager_queue_length() -> usize {
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
-    200
+    100
 }
 
 impl Default for AuthorityOverloadConfig {
