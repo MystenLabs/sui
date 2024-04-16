@@ -31,9 +31,6 @@ pub struct SecurityWatchdogConfig {
     pub sf_username: Option<String>,
     #[clap(long, default_value = None, global = true)]
     pub sf_role: Option<String>,
-
-    pub sf_password: String,
-    pub pd_api_key: String,
     /// The url of the metrics client to connect to.
     #[clap(long, default_value = "127.0.0.1", global = true)]
     pub client_metric_host: String,
