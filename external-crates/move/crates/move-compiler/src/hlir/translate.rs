@@ -123,7 +123,7 @@ type VariantFieldIndicies = UniqueMap<
 type VariantPositionalMap =
     UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<VariantName, bool>>>;
 
-pub(super) struct HlirDebugFlags {
+pub(super) struct HLIRDebugFlags {
     pub(super) match_translation: bool,
     pub(super) match_variant_translation: bool,
     pub(super) match_specialization: bool,
@@ -133,7 +133,7 @@ pub(super) struct HlirDebugFlags {
 
 pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
-    pub debug: HlirDebugFlags,
+    pub debug: HLIRDebugFlags,
     current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
     enum_variants: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
@@ -287,7 +287,7 @@ impl<'env> Context<'env> {
                 &mdef.enums,
             );
         }
-        let debug = HlirDebugFlags {
+        let debug = HLIRDebugFlags {
             match_translation: false,
             match_variant_translation: false,
             match_specialization: false,

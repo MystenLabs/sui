@@ -979,11 +979,12 @@ pub(crate) use format_oxford_list;
 //**************************************************************************************************
 
 /// Debug formatter based on provided `fmt` option:
+///
 /// - None: calls `val.print()`
 /// - `verbose`: calls `val.print_verbose()`
-/// `fmt`: calls ``println!("{}", val)`
-/// `dbg`: calls ``println!("{:?}", val)`
-/// `sdbg`: calls ``println!("{:#?}", val)`
+/// - `fmt`: calls `println!("{}", val)`
+/// - `dbg`: calls `println!("{:?}", val)`
+/// - `sdbg`: calls `println!("{:#?}", val)`
 macro_rules! debug_print_format {
     ($val:expr) => {{
         $val.print();
@@ -1005,10 +1006,13 @@ macro_rules! debug_print_format {
 pub(crate) use debug_print_format;
 
 /// Print formatter for debugging. Allows a few different forms:
+///
 /// `(msg `s`)`                        as println!(s);
 /// `(name => val [; fmt])`            as "name: " + debug_fprint_ormat!(vall fmt)
 /// `(opt name => val [; fmt])`        as "name: " + "Some " debug_print_format!(val; fmt) or "None"
 /// `(lines name => val [; fmt]) ` as "name: " + for n in val { debug_print_format!(n; fmt) }
+///
+/// See `debug_print_format` for different `fmt` options.
 macro_rules! debug_print_internal {
     () => {};
     (($name:expr => $val:expr $(; $fmt:ident)?)) => {
