@@ -325,7 +325,7 @@ impl ModuleCache {
                 .signature_at(function.parameters)
                 .0
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             self.functions.push(Arc::new(function));
         }

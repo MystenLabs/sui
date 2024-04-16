@@ -1596,6 +1596,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-v0"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "invalid-mutations",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v1"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "invalid-mutations",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v2"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "invalid-mutations",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
@@ -1715,6 +1760,7 @@ dependencies = [
  "enum-compat-util",
  "ethnum",
  "hex",
+ "leb128",
  "move-proc-macros",
  "num",
  "once_cell",
@@ -1727,6 +1773,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "thiserror",
  "uint",
 ]
 
@@ -2062,6 +2109,87 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-v0"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "dir-diff",
+ "file_diff",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime-v0",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-v1"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "dir-diff",
+ "file_diff",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime-v1",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-v2"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "dir-diff",
+ "file_diff",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime-v2",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -2147,6 +2275,7 @@ name = "move-vm-integration-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "expect-test",
  "fail",
  "memory-stats",
  "move-binary-format",
@@ -2183,6 +2312,78 @@ dependencies = [
  "hex",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v0"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v0",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v1"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v1",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v2",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
