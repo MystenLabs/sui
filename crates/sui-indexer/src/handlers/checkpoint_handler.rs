@@ -55,7 +55,7 @@ use super::CheckpointDataToCommit;
 use super::EpochToCommit;
 use super::TransactionObjectChangesToCommit;
 
-const CHECKPOINT_QUEUE_SIZE: usize = 100;
+const CHECKPOINT_QUEUE_SIZE: usize = 300;
 
 pub async fn new_handlers<S>(
     state: S,

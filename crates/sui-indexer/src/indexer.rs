@@ -19,7 +19,7 @@ use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::IndexerConfig;
 
-const DOWNLOAD_QUEUE_SIZE: usize = 200;
+const DOWNLOAD_QUEUE_SIZE: usize = 300;
 
 pub struct Indexer;
 
