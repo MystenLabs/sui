@@ -842,7 +842,6 @@ impl SuiClientCommands {
                 let cmd = ReplayToolCommand::ReplayBatch {
                     path,
                     terminate_early,
-                    batch_size: 16,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
