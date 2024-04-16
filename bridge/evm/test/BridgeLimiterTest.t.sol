@@ -21,7 +21,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
 
     function testCalculateAmountInUSD() public {
         uint8 tokenID = 1; // wBTC
-        uint256 wBTCAmount = 100000000; // wBTC has 8 decimals
+        uint256 wBTCAmount = 1_00000000; // wBTC has 8 decimals
         uint256 actual = limiter.calculateAmountInUSD(tokenID, wBTCAmount);
         assertEq(actual, BTC_PRICE);
         tokenID = 2;
@@ -29,7 +29,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         actual = limiter.calculateAmountInUSD(tokenID, ethAmount);
         assertEq(actual, ETH_PRICE);
         tokenID = 3;
-        uint256 usdcAmount = 1000000; // USDC has 6 decimals
+        uint256 usdcAmount = 1_000000; // USDC has 6 decimals
         actual = limiter.calculateAmountInUSD(tokenID, usdcAmount);
         assertEq(actual, USDC_PRICE);
     }
@@ -37,19 +37,19 @@ contract BridgeLimiterTest is BridgeBaseTest {
     function testCalculateWindowLimit() public {
         changePrank(address(bridge));
         uint8 tokenID = 3;
-        uint256 amount = 1000000; // USDC has 6 decimals
+        uint256 amount = 1_000000; // USDC has 6 decimals
         limiter.recordBridgeTransfers(supportedChainID, tokenID, amount);
         skip(1 hours);
         limiter.recordBridgeTransfers(supportedChainID, tokenID, 2 * amount);
         skip(1 hours);
         uint256 actual = limiter.calculateWindowAmount(supportedChainID);
-        assertEq(actual, 300000000);
+        assertEq(actual, 3 * USD_VALUE_MULTIPLIER);
         skip(22 hours);
         actual = limiter.calculateWindowAmount(supportedChainID);
-        assertEq(actual, 200000000);
+        assertEq(actual, 2 * USD_VALUE_MULTIPLIER);
         skip(59 minutes);
         actual = limiter.calculateWindowAmount(supportedChainID);
-        assertEq(actual, 200000000);
+        assertEq(actual, 2 * USD_VALUE_MULTIPLIER);
         skip(1 minutes);
         actual = limiter.calculateWindowAmount(supportedChainID);
         assertEq(actual, 0);
@@ -68,7 +68,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
     function testRecordBridgeTransfer() public {
         changePrank(address(bridge));
         uint8 tokenID = 1;
-        uint256 amount = 100000000; // wBTC has 8 decimals
+        uint256 amount = 1_00000000; // wBTC has 8 decimals
         limiter.recordBridgeTransfers(supportedChainID, tokenID, amount);
         tokenID = 2;
         amount = 1 ether;
@@ -84,7 +84,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
     function testrecordBridgeTransfersGarbageCollection() public {
         changePrank(address(bridge));
         uint8 tokenID = 1;
-        uint256 amount = 100000000; // wBTC has 8 decimals
+        uint256 amount = 1_00000000; // wBTC has 8 decimals
         uint32 hourToDelete = uint32(block.timestamp / 1 hours);
         limiter.recordBridgeTransfers(supportedChainID, tokenID, amount);
         uint256 keyToDelete = limiter.getChainHourTimestampKey(supportedChainID, hourToDelete);
@@ -99,7 +99,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
     function testUpdateLimitWithSignatures() public {
         changePrank(address(bridge));
         uint8 sourceChainID = 0;
-        uint64 newLimit = 1000000000;
+        uint64 newLimit = 10 * USD_VALUE_MULTIPLIER;
         bytes memory payload = abi.encodePacked(sourceChainID, newLimit);
         // Create a sample BridgeUtils
         BridgeUtils.Message memory message = BridgeUtils.Message({
@@ -124,7 +124,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         // Call the updateLimitWithSignatures function
         limiter.updateLimitWithSignatures(signatures, message);
 
-        assertEq(limiter.chainLimits(supportedChainID), 1000000000);
+        assertEq(limiter.chainLimits(supportedChainID), 10 * USD_VALUE_MULTIPLIER);
     }
 
     function testMultipleChainLimits() public {
@@ -160,13 +160,13 @@ contract BridgeLimiterTest is BridgeBaseTest {
         committee.initializeConfig(address(config));
         // deploy new limiter with 2 supported chains
         uint64[] memory totalLimits = new uint64[](2);
-        totalLimits[0] = 1_000_000_00000000;
-        totalLimits[1] = 2_000_000_00000000;
+        totalLimits[0] = 1_000_000 * USD_VALUE_MULTIPLIER;
+        totalLimits[1] = 2_000_000 * USD_VALUE_MULTIPLIER;
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), supportedChains, totalLimits);
         // check if the limits are set correctly
-        assertEq(limiter.chainLimits(11), 1_000_000_00000000);
-        assertEq(limiter.chainLimits(12), 2_000_000_00000000);
+        assertEq(limiter.chainLimits(11), 1_000_000 * USD_VALUE_MULTIPLIER);
+        assertEq(limiter.chainLimits(12), 2_000_000 * USD_VALUE_MULTIPLIER);
         // check if the oldestChainTimestamp is set correctly
         assertEq(limiter.oldestChainTimestamp(11), uint32(block.timestamp / 1 hours));
         assertEq(limiter.oldestChainTimestamp(12), uint32(block.timestamp / 1 hours));
@@ -184,7 +184,9 @@ contract BridgeLimiterTest is BridgeBaseTest {
             limiter.willAmountExceedLimit(11, tokenID, 1000000), "limit should not be exceeded"
         );
         assertEq(
-            limiter.calculateWindowAmount(11), 99999900000000, "window amount should be correct"
+            limiter.calculateWindowAmount(11),
+            999999 * USD_VALUE_MULTIPLIER,
+            "window amount should be correct"
         );
         assertEq(limiter.calculateWindowAmount(12), 0, "window amount should be correct");
         // check that transfers are recorded correctly
@@ -194,14 +196,18 @@ contract BridgeLimiterTest is BridgeBaseTest {
             limiter.chainHourlyTransferAmount(
                 limiter.getChainHourTimestampKey(12, uint32(block.timestamp / 1 hours))
             ),
-            1_100_000_00000000,
+            1_100_000 * USD_VALUE_MULTIPLIER,
             "transfer amount should be correct"
         );
         assertEq(
-            limiter.calculateWindowAmount(11), 99999900000000, "window amount should be correct"
+            limiter.calculateWindowAmount(11),
+            999999 * USD_VALUE_MULTIPLIER,
+            "window amount should be correct"
         );
         assertEq(
-            limiter.calculateWindowAmount(12), 110000000000000, "window amount should be correct"
+            limiter.calculateWindowAmount(12),
+            1100000 * USD_VALUE_MULTIPLIER,
+            "window amount should be correct"
         );
     }
 
@@ -312,7 +318,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         skip(2 days);
 
         uint64[] memory totalLimits = new uint64[](1);
-        totalLimits[0] = 100_00000000;
+        totalLimits[0] = 100 * USD_VALUE_MULTIPLIER;
 
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
@@ -326,7 +332,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         changePrank(deployer);
         IWETH9(wETH).deposit{value: 10 ether}();
         IERC20(wETH).transfer(address(vault), 10 ether);
-        // sending chain: 01 (sendingChainID), new limit: 99_900_00000000
+        // sending chain: 01 (sendingChainID), new limit: 99_900 * USD_VALUE_MULTIPLIER
         bytes memory payload = hex"0100000915fa66bc00";
 
         // Create update bridge limit message
@@ -355,6 +361,6 @@ contract BridgeLimiterTest is BridgeBaseTest {
         committee.verifySignatures(signatures, message);
 
         limiter.updateLimitWithSignatures(signatures, message);
-        assertEq(limiter.chainLimits(sendingChainID), 99_900_00000000);
+        assertEq(limiter.chainLimits(sendingChainID), 99_900 * USD_VALUE_MULTIPLIER);
     }
 }
