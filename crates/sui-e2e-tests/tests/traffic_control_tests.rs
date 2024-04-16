@@ -9,7 +9,12 @@ use jsonrpsee::{
     core::{client::ClientT, RpcResult},
     rpc_params,
 };
-use sui_core::traffic_controller::nodefw_test_server::NodeFwTestServer;
+use std::fs::File;
+use std::io::Write;
+use sui_core::traffic_controller::{
+    get_killswitch_state, nodefw_test_server::NodeFwTestServer, KillswitchState, TrafficController,
+    KILLSWITCH_FILENAME,
+};
 use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -115,6 +120,8 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
         delegate_spam_blocking: true,
         delegate_error_blocking: false,
         destination_port: 8080,
+        killswitch_path: tempfile::tempdir().unwrap().into_path(),
+        killswitch_timeout_secs: 10,
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
         .with_policy_config(Some(policy_config))
@@ -143,6 +150,8 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         delegate_spam_blocking: true,
         delegate_error_blocking: false,
         destination_port: 9000,
+        killswitch_path: tempfile::tempdir().unwrap().into_path(),
+        killswitch_timeout_secs: 10,
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
@@ -150,6 +159,108 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         .build()
         .await;
     assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await
+}
+
+#[tokio::test]
+async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 3,
+        spam_policy_type: PolicyType::TestNConnIP(10),
+        channel_capacity: 100,
+        ..Default::default()
+    };
+
+    // sink all traffic to trigger dead mans switch
+    let killswitch_path = tempfile::tempdir().unwrap().into_path();
+    let killswitch_file = killswitch_path.join(KILLSWITCH_FILENAME);
+    assert_eq!(
+        get_killswitch_state(&killswitch_file),
+        None,
+        "Expected killswitch file to not yet exist",
+    );
+
+    let firewall_config = RemoteFirewallConfig {
+        remote_fw_url: String::from("http://127.0.0.1:65000"),
+        delegate_spam_blocking: true,
+        delegate_error_blocking: false,
+        destination_port: 9000,
+        killswitch_path: killswitch_path.clone(),
+        killswitch_timeout_secs: 10,
+    };
+
+    // NOTE: we need to hold onto this tc handle to ensure we don't inadvertently close
+    // the receive channel (this would cause traffic controller to exit the loop and thus
+    // we will never engage the dead mans switch)
+    let _tc = TrafficController::spawn_for_test(policy_config, Some(firewall_config));
+    assert!(
+        matches!(
+            get_killswitch_state(&killswitch_file),
+            Some(KillswitchState::Off)
+        ),
+        "Expected killswitch to be disabled at statup unless previously enabled",
+    );
+
+    // after n seconds with no traffic, the dead mans switch should be engaged
+    let mut killswitch_enabled = false;
+    for _ in 0..10 {
+        if get_killswitch_state(&killswitch_file) == Some(KillswitchState::On) {
+            killswitch_enabled = true;
+            break;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    }
+    assert!(killswitch_enabled, "Expected killswitch to be enabled");
+
+    // if we drop traffic controller and re-instantiate, killswitch should remain disabled
+    for _ in 0..3 {
+        assert!(
+            matches!(
+                get_killswitch_state(&killswitch_file),
+                Some(KillswitchState::On),
+            ),
+            "Expected killswitch to be disabled at statup unless previously enabled",
+        );
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    }
+
+    std::fs::remove_file(&killswitch_file).unwrap();
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_traffic_control_manual_set_killswitch() -> Result<(), anyhow::Error> {
+    let killswitch_path = tempfile::tempdir()
+        .unwrap()
+        .into_path()
+        .join(KILLSWITCH_FILENAME);
+    assert_eq!(
+        get_killswitch_state(&killswitch_path),
+        None,
+        "Expected killswitch file to not yet exist",
+    );
+
+    write!(File::create(&killswitch_path).unwrap(), "\nOFf\n")
+        .expect("Failed to write to nodefw killswitch file");
+    assert!(
+        matches!(
+            get_killswitch_state(&killswitch_path),
+            Some(KillswitchState::Off)
+        ),
+        "Expected killswitch to be disabled at statup unless previously enabled",
+    );
+
+    write!(File::create(&killswitch_path).unwrap(), " on\n ")
+        .expect("Failed to write to nodefw killswitch file");
+    assert!(
+        matches!(
+            get_killswitch_state(&killswitch_path),
+            Some(KillswitchState::On)
+        ),
+        "Expected killswitch to be disabled at statup unless previously enabled",
+    );
+
+    std::fs::remove_file(&killswitch_path).unwrap();
+    Ok(())
 }
 
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {

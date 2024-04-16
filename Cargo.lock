@@ -12836,6 +12836,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
+ "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-protocol-config",
