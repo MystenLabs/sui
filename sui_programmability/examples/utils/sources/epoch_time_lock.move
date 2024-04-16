@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module utils::epoch_time_lock {
-    use sui::tx_context::{Self, TxContext};
 
     /// The epoch passed into the creation of a lock has already passed.
     const EEpochAlreadyPassed: u64 = 0;
@@ -12,7 +11,7 @@ module utils::epoch_time_lock {
 
     /// Holder of an epoch number that can only be discarded in the epoch or
     /// after the epoch has passed.
-    struct EpochTimeLock has store, copy {
+    public struct EpochTimeLock has store, copy {
         epoch: u64
     }
 

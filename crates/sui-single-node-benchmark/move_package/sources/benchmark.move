@@ -14,20 +14,21 @@ module move_benchmark::benchmark {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
+    #[allow(lint(self_transfer))]
     public fun transfer_coin(coin: Coin<SUI>, ctx: &TxContext) {
         transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 
-    public fun run_computation(num: u64) {
+    public fun run_computation(mut num: u64) {
         // Store all numbers in an array to exercise memory consumption.
-        let results = vector<u64>[];
+        let mut results = vector<u64>[];
         vector::push_back(&mut results, 1);
         vector::push_back(&mut results, 1);
         while (num > 0) {
             let len = vector::length(&results);
             let last = vector::borrow(&results, len - 1);
             let second_last = vector::borrow(&results, len - 2);
-            let sum = *last + *second_last;
+            let mut sum = *last + *second_last;
             if (sum >= 1_000_000_000_000_000_000u64) {
                 sum = sum % 1_000_000_000_000_000_000u64;
             };
@@ -36,22 +37,22 @@ module move_benchmark::benchmark {
         }
     }
 
-    struct RootObject has key {
+    public struct RootObject has key {
         id: UID,
         child_count: u64,
     }
 
-    struct Child has store {
+    public struct Child has store {
         field1: u64,
         field2: String,
     }
 
     public entry fun generate_dynamic_fields(num: u64, ctx: &mut TxContext) {
-        let root = RootObject {
+        let mut root = RootObject {
             id: object::new(ctx),
             child_count: num,
         };
-        let i = 0;
+        let mut i = 0;
         while (i < num) {
             let child = Child {
                 field1: i,
@@ -64,11 +65,28 @@ module move_benchmark::benchmark {
     }
 
     public fun read_dynamic_fields(root: &RootObject) {
-        let i = 0;
+        let mut i = 0;
         while (i < root.child_count) {
             let child: &Child = dynamic_field::borrow(&root.id, i);
             assert!(child.field1 == i, 0);
             i = i + 1;
         }
+    }
+
+    public struct SharedCounter has key {
+        id: UID,
+        count: u64,
+    }
+
+    public fun create_shared_counter(ctx: &mut TxContext) {
+        let counter = SharedCounter {
+            id: object::new(ctx),
+            count: 0,
+        };
+        transfer::share_object(counter);
+    }
+
+    public fun increment_shared_counter(counter: &mut SharedCounter) {
+        counter.count = counter.count + 1;
     }
 }

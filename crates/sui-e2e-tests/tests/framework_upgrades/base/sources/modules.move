@@ -6,15 +6,15 @@ module sui_system::msim_extra_1 {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct Type has drop {
+    public struct Type has drop {
         x: u64,
     }
 
-    struct Obj has key {
+    public struct Obj has key {
         id: UID,
     }
 
-    struct AlmostObj {
+    public struct AlmostObj {
         id: UID,
     }
 

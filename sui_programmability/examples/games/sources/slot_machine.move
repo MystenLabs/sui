@@ -12,11 +12,8 @@ module games::slot_machine {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::math;
-    use sui::object::{Self, UID};
     use sui::random::{Self, Random, new_generator};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Error codes
     const EInvalidAmount: u64 = 0;
@@ -24,7 +21,7 @@ module games::slot_machine {
     const EInvalidEpoch: u64 = 2;
 
     /// Game for a specific epoch.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         creator: address,
         epoch: u64,
@@ -63,7 +60,7 @@ module games::slot_machine {
         assert!(coin::value(coin) > 0, EInvalidAmount);
 
         // play the game
-        let generator = new_generator(r, ctx);
+        let mut generator = new_generator(r, ctx);
         let bet = random::generate_u8_in_range(&mut generator, 1, 100);
         let lost = bet / 50; // 0 with probability 49%, and 1 or 2 with probability 51%
         let won = (2 - lost) / 2; // 1 with probability 49%, and 0 with probability 51%

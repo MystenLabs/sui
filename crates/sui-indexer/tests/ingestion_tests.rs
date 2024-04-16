@@ -77,7 +77,7 @@ mod ingestion_tests {
         tokio::time::timeout(Duration::from_secs(10), async {
             while {
                 let cp_opt = pg_store
-                    .get_latest_tx_checkpoint_sequence_number()
+                    .get_latest_checkpoint_sequence_number()
                     .await
                     .unwrap();
                 cp_opt.is_none() || (cp_opt.unwrap() < checkpoint_sequence_number)

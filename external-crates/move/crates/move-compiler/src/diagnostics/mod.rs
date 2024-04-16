@@ -324,7 +324,9 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
 
 fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> (FileId, Range<usize>) {
     let fname = loc.file_hash();
-    let id = mapped_files.file_hash_to_file_id(&fname).unwrap();
+    let id = mapped_files
+        .file_hash_to_file_id(&fname)
+        .unwrap_or_else(|| panic!("ICE Couldn't find filename hash {:?} in mapping", fname));
     let range = loc.usize_range();
     (id, range)
 }
@@ -535,6 +537,17 @@ impl Diagnostics {
             .any(|d| d.info.external_prefix() == Some(prefix))
     }
 
+    /// Returns true if any diagnostic in the Syntax category have already been recorded.
+    pub fn any_syntax_error_with_primary_loc(&self, loc: Loc) -> bool {
+        let Self(Some(inner)) = self else {
+            return false;
+        };
+        inner
+            .diagnostics
+            .iter()
+            .any(|d| d.info().category() == Category::Syntax as u8 && d.primary_label.0 == loc)
+    }
+
     /// Returns the number of diags filtered in source (user) code (an not in the dependencies) that
     /// have a given prefix (first value returned) and how many different categories of diags were
     /// filtered.
@@ -618,6 +631,10 @@ impl Diagnostic {
 
     pub fn primary_msg(&self) -> &str {
         &self.primary_label.1
+    }
+
+    pub fn primary_loc(&self) -> Loc {
+        self.primary_label.0
     }
 
     pub fn is_migration(&self) -> bool {

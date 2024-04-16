@@ -569,6 +569,8 @@ pub struct AuthorityStorePruningConfig {
     /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub killswitch_tombstone_pruning: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub smooth: bool,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -599,6 +601,7 @@ impl Default for AuthorityStorePruningConfig {
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
+            smooth: false,
         }
     }
 }

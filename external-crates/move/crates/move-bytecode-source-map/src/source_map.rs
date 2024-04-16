@@ -5,12 +5,12 @@
 use anyhow::{format_err, Result};
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
         AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, FunctionDefinitionIndex, LocalIndex,
         MemberCount, ModuleHandleIndex, SignatureIndex, StructDefinition, StructDefinitionIndex,
         TableIndex,
     },
+    CompiledModule,
 };
 use move_command_line_common::files::FileHash;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -117,11 +117,11 @@ impl StructSourceMap {
 
     pub fn dummy_struct_map(
         &mut self,
-        view: &BinaryIndexedView,
+        module: &CompiledModule,
         struct_def: &StructDefinition,
         default_loc: Loc,
     ) -> Result<()> {
-        let struct_handle = view.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = module.struct_handle_at(struct_def.struct_handle);
 
         // Add dummy locations for the fields
         match struct_def.declared_field_count() {
@@ -230,7 +230,7 @@ impl FunctionSourceMap {
 
     pub fn dummy_function_map(
         &mut self,
-        view: &BinaryIndexedView,
+        module: &CompiledModule,
         type_parameters: &[AbilitySet],
         parameters: SignatureIndex,
         code: Option<CodeUnit>,
@@ -243,14 +243,14 @@ impl FunctionSourceMap {
         }
 
         // Generate names for each parameter
-        let params = view.signature_at(parameters);
+        let params = module.signature_at(parameters);
         for i in 0..params.0.len() {
             let name = format!("Arg{}", i);
             self.add_parameter_mapping((name, default_loc))
         }
 
         if let Some(code) = code {
-            let locals = view.signature_at(code.locals);
+            let locals = module.signature_at(code.locals);
             for i in 0..locals.0.len() {
                 let name = format!("loc{}", i);
                 self.add_local_mapping((name, default_loc))
@@ -490,69 +490,38 @@ impl SourceMap {
 
     /// Create a 'dummy' source map for a compiled module or script. This is useful for e.g. disassembling
     /// with generated or real names depending upon if the source map is available or not.
-    pub fn dummy_from_view(view: &BinaryIndexedView, default_loc: Loc) -> Result<Self> {
-        let module_ident = match view {
-            BinaryIndexedView::Script(..) => {
-                anyhow::bail!("Scripts are no longer supported for dummy source map")
-            }
-            BinaryIndexedView::Module(..) => {
-                let module_handle = view.module_handle_at(ModuleHandleIndex::new(0));
-                let module_name = ModuleName(Symbol::from(
-                    view.identifier_at(module_handle.name).as_str(),
-                ));
-                let address = *view.address_identifier_at(module_handle.address);
-                ModuleIdent::new(module_name, address)
-            }
+    pub fn dummy_from_view(module: &CompiledModule, default_loc: Loc) -> Result<Self> {
+        let module_ident = {
+            let module_handle = module.module_handle_at(ModuleHandleIndex::new(0));
+            let module_name = ModuleName(Symbol::from(
+                module.identifier_at(module_handle.name).as_str(),
+            ));
+            let address = *module.address_identifier_at(module_handle.address);
+            ModuleIdent::new(module_name, address)
         };
         let mut empty_source_map = Self::new(default_loc, module_ident);
 
-        match view {
-            BinaryIndexedView::Script(script) => {
-                empty_source_map.add_top_level_function_mapping(
-                    FunctionDefinitionIndex(0_u16),
+        for (function_idx, function_def) in module.function_defs.iter().enumerate() {
+            empty_source_map.add_top_level_function_mapping(
+                FunctionDefinitionIndex(function_idx as TableIndex),
+                default_loc,
+                false,
+            )?;
+            let function_handle = module.function_handle_at(function_def.function);
+            empty_source_map
+                .function_map
+                .get_mut(&(function_idx as TableIndex))
+                .ok_or_else(|| format_err!("Unable to get function map while generating dummy"))?
+                .dummy_function_map(
+                    module,
+                    &function_handle.type_parameters,
+                    function_handle.parameters,
+                    function_def.code.clone(),
                     default_loc,
-                    false,
                 )?;
-                empty_source_map
-                    .function_map
-                    .get_mut(&(0_u16))
-                    .ok_or_else(|| {
-                        format_err!("Unable to get function map while generating dummy")
-                    })?
-                    .dummy_function_map(
-                        view,
-                        &script.type_parameters,
-                        script.parameters,
-                        Some(script.code.clone()),
-                        default_loc,
-                    )?;
-            }
-            BinaryIndexedView::Module(module) => {
-                for (function_idx, function_def) in module.function_defs.iter().enumerate() {
-                    empty_source_map.add_top_level_function_mapping(
-                        FunctionDefinitionIndex(function_idx as TableIndex),
-                        default_loc,
-                        false,
-                    )?;
-                    let function_handle = module.function_handle_at(function_def.function);
-                    empty_source_map
-                        .function_map
-                        .get_mut(&(function_idx as TableIndex))
-                        .ok_or_else(|| {
-                            format_err!("Unable to get function map while generating dummy")
-                        })?
-                        .dummy_function_map(
-                            view,
-                            &function_handle.type_parameters,
-                            function_handle.parameters,
-                            function_def.code.clone(),
-                            default_loc,
-                        )?;
-                }
-            }
-        };
+        }
 
-        for (struct_idx, struct_def) in view.struct_defs().into_iter().flatten().enumerate() {
+        for (struct_idx, struct_def) in module.struct_defs().iter().enumerate() {
             empty_source_map.add_top_level_struct_mapping(
                 StructDefinitionIndex(struct_idx as TableIndex),
                 default_loc,
@@ -561,10 +530,10 @@ impl SourceMap {
                 .struct_map
                 .get_mut(&(struct_idx as TableIndex))
                 .ok_or_else(|| format_err!("Unable to get struct map while generating dummy"))?
-                .dummy_struct_map(view, struct_def, default_loc)?;
+                .dummy_struct_map(module, struct_def, default_loc)?;
         }
 
-        for const_idx in 0..view.constant_pool().len() {
+        for const_idx in 0..module.constant_pool().len() {
             empty_source_map.add_const_mapping(
                 ConstantPoolIndex(const_idx as TableIndex),
                 ConstantName(Symbol::from(format!("CONST{}", const_idx))),

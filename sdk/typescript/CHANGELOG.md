@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.51.2
+
+### Patch Changes
+
+- b4ecdb5860: Fix fetch being incorrectly bound to GraphQL client
+
 ## 0.51.1
 
 ### Patch Changes

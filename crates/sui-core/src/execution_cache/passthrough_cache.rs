@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -91,6 +91,7 @@ impl PassthroughCache {
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
             usize::MAX,
+            EPOCH_DURATION_MS_FOR_TESTING,
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);

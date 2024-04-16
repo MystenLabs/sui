@@ -1332,30 +1332,36 @@ async fn test_access_old_object_pruned() {
             .build(),
     );
     for validator in test_cluster.swarm.active_validators() {
-        let state = validator.get_node_handle().unwrap().state();
-        state.prune_objects_and_compact_for_testing().await;
-        // Make sure the old version of the object is already pruned.
-        assert!(state
-            .get_object_store()
-            .get_object_by_key(&gas_object.0, gas_object.1)
+        validator
+            .get_node_handle()
             .unwrap()
-            .is_none());
-        let epoch_store = state.epoch_store_for_testing();
-        assert_eq!(
-            state
-                .handle_transaction(
-                    &epoch_store,
-                    epoch_store.verify_transaction(tx.clone()).unwrap()
-                )
-                .await
-                .unwrap_err(),
-            SuiError::UserInputError {
-                error: UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: gas_object,
-                    current_version: new_gas_version,
-                }
-            }
-        );
+            .with_async(|node| async {
+                let state = node.state();
+                state.prune_objects_and_compact_for_testing().await;
+                // Make sure the old version of the object is already pruned.
+                assert!(state
+                    .database_for_testing()
+                    .get_object_by_key(&gas_object.0, gas_object.1)
+                    .unwrap()
+                    .is_none());
+                let epoch_store = state.epoch_store_for_testing();
+                assert_eq!(
+                    state
+                        .handle_transaction(
+                            &epoch_store,
+                            epoch_store.verify_transaction(tx.clone()).unwrap()
+                        )
+                        .await
+                        .unwrap_err(),
+                    SuiError::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: gas_object,
+                            current_version: new_gas_version,
+                        }
+                    }
+                );
+            })
+            .await;
     }
 
     // Check that fullnode would return the same error.

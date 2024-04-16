@@ -32,6 +32,7 @@ pub struct VerifyParams {
     pub zk_login_env: ZkLoginEnv,
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
+    pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 impl VerifyParams {
@@ -41,6 +42,7 @@ impl VerifyParams {
         zk_login_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
             oidc_provider_jwks,
@@ -48,6 +50,7 @@ impl VerifyParams {
             zk_login_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
+            zklogin_max_epoch_upper_bound_delta,
         }
     }
 }
@@ -55,7 +58,11 @@ impl VerifyParams {
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
-    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult;
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> SuiResult;
 
     fn verify_claims<T>(
         &self,
@@ -71,15 +78,18 @@ pub trait AuthenticatorTrait {
         value: &IntentMessage<T>,
         author: SuiAddress,
         epoch: Option<EpochId>,
-        aux_verify_data: &VerifyParams,
+        verify_params: &VerifyParams,
     ) -> SuiResult
     where
         T: Serialize,
     {
         if let Some(epoch) = epoch {
-            self.verify_user_authenticator_epoch(epoch)?;
+            self.verify_user_authenticator_epoch(
+                epoch,
+                verify_params.zklogin_max_epoch_upper_bound_delta,
+            )?;
         }
-        self.verify_claims(value, author, aux_verify_data)
+        self.verify_claims(value, author, verify_params)
     }
 
     fn verify_uncached_checks<T>(
@@ -278,7 +288,7 @@ impl<'de> ::serde::Deserialize<'de> for GenericSignature {
 
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> SuiResult {
+    fn verify_user_authenticator_epoch(&self, _: EpochId, _: Option<EpochId>) -> SuiResult {
         Ok(())
     }
     fn verify_uncached_checks<T>(

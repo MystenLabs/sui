@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
+use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
@@ -12,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 42;
+const MAX_PROTOCOL_VERSION: u64 = 43;
 
 // Record history of protocol version allocations here:
 //
@@ -115,6 +116,10 @@ const MAX_PROTOCOL_VERSION: u64 = 42;
 // Version 40:
 // Version 41: Enable group operations native functions in testnet and mainnet (without msm).
 // Version 42: Migrate sui framework and related code to Move 2024
+// Version 43: Introduce the upper bound delta config for a zklogin signature's max epoch.
+//             Introduce an explicit parameter for the tick limit per package (previously this was
+//             represented by the parameter for the tick limit per module).
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -393,6 +398,13 @@ struct FeatureFlags {
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
+
+    // Controls the behavior of per object congestion control in consensus handler.
+    #[serde(skip_serializing_if = "PerObjectCongestionControlMode::is_none")]
+    per_object_congestion_control_mode: PerObjectCongestionControlMode,
+    // Set the upper bound allowed for max_epoch in zklogin signature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -416,6 +428,20 @@ pub enum ConsensusTransactionOrdering {
 impl ConsensusTransactionOrdering {
     pub fn is_none(&self) -> bool {
         matches!(self, ConsensusTransactionOrdering::None)
+    }
+}
+
+// The config for per object congestion control in consensus handler.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+pub enum PerObjectCongestionControlMode {
+    #[default]
+    None, // No congestion control.
+    TotalGasBudget, // Use txn gas budget as execution cost.
+}
+
+impl PerObjectCongestionControlMode {
+    pub fn is_none(&self) -> bool {
+        matches!(self, PerObjectCongestionControlMode::None)
     }
 }
 
@@ -622,8 +648,11 @@ pub struct ProtocolConfig {
     /// Maximum number of meter `ticks` spent verifying a Move function. Enforced by the bytecode verifier at signing.
     max_verifier_meter_ticks_per_function: Option<u64>,
 
-    /// Maximum number of meter `ticks` spent verifying a Move function. Enforced by the bytecode verifier at signing.
+    /// Maximum number of meter `ticks` spent verifying a Move module. Enforced by the bytecode verifier at signing.
     max_meter_ticks_per_module: Option<u64>,
+
+    /// Maximum number of meter `ticks` spent verifying a Move package. Enforced by the bytecode verifier at signing.
+    max_meter_ticks_per_package: Option<u64>,
 
     // === Object runtime internal operation limits ====
     // These affect dynamic fields
@@ -965,6 +994,10 @@ pub struct ProtocolConfig {
     consensus_max_transaction_size_bytes: Option<u64>,
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
+
+    // The max accumulated txn execution cost per object in a checkpoint. Transactions
+    // in a checkpoint will be deferred once their touch shared objects hit this limit.
+    max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
 }
 
 // feature flags
@@ -1155,6 +1188,10 @@ impl ProtocolConfig {
         self.feature_flags.accept_zklogin_in_multisig
     }
 
+    pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
+        self.feature_flags.zklogin_max_epoch_upper_bound_delta
+    }
+
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
@@ -1185,6 +1222,10 @@ impl ProtocolConfig {
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
+    }
+
+    pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
+        self.feature_flags.per_object_congestion_control_mode
     }
 }
 
@@ -1363,17 +1404,11 @@ impl ProtocolConfig {
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
 
-            // TODO: Is this too low/high?
             max_back_edges_per_function: Some(10_000),
-
-            // TODO:  Is this too low/high?
             max_back_edges_per_module: Some(10_000),
-
-            // TODO: Is this too low/high?
             max_verifier_meter_ticks_per_function: Some(6_000_000),
-
-            // TODO: Is this too low/high?
             max_meter_ticks_per_module: Some(6_000_000),
+            max_meter_ticks_per_package: None,
 
             object_runtime_max_num_cached_objects: Some(1000),
             object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
@@ -1629,6 +1664,8 @@ impl ProtocolConfig {
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
+
+            max_accumulated_txn_cost_per_object_in_checkpoint: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2025,6 +2062,10 @@ impl ProtocolConfig {
                     cfg.group_ops_bls12381_pairing_cost = Some(52);
                 }
                 42 => {}
+                43 => {
+                    cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
+                    cfg.max_meter_ticks_per_package = Some(16_000_000);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2039,6 +2080,54 @@ impl ProtocolConfig {
             }
         }
         cfg
+    }
+
+    // Extract the bytecode verifier config from this protocol config. `for_signing` indicates
+    // whether this config is used for verification during signing or execution.
+    pub fn verifier_config(&self, for_signing: bool) -> VerifierConfig {
+        let (max_back_edges_per_function, max_back_edges_per_module) = if for_signing {
+            (
+                Some(self.max_back_edges_per_function() as usize),
+                Some(self.max_back_edges_per_module() as usize),
+            )
+        } else {
+            (None, None)
+        };
+
+        VerifierConfig {
+            max_loop_depth: Some(self.max_loop_depth() as usize),
+            max_generic_instantiation_length: Some(self.max_generic_instantiation_length() as usize),
+            max_function_parameters: Some(self.max_function_parameters() as usize),
+            max_basic_blocks: Some(self.max_basic_blocks() as usize),
+            max_value_stack_size: self.max_value_stack_size() as usize,
+            max_type_nodes: Some(self.max_type_nodes() as usize),
+            max_push_size: Some(self.max_push_size() as usize),
+            max_dependency_depth: Some(self.max_dependency_depth() as usize),
+            max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
+            max_function_definitions: Some(self.max_function_definitions() as usize),
+            max_struct_definitions: Some(self.max_struct_definitions() as usize),
+            max_constant_vector_len: Some(self.max_move_vector_len()),
+            max_back_edges_per_function,
+            max_back_edges_per_module,
+            max_basic_blocks_in_script: None,
+            max_idenfitier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            allow_receiving_object_id: self.allow_receiving_object_id(),
+            reject_mutable_random_on_entry_functions: self
+                .reject_mutable_random_on_entry_functions(),
+        }
+    }
+
+    pub fn meter_config(&self) -> MeterConfig {
+        MeterConfig {
+            max_per_fun_meter_units: Some(self.max_verifier_meter_ticks_per_function() as u128),
+            max_per_mod_meter_units: Some(self.max_meter_ticks_per_module() as u128),
+            max_per_pkg_meter_units: Some(
+                // Until the per-package limit was introduced, the per-module limit played double
+                // duty.
+                self.max_meter_ticks_per_package_as_option()
+                    .unwrap_or_else(|| self.max_meter_ticks_per_module()) as u128,
+            ),
+        }
     }
 
     /// Override one or more settings in the config, for testing.
@@ -2119,6 +2208,18 @@ impl ProtocolConfig {
     }
     pub fn set_consensus_max_transactions_in_block_bytes(&mut self, val: u64) {
         self.consensus_max_transactions_in_block_bytes = Some(val);
+    }
+
+    pub fn set_per_object_congestion_control_mode(&mut self, val: PerObjectCongestionControlMode) {
+        self.feature_flags.per_object_congestion_control_mode = val;
+    }
+
+    pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {
+        self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
+    }
+
+    pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
+        self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
 }
 

@@ -4,10 +4,6 @@
 #[allow(unused_const)]
 module sui::transfer {
 
-
-    /* #[test_only] */
-    /* friend sui::test_scenario; */
-
     /// This represents the ability to `receive` an object of type `T`.
     /// This type is ephemeral per-transaction and cannot be stored on-chain.
     /// This does not represent the obligation to receive the object that it

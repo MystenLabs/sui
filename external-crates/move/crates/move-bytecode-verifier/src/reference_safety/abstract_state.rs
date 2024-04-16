@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the abstract state for the type and memory safety analysis.
-use crate::{
-    absint::{AbstractDomain, JoinResult},
-    meter::{Meter, Scope},
-};
+use crate::absint::{AbstractDomain, JoinResult};
 use move_binary_format::{
     binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
@@ -17,6 +14,7 @@ use move_binary_format::{
     safe_unwrap,
 };
 use move_borrow_graph::references::RefID;
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -521,7 +519,7 @@ impl AbstractState {
         arguments: Vec<AbstractValue>,
         acquired_resources: &BTreeSet<StructDefinitionIndex>,
         return_: &Signature,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<AbstractValue>> {
         meter.add_items(
             Scope::Function,
@@ -716,7 +714,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         let joined = Self::join_(self, state);
         assert!(joined.is_canonical());

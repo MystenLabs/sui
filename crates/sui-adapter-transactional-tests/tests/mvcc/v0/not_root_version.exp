@@ -24,7 +24,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 task 5 'view-object'. lines 65-68:
 Owner: Account Address ( P1 )
 Version: 4
-Contents: test::m::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 6 'programmable'. lines 70-72:
 created: object(6,0), object(6,1)
@@ -34,7 +40,15 @@ gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 
 task 7 'view-object'. lines 74-74:
 Owner: Object ID: ( fake(6,1) )
 Version: 2
-Contents: sui::dynamic_field::Field<u64, u64> {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}, name: 0u64, value: 0u64}
+Contents: sui::dynamic_field::Field<u64, u64> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    name: 0u64,
+    value: 0u64,
+}
 
 task 8 'programmable'. lines 76-77:
 mutated: object(0,1), object(6,0), object(6,1)
@@ -43,7 +57,15 @@ gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 
 task 9 'view-object'. lines 79-83:
 Owner: Object ID: ( fake(6,1) )
 Version: 3
-Contents: sui::dynamic_field::Field<u64, u64> {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}, name: 0u64, value: 1u64}
+Contents: sui::dynamic_field::Field<u64, u64> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    name: 0u64,
+    value: 1u64,
+}
 
 task 10 'programmable'. lines 85-90:
 created: object(10,0)

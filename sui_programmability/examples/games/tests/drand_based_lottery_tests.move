@@ -42,12 +42,12 @@ module games::drand_based_lottery_tests {
         let user3 = @0x2;
         let user4 = @0x3;
 
-        let scenario_val = test_scenario::begin(user1);
+        let mut scenario_val = test_scenario::begin(user1);
         let scenario = &mut scenario_val;
 
         drand_based_lottery::create(10, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user1);
-        let game_val = test_scenario::take_shared<Game>(scenario);
+        let mut game_val = test_scenario::take_shared<Game>(scenario);
         let game = &mut game_val;
 
         // User1 buys a ticket.

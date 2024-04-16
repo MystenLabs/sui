@@ -9,7 +9,6 @@ use crate::{
 };
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
@@ -217,7 +216,6 @@ impl ModuleCache {
     ) -> PartialVMResult<&Arc<LoadedModule>> {
         let link_context = data_store.link_context();
         let runtime_id = module.self_id();
-        let module_view = BinaryIndexedView::Module(module);
 
         // Add new structs and collect their field signatures
         let mut field_signatures = vec![];
@@ -269,7 +267,7 @@ impl ModuleCache {
         for signature in field_signatures {
             let tys: Vec<_> = signature
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<_>>()?;
             field_types.push(tys);
         }
@@ -338,7 +336,7 @@ impl ModuleCache {
     }
 
     // `make_type` is the entry point to "translate" a `SignatureToken` to a `Type`
-    fn make_type(&self, module: BinaryIndexedView, tok: &SignatureToken) -> PartialVMResult<Type> {
+    fn make_type(&self, module: &CompiledModule, tok: &SignatureToken) -> PartialVMResult<Type> {
         let res = match tok {
             SignatureToken::Bool => Type::Bool,
             SignatureToken::U8 => Type::U8,
@@ -616,7 +614,6 @@ impl Loader {
     )> {
         let link_context = data_store.link_context();
         let (compiled, loaded) = self.load_module(runtime_id, data_store)?;
-        let compiled_view = BinaryIndexedView::Module(compiled.as_ref());
         let idx = self
             .module_cache
             .read()
@@ -628,7 +625,7 @@ impl Loader {
             .signature_at(func.parameters)
             .0
             .iter()
-            .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
+            .map(|tok| self.module_cache.read().make_type(&compiled, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -636,7 +633,7 @@ impl Loader {
             .signature_at(func.return_)
             .0
             .iter()
-            .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
+            .map(|tok| self.module_cache.read().make_type(&compiled, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -1460,12 +1457,11 @@ impl LoadedModule {
             cache: &ModuleCache,
         ) -> Result<(), PartialVMError> {
             if let Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
-                let module_view = BinaryIndexedView::Module(module);
                 let instantiation = module
                     .signature_at(instantiation_idx)
                     .0
                     .iter()
-                    .map(|ty| cache.make_type(module_view, ty))
+                    .map(|ty| cache.make_type(module, ty))
                     .collect::<Result<Vec<_>, _>>()?;
                 e.insert(instantiation);
             }
@@ -1542,7 +1538,6 @@ impl LoadedModule {
             }
         }
 
-        let module_view = BinaryIndexedView::Module(module);
         for func_def in module.function_defs() {
             let idx = function_refs[func_def.function.0 as usize];
             let name = module.identifier_at(module.function_handle_at(func_def.function).name);
@@ -1574,7 +1569,7 @@ impl LoadedModule {
                                     Some(sig_token) => sig_token,
                                 };
                                 single_signature_token_map
-                                    .insert(*si, cache.make_type(module_view, ty)?);
+                                    .insert(*si, cache.make_type(module, ty)?);
                             }
                         }
                         _ => {}

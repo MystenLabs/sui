@@ -5,10 +5,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use move_binary_format::{
-    binary_views::BinaryIndexedView,
-    file_format::{CompiledModule, CompiledScript},
-};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::{mapping::SourceMapping, utils::source_map_from_file};
 use move_command_line_common::files::{
     MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
@@ -36,10 +33,6 @@ struct Args {
     /// Do not print the basic blocks of each function.
     #[clap(long = "skip-basic-blocks")]
     pub skip_basic_blocks: bool,
-
-    /// Treat input file as a script (default is to treat file as a module)
-    #[clap(short = 's', long = "script")]
-    pub is_script: bool,
 
     /// The path to the bytecode file to disassemble; let's call it file.mv. We assume that two
     /// other files reside under the same directory: a source map file.mvsm (possibly) and the Move
@@ -88,23 +81,14 @@ fn main() {
 
     // TODO: make source mapping work with the Move source language
     let no_loc = Spanned::unsafe_no_loc(()).loc;
-    let module: CompiledModule;
-    let script: CompiledScript;
-    let bytecode = if args.is_script {
-        script = CompiledScript::deserialize(&bytecode_bytes)
-            .expect("Script blob can't be deserialized");
-        BinaryIndexedView::Script(&script)
-    } else {
-        module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)
-            .expect("Module blob can't be deserialized");
-        BinaryIndexedView::Module(&module)
-    };
+    let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)
+        .expect("Module blob can't be deserialized");
 
     let mut source_mapping = {
         if let Ok(s) = source_map {
-            SourceMapping::new(s, bytecode)
+            SourceMapping::new(s, &module)
         } else {
-            SourceMapping::new_from_view(bytecode, no_loc)
+            SourceMapping::new_from_view(&module, no_loc)
                 .expect("Unable to build dummy source mapping")
         }
     };

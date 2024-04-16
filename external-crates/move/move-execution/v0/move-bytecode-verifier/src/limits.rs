@@ -2,18 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    binary_views::BinaryIndexedView,
+    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        CompiledModule, CompiledScript, SignatureToken, StructFieldInformation, TableIndex,
-    },
+    file_format::{CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
     IndexKind,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;
 
 pub struct LimitsVerifier<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
 }
 
 impl<'a> LimitsVerifier<'a> {
@@ -26,31 +24,13 @@ impl<'a> LimitsVerifier<'a> {
         config: &VerifierConfig,
         module: &'a CompiledModule,
     ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Module(module),
-        };
+        let limit_check = Self { resolver: module };
         limit_check.verify_constants(config)?;
         limit_check.verify_function_handles(config)?;
         limit_check.verify_struct_handles(config)?;
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
-    }
-
-    pub fn verify_script(config: &VerifierConfig, module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(config, module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(
-        config: &VerifierConfig,
-        script: &'a CompiledScript,
-    ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Script(script),
-        };
-        limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
-        limit_check.verify_type_nodes(config)
     }
 
     fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
@@ -98,7 +78,8 @@ impl<'a> LimitsVerifier<'a> {
         for cons in self.resolver.constant_pool() {
             self.verify_type_node(config, &cons.type_)?
         }
-        if let Some(sdefs) = self.resolver.struct_defs() {
+        let sdefs = self.resolver.struct_defs();
+        {
             for sdef in sdefs {
                 if let StructFieldInformation::Declared(fdefs) = &sdef.field_information {
                     for fdef in fdefs {
@@ -140,7 +121,8 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_definitions(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        if let Some(defs) = self.resolver.function_defs() {
+        let defs = self.resolver.function_defs();
+        {
             if let Some(max_function_definitions) = config.max_function_definitions {
                 if defs.len() > max_function_definitions {
                     return Err(PartialVMError::new(
@@ -149,7 +131,8 @@ impl<'a> LimitsVerifier<'a> {
                 }
             }
         }
-        if let Some(defs) = self.resolver.struct_defs() {
+        let defs = self.resolver.struct_defs();
+        {
             if let Some(max_struct_definitions) = config.max_struct_definitions {
                 if defs.len() > max_struct_definitions {
                     return Err(PartialVMError::new(

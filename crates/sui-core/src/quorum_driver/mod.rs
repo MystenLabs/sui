@@ -116,8 +116,13 @@ impl<A: Clone> QuorumDriver<A> {
                 debug!(?task, "Enqueued task.");
                 self.metrics.current_requests_in_flight.inc();
                 self.metrics.total_enqueued.inc();
-                if task.retry_times == 1 {
-                    self.metrics.current_transactions_in_retry.inc();
+                if task.retry_times > 0 {
+                    if task.retry_times == 1 {
+                        self.metrics.current_transactions_in_retry.inc();
+                    }
+                    self.metrics
+                        .transaction_retry_count
+                        .report(task.retry_times as u64);
                 }
             })
             .map_err(|e| SuiError::QuorumDriverCommunicationError {
@@ -717,11 +722,6 @@ where
         let tx_digest = *transaction.digest();
         let is_single_writer_tx = !transaction.contains_shared_object();
 
-        quorum_driver
-            .metrics
-            .transaction_retry_count
-            .report(old_retry_times as u64 + 1);
-
         let timer = Instant::now();
         let tx_cert = match tx_cert {
             None => match quorum_driver.process_transaction(transaction.clone()).await {
@@ -785,13 +785,15 @@ where
                 TX_TYPE_SHARED_OBJ_TX
             }])
             .observe(settlement_finality_latency);
-        if settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1 {
-            debug!(
-                ?tx_digest,
-                "Settlement finality latency is out of expected range: {}",
-                settlement_finality_latency
-            );
-        }
+        let is_out_of_expected_range =
+            settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
+        debug!(
+            ?tx_digest,
+            ?is_single_writer_tx,
+            ?is_out_of_expected_range,
+            "QuorumDriver settlement finality latency: {:.3} seconds",
+            settlement_finality_latency
+        );
 
         quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
     }

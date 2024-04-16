@@ -6,8 +6,6 @@ module deepbook::custodian {
     use sui::coin::{Self, Coin};
     use sui::table::{Self, Table};
 
-    /* friend deepbook::clob; */
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     #[test_only]
     const EUserBalanceDoesNotExist: u64 = 1;
@@ -158,8 +156,6 @@ module deepbook::custodian {
         table::borrow(&custodian.account_balances, user)
     }
 
-    /* #[test_only] */
-    /* friend deepbook::clob_test; */
     #[test_only]
     use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
     #[test_only]

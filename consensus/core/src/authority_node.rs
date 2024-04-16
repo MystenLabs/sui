@@ -1,37 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-    vec,
-};
+use std::{sync::Arc, time::Instant};
 
-use async_trait::async_trait;
-use bytes::Bytes;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
-use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    authority_service::AuthorityService,
     block_manager::BlockManager,
-    block_verifier::{BlockVerifier, SignedBlockVerifier},
+    block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
     context::Context,
     core::{Core, CoreSignals},
-    core_thread::{ChannelCoreThreadDispatcher, CoreThreadDispatcher, CoreThreadHandle},
+    core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
-    error::{ConsensusError, ConsensusResult},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{
-        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager, NetworkService,
-    },
+    network::{anemo_network::AnemoManager, tonic_network::TonicManager, NetworkManager},
     storage::rocksdb_store::RocksDBStore,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
@@ -133,7 +123,8 @@ where
     synchronizer: Arc<SynchronizerHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    broadcaster: Broadcaster,
+    // Not created when using block streaming.
+    broadcaster: Option<Broadcaster>,
     network_manager: N,
 }
 
@@ -172,13 +163,17 @@ where
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
+        let tx_block_broadcast = core_signals.block_broadcast_sender();
 
         let mut network_manager = N::new(context.clone());
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster =
-            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
+        let broadcaster = Some(Broadcaster::new(
+            context.clone(),
+            network_client.clone(),
+            &signals_receivers,
+        ));
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -217,13 +212,14 @@ where
             block_verifier.clone(),
         );
 
-        let network_service = Arc::new(AuthorityService {
-            context: context.clone(),
+        let network_service = Arc::new(AuthorityService::new(
+            context.clone(),
             block_verifier,
+            synchronizer.clone(),
             core_dispatcher,
-            synchronizer: synchronizer.clone(),
+            tx_block_broadcast,
             dag_state,
-        });
+        ));
         network_manager
             .install_service(network_keypair, network_service)
             .await;
@@ -247,7 +243,9 @@ where
         );
 
         self.network_manager.stop().await;
-        self.broadcaster.stop();
+        if let Some(mut broadcaster) = self.broadcaster {
+            broadcaster.stop();
+        }
         self.core_thread_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         self.synchronizer.stop().await;
@@ -264,155 +262,32 @@ where
     }
 }
 
-/// Authority's network interface.
-pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
-    context: Arc<Context>,
-    block_verifier: Arc<dyn BlockVerifier>,
-    core_dispatcher: Arc<C>,
-    synchronizer: Arc<SynchronizerHandle>,
-    dag_state: Arc<RwLock<DagState>>,
-}
-
-#[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
-    async fn handle_send_block(
-        &self,
-        peer: AuthorityIndex,
-        serialized_block: Bytes,
-    ) -> ConsensusResult<()> {
-        // TODO: dedup block verifications, here and with fetched blocks.
-        let signed_block: SignedBlock =
-            bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
-
-        // Reject blocks not produced by the peer.
-        if peer != signed_block.author() {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
-                .inc();
-            let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
-            info!("Block with wrong authority from {}: {}", peer, e);
-            return Err(e);
-        }
-
-        // Reject blocks failing validations.
-        if let Err(e) = self.block_verifier.verify(&signed_block) {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
-                .inc();
-            info!("Invalid block from {}: {}", peer, e);
-            return Err(e);
-        }
-        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
-
-        // Reject block with timestamp too far in the future.
-        let forward_time_drift = Duration::from_millis(
-            verified_block
-                .timestamp_ms()
-                .saturating_sub(timestamp_utc_ms()),
-        );
-        if forward_time_drift > self.context.parameters.max_forward_time_drift {
-            return Err(ConsensusError::BlockTooFarInFuture {
-                block_timestamp: verified_block.timestamp_ms(),
-                forward_time_drift,
-            });
-        }
-
-        // Wait until the block's timestamp is current.
-        if forward_time_drift > Duration::ZERO {
-            self.context
-                .metrics
-                .node_metrics
-                .block_timestamp_drift_wait_ms
-                .with_label_values(&[&peer.to_string()])
-                .inc_by(forward_time_drift.as_millis() as u64);
-            sleep(forward_time_drift).await;
-        }
-
-        let missing_ancestors = self
-            .core_dispatcher
-            .add_blocks(vec![verified_block])
-            .await
-            .map_err(|_| ConsensusError::Shutdown)?;
-
-        if !missing_ancestors.is_empty() {
-            // schedule the fetching of them from this peer
-            if let Err(err) = self
-                .synchronizer
-                .fetch_blocks(missing_ancestors, peer)
-                .await
-            {
-                warn!("Errored while trying to fetch missing ancestors via synchronizer: {err}");
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_fetch_blocks(
-        &self,
-        peer: AuthorityIndex,
-        block_refs: Vec<BlockRef>,
-    ) -> ConsensusResult<Vec<Bytes>> {
-        const MAX_ALLOWED_FETCH_BLOCKS: usize = 200;
-
-        if block_refs.len() > MAX_ALLOWED_FETCH_BLOCKS {
-            return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
-        }
-
-        // Some quick validation of the requested block refs
-        for block in &block_refs {
-            if !self.context.committee.is_valid_index(block.author) {
-                return Err(ConsensusError::InvalidAuthorityIndex {
-                    index: block.author,
-                    max: self.context.committee.size(),
-                });
-            }
-            if block.round == 0 {
-                return Err(ConsensusError::UnexpectedGenesisBlockRequested);
-            }
-        }
-
-        // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(&block_refs);
-
-        // Return the serialised blocks
-        let result = blocks
-            .into_iter()
-            .flatten()
-            .map(|block| block.serialized().clone())
-            .collect::<Vec<_>>();
-
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeSet, sync::Arc};
+    use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use async_trait::async_trait;
+    use bytes::Bytes;
     use consensus_config::{local_committee_and_keys, Parameters};
     use parking_lot::Mutex;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
+    use tokio::{
+        sync::{broadcast, mpsc::unbounded_channel},
+        time::sleep,
+    };
 
     use super::*;
     use crate::{
         authority_node::AuthorityService,
-        block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{timestamp_utc_ms, BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
-        network::NetworkClient,
+        error::ConsensusResult,
+        network::{BlockStream, NetworkClient},
         storage::mem_store::MemStore,
         transaction::NoopTransactionVerifier,
     };
@@ -458,12 +333,23 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
+        const SUPPORT_STREAMING: bool = false;
+
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
             _block: &VerifiedBlock,
             _timeout: Duration,
         ) -> ConsensusResult<()> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<BlockStream> {
             unimplemented!("Unimplemented")
         }
 
@@ -526,6 +412,7 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (tx_block_broadcast, _rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
@@ -535,13 +422,14 @@ mod tests {
             core_dispatcher.clone(),
             block_verifier.clone(),
         );
-        let authority_service = Arc::new(AuthorityService {
-            context: context.clone(),
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
             block_verifier,
-            core_dispatcher: core_dispatcher.clone(),
             synchronizer,
+            core_dispatcher.clone(),
+            tx_block_broadcast,
             dag_state,
-        });
+        ));
 
         // Test delaying blocks with time drift.
         let now = timestamp_utc_ms();
@@ -556,7 +444,7 @@ mod tests {
         let serialized = input_block.serialized().clone();
         tokio::spawn(async move {
             service
-                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
+                .handle_received_block(context.committee.to_authority_index(0).unwrap(), serialized)
                 .await
                 .unwrap();
         });

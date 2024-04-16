@@ -4,7 +4,7 @@
 
 use crate::support::dummy_procedure_module;
 use move_binary_format::file_format::Bytecode;
-use move_bytecode_verifier::meter::DummyMeter;
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_bytecode_verifier::CodeUnitVerifier;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
@@ -71,7 +71,7 @@ fn test_max_number_of_bytecode() {
     let module = dummy_procedure_module(nops);
 
     let result =
-        CodeUnitVerifier::verify_module(&VerifierConfig::unbounded(), &module, &mut DummyMeter);
+        CodeUnitVerifier::verify_module(&VerifierConfig::default(), &module, &mut DummyMeter);
     assert!(result.is_ok());
 }
 

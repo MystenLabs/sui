@@ -19,37 +19,37 @@ module common::identified_payment {
     /// NB: This has the `store` ability to allow the `make_shared_payment`
     ///     function. Without this `IdentifiedPayment` could be `key` only and
     ///     custom transfer and receiving rules can be written for it.
-    struct IdentifiedPayment has key, store {
-        id: UID, 
+    public struct IdentifiedPayment has key, store {
+        id: UID,
         payment_id: u64,
         coin: Coin<SUI>,
     }
 
     /// An `EarmarkedPayment` payment is an `IdentifiedPayment` that is
-    /// earmarked for a specific address. E.g., in the restuarant example, you
+    /// earmarked for a specific address. E.g., in the restaurant example, you
     /// may tip your serverd with an `EarmarkedPayment` which will ensure that only
     /// server that you specified in your tip can receive it.
     /// Since this object is `key` only it can only be transferred and
     /// received by functions defined in this module.
-    struct EarmarkedPayment has key {
-        id: UID, 
+    public struct EarmarkedPayment has key {
+        id: UID,
         payment: IdentifiedPayment,
-        for: address,
+        `for`: address,
     }
 
     /// Event emitted when a payment is made. This contains the `payment_id`
     /// that the payment is being made for, the `payment_amount` that is being made,
     /// and the `originator` of the payment.
-    struct SentPaymentEvent has copy, drop {
+    public struct SentPaymentEvent has copy, drop {
         payment_id: u64,
-        payed_to: address,
+        paid_to: address,
         payment_amount: u64,
         originator: address,
     }
 
     /// Event emitted when a payment is processed. This contains the
     /// `payment_id` of the payment, and the amount processed.
-    struct ProcessedPaymentEvent has copy, drop {
+    public struct ProcessedPaymentEvent has copy, drop {
         payment_id: u64,
         payment_amount: u64,
     }
@@ -66,7 +66,7 @@ module common::identified_payment {
         };
         event::emit(SentPaymentEvent {
             payment_id,
-            payed_to: to,
+            paid_to: to,
             payment_amount,
             originator: tx_context::sender(ctx),
         });
@@ -83,7 +83,7 @@ module common::identified_payment {
         };
         event::emit(SentPaymentEvent {
             payment_id,
-            payed_to: object::uid_to_address(register_uid),
+            paid_to: object::uid_to_address(register_uid),
             payment_amount,
             originator: tx_context::sender(ctx),
         });
@@ -102,9 +102,9 @@ module common::identified_payment {
         (payment_id, coin)
     }
 
-    //--------------------------------------------------------------------------- 
+    //---------------------------------------------------------------------------
     // Functions for `EarmarkedPayment`s
-    //--------------------------------------------------------------------------- 
+    //---------------------------------------------------------------------------
 
     /// Custom transfer rule for `EarmarkedPayment` payments -- anyone can transfer them.
     public fun transfer(earmarked: EarmarkedPayment, to: address) {
@@ -115,13 +115,13 @@ module common::identified_payment {
     /// to custom transfer rules: if the object is `key` only , the
     /// `sui::transfer::receive` function can only be called on the object from
     /// within the same module that defined that object.
-    /// 
+    ///
     /// In this case `EarmarkedPayment` is defined with `key` only, so this is
     /// defining a custom receive rule that specifies that only `for` can receive
     /// the payment no matter what object it was sent to.
     public fun receive(parent: &mut UID, ticket: Receiving<EarmarkedPayment>, ctx: &TxContext): IdentifiedPayment {
-        let EarmarkedPayment { id, payment, for } = transfer::receive(parent, ticket);
-        assert!(tx_context::sender(ctx) == for, ENotEarmarkedForSender);
+        let EarmarkedPayment { id, payment, `for` } = transfer::receive(parent, ticket);
+        assert!(tx_context::sender(ctx) == `for`, ENotEarmarkedForSender);
         object::delete(id);
         payment
     }

@@ -89,11 +89,13 @@ use vfs::{
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
-    editions::Flavor,
-    expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+    editions::{Edition, FeatureGate, Flavor},
+    expansion::ast::{
+        self as E, Fields, ModuleIdent, ModuleIdent_, Mutability, Value, Value_, Visibility,
+    },
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
-    parser::ast::{self as P, StructName},
+    parser::ast::{self as P, DatatypeName},
     shared::{unique_map::UniqueMap, Identifier, Name},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
@@ -160,6 +162,8 @@ pub enum DefInfo {
         ModuleIdent_,
         /// Name
         Symbol,
+        /// Visibility
+        Visibility,
         /// Type args
         Vec<(Type, bool /* phantom */)>,
         /// Field names
@@ -183,6 +187,8 @@ pub enum DefInfo {
         /// Type
         Type,
         /// Should displayed definition be preceded by `let`?
+        bool,
+        /// Should displayed definition be preceded by `mut`?
         bool,
     ),
     Const(
@@ -230,6 +236,8 @@ struct FieldDef {
 struct StructDef {
     name_start: Position,
     field_defs: Vec<FieldDef>,
+    /// Does this struct have positional fields?
+    positional: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -250,8 +258,6 @@ struct LocalDef {
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
     def_type: Type,
-    /// Is directly declared with `let` (i.e., not a parameter and not declared with unpack)?
-    with_let: bool,
 }
 
 /// Definition of a constant
@@ -397,18 +403,30 @@ impl fmt::Display for DefInfo {
                     ret_str,
                 )
             }
-            Self::Struct(mod_ident, name, type_args, field_names, field_types) => {
+            Self::Struct(mod_ident, name, visibility, type_args, field_names, field_types) => {
                 let type_args_str = struct_type_args_to_ide_string(type_args);
-                write!(
-                    f,
-                    "struct {}::{}{}{{\n{}\n}}",
-                    // this mod_ident conversion will ensure that only pkg name (without numerical
-                    // address) is displayed which is the same as in source
-                    expansion_mod_ident_to_map_key(mod_ident),
-                    name,
-                    type_args_str,
-                    typed_id_list_to_ide_string(field_names, field_types, true),
-                )
+                // the mod_ident conversions below will ensure that only pkg name (without numerical
+                // address) is displayed which is the same as in source
+                if field_names.is_empty() {
+                    write!(
+                        f,
+                        "{}struct {}::{}{} {{}}",
+                        visibility_to_ide_string(visibility),
+                        expansion_mod_ident_to_map_key(mod_ident),
+                        name,
+                        type_args_str
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{}struct {}::{}{} {{\n{}\n}}",
+                        visibility_to_ide_string(visibility),
+                        expansion_mod_ident_to_map_key(mod_ident),
+                        name,
+                        type_args_str,
+                        typed_id_list_to_ide_string(field_names, field_types, true),
+                    )
+                }
             }
             Self::Field(mod_ident, struct_name, name, t) => {
                 write!(
@@ -420,11 +438,12 @@ impl fmt::Display for DefInfo {
                     type_to_ide_string(t)
                 )
             }
-            Self::Local(name, t, is_decl) => {
+            Self::Local(name, t, is_decl, is_mut) => {
+                let mut_str = if *is_mut { "mut " } else { "" };
                 if *is_decl {
-                    write!(f, "let {}: {}", name, type_to_ide_string(t))
+                    write!(f, "let {}{}: {}", mut_str, name, type_to_ide_string(t))
                 } else {
-                    write!(f, "{}: {}", name, type_to_ide_string(t))
+                    write!(f, "{}{}: {}", mut_str, name, type_to_ide_string(t))
                 }
             }
             Self::Const(mod_ident, name, t, value) => {
@@ -990,6 +1009,7 @@ pub fn get_symbols(
     // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
     // vector as the writer
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
+    let root_pkg_name = resolution_graph.graph.root_package_name;
 
     let overlay_fs_root = VfsPath::new(OverlayFS::new(&[
         VfsPath::new(MemoryFS::new()),
@@ -1013,7 +1033,8 @@ pub fn get_symbols(
     }
 
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
-    let build_plan = BuildPlan::create(resolution_graph)?;
+    let build_plan =
+        BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
@@ -1062,10 +1083,10 @@ pub fn get_symbols(
         None
     };
 
+    let mut edition = None;
     build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
         // extract expansion AST
         let (files, compilation_result) = compiler
-            .set_vfs_root(overlay_fs_root.clone())
             .set_pre_compiled_lib_opt(compiled_libs.clone())
             .run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
@@ -1093,8 +1114,10 @@ pub fn get_symbols(
             }
         };
         eprintln!("compiled to typed AST");
-        let (compiler, typed_program) = compiler.into_ast();
+        let (mut compiler, typed_program) = compiler.into_ast();
         typed_ast = Some(typed_program.clone());
+
+        edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
 
         // compile to CFGIR for accurate diags
         eprintln!("compiling to CFGIR");
@@ -1136,6 +1159,7 @@ pub fn get_symbols(
 
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
+    let parsed_program = parsed_ast.unwrap();
     let typed_modules = typed_ast.unwrap().inner.modules;
 
     let mut mod_outer_defs = BTreeMap::new();
@@ -1145,6 +1169,7 @@ pub fn get_symbols(
     let mut def_info = BTreeMap::new();
 
     pre_process_typed_modules(
+        &parsed_program,
         &typed_modules,
         &files,
         &file_id_mapping,
@@ -1155,10 +1180,12 @@ pub fn get_symbols(
         &mut file_mods,
         &mut references,
         &mut def_info,
+        &edition,
     );
 
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
+            &parsed_program,
             &libs.typing.inner.modules,
             &files,
             &file_id_mapping,
@@ -1169,6 +1196,7 @@ pub fn get_symbols(
             &mut file_mods,
             &mut references,
             &mut def_info,
+            &edition,
         );
     }
 
@@ -1189,7 +1217,7 @@ pub fn get_symbols(
     };
 
     parsing_symbolicator.prog_symbols(
-        &parsed_ast.unwrap(),
+        &parsed_program,
         &mut mod_use_defs,
         &mut mod_to_alias_lengths,
     );
@@ -1246,6 +1274,7 @@ pub fn get_symbols(
 }
 
 fn pre_process_typed_modules(
+    parsed_program: &P::Program,
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
@@ -1256,10 +1285,11 @@ fn pre_process_typed_modules(
     file_mods: &mut BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     def_info: &mut BTreeMap<DefLoc, DefInfo>,
+    edition: &Option<Edition>,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
-        let (defs, symbols) = get_mod_outer_defs(
+        let (mut defs, symbols) = get_mod_outer_defs(
             &pos,
             &sp(pos, *module_ident),
             module_def,
@@ -1268,7 +1298,9 @@ fn pre_process_typed_modules(
             file_id_to_lines,
             references,
             def_info,
+            edition,
         );
+        mark_positional_struct(parsed_program, &mut defs, &mod_ident_str);
 
         let cloned_defs = defs.clone();
         let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
@@ -1279,6 +1311,51 @@ fn pre_process_typed_modules(
 
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
+    }
+}
+
+/// Marks symbolicator's struct metadata as having positional fields
+/// based on the information in the parsed AST.
+fn mark_positional_struct(
+    parsed_program: &P::Program,
+    defs: &mut ModuleDefs,
+    mod_ident_str: &String,
+) {
+    let Some(pkg_def) = parsed_program
+        .source_definitions
+        .iter()
+        .find(|pkg_def| {
+            if let P::Definition::Module(mod_def) = &pkg_def.def {
+                if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(mod_def) {
+                    return mod_ident_str == &parsed_mod_ident_str;
+                }
+            }
+            false
+        })
+        .or_else(|| {
+            parsed_program.lib_definitions.iter().find(|pkg_def| {
+                if let P::Definition::Module(mod_def) = &pkg_def.def {
+                    if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(mod_def) {
+                        return mod_ident_str == &parsed_mod_ident_str;
+                    }
+                }
+                false
+            })
+        })
+    else {
+        return;
+    };
+
+    if let P::Definition::Module(mod_def) = &pkg_def.def {
+        for member in &mod_def.members {
+            let P::ModuleMember::Struct(parsed_sdef) = member else {
+                continue;
+            };
+            let Some(sdef) = defs.structs.get_mut(&parsed_sdef.name.value()) else {
+                continue;
+            };
+            sdef.positional = matches!(parsed_sdef.fields, P::StructFields::Positional(_));
+        }
     }
 }
 
@@ -1294,7 +1371,7 @@ fn process_typed_modules<'a>(
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
-        typing_symbolicator.mod_symbols(module_def);
+        typing_symbolicator.mod_symbols(module_def, &mod_ident_str);
 
         let fpath = match source_files.get(&pos.file_hash()) {
             Some((p, _)) => p,
@@ -1354,6 +1431,20 @@ fn parsing_mod_ident_to_map_key(mod_ident: &P::ModuleIdent_) -> String {
     format!("{}", mod_ident).to_string()
 }
 
+/// Produces module ident string of the form pkg_name::module_name to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST,
+fn parsing_mod_def_to_map_key(mod_def: &P::ModuleDefinition) -> Option<String> {
+    // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
+    // standard practice) and while Move allows other ways of defining modules (i.e., with address
+    // preceding a sequence of modules), this method is now deprecated
+    //
+    // TODO: make this function simply return String when the other way of defining modules is
+    // removed
+    mod_def
+        .address
+        .map(|a| format!("{}::{}", a, mod_def.name).to_string())
+}
+
 /// Produces module ident string of the form pkg_name::module_name to be used as a map key
 /// It's important that these are consistent between parsing AST and typed AST,
 fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
@@ -1391,6 +1482,7 @@ fn get_mod_outer_defs(
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     def_info: &mut BTreeMap<DefLoc, DefInfo>,
+    edition: &Option<Edition>,
 ) -> (ModuleDefs, UseDefMap) {
     let mut structs = BTreeMap::new();
     let mut constants = BTreeMap::new();
@@ -1438,8 +1530,18 @@ fn get_mod_outer_defs(
             StructDef {
                 name_start,
                 field_defs,
+                positional: false, // will be set during parsed AST symbolication
             },
         );
+        let pub_struct = edition
+            .map(|e| e.supports(FeatureGate::PositionalFields))
+            .unwrap_or(false);
+        let visibility = if pub_struct {
+            // fake location OK as this is for display purposes only
+            Visibility::Public(Loc::invalid())
+        } else {
+            Visibility::Internal
+        };
         def_info.insert(
             DefLoc {
                 fhash,
@@ -1448,6 +1550,7 @@ fn get_mod_outer_defs(
             DefInfo::Struct(
                 mod_ident.value,
                 *name,
+                visibility,
                 def.type_parameters
                     .iter()
                     .map(|t| {
@@ -1650,16 +1753,8 @@ impl<'a> ParsingSymbolicator<'a> {
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
         // parsing symbolicator is currently only responsible for processing use declarations
-
-        // we optimistically assume that modules are declared using the PkgName::ModName pattern
-        // (which seems to be the standard practice) and while Move allows other ways of defining
-        // modules (e.g., with address preceding a sequence of modules) we will handle those only
-        // when deemed necessary (worst-case scenario for now is that imports will not feature
-        // advanced functionality, such as go-to-def for modules defined this way)
-        // TODO: handle retrieving address specified in a non-standard way if needed
-        let mod_ident_str = match mod_def.address {
-            Some(a) => format!("{}::{}", a, mod_def.name),
-            None => return,
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(mod_def) else {
+            return;
         };
 
         let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
@@ -1681,10 +1776,25 @@ impl<'a> ParsingSymbolicator<'a> {
                     self.type_symbols(&fun.signature.return_type);
                 }
                 MM::Struct(sdef) => match &sdef.fields {
-                    P::StructFields::Defined(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
+                    P::StructFields::Named(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
                     P::StructFields::Positional(v) => v.iter().for_each(|t| self.type_symbols(t)),
                     P::StructFields::Native(_) => (),
                 },
+                MM::Enum(edef) => {
+                    let P::EnumDefinition { variants, .. } = edef;
+                    for variant in variants {
+                        let P::VariantDefinition { fields, .. } = variant;
+                        match fields {
+                            P::VariantFields::Named(v) => {
+                                v.iter().for_each(|(_, t)| self.type_symbols(t))
+                            }
+                            P::VariantFields::Positional(v) => {
+                                v.iter().for_each(|t| self.type_symbols(t))
+                            }
+                            P::VariantFields::Empty => (),
+                        }
+                    }
+                }
                 MM::Use(use_decl) => self.use_decl_symbols(use_decl),
                 MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
                 MM::Constant(c) => {
@@ -1722,28 +1832,41 @@ impl<'a> ParsingSymbolicator<'a> {
         }
     }
 
+    fn path_entry_symbols(&mut self, path: &P::PathEntry) {
+        let P::PathEntry {
+            name: _,
+            tyargs,
+            is_macro: _,
+        } = path;
+        if let Some(sp!(_, tyargs)) = tyargs {
+            tyargs.iter().for_each(|t| self.type_symbols(t));
+        }
+    }
+
+    fn root_path_entry_symbols(&mut self, path: &P::RootPathEntry) {
+        let P::RootPathEntry {
+            name: _,
+            tyargs,
+            is_macro: _,
+        } = path;
+        if let Some(sp!(_, tyargs)) = tyargs {
+            tyargs.iter().for_each(|t| self.type_symbols(t));
+        }
+    }
+
     /// Get symbols for an expression
     fn exp_symbols(&mut self, sp!(_, exp): &P::Exp) {
         use P::Exp_ as E;
         match exp {
-            E::Name(chain, vo) => {
+            E::Name(chain) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
             }
-            E::Call(chain, _, vo, v) => {
+            E::Call(chain, v) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
                 v.value.iter().for_each(|e| self.exp_symbols(e));
             }
-            E::Pack(chain, vo, v) => {
+            E::Pack(chain, v) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
                 v.iter().for_each(|(_, e)| self.exp_symbols(e));
             }
             E::Vector(_, vo, v) => {
@@ -1975,9 +2098,8 @@ impl<'a> ParsingSymbolicator<'a> {
     fn type_symbols(&mut self, sp!(_, t): &P::Type) {
         use P::Type_ as T;
         match t {
-            T::Apply(chain, v) => {
+            T::Apply(chain) => {
                 self.chain_symbols(chain);
-                v.iter().for_each(|t| self.type_symbols(t));
             }
             T::Ref(_, t) => self.type_symbols(t),
             T::Fun(v, t) => {
@@ -1986,6 +2108,7 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             T::Multiple(v) => v.iter().for_each(|t| self.type_symbols(t)),
             T::Unit => (),
+            T::UnresolvedError => (),
         }
     }
 
@@ -1993,17 +2116,24 @@ impl<'a> ParsingSymbolicator<'a> {
     fn bind_symbols(&mut self, sp!(_, bind): &P::Bind) {
         use P::Bind_ as B;
         match bind {
-            B::Unpack(chain, vo, bindings) => {
+            B::Unpack(chain, bindings) => {
                 self.chain_symbols(chain);
-                if let Some(v) = vo {
-                    v.iter().for_each(|t| self.type_symbols(t));
-                }
                 match bindings {
                     P::FieldBindings::Named(v) => {
-                        v.iter().for_each(|(_, bind)| self.bind_symbols(bind))
+                        for symbol in v {
+                            match symbol {
+                                P::Ellipsis::Binder((_, x)) => self.bind_symbols(x),
+                                P::Ellipsis::Ellipsis(_) => (),
+                            }
+                        }
                     }
                     P::FieldBindings::Positional(v) => {
-                        v.iter().for_each(|bind| self.bind_symbols(bind))
+                        for symbol in v.iter() {
+                            match symbol {
+                                P::Ellipsis::Binder(x) => self.bind_symbols(x),
+                                P::Ellipsis::Ellipsis(_) => (),
+                            }
+                        }
                     }
                 }
             }
@@ -2017,16 +2147,27 @@ impl<'a> ParsingSymbolicator<'a> {
         // record the length of an identifier representing a potentially
         // aliased module, struct or function  name in an access chain,
         let no = match chain {
-            NA::One(n) => Some(*n), // this can be an aliased struct or function
-            NA::Two(leading_name, _) => {
-                // the only thing aliased here coud be a module
-                if let P::LeadingNameAccess_::Name(n) = leading_name.value {
-                    Some(n)
+            NA::Single(entry) => {
+                self.path_entry_symbols(entry);
+                Some(entry.name)
+            }
+            NA::Path(path) => {
+                let P::NamePath { root, entries } = path;
+                self.root_path_entry_symbols(root);
+                entries
+                    .iter()
+                    .for_each(|entry| self.path_entry_symbols(entry));
+                // FIXME: this is a hack that will break when we add enums
+                if entries.len() < 2 {
+                    if let P::LeadingNameAccess_::Name(n) = root.name.value {
+                        Some(n)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
             }
-            NA::Three(..) => None,
         };
         let Some(n) = no else {
             return;
@@ -2041,7 +2182,7 @@ impl<'a> ParsingSymbolicator<'a> {
 
 impl<'a> TypingSymbolicator<'a> {
     /// Get symbols for the whole module
-    fn mod_symbols(&mut self, mod_def: &ModuleDefinition) {
+    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &String) {
         for (pos, name, fun) in &mod_def.functions {
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
@@ -2143,46 +2284,70 @@ impl<'a> TypingSymbolicator<'a> {
                 ),
             );
 
-            self.struct_symbols(s);
+            self.struct_symbols(s, name, mod_ident_str);
         }
         self.use_funs_symbols(&mod_def.use_funs);
     }
 
     /// Get symbols for struct definition
-    fn struct_symbols(&mut self, struct_def: &StructDefinition) {
+    fn struct_symbols(
+        &mut self,
+        struct_def: &StructDefinition,
+        struct_name: &Symbol,
+        mod_ident_str: &String,
+    ) {
         // create scope designated to contain type parameters (if any)
         let mut tp_scope = BTreeMap::new();
         for stp in &struct_def.type_parameters {
             self.add_type_param(&stp.param, &mut tp_scope);
         }
+
+        let positional = self
+            .mod_outer_defs
+            .get(mod_ident_str)
+            .map_or(false, |mod_defs| {
+                mod_defs
+                    .structs
+                    .get(struct_name)
+                    .map_or(false, |sdef| sdef.positional)
+            });
+
         self.type_params = tp_scope;
         if let StructFields::Defined(fields) = &struct_def.fields {
             for (fpos, fname, (_, t)) in fields {
                 self.add_type_id_use_def(t);
-                // enter self-definition for field name (unwrap safe - done when inserting def)
-                let start = get_start_loc(&fpos, self.files, self.file_id_mapping).unwrap();
-                let field_info = DefInfo::Type(t.clone());
-                let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, &field_info);
-                let doc_string = extract_doc_string(
-                    self.file_id_mapping,
-                    self.file_id_to_lines,
-                    &start,
-                    &fpos.file_hash(),
-                );
-                self.use_defs.insert(
-                    start.line,
-                    UseDef::new(
-                        self.references,
-                        self.alias_lengths,
-                        fpos.file_hash(),
-                        start,
-                        fpos.file_hash(),
-                        start,
-                        fname,
-                        ident_type_def_loc,
-                        doc_string,
-                    ),
-                );
+                if !positional {
+                    // Enter self-definition for field name (unwrap safe - done when inserting def),
+                    // but only if the fields are named. Positional fields, introduced in Move 2024
+                    // version of the language, have "fake" locations and could make the displayed
+                    // results confusing. The reason for "fake" locations is that a struct has one
+                    // internal representation in the compiler for both structs with named and
+                    // positional fields (and the latter's fields don't have the actual names).
+                    let start = get_start_loc(&fpos, self.files, self.file_id_mapping).unwrap();
+                    let field_info = DefInfo::Type(t.clone());
+                    let ident_type_def_loc =
+                        def_info_to_type_def_loc(self.mod_outer_defs, &field_info);
+                    let doc_string = extract_doc_string(
+                        self.file_id_mapping,
+                        self.file_id_to_lines,
+                        &start,
+                        &fpos.file_hash(),
+                    );
+                    self.use_defs.insert(
+                        start.line,
+                        UseDef::new(
+                            self.references,
+                            self.alias_lengths,
+                            fpos.file_hash(),
+                            start,
+                            fpos.file_hash(),
+                            start,
+                            fname,
+                            ident_type_def_loc,
+                            doc_string,
+                        ),
+                    );
+                }
             }
         }
     }
@@ -2200,7 +2365,7 @@ impl<'a> TypingSymbolicator<'a> {
         // function body)
         let mut scope = OrdMap::new();
 
-        for (_, pname, ptype) in &fun.signature.parameters {
+        for (mutability, pname, ptype) in &fun.signature.parameters {
             self.add_type_id_use_def(ptype);
 
             // add definition of the parameter
@@ -2210,6 +2375,7 @@ impl<'a> TypingSymbolicator<'a> {
                 &mut scope,
                 ptype.clone(),
                 false, /* with_let */
+                matches!(mutability, Mutability::Mut(_)),
             );
         }
 
@@ -2272,7 +2438,9 @@ impl<'a> TypingSymbolicator<'a> {
         for_unpack: bool,
     ) {
         match &lval.value {
-            LValue_::Var { var, ty: t, .. } => {
+            LValue_::Var {
+                mut_, var, ty: t, ..
+            } => {
                 if define {
                     self.add_local_def(
                         &var.loc,
@@ -2280,6 +2448,8 @@ impl<'a> TypingSymbolicator<'a> {
                         scope,
                         *t.clone(),
                         define && !for_unpack, // with_let (only for simple definition, e.g., `let t = 1;``)
+                        mut_.map(|m| matches!(m, Mutability::Mut(_)))
+                            .unwrap_or_default(),
                     );
                 } else {
                     self.add_local_use_def(&var.value.name, &var.loc, scope)
@@ -2292,6 +2462,9 @@ impl<'a> TypingSymbolicator<'a> {
                 self.unpack_symbols(define, ident, name, tparams, fields, scope);
             }
             LValue_::Ignore => (),
+            LValue_::UnpackVariant(..) | LValue_::BorrowUnpackVariant(..) => {
+                debug_assert!(false, "Enums are not supported by move analyzser.");
+            }
         }
     }
 
@@ -2300,7 +2473,7 @@ impl<'a> TypingSymbolicator<'a> {
         &mut self,
         define: bool,
         ident: &ModuleIdent,
-        name: &StructName,
+        name: &DatatypeName,
         tparams: &Vec<Type>,
         fields: &Fields<(Type, LValue)>,
         scope: &mut OrdMap<Symbol, LocalDef>,
@@ -2509,7 +2682,7 @@ impl<'a> TypingSymbolicator<'a> {
     fn pack_symbols(
         &mut self,
         ident: &ModuleIdent,
-        name: &StructName,
+        name: &DatatypeName,
         tparams: &Vec<Type>,
         fields: &Fields<(Type, Exp)>,
         scope: &mut OrdMap<Symbol, LocalDef>,
@@ -2849,6 +3022,7 @@ impl<'a> TypingSymbolicator<'a> {
         scope: &mut OrdMap<Symbol, LocalDef>,
         def_type: Type,
         with_let: bool,
+        mutable: bool,
     ) {
         match get_start_loc(pos, self.files, self.file_id_mapping) {
             Some(name_start) => {
@@ -2861,7 +3035,6 @@ impl<'a> TypingSymbolicator<'a> {
                     LocalDef {
                         def_loc,
                         def_type: def_type.clone(),
-                        with_let,
                     },
                 );
                 // in other languages only one definition is allowed per scope but in move an (and
@@ -2889,7 +3062,7 @@ impl<'a> TypingSymbolicator<'a> {
                         fhash: pos.file_hash(),
                         start: name_start,
                     },
-                    DefInfo::Local(*name, def_type, with_let),
+                    DefInfo::Local(*name, def_type, with_let, mutable),
                 );
             }
             None => {
@@ -3052,9 +3225,11 @@ fn def_info_to_type_def_loc(
     match def_info {
         DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
         DefInfo::Function(_, _, _, _, _, _, ret) => type_def_loc(mod_outer_defs, ret),
-        DefInfo::Struct(mod_ident, name, _, _, _) => find_struct(mod_outer_defs, mod_ident, name),
+        DefInfo::Struct(mod_ident, name, _, _, _, _) => {
+            find_struct(mod_outer_defs, mod_ident, name)
+        }
         DefInfo::Field(_, _, _, t) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Local(_, t, _) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Local(_, t, _, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Const(_, _, t, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Module(_) => None,
     }
@@ -3683,7 +3858,7 @@ fn docstring_test() {
         4,
         11,
         "M6.move",
-        "struct Symbols::M6::DocumentedStruct{\n\tdocumented_field: u64\n}",
+        "struct Symbols::M6::DocumentedStruct {\n\tdocumented_field: u64\n}",
         Some((4, 11, "M6.move")),
         Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
@@ -3745,7 +3920,7 @@ fn docstring_test() {
         4,
         11,
         "M6.move",
-        "struct Symbols::M6::DocumentedStruct{\n\tdocumented_field: u64\n}",
+        "struct Symbols::M6::DocumentedStruct {\n\tdocumented_field: u64\n}",
         Some((4, 11, "M6.move")),
         Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
@@ -3760,7 +3935,7 @@ fn docstring_test() {
         4,
         11,
         "M6.move",
-        "struct Symbols::M6::DocumentedStruct{\n\tdocumented_field: u64\n}",
+        "struct Symbols::M6::DocumentedStruct {\n\tdocumented_field: u64\n}",
         Some((4, 11, "M6.move")),
         Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
@@ -3840,7 +4015,7 @@ fn docstring_test() {
         3,
         11,
         "M7.move",
-        "struct Symbols::M7::OtherDocStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M7::OtherDocStruct {\n\tsome_field: u64\n}",
         Some((3, 11, "M7.move")),
         Some("Documented struct in another module\n"),
     );
@@ -3888,7 +4063,7 @@ fn docstring_test() {
         3,
         11,
         "M7.move",
-        "struct Symbols::M7::OtherDocStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M7::OtherDocStruct {\n\tsome_field: u64\n}",
         Some((3, 11, "M7.move")),
         Some("Documented struct in another module\n"),
     );
@@ -3960,7 +4135,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // const def name
@@ -4016,7 +4191,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // struct name in unpack (unpack function)
@@ -4030,7 +4205,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // field name in unpack (unpack function)
@@ -4100,7 +4275,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // struct name in pack (pack function)
@@ -4114,7 +4289,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // field name in pack (pack function)
@@ -4156,7 +4331,7 @@ fn symbols_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // function name in a call (other_mod_struct function)
@@ -4198,7 +4373,7 @@ fn symbols_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // function name (acq function)
@@ -4268,7 +4443,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // vector constructor first element struct type (vec function)
@@ -4282,7 +4457,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // vector constructor first element struct field (vec function)
@@ -4793,7 +4968,7 @@ fn symbols_test() {
         2,
         11,
         "M3.move",
-        "struct Symbols::M3::ParamStruct<T>{\n\tsome_field: T\n}",
+        "struct Symbols::M3::ParamStruct<T> {\n\tsome_field: T\n}",
         Some((2, 11, "M3.move")),
     );
     // generic type in struct field definition which itself is a struct
@@ -5366,7 +5541,7 @@ fn imports_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct {\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // aliased mod use (alias name)
@@ -5380,7 +5555,7 @@ fn imports_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct {\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // locally aliased mod use (actual mod name)
@@ -5422,7 +5597,7 @@ fn imports_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct {\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
 }
@@ -5673,7 +5848,7 @@ fn parse_error_test() {
         2,
         11,
         "M2.move",
-        "struct ParseError::M2::SomeStruct{\n\tsome_field: u64\n}",
+        "struct ParseError::M2::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
 }
@@ -5768,7 +5943,7 @@ fn pretype_error_test() {
         2,
         11,
         "M2.move",
-        "struct PreTypeError::M2::SomeStruct{\n\tsome_field: u64\n}",
+        "struct PreTypeError::M2::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
 }
@@ -5809,7 +5984,7 @@ fn pretype_error_with_deps_test() {
         2,
         11,
         "M1.move",
-        "struct PreTypeErrorDep::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "struct PreTypeErrorDep::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
 
@@ -5941,7 +6116,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "struct Move2024::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in public module use fun decl
@@ -5997,7 +6172,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "struct Move2024::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in public module use fun decl
@@ -6068,7 +6243,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "struct Move2024::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in module use fun decl
@@ -6124,7 +6299,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "struct Move2024::M1::SomeStruct{\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in block use fun decl
@@ -6240,6 +6415,130 @@ fn mod_ident_uniform_test() {
 }
 
 #[test]
+/// Checks if symbolication for positional struct fields work correctly and recognizes the
+/// visibility modifier.
+fn move2024_struct_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/move-2024");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        &mut BTreeMap::new(),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/structs.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // struct def with no fields
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        2,
+        18,
+        "structs.move",
+        2,
+        18,
+        "structs.move",
+        "public struct Move2024::structs::SomeStruct {}",
+        Some((2, 18, "structs.move")),
+    );
+    // struct def with positional fields
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        4,
+        18,
+        "structs.move",
+        4,
+        18,
+        "structs.move",
+        "public struct Move2024::structs::Positional {\n\t0: u64,\n\t1: Move2024::structs::SomeStruct\n}",
+        Some((4, 18, "structs.move")),
+    );
+    // positional field type (in def)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        4,
+        34,
+        "structs.move",
+        2,
+        18,
+        "structs.move",
+        "public struct Move2024::structs::SomeStruct {}",
+        Some((2, 18, "structs.move")),
+    );
+    // fun param of a positional struct type
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        6,
+        19,
+        "structs.move",
+        6,
+        19,
+        "structs.move",
+        "positional: Move2024::structs::Positional",
+        Some((4, 18, "structs.move")),
+    );
+    // fun param type of a positional struct type
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        6,
+        31,
+        "structs.move",
+        4,
+        18,
+        "structs.move",
+        "public struct Move2024::structs::Positional {\n\t0: u64,\n\t1: Move2024::structs::SomeStruct\n}",
+        Some((4, 18, "structs.move")),
+    );
+    // first positional field access (u64 type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        7,
+        20,
+        "structs.move",
+        4,
+        29,
+        "structs.move",
+        "Move2024::structs::Positional\n0: u64",
+        None,
+    );
+    // first positional field access (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        3,
+        7,
+        34,
+        "structs.move",
+        4,
+        34,
+        "structs.move",
+        "Move2024::structs::Positional\n1: Move2024::structs::SomeStruct",
+        Some((2, 18, "structs.move")),
+    );
+}
+
+#[test]
 /// Tests symbolication of implicit structs and modules.
 fn implicit_uses_test() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -6270,11 +6569,11 @@ fn implicit_uses_test() {
         3,
         12,
         "implicit_uses.move",
-        76,
+        64,
         18,
         "object.move",
-        "struct sui::object::UID{\n\tid: sui::object::ID\n}",
-        Some((76, 18, "object.move")),
+        "public struct sui::object::UID {\n\tid: sui::object::ID\n}",
+        Some((64, 18, "object.move")),
     );
     // implicit struct as parameter type
     assert_use_def(
@@ -6287,7 +6586,7 @@ fn implicit_uses_test() {
         20,
         18,
         "tx_context.move",
-        "struct sui::tx_context::TxContext{\n\tepoch: u64,\n\tepoch_timestamp_ms: u64,\n\tids_created: u64,\n\tsender: address,\n\ttx_hash: vector<u8>\n}",
+        "public struct sui::tx_context::TxContext {\n\tepoch: u64,\n\tepoch_timestamp_ms: u64,\n\tids_created: u64,\n\tsender: address,\n\ttx_hash: vector<u8>\n}",
         Some((20, 18, "tx_context.move")),
     );
     // implicit module name in function call
@@ -6302,6 +6601,87 @@ fn implicit_uses_test() {
         12,
         "object.move",
         "module sui::object",
+        None,
+    );
+}
+
+#[test]
+/// Tests mutability annotation added in Move 2024.
+fn let_mut_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/move-2024");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        &mut BTreeMap::new(),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/let_mut.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // mut param def
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        2,
+        23,
+        "let_mut.move",
+        2,
+        23,
+        "let_mut.move",
+        "mut p: u64",
+        None,
+    );
+    // mut param use
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        3,
+        8,
+        "let_mut.move",
+        2,
+        23,
+        "let_mut.move",
+        "mut p: u64",
+        None,
+    );
+    // mut var def
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        4,
+        16,
+        "let_mut.move",
+        4,
+        16,
+        "let_mut.move",
+        "let mut v: u64",
+        None,
+    );
+    // mut var use
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        5,
+        8,
+        "let_mut.move",
+        4,
+        16,
+        "let_mut.move",
+        "let mut v: u64",
         None,
     );
 }

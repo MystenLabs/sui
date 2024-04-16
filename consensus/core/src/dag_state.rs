@@ -326,6 +326,27 @@ impl DagState {
         genesis_block.clone()
     }
 
+    /// Returns cached recent blocks from the specified authority.
+    /// Blocks returned is limited by both the `start` round, and if the blocks are cached.
+    pub(crate) fn get_cached_blocks(
+        &self,
+        authority: AuthorityIndex,
+        start: Round,
+    ) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![];
+        for block_ref in self.recent_refs[authority].range((
+            Included(BlockRef::new(start, authority, BlockDigest::MIN)),
+            Unbounded,
+        )) {
+            let block = self
+                .recent_blocks
+                .get(block_ref)
+                .expect("Block should exist in recent blocks");
+            blocks.push(block.clone());
+        }
+        blocks
+    }
+
     /// Returns the last block proposed per authority with `round < end_round`.
     /// The method is guaranteed to return results only when the `end_round` is not earlier of the
     /// available cached data for each authority, otherwise the method will panic - it's the caller's
@@ -1240,6 +1261,61 @@ mod test {
     }
 
     #[test]
+    fn test_get_cached_blocks() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.parameters.dag_state_cached_rounds = 5;
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create no blocks for authority 0
+        // Create one block (round 10) for authority 1
+        // Create two blocks (rounds 10,11) for authority 2
+        // Create three blocks (rounds 10,11,12) for authority 3
+        let mut all_blocks = Vec::new();
+        for author in 1..=3 {
+            for round in 10..(10 + author) {
+                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
+                all_blocks.push(block.clone());
+                dag_state.accept_block(block);
+            }
+        }
+
+        let cached_blocks =
+            dag_state.get_cached_blocks(context.committee.to_authority_index(0).unwrap(), 0);
+        assert!(cached_blocks.is_empty());
+
+        let cached_blocks =
+            dag_state.get_cached_blocks(context.committee.to_authority_index(1).unwrap(), 10);
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 10);
+
+        let cached_blocks =
+            dag_state.get_cached_blocks(context.committee.to_authority_index(2).unwrap(), 10);
+        assert_eq!(cached_blocks.len(), 2);
+        assert_eq!(cached_blocks[0].round(), 10);
+        assert_eq!(cached_blocks[1].round(), 11);
+
+        let cached_blocks =
+            dag_state.get_cached_blocks(context.committee.to_authority_index(2).unwrap(), 11);
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 11);
+
+        let cached_blocks =
+            dag_state.get_cached_blocks(context.committee.to_authority_index(3).unwrap(), 10);
+        assert_eq!(cached_blocks.len(), 3);
+        assert_eq!(cached_blocks[0].round(), 10);
+        assert_eq!(cached_blocks[1].round(), 11);
+        assert_eq!(cached_blocks[2].round(), 12);
+
+        let cached_blocks =
+            dag_state.get_cached_blocks(context.committee.to_authority_index(3).unwrap(), 12);
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 12);
+    }
+
+    #[test]
     fn test_get_cached_last_block_per_authority() {
         // GIVEN
         const CACHED_ROUNDS: Round = 2;
@@ -1262,16 +1338,6 @@ mod test {
                 dag_state.accept_block(block);
             }
         }
-
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            all_blocks.last().unwrap().reference(),
-            all_blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        ));
 
         // WHEN search for the latest blocks
         let end_round = 4;

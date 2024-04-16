@@ -19,29 +19,6 @@ use std::{
     io::{Cursor, Read},
 };
 
-impl CompiledScript {
-    /// Deserializes a &[u8] slice into a `CompiledScript` instance.
-    pub fn deserialize(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_max_version(binary, VERSION_MAX)
-    }
-
-    /// Deserializes a &[u8] slice into a `CompiledScript` instance.
-    pub fn deserialize_with_max_version(
-        binary: &[u8],
-        max_binary_format_version: u32,
-    ) -> BinaryLoaderResult<Self> {
-        let script = deserialize_compiled_script(binary, max_binary_format_version)?;
-        BoundsChecker::verify_script(&script)?;
-        Ok(script)
-    }
-
-    // exposed as a public function to enable testing the deserializer
-    #[doc(hidden)]
-    pub fn deserialize_no_check_bounds(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        deserialize_compiled_script(binary, VERSION_MAX)
-    }
-}
-
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
@@ -310,32 +287,6 @@ fn load_local_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u8> {
     read_uleb_internal(cursor, LOCAL_INDEX_MAX)
 }
 
-/// Module internal function that manages deserialization of transactions.
-fn deserialize_compiled_script(
-    binary: &[u8],
-    max_binary_format_version: u32,
-) -> BinaryLoaderResult<CompiledScript> {
-    // TODO: this function is unused and it's ok to call `new_legacy` until
-    //       we finalize the script removal
-    let binary_config = &BinaryConfig::legacy(max_binary_format_version, false);
-    let versioned_binary = VersionedBinary::initialize(binary, binary_config, false)?;
-    let mut cursor = versioned_binary.new_cursor(0, binary.len() - versioned_binary.data_offset());
-    let version = versioned_binary.version();
-    let mut script = CompiledScript {
-        version,
-        type_parameters: load_ability_sets(
-            &mut cursor,
-            AbilitySetPosition::FunctionTypeParameters,
-        )?,
-        parameters: load_signature_index(&mut cursor)?,
-        code: load_code_unit(&mut cursor)?,
-        ..Default::default()
-    };
-
-    build_compiled_script(&mut script, &versioned_binary, &versioned_binary.tables)?;
-    Ok(script)
-}
-
 /// Module internal function that manages deserialization of modules.
 fn deserialize_compiled_module(
     binary: &[u8],
@@ -435,44 +386,6 @@ trait CommonTables {
     fn get_metadata(&mut self) -> &mut Vec<Metadata>;
 }
 
-impl CommonTables for CompiledScript {
-    fn get_module_handles(&mut self) -> &mut Vec<ModuleHandle> {
-        &mut self.module_handles
-    }
-
-    fn get_struct_handles(&mut self) -> &mut Vec<StructHandle> {
-        &mut self.struct_handles
-    }
-
-    fn get_function_handles(&mut self) -> &mut Vec<FunctionHandle> {
-        &mut self.function_handles
-    }
-
-    fn get_function_instantiations(&mut self) -> &mut Vec<FunctionInstantiation> {
-        &mut self.function_instantiations
-    }
-
-    fn get_signatures(&mut self) -> &mut SignaturePool {
-        &mut self.signatures
-    }
-
-    fn get_identifiers(&mut self) -> &mut IdentifierPool {
-        &mut self.identifiers
-    }
-
-    fn get_address_identifiers(&mut self) -> &mut AddressIdentifierPool {
-        &mut self.address_identifiers
-    }
-
-    fn get_constant_pool(&mut self) -> &mut ConstantPool {
-        &mut self.constant_pool
-    }
-
-    fn get_metadata(&mut self) -> &mut Vec<Metadata> {
-        &mut self.metadata
-    }
-}
-
 impl CommonTables for CompiledModule {
     fn get_module_handles(&mut self) -> &mut Vec<ModuleHandle> {
         &mut self.module_handles
@@ -509,17 +422,6 @@ impl CommonTables for CompiledModule {
     fn get_metadata(&mut self) -> &mut Vec<Metadata> {
         &mut self.metadata
     }
-}
-
-/// Builds and returns a `CompiledScript`.
-fn build_compiled_script(
-    script: &mut CompiledScript,
-    binary: &VersionedBinary,
-    tables: &[Table],
-) -> BinaryLoaderResult<()> {
-    build_common_tables(binary, tables, script)?;
-    build_script_tables(binary, tables, script)?;
-    Ok(())
 }
 
 /// Builds and returns a `CompiledModule`.
@@ -723,39 +625,6 @@ fn build_module_tables(
             | TableType::CONSTANT_POOL
             | TableType::METADATA
             | TableType::SIGNATURES => (),
-        }
-    }
-    Ok(())
-}
-
-/// Builds tables related to a `CompiledScript`.
-fn build_script_tables(
-    _binary: &VersionedBinary,
-    tables: &[Table],
-    _script: &mut CompiledScript,
-) -> BinaryLoaderResult<()> {
-    for table in tables {
-        match table.kind {
-            TableType::MODULE_HANDLES
-            | TableType::STRUCT_HANDLES
-            | TableType::FUNCTION_HANDLES
-            | TableType::FUNCTION_INST
-            | TableType::SIGNATURES
-            | TableType::IDENTIFIERS
-            | TableType::ADDRESS_IDENTIFIERS
-            | TableType::CONSTANT_POOL
-            | TableType::METADATA => {
-                continue;
-            }
-            TableType::STRUCT_DEFS
-            | TableType::STRUCT_DEF_INST
-            | TableType::FUNCTION_DEFS
-            | TableType::FIELD_INST
-            | TableType::FIELD_HANDLE
-            | TableType::FRIEND_DECLS => {
-                return Err(PartialVMError::new(StatusCode::MALFORMED)
-                    .with_message("Bad table in Script".to_string()));
-            }
         }
     }
     Ok(())
@@ -1954,10 +1823,6 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
 
     fn module_idx(&self) -> ModuleHandleIndex {
         self.module_idx
-    }
-
-    fn data_offset(&self) -> usize {
-        self.data_offset
     }
 
     fn binary_end_offset(&self) -> usize {

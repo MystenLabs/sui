@@ -13,7 +13,7 @@ module nfts::chat_tests {
 
     #[test]
     fun test_chat() {
-        let scenario_val = test_scenario::begin(USER1_ADDRESS);
+        let mut scenario_val = test_scenario::begin(USER1_ADDRESS);
         let scenario = &mut scenario_val;
         {
             chat::post(

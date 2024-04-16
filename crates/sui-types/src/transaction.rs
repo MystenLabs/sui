@@ -2243,6 +2243,17 @@ impl SenderSignedData {
 
         Ok(())
     }
+
+    pub fn verify_max_epoch_for_all_sigs(
+        &self,
+        epoch: EpochId,
+        upper_bound_for_max_epoch: Option<u64>,
+    ) -> SuiResult {
+        for sig in &self.inner().tx_signatures {
+            sig.verify_user_authenticator_epoch(epoch, upper_bound_for_max_epoch)?;
+        }
+        Ok(())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
@@ -2333,9 +2344,9 @@ impl Message for SenderSignedData {
 
     fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         for sig in &self.inner().tx_signatures {
-            sig.verify_user_authenticator_epoch(epoch)?;
+            // the upper bound is checked for SenderSignedData only via verify_max_epoch_for_all_sigs
+            sig.verify_user_authenticator_epoch(epoch, None)?;
         }
-
         Ok(())
     }
 }

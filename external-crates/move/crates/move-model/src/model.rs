@@ -38,7 +38,6 @@ use num::BigUint;
 pub use move_binary_format::file_format::{AbilitySet, Visibility as FunctionVisibility};
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
         AddressIdentifierIndex, Bytecode, Constant as VMConstant, ConstantPoolIndex,
         FunctionDefinitionIndex, FunctionHandleIndex, FunctionInstantiation, SignatureIndex,
@@ -1950,10 +1949,7 @@ impl<'env> ModuleEnv<'env> {
     /// Disassemble the module bytecode
     pub fn disassemble(&self) -> String {
         let disas = Disassembler::new(
-            SourceMapping::new(
-                self.data.source_map.clone(),
-                BinaryIndexedView::Module(self.get_verified_module()),
-            ),
+            SourceMapping::new(self.data.source_map.clone(), self.get_verified_module()),
             DisassemblerOptions {
                 only_externally_visible: false,
                 print_code: true,

@@ -4,14 +4,14 @@
 
 use crate::{marking::MarkedSourceMapping, source_map::SourceMap};
 use anyhow::Result;
-use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::CompiledModule;
 use move_ir_types::location::Loc;
 
 /// An object that associates source code with compiled bytecode and source map.
 #[derive(Debug)]
-pub struct SourceMapping<'view> {
+pub struct SourceMapping<'a> {
     // The resulting bytecode from compiling the source map
-    pub bytecode: BinaryIndexedView<'view>,
+    pub bytecode: &'a CompiledModule,
 
     // The source map for the bytecode made w.r.t. to the `source_code`
     pub source_map: SourceMap,
@@ -26,8 +26,8 @@ pub struct SourceMapping<'view> {
     pub marks: Option<MarkedSourceMapping>,
 }
 
-impl<'view> SourceMapping<'view> {
-    pub fn new(source_map: SourceMap, bytecode: BinaryIndexedView<'view>) -> Self {
+impl<'a> SourceMapping<'a> {
+    pub fn new(source_map: SourceMap, bytecode: &'a CompiledModule) -> Self {
         Self {
             source_map,
             bytecode,
@@ -36,9 +36,9 @@ impl<'view> SourceMapping<'view> {
         }
     }
 
-    pub fn new_from_view(bytecode: BinaryIndexedView<'view>, default_loc: Loc) -> Result<Self> {
+    pub fn new_from_view(bytecode: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
         Ok(Self::new(
-            SourceMap::dummy_from_view(&bytecode, default_loc)?,
+            SourceMap::dummy_from_view(bytecode, default_loc)?,
             bytecode,
         ))
     }
