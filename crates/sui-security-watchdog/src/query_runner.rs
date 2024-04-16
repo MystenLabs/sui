@@ -122,7 +122,7 @@ impl SnowflakeQueryRunner {
             config.sf_schema.as_ref().cloned().unwrap().as_str(),
             config.sf_username.as_ref().cloned().unwrap().as_str(),
             config.sf_role.as_ref().cloned().unwrap().as_str(),
-            config.sf_password.as_ref().cloned().unwrap().as_str(),
+            config.sf_password.as_str(),
         )
     }
 
