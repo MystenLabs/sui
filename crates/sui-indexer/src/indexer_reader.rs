@@ -749,9 +749,7 @@ impl IndexerReader {
         }
 
         let stored_txes = self
-            .spawn_blocking(move |this| {
-                this.run_query(|conn| query.limit(limit as i64).load::<StoredTransaction>(conn))
-            })
+            .run_query_async(move |conn| query.limit(limit as i64).load::<StoredTransaction>(conn))
             .await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
             .await
@@ -779,16 +777,13 @@ impl IndexerReader {
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
         let cursor_tx_seq = if let Some(cursor) = cursor {
             let tx_seq = self
-                .spawn_blocking(move |this| {
-                    this.run_query(|conn| {
-                        transactions::dsl::transactions
-                            .select(transactions::tx_sequence_number)
-                            .filter(
-                                transactions::dsl::transaction_digest
-                                    .eq(cursor.into_inner().to_vec()),
-                            )
-                            .first::<i64>(conn)
-                    })
+                .run_query_async(move |conn| {
+                    transactions::dsl::transactions
+                        .select(transactions::tx_sequence_number)
+                        .filter(
+                            transactions::dsl::transaction_digest.eq(cursor.into_inner().to_vec()),
+                        )
+                        .first::<i64>(conn)
                 })
                 .await?;
             Some(tx_seq)
@@ -970,10 +965,8 @@ impl IndexerReader {
 
         tracing::debug!("query transaction blocks: {}", query);
         let tx_sequence_numbers = self
-            .spawn_blocking(move |this| {
-                this.run_query(|conn| {
-                    diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn)
-                })
+            .run_query_async(move |conn| {
+                diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn)
             })
             .await?
             .into_iter()
@@ -1032,13 +1025,11 @@ impl IndexerReader {
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
         let (timestamp_ms, serialized_events) = self
-            .spawn_blocking(move |this| {
-                this.run_query(|conn| {
-                    transactions::table
-                        .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                        .select((transactions::timestamp_ms, transactions::events))
-                        .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
-                })
+            .run_query_async(move |conn| {
+                transactions::table
+                    .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+                    .select((transactions::timestamp_ms, transactions::events))
+                    .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
             })
             .await?;
 
@@ -1112,28 +1103,24 @@ impl IndexerReader {
             } = cursor;
 
             let tx_seq = self
-                .spawn_blocking(move |this| {
-                    this.run_query(|conn| {
-                        transactions::dsl::transactions
-                            .select(transactions::tx_sequence_number)
-                            .filter(
-                                transactions::dsl::transaction_digest
-                                    .eq(tx_digest.into_inner().to_vec()),
-                            )
-                            .first::<i64>(conn)
-                    })
+                .run_query_async(move |conn| {
+                    transactions::dsl::transactions
+                        .select(transactions::tx_sequence_number)
+                        .filter(
+                            transactions::dsl::transaction_digest
+                                .eq(tx_digest.into_inner().to_vec()),
+                        )
+                        .first::<i64>(conn)
                 })
                 .await?;
             (tx_seq, event_seq)
         } else if descending_order {
             let max_tx_seq: i64 = self
-                .spawn_blocking(move |this| {
-                    this.run_query(|conn| {
-                        events::dsl::events
-                            .select(events::tx_sequence_number)
-                            .order(events::dsl::tx_sequence_number.desc())
-                            .first::<i64>(conn)
-                    })
+                .run_query_async(move |conn| {
+                    events::dsl::events
+                        .select(events::tx_sequence_number)
+                        .order(events::dsl::tx_sequence_number.desc())
+                        .first::<i64>(conn)
                 })
                 .await?;
             (max_tx_seq + 1, 0)
@@ -1233,9 +1220,7 @@ impl IndexerReader {
         };
         tracing::debug!("query events: {}", query);
         let stored_events = self
-            .spawn_blocking(move |this| {
-                this.run_query(|conn| diesel::sql_query(query).load::<StoredEvent>(conn))
-            })
+            .run_query_async(move |conn| diesel::sql_query(query).load::<StoredEvent>(conn))
             .await?;
 
         let mut sui_event_futures = vec![];
