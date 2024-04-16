@@ -442,6 +442,15 @@ title: Module `0xb::message`
 
 
 
+<a name="0xb_message_EInvalidPayloadLength"></a>
+
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_EInvalidPayloadLength">EInvalidPayloadLength</a>: u64 = 5;
+</code></pre>
+
+
+
 <a name="0xb_message_ETrailingBytes"></a>
 
 
@@ -791,6 +800,8 @@ Token Transfer Message Format:
     payload.push_back(token_type);
     // <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> serialzies u64 <b>as</b> 8 bytes
     payload.append(<a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&amount)));
+
+    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&payload) == 64, <a href="message.md#0xb_message_EInvalidPayloadLength">EInvalidPayloadLength</a>);
 
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
         message_type: <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
