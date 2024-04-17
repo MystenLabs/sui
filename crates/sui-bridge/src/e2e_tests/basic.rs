@@ -179,9 +179,8 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     // Now let the recipient send the coin back to ETH
     let eth_address_1 = EthAddress::random();
     let bridge_obj_arg = sui_bridge_client
-        .get_mutable_bridge_object_arg()
-        .await
-        .unwrap();
+        .get_mutable_bridge_object_arg_must_succeed()
+        .await;
     let nonce = 0;
 
     let sui_token_type_tags = sui_bridge_client.get_token_id_map().await.unwrap();

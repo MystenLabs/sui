@@ -90,9 +90,8 @@ async fn main() -> anyhow::Result<()> {
                     .await
                     .expect("Failed to request committee signatures");
                 let bridge_arg = sui_client
-                    .get_mutable_bridge_object_arg()
-                    .await
-                    .expect("Failed to get mutable bridge object arg");
+                    .get_mutable_bridge_object_arg_must_succeed()
+                    .await;
                 let id_token_map = sui_client.get_token_id_map().await.unwrap();
                 let tx = build_sui_transaction(
                     sui_address,

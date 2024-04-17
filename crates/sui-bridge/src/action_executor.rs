@@ -19,7 +19,6 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use crate::error::BridgeResult;
 use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
@@ -94,9 +93,11 @@ where
         key: SuiKeyPair,
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
-    ) -> BridgeResult<Self> {
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await?;
-        Ok(Self {
+    ) -> Self {
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
+        Self {
             sui_client,
             bridge_auth_agg,
             store,
@@ -104,7 +105,7 @@ where
             gas_object_id,
             sui_address,
             bridge_object_arg,
-        })
+        }
     }
 
     fn run_inner(
@@ -1088,8 +1089,7 @@ mod tests {
             sui_address,
             gas_object_ref.0,
         )
-        .await
-        .unwrap();
+        .await;
 
         let (executor_handle, signing_tx, execution_tx) = executor.run_inner();
         handles.extend(executor_handle);
