@@ -11,13 +11,15 @@ use rand::Rng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub fn get_rand_seed(
+pub fn generate_rand_seed(
     _context: &mut NativeContext,
     _ty_args: Vec<Type>,
     _args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let mut seed = [0u8; 32];
-    rand::thread_rng().try_fill(&mut seed).expect("should never fail");
+    rand::thread_rng()
+        .try_fill(&mut seed)
+        .expect("should never fail");
     Ok(NativeResult::ok(
         legacy_test_cost(),
         smallvec![Value::vector_u8(seed)],

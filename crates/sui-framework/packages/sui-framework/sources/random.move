@@ -311,10 +311,10 @@ module sui::random {
     // To be used when non-deterministic randomness is needed in tests (e.g., fuzzing).
     #[test_only]
     public fun new_generator_for_testing(): RandomGenerator {
-        let seed = get_rand_seed();
+        let seed = generate_rand_seed();
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
 
     #[test_only]
-    native fun get_rand_seed(): vector<u8>;
+    native fun generate_rand_seed(): vector<u8>;
 }
