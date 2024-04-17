@@ -212,7 +212,10 @@ impl RandomnessEventLoop {
         self.peer_share_ids = Some(authority_info.iter().try_fold(
             HashMap::new(),
             |mut acc, (_name, (peer_id, party_id))| -> Result<_> {
-                let ids = dkg_output.nodes.share_ids_of(*party_id);
+                let ids = dkg_output
+                    .nodes
+                    .share_ids_of(*party_id)
+                    .expect("party_id should be valid");
                 acc.insert(*peer_id, ids);
                 Ok(acc)
             },
