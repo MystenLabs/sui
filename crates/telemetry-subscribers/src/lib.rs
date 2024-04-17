@@ -383,11 +383,13 @@ impl TelemetryConfig {
 
         if config.enable_otlp_tracing {
             let trace_file = env::var("TRACE_FILE").ok();
+            let service_name =
+                env::var("TRACE_SERVICE_NAME").unwrap_or_else(|_| "sui-node".to_string());
 
             let config = sdk::trace::config()
                 .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
                     "service.name",
-                    "sui-node",
+                    service_name.clone(),
                 )]))
                 .with_sampler(Sampler::ParentBased(Box::new(sampler.clone())));
 
@@ -404,7 +406,7 @@ impl TelemetryConfig {
                     .with_span_processor(processor)
                     .build();
 
-                let tracer = p.tracer("sui-node");
+                let tracer = p.tracer(service_name);
                 provider = Some(p);
 
                 tracing_opentelemetry::layer().with_tracer(tracer)

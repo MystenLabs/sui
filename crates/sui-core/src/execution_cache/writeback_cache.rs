@@ -650,7 +650,7 @@ impl WritebackCache {
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "debug", skip_all, fields(num_txns = digests.len()))]
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
