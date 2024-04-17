@@ -10,11 +10,7 @@ module sui_system::validator {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
 
-    friend sui_system::genesis;
-    friend sui_system::sui_system_state_inner;
-    friend sui_system::validator_wrapper;
-
-    struct ValidatorMetadata has store {
+    public struct ValidatorMetadata has store {
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
         network_pubkey_bytes: vector<u8>,
@@ -26,14 +22,14 @@ module sui_system::validator {
         extra_fields: Bag,
     }
 
-    struct Validator has store {
+    public struct Validator has store {
         metadata: ValidatorMetadata,
         voting_power: u64,
         stake: Balance<SUI>,
         extra_fields: Bag,
     }
 
-    public(friend) fun new(
+    public(package) fun new(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
         network_pubkey_bytes: vector<u8>,
@@ -65,7 +61,7 @@ module sui_system::validator {
         }
     }
 
-    public(friend) fun new_dummy_inactive_validator(
+    public(package) fun new_dummy_inactive_validator(
         ctx: &mut TxContext
     ): Validator {
         let metadata = ValidatorMetadata {

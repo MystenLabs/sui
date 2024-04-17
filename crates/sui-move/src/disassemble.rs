@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_binary_format::{binary_views::BinaryIndexedView, CompiledModule};
+use move_binary_format::CompiledModule;
 use move_cli::base;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -65,8 +65,7 @@ impl Disassemble {
         if self.debug {
             println!("{module:#?}");
         } else {
-            let view = BinaryIndexedView::Module(&module);
-            let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc)?;
+            let d = Disassembler::from_view(&module, Spanned::unsafe_no_loc(()).loc)?;
             println!("{}", d.disassemble()?);
         }
 

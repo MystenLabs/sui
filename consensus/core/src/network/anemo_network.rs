@@ -21,6 +21,7 @@ use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use prometheus::HistogramTimer;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, warn};
 
@@ -32,13 +33,13 @@ use super::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
     metrics::NetworkRouteMetrics,
-    FetchBlocksRequest, FetchBlocksResponse, NetworkClient, NetworkManager, NetworkService,
-    SendBlockRequest, SendBlockResponse,
+    BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
+    Round,
 };
 
 /// Implements Anemo RPC client for Consensus.
@@ -122,6 +123,8 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
+    const SUPPORT_STREAMING: bool = false;
+
     async fn send_block(
         &self,
         peer: AuthorityIndex,
@@ -137,6 +140,15 @@ impl NetworkClient for AnemoClient {
             .await
             .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
         Ok(())
+    }
+
+    async fn subscribe_blocks(
+        &self,
+        _peer: AuthorityIndex,
+        _last_received: Round,
+        _timeout: Duration,
+    ) -> ConsensusResult<BlockStream> {
+        unimplemented!("Unimplemented")
     }
 
     async fn fetch_blocks(
@@ -488,6 +500,27 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     }
 }
 
+/// Network message types.
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct SendBlockRequest {
+    // Serialized SignedBlock.
+    block: Bytes,
+}
+
+#[derive(Clone, Serialize, Deserialize, prost::Message)]
+pub(crate) struct SendBlockResponse {}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchBlocksRequest {
+    block_refs: Vec<Vec<u8>>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchBlocksResponse {
+    // Serialized SignedBlock.
+    blocks: Vec<Bytes>,
+}
+
 #[derive(Clone)]
 pub(crate) struct MetricsMakeCallbackHandler {
     metrics: Arc<NetworkRouteMetrics>,
@@ -614,7 +647,10 @@ mod test {
         block::{BlockRef, TestBlock, VerifiedBlock},
         context::Context,
         error::ConsensusResult,
-        network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
+        network::{
+            anemo_network::AnemoManager, BlockStream, NetworkClient, NetworkManager, NetworkService,
+        },
+        Round,
     };
 
     struct TestService {
@@ -642,6 +678,14 @@ mod test {
             Ok(())
         }
 
+        async fn handle_subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+        ) -> ConsensusResult<BlockStream> {
+            unimplemented!()
+        }
+
         async fn handle_fetch_blocks(
             &self,
             peer: AuthorityIndex,
@@ -653,7 +697,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn anemo_basics() {
+    async fn anemo_send_block() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(

@@ -10,9 +10,7 @@
 	"privatePackages": false,
 	"ignore": [
 		"sui-wallet",
-		"sui-explorer",
 		"@mysten/core",
-		"@mysten/ui",
 		"sponsored-transactions",
 		"kiosk-demo",
 		"kiosk-cli",

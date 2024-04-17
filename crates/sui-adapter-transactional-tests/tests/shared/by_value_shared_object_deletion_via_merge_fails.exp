@@ -26,17 +26,41 @@ gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 
 task 5 'view-object'. lines 70-70:
 Owner: Account Address ( A )
 Version: 3
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
 task 6 'view-object'. lines 72-72:
 Owner: Shared
 Version: 4
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
 task 7 'view-object'. lines 74-76:
 Owner: Shared
 Version: 5
-Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}}
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
 
 task 8 'programmable'. lines 77-81:
 Error: Transaction Effects Status: The shared object operation is not allowed.
@@ -76,17 +100,41 @@ gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 
 task 16 'view-object'. lines 109-109:
 Owner: Shared
 Version: 6
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(13,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(13,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
 task 17 'view-object'. lines 111-111:
 Owner: Shared
 Version: 7
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(14,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(14,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
 
 task 18 'view-object'. lines 113-115:
 Owner: Shared
 Version: 8
-Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}}
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,0),
+        },
+    },
+}
 
 task 19 'programmable'. lines 116-120:
 Error: Transaction Effects Status: The shared object operation is not allowed.

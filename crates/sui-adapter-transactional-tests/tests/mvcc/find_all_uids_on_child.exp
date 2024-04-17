@@ -16,7 +16,13 @@ gas summary: computation_cost: 1000000, storage_cost: 17609200,  storage_rebate:
 task 3 'view-object'. lines 146-146:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,9)}}}
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,9),
+        },
+    },
+}
 
 task 4 'programmable'. lines 148-149:
 mutated: object(0,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
@@ -25,7 +31,13 @@ gas summary: computation_cost: 1000000, storage_cost: 13968800,  storage_rebate:
 task 5 'view-object'. lines 151-151:
 Owner: Account Address ( A )
 Version: 3
-Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,9)}}}
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,9),
+        },
+    },
+}
 
 task 6 'programmable'. lines 153-154:
 mutated: object(0,0), object(2,9)
@@ -35,7 +47,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 
 task 7 'view-object'. lines 156-159:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,9)}}}
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,9),
+        },
+    },
+}
 
 task 8 'programmable'. lines 161-162:
 mutated: object(_), object(2,9)

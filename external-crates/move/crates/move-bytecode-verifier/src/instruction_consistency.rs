@@ -8,17 +8,16 @@
 
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, FieldHandleIndex,
-        FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex, TableIndex,
+        Bytecode, CodeOffset, CodeUnit, CompiledModule, FieldHandleIndex, FunctionDefinitionIndex,
+        FunctionHandleIndex, StructDefinitionIndex, TableIndex,
     },
 };
 use move_core_types::vm_status::StatusCode;
 
 pub struct InstructionConsistency<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     current_function: Option<FunctionDefinitionIndex>,
 }
 
@@ -28,7 +27,7 @@ impl<'a> InstructionConsistency<'a> {
     }
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
-        let resolver = BinaryIndexedView::Module(module);
+        let resolver = module;
 
         for (idx, func_def) in module.function_defs().iter().enumerate() {
             match &func_def.code {
@@ -45,18 +44,6 @@ impl<'a> InstructionConsistency<'a> {
         Ok(())
     }
 
-    pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(module).map_err(|e| e.finish(Location::Script))
-    }
-
-    pub fn verify_script_impl(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let checker = Self {
-            resolver: BinaryIndexedView::Script(script),
-            current_function: None,
-        };
-        checker.check_instructions(&script.code)
-    }
-
     fn check_instructions(&self, code: &CodeUnit) -> PartialVMResult<()> {
         for (offset, instr) in code.code.iter().enumerate() {
             use Bytecode::*;
@@ -66,14 +53,14 @@ impl<'a> InstructionConsistency<'a> {
                     self.check_field_op(offset, *field_handle_index, /* generic */ false)?;
                 }
                 MutBorrowFieldGeneric(field_inst_index) => {
-                    let field_inst = self.resolver.field_instantiation_at(*field_inst_index)?;
+                    let field_inst = self.resolver.field_instantiation_at(*field_inst_index);
                     self.check_field_op(offset, field_inst.handle, /* generic */ true)?;
                 }
                 ImmBorrowField(field_handle_index) => {
                     self.check_field_op(offset, *field_handle_index, /* generic */ false)?;
                 }
                 ImmBorrowFieldGeneric(field_inst_index) => {
-                    let field_inst = self.resolver.field_instantiation_at(*field_inst_index)?;
+                    let field_inst = self.resolver.field_instantiation_at(*field_inst_index);
                     self.check_field_op(offset, field_inst.handle, /* non_ */ true)?;
                 }
                 Call(idx) => {
@@ -87,49 +74,49 @@ impl<'a> InstructionConsistency<'a> {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 PackGeneric(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 Unpack(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 UnpackGeneric(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 MutBorrowGlobalDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 MutBorrowGlobalGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 ImmBorrowGlobalDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 ImmBorrowGlobalGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 ExistsDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 ExistsGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 MoveFromDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 MoveFromGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 MoveToDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
                 MoveToGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 VecPack(_, num) | VecUnpack(_, num) => {
@@ -166,7 +153,7 @@ impl<'a> InstructionConsistency<'a> {
         field_handle_index: FieldHandleIndex,
         generic: bool,
     ) -> PartialVMResult<()> {
-        let field_handle = self.resolver.field_handle_at(field_handle_index)?;
+        let field_handle = self.resolver.field_handle_at(field_handle_index);
         self.check_type_op(offset, field_handle.owner, generic)
     }
 
@@ -180,7 +167,7 @@ impl<'a> InstructionConsistency<'a> {
         struct_def_index: StructDefinitionIndex,
         generic: bool,
     ) -> PartialVMResult<()> {
-        let struct_def = self.resolver.struct_def_at(struct_def_index)?;
+        let struct_def = self.resolver.struct_def_at(struct_def_index);
         let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
         if struct_handle.type_parameters.is_empty() == generic {
             return Err(

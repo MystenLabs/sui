@@ -7,15 +7,15 @@ module tto::M2 {
     use sui::transfer::{Self, Receiving};
     use sui::dynamic_field as df;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
-    struct C has key {
+    public struct C has key {
         id: UID, 
         wrapped: B,
     }

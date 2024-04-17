@@ -8,7 +8,7 @@ module e::m {
     use std::string::String as UTF8;
     use sui::object::UID;
 
-    struct O has key { id: UID }
+    public struct O has key { id: UID }
 
     public native fun foo<T>(
         o: &O,

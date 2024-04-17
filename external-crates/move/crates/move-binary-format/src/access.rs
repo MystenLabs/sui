@@ -4,7 +4,7 @@
 
 //! Defines accessors for compiled modules.
 
-use crate::{file_format::*, internals::ModuleIndex};
+use crate::{errors::PartialVMResult, file_format::*, internals::ModuleIndex};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -208,108 +208,52 @@ pub trait ModuleAccess: Sync {
             name == self.identifier_at(handle.name)
         })
     }
-}
 
-/// Represents accessors for a compiled script.
-///
-/// This is a trait to allow working across different wrappers for `CompiledScript`.
-pub trait ScriptAccess: Sync {
-    /// Returns the `CompiledScript` that will be used for accesses.
-    fn as_script(&self) -> &CompiledScript;
+    // Return the `AbilitySet` of a `SignatureToken` given a context.
+    // A `TypeParameter` has the abilities of its `constraints`.
+    // `StructInstantiation` abilities are predicated on the particular instantiation
+    fn abilities(
+        &self,
+        ty: &SignatureToken,
+        constraints: &[AbilitySet],
+    ) -> PartialVMResult<AbilitySet> {
+        use SignatureToken::*;
 
-    fn module_handle_at(&self, idx: ModuleHandleIndex) -> &ModuleHandle {
-        &self.as_script().module_handles[idx.into_index()]
-    }
+        match ty {
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => Ok(AbilitySet::PRIMITIVES),
 
-    fn struct_handle_at(&self, idx: StructHandleIndex) -> &StructHandle {
-        &self.as_script().struct_handles[idx.into_index()]
-    }
-
-    fn function_handle_at(&self, idx: FunctionHandleIndex) -> &FunctionHandle {
-        &self.as_script().function_handles[idx.into_index()]
-    }
-
-    fn signature_at(&self, idx: SignatureIndex) -> &Signature {
-        &self.as_script().signatures[idx.into_index()]
-    }
-
-    fn identifier_at(&self, idx: IdentifierIndex) -> &IdentStr {
-        &self.as_script().identifiers[idx.into_index()]
-    }
-
-    fn address_identifier_at(&self, idx: AddressIdentifierIndex) -> &AccountAddress {
-        &self.as_script().address_identifiers[idx.into_index()]
-    }
-
-    fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
-        &self.as_script().constant_pool[idx.into_index()]
-    }
-
-    fn function_instantiation_at(&self, idx: FunctionInstantiationIndex) -> &FunctionInstantiation {
-        &self.as_script().function_instantiations[idx.into_index()]
-    }
-
-    fn module_handles(&self) -> &[ModuleHandle] {
-        &self.as_script().module_handles
-    }
-
-    fn struct_handles(&self) -> &[StructHandle] {
-        &self.as_script().struct_handles
-    }
-
-    fn function_handles(&self) -> &[FunctionHandle] {
-        &self.as_script().function_handles
-    }
-
-    fn function_instantiations(&self) -> &[FunctionInstantiation] {
-        &self.as_script().function_instantiations
-    }
-
-    fn signatures(&self) -> &[Signature] {
-        &self.as_script().signatures
-    }
-
-    fn constant_pool(&self) -> &[Constant] {
-        &self.as_script().constant_pool
-    }
-
-    fn identifiers(&self) -> &[Identifier] {
-        &self.as_script().identifiers
-    }
-
-    fn address_identifiers(&self) -> &[AccountAddress] {
-        &self.as_script().address_identifiers
-    }
-
-    fn version(&self) -> u32 {
-        self.as_script().version
-    }
-
-    fn code(&self) -> &CodeUnit {
-        &self.as_script().code
-    }
-
-    fn immediate_dependencies(&self) -> Vec<ModuleId> {
-        self.module_handles()
-            .iter()
-            .map(|handle| {
-                ModuleId::new(
-                    *self.address_identifier_at(handle.address),
-                    self.identifier_at(handle.name).to_owned(),
+            Reference(_) | MutableReference(_) => Ok(AbilitySet::REFERENCES),
+            Signer => Ok(AbilitySet::SIGNER),
+            TypeParameter(idx) => Ok(constraints[*idx as usize]),
+            Vector(ty) => AbilitySet::polymorphic_abilities(
+                AbilitySet::VECTOR,
+                vec![false],
+                vec![self.abilities(ty, constraints)?],
+            ),
+            Struct(idx) => {
+                let sh = self.struct_handle_at(*idx);
+                Ok(sh.abilities)
+            }
+            StructInstantiation(struct_inst) => {
+                let (idx, type_args) = &**struct_inst;
+                let sh = self.struct_handle_at(*idx);
+                let declared_abilities = sh.abilities;
+                let type_arguments = type_args
+                    .iter()
+                    .map(|arg| self.abilities(arg, constraints))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                AbilitySet::polymorphic_abilities(
+                    declared_abilities,
+                    sh.type_parameters.iter().map(|param| param.is_phantom),
+                    type_arguments,
                 )
-            })
-            .collect()
+            }
+        }
     }
 }
 
 impl ModuleAccess for CompiledModule {
     fn as_module(&self) -> &CompiledModule {
-        self
-    }
-}
-
-impl ScriptAccess for CompiledScript {
-    fn as_script(&self) -> &CompiledScript {
         self
     }
 }

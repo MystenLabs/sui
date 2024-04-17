@@ -11,20 +11,21 @@ mod abstract_state;
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
     locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
-    meter::{Meter, Scope},
 };
 use abstract_state::{AbstractState, LocalState};
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
+    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
+    CompiledModule,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 pub(crate) fn verify<'a>(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     function_view: &'a FunctionView<'a>,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let initial_state = AbstractState::new(resolver, function_view)?;
     LocalsSafetyAnalysis().analyze_function(initial_state, function_view, meter)
@@ -34,7 +35,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     match bytecode {
@@ -176,7 +177,7 @@ impl TransferFunctions for LocalsSafetyAnalysis {
         bytecode: &Bytecode,
         index: CodeOffset,
         _last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         execute_inner(state, bytecode, index, meter)
     }

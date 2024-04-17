@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_ptb::ptb::PTB;
+use crate::{
+    client_ptb::ptb::PTB,
+    verifier_meter::{AccumulatingMeter, Accumulator},
+};
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
@@ -21,6 +24,7 @@ use fastcrypto::{
 };
 
 use move_binary_format::CompiledModule;
+use move_bytecode_verifier_meter::Scope;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
@@ -31,7 +35,6 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 use shared_crypto::intent::Intent;
-use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Coin, DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
@@ -43,6 +46,7 @@ use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
+use sui_package_management::LockCommand;
 use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
@@ -70,8 +74,11 @@ use json_to_table::json_to_table;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{
-        object::Cell as TableCell, style::HorizontalLine, Border as TableBorder,
-        Modify as TableModify, Panel as TablePanel, Style as TableStyle,
+        object::{Cell as TableCell, Columns as TableCols, Rows as TableRows},
+        span::Span as TableSpan,
+        style::HorizontalLine,
+        Alignment as TableAlignment, Border as TableBorder, Modify as TableModify,
+        Panel as TablePanel, Style as TableStyle,
     },
 };
 
@@ -671,9 +678,11 @@ pub enum SuiClientCommands {
         #[clap(name = "protocol-version", long)]
         protocol_version: Option<u64>,
 
-        /// Path to specific pre-compiled module bytecode to verify (instead of an entire package)
-        #[clap(name = "module", long, global = true)]
-        module_path: Option<PathBuf>,
+        /// Paths to specific pre-compiled module bytecode to verify (instead of an entire package).
+        /// Multiple modules can be verified by passing multiple --module flags. They will be
+        /// treated as if they were one package (subject to the overall package limit).
+        #[clap(name = "module", long, action = clap::ArgAction::Append, global = true)]
+        module_paths: Vec<PathBuf>,
 
         /// Package build options
         #[clap(flatten)]
@@ -980,8 +989,8 @@ impl SuiClientCommands {
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
                         client.read_api(),
-                        build_config,
-                        package_path,
+                        build_config.clone(),
+                        package_path.clone(),
                         upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
@@ -1002,13 +1011,33 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Upgrade
-                )
+                );
+                if let SuiClientCommandResult::Upgrade(ref response) = result {
+                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    if let Err(e) = sui_package_management::update_lock_file(
+                        context,
+                        LockCommand::Upgrade,
+                        build_config.install_dir,
+                        build_config.lock_file,
+                        response,
+                    )
+                    .await
+                    {
+                        eprintln!(
+                            "{} {e}",
+                            "Warning: Issue while updating `Move.lock` for published package."
+                                .bold()
+                                .yellow()
+                        )
+                    };
+                };
+                result
             }
             SuiClientCommands::Publish {
                 package_path,
@@ -1041,8 +1070,8 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
-                    build_config,
-                    package_path,
+                    build_config.clone(),
+                    package_path.clone(),
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                 )
@@ -1058,18 +1087,38 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Publish
-                )
+                );
+                if let SuiClientCommandResult::Publish(ref response) = result {
+                    let build_config = resolve_lock_file_path(build_config, Some(package_path))?;
+                    if let Err(e) = sui_package_management::update_lock_file(
+                        context,
+                        LockCommand::Publish,
+                        build_config.install_dir,
+                        build_config.lock_file,
+                        response,
+                    )
+                    .await
+                    {
+                        eprintln!(
+                            "{} {e}",
+                            "Warning: Issue while updating `Move.lock` for published package."
+                                .bold()
+                                .yellow()
+                        )
+                    };
+                };
+                result
             }
 
             SuiClientCommands::VerifyBytecodeMeter {
                 protocol_version,
-                module_path,
+                module_paths,
                 package_path,
                 build_config,
             } => {
@@ -1081,29 +1130,41 @@ impl SuiClientCommands {
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
-                let modules = match (module_path, package_path) {
-                    (Some(_), Some(_)) => {
+                let (pkg_name, modules) = match (module_paths, package_path) {
+                    (paths, Some(_)) if !paths.is_empty() => {
                         bail!("Cannot specify both a module path and a package path")
                     }
 
-                    (Some(module_path), None) => {
-                        let module_bytes =
-                            fs::read(module_path).context("Failed to read module file")?;
-                        let module = CompiledModule::deserialize_with_defaults(&module_bytes)
-                            .context("Failed to deserialize module")?;
-                        vec![module]
+                    (paths, None) if !paths.is_empty() => {
+                        let mut modules = Vec::with_capacity(paths.len());
+                        for path in paths {
+                            let module_bytes =
+                                fs::read(path).context("Failed to read module file")?;
+                            let module = CompiledModule::deserialize_with_defaults(&module_bytes)
+                                .context("Failed to deserialize module")?;
+                            modules.push(module);
+                        }
+                        ("<unknown>".to_string(), modules)
                     }
 
-                    (None, package_path) => {
+                    (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
                         let package = compile_package_simple(build_config, package_path)?;
-                        package.get_modules().cloned().collect()
+                        let name = package
+                            .package
+                            .compiled_package_info
+                            .package_name
+                            .to_string();
+                        (name, package.get_modules().cloned().collect())
                     }
                 };
 
-                let mut verifier =
-                    sui_execution::verifier(&protocol_config, true, &bytecode_verifier_metrics);
-                let overrides = VerifierOverrides::new(None, None);
+                let for_signing = true;
+                let mut verifier = sui_execution::verifier(
+                    &protocol_config,
+                    for_signing,
+                    &bytecode_verifier_metrics,
+                );
 
                 println!(
                     "Running bytecode verifier for {} module{}",
@@ -1111,20 +1172,31 @@ impl SuiClientCommands {
                     if modules.len() != 1 { "s" } else { "" },
                 );
 
-                let verifier_values = verifier.meter_compiled_modules_with_overrides(
-                    &modules,
-                    &protocol_config,
-                    &overrides,
-                )?;
+                let mut meter = AccumulatingMeter::new();
+                verifier.meter_compiled_modules(&protocol_config, &modules, &mut meter)?;
+
+                let mut used_ticks = meter.accumulator(Scope::Package).clone();
+                used_ticks.name = pkg_name;
+
+                let meter_config = protocol_config.meter_config();
+
+                let exceeded = matches!(
+                    meter_config.max_per_pkg_meter_units,
+                    Some(allowed_ticks) if allowed_ticks < used_ticks.max_ticks(Scope::Package)
+                ) || matches!(
+                    meter_config.max_per_mod_meter_units,
+                    Some(allowed_ticks) if allowed_ticks < used_ticks.max_ticks(Scope::Module)
+                ) || matches!(
+                    meter_config.max_per_fun_meter_units,
+                    Some(allowed_ticks) if allowed_ticks < used_ticks.max_ticks(Scope::Function)
+                );
+
                 SuiClientCommandResult::VerifyBytecodeMeter {
-                    max_module_ticks: verifier_values
-                        .max_per_mod_meter_current
-                        .unwrap_or(u128::MAX),
-                    max_function_ticks: verifier_values
-                        .max_per_fun_meter_current
-                        .unwrap_or(u128::MAX),
-                    used_function_ticks: verifier_values.fun_meter_units_result,
-                    used_module_ticks: verifier_values.mod_meter_units_result,
+                    success: !exceeded,
+                    max_package_ticks: meter_config.max_per_pkg_meter_units,
+                    max_module_ticks: meter_config.max_per_mod_meter_units,
+                    max_function_ticks: meter_config.max_per_fun_meter_units,
+                    used_ticks,
                 }
             }
 
@@ -1766,7 +1838,7 @@ pub(crate) async fn compile_package(
         check_unpublished_dependencies(&dependencies.unpublished)?;
     };
     let compiled_package = build_from_resolution_graph(
-        package_path,
+        package_path.clone(),
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
@@ -1815,6 +1887,16 @@ pub(crate) async fn compile_package(
     } else {
         eprintln!("{}", "Skipping dependency verification".bold().yellow());
     }
+
+    compiled_package
+        .package
+        .compiled_package_info
+        .build_flags
+        .update_lock_file_toolchain_version(&package_path, env!("CARGO_PKG_VERSION").into())
+        .map_err(|e| SuiError::ModuleBuildFailure {
+            error: format!("Failed to update Move.lock toolchain version: {e}"),
+        })?;
+
     Ok((dependencies, compiled_modules, compiled_package, package_id))
 }
 
@@ -2074,33 +2156,91 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "Source verification succeeded!")?;
             }
             SuiClientCommandResult::VerifyBytecodeMeter {
+                success,
+                max_package_ticks,
                 max_module_ticks,
                 max_function_ticks,
-                used_function_ticks,
-                used_module_ticks,
+                used_ticks,
             } => {
                 let mut builder = TableBuilder::default();
-                builder.set_header(vec!["", "Module", "Function"]);
-                builder.push_record(vec![
-                    "Max".to_string(),
-                    max_module_ticks.to_string(),
-                    max_function_ticks.to_string(),
-                ]);
-                builder.push_record(vec![
-                    "Used".to_string(),
-                    used_module_ticks.to_string(),
-                    used_function_ticks.to_string(),
-                ]);
-                let mut table = builder.build();
-                table.with(TableStyle::rounded());
-                if (used_module_ticks > max_module_ticks)
-                    || (used_function_ticks > max_function_ticks)
-                {
-                    table.with(TablePanel::header("Module will NOT pass metering check!"));
-                } else {
-                    table.with(TablePanel::header("Module will pass metering check!"));
+
+                /// Convert ticks to string, using commas as thousands separators
+                fn format_ticks(ticks: u128) -> String {
+                    let ticks = ticks.to_string();
+                    let mut formatted = String::with_capacity(ticks.len() + ticks.len() / 3);
+                    for (i, c) in ticks.chars().rev().enumerate() {
+                        if i != 0 && (i % 3 == 0) {
+                            formatted.push(',');
+                        }
+                        formatted.push(c);
+                    }
+                    formatted.chars().rev().collect()
                 }
+
+                // Build up the limits table
+                builder.push_record(vec!["Limits"]);
+                builder.push_record(vec![
+                    "packages".to_string(),
+                    max_package_ticks.map_or_else(|| "None".to_string(), format_ticks),
+                ]);
+                builder.push_record(vec![
+                    "  modules".to_string(),
+                    max_module_ticks.map_or_else(|| "None".to_string(), format_ticks),
+                ]);
+                builder.push_record(vec![
+                    "    functions".to_string(),
+                    max_function_ticks.map_or_else(|| "None".to_string(), format_ticks),
+                ]);
+
+                // Build up usage table
+                builder.push_record(vec!["Ticks Used"]);
+                let mut stack = vec![used_ticks];
+                while let Some(usage) = stack.pop() {
+                    let indent = match usage.scope {
+                        Scope::Transaction => 0,
+                        Scope::Package => 0,
+                        Scope::Module => 2,
+                        Scope::Function => 4,
+                    };
+
+                    builder.push_record(vec![
+                        format!("{:indent$}{}", "", usage.name),
+                        format_ticks(usage.ticks),
+                    ]);
+
+                    stack.extend(usage.children.iter().rev())
+                }
+
+                let mut table = builder.build();
+
+                let message = if *success {
+                    "Package will pass metering check!"
+                } else {
+                    "Package will NOT pass metering check!"
+                };
+
+                // Add overall header and footer message;
+                table.with(TablePanel::header(message));
+                table.with(TablePanel::footer(message));
+
+                // Set-up spans for headers
+                table.with(TableModify::new(TableRows::new(0..2)).with(TableSpan::column(2)));
+                table.with(TableModify::new(TableRows::single(5)).with(TableSpan::column(2)));
+
+                // Styling
+                table.with(TableStyle::rounded());
+                table.with(TableModify::new(TableCols::new(1..)).with(TableAlignment::right()));
+
+                // Separators before and after headers/footers
+                let hl = TableStyle::modern().get_horizontal();
+                let last = table.count_rows() - 1;
+                table.with(HorizontalLine::new(2, hl));
+                table.with(HorizontalLine::new(5, hl));
+                table.with(HorizontalLine::new(6, hl));
+                table.with(HorizontalLine::new(last, hl));
+
                 table.with(tabled::settings::style::BorderSpanCorrection);
+
                 writeln!(f, "{}", table)?;
             }
             SuiClientCommandResult::NoOutput => {}
@@ -2377,10 +2517,11 @@ pub enum SuiClientCommandResult {
     TransferSui(SuiTransactionBlockResponse),
     Upgrade(SuiTransactionBlockResponse),
     VerifyBytecodeMeter {
-        max_module_ticks: u128,
-        max_function_ticks: u128,
-        used_function_ticks: u128,
-        used_module_ticks: u128,
+        success: bool,
+        max_package_ticks: Option<u128>,
+        max_module_ticks: Option<u128>,
+        max_function_ticks: Option<u128>,
+        used_ticks: Accumulator,
     },
     VerifySource,
 }

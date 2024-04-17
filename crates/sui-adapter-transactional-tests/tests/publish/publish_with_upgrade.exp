@@ -8,4 +8,15 @@ gas summary: computation_cost: 1000000, storage_cost: 5532800,  storage_rebate: 
 task 2 'view-object'. lines 11-11:
 Owner: Account Address ( _ )
 Version: 2
-Contents: sui::package::UpgradeCap {id: sui::object::UID {id: sui::object::ID {bytes: fake(1,1)}}, package: sui::object::ID {bytes: Test}, version: 1u64, policy: 0u8}
+Contents: sui::package::UpgradeCap {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,1),
+        },
+    },
+    package: sui::object::ID {
+        bytes: Test,
+    },
+    version: 1u64,
+    policy: 0u8,
+}

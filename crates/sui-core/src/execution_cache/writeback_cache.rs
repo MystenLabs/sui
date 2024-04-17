@@ -40,7 +40,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
@@ -79,11 +79,11 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument, trace};
 
 use super::ExecutionCacheAPI;
 use super::{
-    cached_version_map::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
+    cache_types::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
     ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI,
     ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
 };
@@ -199,6 +199,9 @@ impl UncommittedData {
     }
 }
 
+// TODO: set this via the config
+static MAX_CACHE_SIZE: u64 = 10000;
+
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
@@ -206,6 +209,14 @@ struct CachedCommittedData {
 
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
+
+    transactions: MokaCache<TransactionDigest, Arc<VerifiedTransaction>>,
+
+    transaction_effects: MokaCache<TransactionEffectsDigest, Arc<TransactionEffects>>,
+
+    transaction_events: MokaCache<TransactionEventsDigest, Arc<TransactionEvents>>,
+
+    executed_effects_digests: MokaCache<TransactionDigest, TransactionEffectsDigest>,
 
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
@@ -215,21 +226,41 @@ struct CachedCommittedData {
 impl CachedCommittedData {
     fn new() -> Self {
         let object_cache = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
         let marker_cache = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let transactions = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let transaction_effects = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let transaction_events = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
+            .build();
+        let executed_effects_digests = MokaCache::builder()
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
         let transaction_objects = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
 
         Self {
             object_cache,
             marker_cache,
+            transactions,
+            transaction_effects,
+            transaction_events,
+            executed_effects_digests,
             _transaction_objects: transaction_objects,
         }
     }
@@ -289,8 +320,8 @@ macro_rules! check_cache_entry_by_latest {
 impl WritebackCache {
     fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         let packages = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
+            .max_capacity(MAX_CACHE_SIZE)
+            .max_capacity(MAX_CACHE_SIZE)
             .build();
         Self {
             dirty: UncommittedData::new(),
@@ -475,20 +506,137 @@ impl WritebackCache {
         )
     }
 
+    #[instrument(level = "debug", skip_all)]
+    async fn write_transaction_outputs(
+        &self,
+        epoch_id: EpochId,
+        tx_outputs: Arc<TransactionOutputs>,
+    ) -> SuiResult {
+        trace!(digest = ?tx_outputs.transaction.digest(), "writing transaction outputs to cache");
+
+        let TransactionOutputs {
+            transaction,
+            effects,
+            markers,
+            written,
+            deleted,
+            wrapped,
+            events,
+            ..
+        } = &*tx_outputs;
+
+        // Deletions and wraps must be written first. The reason is that one of the deletes
+        // may be a child object, and if we write the parent object first, a reader may or may
+        // not see the previous version of the child object, instead of the deleted/wrapped
+        // tombstone, which would cause an execution fork
+        for ObjectKey(id, version) in deleted.iter() {
+            self.write_object_entry(id, *version, ObjectEntry::Deleted)
+                .await;
+        }
+
+        for ObjectKey(id, version) in wrapped.iter() {
+            self.write_object_entry(id, *version, ObjectEntry::Wrapped)
+                .await;
+        }
+
+        // Update all markers
+        for (object_key, marker_value) in markers.iter() {
+            self.write_marker_value(epoch_id, object_key, *marker_value)
+                .await;
+        }
+
+        // Write children before parents to ensure that readers do not observe a parent object
+        // before its most recent children are visible.
+        for (object_id, object) in written.iter() {
+            if object.is_child_object() {
+                self.write_object_entry(object_id, object.version(), object.clone().into())
+                    .await;
+            }
+        }
+        for (object_id, object) in written.iter() {
+            if !object.is_child_object() {
+                self.write_object_entry(object_id, object.version(), object.clone().into())
+                    .await;
+                if object.is_package() {
+                    debug!("caching package: {:?}", object.compute_object_reference());
+                    self.packages
+                        .insert(*object_id, PackageObject::new(object.clone()));
+                }
+            }
+        }
+
+        let tx_digest = *transaction.digest();
+        let effects_digest = effects.digest();
+
+        // insert transaction effects before executed_effects_digests so that there
+        // are never dangling entries in executed_effects_digests
+        self.dirty
+            .transaction_effects
+            .insert(effects_digest, effects.clone());
+
+        // note: if events.data.is_empty(), then there are no events for this transaction. We
+        // store it anyway to avoid special cases in commint_transaction_outputs, and translate
+        // an empty events structure to None when reading.
+        match self.dirty.transaction_events.entry(events.digest()) {
+            DashMapEntry::Occupied(mut occupied) => {
+                occupied.get_mut().0.insert(tx_digest);
+            }
+            DashMapEntry::Vacant(entry) => {
+                let mut txns = BTreeSet::new();
+                txns.insert(tx_digest);
+                entry.insert((txns, events.clone()));
+            }
+        }
+
+        self.dirty
+            .executed_effects_digests
+            .insert(tx_digest, effects_digest);
+
+        self.dirty
+            .pending_transaction_writes
+            .insert(tx_digest, tx_outputs);
+
+        self.executed_effects_digests_notify_read
+            .notify(&tx_digest, &effects_digest);
+
+        self.metrics
+            .pending_notify_read
+            .set(self.executed_effects_digests_notify_read.num_pending() as i64);
+
+        Ok(())
+    }
+
     // Commits dirty data for the given TransactionDigest to the db.
+    #[instrument(level = "debug", skip(self))]
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
         digest: TransactionDigest,
     ) -> SuiResult {
-        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(&digest) else {
+        fail_point_async!("writeback-cache-commit");
+
+        let DashMapEntry::Occupied(occupied) = self.dirty.pending_transaction_writes.entry(digest)
+        else {
             panic!("Attempt to commit unknown transaction {:?}", digest);
         };
 
-        // Flush writes to disk
+        let outputs = occupied.get().clone();
+
+        // Flush writes to disk before removing anything from dirty set. otherwise,
+        // a cache eviction could cause a value to disappear briefly, even if we insert to the
+        // cache before removing from the dirty set.
         self.store
             .write_transaction_outputs(epoch, outputs.clone())
             .await?;
+
+        // Cache transaction before removing entry from self.dirty to avoid
+        // unnecessary cache misses
+        self.cached
+            .transactions
+            .insert(digest, outputs.transaction.clone());
+
+        // releases lock on pending_transaction_writes
+        occupied.remove();
 
         // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
@@ -502,6 +650,43 @@ impl WritebackCache {
             events,
             ..
         } = &*outputs;
+
+        let tx_digest = *transaction.digest();
+        let effects_digest = effects.digest();
+        let events_digest = events.digest();
+
+        self.cached
+            .transaction_effects
+            .insert(effects_digest, effects.clone().into());
+        self.cached
+            .executed_effects_digests
+            .insert(digest, effects_digest);
+        self.cached
+            .transaction_events
+            .insert(events_digest, events.clone().into());
+
+        self.dirty
+            .transaction_effects
+            .remove(&effects_digest)
+            .expect("effects must exist");
+
+        match self.dirty.transaction_events.entry(events.digest()) {
+            DashMapEntry::Occupied(mut occupied) => {
+                let txns = &mut occupied.get_mut().0;
+                assert!(txns.remove(&tx_digest), "transaction must exist");
+                if txns.is_empty() {
+                    occupied.remove();
+                }
+            }
+            DashMapEntry::Vacant(_) => {
+                panic!("events must exist");
+            }
+        }
+
+        self.dirty
+            .executed_effects_digests
+            .remove(&tx_digest)
+            .expect("executed effects must exist");
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
@@ -543,32 +728,6 @@ impl WritebackCache {
                 &ObjectEntry::Wrapped,
             );
         }
-
-        let tx_digest = *transaction.digest();
-        let effects_digest = effects.digest();
-
-        self.dirty
-            .transaction_effects
-            .remove(&effects_digest)
-            .expect("effects must exist");
-
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                let txns = &mut occupied.get_mut().0;
-                assert!(txns.remove(&tx_digest), "transaction must exist");
-                if txns.is_empty() {
-                    occupied.remove();
-                }
-            }
-            DashMapEntry::Vacant(_) => {
-                panic!("events must exist");
-            }
-        }
-
-        self.dirty
-            .executed_effects_digests
-            .remove(&tx_digest)
-            .expect("executed effects must exist");
 
         Ok(())
     }
@@ -627,6 +786,7 @@ impl WritebackCache {
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
             usize::MAX,
+            EPOCH_DURATION_MS_FOR_TESTING,
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
@@ -652,11 +812,19 @@ impl WritebackCache {
     fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
         // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
         // state when clear_state_end_of_epoch_impl is called.
-        let (_, outputs) = self
-            .dirty
-            .pending_transaction_writes
-            .remove(tx)
-            .expect("transaction must exist");
+        // Futher, once we do this, we can delay the insertion of the transaction into
+        // pending_consensus_transactions until after the transaction has executed.
+        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
+            assert!(
+                !self.is_tx_already_executed(tx).expect("read cannot fail"),
+                "attempt to revert committed transaction"
+            );
+
+            // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
+            // can happen before the transaction executes.
+            info!("Not reverting {:?} as it was not executed", tx);
+            return Ok(());
+        };
 
         for (object_id, object) in outputs.written.iter() {
             if object.is_package() {
@@ -665,6 +833,7 @@ impl WritebackCache {
             }
         }
 
+        // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
     }
 
@@ -725,20 +894,9 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    // TOOO: we may not need this function now that all writes go through the cache
-    fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]) {
-        for package_id in system_package_ids {
-            if let Some(p) = self
-                .store
-                .get_object(package_id)
-                .expect("Failed to update system packages")
-            {
-                assert!(p.is_package());
-                self.packages.insert(*package_id, PackageObject::new(p));
-            }
-            // It's possible that a package is not found if it's newly added system package ID
-            // that hasn't got created yet. This should be very very rare though.
-        }
+    fn force_reload_system_packages(&self, _system_package_ids: &[ObjectID]) {
+        // This is a no-op because all writes go through the cache, therefore it can never
+        // be incoherent
     }
 
     // get_object and variants.
@@ -910,6 +1068,8 @@ impl ExecutionCacheRead for WritebackCache {
                 Ok(
                     if let Some(tx) = self.dirty.pending_transaction_writes.get(digest) {
                         CacheResult::Hit(Some(tx.transaction.clone()))
+                    } else if let Some(tx) = self.cached.transactions.get(digest) {
+                        CacheResult::Hit(Some(tx.clone()))
                     } else {
                         CacheResult::Miss
                     },
@@ -933,6 +1093,8 @@ impl ExecutionCacheRead for WritebackCache {
                 Ok(
                     if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
                         CacheResult::Hit(Some(*digest))
+                    } else if let Some(digest) = self.cached.executed_effects_digests.get(digest) {
+                        CacheResult::Hit(Some(digest))
                     } else {
                         CacheResult::Miss
                     },
@@ -952,6 +1114,8 @@ impl ExecutionCacheRead for WritebackCache {
                 Ok(
                     if let Some(effects) = self.dirty.transaction_effects.get(digest) {
                         CacheResult::Hit(Some(effects.clone()))
+                    } else if let Some(effects) = self.cached.transaction_effects.get(digest) {
+                        CacheResult::Hit(Some((*effects).clone()))
                     } else {
                         CacheResult::Miss
                     },
@@ -994,8 +1158,23 @@ impl ExecutionCacheRead for WritebackCache {
             event_digests,
             |digest| {
                 Ok(
-                    if let Some(events) = self.dirty.transaction_events.get(digest) {
-                        CacheResult::Hit(Some(events.1.clone()))
+                    if let Some(events) = self
+                        .dirty
+                        .transaction_events
+                        .get(digest)
+                        .map(|e| e.1.clone())
+                        .or_else(|| {
+                            self.cached
+                                .transaction_events
+                                .get(digest)
+                                .map(|e| (*e).clone())
+                        })
+                    {
+                        if events.data.is_empty() {
+                            CacheResult::Hit(None)
+                        } else {
+                            CacheResult::Hit(Some(events))
+                        }
                     } else {
                         CacheResult::Miss
                     },
@@ -1064,99 +1243,12 @@ impl ExecutionCacheWrite for WritebackCache {
         todo!()
     }
 
-    #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
     ) -> BoxFuture<'_, SuiResult> {
-        async move {
-            let TransactionOutputs {
-                transaction,
-                effects,
-                markers,
-                written,
-                deleted,
-                wrapped,
-                events,
-                ..
-            } = &*tx_outputs;
-
-            // Deletions and wraps must be written first. The reason is that one of the deletes
-            // may be a child object, and if we write the parent object first, a reader may or may
-            // not see the previous version of the child object, instead of the deleted/wrapped
-            // tombstone, which would cause an execution fork
-            for ObjectKey(id, version) in deleted.iter() {
-                self.write_object_entry(id, *version, ObjectEntry::Deleted)
-                    .await;
-            }
-
-            for ObjectKey(id, version) in wrapped.iter() {
-                self.write_object_entry(id, *version, ObjectEntry::Wrapped)
-                    .await;
-            }
-
-            // Update all markers
-            for (object_key, marker_value) in markers.iter() {
-                self.write_marker_value(epoch_id, object_key, *marker_value)
-                    .await;
-            }
-
-            // Write children before parents to ensure that readers do not observe a parent object
-            // before its most recent children are visible.
-            for (object_id, object) in written.iter() {
-                if object.is_child_object() {
-                    self.write_object_entry(object_id, object.version(), object.clone().into())
-                        .await;
-                }
-            }
-            for (object_id, object) in written.iter() {
-                if !object.is_child_object() {
-                    self.write_object_entry(object_id, object.version(), object.clone().into())
-                        .await;
-                    if object.is_package() {
-                        self.packages
-                            .insert(*object_id, PackageObject::new(object.clone()));
-                    }
-                }
-            }
-
-            let tx_digest = *transaction.digest();
-            let effects_digest = effects.digest();
-
-            self.dirty
-                .transaction_effects
-                .insert(effects_digest, effects.clone());
-
-            match self.dirty.transaction_events.entry(events.digest()) {
-                DashMapEntry::Occupied(mut occupied) => {
-                    occupied.get_mut().0.insert(tx_digest);
-                }
-                DashMapEntry::Vacant(entry) => {
-                    let mut txns = BTreeSet::new();
-                    txns.insert(tx_digest);
-                    entry.insert((txns, events.clone()));
-                }
-            }
-
-            self.dirty
-                .executed_effects_digests
-                .insert(tx_digest, effects_digest);
-
-            self.dirty
-                .pending_transaction_writes
-                .insert(tx_digest, tx_outputs);
-
-            self.executed_effects_digests_notify_read
-                .notify(&tx_digest, &effects_digest);
-
-            self.metrics
-                .pending_notify_read
-                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-
-            Ok(())
-        }
-        .boxed()
+        WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs).boxed()
     }
 }
 

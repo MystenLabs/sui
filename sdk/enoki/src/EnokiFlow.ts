@@ -108,11 +108,13 @@ export class EnokiFlow {
 		provider: AuthProvider;
 		clientId: string;
 		redirectUrl: string;
+		network?: 'mainnet' | 'testnet' | 'devnet';
 		extraParams?: Record<string, unknown>;
 	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
 		const { nonce, randomness, maxEpoch, estimatedExpiration } =
 			await this.#enokiClient.createZkLoginNonce({
+				network: input.network,
 				ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 			});
 
@@ -255,7 +257,7 @@ export class EnokiFlow {
 	}
 
 	// TODO: Should this return the proof if it already exists?
-	async getProof() {
+	async getProof({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
 		const zkp = await this.getSession();
 		const { salt } = this.$zkLoginState.get();
 
@@ -274,6 +276,7 @@ export class EnokiFlow {
 		const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair));
 
 		const proof = await this.#enokiClient.createZkLoginZkp({
+			network,
 			jwt: zkp.jwt,
 			maxEpoch: zkp.maxEpoch,
 			randomness: zkp.randomness,
@@ -288,9 +291,9 @@ export class EnokiFlow {
 		return proof;
 	}
 
-	async getKeypair() {
+	async getKeypair({ network }: { network?: 'mainnet' | 'testnet' } = {}) {
 		// Get the proof, so that we ensure it exists in state:
-		await this.getProof();
+		await this.getProof({ network });
 
 		const zkp = await this.getSession();
 
@@ -347,15 +350,17 @@ export class EnokiFlow {
 	}
 
 	async executeTransactionBlock({
+		network,
 		bytes,
 		digest,
 		client,
 	}: {
+		network?: 'mainnet' | 'testnet';
 		bytes: string;
 		digest: string;
 		client: SuiClient;
 	}) {
-		const keypair = await this.getKeypair();
+		const keypair = await this.getKeypair({ network });
 		const userSignature = await keypair.signTransactionBlock(fromB64(bytes));
 
 		await this.#enokiClient.executeSponsoredTransactionBlock({
@@ -383,6 +388,6 @@ export class EnokiFlow {
 			transactionBlock,
 			client,
 		});
-		return await this.executeTransactionBlock({ bytes, digest, client });
+		return await this.executeTransactionBlock({ network, bytes, digest, client });
 	}
 }

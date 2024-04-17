@@ -261,9 +261,12 @@ pub enum ToolCommand {
         about = "Downloads the legacy database snapshot via cloud object store, outputs to local disk"
     )]
     DownloadDBSnapshot {
-        #[clap(long = "epoch")]
+        #[clap(long = "epoch", conflicts_with = "latest")]
         epoch: Option<u64>,
-        #[clap(long = "path", default_value = "/tmp")]
+        #[clap(
+            long = "path",
+            help = "the path to write the downloaded snapshot files"
+        )]
         path: PathBuf,
         /// skip downloading indexes dir
         #[clap(long = "skip-indexes")]
@@ -279,11 +282,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket")]
+        #[clap(long = "snapshot-bucket", group = "auth")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
+            group = "auth",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -297,12 +301,17 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+            conflicts_with = "auth",
+            help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
         /// Download snapshot of the latest available epoch.
         /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(long = "latest")]
+        #[clap(
+            long = "latest",
+            conflicts_with = "epoch",
+            help = "defaults to latest available snapshot in chosen bucket"
+        )]
         latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -318,11 +327,11 @@ pub enum ToolCommand {
         about = "Downloads formal database snapshot via cloud object store, outputs to local disk"
     )]
     DownloadFormalSnapshot {
-        #[clap(long = "epoch")]
+        #[clap(long = "epoch", conflicts_with = "latest")]
         epoch: Option<u64>,
         #[clap(long = "genesis")]
         genesis: PathBuf,
-        #[clap(long = "path", default_value = "/tmp")]
+        #[clap(long = "path")]
         path: PathBuf,
         /// Number of parallel downloads to perform. Defaults to a reasonable
         /// value based on number of available logical cores.
@@ -339,11 +348,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket")]
+        #[clap(long = "snapshot-bucket", group = "auth")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
+            group = "auth",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -360,12 +370,17 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+            conflicts_with = "auth",
+            help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
         /// Download snapshot of the latest available epoch.
         /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(long = "latest")]
+        #[clap(
+            long = "latest",
+            conflicts_with = "epoch",
+            help = "defaults to latest available snapshot in chosen bucket"
+        )]
         latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -633,7 +648,7 @@ impl ToolCommand {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
-                        .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
+                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
                 };
                 let snapshot_store_config = match snapshot_bucket_type {
                     ObjectStoreType::S3 => ObjectStoreConfig {
@@ -815,7 +830,7 @@ impl ToolCommand {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
-                        .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
+                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
                 };
                 let snapshot_store_config = if no_sign_request {
                     let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {

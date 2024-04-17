@@ -28,7 +28,6 @@
 module nfts::shared_auction {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::tx_context::{Self, TxContext};
 
     use nfts::auction_lib::{Self, Auction};
 

@@ -291,7 +291,7 @@ impl ExecutorCluster {
 
         let latest_cp = self
             .indexer_store
-            .get_latest_tx_checkpoint_sequence_number()
+            .get_latest_checkpoint_sequence_number()
             .await
             .unwrap()
             .unwrap();
@@ -323,7 +323,7 @@ impl ExecutorCluster {
 
     pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
         self.indexer_store
-            .persist_object_snapshot(start_cp, end_cp)
+            .update_objects_snapshot(start_cp, end_cp)
             .await
             .unwrap();
 

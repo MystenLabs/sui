@@ -98,7 +98,7 @@ fun init(otw: WEATHER, ctx: &mut TxContext) {
 }
 ```
 
-- The first struct, `AdminCap`, is a [capability](concepts/sui-move-concepts/patterns/capabilities.mdx).
+- The first struct, `AdminCap`, is a capability.
 - The second struct, `WEATHER`, is a [one-time witness](concepts/sui-move-concepts/one-time-witness.mdx) that ensures only a single instance of this `Weather` ever exists.
 - The `WeatherOracle` struct works as a registry and stores the `geoname_id`s of the `CityWeatherOracle`s as [dynamic fields](concepts/dynamic-fields.mdx).
 - The [`init` function](concepts/sui-move-concepts/init.mdx) creates and sends the `Publisher` and `AdminCap` objects to the sender. Also, it creates a [shared object](concepts/object-ownership/shared.mdx) for all the `CityWeatherOracle`s.

@@ -2,15 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui_system::validator_cap {
-    /* friend sui_system::sui_system_state_inner; */
-    /* friend sui_system::validator; */
-    /* friend sui_system::validator_set; */
-
-    /* #[test_only] */
-    /* friend sui_system::sui_system_tests; */
-    /* #[test_only] */
-    /* friend sui_system::rewards_distribution_tests; */
-
     /// The capability object is created when creating a new `Validator` or when the
     /// validator explicitly creates a new capability object for rotation/revocation.
     /// The holder address of this object can perform some validator operations on behalf of

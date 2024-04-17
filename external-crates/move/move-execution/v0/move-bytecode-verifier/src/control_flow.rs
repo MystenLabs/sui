@@ -15,17 +15,15 @@
 use crate::{
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
-    meter::Meter,
 };
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
+    access::ModuleAccess,
     binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
-    file_format::{
-        CodeOffset, CodeUnit, CompiledScript, FunctionDefinition, FunctionDefinitionIndex,
-    },
+    file_format::{CodeOffset, CodeUnit, FunctionDefinition, FunctionDefinitionIndex},
     CompiledModule,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::BTreeSet;
@@ -38,7 +36,7 @@ pub fn verify_function<'a>(
     index: FunctionDefinitionIndex,
     function_definition: &'a FunctionDefinition,
     code: &'a CodeUnit,
-    _meter: &mut impl Meter, // TODO: metering
+    _meter: &mut (impl Meter + ?Sized), // TODO: metering
 ) -> PartialVMResult<FunctionView<'a>> {
     let function_handle = module.function_handle_at(function_definition.function);
 
@@ -48,23 +46,6 @@ pub fn verify_function<'a>(
     } else {
         verify_fallthrough(Some(index), code)?;
         let function_view = FunctionView::function(module, index, code, function_handle);
-        verify_reducibility(verifier_config, &function_view)?;
-        Ok(function_view)
-    }
-}
-
-/// Perform control flow verification on the compiled script, returning its `FunctionView` if
-/// verification was successful.
-pub fn verify_script<'a>(
-    verifier_config: &'a VerifierConfig,
-    script: &'a CompiledScript,
-) -> PartialVMResult<FunctionView<'a>> {
-    if script.version() <= 5 {
-        control_flow_v5::verify(verifier_config, None, &script.code)?;
-        Ok(FunctionView::script(script))
-    } else {
-        verify_fallthrough(None, &script.code)?;
-        let function_view = FunctionView::script(script);
         verify_reducibility(verifier_config, &function_view)?;
         Ok(function_view)
     }

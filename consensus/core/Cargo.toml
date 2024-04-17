@@ -35,6 +35,7 @@ sui-protocol-config.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 tonic.workspace = true
 tower.workspace = true
 tracing.workspace = true

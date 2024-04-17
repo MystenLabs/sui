@@ -244,6 +244,21 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, et);
             exp(context, ef);
         }
+        E::Match(esubject, arms) => {
+            exp(context, esubject);
+            for sp!(_, arm) in &arms.value {
+                if let Some(guard) = arm.guard.as_ref() {
+                    exp(context, guard)
+                }
+                exp(context, &arm.rhs);
+            }
+        }
+        E::VariantMatch(subject, _, arms) => {
+            exp(context, subject);
+            for (_, rhs) in arms {
+                exp(context, rhs);
+            }
+        }
         E::While(_, eb, eloop) => {
             exp(context, eb);
             exp(context, eloop);
@@ -272,6 +287,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 exp(context, fe)
             }
         }
+        E::PackVariant(_, _, _, _, fields) => {
+            for (_, _, (_, (_, fe))) in fields.iter() {
+                exp(context, fe)
+            }
+        }
+
         E::ExpList(el) => exp_list(context, el),
 
         E::Cast(e, _) | E::Annotate(e, _) => exp(context, e),

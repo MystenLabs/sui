@@ -5,9 +5,6 @@ module deepbook::critbit {
     use sui::table::{Self, Table};
     use deepbook::math::{count_leading_zeros};
 
-    /* friend deepbook::clob; */
-    /* friend deepbook::clob_v2; */
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EExceedCapacity: u64 = 2;
     const ETreeNotEmpty: u64 = 3;
@@ -383,9 +380,6 @@ module deepbook::critbit {
     fun is_left_child<V: store>(tree: &CritbitTree<V>, parent_index: u64, index: u64): bool {
         table::borrow(&tree.internal_nodes, parent_index).left_child == index
     }
-
-    /* #[test_only] */
-    /* friend deepbook::critbit_test; */
 
     #[test_only]
     public fun new_leaf_for_test<V>(key: u64, value: V, parent: u64): Leaf<V> {

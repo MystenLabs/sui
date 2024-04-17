@@ -2,22 +2,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::meter::{
-    Meter, Scope, ANALYZE_FUNCTION_BASE_COST, EXECUTE_BLOCK_BASE_COST, PER_BACKEDGE_COST,
-    PER_SUCCESSOR_COST,
-};
 use move_binary_format::{
     binary_views::FunctionView,
     control_flow_graph::{BlockId, ControlFlowGraph},
     errors::PartialVMResult,
     file_format::{Bytecode, CodeOffset},
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use std::collections::BTreeMap;
 
 /// Trait for finite-height abstract domains. Infinite height domains would require a more complex
 /// trait with widening and a partial order.
 pub trait AbstractDomain: Clone + Sized {
-    fn join(&mut self, other: &Self, meter: &mut impl Meter) -> PartialVMResult<JoinResult>;
+    fn join(
+        &mut self,
+        other: &Self,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<JoinResult>;
 }
 
 #[derive(Debug)]
@@ -36,6 +37,12 @@ pub struct BlockInvariant<State> {
 /// A map from block id's to the pre/post of each block after a fixed point is reached.
 #[allow(dead_code)]
 pub type InvariantMap<State> = BTreeMap<BlockId, BlockInvariant<State>>;
+
+/// Costs for metered verification
+const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
+const EXECUTE_BLOCK_BASE_COST: u128 = 10;
+const PER_BACKEDGE_COST: u128 = 10;
+const PER_SUCCESSOR_COST: u128 = 10;
 
 /// Take a pre-state + instruction and mutate it to produce a post-state
 /// Auxiliary data can be stored in self.
@@ -59,7 +66,7 @@ pub trait TransferFunctions {
         instr: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()>;
 }
 
@@ -69,7 +76,7 @@ pub trait AbstractInterpreter: TransferFunctions {
         &mut self,
         initial_state: Self::State,
         function_view: &FunctionView,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         meter.add(Scope::Function, ANALYZE_FUNCTION_BASE_COST)?;
         let mut inv_map = InvariantMap::new();
@@ -144,7 +151,7 @@ pub trait AbstractInterpreter: TransferFunctions {
         block_id: BlockId,
         pre_state: &Self::State,
         function_view: &FunctionView,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Self::State> {
         meter.add(Scope::Function, EXECUTE_BLOCK_BASE_COST)?;
         let mut state_acc = pre_state.clone();

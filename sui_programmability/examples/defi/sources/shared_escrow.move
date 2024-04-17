@@ -3,14 +3,8 @@
 
 /// An escrow for atomic swap of objects without a trusted third party
 module defi::shared_escrow {
-    use std::option::{Self, Option};
-
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     /// An object held in escrow
-    struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
+    public struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: UID,
         /// owner of the escrowed object
         creator: address,

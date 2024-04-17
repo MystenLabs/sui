@@ -16,52 +16,228 @@ gas summary: computation_cost: 1000000, storage_cost: 18749200,  storage_rebate:
 task 3 'view-object'. lines 80-80:
 Owner: Object ID: ( fake(2,7) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,4)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,4),
+    },
+}
 
 task 4 'view-object'. lines 82-82:
 Owner: Object ID: ( _ )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,5)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,5),
+    },
+}
 
 task 5 'view-object'. lines 84-84:
 Owner: Object ID: ( fake(2,6) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,7)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,7),
+    },
+}
 
 task 6 'view-object'. lines 86-86:
 Owner: Object ID: ( fake(2,7) )
 Version: 2
-Contents: sui::dynamic_field::Field<u64, tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, name: 1u64, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[98u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8, 95u8, 100u8, 102u8]}}
+Contents: sui::dynamic_field::Field<u64, tto::M1::A> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    name: 1u64,
+    value: tto::M1::A {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: vector[
+            98u8,
+            95u8,
+            99u8,
+            104u8,
+            105u8,
+            108u8,
+            100u8,
+            95u8,
+            99u8,
+            104u8,
+            105u8,
+            108u8,
+            100u8,
+            95u8,
+            100u8,
+            102u8,
+        ],
+    },
+}
 
 task 7 'view-object'. lines 88-88:
 Owner: Object ID: ( fake(2,0) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,4)}}, value: vector[98u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8]}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+    value: vector[
+        98u8,
+        95u8,
+        99u8,
+        104u8,
+        105u8,
+        108u8,
+        100u8,
+        95u8,
+        99u8,
+        104u8,
+        105u8,
+        108u8,
+        100u8,
+    ],
+}
 
 task 8 'view-object'. lines 90-90:
 Owner: Object ID: ( fake(2,1) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,5)}}, value: vector[119u8, 114u8, 97u8, 112u8, 112u8, 101u8, 100u8, 95u8, 100u8, 102u8]}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,5),
+        },
+    },
+    value: vector[
+        119u8,
+        114u8,
+        97u8,
+        112u8,
+        112u8,
+        101u8,
+        100u8,
+        95u8,
+        100u8,
+        102u8,
+    ],
+}
 
 task 9 'view-object'. lines 92-92:
 Owner: Account Address ( fake(2,8) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,6)}}, value: vector[98u8, 95u8, 112u8, 97u8, 114u8, 101u8, 110u8, 116u8]}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,6),
+        },
+    },
+    value: vector[
+        98u8,
+        95u8,
+        112u8,
+        97u8,
+        114u8,
+        101u8,
+        110u8,
+        116u8,
+    ],
+}
 
 task 10 'view-object'. lines 94-94:
 Owner: Object ID: ( fake(2,2) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,7)}}, value: vector[98u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8]}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,7),
+        },
+    },
+    value: vector[
+        98u8,
+        95u8,
+        99u8,
+        104u8,
+        105u8,
+        108u8,
+        100u8,
+    ],
+}
 
 task 11 'view-object'. lines 96-96:
 Owner: Account Address ( A )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,8)}}, value: vector[97u8, 95u8, 112u8, 97u8, 114u8, 101u8, 110u8, 116u8]}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    value: vector[
+        97u8,
+        95u8,
+        112u8,
+        97u8,
+        114u8,
+        101u8,
+        110u8,
+        116u8,
+    ],
+}
 
 task 12 'view-object'. lines 98-101:
 Owner: Account Address ( fake(2,8) )
 Version: 2
-Contents: tto::M1::Wrapper<tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,9)}}, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[119u8, 114u8, 97u8, 112u8, 112u8, 101u8, 100u8]}}
+Contents: tto::M1::Wrapper<tto::M1::A> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,9),
+        },
+    },
+    value: tto::M1::A {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: vector[
+            119u8,
+            114u8,
+            97u8,
+            112u8,
+            112u8,
+            101u8,
+            100u8,
+        ],
+    },
+}
 
 task 13 'run'. lines 102-102:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 2

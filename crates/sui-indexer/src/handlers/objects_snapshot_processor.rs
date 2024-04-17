@@ -3,6 +3,8 @@
 
 use tracing::info;
 
+use sui_rest_api::Client;
+
 use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
@@ -10,6 +12,7 @@ const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
 const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
 
 pub struct ObjectsSnapshotProcessor<S> {
+    pub client: Client,
     pub store: S,
     metrics: IndexerMetrics,
     pub config: SnapshotLagConfig,
@@ -63,11 +66,13 @@ where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
     pub fn new_with_config(
+        client: Client,
         store: S,
         metrics: IndexerMetrics,
         config: SnapshotLagConfig,
     ) -> ObjectsSnapshotProcessor<S> {
         Self {
+            client,
             store,
             metrics,
             config,
@@ -101,22 +106,45 @@ where
             self.config.snapshot_max_lag as u64 - self.config.snapshot_min_lag as u64;
         let mut latest_cp = self
             .store
-            .get_latest_tx_checkpoint_sequence_number()
+            .get_latest_checkpoint_sequence_number()
             .await?
             .unwrap_or_default();
+        // when backfill_mode is true, objects_snapshot will be updated with the latest
+        // in the checkpoint handler instead, because the async update in this processor
+        // is slower than other tables during the backfilling process.
+        let mut backfill_mode = true;
+        let mut latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
 
         loop {
+            if backfill_mode && latest_fn_cp > start_cp + self.config.snapshot_max_lag as u64 {
+                // backfill mode is true, and the lag is too high, so we need to wait for the lag to be reduced
+                // before we can update the snapshot.
+                tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration))
+                    .await;
+                latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
+                start_cp = self
+                    .store
+                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .await?
+                    .unwrap_or_default();
+                continue;
+            } else if backfill_mode {
+                // flip the backfill mode to false, so that later objects_snapshot will be updated
+                // via this processor instead of the checkpoint handler.
+                backfill_mode = false;
+            }
+
             while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
                 tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration))
                     .await;
                 latest_cp = self
                     .store
-                    .get_latest_tx_checkpoint_sequence_number()
+                    .get_latest_checkpoint_sequence_number()
                     .await?
                     .unwrap_or_default();
             }
             self.store
-                .persist_object_snapshot(start_cp, start_cp + snapshot_window)
+                .update_objects_snapshot(start_cp, start_cp + snapshot_window)
                 .await?;
             start_cp += snapshot_window;
             self.metrics

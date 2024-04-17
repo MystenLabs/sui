@@ -7,7 +7,7 @@ module serializer::serializer_tests {
     use sui::object::{Self, UID};
     use sui::clock::Clock;
 
-    struct MutableShared has key {
+    public struct MutableShared has key {
         id: UID,
         value: u64,
     }

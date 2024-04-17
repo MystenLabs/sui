@@ -4,8 +4,9 @@
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
 use move_bytecode_verifier::{
-    limits::LimitsVerifier, meter::DummyMeter, verify_module_with_config_for_test,
+    limits::LimitsVerifier, verify_module_with_config_for_test,
 };
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -594,7 +595,7 @@ fn max_mixed_config_test() {
 
 #[test]
 fn max_identifier_len() {
-    let config = production_config();
+    let (config, _) = production_config();
     let max_ident = "z".repeat(
         config
             .max_idenfitier_len
@@ -605,7 +606,6 @@ fn max_identifier_len() {
     let res = LimitsVerifier::verify_module(&config, &good_module);
     assert!(res.is_ok());
 
-    let config = production_config();
     let max_ident = "z".repeat(
         (config
             .max_idenfitier_len

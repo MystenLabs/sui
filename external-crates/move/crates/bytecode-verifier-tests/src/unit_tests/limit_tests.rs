@@ -3,9 +3,8 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
-use move_bytecode_verifier::{
-    limits::LimitsVerifier, meter::DummyMeter, verify_module_with_config_for_test,
-};
+use move_bytecode_verifier::{limits::LimitsVerifier, verify_module_with_config_for_test};
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -29,28 +28,6 @@ fn test_function_handle_type_instantiation() {
                 ..Default::default()
             },
             &m
-        )
-        .unwrap_err()
-        .major_status(),
-        StatusCode::TOO_MANY_TYPE_PARAMETERS
-    );
-
-    let mut s = basic_test_script();
-    s.function_handles.push(FunctionHandle {
-        module: ModuleHandleIndex::new(0),
-        name: IdentifierIndex::new(0),
-        parameters: SignatureIndex(0),
-        return_: SignatureIndex(0),
-        type_parameters: std::iter::repeat(AbilitySet::ALL).take(10).collect(),
-    });
-
-    assert_eq!(
-        LimitsVerifier::verify_script(
-            &VerifierConfig {
-                max_generic_instantiation_length: Some(9),
-                ..Default::default()
-            },
-            &s
         )
         .unwrap_err()
         .major_status(),
@@ -85,32 +62,6 @@ fn test_struct_handle_type_instantiation() {
         .major_status(),
         StatusCode::TOO_MANY_TYPE_PARAMETERS
     );
-
-    let mut s = basic_test_script();
-    s.struct_handles.push(StructHandle {
-        module: ModuleHandleIndex::new(0),
-        name: IdentifierIndex::new(0),
-        abilities: AbilitySet::ALL,
-        type_parameters: std::iter::repeat(StructTypeParameter {
-            constraints: AbilitySet::ALL,
-            is_phantom: false,
-        })
-        .take(10)
-        .collect(),
-    });
-
-    assert_eq!(
-        LimitsVerifier::verify_script(
-            &VerifierConfig {
-                max_generic_instantiation_length: Some(9),
-                ..Default::default()
-            },
-            &s
-        )
-        .unwrap_err()
-        .major_status(),
-        StatusCode::TOO_MANY_TYPE_PARAMETERS
-    );
 }
 
 #[test]
@@ -134,31 +85,6 @@ fn test_function_handle_parameters() {
                 ..Default::default()
             },
             &m
-        )
-        .unwrap_err()
-        .major_status(),
-        StatusCode::TOO_MANY_PARAMETERS
-    );
-
-    let mut s = basic_test_script();
-    s.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Bool).take(10).collect(),
-    ));
-    s.function_handles.push(FunctionHandle {
-        module: ModuleHandleIndex::new(0),
-        name: IdentifierIndex::new(0),
-        parameters: SignatureIndex(1),
-        return_: SignatureIndex(0),
-        type_parameters: vec![],
-    });
-
-    assert_eq!(
-        LimitsVerifier::verify_script(
-            &VerifierConfig {
-                max_function_parameters: Some(9),
-                ..Default::default()
-            },
-            &s
         )
         .unwrap_err()
         .major_status(),
@@ -594,7 +520,7 @@ fn max_mixed_config_test() {
 
 #[test]
 fn max_identifier_len() {
-    let config = production_config();
+    let (config, _) = production_config();
     let max_ident = "z".repeat(
         config
             .max_idenfitier_len
@@ -605,7 +531,6 @@ fn max_identifier_len() {
     let res = LimitsVerifier::verify_module(&config, &good_module);
     assert!(res.is_ok());
 
-    let config = production_config();
     let max_ident = "z".repeat(
         (config
             .max_idenfitier_len

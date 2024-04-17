@@ -6,7 +6,7 @@ module b::m {
     use a::m::T2 as M;
     use a::n::T0 as N;
 
-    struct T0 {
+    public struct T0 {
         m: M,
         n: N,
     }
