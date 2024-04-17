@@ -644,7 +644,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         tokenPrices[2] = 1 * USD_VALUE_MULTIPLIER; // ETH PRICE
         tokenPrices[3] = 1 * USD_VALUE_MULTIPLIER; // USDC PRICE
         tokenPrices[4] = 1 * USD_VALUE_MULTIPLIER; // USDT PRICE
-        uint8 _chainID = 3;
+        uint8 _chainID = 2;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
         address[] memory _supportedTokens = new address[](5);
