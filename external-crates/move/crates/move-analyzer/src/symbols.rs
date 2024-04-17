@@ -116,6 +116,16 @@ use move_symbol_pool::Symbol;
 /// go-to-references to the IDE.
 pub const DEFS_AND_REFS_SUPPORT: bool = true;
 
+const MANIFEST_FILE_NAME: &str = "Move.toml";
+
+#[derive(Clone)]
+pub struct PrecompiledPkgDeps {
+    /// Hash of the manifest file for a given package
+    manifest_hash: Option<FileHash>,
+    /// Precompiled deps
+    deps: Arc<FullyCompiledProgram>,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
 /// Location of a definition's identifier
 pub struct DefLoc {
@@ -731,7 +741,7 @@ impl SymbolicatorRunner {
     pub fn new(
         ide_files_root: VfsPath,
         symbols: Arc<Mutex<Symbols>>,
-        pkg_deps: Arc<Mutex<BTreeMap<PathBuf, Arc<FullyCompiledProgram>>>>,
+        pkg_deps: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
     ) -> Self {
@@ -851,7 +861,7 @@ impl SymbolicatorRunner {
         let mut current_path_opt = Some(starting_path);
         while current_path_opt.is_some() {
             let current_path = current_path_opt.unwrap();
-            let manifest_path = current_path.join("Move.toml");
+            let manifest_path = current_path.join(MANIFEST_FILE_NAME);
             if manifest_path.is_file() {
                 return Some(current_path.to_path_buf());
             }
@@ -1051,7 +1061,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, Arc<FullyCompiledProgram>>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
@@ -1076,6 +1086,19 @@ pub fn get_symbols(
         ide_files_root.clone(),
         VfsPath::new(PhysicalFS::new("/")),
     ]));
+
+    let manifest_file = overlay_fs_root
+        .join(pkg_path.to_string_lossy())
+        .and_then(|p| p.join(MANIFEST_FILE_NAME))
+        .and_then(|p| p.open_file());
+
+    let manifest_hash = if let Ok(mut f) = manifest_file {
+        let mut contents = String::new();
+        let _ = f.read_to_string(&mut contents);
+        Some(FileHash::new(&contents))
+    } else {
+        None
+    };
 
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
@@ -1120,18 +1143,24 @@ pub fn get_symbols(
 
         let mut pkg_deps = pkg_dependencies.lock().unwrap();
         let compiled_deps = match pkg_deps.get(pkg_path) {
-            Some(d) => {
+            Some(d) if manifest_hash.is_some() && manifest_hash == d.manifest_hash => {
                 eprintln!("found pre-compiled libs for {:?}", pkg_path);
-                Some(d.clone())
+                Some(d.deps.clone())
             }
-            None => construct_pre_compiled_lib(src_deps, None, compiler_flags)
+            _ => construct_pre_compiled_lib(src_deps, None, compiler_flags)
                 .ok()
                 .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
-                .map(|lib| {
+                .map(|libs| {
                     eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                    let res = Arc::new(lib);
-                    pkg_deps.insert(pkg_path.to_path_buf(), res.clone());
-                    res
+                    let deps = Arc::new(libs);
+                    pkg_deps.insert(
+                        pkg_path.to_path_buf(),
+                        PrecompiledPkgDeps {
+                            manifest_hash,
+                            deps: deps.clone(),
+                        },
+                    );
+                    deps
                 }),
         };
         if compiled_deps.is_some() {
