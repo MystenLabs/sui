@@ -173,7 +173,7 @@ title: Module `0xb::limiter`
 
 
 
-<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>: u64 = 10000;
+<pre><code><b>const</b> <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>: u64 = 100000000;
 </code></pre>
 
 
