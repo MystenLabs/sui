@@ -591,7 +591,7 @@ impl<'env> Context<'env> {
                         let dname = DatatypeName(name);
                         Some((
                             mident_name,
-                            dname.clone(),
+                            dname,
                             ResolvedConstructor::Struct(dname, struct_type),
                         ))
                     }
