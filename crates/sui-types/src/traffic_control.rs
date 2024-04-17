@@ -61,14 +61,19 @@ pub struct RemoteFirewallConfig {
     pub delegate_spam_blocking: bool,
     #[serde(default)]
     pub delegate_error_blocking: bool,
-    pub killswitch_path: PathBuf,
+    #[serde(default = "default_drain_path")]
+    pub drain_path: PathBuf,
     /// Time in secs, after which no registered ingress traffic
-    /// will trigger dead mans switch to disable any firewalls
-    #[serde(default = "default_killswitch_timeout")]
-    pub killswitch_timeout_secs: u64,
+    /// will trigger dead mans switch to drain any firewalls
+    #[serde(default = "default_drain_timeout")]
+    pub drain_timeout_secs: u64,
 }
 
-fn default_killswitch_timeout() -> u64 {
+fn default_drain_path() -> PathBuf {
+    PathBuf::from("/tmp/drain")
+}
+
+fn default_drain_timeout() -> u64 {
     TRAFFIC_SINK_TIMEOUT_SEC
 }
 
