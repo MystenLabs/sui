@@ -71,6 +71,7 @@ jobs:
         # make text json payload friendly
         rel_notes="${rel_notes//\\/\\\\}"
         rel_notes="${rel_notes//\"/\\\"}"
+        rel_notes="${rel_notes//$'\r'/}"
         echo "release_notes=${rel_notes}" >> $GITHUB_ENV
 
     - name: Configure AWS credentials
