@@ -643,24 +643,25 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
 }
 
 fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
+    use N::MatchPattern_ as MP;
     match p_ {
-        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
-        N::MatchPattern_::Variant(_, _, _, _, fields) => {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Variant(_, _, _, _, fields) => {
             for (_, _, (_, p)) in fields {
                 recolor_pat(ctx, p)
             }
         }
-        N::MatchPattern_::Struct(_, _, _, fields) => {
+        MP::Struct(_, _, _, fields) => {
             for (_, _, (_, p)) in fields {
                 recolor_pat(ctx, p)
             }
         }
-        N::MatchPattern_::Binder(_mut, var, _) => recolor_var(ctx, var),
-        N::MatchPattern_::Or(lhs, rhs) => {
+        MP::Binder(_mut, var, _) => recolor_var(ctx, var),
+        MP::Or(lhs, rhs) => {
             recolor_pat(ctx, lhs);
             recolor_pat(ctx, rhs);
         }
-        N::MatchPattern_::At(var, _unused_var, inner) => {
+        MP::At(var, _unused_var, inner) => {
             recolor_var(ctx, var);
             recolor_pat(ctx, inner);
         }
@@ -1112,9 +1113,10 @@ fn exps(context: &mut Context, es: &mut [N::Exp]) {
 }
 
 fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
+    use N::MatchPattern_ as MP;
     match p_ {
-        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
-        N::MatchPattern_::Variant(_, _, _, tys_opt, fields) => {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Variant(_, _, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
@@ -1122,7 +1124,7 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
                 pat(context, p)
             }
         }
-        N::MatchPattern_::Struct(_, _, tys_opt, fields) => {
+        MP::Struct(_, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
@@ -1130,20 +1132,20 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
                 pat(context, p)
             }
         }
-        N::MatchPattern_::Binder(_mut, var, _) => {
+        MP::Binder(_mut, var, _) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
                     context.core.env.has_errors(),
                     "ICE cannot use macro parameter in pattern"
                 );
-                *p_ = N::MatchPattern_::ErrorPat;
+                *p_ = MP::ErrorPat;
             }
         }
-        N::MatchPattern_::Or(lhs, rhs) => {
+        MP::Or(lhs, rhs) => {
             pat(context, lhs);
             pat(context, rhs);
         }
-        N::MatchPattern_::At(var, _unused_var, inner) => {
+        MP::At(var, _unused_var, inner) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
                     context.core.env.has_errors(),

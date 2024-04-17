@@ -241,6 +241,7 @@ codes!(
         InvalidPattern: { msg: "invalid pattern", severity: BlockingError },
         UnboundVariant: { msg: "unbound variant", severity: BlockingError },
         InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
+        InvalidPosition: { msg: "invalid usage position", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

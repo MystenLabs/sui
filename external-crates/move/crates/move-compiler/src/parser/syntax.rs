@@ -11,7 +11,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
-    shared::*,
+    shared::{string_utils::*, *},
     MatchedFileCommentMap,
 };
 

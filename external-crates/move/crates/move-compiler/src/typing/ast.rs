@@ -297,6 +297,7 @@ pub enum UnannotatedPat_ {
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
+    Constant(ModuleIdent, ConstantName),
     Binder(Mutability, Var),
     Literal(Value),
     Wildcard,
@@ -311,10 +312,6 @@ pub type UnannotatedPat = Spanned<UnannotatedPat_>;
 pub struct MatchPattern {
     pub ty: Type,
     pub pat: Spanned<UnannotatedPat_>,
-}
-
-pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
-    MatchPattern { pat, ty }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -376,6 +373,10 @@ pub fn splat_item(env: &mut CompilationEnv, splat_loc: Loc, e: Exp) -> ExpListIt
         }
     };
     ExpListItem::Splat(splat_loc, e, ss)
+}
+
+pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
+    MatchPattern { ty, pat }
 }
 
 //**************************************************************************************************
@@ -986,6 +987,9 @@ impl AstDebug for UnannotatedPat_ {
                     a.ast_debug(w);
                 });
                 w.write("}");
+            }
+            UnannotatedPat_::Constant(m, c) => {
+                w.write(&format!("{}::{}", m, c));
             }
             UnannotatedPat_::Or(lhs, rhs) => {
                 w.write("(");
