@@ -351,7 +351,7 @@ mod tests {
     fn test_eth_message_conversion_add_tokens_on_evm_action_regression() -> anyhow::Result<()> {
         let action = AddTokensOnEvmAction {
             nonce: 5,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             native: true,
             token_ids: vec![99, 100, 101],
             token_addresses: vec![
@@ -369,7 +369,7 @@ mod tests {
                 message_type: BridgeActionType::AddTokensOnEvm as u8,
                 version: ADD_TOKENS_ON_EVM_MESSAGE_VERSION,
                 nonce: 5,
-                chain_id: BridgeChainId::EthLocalTest as u8,
+                chain_id: BridgeChainId::EthCustom as u8,
                 payload: Hex::decode("0103636465030101010101010101010101010101010101010101020202020202020202020202020202020202020203030303030303030303030303030303030303030305060703000000003b9aca00000000007735940000000000b2d05e00").unwrap().into(),
             }
         );

@@ -698,7 +698,7 @@ mod tests {
         // 1. Pause
         let action = BridgeAction::EmergencyAction(EmergencyAction {
             nonce: 0,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             action_type: EmergencyActionType::Pause,
         });
         // `approve_action_with_validator_secrets` covers transaction building
@@ -717,7 +717,7 @@ mod tests {
         // 2. Unpause
         let action = BridgeAction::EmergencyAction(EmergencyAction {
             nonce: 1,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             action_type: EmergencyActionType::Unpause,
         });
         // `approve_action_with_validator_secrets` covers transaction building
@@ -763,7 +763,7 @@ mod tests {
         // 1. blocklist The victim
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 0,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
             blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
                 &victim.bridge_pubkey_bytes,
@@ -792,7 +792,7 @@ mod tests {
         // 2. unblocklist the victim
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 1,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Unblocklist,
             blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
                 &victim.bridge_pubkey_bytes,
@@ -848,8 +848,8 @@ mod tests {
         // update limit
         let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
             nonce: 0,
-            chain_id: BridgeChainId::SuiLocalTest,
-            sending_chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
+            sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 6_666_666 * USD_MULTIPLIER, // $1M USD
         });
         // `approve_action_with_validator_secrets` covers transaction building
@@ -869,7 +869,7 @@ mod tests {
             .limiter
             .transfer_limit;
         for limit in new_transfer_limit {
-            if limit.0 == BridgeChainId::EthLocalTest && limit.1 == BridgeChainId::SuiLocalTest {
+            if limit.0 == BridgeChainId::EthCustom && limit.1 == BridgeChainId::SuiCustom {
                 assert_eq!(limit.2, 6_666_666 * USD_MULTIPLIER);
             } else {
                 assert_eq!(limit.2, *transfer_limit.get(&(limit.0, limit.1)).unwrap());
@@ -904,7 +904,7 @@ mod tests {
         // update price
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 0,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             token_id: TOKEN_ID_BTC,
             new_usd_price: 69_000 * USD_MULTIPLIER, // $69k USD
         });

@@ -78,10 +78,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
         })?;
 
         match sui_chain_id {
-            BridgeChainId::SuiMainnet
-            | BridgeChainId::SuiTestnet
-            | BridgeChainId::SuiDevnet
-            | BridgeChainId::SuiLocalTest => {}
+            BridgeChainId::SuiMainnet | BridgeChainId::SuiTestnet | BridgeChainId::SuiCustom => {}
             _ => {
                 return Err(BridgeError::Generic(format!(
                     "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Invalid source chain {}",
@@ -90,8 +87,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
             }
         }
         match eth_chain_id {
-            BridgeChainId::EthMainnet | BridgeChainId::EthSepolia | BridgeChainId::EthLocalTest => {
-            }
+            BridgeChainId::EthMainnet | BridgeChainId::EthSepolia | BridgeChainId::EthCustom => {}
             _ => {
                 return Err(BridgeError::Generic(format!(
                     "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Invalid target chain {}",

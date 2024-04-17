@@ -415,9 +415,9 @@ mod tests {
         let emitted_event_1 = MoveTokenBridgeEvent {
             message_type: BridgeActionType::TokenTransfer as u8,
             seq_num: 1,
-            source_chain: BridgeChainId::SuiLocalTest as u8,
+            source_chain: BridgeChainId::SuiCustom as u8,
             sender_address: SuiAddress::random_for_testing_only().to_vec(),
-            target_chain: BridgeChainId::EthLocalTest as u8,
+            target_chain: BridgeChainId::EthCustom as u8,
             target_address: EthAddress::random().as_bytes().to_vec(),
             token_type: TOKEN_ID_USDC,
             amount_sui_adjusted: 12345,
@@ -541,13 +541,13 @@ mod tests {
     #[tokio::test]
     async fn test_signer_with_governace_verifier() {
         let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             nonce: 1,
             action_type: EmergencyActionType::Pause,
         });
         let action_2 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id: BridgeChainId::EthLocalTest,
-            sending_chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::EthCustom,
+            sending_chain_id: BridgeChainId::SuiCustom,
             nonce: 1,
             new_usd_limit: 10000,
         });
@@ -584,7 +584,7 @@ mod tests {
 
         // alter action_1 to action_3
         let action_3 = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             nonce: 1,
             action_type: EmergencyActionType::Unpause,
         });

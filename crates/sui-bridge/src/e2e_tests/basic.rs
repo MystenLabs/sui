@@ -82,8 +82,8 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     for _ in 0..3 {
         server_ports.push(get_available_port("127.0.0.1"));
     }
-    let eth_chain_id = BridgeChainId::EthLocalTest as u8;
-    let sui_chain_id = BridgeChainId::SuiLocalTest as u8;
+    let eth_chain_id = BridgeChainId::EthCustom as u8;
+    let sui_chain_id = BridgeChainId::SuiCustom as u8;
     let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
         .build_with_bridge(true)

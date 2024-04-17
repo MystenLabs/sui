@@ -552,7 +552,7 @@ mod tests {
         .unwrap();
         let blocklist_action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 129,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
             blocklisted_members: vec![pub_key_bytes.clone()],
         });
@@ -569,7 +569,7 @@ mod tests {
             68b43fd906c0b8f024a18c56e06744f7c6157c65
         ]: blocklisted members abi-encoded
         */
-        assert_eq!(bytes, Hex::decode("5355495f4252494447455f4d4553534147450101000000000000008103000168b43fd906c0b8f024a18c56e06744f7c6157c65").unwrap());
+        assert_eq!(bytes, Hex::decode("5355495f4252494447455f4d4553534147450101000000000000008102000168b43fd906c0b8f024a18c56e06744f7c6157c65").unwrap());
 
         let pub_key_bytes_2 = BridgeAuthorityPublicKeyBytes::from_bytes(
             &Hex::decode("027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279")
@@ -579,7 +579,7 @@ mod tests {
         // its evem address: 0xacaef39832cb995c4e049437a3e2ec6a7bad1ab5
         let blocklist_action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 68,
-            chain_id: BridgeChainId::SuiDevnet,
+            chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Unblocklist,
             blocklisted_members: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
         });
@@ -601,7 +601,7 @@ mod tests {
 
         let blocklist_action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 49,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             blocklist_type: BlocklistType::Blocklist,
             blocklisted_members: vec![pub_key_bytes.clone()],
         });
@@ -647,7 +647,7 @@ mod tests {
     fn test_bridge_message_encoding_emergency_action() {
         let action = BridgeAction::EmergencyAction(EmergencyAction {
             nonce: 55,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             action_type: EmergencyActionType::Pause,
         });
         let bytes = action.to_bytes();
@@ -661,7 +661,7 @@ mod tests {
         */
         assert_eq!(
             bytes,
-            Hex::decode("5355495f4252494447455f4d455353414745020100000000000000370300").unwrap()
+            Hex::decode("5355495f4252494447455f4d455353414745020100000000000000370200").unwrap()
         );
 
         let action = BridgeAction::EmergencyAction(EmergencyAction {
@@ -688,8 +688,8 @@ mod tests {
     fn test_bridge_message_encoding_limit_update_action() {
         let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
             nonce: 15,
-            chain_id: BridgeChainId::SuiLocalTest,
-            sending_chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
+            sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 1_000_000 * USD_MULTIPLIER, // $1M USD
         });
         let bytes = action.to_bytes();
@@ -705,7 +705,7 @@ mod tests {
         assert_eq!(
             bytes,
             Hex::decode(
-                "5355495f4252494447455f4d4553534147450301000000000000000f030c00000002540be400"
+                "5355495f4252494447455f4d4553534147450301000000000000000f020c00000002540be400"
             )
             .unwrap()
         );
@@ -715,7 +715,7 @@ mod tests {
     fn test_bridge_message_encoding_asset_price_update_action() {
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000 * USD_MULTIPLIER, // $100k USD
         });
@@ -732,7 +732,7 @@ mod tests {
         assert_eq!(
             bytes,
             Hex::decode(
-                "5355495f4252494447455f4d4553534147450401000000000000010a0301000000003b9aca00"
+                "5355495f4252494447455f4d4553534147450401000000000000010a0201000000003b9aca00"
             )
             .unwrap()
         );
@@ -748,7 +748,7 @@ mod tests {
 
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data,
@@ -779,7 +779,7 @@ mod tests {
         );
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data,
@@ -814,7 +814,7 @@ mod tests {
         );
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data,
@@ -839,7 +839,7 @@ mod tests {
         // Empty calldate
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![],
@@ -919,7 +919,7 @@ mod tests {
 
         let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
             nonce: 0,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             native: false,
             token_ids: vec![1, 2, 3, 4],
             token_type_names: vec![
@@ -939,7 +939,7 @@ mod tests {
 
         assert_eq!(
             Hex::encode(encoded_bytes),
-            "5355495f4252494447455f4d4553534147450601000000000000000003000401020304044a396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434a373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484c353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434c343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
+            "5355495f4252494447455f4d4553534147450601000000000000000002000401020304044a396235653133626364306362323366663235633037363938653839643438303536633734353333386438633964626430333361343137326238373032373037333a3a6274633a3a4254434a373937306437316330333537336635343061373135376630643339373065313137656666613661653136636566643530623435633734393637306232346536613a3a6574683a3a4554484c353030653432396132343437383430356435313330323232623230663835373061373436623662633232343233663134623464346536613865613538303733363a3a757364633a3a555344434c343662666535316461316264393531313931396139326562313135343134396233366330663432313231323138303865313365336535383537643630376139633a3a757364743a3a55534454040065cd1d0000000080c3c90100000000e803000000000000e803000000000000",
         );
         Ok(())
     }
@@ -948,7 +948,7 @@ mod tests {
     fn test_bridge_message_encoding_regression_add_coins_on_evm() -> anyhow::Result<()> {
         let action = BridgeAction::AddTokensOnEvmAction(crate::types::AddTokensOnEvmAction {
             nonce: 0,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             native: true,
             token_ids: vec![99, 100, 101],
             token_addresses: vec![

@@ -567,15 +567,15 @@ mod tests {
 
         let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
             nonce: 15,
-            chain_id: BridgeChainId::SuiLocalTest,
-            sending_chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
+            sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 1_000_000 * USD_MULTIPLIER,
         });
         assert_eq!(action.approval_threshold(), 5001);
 
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000 * USD_MULTIPLIER,
         });
@@ -583,7 +583,7 @@ mod tests {
 
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![],

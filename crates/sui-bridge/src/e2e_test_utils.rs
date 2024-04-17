@@ -86,7 +86,7 @@ pub async fn publish_coins_return_add_coins_on_sui_action(
 
     BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
         nonce,
-        chain_id: BridgeChainId::SuiLocalTest,
+        chain_id: BridgeChainId::SuiCustom,
         native: false,
         token_ids,
         token_type_names,
