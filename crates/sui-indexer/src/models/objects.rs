@@ -105,6 +105,28 @@ impl From<StoredObject> for StoredObjectSnapshot {
     }
 }
 
+impl From<StoredDeletedObject> for StoredObjectSnapshot {
+    fn from(o: StoredDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::WrappedOrDeleted as i16,
+            object_digest: None,
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            owner_type: None,
+            owner_id: None,
+            object_type: None,
+            serialized_object: None,
+            coin_type: None,
+            coin_balance: None,
+            df_kind: None,
+            df_name: None,
+            df_object_type: None,
+            df_object_id: None,
+        }
+    }
+}
+
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
 pub struct StoredHistoryObject {
@@ -161,27 +183,6 @@ impl From<IndexedDeletedObject> for StoredDeletedObject {
             object_id: o.object_id.to_vec(),
             object_version: o.object_version as i64,
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
-        }
-    }
-}
-
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
-#[diesel(table_name = objects_snapshot, primary_key(object_id))]
-
-pub struct StoredDeletedObjectSnapshot {
-    pub object_id: Vec<u8>,
-    pub object_version: i64,
-    pub object_status: i16,
-    pub checkpoint_sequence_number: i64,
-}
-
-impl From<StoredDeletedObject> for StoredDeletedObjectSnapshot {
-    fn from(o: StoredDeletedObject) -> Self {
-        Self {
-            object_id: o.object_id.to_vec(),
-            object_version: o.object_version,
-            object_status: ObjectStatus::WrappedOrDeleted as i16,
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
         }
     }
 }
