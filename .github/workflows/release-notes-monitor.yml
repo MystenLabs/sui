@@ -30,7 +30,7 @@ jobs:
         # export new_commit_hash=$(git rev-parse HEAD)
         export new_commit_hash="70a27fe6fb390d304dd7ea05073b9d86879ec91c"
         export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
-        
+
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -rV | head -1)
         # export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
         export previous_commit_hash="d181e3f6ec8c3e185c239543f2613103db806eee"
@@ -60,7 +60,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "Processing ${{ matrix.pr }} PR"
+        echo "Processing PR#${{ matrix.pr }}"
         # old format
         export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
         # new format
@@ -98,7 +98,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ env.release_notes }}\n"
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ env.release_notes }}"
                 }
               },
               {
