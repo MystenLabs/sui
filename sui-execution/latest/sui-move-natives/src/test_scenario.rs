@@ -24,9 +24,9 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::{
-    borrow::{Borrow, BorrowMut},
+    borrow::Borrow,
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::Mutex,
+    sync::RwLock,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -51,7 +51,7 @@ type Set<K> = IndexSet<K>;
 /// allows this to be used by both the object runtime (for reading) and the test scenario (for
 /// writing) while hiding mutability.
 #[derive(Tid)]
-pub struct InMemoryTestStore(pub &'static Mutex<InMemoryStorage>);
+pub struct InMemoryTestStore(pub &'static RwLock<InMemoryStorage>);
 
 impl ChildObjectResolver for InMemoryTestStore {
     fn read_child_object(
@@ -61,7 +61,7 @@ impl ChildObjectResolver for InMemoryTestStore {
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         self.0
-            .lock()
+            .read()
             .unwrap()
             .read_child_object(parent, child, child_version_upper_bound)
     }
@@ -73,7 +73,7 @@ impl ChildObjectResolver for InMemoryTestStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0.lock().unwrap().get_object_received_at_version(
+        self.0.read().unwrap().get_object_received_at_version(
             owner,
             receiving_object_id,
             receive_object_at_version,
@@ -629,7 +629,7 @@ pub fn allocate_receiving_ticket_for_object(
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
     let store: &&InMemoryTestStore = context.extensions().get();
-    store.0.lock().unwrap().borrow_mut().insert_object(object);
+    store.0.write().unwrap().insert_object(object);
 
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -660,14 +660,7 @@ pub fn deallocate_receiving_ticket_for_object(
 
     // Remove the object from storage. We should never hit this scenario either.
     let store: &&InMemoryTestStore = context.extensions().get();
-    if store
-        .0
-        .lock()
-        .unwrap()
-        .borrow_mut()
-        .remove_object(id)
-        .is_none()
-    {
+    if store.0.write().unwrap().remove_object(id).is_none() {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,

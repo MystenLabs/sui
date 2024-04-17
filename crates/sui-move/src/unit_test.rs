@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 use sui_move_build::decorate_warnings;
 use sui_move_natives::test_scenario::InMemoryTestStore;
@@ -85,8 +85,8 @@ impl ChildObjectResolver for DummyChildObjectStore {
     }
 }
 
-static TEST_STORE_INNER: Lazy<Mutex<InMemoryStorage>> =
-    Lazy::new(|| Mutex::new(InMemoryStorage::default()));
+static TEST_STORE_INNER: Lazy<RwLock<InMemoryStorage>> =
+    Lazy::new(|| RwLock::new(InMemoryStorage::default()));
 
 static TEST_STORE: Lazy<InMemoryTestStore> = Lazy::new(|| InMemoryTestStore(&TEST_STORE_INNER));
 
