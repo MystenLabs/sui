@@ -741,7 +741,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
     let ln = parse_leading_name_access_(context, global_name, &item_description)?;
 
     let (mut is_macro, mut tys) =
-        parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, ln.loc)?;
+        parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, ln.loc);
     if let Some(loc) = &is_macro {
         if !macros_allowed {
             let msg = format!(
@@ -823,7 +823,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
         )?;
         let name = parse_identifier(context)?;
         let (mut is_macro, mut tys) =
-            parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc)?;
+            parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {
             if !macros_allowed {
                 context.env.add_diag(diag!(
@@ -860,13 +860,13 @@ fn parse_macro_opt_and_tyargs_opt(
     context: &mut Context,
     tyargs_whitespace_allowed: bool,
     end_loc: Loc,
-) -> Result<(Option<Loc>, Option<Spanned<Vec<Type>>>), Box<Diagnostic>> {
+) -> (Option<Loc>, Option<Spanned<Vec<Type>>>) {
     let mut is_macro = None;
     let mut tyargs = None;
 
     if let Tok::Exclaim = context.tokens.peek() {
         let loc = current_token_loc(context.tokens);
-        context.tokens.advance()?;
+        context.advance();
         is_macro = Some(loc);
     }
 
@@ -887,7 +887,7 @@ fn parse_macro_opt_and_tyargs_opt(
         );
         tyargs = tys_.map(|tys| sp(ty_loc, tys));
     }
-    Ok((is_macro, tyargs))
+    (is_macro, tyargs)
 }
 
 //**************************************************************************************************
@@ -2545,6 +2545,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
     let start_loc = context.tokens.start_loc();
     let mut lhs = parse_term(context)?;
     loop {
+        let first_token_loc = current_token_loc(context.tokens);
         let exp = match context.tokens.peek() {
             Tok::Period => {
                 context.advance();
@@ -2590,24 +2591,13 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                     _ => match parse_identifier(context) {
                         Err(diag) => {
                             context.add_diag(*diag);
-                            Exp_::DotUnresolved(loc, Box::new(lhs))
+                            Exp_::DotUnresolved(first_token_loc, Box::new(lhs))
                         }
                         Ok(n) => {
                             if is_start_of_call_after_function_name(context, &n) {
-                                let call_start = context.tokens.start_loc();
-                                let is_macro = if let Tok::Exclaim = context.tokens.peek() {
-                                    let loc = current_token_loc(context.tokens);
-                                    context.advance();
-                                    Some(loc)
-                                } else {
-                                    None
-                                };
-                                let mut tys = None;
-                                if context.tokens.peek() == Tok::Less
-                                    && n.loc.end() as usize == call_start
-                                {
-                                    tys = parse_optional_type_args(context);
-                                }
+                                let (is_macro, tys) =
+                                    parse_macro_opt_and_tyargs_opt(context, false, n.loc);
+                                let tys = tys.map(|t| t.value);
                                 let args = parse_call_args(context);
                                 Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
                             } else {

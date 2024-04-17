@@ -1737,7 +1737,7 @@ impl AstDebug for ExpDotted_ {
             }
             D::DotUnresolved(_, e) => {
                 e.ast_debug(w);
-                w.write("")
+                w.write(".")
             }
         }
     }
