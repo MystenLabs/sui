@@ -167,7 +167,7 @@ fn assign_versions_for_certificate(
 
     let cancellation_info: Option<HashSet<_>> =
         if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
-            cancelled_txns.get(&tx_digest)
+            cancelled_txns.get(tx_digest)
         {
             Some(congested_objects.clone().into_iter().collect())
         } else {
@@ -187,7 +187,7 @@ fn assign_versions_for_certificate(
 
     if let Some(congested_objects) = cancellation_info {
         for SharedInputObject { id, .. } in shared_input_objects.iter() {
-            let assigned_version = if congested_objects.contains(&id) {
+            let assigned_version = if congested_objects.contains(id) {
                 SequenceNumber::CONGESTED
             } else {
                 SequenceNumber::CANCELLED_READ
@@ -246,6 +246,8 @@ fn assign_versions_for_certificate(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
     use crate::authority::shared_object_version_manager::{
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
@@ -395,6 +397,120 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_assign_versions_from_consensus_with_cancellation() {
+        let shared_object_1 = Object::with_id_shared_for_testing(ObjectID::random());
+        let id1 = shared_object_1.id();
+        let shared_object_2 = Object::with_id_shared_for_testing(ObjectID::random());
+        let id2 = shared_object_2.id();
+        let init_shared_version_1 = match shared_object_1.owner {
+            Owner::Shared {
+                initial_shared_version,
+                ..
+            } => initial_shared_version,
+            _ => panic!("expected shared object"),
+        };
+        let init_shared_version_2 = match shared_object_2.owner {
+            Owner::Shared {
+                initial_shared_version,
+                ..
+            } => initial_shared_version,
+            _ => panic!("expected shared object"),
+        };
+        let authority = TestAuthorityBuilder::new()
+            .with_starting_objects(&[shared_object_1.clone(), shared_object_2.clone()])
+            .build()
+            .await;
+        let certs = vec![
+            generate_shared_objs_tx_with_gas_version(
+                &[
+                    (id1, init_shared_version_1, true),
+                    (id2, init_shared_version_2, true),
+                ],
+                3,
+            ),
+            generate_shared_objs_tx_with_gas_version(
+                &[
+                    (id1, init_shared_version_1, true),
+                    (id2, init_shared_version_2, true),
+                ],
+                5,
+            ),
+            generate_shared_objs_tx_with_gas_version(&[(id1, init_shared_version_1, true)], 1),
+            generate_shared_objs_tx_with_gas_version(
+                &[
+                    (id1, init_shared_version_1, true),
+                    (id2, init_shared_version_2, true),
+                ],
+                9,
+            ),
+        ];
+        let epoch_store = authority.epoch_store_for_testing();
+
+        let cancelled_txns: BTreeMap<TransactionDigest, CancelConsensusCertificateReason> = [
+            (
+                *certs[1].digest(),
+                CancelConsensusCertificateReason::CongestionOnObjects(vec![id1]),
+            ),
+            (
+                *certs[3].digest(),
+                CancelConsensusCertificateReason::CongestionOnObjects(vec![id2]),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let ConsensusSharedObjVerAssignment {
+            shared_input_next_versions,
+            assigned_versions,
+        } = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_cache_reader().as_ref(),
+            &certs,
+            None,
+            &cancelled_txns,
+        )
+        .await
+        .unwrap();
+        // Check that the final version of the shared object is the lamport version of the last
+        // transaction.
+        assert_eq!(
+            shared_input_next_versions,
+            HashMap::from([
+                (id1, SequenceNumber::from_u64(5)),
+                (id2, SequenceNumber::from_u64(4))
+            ])
+        );
+        // Check that the version assignment for each transaction is correct.
+        // For a transaction that uses the shared object with mutable=false, it won't update the version
+        // using lamport version, hence the next transaction will use the same version number.
+        // In the following case, certs[2] has the same assignment as certs[1] for this reason.
+        assert_eq!(
+            assigned_versions,
+            vec![
+                (
+                    certs[0].key(),
+                    vec![(id1, init_shared_version_1), (id2, init_shared_version_2)]
+                ),
+                (
+                    certs[1].key(),
+                    vec![
+                        (id1, SequenceNumber::CONGESTED),
+                        (id2, SequenceNumber::CANCELLED_READ),
+                    ]
+                ),
+                (certs[2].key(), vec![(id1, SequenceNumber::from_u64(4)),]),
+                (
+                    certs[3].key(),
+                    vec![
+                        (id1, SequenceNumber::CANCELLED_READ),
+                        (id2, SequenceNumber::CONGESTED)
+                    ]
+                ),
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn test_assign_versions_from_effects() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
@@ -484,6 +600,39 @@ mod tests {
         .programmable(builder.finish())
         .build();
         let tx = SenderSignedData::new(tx_data, vec![]);
+        VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
+            tx,
+            CertificateProof::new_system(0),
+        ))
+    }
+
+    fn generate_shared_objs_tx_with_gas_version(
+        shared_objects: &[(ObjectID, SequenceNumber, bool)],
+        gas_object_version: u64,
+    ) -> VerifiedExecutableTransaction {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        for (shared_object_id, shared_object_init_version, shared_object_mutable) in shared_objects
+        {
+            builder
+                .obj(ObjectArg::SharedObject {
+                    id: *shared_object_id,
+                    initial_shared_version: *shared_object_init_version,
+                    mutable: *shared_object_mutable,
+                })
+                .unwrap();
+        }
+        let tx_data = TestTransactionBuilder::new(
+            SuiAddress::ZERO,
+            (
+                ObjectID::random(),
+                SequenceNumber::from_u64(gas_object_version),
+                ObjectDigest::random(),
+            ),
+            0,
+        )
+        .programmable(builder.finish())
+        .build();
+        let tx = SenderSignedData::new(tx_data, Intent::sui_transaction(), vec![]);
         VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
             tx,
             CertificateProof::new_system(0),

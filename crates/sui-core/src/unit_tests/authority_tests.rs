@@ -5661,6 +5661,7 @@ async fn test_per_object_congestion_control() {
     protocol_config
         .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
     protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
+    protocol_config.set_max_deferral_rounds_for_congestion_control(10);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)

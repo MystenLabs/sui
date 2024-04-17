@@ -2294,6 +2294,10 @@ impl ProtocolConfig {
         self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
     }
 
+    pub fn set_max_deferral_rounds_for_congestion_control(&mut self, val: u64) {
+        self.max_deferral_rounds_for_congestion_control = Some(val);
+    }
+
     pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
