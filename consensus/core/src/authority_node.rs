@@ -300,7 +300,7 @@ where
 
         // First shutdown components calling into Core.
         self.synchronizer.stop().await;
-        self.commit_syncer.stop();
+        self.commit_syncer.stop().await;
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.

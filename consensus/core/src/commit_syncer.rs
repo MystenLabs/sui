@@ -32,17 +32,16 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use futures::{
-    stream::{FuturesOrdered, FuturesUnordered},
-    StreamExt,
-};
+use futures::{stream::FuturesOrdered, StreamExt};
+use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use rand::prelude::SliceRandom as _;
 use tokio::{
-    task::JoinSet,
+    sync::oneshot,
+    task::{JoinHandle, JoinSet},
     time::{sleep, Instant, MissedTickBehavior},
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
@@ -60,7 +59,8 @@ use crate::{
 };
 
 pub(crate) struct CommitSyncer<C: NetworkClient> {
-    tasks: JoinSet<()>,
+    schedule_task: JoinHandle<()>,
+    tx_shutdown: oneshot::Sender<()>,
     _phantom: std::marker::PhantomData<C>,
 }
 
@@ -82,23 +82,31 @@ impl<C: NetworkClient> CommitSyncer<C> {
             block_verifier,
             dag_state,
         });
-        let mut tasks = JoinSet::new();
-        tasks.spawn(Self::schedule_loop(inner, fetch_state));
+        let (tx_shutdown, rx_shutdown) = oneshot::channel();
+        let schedule_task =
+            spawn_logged_monitored_task!(Self::schedule_loop(inner, fetch_state, rx_shutdown));
         CommitSyncer {
-            tasks,
+            schedule_task,
+            tx_shutdown,
             _phantom: Default::default(),
         }
     }
 
-    pub(crate) fn stop(&mut self) {
-        self.tasks.abort_all();
+    pub(crate) async fn stop(self) {
+        let _ = self.tx_shutdown.send(());
+        // Do not abort schedule task, which waits for fetches to shut down.
+        let _ = self.schedule_task.await;
     }
 
-    async fn schedule_loop(inner: Arc<Inner<C>>, fetch_state: Arc<Mutex<FetchState>>) {
+    async fn schedule_loop(
+        inner: Arc<Inner<C>>,
+        fetch_state: Arc<Mutex<FetchState>>,
+        mut rx_shutdown: oneshot::Receiver<()>,
+    ) {
         let mut interval = tokio::time::interval(Duration::from_secs(2));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         // Inflight requests to fetch commits from different authorities.
-        let mut inflight_fetches = FuturesUnordered::new();
+        let mut inflight_fetches = JoinSet::new();
         // Additional ranges (inclusive start and end) of commits to fetch.
         let mut pending_fetches = VecDeque::<(CommitIndex, CommitIndex)>::new();
         // Highest end index among inflight and pending fetches.
@@ -108,7 +116,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // The commit index that is the max of local last commit index and highest commit index of blocks sent to Core.
         let mut synced_commit_index = inner.dag_state.read().last_commit_index();
 
-        'run: loop {
+        loop {
             tokio::select! {
                 // Periodially, schedule new fetches if the node is falling behind.
                 _ = interval.tick() => {
@@ -139,10 +147,12 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 }
 
                 // Processed fetched blocks.
-                Some(result) = inflight_fetches.next(), if !inflight_fetches.is_empty() => {
+                Some(result) = inflight_fetches.join_next(), if !inflight_fetches.is_empty() => {
                     if let Err(e) = result {
-                        debug!("Failed to fetch: {}", e);
-                        continue 'run;
+                        warn!("Fetch cancelled or panicked, CommitSyncer shutting down: {}", e);
+                        // If any fetch is cancelled or panicked, try to shutdown and exit the loop.
+                        inflight_fetches.shutdown().await;
+                        return;
                     }
                     let (target_end, commits, blocks): (CommitIndex, Vec<TrustedCommit>, Vec<VerifiedBlock>) = result.unwrap();
                     assert!(!commits.is_empty());
@@ -185,6 +195,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         synced_commit_index = synced_commit_index.max(fetched_end);
                     }
                 }
+
+                _ = &mut rx_shutdown => {
+                    // Shutdown requested.
+                    info!("CommitSyncer shutting down ...");
+                    inflight_fetches.shutdown().await;
+                    return;
+                }
             }
 
             // Cap parallel fetches based on configured limit and committee size, to avoid overloading the network.
@@ -211,12 +228,12 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 let Some((start, end)) = pending_fetches.pop_front() else {
                     break;
                 };
-                inflight_fetches.push(tokio::spawn(Self::fetch_loop(
+                inflight_fetches.spawn(Self::fetch_loop(
                     inner.clone(),
                     fetch_state.clone(),
                     start,
                     end,
-                )));
+                ));
             }
 
             let metrics = &inner.context.metrics.node_metrics;
@@ -232,6 +249,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
         }
     }
 
+    // Retries fetching commits and blocks from available authorities, until a request succeeds
+    // where at least a prefix of the commit range is fetched.
+    // Returns the fetched commits and blocks referenced by the commits.
     async fn fetch_loop(
         inner: Arc<Inner<C>>,
         fetch_state: Arc<Mutex<FetchState>>,
@@ -261,6 +281,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
         }
     }
 
+    // Fetches commits and blocks from a single authority. At a high level, first the commits are
+    // fetched and verified. After that, blocks referenced in the certified commits are fetched
+    // and sent to Core for processing.
     async fn fetch_once(
         inner: Arc<Inner<C>>,
         fetch_state: Arc<Mutex<FetchState>>,
@@ -280,7 +303,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
             .commit_sync_fetch_once_latency
             .start_timer();
 
-        // Find an available authority to fetch data.
+        // 1. Find an available authority to fetch commits and blocks from, and wait
+        // if it is not yet ready.
         let Some((available_time, target_authority, retries)) =
             fetch_state.lock().available_authorities.pop_first()
         else {
@@ -292,7 +316,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             sleep(available_time - now).await;
         }
 
-        // Fetch and verify commits.
+        // 2. Fetch commits in the range [start, end] from the selected authority.
         let (serialized_commits, serialized_blocks) = match inner
             .network_client
             .fetch_commits(target_authority, start, end, FETCH_COMMITS_TIMEOUT)
@@ -318,6 +342,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
         };
 
+        // 3. Verify the response contains blocks that can certify the last returned commit,
+        // and the returned commits are chained by digest, so earlier commits are certified
+        // as well.
         let commits = inner.verify_commits(
             target_authority,
             start,
@@ -326,7 +353,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             serialized_blocks,
         )?;
 
-        // Fetch blocks and verify with digests.
+        // 4. Fetch blocks referenced by the commits, from the same authority.
         let block_refs: Vec<_> = commits.iter().flat_map(|c| c.blocks()).cloned().collect();
         let mut requests: FuturesOrdered<_> = block_refs
             .chunks(inner.context.parameters.max_blocks_per_fetch)
@@ -354,8 +381,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             Ok(block)
                         })
                         .collect::<ConsensusResult<Vec<_>>>()?;
-                    // Fetched blocks matching the requested block refs are verified, because the
-                    // requested block refs come from verified commits.
+                    // 6. Verify the returned blocks match the requested block refs.
+                    // If they do match, the returned blocks can be considered verified as well.
                     let mut blocks = Vec::new();
                     for ((requested_block_ref, signed_block), serialized) in request_block_refs
                         .iter()
@@ -392,7 +419,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
 }
 
 pub(crate) struct HighestCommitMonitor {
-    // Highest commit voted by each authority.
+    // Highest commit index voted by each authority.
     highest_voted_commits: Mutex<Vec<CommitIndex>>,
 }
 
@@ -413,22 +440,24 @@ impl HighestCommitMonitor {
         }
     }
 
-    // Finds the highest index that must be valid.
+    // Finds the highest valid commit index.
+    // When an authority votes for commit index S, it is also voting for all commit indices 1 <= i < S.
+    // So the highest valid commit index is the smallest index S such that the sum of stakes of authorities
+    // voting for commit indices >= S passes the validity threshold.
     fn highest_valid_index(&self, context: &Context) -> CommitIndex {
         let highest_voted_commits = self.highest_voted_commits.lock();
-        let mut highest_voted_commits = context
-            .committee
-            .authorities()
-            .zip(highest_voted_commits.iter())
-            .map(|((_i, a), r)| (*r, a.stake))
+        let mut highest_voted_commits = highest_voted_commits
+            .iter()
+            .zip(context.committee.authorities())
+            .map(|(commit_index, (_, a))| (*commit_index, a.stake))
             .collect::<Vec<_>>();
-        // Sort by commit ref (which is index) then stake, in descending order.
+        // Sort by commit index then stake, in descending order.
         highest_voted_commits.sort_by(|a, b| a.cmp(b).reverse());
         let mut total_stake = 0;
-        for (index, stake) in highest_voted_commits {
+        for (commit_index, stake) in highest_voted_commits {
             total_stake += stake;
             if total_stake >= context.committee.validity_threshold() {
-                return index;
+                return commit_index;
             }
         }
         GENESIS_COMMIT_INDEX
@@ -527,6 +556,8 @@ impl<C: NetworkClient> Inner<C> {
 struct FetchState {
     // Tuple of the next time the authority is available to be fetched from, authority index and
     // count of previous consecutive failures fetching from the authority.
+    // TODO: move this to a separate module, add load balancing, and consider health of peer with
+    // previous request failures and leader scores.
     available_authorities: BTreeSet<(Instant, AuthorityIndex, u32)>,
 }
 
