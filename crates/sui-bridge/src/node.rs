@@ -147,8 +147,7 @@ async fn start_client_components(
         client_config.sui_address,
         client_config.gas_object_ref.0,
     )
-    .await
-    .expect("Failed to create bridge action executor");
+    .await;
 
     let orchestrator =
         BridgeOrchestrator::new(sui_client, sui_events_rx, eth_events_rx, store.clone());

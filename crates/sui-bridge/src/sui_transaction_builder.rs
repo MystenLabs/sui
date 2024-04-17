@@ -624,7 +624,9 @@ mod tests {
         let context = &mut test_cluster.wallet;
         let sender = context.active_address().unwrap();
         let usdc_amount = 5000000;
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. Test Eth -> Sui Transfer approval
@@ -692,7 +694,9 @@ mod tests {
         assert!(!summary.is_frozen);
 
         let context = &mut test_cluster.wallet;
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. Pause
@@ -757,7 +761,9 @@ mod tests {
         }
 
         let context = &mut test_cluster.wallet;
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // 1. blocklist The victim
@@ -842,7 +848,9 @@ mod tests {
             .collect::<HashMap<_, _>>();
 
         let context = &mut test_cluster.wallet;
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // update limit
@@ -898,7 +906,9 @@ mod tests {
         assert_ne!(notional_values[&TOKEN_ID_USDC], 69_000 * USD_MULTIPLIER);
 
         let context = &mut test_cluster.wallet;
-        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_object_arg = sui_client
+            .get_mutable_bridge_object_arg_must_succeed()
+            .await;
         let id_token_map = sui_client.get_token_id_map().await.unwrap();
 
         // update price
