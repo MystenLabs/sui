@@ -429,8 +429,8 @@ module sui::test_scenario_tests {
         {
 
             let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
-            let t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
+            let t2 = test_scenario::receiving_ticket_by_id<Object>(id2);
+            let t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
             let obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
             assert!(parent.value == 10, EValueMismatch);
@@ -462,7 +462,7 @@ module sui::test_scenario_tests {
         {
 
             let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::receiving_ticket_for_most_recent_object<Object>(&id1);
+            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
@@ -487,7 +487,7 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_by_id<Object>(id1);
         };
         scenario.end();
     }
@@ -507,8 +507,8 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
-            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_by_id<Object>(id1);
         };
         scenario.end();
     }
@@ -527,9 +527,9 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
+            let t2 = test_scenario::receiving_ticket_by_id<Object>(id1);
             test_scenario::return_receiving_ticket(t2);
-            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id1);
+            let _t2 = test_scenario::receiving_ticket_by_id<Object>(id1);
         };
         scenario.end();
     }
@@ -560,10 +560,10 @@ module sui::test_scenario_tests {
         {
 
             let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            let t2 = test_scenario::receiving_ticket_by_id<Object>(id2);
             test_scenario::return_receiving_ticket(t2);
-            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
-            let t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
+            let t2 = test_scenario::receiving_ticket_by_id<Object>(id2);
+            let t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
             let obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
             assert!(parent.value == 10, EValueMismatch);
@@ -603,10 +603,10 @@ module sui::test_scenario_tests {
         {
 
             let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
+            let t2 = test_scenario::receiving_ticket_by_id<Object>(id2);
             test_scenario::return_receiving_ticket(t2);
-            let t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
-            let t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
+            let t2 = test_scenario::receiving_ticket_by_id<Object>(id2);
+            let t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
             let mut obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
             assert!(parent.value == 10, EValueMismatch);
@@ -647,8 +647,8 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            let _t2 = test_scenario::receiving_ticket_for_object_by_id<Object>(id2);
-            let _t3 = test_scenario::receiving_ticket_for_object_by_id<Object>(id3);
+            let _t2 = test_scenario::receiving_ticket_by_id<Object>(id2);
+            let _t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
         };
         scenario.end();
     }

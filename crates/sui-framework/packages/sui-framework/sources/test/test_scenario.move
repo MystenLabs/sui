@@ -363,24 +363,24 @@ module sui::test_scenario {
     }
 
     /// Return the IDs of the receivalbe objects that `object` owns.
-    public fun receivable_object_ids_for_owner_object_id<T: key>(object: ID): vector<ID> {
+    public fun receivable_object_ids_for_owner_id<T: key>(object: ID): vector<ID> {
         ids_for_address<T>(object::id_to_address(&object))
     }
 
     /// Create a `Receiving<T>` receiving ticket for the most recent 
     /// object of type `T` that is owned by the `owner` object ID. 
-    public fun receiving_ticket_for_most_recent_object<T: key>(
+    public fun most_recent_receiving_ticket<T: key>(
         owner: &ID
     ): sui::transfer::Receiving<T> {
         let id_opt = most_recent_id_for_address<T>(object::id_to_address(owner));
         assert!(option::is_some(&id_opt), EEmptyInventory);
         let id = option::destroy_some(id_opt);
-        receiving_ticket_for_object_by_id<T>(id)
+        receiving_ticket_by_id<T>(id)
     }
 
     /// Create a `Receiving<T>` receiving ticket for the object of type
     /// `T` with the given `object_id`.
-    public fun receiving_ticket_for_object_by_id<T: key>(
+    public fun receiving_ticket_by_id<T: key>(
         object_id: ID
     ): sui::transfer::Receiving<T> {
         let version = allocate_receiving_ticket_for_object<T>(object_id);
