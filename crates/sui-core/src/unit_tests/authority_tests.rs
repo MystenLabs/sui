@@ -4556,8 +4556,7 @@ pub async fn call_dev_inspect(
 async fn make_test_transaction(
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
-    shared_object_id: ObjectID,
-    shared_object_initial_shared_version: SequenceNumber,
+    shared_objects: &[(ObjectID, SequenceNumber, bool)],
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
     arg_value: u64,
@@ -4581,14 +4580,17 @@ async fn make_test_transaction(
         /* type_args */ vec![],
         *gas_object_ref,
         /* args */
-        vec![
-            CallArg::Object(ObjectArg::SharedObject {
-                id: shared_object_id,
-                initial_shared_version: shared_object_initial_shared_version,
-                mutable: true,
-            }),
-            CallArg::Pure(arg_value.to_le_bytes().to_vec()),
-        ],
+        shared_objects
+            .iter()
+            .map(|(shared_object_id, initial_shared_version, mutable)| {
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: *shared_object_id,
+                    initial_shared_version: *initial_shared_version,
+                    mutable: *mutable,
+                })
+            })
+            .chain(vec![CallArg::Pure(arg_value.to_le_bytes().to_vec())])
+            .collect(),
         gas_budget.unwrap_or(TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp),
         gas_price.unwrap_or(rgp),
     )
@@ -4645,8 +4647,7 @@ async fn prepare_authority_and_shared_object_cert(
     let certificate = make_test_transaction(
         &sender,
         &keypair,
-        shared_object_id,
-        initial_shared_version,
+        &[(shared_object_id, initial_shared_version, true)],
         &gas_object_ref,
         &[&authority],
         16,
@@ -4760,8 +4761,7 @@ async fn test_consensus_message_processed() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
-            shared_object_id,
-            initial_shared_version,
+            &[(shared_object_id, initial_shared_version, true)],
             &gas_object_ref,
             &[&authority1, &authority2],
             Uniform::from(0..100000).sample(&mut rng),
@@ -5642,7 +5642,7 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
 }
 
 #[sim_test]
-async fn test_per_object_congestion_control() {
+async fn test_consensus_handler_per_object_congestion_control() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // In this test, we tests transactions that operate on 2 shared objects. The idea is that
@@ -5684,12 +5684,15 @@ async fn test_per_object_congestion_control() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
-            if index < 5 {
-                shared_objects[0].id()
-            } else {
-                shared_objects[1].id()
-            },
-            OBJECT_START_VERSION,
+            &[(
+                if index < 5 {
+                    shared_objects[0].id()
+                } else {
+                    shared_objects[1].id()
+                },
+                OBJECT_START_VERSION,
+                true,
+            )],
             &gas_object.compute_object_reference(),
             &[&authority],
             12345,
@@ -5763,8 +5766,7 @@ async fn test_per_object_congestion_control() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
-            shared_objects[1].id(),
-            OBJECT_START_VERSION,
+            &[(shared_objects[1].id(), OBJECT_START_VERSION, true)],
             &gas_object.compute_object_reference(),
             &[&authority],
             12345,
@@ -5825,4 +5827,104 @@ async fn test_per_object_congestion_control() {
         .get_all_deferred_transactions_for_test()
         .unwrap()
         .is_empty());
+}
+
+#[sim_test]
+async fn test_consensus_handler_congestion_control_transaction_cancellation() {
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+
+    let shared_objects = create_shared_objects(2);
+    let gas_objects = create_gas_objects(3, sender);
+    let gas_objects_cancelled_txn = create_gas_objects(1, sender);
+
+    // Create the cluster with controlled per object congestion control and cancellation.
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config
+        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
+    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(100_000_000);
+    protocol_config.set_max_deferral_rounds_for_congestion_control(2);
+    let authority = TestAuthorityBuilder::new()
+        .with_reference_gas_price(1000)
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+    let mut genesis_objects = gas_objects.clone();
+    genesis_objects.extend(gas_objects_cancelled_txn.clone());
+    genesis_objects.extend(shared_objects.clone());
+    authority.insert_genesis_objects(&genesis_objects).await;
+
+    let mut certificates: Vec<VerifiedCertificate> = vec![];
+    for gas_object in gas_objects.iter() {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            &[(shared_objects[0].id(), OBJECT_START_VERSION, true)],
+            &gas_object.compute_object_reference(),
+            &[&authority],
+            12345,
+            Some(2000),
+            Some(100_000_000),
+        )
+        .await;
+        certificates.push(certificate);
+    }
+
+    let cancelled_txn = make_test_transaction(
+        &sender,
+        &keypair,
+        &[
+            (shared_objects[0].id(), OBJECT_START_VERSION, true),
+            (shared_objects[1].id(), OBJECT_START_VERSION, true),
+        ],
+        &gas_objects_cancelled_txn[0].compute_object_reference(),
+        &[&authority],
+        12345,
+        Some(1000),
+        Some(100_000_000),
+    )
+    .await;
+    certificates.push(cancelled_txn.clone());
+
+    // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
+    certificates.shuffle(&mut rand::thread_rng());
+
+    // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
+    // should go through, and all transactions oeprate on the cheaper object should go through.
+    // We also check that the scheduled transactions on the expensive object have the highest gas price.
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
+    assert_eq!(scheduled_txns.len(), 1);
+    for cert in scheduled_txns.iter() {
+        assert!(cert.data().transaction_data().gas_price() == 2000);
+    }
+
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    assert_eq!(scheduled_txns.len(), 1);
+    for cert in scheduled_txns.iter() {
+        assert!(cert.data().transaction_data().gas_price() == 2000);
+    }
+
+    // Sends the last batch with no new transaction. The last deferred transactions should go through.
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    assert_eq!(scheduled_txns.len(), 2);
+    assert!(authority
+        .epoch_store_for_testing()
+        .get_all_deferred_transactions_for_test()
+        .unwrap()
+        .is_empty());
+    let shared_object_version = authority
+        .epoch_store_for_testing()
+        .get_shared_locks(&cancelled_txn.key())
+        .expect("Reading shared locks should not fail")
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+    assert_eq!(
+        [
+            (shared_objects[0].id(), SequenceNumber::CONGESTED),
+            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+        ]
+        .into_iter()
+        .collect::<HashMap<_, _>>(),
+        shared_object_version
+    );
 }

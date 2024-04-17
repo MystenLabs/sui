@@ -89,7 +89,7 @@ pub fn transaction_deferral_within_limit(
         deferred_from_round,
     } = deferral_key
     {
-        return (future_round - deferred_from_round) < max_deferral_rounds_for_congestion_control;
+        return (future_round - deferred_from_round) <= max_deferral_rounds_for_congestion_control;
     }
     true
 }
