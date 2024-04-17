@@ -2,4 +2,4 @@
 '@mysten/kiosk': patch
 ---
 
-Adds pagination option for owned kiosk lookup
+Adds pagination option for owned kiosks lookup
