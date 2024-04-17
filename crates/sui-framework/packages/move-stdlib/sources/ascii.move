@@ -4,8 +4,6 @@
 /// The `ASCII` module defines basic string and char newtypes in Move that verify
 /// that characters are valid ASCII, and that strings consist of only valid ASCII characters.
 module std::ascii {
-    use std::option::{Self, Option};
-
     // Allows calling `.to_string()` to convert an `ascii::String` into as `string::String`
     public use fun std::string::from_ascii as String.to_string;
 
@@ -105,5 +103,56 @@ module std::ascii {
     public fun is_printable_char(byte: u8): bool {
        byte >= 0x20 && // Disallow metacharacters
        byte <= 0x7E // Don't allow DEL metacharacter
+    }
+
+    /// Return `true` if `str1` is less than or equal to `str2` in lexicographic order. Returns `false` otherwise.
+    public fun compare(str1: &String, str2: &String): bool {
+        let len1 = str1.length();
+        let len2 = str2.length();
+        let min_len = if (len1 < len2) { len1 } else { len2 };
+
+        let bytes1 = str1.as_bytes();
+        let bytes2 = str2.as_bytes();
+
+        let mut i: u64 = 0;
+        while (i < min_len) {
+            if (bytes1[i] < bytes2[i]) {
+                return true
+            } else if (bytes1[i] > bytes2[i]) {
+                return false
+            };
+            i = i + 1
+        };
+
+        if (len1 <= len2) {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Concatenate two ASCII strings and return resulting String
+    public fun append(str1: &String, str2: &String): String {
+        let mut result_bytes = vector::empty<u8>();
+
+        // Append bytes from the first string
+        let bytes1 = str1.as_bytes();
+        let len1 = bytes1.length();
+        let mut i = 0;
+        while (i < len1) {
+            result_bytes.push_back(bytes1[i]);
+            i = i + 1;
+        };
+
+        // Append bytes from the second string
+        let bytes2 = str2.as_bytes();
+        let len2 = bytes2.length();
+        i = 0;
+        while (i < len2) {
+            result_bytes.push_back(bytes2[i]);
+            i = i + 1;
+        };
+
+        string(result_bytes)
     }
 }

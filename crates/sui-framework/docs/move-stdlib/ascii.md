@@ -21,6 +21,8 @@ that characters are valid ASCII, and that strings consist of only valid ASCII ch
 -  [Function `byte`](#0x1_ascii_byte)
 -  [Function `is_valid_char`](#0x1_ascii_is_valid_char)
 -  [Function `is_printable_char`](#0x1_ascii_is_printable_char)
+-  [Function `compare`](#0x1_ascii_compare)
+-  [Function `append`](#0x1_ascii_append)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -417,6 +419,97 @@ Returns <code><b>true</b></code> if <code>byte</code> is an printable ASCII char
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte: u8): bool {
    byte &gt;= 0x20 && // Disallow metacharacters
    <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_ascii_compare"></a>
+
+## Function `compare`
+
+Return <code><b>true</b></code> if <code>str1</code> is less than or equal to <code>str2</code> in lexicographic order. Returns <code><b>false</b></code> otherwise.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_compare">compare</a>(str1: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, str2: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_compare">compare</a>(str1: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, str2: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): bool {
+    <b>let</b> len1 = str1.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
+    <b>let</b> len2 = str2.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
+    <b>let</b> min_len = <b>if</b> (len1 &lt; len2) { len1 } <b>else</b> { len2 };
+
+    <b>let</b> bytes1 = str1.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>();
+    <b>let</b> bytes2 = str2.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>();
+
+    <b>let</b> <b>mut</b> i: u64 = 0;
+    <b>while</b> (i &lt; min_len) {
+        <b>if</b> (bytes1[i] &lt; bytes2[i]) {
+            <b>return</b> <b>true</b>
+        } <b>else</b> <b>if</b> (bytes1[i] &gt; bytes2[i]) {
+            <b>return</b> <b>false</b>
+        };
+        i = i + 1
+    };
+
+    <b>if</b> (len1 &lt;= len2) {
+        <b>true</b>
+    } <b>else</b> {
+        <b>false</b>
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_ascii_append"></a>
+
+## Function `append`
+
+Concatenate two ASCII strings and return resulting String
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(str1: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, str2: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(str1: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, str2: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
+    <b>let</b> <b>mut</b> result_bytes = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u8&gt;();
+
+    // Append bytes from the first <a href="../move-stdlib/string.md#0x1_string">string</a>
+    <b>let</b> bytes1 = str1.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>();
+    <b>let</b> len1 = bytes1.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
+    <b>let</b> <b>mut</b> i = 0;
+    <b>while</b> (i &lt; len1) {
+        result_bytes.push_back(bytes1[i]);
+        i = i + 1;
+    };
+
+    // Append bytes from the second <a href="../move-stdlib/string.md#0x1_string">string</a>
+    <b>let</b> bytes2 = str2.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>();
+    <b>let</b> len2 = bytes2.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
+    i = 0;
+    <b>while</b> (i &lt; len2) {
+        result_bytes.push_back(bytes2[i]);
+        i = i + 1;
+    };
+
+    <a href="../move-stdlib/string.md#0x1_string">string</a>(result_bytes)
 }
 </code></pre>
 
