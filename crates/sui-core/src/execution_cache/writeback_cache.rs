@@ -783,7 +783,9 @@ impl WritebackCache {
                     .get_transaction_block(tx_digest)
                     .unwrap()
                     .is_some());
-                // if the transaction is not in dirty, it either does not exist or does not need to be committed.
+                // If the transaction is not in dirty, it does not need to be committed.
+                // This situation can happen if we build a checkpoint locally which was just executed
+                // via state sync.
                 continue;
             };
 
