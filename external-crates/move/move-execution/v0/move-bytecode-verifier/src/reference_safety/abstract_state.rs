@@ -13,8 +13,8 @@ use move_binary_format::{
     },
     safe_unwrap,
 };
-use move_bytecode_verifier_meter::{Meter, Scope};
 use move_borrow_graph::references::RefID;
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::collections::{BTreeMap, BTreeSet};
 
