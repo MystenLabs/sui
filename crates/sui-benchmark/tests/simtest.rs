@@ -403,7 +403,7 @@ mod test {
 
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
-        let mut test_cluster = init_test_cluster_builder(7, 5000)
+        let mut test_cluster = init_test_cluster_builder(4, 15000)
             .with_protocol_version(ProtocolVersion::new(starting_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 starting_version,
