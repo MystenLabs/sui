@@ -72,13 +72,14 @@ public fun create<T: key + store>(
    recipient: address,
    ctx: &mut TxContext
 ) {
-   let escrow = Escrow {
-       id: object::new(ctx),
-       sender: tx_context::sender(ctx),
-       recipient,
-       exchange_key,
-       escrowed,
+   let mut escrow = Escrow<T> {
+      id: object::new(ctx),
+      sender: ctx.sender(),
+      recipient,
+      exchange_key,
    };
+
+   dof::add(&mut escrow.id, EscrowedObjectKey {}, escrowed);
 
    transfer::public_share_object(escrow);
 }
@@ -90,31 +91,32 @@ This function is used to perform the swap operation. It takes four arguments: th
 
 ```move
 public fun swap<T: key + store, U: key + store>(
-   escrow: Escrow<T>,
+   mut escrow: Escrow<T>,
    key: Key,
    locked: Locked<U>,
    ctx: &TxContext,
 ): T {
+   let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
+
    let Escrow {
-       id,
-       sender,
-       recipient,
-       exchange_key,
-       escrowed,
+      id,
+      sender,
+      recipient,
+      exchange_key,
    } = escrow;
 
-   assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+   assert!(recipient == ctx.sender(), EMismatchedSenderRecipient);
    assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
 
    // Do the actual swap
-   transfer::public_transfer(lock::unlock(locked, key), sender);
-   object::delete(id);
+   transfer::public_transfer(locked.unlock(key), sender);
+   id.delete();
 
    escrowed
 }
 ```
 
-The `object::delete` function call is used to delete the shared `Escrow` object. Previously, Move supported only the deletion of owned objects, but [shared-object deletion has since been enabled](https://github.com/MystenLabs/sui/pull/16008).
+The `id.delete()` function call is used to delete the shared `Escrow` object. Previously, Move supported only the deletion of owned objects, but [shared-object deletion has since been enabled](https://github.com/MystenLabs/sui/pull/16008).
 
 #### `return_to_sender`
 
@@ -122,19 +124,20 @@ This function is used to cancel the escrow and return the escrowed item to the s
 
 ```move
 public fun return_to_sender<T: key + store>(
-   escrow: Escrow<T>,
+   mut escrow: Escrow<T>,
    ctx: &TxContext
 ): T {
+   let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
+
    let Escrow {
-       id,
-       sender,
-       recipient: _,
-       exchange_key: _,
-       escrowed,
+      id,
+      sender,
+      recipient: _,
+      exchange_key: _,
    } = escrow;
 
-   assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
-   object::delete(id);
+   assert!(sender == ctx.sender(), EMismatchedSenderRecipient);
+   id.delete();
    escrowed
 }
 ```
