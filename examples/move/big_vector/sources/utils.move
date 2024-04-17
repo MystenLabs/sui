@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Vector-related utilities.
 module big_vector::utils {
     /// Pop elements from the back of `v` until its length equals `n`,

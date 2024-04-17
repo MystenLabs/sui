@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// BigVector is an arbitrary sized vector-like data structure,
 /// implemented using an on-chain B+ Tree to support almost constant
 /// time (log base max_fan_out) random access, insertion and removal.
