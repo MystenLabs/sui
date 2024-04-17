@@ -7081,6 +7081,7 @@ dependencies = [
  "move-docgen",
  "move-errmapgen",
  "move-prover",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-types",
  "sha2 0.9.9",
