@@ -114,7 +114,10 @@ impl DagState {
             let authority_index = state.context.committee.to_authority_index(i).unwrap();
             let blocks = state
                 .store
-                .scan_blocks_by_author(authority_index, Self::evict_round(round, cached_rounds) + 1)
+                .scan_blocks_by_author(
+                    authority_index,
+                    Self::eviction_round(round, cached_rounds) + 1,
+                )
                 .unwrap();
             for block in blocks {
                 state.update_block_metadata(&block);
@@ -379,7 +382,7 @@ impl DagState {
                 .to_authority_index(authority_index)
                 .unwrap();
 
-            let last_evicted_round = self.authority_evict_round(authority_index);
+            let last_evicted_round = self.authority_eviction_round(authority_index);
             if end_round.saturating_sub(1) <= last_evicted_round {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
@@ -415,10 +418,10 @@ impl DagState {
             return true;
         }
 
-        if slot.round <= self.authority_evict_round(slot.authority) {
+        if slot.round <= self.authority_eviction_round(slot.authority) {
             panic!(
                 "Attempted to check for slot {slot} that is <= the last evicted round {}",
-                self.authority_evict_round(slot.authority)
+                self.authority_eviction_round(slot.authority)
             );
         }
 
@@ -610,20 +613,30 @@ impl DagState {
             .inc();
 
         // Clean up old cached data. After flushing, all cached blocks are guaranteed to be persisted.
+        let mut total_recent_refs = 0;
         for (authority_refs, last_committed_round) in self
             .recent_refs
             .iter_mut()
             .zip(self.last_committed_rounds.iter())
         {
             while let Some(block_ref) = authority_refs.first() {
-                if block_ref.round <= Self::evict_round(*last_committed_round, self.cached_rounds) {
+                if block_ref.round
+                    <= Self::eviction_round(*last_committed_round, self.cached_rounds)
+                {
                     self.recent_blocks.remove(block_ref);
                     authority_refs.pop_first();
                 } else {
                     break;
                 }
             }
+            total_recent_refs += authority_refs.len();
         }
+
+        let metrics = &self.context.metrics.node_metrics;
+        metrics
+            .dag_state_recent_blocks
+            .set(self.recent_blocks.len() as i64);
+        metrics.dag_state_recent_refs.set(total_recent_refs as i64);
     }
 
     /// Detects and returns the blocks of the round that forms the last quorum. The method will return
@@ -658,14 +671,14 @@ impl DagState {
     /// The last round that got evicted after a cache clean up operation. After this round we are
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
-    fn authority_evict_round(&self, authority_index: AuthorityIndex) -> Round {
+    fn authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
         let commit_round = self.last_committed_rounds[authority_index];
-        Self::evict_round(commit_round, self.cached_rounds)
+        Self::eviction_round(commit_round, self.cached_rounds)
     }
 
     /// Calculates the last eviction round based on the provided `commit_round`. Any blocks with
     /// round <= the evict round have been cleaned up.
-    fn evict_round(commit_round: Round, cached_rounds: Round) -> Round {
+    fn eviction_round(commit_round: Round, cached_rounds: Round) -> Round {
         commit_round.saturating_sub(cached_rounds)
     }
 }

@@ -83,6 +83,8 @@ pub(crate) struct NodeMetrics {
     pub core_lock_enqueued: IntCounter,
     pub highest_accepted_round: IntGauge,
     pub accepted_blocks: IntCounter,
+    pub dag_state_recent_blocks: IntGauge,
+    pub dag_state_recent_refs: IntGauge,
     pub dag_state_store_read_count: IntCounterVec,
     pub dag_state_store_write_count: IntCounter,
     pub fetch_blocks_scheduler_inflight: IntGauge,
@@ -172,6 +174,16 @@ impl NodeMetrics {
             accepted_blocks: register_int_counter_with_registry!(
                 "accepted_blocks",
                 "Number of accepted blocks",
+                registry,
+            ).unwrap(),
+            dag_state_recent_blocks: register_int_gauge_with_registry!(
+                "dag_state_recent_blocks",
+                "Number of recent blocks cached in the DagState",
+                registry,
+            ).unwrap(),
+            dag_state_recent_refs: register_int_gauge_with_registry!(
+                "dag_state_recent_refs",
+                "Number of recent refs cached in the DagState",
                 registry,
             ).unwrap(),
             dag_state_store_read_count: register_int_counter_vec_with_registry!(
