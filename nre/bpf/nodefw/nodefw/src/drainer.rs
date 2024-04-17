@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::fs;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
