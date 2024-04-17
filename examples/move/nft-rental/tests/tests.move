@@ -3,13 +3,15 @@
 #[test_only]
 module nft_rental::tests {
     // sui imports
-    use sui::test_scenario::{Self, Scenario};
-    use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap};
-    use sui::package::{Self, Publisher};
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
-    use sui::kiosk_test_utils;
-    use sui::clock::{Self, Clock};
-    use sui::tx_context::{dummy};
+    use sui::{
+        test_scenario::{Self, Scenario},
+        transfer_policy::{Self, TransferPolicy, TransferPolicyCap},
+        package::{Self, Publisher},
+        kiosk::{Self, Kiosk, KioskOwnerCap},
+        kiosk_test_utils,
+        clock::{Self, Clock},
+        tx_context::{dummy}
+    };
 
     // other imports 
     use nft_rental::rentables_ext::{Self, Promise, ProtectedTP, RentalPolicy, Listed};

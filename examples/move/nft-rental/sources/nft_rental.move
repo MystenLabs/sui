@@ -7,15 +7,17 @@ module nft_rental::rentables_ext {
     // === Imports ===
 
     // sui imports
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
-    use sui::kiosk_extension;
-    use sui::bag;
-    use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap, has_rule};
-    use sui::clock::{Self, Clock};
-    use sui::coin::{Self, Coin};
-    use sui::balance::{Self, Balance};
-    use sui::sui::SUI;
-    use sui::package::Publisher;
+    use sui::{
+        kiosk::{Self, Kiosk, KioskOwnerCap},
+        kiosk_extension,
+        bag,
+        transfer_policy::{Self, TransferPolicy, TransferPolicyCap, has_rule},
+        clock::{Self, Clock},
+        coin::{Self, Coin},
+        balance::{Self, Balance},
+        sui::SUI,
+        package::Publisher
+    };
 
     // Other imports
     use kiosk::kiosk_lock_rule::Rule as LockRule;

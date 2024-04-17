@@ -81,13 +81,13 @@ The `nft_rental` module provides an API that facilitates lending or borrowing th
 The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct has only the `drop` ability and acts as the extension key for the kiosk `Rentables` extension.
 
 ```move
-struct Rentables has drop {}
+public struct Rentables has drop {}
 ```
 
 The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. It is used as the dynamic field key in the borrower's `Bag` entry when someone is actively borrowing an item. The struct has `store`, `copy`, and `drop` abilities because they are necessary for all dynamic field keys.
 
 ```move
-struct Rented has store, copy, drop { 
+public struct Rented has store, copy, drop { 
     id: ID 
 }
 ```
@@ -95,7 +95,7 @@ struct Rented has store, copy, drop {
 The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object. It is used as the dynamic field key in the renter's `Bag` entry after an item is listed for renting. Like `Rented`, this struct has `store`, `copy`, and `drop` abilities because they are necessary for all dynamic field keys.
 
 ```move
-struct Listed has store, copy, drop { 
+public struct Listed has store, copy, drop { 
     id: ID 
 }
 ```
@@ -106,7 +106,7 @@ The `Promise` field lacks the `store` ability as it shouldn't be wrapped inside 
 It also lacks the `drop` ability because only the `return_val` function can consume it.
 
 ```move
-struct Promise {
+public struct Promise {
   item_id: Rented,
   duration: u64,
   start_date: u64,
@@ -120,7 +120,7 @@ The `Rentable` struct is as a wrapper object that holds an asset that is being r
 This struct requires the `store` ability because it stores a value `T` that definitely also has `store`.
 
 ```move
-struct Rentable<T: key + store> has store {
+public struct Rentable<T: key + store> has store {
   object: T,
   duration: u64, // total amount of time offered for renting in days
   start_date: Option<u64>, // initially undefined, is updated once someone rents it
@@ -132,7 +132,7 @@ struct Rentable<T: key + store> has store {
 The `RentalPolicy` struct is a shared object that every creator mints. The struct defines the royalties the creator receives from each rent invocation.
 
 ```move
-struct RentalPolicy<phantom T> has key, store {
+public struct RentalPolicy<phantom T> has key, store {
   id: UID,
   balance: Balance<SUI>,
   /// Note: Move does not support float numbers.
@@ -151,7 +151,7 @@ handled will always be tradable.
 A protected empty transfer policy is required to facilitate the rental process so that the extension can transfer the asset without any additional rules to resolve (like lock rule, loyalty rule, and so on). If creators want to enforce royalties on rentals, they can use the `RentalPolicy` detailed previously.
 
 ```move
-struct ProtectedTP<phantom T> has key, store {
+public struct ProtectedTP<phantom T> has key, store {
   id: UID,
   transfer_policy: TransferPolicy<T>,
   policy_cap: TransferPolicyCap<T>
