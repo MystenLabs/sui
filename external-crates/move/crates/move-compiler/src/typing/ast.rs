@@ -266,18 +266,31 @@ pub type MatchArm = Spanned<MatchArm_>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnannotatedPat_ {
-    Constructor(
+    Variant(
         ModuleIdent,
         DatatypeName,
         VariantName,
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
-    BorrowConstructor(
+    BorrowVariant(
         bool,
         ModuleIdent,
         DatatypeName,
         VariantName,
+        Vec<Type>,
+        Fields<(Type, MatchPattern)>,
+    ),
+    Struct(
+        ModuleIdent,
+        DatatypeName,
+        Vec<Type>,
+        Fields<(Type, MatchPattern)>,
+    ),
+    BorrowStruct(
+        bool,
+        ModuleIdent,
+        DatatypeName,
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
@@ -903,7 +916,7 @@ impl AstDebug for MatchPattern {
 impl AstDebug for UnannotatedPat_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            UnannotatedPat_::BorrowConstructor(mut_, m, e, v, tys, fields) => {
+            UnannotatedPat_::BorrowVariant(mut_, m, e, v, tys, fields) => {
                 w.write("&");
                 if *mut_ {
                     w.write("mut ");
@@ -921,8 +934,40 @@ impl AstDebug for UnannotatedPat_ {
                 });
                 w.write("}");
             }
-            UnannotatedPat_::Constructor(m, e, v, tys, fields) => {
+            UnannotatedPat_::Variant(m, e, v, tys, fields) => {
                 w.write(&format!("{}::{}::{}", m, e, v));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            UnannotatedPat_::BorrowStruct(mut_, m, s, tys, fields) => {
+                w.write("&");
+                if *mut_ {
+                    w.write("mut ");
+                }
+                w.write(&format!("{}::{}", m, s));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            UnannotatedPat_::Struct(m, e, tys, fields) => {
+                w.write(&format!("{}::{}", m, e));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");

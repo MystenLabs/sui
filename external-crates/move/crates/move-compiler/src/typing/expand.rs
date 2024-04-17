@@ -387,7 +387,14 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
     use T::UnannotatedPat_ as P;
     type_(context, &mut p.ty);
     match &mut p.pat.value {
-        P::Constructor(_, _, _, bts, fields) | P::BorrowConstructor(_, _, _, _, bts, fields) => {
+        P::Variant(_, _, _, bts, fields) | P::BorrowVariant(_, _, _, _, bts, fields) => {
+            types(context, bts);
+            for (_, _, (_, (bt, innerb))) in fields.iter_mut() {
+                type_(context, bt);
+                pat(context, innerb)
+            }
+        }
+        P::Struct(_, _, bts, fields) | P::BorrowStruct(_, _, _, bts, fields) => {
             types(context, bts);
             for (_, _, (_, (bt, innerb))) in fields.iter_mut() {
                 type_(context, bt);

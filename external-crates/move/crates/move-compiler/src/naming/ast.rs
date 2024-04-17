@@ -174,7 +174,7 @@ pub struct StructDefinition {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StructFields {
-    Defined(Fields<Type>),
+    Defined(/* positional */ bool, Fields<Type>),
     Native(Loc),
 }
 
@@ -488,10 +488,16 @@ pub type MatchArm = Spanned<MatchArm_>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchPattern_ {
-    Constructor(
+    Variant(
         ModuleIdent,
         DatatypeName,
         VariantName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Struct(
+        ModuleIdent,
+        DatatypeName,
         Option<Vec<Type>>,
         Fields<MatchPattern>,
     ),
@@ -927,6 +933,20 @@ impl Type_ {
             | Type_::UnresolvedError => None,
         }
     }
+
+    // Unwraps refs
+    pub fn base_type_(&self) -> Self {
+        match self {
+            Type_::Ref(_, inner) => inner.value.clone(),
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => self.clone(),
+        }
+    }
 }
 
 impl Var_ {
@@ -1236,7 +1256,10 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
+        if let StructFields::Defined(is_positional, fields) = fields {
+            if *is_positional {
+                w.write("#positional");
+            }
             w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;
@@ -1887,8 +1910,21 @@ impl AstDebug for MatchPattern_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use MatchPattern_::*;
         match self {
-            Constructor(mident, enum_, variant, tys_opt, fields) => {
+            Variant(mident, enum_, variant, tys_opt, fields) => {
                 w.write(format!("{}::{}::{}", mident, enum_, variant));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Struct(mident, struct_, tys_opt, fields) => {
+                w.write(format!("{}::{}", mident, struct_,));
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);

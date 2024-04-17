@@ -663,7 +663,7 @@ fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
 
     // instantiate types and check constraints
@@ -2168,7 +2168,7 @@ fn match_pattern_(
     }
 
     match pat_ {
-        P::Constructor(m, enum_, variant, tys_opt, fields) => {
+        P::Variant(m, enum_, variant, tys_opt, fields) => {
             let (bt, targs) = core::make_enum_type(context, loc, &m, &enum_, tys_opt);
             let typed_fields = add_variant_field_types(
                 context,
@@ -2182,19 +2182,19 @@ fn match_pattern_(
             );
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
                 let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty);
-                let fty_out = subtype(
+                let fty_ref = rtype!(fty.clone());
+                subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
-                (idx, (fty_out, tpat))
+                (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
-                    "Invalid deconstructing pattern for '{}::{}::{}'.\n All enums can only be \
+                    "Invalid pattern for '{}::{}::{}'.\n All enums can only be \
                      matched in the module in which they are declared",
                     &m, &enum_, &variant
                 );
@@ -2204,12 +2204,54 @@ fn match_pattern_(
             }
             let bt = rtype!(bt);
             let pat_ = if let Some(mut_) = mut_ref {
-                TP::BorrowConstructor(*mut_, m, enum_, variant, targs, tfields)
+                TP::BorrowVariant(*mut_, m, enum_, variant, targs, tfields)
             } else {
-                TP::Constructor(m, enum_, variant, targs, tfields)
+                TP::Variant(m, enum_, variant, targs, tfields)
             };
             T::pat(bt, sp(loc, pat_))
         }
+        P::Struct(m, struct_, tys_opt, fields) => {
+            let (bt, targs) = core::make_struct_type(context, loc, &m, &struct_, tys_opt);
+            let typed_fields = add_struct_field_types(
+                context,
+                loc,
+                "pattern",
+                &m,
+                &struct_,
+                targs.clone(),
+                fields,
+            );
+            let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
+                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(fty.clone());
+                subtype(
+                    context,
+                    f.loc(),
+                    || "Invalid pattern field type",
+                    tpat.ty.clone(),
+                    fty_ref,
+                );
+                (idx, (fty, tpat))
+            });
+            if !context.is_current_module(&m) {
+                let msg = format!(
+                    "Invalid pattern for '{}::{}'.\n All struct can only be \
+                     matched in the module in which they are declared",
+                    &m, &struct_,
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
+            }
+            let bt = rtype!(bt);
+            let pat_ = if let Some(mut_) = mut_ref {
+                TP::BorrowStruct(*mut_, m, struct_, targs, tfields)
+            } else {
+                TP::Struct(m, struct_, targs, tfields)
+            };
+            T::pat(bt, sp(loc, pat_))
+        }
+
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Wildcard))
@@ -2378,7 +2420,10 @@ fn match_pattern_has_rhs_binders(
         N::MatchPattern_::At(x, _, inner) => {
             rhs_binders.contains(x) || match_pattern_has_rhs_binders(inner, rhs_binders)
         }
-        N::MatchPattern_::Constructor(_, _, _, _, fields) => fields
+        N::MatchPattern_::Variant(_, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, x))| match_pattern_has_rhs_binders(x, rhs_binders)),
+        N::MatchPattern_::Struct(_, _, _, fields) => fields
             .iter()
             .any(|(_, _, (_, x))| match_pattern_has_rhs_binders(x, rhs_binders)),
         N::MatchPattern_::Or(lhs, rhs) => {
@@ -2717,7 +2762,7 @@ fn add_struct_field_types<T>(
 ) -> Fields<(Type, T)> {
     let maybe_fields_ty = core::make_struct_field_types(context, loc, m, n, targs);
     let mut fields_ty = match maybe_fields_ty {
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
         N::StructFields::Native(nloc) => {
             let msg = format!(
                 "Invalid {} usage for native struct '{}::{}'. Native structs cannot be directly \

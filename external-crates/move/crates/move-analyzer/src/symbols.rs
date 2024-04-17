@@ -1555,7 +1555,7 @@ fn get_mod_outer_defs(
         // process field structs first
         let mut field_defs = vec![];
         let mut field_types = vec![];
-        if let StructFields::Defined(fields) = &def.fields {
+        if let StructFields::Defined(_positional, fields) = &def.fields {
             for (fpos, fname, (_, t)) in fields {
                 let start = match get_start_loc(&fpos, files, file_id_mapping) {
                     Some(s) => s,
@@ -2244,7 +2244,7 @@ impl<'a> ParsingSymbolicator<'a> {
 
 impl<'a> TypingSymbolicator<'a> {
     /// Get symbols for the whole module
-    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &String) {
+    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &str) {
         for (pos, name, fun) in &mod_def.functions {
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
@@ -2355,8 +2355,8 @@ impl<'a> TypingSymbolicator<'a> {
     fn struct_symbols(
         &mut self,
         struct_def: &StructDefinition,
-        struct_name: &Symbol,
-        mod_ident_str: &String,
+        _struct_name: &Symbol,
+        _mod_ident_str: &str,
     ) {
         // create scope designated to contain type parameters (if any)
         let mut tp_scope = BTreeMap::new();
@@ -2364,18 +2364,8 @@ impl<'a> TypingSymbolicator<'a> {
             self.add_type_param(&stp.param, &mut tp_scope);
         }
 
-        let positional = self
-            .mod_outer_defs
-            .get(mod_ident_str)
-            .map_or(false, |mod_defs| {
-                mod_defs
-                    .structs
-                    .get(struct_name)
-                    .map_or(false, |sdef| sdef.positional)
-            });
-
         self.type_params = tp_scope;
-        if let StructFields::Defined(fields) = &struct_def.fields {
+        if let StructFields::Defined(positional, fields) = &struct_def.fields {
             for (fpos, fname, (_, t)) in fields {
                 self.add_type_id_use_def(t);
                 if !positional {
