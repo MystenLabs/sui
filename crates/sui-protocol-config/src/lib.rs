@@ -1042,6 +1042,8 @@ pub struct ProtocolConfig {
     // The max accumulated txn execution cost per object in a checkpoint. Transactions
     // in a checkpoint will be deferred once their touch shared objects hit this limit.
     max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+
+    max_deferral_rounds_for_congestion_control: Option<u64>,
 }
 
 // feature flags
@@ -1720,6 +1722,8 @@ impl ProtocolConfig {
             consensus_max_transactions_in_block_bytes: None,
 
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
+
+            max_deferral_rounds_for_congestion_control: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };

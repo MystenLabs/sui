@@ -146,6 +146,7 @@ impl RWLockDependencyBuilder {
                         .entry(*effect.transaction_digest())
                         .or_default()
                         .push(ObjectKey(oid, version)),
+                    InputSharedObject::Cancelled(..) => (),
                 }
             }
         }

@@ -14,6 +14,7 @@ use super::{object_read::ObjectRead, sui_address::SuiAddress};
 pub(crate) enum UnchangedSharedObject {
     Read(SharedObjectRead),
     Delete(SharedObjectDelete),
+    Cancelled(SharedObjectCancelled),
 }
 
 /// The transaction accepted a shared object as input, but only to read it.
@@ -37,6 +38,12 @@ pub(crate) struct SharedObjectDelete {
     /// Whether this transaction intended to use this shared object mutably or not. See
     /// `SharedInput.mutable` for further details.
     mutable: bool,
+}
+
+#[derive(SimpleObject)]
+pub(crate) struct SharedObjectCancelled {
+    address: SuiAddress,
+    version: u64,
 }
 
 /// Error for converting from an `InputSharedObject`.
@@ -70,6 +77,11 @@ impl UnchangedSharedObject {
                 address: id.into(),
                 version: v.value(),
                 mutable: true,
+            })),
+
+            I::Cancelled(id, v) => Ok(U::Cancelled(SharedObjectCancelled {
+                address: id.into(),
+                version: v.value(),
             })),
         }
     }

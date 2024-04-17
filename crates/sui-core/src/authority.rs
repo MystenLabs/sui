@@ -199,6 +199,7 @@ pub mod epoch_start_configuration;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod test_authority_builder;
+pub mod transaction_deferral;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -5122,7 +5123,9 @@ impl NodeStateDump {
                         shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
-                InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
+                InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::MutateDeleted(..)
+                | InputSharedObject::Cancelled(..) => (),
             }
         }
 

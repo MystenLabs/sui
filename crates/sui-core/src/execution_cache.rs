@@ -195,6 +195,9 @@ pub trait ExecutionCacheRead: Send + Sync {
             )?
             .into_iter(),
         ) {
+            assert!(
+                input_key.version().is_none() || input_key.version().unwrap() < SequenceNumber::MAX
+            );
             // If the key exists at the specified version, then the object is available.
             if has_key {
                 versioned_results.push((*idx, true))

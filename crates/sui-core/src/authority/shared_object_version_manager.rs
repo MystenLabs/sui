@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityPerEpochStore;
 use crate::execution_cache::ExecutionCacheRead;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -38,6 +42,7 @@ impl SharedObjVerManager {
         cache_reader: &dyn ExecutionCacheRead,
         certificates: &[VerifiedExecutableTransaction],
         randomness_round: Option<RandomnessRound>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<ConsensusSharedObjVerAssignment> {
         let mut shared_input_next_versions = get_or_init_versions(
             certificates.iter().map(|cert| cert.data()),
@@ -66,8 +71,11 @@ impl SharedObjVerManager {
             if !cert.contains_shared_object() {
                 continue;
             }
-            let cert_assigned_versions =
-                assign_versions_for_certificate(cert, &mut shared_input_next_versions);
+            let cert_assigned_versions = assign_versions_for_certificate(
+                cert,
+                &mut shared_input_next_versions,
+                cancelled_txns,
+            );
             assigned_versions.push((cert.key(), cert_assigned_versions));
         }
 
@@ -153,8 +161,18 @@ async fn get_or_init_versions(
 fn assign_versions_for_certificate(
     cert: &VerifiedExecutableTransaction,
     shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
+    cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
 ) -> Vec<(ObjectID, SequenceNumber)> {
     let tx_digest = cert.digest();
+
+    let cancellation_info: Option<HashSet<_>> =
+        if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
+            cancelled_txns.get(&tx_digest)
+        {
+            Some(congested_objects.clone().into_iter().collect())
+        } else {
+            None
+        };
 
     // Make an iterator to update the locks of the transaction's shared objects.
     let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
@@ -167,16 +185,33 @@ fn assign_versions_for_certificate(
     let receiving_object_keys = transaction_receiving_object_keys(cert);
     input_object_keys.extend(receiving_object_keys);
 
-    for (SharedInputObject { id, mutable, .. }, version) in shared_input_objects
-        .iter()
-        .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
-    {
-        assigned_versions.push((*id, version));
-        input_object_keys.push(ObjectKey(*id, version));
-        is_mutable_input.push(*mutable);
+    if let Some(congested_objects) = cancellation_info {
+        for SharedInputObject { id, .. } in shared_input_objects.iter() {
+            let assigned_version = if congested_objects.contains(&id) {
+                SequenceNumber::CONGESTED
+            } else {
+                SequenceNumber::CANCELLED_READ
+            };
+            assigned_versions.push((*id, assigned_version));
+            input_object_keys.push(ObjectKey(*id, SequenceNumber::MIN));
+            is_mutable_input.push(false);
+        }
+    } else {
+        for (SharedInputObject { id, mutable, .. }, version) in shared_input_objects
+            .iter()
+            .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
+        {
+            assigned_versions.push((*id, version));
+            input_object_keys.push(ObjectKey(*id, version));
+            is_mutable_input.push(*mutable);
+        }
     }
 
     let next_version = SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
+    assert!(
+        next_version <= SequenceNumber::MAX,
+        "next_version must be less than MAX"
+    );
 
     // Update the next version for the shared objects.
     assigned_versions
@@ -190,7 +225,13 @@ fn assign_versions_for_certificate(
             }
         })
         .for_each(|(id, version)| {
-            shared_input_next_versions.insert(id, version);
+            assert!(
+                version < SequenceNumber::MAX,
+                "version must be less than MAX"
+            );
+            shared_input_next_versions
+                .insert(id, version)
+                .expect("Object must exist in shared_input_next_versions.");
         });
 
     trace!(
@@ -254,6 +295,7 @@ mod tests {
             authority.get_cache_reader().as_ref(),
             &certs,
             None,
+            &BTreeMap::new(),
         )
         .await
         .unwrap();
@@ -314,6 +356,7 @@ mod tests {
             authority.get_cache_reader().as_ref(),
             &certs,
             Some(RandomnessRound::new(1)),
+            &BTreeMap::new(),
         )
         .await
         .unwrap();
