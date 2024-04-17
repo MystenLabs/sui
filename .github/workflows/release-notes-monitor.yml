@@ -27,13 +27,11 @@ jobs:
       id: get-pr-list
       working-directory: ./
       run: |
-        # export new_commit_hash=$(git rev-parse HEAD)
-        export new_commit_hash="70a27fe6fb390d304dd7ea05073b9d86879ec91c"
+        export new_commit_hash=$(git rev-parse HEAD)
         export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
 
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -rV | head -1)
-        # export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
-        export previous_commit_hash="d181e3f6ec8c3e185c239543f2613103db806eee"
+        export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
         
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
 
@@ -60,7 +58,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "Processing PR#${{ matrix.pr }}"
+        echo "Processing PR# ${{ matrix.pr }}"
         
         # old format
         export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
@@ -68,7 +66,7 @@ jobs:
         # new format
         [[ -z $rel_notes ]] && export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/^\- \[x\]/')
 
-        # make text json payload friendly
+        # make the string json payload friendly
         rel_notes="${rel_notes//\\/\\\\}"
         rel_notes="${rel_notes//\"/\\\"}"
         rel_notes="${rel_notes//$'\r'/}"
@@ -81,7 +79,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
 
-    - name: Get PR author
+    - name: Get PR author from PR# ${{ matrix.pr }} 
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -94,8 +92,7 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       with:
-        # channel-id: '#ext-mysten-release-notes'
-        channel-id: '#test-notifications'
+        channel-id: '#ext-mysten-release-notes'
         payload: |
           {
             "text": "PR *${{ matrix.pr }}* Release Notes",
@@ -113,12 +110,12 @@ jobs:
             ]
           }
 
-  # tag:
-  #   name: Adding git tag to processed commit
-  #   needs: [ get-list-of-prs ]
-  #   if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
-  #   uses: mystenlabs/sui/.github/workflows/tag.yml@main
-  #   with:
-  #     sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
-  #     tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
-  #   secrets: inherit
+  tag:
+    name: Adding git tag to processed commit
+    needs: [ get-list-of-prs ]
+    if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
+    uses: mystenlabs/sui/.github/workflows/tag.yml@main
+    with:
+      sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
+      tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
+    secrets: inherit
