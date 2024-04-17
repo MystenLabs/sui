@@ -833,8 +833,13 @@ impl AuthorityStore {
         let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
-        for outputs in tx_outputs {
-            self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
+
+        {
+            let _span = tracing::trace_span!("batch_build");
+
+            for outputs in tx_outputs {
+                self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
+            }
         }
         // test crashing before writing the batch
         fail_point_async!("crash");
