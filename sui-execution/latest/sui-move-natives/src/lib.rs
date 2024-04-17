@@ -67,7 +67,7 @@ mod dynamic_field;
 mod event;
 mod object;
 pub mod object_runtime;
-mod test_scenario;
+pub mod test_scenario;
 mod test_utils;
 mod transfer;
 mod tx_context;
@@ -809,6 +809,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "test_scenario",
             "ids_for_address",
             make_native!(test_scenario::ids_for_address),
+        ),
+        (
+            "test_scenario",
+            "allocate_receiving_ticket_for_object",
+            make_native!(test_scenario::allocate_receiving_ticket_for_object),
+        ),
+        (
+            "test_scenario",
+            "deallocate_receiving_ticket_for_object",
+            make_native!(test_scenario::deallocate_receiving_ticket_for_object),
         ),
         (
             "transfer",
