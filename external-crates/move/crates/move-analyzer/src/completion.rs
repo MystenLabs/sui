@@ -4,7 +4,7 @@
 
 use crate::{
     context::Context,
-    symbols::{self, DefInfo, DefLoc, SymbolicatorRunner, Symbols},
+    symbols::{self, DefInfo, DefLoc, PrecompiledPkgDeps, SymbolicatorRunner, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -12,7 +12,6 @@ use lsp_types::{
 };
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    command_line::compiler::FullyCompiledProgram,
     editions::Edition,
     expansion::ast::Visibility,
     linters::LintLevel,
@@ -363,7 +362,7 @@ pub fn on_completion_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, Arc<FullyCompiledProgram>>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
