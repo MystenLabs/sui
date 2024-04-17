@@ -157,11 +157,19 @@ impl BlockManager {
             .cloned()
             .collect::<BTreeSet<_>>();
 
-        self.context
-            .metrics
-            .node_metrics
+        let metrics = &self.context.metrics.node_metrics;
+        metrics
             .missing_blocks_total
             .set(missing_blocks_after.len() as i64);
+        metrics
+            .block_manager_suspended_blocks
+            .set(self.suspended_blocks.len() as i64);
+        metrics
+            .block_manager_missing_ancestors
+            .set(self.missing_ancestors.len() as i64);
+        metrics
+            .block_manager_missing_blocks
+            .set(self.missing_blocks.len() as i64);
 
         // Figure out the new missing blocks
         (accepted_blocks, missing_blocks_after)
@@ -219,7 +227,7 @@ impl BlockManager {
             self.context
                 .metrics
                 .node_metrics
-                .suspended_blocks
+                .block_suspensions
                 .with_label_values(&[hostname])
                 .inc();
             self.suspended_blocks
@@ -266,7 +274,7 @@ impl BlockManager {
             self.context
                 .metrics
                 .node_metrics
-                .unsuspended_blocks
+                .block_unsuspensions
                 .with_label_values(&[hostname])
                 .inc();
         }

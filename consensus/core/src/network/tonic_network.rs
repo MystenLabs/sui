@@ -654,10 +654,10 @@ pub(crate) struct FetchCommitsRequest {
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct FetchCommitsResponse {
-    // Serialized Commit.
+    // Serialized consecutive Commit.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     commits: Vec<Bytes>,
-    // Serialized SignedBlock.
+    // Serialized SignedBlock that certify the last commit from above.
     #[prost(bytes = "bytes", repeated, tag = "2")]
     certifier_blocks: Vec<Bytes>,
 }

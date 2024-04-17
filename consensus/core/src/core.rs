@@ -206,6 +206,7 @@ impl Core {
         &mut self,
         round: Round,
     ) -> ConsensusResult<Option<VerifiedBlock>> {
+        let _scope = monitored_scope("Core::force_new_block");
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
             return self.try_propose(true);
@@ -229,7 +230,6 @@ impl Core {
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
     fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
-        let _scope = monitored_scope("Core::try_new_block");
         let _s = self
             .context
             .metrics
@@ -368,6 +368,7 @@ impl Core {
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
+        let _scope = monitored_scope("Core::get_missing_blocks");
         self.block_manager.missing_blocks()
     }
 

@@ -587,9 +587,9 @@ pub(crate) struct FetchCommitsRequest {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct FetchCommitsResponse {
-    // Serialized Commit.
+    // Serialized consecutive Commit.
     commits: Vec<Bytes>,
-    // Serialized SignedBlock.
+    // Serialized SignedBlock that certify the last commit from above.
     certifier_blocks: Vec<Bytes>,
 }
 
