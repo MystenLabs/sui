@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/bcs';
+
 import type { PublicKey, SerializedSignature, SignatureScheme } from '../cryptography/index.js';
 import { parseSerializedSignature } from '../cryptography/index.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
@@ -8,7 +10,7 @@ import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 // eslint-disable-next-line import/no-cycle
 import { MultiSigPublicKey } from '../multisig/publickey.js';
-import { ZkLoginPublicIdentifier } from '../zklogin/publickey.js';
+import { graphqlVerifyZkLoginSignature, ZkLoginPublicIdentifier } from '../zklogin/publickey.js';
 
 export async function verifySignature(
 	bytes: Uint8Array,
@@ -28,6 +30,20 @@ export async function verifyPersonalMessage(
 	signature: SerializedSignature,
 ): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
+
+	if (parsedSignature.signatureScheme === 'ZkLogin') {
+		if (
+			!(await graphqlVerifyZkLoginSignature({
+				address: parsedSignature.zkLogin.address,
+				bytes: toB64(message),
+				signature,
+			}))
+		) {
+			throw new Error(`Signature is not valid for the provided message`);
+		}
+
+		return parsedSignature.publicKey;
+	}
 
 	if (
 		!(await parsedSignature.publicKey.verifyPersonalMessage(
@@ -67,10 +83,6 @@ function parseSignature(signature: SerializedSignature) {
 			...parsedSignature,
 			publicKey: new MultiSigPublicKey(parsedSignature.multisig.multisig_pk),
 		};
-	}
-
-	if (parsedSignature.signatureScheme === 'ZkLogin') {
-		throw new Error('ZkLogin is not supported yet');
 	}
 
 	const publicKey = publicKeyFromRawBytes(
