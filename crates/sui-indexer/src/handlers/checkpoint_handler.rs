@@ -11,7 +11,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
-use sui_package_resolver::{PackageStore, Resolver};
+use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
 use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -113,7 +113,7 @@ pub struct CheckpointHandler<S, T: R2D2Connection + 'static> {
     // buffers for packages that are being indexed but not committed to DB,
     // they will be periodically GCed to avoid OOM.
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    package_resolver: Arc<Resolver<InterimPackageResolver<T>>>,
+    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver<T>>>>,
 }
 
 #[async_trait]
@@ -164,7 +164,8 @@ where
             package_buffer.clone(),
             metrics.clone(),
         );
-        let package_resolver = Arc::new(Resolver::new(in_mem_package_resolver));
+        let cached_package_resolver = PackageStoreWithLruCache::new(in_mem_package_resolver);
+        let package_resolver = Arc::new(Resolver::new(cached_package_resolver));
         Self {
             state,
             metrics,
