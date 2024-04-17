@@ -2045,32 +2045,28 @@ impl Display for CounterExample {
             CounterExample::Note(_, inner) => inner.fmt(f),
             CounterExample::Struct(s, is_positional, args) => {
                 write!(f, "{}", s)?;
-                if !args.is_empty() {
-                    if *is_positional {
-                        write!(f, "(")?;
-                        write!(
-                            f,
-                            "{}",
-                            args.iter()
-                                .map(|(_name, arg)| { format!("{}", arg) })
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )?;
-                        write!(f, ")")
-                    } else {
-                        write!(f, " {{ ")?;
-                        write!(
-                            f,
-                            "{}",
-                            args.iter()
-                                .map(|(name, arg)| { format!("{}: {}", name, arg) })
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )?;
-                        write!(f, " }}")
-                    }
+                if *is_positional {
+                    write!(f, "(")?;
+                    write!(
+                        f,
+                        "{}",
+                        args.iter()
+                            .map(|(_name, arg)| { format!("{}", arg) })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )?;
+                    write!(f, ")")
                 } else {
-                    Ok(())
+                    write!(f, " {{ ")?;
+                    write!(
+                        f,
+                        "{}",
+                        args.iter()
+                            .map(|(name, arg)| { format!("{}: {}", name, arg) })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )?;
+                    write!(f, " }}")
                 }
             }
             CounterExample::Variant(e, v, is_positional, args) => {

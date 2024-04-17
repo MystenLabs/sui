@@ -2194,7 +2194,7 @@ fn match_pattern_(
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
-                    "Invalid deconstructing pattern for '{}::{}::{}'.\n All enums can only be \
+                    "Invalid pattern for '{}::{}::{}'.\n All enums can only be \
                      matched in the module in which they are declared",
                     &m, &enum_, &variant
                 );
@@ -2235,7 +2235,7 @@ fn match_pattern_(
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
-                    "Invalid deconstructing pattern for '{}::{}'.\n All struct can only be \
+                    "Invalid pattern for '{}::{}'.\n All struct can only be \
                      matched in the module in which they are declared",
                     &m, &struct_,
                 );

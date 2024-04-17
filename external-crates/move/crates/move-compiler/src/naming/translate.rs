@@ -166,7 +166,7 @@ impl FieldInfo {
 
 #[derive(Debug, Clone)]
 pub(super) enum ResolvedConstructor {
-    Struct(Box<StructType>),
+    Struct(DatatypeName, Box<StructType>),
     Variant(
         Box<EnumType>,
         VariantName,
@@ -178,15 +178,22 @@ pub(super) enum ResolvedConstructor {
 impl ResolvedConstructor {
     fn type_arity(&self) -> usize {
         match self {
-            ResolvedConstructor::Struct(stype) => stype.arity,
+            ResolvedConstructor::Struct(_, stype) => stype.arity,
             ResolvedConstructor::Variant(etype, _, _, _) => etype.arity,
         }
     }
 
     fn field_info(&self) -> &FieldInfo {
         match self {
-            ResolvedConstructor::Struct(stype) => &stype.field_info,
+            ResolvedConstructor::Struct(_, stype) => &stype.field_info,
             ResolvedConstructor::Variant(_, _, _, field_info) => field_info,
+        }
+    }
+
+    fn name(&self) -> String {
+        match self {
+            ResolvedConstructor::Struct(name, _) => name.to_string(),
+            ResolvedConstructor::Variant(_, vname, _, _) => vname.to_string(),
         }
     }
 }
@@ -581,10 +588,11 @@ impl<'env> Context<'env> {
                 let mident_name = module_type.original_mident();
                 match (&ma.value, module_type) {
                     (EN::Name(_) | EN::ModuleAccess(_, _), ModuleType::Struct(struct_type)) => {
+                        let dname = DatatypeName(name);
                         Some((
                             mident_name,
-                            DatatypeName(name),
-                            ResolvedConstructor::Struct(struct_type),
+                            dname.clone(),
+                            ResolvedConstructor::Struct(dname, struct_type),
                         ))
                     }
                     (EN::Variant(_, variant_name), ModuleType::Enum(enum_type)) => {
@@ -2008,7 +2016,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             );
             check_constructor_form(context, eloc, ConstructorForm::None, "instantiation", &ty);
             match ty {
-                ResolvedConstructor::Struct(_stype) => {
+                ResolvedConstructor::Struct(_, _stype) => {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
@@ -2206,7 +2214,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             );
             check_constructor_form(context, eloc, ConstructorForm::Braces, "instantiation", &ty);
             match ty {
-                ResolvedConstructor::Struct(_stype) => NE::Pack(m, n, tys_opt, fields),
+                ResolvedConstructor::Struct(_, _stype) => NE::Pack(m, n, tys_opt, fields),
                 ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
                     NE::PackVariant(m, n, variant, tys_opt, fields)
                 }
@@ -2257,7 +2265,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 }))
                 .unwrap();
             match ty {
-                ResolvedConstructor::Struct(_stype) => NE::Pack(m, n, tys_opt, fields),
+                ResolvedConstructor::Struct(_, _stype) => NE::Pack(m, n, tys_opt, fields),
                 ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
                     NE::PackVariant(m, n, variant, tys_opt, fields)
                 }
@@ -2467,8 +2475,10 @@ fn check_constructor_form(
     const EMPTY: &str = "empty";
     const POSNL_UPCASE: &str = "Positional";
     const POSNL: &str = "positional";
-    const VARIANT_DEFN: &str = "Enum variant is declared here";
-    const STRUCT_DEFN: &str = "Struct is declared here";
+
+    fn defn_loc_error(name: &str) -> String {
+        format!("'{name}' is declared here")
+    }
 
     macro_rules! invalid_inst_msg {
         ($ty:expr, $upcase:ident, $kind:ident) => {{
@@ -2492,8 +2502,9 @@ fn check_constructor_form(
         };
     }
 
+    let name = ty.name();
     match ty {
-        RC::Struct(stype) => match form {
+        RC::Struct(_, stype) => match form {
             CF::None => {
                 let (form_upcase, form) = if stype.field_info.is_positional() {
                     (POSNL_UPCASE, POSNL)
@@ -2504,7 +2515,7 @@ fn check_constructor_form(
                 let mut diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, msg),
-                    (stype.decl_loc, STRUCT_DEFN),
+                    (stype.decl_loc, defn_loc_error(&name)),
                 );
                 if stype.field_info.is_positional() {
                     diag.add_note(posnl_note!());
@@ -2519,7 +2530,7 @@ fn check_constructor_form(
                 let diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, &msg),
-                    (stype.decl_loc, STRUCT_DEFN),
+                    (stype.decl_loc, defn_loc_error(&name)),
                 );
                 context.env.add_diag(diag);
             }
@@ -2528,7 +2539,7 @@ fn check_constructor_form(
                 let diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, &msg),
-                    (stype.decl_loc, STRUCT_DEFN),
+                    (stype.decl_loc, defn_loc_error(&name)),
                 );
                 context.env.add_diag(diag);
             }
@@ -2546,7 +2557,7 @@ fn check_constructor_form(
                 let mut diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, &msg),
-                    (*vloc, VARIANT_DEFN),
+                    (*vloc, defn_loc_error(&name)),
                 );
                 if vfields.is_positional() {
                     diag.add_note(posnl_note!());
@@ -2560,7 +2571,7 @@ fn check_constructor_form(
                 let mut diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, msg),
-                    (*vloc, VARIANT_DEFN),
+                    (*vloc, defn_loc_error(&name)),
                 );
                 diag.add_note(format!("Remove '()' arguments from this {position}"));
                 context.env.add_diag(diag);
@@ -2571,7 +2582,7 @@ fn check_constructor_form(
                 let mut diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, &msg),
-                    (*vloc, VARIANT_DEFN),
+                    (*vloc, defn_loc_error(&name)),
                 );
                 diag.add_note(named_note!());
                 context.env.add_diag(diag);
@@ -2581,7 +2592,7 @@ fn check_constructor_form(
                 let mut diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, msg),
-                    (*vloc, VARIANT_DEFN),
+                    (*vloc, defn_loc_error(&name)),
                 );
                 diag.add_note(format!("Remove '{{ }}' arguments from this {position}"));
                 context.env.add_diag(diag);
@@ -2591,7 +2602,7 @@ fn check_constructor_form(
                 let mut diag = diag!(
                     NameResolution::PositionalCallMismatch,
                     (loc, &msg),
-                    (*vloc, VARIANT_DEFN),
+                    (*vloc, defn_loc_error(&name)),
                 );
                 diag.add_note(posnl_note!());
                 context.env.add_diag(diag);
@@ -3002,7 +3013,9 @@ fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::
                 UniqueMap::maybe_from_iter(args.into_iter()).expect("ICE naming failed");
 
             match ty {
-                ResolvedConstructor::Struct(_stype) => NP::Struct(m, n, tys_opt, result_args),
+                ResolvedConstructor::Struct(_name, _stype) => {
+                    NP::Struct(m, n, tys_opt, result_args)
+                }
                 ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
                     NP::Variant(m, n, variant, tys_opt, result_args)
                 }
@@ -3034,7 +3047,7 @@ fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::
             }
 
             match ty {
-                ResolvedConstructor::Struct(_stype) => NP::Struct(m, n, tys_opt, args),
+                ResolvedConstructor::Struct(_name, _stype) => NP::Struct(m, n, tys_opt, args),
                 ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
                     NP::Variant(m, n, variant, tys_opt, args)
                 }
@@ -3055,7 +3068,7 @@ fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::
             );
 
             match ty {
-                ResolvedConstructor::Struct(_stype) => {
+                ResolvedConstructor::Struct(_name, _stype) => {
                     // No need to chck is_empty / is_positional because typing will report the errors.
                     NP::Struct(m, n, tys_opt, UniqueMap::new())
                 }

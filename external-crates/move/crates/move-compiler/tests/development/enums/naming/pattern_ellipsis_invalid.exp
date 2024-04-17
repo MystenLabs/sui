@@ -2,7 +2,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:16:13
    │
  3 │         D
-   │         - Enum variant is declared here
+   │         - 'D' is declared here
    ·
 16 │             Y::D(..) => 0,
    │             ^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
@@ -13,7 +13,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:17:13
    │
  3 │         D
-   │         - Enum variant is declared here
+   │         - 'D' is declared here
    ·
 17 │             Y::D{..} => 0,
    │             ^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
@@ -24,7 +24,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:18:13
    │
  3 │         D
-   │         - Enum variant is declared here
+   │         - 'D' is declared here
    ·
 18 │             Y::D(x, ..) => 0,
    │             ^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
@@ -49,7 +49,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:19:13
    │
  3 │         D
-   │         - Enum variant is declared here
+   │         - 'D' is declared here
    ·
 19 │             Y::D{x, ..} => 0,
    │             ^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
@@ -74,7 +74,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:25:13
    │
  7 │         D()
-   │         --- Enum variant is declared here
+   │         --- 'D' is declared here
    ·
 25 │             X::D{} => 0,
    │             ^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
@@ -85,7 +85,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:26:13
    │
  7 │         D()
-   │         --- Enum variant is declared here
+   │         --- 'D' is declared here
    ·
 26 │             X::D{..} => 0,
    │             ^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
@@ -96,7 +96,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:27:13
    │
  7 │         D()
-   │         --- Enum variant is declared here
+   │         --- 'D' is declared here
    ·
 27 │             X::D{x, ..} => 0,
    │             ^^^^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
@@ -121,7 +121,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:33:13
    │
 11 │         D{}
-   │         --- Enum variant is declared here
+   │         --- 'D' is declared here
    ·
 33 │             Z::D() => 0,
    │             ^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
@@ -132,7 +132,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:34:13
    │
 11 │         D{}
-   │         --- Enum variant is declared here
+   │         --- 'D' is declared here
    ·
 34 │             Z::D(..) => 0,
    │             ^^^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
@@ -143,7 +143,7 @@ error[E03013]: positional call mismatch
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:35:13
    │
 11 │         D{}
-   │         --- Enum variant is declared here
+   │         --- 'D' is declared here
    ·
 35 │             Z::D(x, ..) => 0,
    │             ^^^^^^^^^^^ Invalid variant pattern. Named variant declarations require named patterns

@@ -2,7 +2,7 @@ error[E03013]: positional call mismatch
   ┌─ tests/development/enums/matching/invalid_positional_ctor.move:8:18
   │
 4 │         E(u64)
-  │         ------ Enum variant is declared here
+  │         ------ 'E' is declared here
   ·
 8 │         let _x = Entry::E;
   │                  ^^^^^^^^ Invalid variant instantiation. Positional variant declarations require positional instantiations
@@ -19,7 +19,7 @@ error[E03013]: positional call mismatch
   ┌─ tests/development/enums/matching/invalid_positional_ctor.move:9:18
   │
 4 │         E(u64)
-  │         ------ Enum variant is declared here
+  │         ------ 'E' is declared here
   ·
 9 │         let _x = Entry::E { x: 32 };
   │                  ^^^^^^^^^^^^^^^^^^ Invalid variant instantiation. Positional variant declarations require positional instantiations

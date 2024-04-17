@@ -10,7 +10,7 @@ error[E03013]: positional call mismatch
   ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
   │
 4 │     struct Foo has drop { x: u64 }
-  │            --- Struct is declared here
+  │            --- 'Foo' is declared here
   ·
 7 │         let _ = Foo(0);
   │                 ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations

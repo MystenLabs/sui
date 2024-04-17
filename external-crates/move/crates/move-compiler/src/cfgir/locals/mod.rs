@@ -249,7 +249,8 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
                             let stmt = match display_var(local.value()) {
                                 DisplayVar::Tmp => "The value is created but not used".to_owned(),
                                 DisplayVar::MatchTmp(_name) => {
-                                    "This match takes ownership of this value but does not use it"
+                                    "The match expression takes ownership of this value \
+                                    but does not use it"
                                         .to_string()
                                 }
                                 DisplayVar::Orig(l) => {
