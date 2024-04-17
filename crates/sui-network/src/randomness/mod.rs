@@ -351,7 +351,7 @@ impl RandomnessEventLoop {
         let expected_share_ids = if let Some(expected_share_ids) = peer_share_ids.get(&peer_id) {
             expected_share_ids
         } else {
-            warn!("received partial sigs from unknown peer");
+            debug!("received partial sigs from unknown peer");
             return;
         };
         if sig_bytes.len() != expected_share_ids.len() as usize {
@@ -404,9 +404,9 @@ impl RandomnessEventLoop {
             };
         // Verify we received the expected share IDs (to protect against a validator that sends
         // valid signatures of other peers which will be successfully verified below).
-        let received_share_ids = partial_sigs.iter().map(|s| s.index).collect::<Vec<_>>();
-        if received_share_ids != *expected_share_ids {
-            warn!("received partial sigs with wrong share ids: : expected {expected_share_ids:?}, received {received_share_ids:?}");
+        let received_share_ids = partial_sigs.iter().map(|s| s.index);
+        if received_share_ids.eq(*expected_share_ids.iter()) {
+            warn!("received partial sigs with wrong share ids: expected {expected_share_ids:?}, received {received_share_ids:?}");
             return;
         }
 
