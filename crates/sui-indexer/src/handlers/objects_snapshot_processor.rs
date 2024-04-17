@@ -10,6 +10,7 @@ use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
 const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
+const OBJECTS_SNAPSHOT_SLEEP_DURATION: u64 = 5;
 
 pub struct ObjectsSnapshotProcessor<S> {
     pub client: Client,

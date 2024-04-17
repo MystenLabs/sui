@@ -177,8 +177,16 @@ async fn commit_checkpoints<S>(
             .unwrap_or("false".to_string())
             .parse::<bool>()
             .unwrap();
+        let only_package = std::env::var("SUI_ONLY_PACKAGE")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .unwrap();
         if !env_skip_object_commit {
-            persist_tasks.push(state.persist_objects(package_object_changes_batch.clone()));
+            if only_package {
+                persist_tasks.push(state.persist_objects(package_object_changes_batch.clone()));
+            } else {
+                persist_tasks.push(state.persist_objects(object_changes_batch.clone()));
+            }
         }
         if object_snapshot_backfill_mode && !env_skip_object_snapshot_backfill {
             persist_tasks.push(state.backfill_objects_snapshot(object_changes_batch));
