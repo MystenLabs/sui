@@ -247,6 +247,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
     let package = effects
         .created()
         .iter()
@@ -543,6 +544,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
             "Command failed: {:?}",
             response
         );
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         response
             .effects
             .unwrap()
@@ -829,6 +834,10 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         response
             .effects
             .as_ref()
@@ -886,6 +895,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
         build_config: build_config.clone(),
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        dry_run: false,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
@@ -897,6 +907,10 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     // Get Package ID and version
     let (expect_original_id, expect_version, _) =
         if let SuiClientCommandResult::Publish(response) = resp {
+            assert_eq!(
+                response.effects.as_ref().unwrap().gas_object().object_id(),
+                gas_obj_id
+            );
             get_new_package_obj_from_response(&response)
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
         } else {
@@ -965,6 +979,10 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -1077,6 +1095,10 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -1208,6 +1230,10 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -1339,6 +1365,10 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
@@ -1475,6 +1505,10 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
+        );
         response
             .effects
             .as_ref()
@@ -1796,6 +1830,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
     let package = effects
         .created()
         .iter()
@@ -1867,6 +1902,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
 
     let obj_ids = effects
         .created()
@@ -1918,6 +1954,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         build_config: build_config_publish.clone(),
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        dry_run: false,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
@@ -1933,6 +1970,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
 
     assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
     let package = effects
         .created()
         .iter()
@@ -1997,6 +2035,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         build_config: build_config_upgrade.clone(),
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        dry_run: false,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
@@ -2012,6 +2051,10 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Get Upgraded Package ID and version
     let (expect_upgrade_latest_id, expect_upgrade_version, _) =
         if let SuiClientCommandResult::Upgrade(response) = upgrade_response {
+            assert_eq!(
+                response.effects.as_ref().unwrap().gas_object().object_id(),
+                gas_obj_id
+            );
             get_new_package_obj_from_response(&response)
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
         } else {
@@ -2092,6 +2135,10 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
             response.status_ok().unwrap(),
             "Command failed: {:?}",
             response
+        );
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            gas_obj_id
         );
         (
             response
@@ -2506,6 +2553,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
+        assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
         let object_id = r
             .effects
             .as_ref()
@@ -2630,6 +2678,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
+        assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
         let updated_object_id = r
             .effects
             .as_ref()
