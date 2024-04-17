@@ -95,7 +95,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let listener = std::net::TcpListener::bind(nodefw::var!(
         "NODEFW_LISTEN_ON",
-        "127.0.0.1:8081".into(),
+        "127.0.0.1:8080".into(),
         String
     ))
     .unwrap();
