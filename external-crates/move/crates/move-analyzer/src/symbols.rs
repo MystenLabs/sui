@@ -2691,7 +2691,9 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
             }
-
+            E::InvalidAccess(e) => {
+                self.exp_symbols(e, scope);
+            }
             _ => (),
         }
     }
@@ -6801,7 +6803,7 @@ fn partial_dot_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
