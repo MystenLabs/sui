@@ -5,21 +5,16 @@
 /// It allows users to list their NFTs for renting, rent NFTs for a specified duration, and return them after the rental period.
 module nft_rental::rentables_ext {
     // === Imports ===
-    // std imports
-    use std::option::{Self, Option};
 
     // sui imports
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
-    use sui::tx_context::TxContext;
     use sui::kiosk_extension;
     use sui::bag;
-    use sui::object::{Self, UID, ID};
     use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap, has_rule};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::transfer;
     use sui::package::Publisher;
 
     // Other imports
@@ -43,18 +38,18 @@ module nft_rental::rentables_ext {
     // === Structs ===
     
     /// Extension Key for Kiosk Rentables extension.
-    struct Rentables has drop {}
+    public struct Rentables has drop {}
 
     // Struct representing a rented item.
     // Used as a key for the Rentable that's placed in the Extension's Bag.
-    struct Rented has store, copy, drop { id: ID }
+    public struct Rented has store, copy, drop { id: ID }
 
     // Struct representing a listed item. 
     // Used as a key for the Rentable that's placed in the Extension's Bag.
-    struct Listed has store, copy, drop { id: ID }
+    public struct Listed has store, copy, drop { id: ID }
 
     /// Promise struct for borrowing by value.
-    struct Promise {
+    public struct Promise {
         item: Rented,
         duration: u64,
         start_date: u64,
@@ -65,7 +60,7 @@ module nft_rental::rentables_ext {
 
     /// A wrapper object that holds an asset that is being rented. 
     /// Contains information relevant to the rental period, cost and renter.
-    struct Rentable<T: key + store> has store {
+    public struct Rentable<T: key + store> has store {
         object: T,
         duration: u64, // total amount of time offered for renting in days
         start_date: Option<u64>, // initially undefined, is updated once someone rents it
@@ -75,7 +70,7 @@ module nft_rental::rentables_ext {
 
     /// A shared object that should be minted by every creator. 
     /// Defines the royalties the creator will receive from each rent invocation. 
-    struct RentalPolicy<phantom T> has key, store {
+    public struct RentalPolicy<phantom T> has key, store {
         id: UID,
         balance: Balance<SUI>,
         /// Note: Move does not support float numbers. 
@@ -88,7 +83,7 @@ module nft_rental::rentables_ext {
     /// A shared object that should be minted by every creator. 
     /// Even for creators that do not wish to enforce royalties.
     /// Provides authorized access to an empty TransferPolicy. 
-    struct ProtectedTP<phantom T> has key, store {
+    public struct ProtectedTP<phantom T> has key, store {
         id: UID,
         transfer_policy: TransferPolicy<T>,
         policy_cap: TransferPolicyCap<T>
@@ -204,13 +199,13 @@ module nft_rental::rentables_ext {
         borrower_kiosk: &mut Kiosk,
         rental_policy: &mut RentalPolicy<T>,
         item_id: ID,
-        coin: Coin<SUI>,
+        mut coin: Coin<SUI>,
         clock: &Clock,
         ctx: &mut TxContext) {
         
         assert!(kiosk_extension::is_installed<Rentables>(borrower_kiosk), EExtensionNotInstalled);
 
-        let rentable = take_from_bag<T, Listed>(renter_kiosk, Listed { id: item_id });
+        let mut rentable = take_from_bag<T, Listed>(renter_kiosk, Listed { id: item_id });
         
         let max_price_per_day = MAX_VALUE_U64 / rentable.duration;
         assert!(rentable.price_per_day <= max_price_per_day, ETotalPriceOverflow);

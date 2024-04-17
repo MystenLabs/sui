@@ -4,14 +4,12 @@
 module nft_rental::tests {
     // sui imports
     use sui::test_scenario::{Self, Scenario};
-    use sui::object::{Self, UID, ID};
     use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap};
     use sui::package::{Self, Publisher};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
     use sui::kiosk_test_utils;
-    use sui::transfer;
     use sui::clock::{Self, Clock};
-    use sui::tx_context::{TxContext, dummy};
+    use sui::tx_context::{dummy};
 
     // other imports 
     use nft_rental::rentables_ext::{Self, Promise, ProtectedTP, RentalPolicy, Listed};
@@ -22,13 +20,13 @@ module nft_rental::tests {
     const BORROWER: address = @0xBBBB;
     const THIEF: address = @0xDDDD;
 
-    struct T has key, store {id: UID}
-    struct WITNESS has drop {}
+    public struct T has key, store {id: UID}
+    public struct WITNESS has drop {}
 
     // ==================== Tests ====================
     #[test]
     fun test_install_extension() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
 
         let renter_kiosk_id = create_kiosk(RENTER, test_scenario::ctx(test));
@@ -40,7 +38,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_remove_extension() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
 
         let renter_kiosk_id = create_kiosk(RENTER, test_scenario::ctx(test));
@@ -54,7 +52,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_setup_renting() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let witness = WITNESS {};
         let publisher = package::test_claim(witness, &mut dummy());
@@ -73,7 +71,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_list_with_extension() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -98,7 +96,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EExtensionNotInstalled)]
     fun test_list_without_extension() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -121,7 +119,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=0x2::kiosk::ENotOwner)]
     fun test_list_with_wrong_cap() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -140,7 +138,7 @@ module nft_rental::tests {
 
         test_scenario::next_tx(test, RENTER);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(test, renter_kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(test, renter_kiosk_id);
             let kiosk_cap = test_scenario::take_from_address<KioskOwnerCap>(test, BORROWER);
             let protected_tp = test_scenario::take_shared<ProtectedTP<T>>(test);
 
@@ -156,7 +154,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_delist_locked() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -184,7 +182,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_delist_placed() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -212,7 +210,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EObjectNotExist)]
     fun test_delist_rented() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -249,7 +247,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::ENotOwner)]
     fun test_delist_with_wrong_cap() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -271,7 +269,7 @@ module nft_rental::tests {
 
         test_scenario::next_tx(test, RENTER);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(test, renter_kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(test, renter_kiosk_id);
             let kiosk_cap = test_scenario::take_from_address<KioskOwnerCap>(test, BORROWER);
             let transfer_policy = test_scenario::take_shared<TransferPolicy<T>>(test);
 
@@ -288,7 +286,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_rent_with_extension() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -321,7 +319,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EExtensionNotInstalled)]
     fun test_rent_without_extension() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -352,7 +350,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::ENotEnoughCoins)]
     fun test_rent_with_not_enough_coins() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -385,7 +383,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::ETotalPriceOverflow)]
     fun test_rent_with_overflow() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -417,7 +415,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_borrow() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -452,7 +450,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::ENotOwner)]
     fun test_borrow_with_wrong_cap() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -479,7 +477,7 @@ module nft_rental::tests {
 
         test_scenario::next_tx(test, BORROWER);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(test, borrower_kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(test, borrower_kiosk_id);
             let kiosk_cap = test_scenario::take_from_address<KioskOwnerCap>(test, RENTER);
 
             let _object = rentables_ext::borrow<T>(&mut kiosk, &kiosk_cap, item_id, test_scenario::ctx(test));
@@ -495,7 +493,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_borrow_val() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -531,7 +529,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::ENotOwner)]
     fun test_borrow_val_with_wrong_cap() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -558,7 +556,7 @@ module nft_rental::tests {
 
         test_scenario::next_tx(test, BORROWER);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(test, borrower_kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(test, borrower_kiosk_id);
             let kiosk_cap = test_scenario::take_from_address<KioskOwnerCap>(test, RENTER);
 
             let (object, promise) = rentables_ext::borrow_val<T>(&mut kiosk, &kiosk_cap, item_id, test_scenario::ctx(test));
@@ -578,7 +576,7 @@ module nft_rental::tests {
 
     #[test]
     fun test_return_val() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -615,7 +613,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EExtensionNotInstalled)]
     fun test_return_val_without_extension() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -654,7 +652,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EInvalidKiosk)]
     fun test_return_val_wrong_kiosk() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -690,12 +688,12 @@ module nft_rental::tests {
 
     #[test]
     fun test_reclaim() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
 
-        let clock = clock::create_for_testing(test_scenario::ctx(test));
+        let mut clock = clock::create_for_testing(test_scenario::ctx(test));
 
         let witness = WITNESS {};
         let publisher = package::test_claim(witness, &mut dummy());
@@ -725,13 +723,13 @@ module nft_rental::tests {
 
     #[test]
     fun test_reclaim_locked() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
         let witness = WITNESS {};
 
-        let clock = clock::create_for_testing(test_scenario::ctx(test));
+        let mut clock = clock::create_for_testing(test_scenario::ctx(test));
 
         let renter_kiosk_id = create_kiosk(RENTER, test_scenario::ctx(test));
         let borrower_kiosk_id = create_kiosk(BORROWER, test_scenario::ctx(test));
@@ -762,12 +760,12 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EInvalidKiosk)]
     fun test_reclaim_wrong_kiosk() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
 
-        let clock = clock::create_for_testing(test_scenario::ctx(test));
+        let mut clock = clock::create_for_testing(test_scenario::ctx(test));
 
         let witness = WITNESS {};
         let publisher = package::test_claim(witness, &mut dummy());
@@ -801,12 +799,12 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::ERentingPeriodNotOver)]
     fun test_reclaim_renting_period_not_over() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
 
-        let clock = clock::create_for_testing(test_scenario::ctx(test));
+        let mut clock = clock::create_for_testing(test_scenario::ctx(test));
 
         let witness = WITNESS {};
         let publisher = package::test_claim(witness, &mut dummy());
@@ -837,12 +835,12 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EExtensionNotInstalled)]
     fun test_reclaim_without_extension() {
-        let scenario= test_scenario::begin(BORROWER);
+        let mut scenario = test_scenario::begin(BORROWER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
 
-        let clock = clock::create_for_testing(test_scenario::ctx(test));
+        let mut clock = clock::create_for_testing(test_scenario::ctx(test));
 
         let witness = WITNESS {};
         let publisher = package::test_claim(witness, &mut dummy());
@@ -875,7 +873,7 @@ module nft_rental::tests {
     #[test]
     #[expected_failure(abort_code=rentables_ext::EObjectNotExist)]
     fun test_take_non_existed_item() {
-        let scenario= test_scenario::begin(RENTER);
+        let mut scenario = test_scenario::begin(RENTER);
         let test = &mut scenario;
         let item = T {id: object::new(test_scenario::ctx(test))};
         let item_id = object::id(&item);
@@ -887,7 +885,7 @@ module nft_rental::tests {
 
         test_scenario::next_tx(test, RENTER);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(test, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(test, kiosk_id);
             let listed = rentables_ext::create_listed(item_id);
 
             rentables_ext::test_take_from_bag<T, Listed>(&mut kiosk, listed);
@@ -917,7 +915,7 @@ module nft_rental::tests {
     fun install_ext(scenario: &mut Scenario, sender: address, kiosk_id: ID) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
 
             rentables_ext::install(&mut kiosk, &kiosk_cap, test_scenario::ctx(scenario));
@@ -930,7 +928,7 @@ module nft_rental::tests {
     fun remove_ext(scenario: &mut Scenario, sender: address, kiosk_id: ID) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
 
             rentables_ext::remove(&mut kiosk, &kiosk_cap, test_scenario::ctx(scenario));
@@ -951,7 +949,7 @@ module nft_rental::tests {
     fun lock_in_kiosk(scenario: &mut Scenario, sender: address, kiosk_id: ID, item: T) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
             let transfer_policy = test_scenario::take_shared<TransferPolicy<T>>(scenario);
 
@@ -966,7 +964,7 @@ module nft_rental::tests {
     fun place_in_kiosk(scenario: &mut Scenario, sender: address, kiosk_id: ID, item: T) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
 
             kiosk::place<T>(&mut kiosk, &kiosk_cap, item);
@@ -979,7 +977,7 @@ module nft_rental::tests {
     fun list_for_rent(scenario: &mut Scenario, sender: address, kiosk_id: ID, item_id: ID, duration: u64, price: u64) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
             let protected_tp = test_scenario::take_shared<ProtectedTP<T>>(scenario);
 
@@ -994,7 +992,7 @@ module nft_rental::tests {
     fun delist_from_rent(scenario: &mut Scenario, sender: address, kiosk_id: ID, item_id: ID) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
             let transfer_policy = test_scenario::take_shared<TransferPolicy<T>>(scenario);
 
@@ -1009,9 +1007,9 @@ module nft_rental::tests {
     fun rent(scenario: &mut Scenario, sender: address, renter_kiosk_id: ID, borrower_kiosk_id: ID, item_id: ID, coin_amount: u64, clock: &Clock) {
         test_scenario::next_tx(scenario, sender);
         {
-            let borrower_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, borrower_kiosk_id);
-            let renter_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, renter_kiosk_id);
-            let rental_policy = test_scenario::take_shared<RentalPolicy<T>>(scenario);
+            let mut borrower_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, borrower_kiosk_id);
+            let mut renter_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, renter_kiosk_id);
+            let mut rental_policy = test_scenario::take_shared<RentalPolicy<T>>(scenario);
 
             let coin = kiosk_test_utils::get_sui(coin_amount, test_scenario::ctx(scenario));
 
@@ -1025,7 +1023,7 @@ module nft_rental::tests {
     fun borrow(scenario: &mut Scenario, sender: address, kiosk_id: ID, item_id: ID) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
 
             let _object = rentables_ext::borrow<T>(&mut kiosk, &kiosk_cap, item_id, test_scenario::ctx(scenario));
@@ -1037,7 +1035,7 @@ module nft_rental::tests {
 
     fun borrow_val(scenario: &mut Scenario, sender: address, kiosk_id: ID, item_id: ID): Promise {
         test_scenario::next_tx(scenario, sender);
-        let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+        let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
         let kiosk_cap = test_scenario::take_from_sender<KioskOwnerCap>(scenario);
 
         let (object, promise) = rentables_ext::borrow_val<T>(&mut kiosk, &kiosk_cap, item_id, test_scenario::ctx(scenario));
@@ -1051,7 +1049,7 @@ module nft_rental::tests {
     fun return_val(scenario: &mut Scenario, promise: Promise, sender: address, kiosk_id: ID) {
         test_scenario::next_tx(scenario, sender);
         {
-            let kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
+            let mut kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, kiosk_id);
             let object = test_scenario::take_from_sender<T>(scenario);
             
             rentables_ext::return_val(&mut kiosk, object, promise, test_scenario::ctx(scenario));
@@ -1062,8 +1060,8 @@ module nft_rental::tests {
     fun reclaim(scenario: &mut Scenario, sender: address, renter_kiosk_id: ID, borrower_kiosk_id: ID, item_id: ID, tick: u64, clock: &mut Clock) {
         test_scenario::next_tx(scenario, sender);
         {
-            let borrower_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, borrower_kiosk_id);
-            let renter_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, renter_kiosk_id);
+            let mut borrower_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, borrower_kiosk_id);
+            let mut renter_kiosk = test_scenario::take_shared_by_id<Kiosk>(scenario, renter_kiosk_id);
             let policy = test_scenario::take_shared<TransferPolicy<T>>(scenario);
 
             clock::increment_for_testing(clock, tick);
@@ -1079,7 +1077,7 @@ module nft_rental::tests {
     fun add_lock_rule(scenario: &mut Scenario, sender: address) {
         test_scenario::next_tx(scenario, sender);
         {
-            let transfer_policy = test_scenario::take_shared<TransferPolicy<T>>(scenario);
+            let mut transfer_policy = test_scenario::take_shared<TransferPolicy<T>>(scenario);
             let policy_cap = test_scenario::take_from_sender<TransferPolicyCap<T>>(scenario);
 
             lock_rule::add(&mut transfer_policy, &policy_cap);
