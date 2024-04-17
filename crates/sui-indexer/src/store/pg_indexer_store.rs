@@ -31,8 +31,8 @@ use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
 use crate::models::objects::{
-    StoredDeletedHistoryObject, StoredDeletedObject, StoredDeletedObjectSnapshot,
-    StoredHistoryObject, StoredObject, StoredObjectSnapshot,
+    StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
+    StoredObjectSnapshot,
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
@@ -69,7 +69,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // The amount of rows to update in one DB transcation, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
-const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 1000;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -184,79 +184,77 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    fn persist_objects_chunk(
+    fn persist_object_mutation_chunk(
         &self,
-        objects: Vec<ObjectChangeToCommit>,
+        mutated_object_mutation_chunk: Vec<StoredObject>,
     ) -> Result<(), IndexerError> {
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-
-        let mut mutated_objects = vec![];
-        let mut deleted_object_ids = vec![];
-        for object in objects {
-            match object {
-                ObjectChangeToCommit::MutatedObject(o) => {
-                    mutated_objects.push(o);
-                }
-                ObjectChangeToCommit::DeletedObject(id) => {
-                    deleted_object_ids.push(id);
-                }
-            }
-        }
-
+        let len = mutated_object_mutation_chunk.len();
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                // Persist mutated objects
-                for mutated_object_change_chunk in
-                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(objects::table)
-                        .values(mutated_object_change_chunk)
-                        .on_conflict(objects::object_id)
-                        .do_update()
-                        .set((
-                            objects::object_id.eq(excluded(objects::object_id)),
-                            objects::object_version.eq(excluded(objects::object_version)),
-                            objects::object_digest.eq(excluded(objects::object_digest)),
-                            objects::checkpoint_sequence_number
-                                .eq(excluded(objects::checkpoint_sequence_number)),
-                            objects::owner_type.eq(excluded(objects::owner_type)),
-                            objects::owner_id.eq(excluded(objects::owner_id)),
-                            objects::object_type.eq(excluded(objects::object_type)),
-                            objects::serialized_object.eq(excluded(objects::serialized_object)),
-                            objects::coin_type.eq(excluded(objects::coin_type)),
-                            objects::coin_balance.eq(excluded(objects::coin_balance)),
-                            objects::df_kind.eq(excluded(objects::df_kind)),
-                            objects::df_name.eq(excluded(objects::df_name)),
-                            objects::df_object_type.eq(excluded(objects::df_object_type)),
-                            objects::df_object_id.eq(excluded(objects::df_object_id)),
-                        ))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write object mutation to PostgresDB")?;
-                }
-
-                // Persist deleted objects
-                for deleted_objects_chunk in
-                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::delete(
-                        objects::table.filter(
-                            objects::object_id.eq_any(
-                                deleted_objects_chunk
-                                    .iter()
-                                    .map(|o| o.object_id.clone())
-                                    .collect::<Vec<_>>(),
-                            ),
-                        ),
-                    )
+                diesel::insert_into(objects::table)
+                    .values(mutated_object_mutation_chunk.clone())
+                    .on_conflict(objects::object_id)
+                    .do_update()
+                    .set((
+                        objects::object_id.eq(excluded(objects::object_id)),
+                        objects::object_version.eq(excluded(objects::object_version)),
+                        objects::object_digest.eq(excluded(objects::object_digest)),
+                        objects::checkpoint_sequence_number
+                            .eq(excluded(objects::checkpoint_sequence_number)),
+                        objects::owner_type.eq(excluded(objects::owner_type)),
+                        objects::owner_id.eq(excluded(objects::owner_id)),
+                        objects::object_type.eq(excluded(objects::object_type)),
+                        objects::serialized_object.eq(excluded(objects::serialized_object)),
+                        objects::coin_type.eq(excluded(objects::coin_type)),
+                        objects::coin_balance.eq(excluded(objects::coin_balance)),
+                        objects::df_kind.eq(excluded(objects::df_kind)),
+                        objects::df_name.eq(excluded(objects::df_name)),
+                        objects::df_object_type.eq(excluded(objects::df_object_type)),
+                        objects::df_object_id.eq(excluded(objects::df_object_id)),
+                    ))
                     .execute(conn)
                     .map_err(IndexerError::from)
-                    .context("Failed to write object deletion to PostgresDB")?;
-                }
+                    .context("Failed to write object mutation to PostgresDB")?;
+                Ok::<(), IndexerError>(())
+            },
+            Duration::from_secs(60)
+        )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} chunked objects", len,)
+        })
+    }
+
+    fn persist_object_deletion_chunk(
+        &self,
+        deleted_objects_chunk: Vec<StoredDeletedObject>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_chunks
+            .start_timer();
+        let len = deleted_objects_chunk.len();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::delete(
+                    objects::table.filter(
+                        objects::object_id.eq_any(
+                            deleted_objects_chunk
+                                .iter()
+                                .map(|o| o.object_id.clone())
+                                .collect::<Vec<_>>(),
+                        ),
+                    ),
+                )
+                .execute(conn)
+                .map_err(IndexerError::from)
+                .context("Failed to write object deletion to PostgresDB")?;
 
                 Ok::<(), IndexerError>(())
             },
@@ -264,11 +262,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked objects",
-                mutated_objects.len() + deleted_object_ids.len(),
-            )
+            info!(elapsed, "Deleted {} chunked objects", len,)
         })
     }
 
@@ -280,16 +274,14 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_snapshot_chunks
             .start_timer();
-        let mut mutated_objects: Vec<StoredObjectSnapshot> = vec![];
-        let mut deleted_object_ids: Vec<StoredDeletedObjectSnapshot> = vec![];
-
+        let mut objects_snapshot: Vec<StoredObjectSnapshot> = vec![];
         for object in objects {
             match object {
                 ObjectChangeToCommit::MutatedObject(stored_object) => {
-                    mutated_objects.push(stored_object.into());
+                    objects_snapshot.push(stored_object.into());
                 }
                 ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
-                    deleted_object_ids.push(stored_deleted_object.into());
+                    objects_snapshot.push(stored_deleted_object.into());
                 }
             }
         }
@@ -297,11 +289,11 @@ impl PgIndexerStore {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for mutated_object_change_chunk in
-                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                for objects_snapshot_chunk in
+                    objects_snapshot.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     diesel::insert_into(objects_snapshot::table)
-                        .values(mutated_object_change_chunk)
+                        .values(objects_snapshot_chunk)
                         .on_conflict(objects_snapshot::object_id)
                         .do_update()
                         .set((
@@ -333,28 +325,6 @@ impl PgIndexerStore {
                         .map_err(IndexerError::from)
                         .context("Failed to write object mutations to objects_snapshot in DB.")?;
                 }
-
-                for deleted_objects_chunk in
-                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(objects_snapshot::table)
-                        .values(deleted_objects_chunk)
-                        .on_conflict(objects_snapshot::object_id)
-                        .do_update()
-                        .set((
-                            objects_snapshot::object_id.eq(excluded(objects_snapshot::object_id)),
-                            objects_snapshot::object_version
-                                .eq(excluded(objects_snapshot::object_version)),
-                            objects_snapshot::object_status
-                                .eq(excluded(objects_snapshot::object_status)),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
-                        ))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write object deletions to objects_snapshot in DB.")?;
-                }
-
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -364,7 +334,7 @@ impl PgIndexerStore {
             info!(
                 elapsed,
                 "Persisted {} chunked objects snapshot",
-                mutated_objects.len() + deleted_object_ids.len(),
+                objects_snapshot.len(),
             )
         })
     }
@@ -951,13 +921,29 @@ impl IndexerStore for PgIndexerStore {
             .start_timer();
         let objects = make_final_list_of_objects_to_commit(object_changes);
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
-        let futures = chunks
-            .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_chunk(c)))
-            .collect::<Vec<_>>();
 
-        futures::future::join_all(futures)
+        let mut object_mutations = vec![];
+        let mut object_deletions = vec![];
+        for object in objects {
+            match object {
+                ObjectChangeToCommit::MutatedObject(mutation) => {
+                    object_mutations.push(mutation);
+                }
+                ObjectChangeToCommit::DeletedObject(deletion) => {
+                    object_deletions.push(deletion);
+                }
+            }
+        }
+        let mutation_len = object_mutations.len();
+        let deletion_len = object_deletions.len();
+
+        let object_mutation_chunks = chunk!(object_mutations, self.parallel_objects_chunk_size);
+        let object_deletion_chunks = chunk!(object_deletions, self.parallel_objects_chunk_size);
+        let mutation_futures = object_mutation_chunks
+            .into_iter()
+            .map(|c| self.spawn_blocking_task(move |this| this.persist_object_mutation_chunk(c)))
+            .collect::<Vec<_>>();
+        futures::future::join_all(mutation_futures)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -967,8 +953,29 @@ impl IndexerStore for PgIndexerStore {
                     e
                 ))
             })?;
+        let deletion_futures = object_deletion_chunks
+            .into_iter()
+            .map(|c| self.spawn_blocking_task(move |this| this.persist_object_deletion_chunk(c)))
+            .collect::<Vec<_>>();
+        futures::future::join_all(deletion_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to delete all objects chunks: {:?}",
+                    e
+                ))
+            })?;
+
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} objects", len);
+        info!(
+            elapsed,
+            "Persisted {} objects with {} mutations and {} deletions ",
+            len,
+            mutation_len,
+            deletion_len,
+        );
         Ok(())
     }
 
