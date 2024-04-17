@@ -66,7 +66,7 @@ jobs:
         export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
         
         # new format
-        [[ -z $rel_notes ]] && export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/^\- \[x\]/' | awk -F ": " '{print $2}')
+        [[ -z $rel_notes ]] && export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/^\- \[x\]/')
 
         # make text json payload friendly
         rel_notes="${rel_notes//\\/\\\\}"
