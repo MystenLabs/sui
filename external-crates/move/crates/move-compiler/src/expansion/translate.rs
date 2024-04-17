@@ -2950,7 +2950,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     (
                         name.loc,
                         "Unexpected name access. \
-                        Expected an identifier, '<enum>::<variant>', or '<struct>' form."
+                        Expected a valid 'enum' variant or 'struct' name."
                     )
                 ));
                 None
