@@ -14,11 +14,8 @@
 /// because the expectation is that indices are sparsely distributed.
 module big_vector::big_vector {
     use sui::dynamic_field as df;
-    use sui::object::UID;
-    use sui::tx_context::TxContext;
 
     use fun sui::object::new as TxContext.new;
-    use fun sui::object::delete as UID.delete;
 
     use fun big_vector::utils::pop_until as vector.pop_until;
     use fun big_vector::utils::pop_n as vector.pop_n;
@@ -233,6 +230,18 @@ module big_vector::big_vector {
     /// the length.
     public fun depth<E: store>(self: &BigVector<E>): u8 {
         self.depth
+    }
+
+    /// Check for the presence of `key` in `self`.
+    public fun contains<E: store>(self: &BigVector<E>, key: u128): bool {
+        let (ref, off) = self.slice_following(key);
+
+        if (ref.is_null()) {
+            return false
+        };
+
+        let slice = self.borrow_slice(ref);
+        off < slice.length() && slice.key(off) == key
     }
 
     #[syntax(index)]

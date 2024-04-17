@@ -1,6 +1,5 @@
 #[test_only]
 module big_vector::big_vector_tests {
-    use sui::tx_context;
     use big_vector::big_vector::{Self as bv, BigVector};
 
     #[test]
@@ -121,6 +120,29 @@ module big_vector::big_vector_tests {
         );
 
         bv.drop();
+    }
+
+    #[test]
+    fun test_contains() {
+        let bv = filled_for_test();
+
+        assert!(bv.contains(5), 0);
+        assert!(bv.contains(7), 0);
+        assert!(bv.contains(8), 0);
+        assert!(bv.contains(9), 0);
+        assert!(bv.contains(10), 0);
+        assert!(bv.contains(15), 0);
+        assert!(bv.contains(17), 0);
+        assert!(bv.contains(19), 0);
+        assert!(bv.contains(20), 0);
+        assert!(bv.contains(22), 0);
+
+        assert!(!bv.contains(6), 0);
+        assert!(!bv.contains(11), 0);
+        assert!(!bv.contains(16), 0);
+        assert!(!bv.contains(21), 0);
+
+        bv.drop()
     }
 
     #[test]
