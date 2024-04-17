@@ -20,6 +20,7 @@ module bridge::bridge {
         UpdateBridgeLimit, AddTokenOnSui
     };
     use bridge::message_types;
+    use bridge::result::{Self, Result};
     use bridge::treasury::{Self, BridgeTreasury};
 
     const MESSAGE_VERSION: u8 = 1;
@@ -91,6 +92,7 @@ module bridge::bridge {
     const ETokenAlreadyClaimed: u64 = 15;
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
+    const ETransferLimitExceed: u64 = 18;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -107,6 +109,10 @@ module bridge::bridge {
     }
 
     public struct TokenTransferAlreadyClaimed has copy, drop {
+        message_key: BridgeMessageKey,
+    }
+
+    public struct TokenTransferLimitExceed has copy, drop {
         message_key: BridgeMessageKey,
     }
 
@@ -163,9 +169,9 @@ module bridge::bridge {
     }
 
     public fun register_foreign_token<T>(
-        bridge: &mut Bridge, 
-        tc: TreasuryCap<T>, 
-        uc: UpgradeCap, 
+        bridge: &mut Bridge,
+        tc: TreasuryCap<T>,
+        uc: UpgradeCap,
         metadata: &CoinMetadata<T>,
     ) {
         load_inner_mut(bridge)
@@ -173,7 +179,7 @@ module bridge::bridge {
             .register_foreign_token<T>(tc, uc, metadata)
     }
 
-    // Create bridge request to send token to other chain, the request will be in 
+    // Create bridge request to send token to other chain, the request will be in
     // pending state until approved
     public fun send_token<T>(
         bridge: &mut Bridge,
@@ -207,7 +213,7 @@ module bridge::bridge {
 
         // Store pending bridge request
         inner.token_transfer_records.push_back(
-            message.key(), 
+            message.key(),
             BridgeRecord {
                 message,
                 verified_signatures: option::none(),
@@ -247,12 +253,12 @@ module bridge::bridge {
         let token_payload = message.extract_token_bridge_payload();
         let target_chain = token_payload.token_target_chain();
         assert!(
-            message.source_chain() == inner.chain_id || target_chain == inner.chain_id, 
+            message.source_chain() == inner.chain_id || target_chain == inner.chain_id,
             EUnexpectedChainID,
         );
 
         let message_key = message.key();
-        // retrieve pending message if source chain is Sui, the initial message 
+        // retrieve pending message if source chain is Sui, the initial message
         // must exist on chain
         if (message.source_chain() == inner.chain_id) {
             let record = &mut inner.token_transfer_records[message_key];
@@ -278,7 +284,7 @@ module bridge::bridge {
             };
             // Store message and approval
             inner.token_transfer_records.push_back(
-                message_key, 
+                message_key,
                 BridgeRecord {
                     message,
                     verified_signatures: option::some(signatures),
@@ -293,27 +299,29 @@ module bridge::bridge {
     // This function can only be called by the token recipient
     // Abort if the token has already been claimed.
     public fun claim_token<T>(
-        bridge: &mut Bridge, 
-        clock: &Clock, 
-        source_chain: u8, 
-        bridge_seq_num: u64, 
+        bridge: &mut Bridge,
+        clock: &Clock,
+        source_chain: u8,
+        bridge_seq_num: u64,
         ctx: &mut TxContext,
     ): Coin<T> {
-        let (maybe_token, owner) = claim_token_internal<T>(
+        let (result, owner) = claim_token_internal<T>(
             clock,
-            bridge, 
-            source_chain, 
-            bridge_seq_num, 
+            bridge,
+            source_chain,
+            bridge_seq_num,
             ctx,
         );
+        if (result.is_err()){
+            abort result.unwrap_err()
+        };
         // Only token owner can claim the token
         assert!(ctx.sender() == owner, EUnauthorisedClaim);
-        assert!(maybe_token.is_some(), ETokenAlreadyClaimed);
-        maybe_token.destroy_some()
+        result.unwrap()
     }
 
     // This function can be called by anyone to claim and transfer the token to the recipient
-    // If the token has already been claimed, it will return instead of aborting.
+    // If the token has already been claimed or transfer limit reached, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
         bridge: &mut Bridge,
         clock: &Clock,
@@ -321,21 +329,25 @@ module bridge::bridge {
         bridge_seq_num: u64,
         ctx: &mut TxContext,
     ) {
-        let (token, owner) = claim_token_internal<T>(clock, bridge, source_chain, bridge_seq_num, ctx);
-        if (token.is_none()) {
-            token.destroy_none();
+        let (result, owner) = claim_token_internal<T>(clock, bridge, source_chain, bridge_seq_num, ctx);
+        if (result.is_err()) {
+            let err = result.unwrap_err();
             let key = message::create_key(
                 source_chain,
                 message_types::token(),
                 bridge_seq_num
             );
-
-            emit(TokenTransferAlreadyClaimed { message_key: key });
+            if (err == ETokenAlreadyClaimed){
+                emit(TokenTransferAlreadyClaimed { message_key: key });
+            } else if (err == ETransferLimitExceed){
+                emit(TokenTransferLimitExceed { message_key: key });
+            } else {
+                abort err
+            };
             return
         };
-
         transfer::public_transfer(
-            token.destroy_some(),
+            result.unwrap(),
             owner
         )
     }
@@ -370,7 +382,7 @@ module bridge::bridge {
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext,
-    ): (Option<Coin<T>>, address) {
+    ): (Result<Coin<T>,u64>, address) {
         let inner = load_inner_mut(bridge);
         assert!(!inner.paused, EBridgeUnavailable);
 
@@ -381,7 +393,7 @@ module bridge::bridge {
         let record = &mut inner.token_transfer_records[key];
         // ensure this is a token bridge message
         assert!(
-            &record.message.message_type() == message_types::token(), 
+            &record.message.message_type() == message_types::token(),
             EUnexpectedMessageType,
         );
         // Ensure it's signed
@@ -394,7 +406,7 @@ module bridge::bridge {
 
         // If already claimed, exit early
         if (record.claimed) {
-            return (option::none(), owner)
+            return (result::err(ETokenAlreadyClaimed), owner)
         };
 
         let target_chain = token_payload.token_target_chain();
@@ -406,11 +418,9 @@ module bridge::bridge {
         // TODO: add unit tests
         // `get_route` abort if route is invalid
         let route = chain_ids::get_route(source_chain, target_chain);
-        // get owner address
-        let owner = address::from_bytes(token_payload.token_target_address());
         // check token type
         assert!(
-            treasury::token_id<T>(&inner.treasury) == token_payload.token_type(), 
+            treasury::token_id<T>(&inner.treasury) == token_payload.token_type(),
             EUnexpectedTokenType,
         );
 
@@ -419,13 +429,13 @@ module bridge::bridge {
         if (!inner
                 .limiter
                 .check_and_record_sending_transfer<T>(
-                    &inner.treasury, 
-                    clock, 
-                    route, 
+                    &inner.treasury,
+                    clock,
+                    route,
                     amount,
                 )
         ) {
-            return (option::none(), owner)
+            return (result::err(ETransferLimitExceed), owner)
         };
 
         // claim from treasury
@@ -434,8 +444,7 @@ module bridge::bridge {
         // Record changes
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
-
-        (option::some(token), owner)
+        (result::ok(token), owner)
     }
 
     public fun execute_system_message(
@@ -702,7 +711,7 @@ module bridge::bridge {
 
     #[test_only]
     public fun test_execute_emergency_op(
-        bridge_inner: &mut BridgeInner, 
+        bridge_inner: &mut BridgeInner,
         payload: EmergencyOp,
     ) {
         bridge_inner.execute_emergency_op(payload)
@@ -725,7 +734,7 @@ module bridge::bridge {
 
     #[test_only]
     public fun test_get_current_seq_num_and_increment(
-        bridge_inner: &mut BridgeInner, 
+        bridge_inner: &mut BridgeInner,
         msg_type: u8,
     ): u64 {
         get_current_seq_num_and_increment(bridge_inner, msg_type)
@@ -733,7 +742,7 @@ module bridge::bridge {
 
     #[test_only]
     public fun test_execute_update_bridge_limit(
-        inner: &mut BridgeInner, 
+        inner: &mut BridgeInner,
         payload: UpdateBridgeLimit,
     ) {
         execute_update_bridge_limit(inner, payload)
@@ -741,7 +750,7 @@ module bridge::bridge {
 
     #[test_only]
     public fun test_execute_update_asset_price(
-        inner: &mut BridgeInner, 
+        inner: &mut BridgeInner,
         payload: UpdateAssetPrice,
     ) {
         execute_update_asset_price(inner, payload)
