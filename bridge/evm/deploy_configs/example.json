@@ -5,7 +5,7 @@
   "sourceChainId": 0,
   "supportedChainIDs": [1],
   "supportedChainLimitsInDollars": [1000000],
-  "supportedTokens": ["0x00", "0x00", "0x00", "0x00", "0x00"],
-  "tokenPrices": [12800, 432518900, 25969600, 10000],
+  "supportedTokens": ["0x00", "0x00", "0x00", "0x00"],
+  "tokenPrices": [128000000, 4325189000000, 259696000000, 100000000],
   "wETHAddress": "0x00"
 }

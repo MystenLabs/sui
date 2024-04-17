@@ -26,7 +26,7 @@ module bridge::treasury {
     const ETokenSupplyNonZero: u64 = 2;
 
     #[test_only]
-    const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
+    const USD_VALUE_MULTIPLIER: u64 = 100000000; // 8 DP accuracy
 
     public struct BridgeTreasury has store {
         // token treasuries, values are TreasuryCaps for native bridge V1.

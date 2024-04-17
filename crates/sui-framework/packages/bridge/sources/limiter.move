@@ -21,7 +21,7 @@ module bridge::limiter {
     // TODO: U64::MAX, make this configurable?
     const MAX_TRANSFER_LIMIT: u64 = 18_446_744_073_709_551_615;
 
-    const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
+    const USD_VALUE_MULTIPLIER: u64 = 100000000; // 8 DP accuracy
 
     public struct TransferLimiter has store {
         transfer_limits: VecMap<BridgeRoute, u64>,
@@ -412,11 +412,12 @@ module bridge::limiter {
         let id = treasury::token_id<BTC>(&treasury);
         treasury.update_asset_notional_price(id, 10 * USD_VALUE_MULTIPLIER);
         let id = treasury::token_id<ETH>(&treasury);
-        treasury.update_asset_notional_price(id, 25000);
+        let eth_price = 250000000;
+        treasury.update_asset_notional_price(id, eth_price);
         let id = treasury::token_id<USDC>(&treasury);
         treasury.update_asset_notional_price(id, 1 * USD_VALUE_MULTIPLIER);
         let id = treasury::token_id<USDT>(&treasury);
-        treasury.update_asset_notional_price(id, 5000);
+        treasury.update_asset_notional_price(id, 50000000);
 
         let mut clock = clock::create_for_testing(ctx);
         clock.set_for_testing(36082800000); // hour 10023
@@ -429,9 +430,9 @@ module bridge::limiter {
         assert_eq(record.hour_tail, 10000);
         assert_eq(
             record.per_hour_amounts,
-            vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15 * 25000]
+            vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15 * eth_price]
         );
-        assert_eq(record.total_amount, 15 * 25000);
+        assert_eq(record.total_amount, 15 * eth_price);
 
         // hour 0 (10023): $37.5 + $10 = $47.5
         // 10 uddc = $10
@@ -439,7 +440,7 @@ module bridge::limiter {
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.hour_head, 10023);
         assert_eq(record.hour_tail, 10000);
-        let expected_notion_amount_10023 = 15 * 25000 + 10 * USD_VALUE_MULTIPLIER;
+        let expected_notion_amount_10023 = 15 * eth_price + 10 * USD_VALUE_MULTIPLIER;
         assert_eq(
             record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10023]
@@ -465,7 +466,7 @@ module bridge::limiter {
         // fail
         // 65 usdt = $33
         assert!(!check_and_record_sending_transfer<USDT>(&mut limiter, &treasury, &clock, route, 66 * 1_000_000), 0);
-        // but window slided
+        // but window slid
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.hour_head, 10046);
         assert_eq(record.hour_tail, 10023);
