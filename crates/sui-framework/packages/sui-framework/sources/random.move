@@ -306,4 +306,15 @@ module sui::random {
     public fun generator_buffer(r: &RandomGenerator): &vector<u8> {
         &r.buffer
     }
+
+    // Random generator from a non-deterministic seed.
+    // To be used when non-deterministic randomness is needed in tests (e.g., fuzzing).
+    #[test_only]
+    public fun new_generator_for_testing(): RandomGenerator {
+        let seed = get_rand_seed();
+        RandomGenerator { seed, counter: 0, buffer: vector[] }
+    }
+
+    #[test_only]
+    native fun get_rand_seed(): vector<u8>;
 }
