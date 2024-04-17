@@ -67,6 +67,7 @@ mod dynamic_field;
 mod event;
 mod object;
 pub mod object_runtime;
+mod random;
 pub mod test_scenario;
 mod test_utils;
 mod transfer;
@@ -855,6 +856,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "test_utils",
             "create_one_time_witness",
             make_native!(test_utils::create_one_time_witness),
+        ),
+        (
+            "random",
+            "generate_rand_seed",
+            make_native!(random::generate_rand_seed),
         ),
         (
             "zklogin_verified_id",
