@@ -58,13 +58,13 @@ mod tests {
     #[tokio::test]
     async fn test_governance_verifier() {
         let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             nonce: 1,
             action_type: EmergencyActionType::Pause,
         });
         let action_2 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id: BridgeChainId::EthLocalTest,
-            sending_chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::EthCustom,
+            sending_chain_id: BridgeChainId::SuiCustom,
             nonce: 1,
             new_usd_limit: 10000,
         });
@@ -80,8 +80,8 @@ mod tests {
         );
 
         let action_3 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id: BridgeChainId::EthLocalTest,
-            sending_chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::EthCustom,
+            sending_chain_id: BridgeChainId::SuiCustom,
             nonce: 2,
             new_usd_limit: 10000,
         });
