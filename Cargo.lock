@@ -6729,6 +6729,7 @@ dependencies = [
  "move-prover",
  "move-read-write-set-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -7079,6 +7080,7 @@ dependencies = [
  "move-docgen",
  "move-errmapgen",
  "move-prover",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-types",
  "sha2 0.9.9",
@@ -7088,18 +7090,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-v0"
+name = "move-stdlib-natives"
 version = "0.1.1"
 dependencies = [
- "anyhow",
  "hex",
- "log",
  "move-binary-format",
- "move-command-line-common",
  "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-prover",
+ "move-vm-runtime",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+]
+
+[[package]]
+name = "move-stdlib-natives-v0"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
  "move-vm-runtime-v0",
  "move-vm-types",
  "sha2 0.9.9",
@@ -7109,18 +7119,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-v1"
+name = "move-stdlib-natives-v1"
 version = "0.1.1"
 dependencies = [
- "anyhow",
  "hex",
- "log",
  "move-binary-format",
- "move-command-line-common",
  "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-prover",
  "move-vm-runtime-v1",
  "move-vm-types",
  "sha2 0.9.9",
@@ -7130,18 +7134,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-v2"
+name = "move-stdlib-natives-v2"
 version = "0.1.1"
 dependencies = [
- "anyhow",
  "hex",
- "log",
  "move-binary-format",
- "move-command-line-common",
  "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-prover",
  "move-vm-runtime-v2",
  "move-vm-types",
  "sha2 0.9.9",
@@ -7176,6 +7174,7 @@ dependencies = [
  "move-ir-compiler",
  "move-ir-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
@@ -7208,6 +7207,7 @@ dependencies = [
  "move-model",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -13087,7 +13087,7 @@ dependencies = [
  "indexmap 2.1.0",
  "move-binary-format",
  "move-core-types",
- "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-types",
  "smallvec",
@@ -13107,7 +13107,7 @@ dependencies = [
  "linked-hash-map",
  "move-binary-format",
  "move-core-types",
- "move-stdlib-v0",
+ "move-stdlib-natives-v0",
  "move-vm-runtime-v0",
  "move-vm-types",
  "smallvec",
@@ -13127,7 +13127,7 @@ dependencies = [
  "linked-hash-map",
  "move-binary-format",
  "move-core-types",
- "move-stdlib-v1",
+ "move-stdlib-natives-v1",
  "move-vm-runtime-v1",
  "move-vm-types",
  "smallvec",
@@ -13147,7 +13147,7 @@ dependencies = [
  "indexmap 2.1.0",
  "move-binary-format",
  "move-core-types",
- "move-stdlib-v2",
+ "move-stdlib-natives-v2",
  "move-vm-runtime-v2",
  "move-vm-types",
  "smallvec",

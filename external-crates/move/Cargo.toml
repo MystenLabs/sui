@@ -19,10 +19,10 @@ members = [
     "move-execution/v1/crates/move-vm-runtime",
     "move-execution/v2/crates/move-vm-runtime",
     # "move-execution/$CUT/crates/move-vm-runtime",
-    "move-execution/v0/crates/move-stdlib",
-    "move-execution/v1/crates/move-stdlib",
-    "move-execution/v2/crates/move-stdlib",
-    # "move-execution/$CUT/crates/move-stdlib",
+    "move-execution/v0/crates/move-stdlib-natives",
+    "move-execution/v1/crates/move-stdlib-natives",
+    "move-execution/v2/crates/move-stdlib-natives",
+    # "move-execution/$CUT/crates/move-stdlib-natives",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -165,6 +165,7 @@ move-read-write-set-types = { path = "crates/move-read-write-set-types" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stackless-bytecode-interpreter = { path = "crates/move-stackless-bytecode-interpreter" }
 move-stdlib = { path = "crates/move-stdlib" }
+move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "crates/move-transactional-test-runner" }
 move-unit-test = { path = "crates/move-unit-test" }

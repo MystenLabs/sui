@@ -132,9 +132,9 @@ fn execute_function_in_module(
         module.identifier_at(entry_name_idx)
     };
     {
-        let vm = MoveVM::new(move_stdlib::natives::all_natives(
+        let vm = MoveVM::new(move_stdlib_natives::all_natives(
             AccountAddress::from_hex_literal("0x1").unwrap(),
-            move_stdlib::natives::GasParameters::zeros(),
+            move_stdlib_natives::GasParameters::zeros(),
         ))
         .unwrap();
 

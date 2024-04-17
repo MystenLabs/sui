@@ -138,9 +138,9 @@ impl TestRunner {
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state = setup_test_storage(modules)?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
-            move_stdlib::natives::all_natives(
+            move_stdlib_natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib::natives::GasParameters::zeros(),
+                move_stdlib_natives::GasParameters::zeros(),
             )
         });
         Ok(Self {
