@@ -137,14 +137,8 @@ impl RandomnessManager {
                 weight: (*stake).try_into().expect("stake should fit in u16"),
             })
             .collect();
-        let nodes = match nodes::Nodes::new(nodes) {
-            Ok(nodes) => nodes,
-            Err(err) => {
-                error!("random beacon: error while initializing Nodes: {err:?}");
-                return None;
-            }
-        };
-        let (nodes, t) = nodes.reduce(
+        let (nodes, t) = match nodes::Nodes::new_reduced(
+            nodes,
             committee
                 .validity_threshold()
                 .try_into()
@@ -154,7 +148,13 @@ impl RandomnessManager {
                 .random_beacon_reduction_lower_bound()
                 .try_into()
                 .expect("should fit u16"),
-        );
+        ) {
+            Ok((nodes, t)) => (nodes, t),
+            Err(err) => {
+                error!("random beacon: error while initializing Nodes: {err:?}");
+                return None;
+            }
+        };
         let total_weight = nodes.total_weight();
         let num_nodes = nodes.num_nodes();
         let prefix_str = format!(
