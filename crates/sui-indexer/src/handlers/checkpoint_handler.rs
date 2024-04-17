@@ -11,7 +11,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
-use sui_package_resolver::{PackageStore, Resolver};
+use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
 use sui_rest_api::CheckpointData;
 use sui_rest_api::CheckpointTransaction;
 use sui_types::base_types::ObjectRef;
@@ -149,7 +149,8 @@ where
             &package_objects,
             self.metrics.clone(),
         );
-        let package_resolver = Arc::new(Resolver::new(in_mem_package_resolver));
+        let cached_package_resolver = PackageStoreWithLruCache::new(in_mem_package_resolver);
+        let package_resolver = Arc::new(Resolver::new(cached_package_resolver));
 
         let mut packages_per_checkpoint: HashMap<_, Vec<_>> = HashMap::new();
         for package in packages {
