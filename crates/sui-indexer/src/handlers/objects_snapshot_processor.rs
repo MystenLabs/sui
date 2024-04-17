@@ -124,7 +124,7 @@ where
                 latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
                 start_cp = self
                     .store
-                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .get_latest_checkpoint_sequence_number()
                     .await?
                     .unwrap_or_default();
                 continue;
