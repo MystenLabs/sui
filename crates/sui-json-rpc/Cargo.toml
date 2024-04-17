@@ -28,6 +28,7 @@ async-trait.workspace = true
 serde.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
 signature.workspace = true
 thiserror.workspace = true
 bcs.workspace = true

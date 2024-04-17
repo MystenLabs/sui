@@ -16,6 +16,7 @@ use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_types::traffic_control::PolicyConfig;
 use sui_types::traffic_control::RemoteFirewallConfig;
 use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -257,6 +258,7 @@ impl JsonRpcServerBuilder {
         listen_address: SocketAddr,
         _custom_runtime: Option<Handle>,
         server_type: Option<ServerType>,
+        cancel: Option<CancellationToken>,
     ) -> Result<ServerHandle, Error> {
         let app = self.to_router(server_type).await?;
 
@@ -264,6 +266,12 @@ impl JsonRpcServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
         let addr = server.local_addr();
+        let server = server.with_graceful_shutdown(async {
+            if let Some(cancel) = cancel {
+                cancel.cancel();
+            }
+        });
+
         let handle = tokio::spawn(async move { server.await.unwrap() });
 
         let handle = ServerHandle {
