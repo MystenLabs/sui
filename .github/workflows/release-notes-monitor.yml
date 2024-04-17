@@ -28,10 +28,12 @@ jobs:
       working-directory: ./
       run: |
         export new_commit_hash=$(git rev-parse HEAD)
-        export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
+        # export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
+        export existing_commit_tag="70a27fe6fb390d304dd7ea05073b9d86879ec91c"
 
         export previous_tag=$(git tag | grep -E 'sui_v1(.*)_rel_notes' | sort -rV | head -1)
-        export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
+        # export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
+        export previous_commit_hash="d181e3f6ec8c3e185c239543f2613103db806eee"
         
         export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit ${previous_commit_hash}...${new_commit_hash} -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+' | jq -R -s -c 'split("\n")[:-1]')
 
@@ -86,7 +88,8 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       with:
-        channel-id: '#ext-mysten-release-notes'
+        # channel-id: '#ext-mysten-release-notes'
+        channel-id: '#test-notifications'
         payload: |
           {
             "text": "PR *${{ matrix.pr }}* Release Notes",
