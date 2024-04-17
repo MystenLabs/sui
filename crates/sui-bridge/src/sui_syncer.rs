@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! The SuiSyncer module is responsible for synchronizing Events emitted on Sui blockchain from
-//! concerned bridge packages.
+//! The SuiSyncer module is responsible for synchronizing Events emitted
+//! on Sui blockchain from concerned modules of bridge package 0x9.
 
 use crate::{
     error::BridgeResult,
@@ -19,8 +19,6 @@ use tokio::{
     time::{self, Duration},
 };
 
-// TODO: use the right package id
-// const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
 const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
 /// Map from contract address to their start cursor (exclusive)
@@ -100,10 +98,6 @@ where
 
             let len = events.data.len();
             if len != 0 {
-                // Note: it's extremely critical to make sure the SuiEvents we send via this channel
-                // are complete per transaction level. Namely, we should never send a partial list
-                // of events for a transaction. Otherwise, we may end up missing events.
-                // See `sui_client.query_events_by_module` for how this is implemented.
                 events_sender
                     .send((module.clone(), events.data))
                     .await
