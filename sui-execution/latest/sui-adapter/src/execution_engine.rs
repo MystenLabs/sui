@@ -1023,7 +1023,7 @@ mod checked {
             BridgeChainId::SuiTestnet as u8
         } else {
             // How do we distinguish devnet from other test envs?
-            BridgeChainId::SuiLocalTest as u8
+            BridgeChainId::SuiCustom as u8
         };
 
         let bridge_chain_id = builder.pure(bridge_chain_id).unwrap();

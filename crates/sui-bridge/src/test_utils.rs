@@ -86,9 +86,9 @@ pub fn get_test_sui_to_eth_bridge_action(
         sui_tx_event_index: sui_tx_event_index.unwrap_or(0),
         sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
             nonce: nonce.unwrap_or_default(),
-            sui_chain_id: BridgeChainId::SuiLocalTest,
+            sui_chain_id: BridgeChainId::SuiCustom,
             sui_address: sender_address.unwrap_or_else(SuiAddress::random_for_testing_only),
-            eth_chain_id: BridgeChainId::EthLocalTest,
+            eth_chain_id: BridgeChainId::EthCustom,
             eth_address: recipient_address.unwrap_or_else(EthAddress::random),
             token_id: token_id.unwrap_or(TOKEN_ID_USDC),
             amount_sui_adjusted: amount_sui_adjusted.unwrap_or(100_000),
@@ -105,9 +105,9 @@ pub fn get_test_eth_to_sui_bridge_action(
         eth_tx_hash: TxHash::random(),
         eth_event_index: 0,
         eth_bridge_event: EthToSuiTokenBridgeV1 {
-            eth_chain_id: BridgeChainId::EthLocalTest,
+            eth_chain_id: BridgeChainId::EthCustom,
             nonce: nonce.unwrap_or_default(),
-            sui_chain_id: BridgeChainId::SuiLocalTest,
+            sui_chain_id: BridgeChainId::SuiCustom,
             token_id: TOKEN_ID_USDC,
             sui_adjusted_amount: amount.unwrap_or(100_000),
             sui_address: sui_address.unwrap_or_else(SuiAddress::random_for_testing_only),
@@ -295,7 +295,7 @@ pub async fn bridge_token(
             "send_token",
             vec![
                 CallArg::Object(bridge_object_arg),
-                CallArg::Pure(bcs::to_bytes(&(BridgeChainId::EthLocalTest as u8)).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&(BridgeChainId::EthCustom as u8)).unwrap()),
                 CallArg::Pure(bcs::to_bytes(&recv_address.as_bytes()).unwrap()),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(token_ref)),
             ],

@@ -267,12 +267,12 @@ contract BridgeLimiterTest is BridgeBaseTest {
             messageType: BridgeUtils.UPDATE_BRIDGE_LIMIT,
             version: 1,
             nonce: 15,
-            chainID: 3,
+            chainID: 2,
             payload: payload
         });
         bytes memory encodedMessage = BridgeUtils.encodeMessage(message);
         bytes memory expectedEncodedMessage =
-            hex"5355495f4252494447455f4d4553534147450301000000000000000f030c00000002540be400";
+            hex"5355495f4252494447455f4d4553534147450301000000000000000f020c00000002540be400";
 
         assertEq(encodedMessage, expectedEncodedMessage);
     }

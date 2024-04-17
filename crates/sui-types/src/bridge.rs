@@ -74,22 +74,18 @@ pub const TOKEN_ID_USDT: u8 = 4;
 pub enum BridgeChainId {
     SuiMainnet = 0,
     SuiTestnet = 1,
-    SuiDevnet = 2,
-    SuiLocalTest = 3,
+    SuiCustom = 2,
 
     EthMainnet = 10,
     EthSepolia = 11,
-    EthLocalTest = 12,
+    EthCustom = 12,
 }
 
 impl BridgeChainId {
     pub fn is_sui_chain(&self) -> bool {
         matches!(
             self,
-            BridgeChainId::SuiMainnet
-                | BridgeChainId::SuiTestnet
-                | BridgeChainId::SuiDevnet
-                | BridgeChainId::SuiLocalTest
+            BridgeChainId::SuiMainnet | BridgeChainId::SuiTestnet | BridgeChainId::SuiCustom
         )
     }
 }

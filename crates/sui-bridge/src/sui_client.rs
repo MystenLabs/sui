@@ -809,8 +809,8 @@ mod tests {
         )
         .await;
         assert_eq!(bridge_event.nonce, 0);
-        assert_eq!(bridge_event.sui_chain_id, BridgeChainId::SuiLocalTest);
-        assert_eq!(bridge_event.eth_chain_id, BridgeChainId::EthLocalTest);
+        assert_eq!(bridge_event.sui_chain_id, BridgeChainId::SuiCustom);
+        assert_eq!(bridge_event.eth_chain_id, BridgeChainId::EthCustom);
         assert_eq!(bridge_event.eth_address, eth_recv_address);
         assert_eq!(bridge_event.sui_address, sender);
         assert_eq!(bridge_event.token_id, TOKEN_ID_USDC);
