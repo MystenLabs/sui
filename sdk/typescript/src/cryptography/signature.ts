@@ -70,14 +70,7 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 				bytes,
 			};
 		case 'ZkLogin':
-			let res = parseSerializedZkLoginSignature(serializedSignature);
-			return {
-				serializedSignature: res.serializedSignature,
-				signatureScheme: res.signatureScheme,
-				zkLogin: res.zkLogin,
-				signature: res.signature,
-				publicKey: res.publicKey,
-			};
+			return parseSerializedZkLoginSignature(serializedSignature);
 		case 'ED25519':
 		case 'Secp256k1':
 		case 'Secp256r1':

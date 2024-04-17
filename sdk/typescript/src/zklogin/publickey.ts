@@ -17,21 +17,24 @@ import { toPaddedBigEndianBytes } from './utils.js';
  * A zkLogin public identifier
  */
 export class ZkLoginPublicIdentifier extends PublicKey {
-	private data: Uint8Array;
+	#data: Uint8Array;
+	#client?: SuiGraphQLClient;
 
 	/**
 	 * Create a new ZkLoginPublicIdentifier object
 	 * @param value zkLogin public identifier as buffer or base-64 encoded string
 	 */
-	constructor(value: PublicKeyInitData) {
+	constructor(value: PublicKeyInitData, { client }: { client?: SuiGraphQLClient } = {}) {
 		super();
 
+		this.#client = client;
+
 		if (typeof value === 'string') {
-			this.data = fromB64(value);
+			this.#data = fromB64(value);
 		} else if (value instanceof Uint8Array) {
-			this.data = value;
+			this.#data = value;
 		} else {
-			this.data = Uint8Array.from(value);
+			this.#data = Uint8Array.from(value);
 		}
 	}
 
@@ -46,7 +49,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	 * Return the byte array representation of the zkLogin public identifier
 	 */
 	toRawBytes(): Uint8Array {
-		return this.data;
+		return this.#data;
 	}
 
 	/**
@@ -62,10 +65,11 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	async verify(message: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
 
-		return await graphqlVerifyZkLoginSignature({
+		return graphqlVerifyZkLoginSignature({
 			address: parsedSignature.zkLogin!.address,
 			bytes: toB64(message),
 			signature: parsedSignature.serializedSignature,
+			client: this.#client,
 		});
 	}
 }
@@ -74,6 +78,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 export function toZkLoginPublicIdentifier(
 	addressSeed: bigint,
 	iss: string,
+	options?: { client?: SuiGraphQLClient },
 ): ZkLoginPublicIdentifier {
 	// Consists of iss_bytes_len || iss_bytes || padded_32_byte_address_seed.
 	const addressSeedBytesBigEndian = toPaddedBigEndianBytes(addressSeed, 32);
@@ -82,7 +87,7 @@ export function toZkLoginPublicIdentifier(
 	tmp.set([issBytes.length], 0);
 	tmp.set(issBytes, 1);
 	tmp.set(addressSeedBytesBigEndian, 1 + issBytes.length);
-	return new ZkLoginPublicIdentifier(tmp);
+	return new ZkLoginPublicIdentifier(tmp, options);
 }
 
 const VerifyZkLoginSignatureQuery = graphql(`
@@ -98,33 +103,26 @@ const VerifyZkLoginSignatureQuery = graphql(`
 			intentScope: $intent_scope
 			author: $author
 		) {
+			success
 			errors
 		}
 	}
 `);
 
-export async function graphqlVerifyZkLoginSignature({
+async function graphqlVerifyZkLoginSignature({
 	address,
 	bytes,
 	signature,
-	network,
-	fetch: fetchFn,
+	client = new SuiGraphQLClient({
+		url: 'https://sui-testnet.mystenlabs.com/graphql',
+	}),
 }: {
 	address: string;
 	bytes: string;
 	signature: string;
-	network?: 'mainnet' | 'testnet';
-	fetch?: typeof fetch;
+	client?: SuiGraphQLClient;
 }) {
-	const gqlClient = new SuiGraphQLClient({
-		url:
-			network === 'testnet'
-				? 'https://sui-testnet.mystenlabs.com/graphql'
-				: 'https://sui-mainnet.mystenlabs.com/graphql',
-		fetch: fetchFn,
-	});
-
-	const resp = await gqlClient.query({
+	const resp = await client.query({
 		query: VerifyZkLoginSignatureQuery,
 		variables: {
 			bytes,
@@ -134,7 +132,10 @@ export async function graphqlVerifyZkLoginSignature({
 		},
 	});
 
-	return resp.data?.verifyZkloginSignature.errors.length === 0;
+	return (
+		resp.data?.verifyZkloginSignature.success === true &&
+		resp.data?.verifyZkloginSignature.errors.length === 0
+	);
 }
 
 export function parseSerializedZkLoginSignature(signature: Uint8Array | SerializedSignature) {
