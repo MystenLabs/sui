@@ -482,9 +482,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 .join(","),
         );
 
-        // now release all the locked blocks as they have been fetched and verified
-        drop(requested_blocks_guard);
-
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
         // will take care of that.
@@ -492,6 +489,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .add_blocks(blocks)
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+
+        // now release all the locked blocks as they have been fetched, verified & processed
+        drop(requested_blocks_guard);
 
         // kick off immediately the scheduled synchronizer
         if !missing_blocks.is_empty() {
