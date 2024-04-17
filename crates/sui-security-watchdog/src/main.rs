@@ -5,6 +5,7 @@ use prometheus::Registry;
 
 use anyhow::Result;
 use clap::*;
+use std::env;
 use sui_security_watchdog::scheduler::SchedulerService;
 use sui_security_watchdog::SecurityWatchdogConfig;
 
@@ -15,6 +16,9 @@ async fn main() -> Result<()> {
         .init();
     env_logger::init();
     let config = SecurityWatchdogConfig::parse();
+    let pd_api_key = env::var("PD_API_KEY").expect("PD_API_KEY env var must be set");
+    let sf_password = env::var("SF_PASSWORD").expect("SF_PASSWORD env var must be set");
+
     let registry_service = mysten_metrics::start_prometheus_server(
         format!(
             "{}:{}",
@@ -25,7 +29,7 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
-    let service = SchedulerService::new(&config, &registry).await?;
+    let service = SchedulerService::new(&config, &registry, pd_api_key, sf_password).await?;
     service.schedule().await?;
     service.start().await?;
     tokio::signal::ctrl_c().await?;
