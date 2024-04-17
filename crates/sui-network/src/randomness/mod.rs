@@ -405,7 +405,11 @@ impl RandomnessEventLoop {
         // Verify we received the expected share IDs (to protect against a validator that sends
         // valid signatures of other peers which will be successfully verified below).
         let received_share_ids = partial_sigs.iter().map(|s| s.index);
-        if received_share_ids.ne(*expected_share_ids.iter()) {
+        if received_share_ids
+            .zip(expected_share_ids.iter())
+            .any(|(a, b)| a != *b)
+        {
+            let received_share_ids = partial_sigs.iter().map(|s| s.index).collect::<Vec<_>>();
             warn!("received partial sigs with wrong share ids: expected {expected_share_ids:?}, received {received_share_ids:?}");
             return;
         }
