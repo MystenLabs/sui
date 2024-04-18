@@ -45,7 +45,8 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_dag_state_cached_rounds")]
     pub dag_state_cached_rounds: u32,
 
-    // Number of parallel fetches to be issued to different authorities.
+    // Number of authorities commit syncer fetches in parallel.
+    // Both commits in a range and blocks referenced by the commits are fetched per authority.
     #[serde(default = "Parameters::default_commit_sync_parallel_fetches")]
     pub commit_sync_parallel_fetches: usize,
 
@@ -55,7 +56,8 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batch_size")]
     pub commit_sync_batch_size: u32,
 
-    // Number of batches ahead of last accepted batch, before throttling starts.
+    // Maximum number of commit batches being fetched, before throttling
+    // of outgoing commit fetches starts.
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! CommitSyncer implements efficient synchronization of past committed data.
+//! CommitSyncer implements efficient synchronization of committed data.
 //!
 //! During the operation of a committee of authorities for consensus, one or more authorities
 //! can fall behind the quorum in their received and accepted blocks. This can happen due to
@@ -25,7 +25,7 @@
 //! efficient resource usage, over faster reactions.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
@@ -41,7 +41,7 @@ use tokio::{
     task::{JoinHandle, JoinSet},
     time::{sleep, Instant, MissedTickBehavior},
 };
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
@@ -108,7 +108,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // Inflight requests to fetch commits from different authorities.
         let mut inflight_fetches = JoinSet::new();
         // Additional ranges (inclusive start and end) of commits to fetch.
-        let mut pending_fetches = VecDeque::<(CommitIndex, CommitIndex)>::new();
+        let mut pending_fetches = BTreeSet::<(CommitIndex, CommitIndex)>::new();
         // Highest end index among inflight and pending fetches.
         let mut highest_scheduled_index = Option::<CommitIndex>::None;
         // Fetched commits and blocks by commit indices.
@@ -120,28 +120,31 @@ impl<C: NetworkClient> CommitSyncer<C> {
             tokio::select! {
                 // Periodially, schedule new fetches if the node is falling behind.
                 _ = interval.tick() => {
-                    let highest_valid_index = inner.highest_commit_monitor.highest_valid_index(&inner.context);
+                    let quorum_commit_index = inner.highest_commit_monitor.quorum_commit_index(&inner.context);
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
                     // TODO: cleanup inflight fetches that are no longer needed.
                     let fetch_after_index = synced_commit_index.max(highest_scheduled_index.unwrap_or(0));
                     info!(
-                        "Checking to schedule fetches: synced_commit_index={}, fetch_after_index={}, highest_valid_index={}",
-                        synced_commit_index, fetch_after_index, highest_valid_index
+                        "Checking to schedule fetches: synced_commit_index={}, fetch_after_index={}, quorum_commit_index={}",
+                        synced_commit_index, fetch_after_index, quorum_commit_index
                     );
                     // When the node is falling behind, schedule pending fetches which will be executed on later.
-                    'pending: for prev_end in (fetch_after_index..=highest_valid_index).step_by(inner.context.parameters.commit_sync_batch_size as usize) {
+                    'pending: for prev_end in (fetch_after_index..=quorum_commit_index).step_by(inner.context.parameters.commit_sync_batch_size as usize) {
                         // Create range with inclusive start and end.
                         let range_start = prev_end + 1;
                         let range_end = prev_end + inner.context.parameters.commit_sync_batch_size;
-                        // Do not fetch with small batches. Block subscription and synchronization will help the node catchup.
-                        if range_end > highest_valid_index {
+                        // When the condition below is true, [range_start, range_end] contains less number of commits
+                        // than the target batch size. Not creating the smaller batch is intentional, to avoid the
+                        // cost of processing more and smaller batches.
+                        // Block broadcast, subscription and synchronization will help the node catchup.
+                        if range_end > quorum_commit_index {
                             break 'pending;
                         }
-                        pending_fetches.push_back((range_start, range_end));
-                        // highest_valid_index should be non-decreasing, so this should not
-                        // decrease as well.
+                        pending_fetches.insert((range_start, range_end));
+                        // quorum_commit_index should be non-decreasing, so highest_scheduled_index should not
+                        // decrease either.
                         highest_scheduled_index = Some(range_end);
                     }
                 }
@@ -159,11 +162,14 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     let metrics = &inner.context.metrics.node_metrics;
                     metrics.commit_sync_fetched_commits.inc_by(commits.len() as u64);
                     metrics.commit_sync_fetched_blocks.inc_by(blocks.len() as u64);
+                    metrics.commit_sync_total_fetched_blocks_size.inc_by(
+                        blocks.iter().map(|b| b.serialized().len() as u64).sum::<u64>()
+                    );
 
                     let (commit_start, commit_end) = (commits.first().unwrap().index(), commits.last().unwrap().index());
                     // Allow returning partial results, and try fetching the rest separately.
                     if commit_end < target_end {
-                        pending_fetches.push_front((commit_end + 1, target_end));
+                        pending_fetches.insert((commit_end + 1, target_end));
                     }
                     // Make sure synced_commit_index is up to date.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
@@ -187,10 +193,20 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             continue 'fetched;
                         }
                         // If core thread cannot handle the incoming blocks, it is ok to block here.
-                        if let Err(e) = inner.core_thread_dispatcher.add_blocks(blocks).await {
-                            debug!("Failed to add blocks, shutting down: {}", e);
-                            return;
-                        }
+                        // Also it is possible to have missing ancestors because an equivocating validator
+                        // may produce blocks that are not included in commits but are ancestors to other blocks.
+                        // Synchronizer is needed to fill in the missing ancestors in this case.
+                        match inner.core_thread_dispatcher.add_blocks(blocks).await {
+                            Ok(missing) => {
+                                if !missing.is_empty() {
+                                    warn!("Fetched blocks have missing ancestors: {:?}", missing);
+                                }
+                            }
+                            Err(e) => {
+                                info!("Failed to add blocks, shutting down: {}", e);
+                                return;
+                            }
+                        };
                         // Once commits and blocks are sent to Core, rachet up synced_commit_index
                         synced_commit_index = synced_commit_index.max(fetched_end);
                     }
@@ -225,7 +241,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 if inflight_fetches.len() >= target_parallel_fetches {
                     break;
                 }
-                let Some((start, end)) = pending_fetches.pop_front() else {
+                let Some((start, end)) = pending_fetches.pop_first() else {
                     break;
                 };
                 inflight_fetches.spawn(Self::fetch_loop(
@@ -244,7 +260,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .commit_sync_pending_fetches
                 .set(pending_fetches.len() as i64);
             metrics
-                .commit_sync_highest_index
+                .commit_sync_local_index
                 .set(synced_commit_index as i64);
         }
     }
@@ -275,7 +291,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     return (end, commits, blocks);
                 }
                 Err(e) => {
-                    info!("Failed to fetch: {}", e);
+                    warn!("Failed to fetch: {}", e);
                 }
             }
         }
@@ -305,7 +321,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
 
         // 1. Find an available authority to fetch commits and blocks from, and wait
         // if it is not yet ready.
-        let Some((available_time, target_authority, retries)) =
+        let Some((available_time, retries, target_authority)) =
             fetch_state.lock().available_authorities.pop_first()
         else {
             sleep(MAX_RETRY_INTERVAL).await;
@@ -327,7 +343,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 let now = Instant::now();
                 fetch_state
                     .available_authorities
-                    .insert((now, target_authority, 0));
+                    .insert((now, 0, target_authority));
                 result
             }
             Err(e) => {
@@ -335,8 +351,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 let now = Instant::now();
                 fetch_state.available_authorities.insert((
                     now + FETCH_RETRY_BASE_INTERVAL * retries.min(FETCH_RETRY_INTERVAL_LIMIT),
-                    target_authority,
                     retries.saturating_add(1),
+                    target_authority,
                 ));
                 return Err(e);
             }
@@ -440,11 +456,11 @@ impl HighestCommitMonitor {
         }
     }
 
-    // Finds the highest valid commit index.
+    // Finds the highest commit index certified by a quorum.
     // When an authority votes for commit index S, it is also voting for all commit indices 1 <= i < S.
-    // So the highest valid commit index is the smallest index S such that the sum of stakes of authorities
-    // voting for commit indices >= S passes the validity threshold.
-    fn highest_valid_index(&self, context: &Context) -> CommitIndex {
+    // So the quorum commit index is the smallest index S such that the sum of stakes of authorities
+    // voting for commit indices >= S passes the quorum threshold.
+    fn quorum_commit_index(&self, context: &Context) -> CommitIndex {
         let highest_voted_commits = self.highest_voted_commits.lock();
         let mut highest_voted_commits = highest_voted_commits
             .iter()
@@ -456,7 +472,7 @@ impl HighestCommitMonitor {
         let mut total_stake = 0;
         for (commit_index, stake) in highest_voted_commits {
             total_stake += stake;
-            if total_stake >= context.committee.validity_threshold() {
+            if total_stake >= context.committee.quorum_threshold() {
                 return commit_index;
             }
         }
@@ -554,17 +570,19 @@ impl<C: NetworkClient> Inner<C> {
 }
 
 struct FetchState {
-    // Tuple of the next time the authority is available to be fetched from, authority index and
-    // count of previous consecutive failures fetching from the authority.
-    // TODO: move this to a separate module, add load balancing, and consider health of peer with
-    // previous request failures and leader scores.
-    available_authorities: BTreeSet<(Instant, AuthorityIndex, u32)>,
+    // The value is a tuple of
+    // - the next available time for the authority to fetch from,
+    // - count of current consecutive failures fetching from the authority, reset on success,
+    // - authority index.
+    // TODO: move this to a separate module, add load balancing, add throttling, and consider
+    // health of peer via previous request failures and leader scores.
+    available_authorities: BTreeSet<(Instant, u32, AuthorityIndex)>,
 }
 
 impl FetchState {
     fn new(context: &Context) -> Self {
         // Randomize the initial order of authorities.
-        let mut available_authorities: Vec<_> = context
+        let mut shuffled_authority_indices: Vec<_> = context
             .committee
             .authorities()
             .filter_map(|(index, _)| {
@@ -575,12 +593,14 @@ impl FetchState {
                 }
             })
             .collect();
-        available_authorities.shuffle(&mut rand::thread_rng());
+        shuffled_authority_indices.shuffle(&mut rand::thread_rng());
         Self {
-            available_authorities: available_authorities
+            available_authorities: shuffled_authority_indices
                 .into_iter()
-                .map(|i| (Instant::now(), i, 0))
+                .map(|i| (Instant::now(), 0, i))
                 .collect(),
         }
     }
 }
+
+// TODO: add unit and integration tests.

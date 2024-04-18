@@ -504,7 +504,9 @@ pub(crate) struct CoreSignals {
 
 impl CoreSignals {
     pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
-        // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state.
+        // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state,
+        // since the underlying blocks are ref counted so a lower buffer here will not reduce memory
+        // usage significantly.
         let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<VerifiedBlock>(
             context.parameters.dag_state_cached_rounds as usize,
         );

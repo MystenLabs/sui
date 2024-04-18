@@ -113,7 +113,8 @@ pub(crate) struct NodeMetrics {
     pub commit_sync_pending_fetches: IntGauge,
     pub commit_sync_fetched_commits: IntCounter,
     pub commit_sync_fetched_blocks: IntCounter,
-    pub commit_sync_highest_index: IntGauge,
+    pub commit_sync_total_fetched_blocks_size: IntCounter,
+    pub commit_sync_local_index: IntGauge,
     pub commit_sync_fetch_loop_latency: Histogram,
     pub commit_sync_fetch_once_latency: Histogram,
     pub uptime: Histogram,
@@ -340,9 +341,14 @@ impl NodeMetrics {
                 "The number of blocks fetched via commit syncer",
                 registry,
             ).unwrap(),
-            commit_sync_highest_index: register_int_gauge_with_registry!(
-                "commit_sync_highest_index",
-                "The highest index between local and fetched commits",
+            commit_sync_total_fetched_blocks_size: register_int_counter_with_registry!(
+                "commit_sync_total_fetched_blocks_size",
+                "The total size in bytes of blocks fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_local_index: register_int_gauge_with_registry!(
+                "commit_sync_local_index",
+                "The max commit index among local and fetched commits",
                 registry,
             ).unwrap(),
             commit_sync_fetch_loop_latency: register_histogram_with_registry!(
