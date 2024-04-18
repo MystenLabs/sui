@@ -275,8 +275,12 @@ const CallArg = safeEnum({
 	Pure: BCSBytes,
 	// // added for sui:unresolvedObjectIds
 	UnresolvedObject: object({
-		value: string(),
-		typeSignatures: array(OpenMoveTypeSignature),
+		id: string(),
+		version: optional(nullable(JsonU64)),
+		digest: optional(nullable(string())),
+		initialSharedVersion: optional(nullable(JsonU64)),
+		mutable: optional(nullable(boolean())),
+		receiving: optional(nullable(boolean())),
 	}),
 	// added for sui:rawValues
 	RawValue: object({

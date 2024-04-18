@@ -6,9 +6,10 @@ import { bcs } from '@mysten/bcs';
 import type { CoinStruct } from '../../client/index.js';
 import type { Argument } from '../blockData/v2.js';
 import { Inputs } from '../Inputs.js';
+import type { BuildTransactionBlockOptions } from '../json-rpc-resolver.js';
+import { getClient } from '../json-rpc-resolver.js';
 import type { TransactionBlock } from '../TransactionBlock.js';
 import type { TransactionBlockDataBuilder } from '../TransactionBlockData.js';
-import type { TransactionBlockDataResolver } from '../TransactionBlockDataResolver.js';
 import { Transactions } from '../Transactions.js';
 
 const COIN_WITH_BALANCE = 'CoinWithBalance';
@@ -33,7 +34,8 @@ export function coinWithBalance(type: string, balance: bigint | number) {
 
 async function resolveCoinBalance(
 	blockData: TransactionBlockDataBuilder,
-	dataResolver: TransactionBlockDataResolver,
+	buildOptions: BuildTransactionBlockOptions,
+	next: () => Promise<void>,
 ) {
 	const coinTypes = new Set<string>();
 	const totalByType = new Map<string, bigint>();
@@ -64,22 +66,23 @@ async function resolveCoinBalance(
 		if (input.Object?.ImmOrOwnedObject) {
 			usedIds.add(input.Object.ImmOrOwnedObject.objectId);
 		} else if (input.UnresolvedObject) {
-			usedIds.add(input.UnresolvedObject.value);
+			usedIds.add(input.UnresolvedObject.id);
 		}
 	}
 
 	const coinsByType = new Map<string, CoinStruct[]>();
+	const client = getClient(buildOptions);
 	await Promise.all(
 		[...coinTypes].map(async (coinType) => {
-			const result = await dataResolver.getCoins(blockData.sender!, coinType);
+			const result = await client.getCoins({ owner: blockData.sender!, coinType });
 
-			if (result.length === 0) {
+			if (result.data.length === 0) {
 				throw new Error(`No coins of type ${coinType} owned by ${blockData.sender}`);
 			}
 
 			coinsByType.set(
 				coinType,
-				result.filter((coin) => !usedIds.has(coin.coinObjectId)),
+				result.data.filter((coin) => !usedIds.has(coin.coinObjectId)),
 			);
 		}),
 	);
@@ -140,4 +143,6 @@ async function resolveCoinBalance(
 			return arg;
 		});
 	}
+
+	return next();
 }

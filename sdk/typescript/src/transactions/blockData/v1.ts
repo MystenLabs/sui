@@ -229,7 +229,7 @@ export function v1BlockDataFromTransactionBlockState(
 				kind: 'Input',
 				type: 'object',
 				index,
-				value: input.UnresolvedObject.value,
+				value: input.UnresolvedObject.id,
 			};
 		}
 

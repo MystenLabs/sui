@@ -12,23 +12,15 @@ import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
 import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
 import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
-import {
-	normalizeInputs,
-	resolveObjectReferences,
-	setGasBudget,
-	setGasPayment,
-	setGasPrice,
-	validate,
-} from './buildSteps.js';
 import { getIdFromCallArg, Inputs } from './Inputs.js';
-import { createPure } from './pure.js';
-import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type {
 	BuildTransactionBlockOptions,
 	SerializeTransactionBlockOptions,
-	TransactionBlockStep,
-} from './TransactionBlockDataResolver.js';
-import { TransactionBlockDataResolver } from './TransactionBlockDataResolver.js';
+	TransactionBlockPlugin,
+} from './json-rpc-resolver.js';
+import { getLimit, resolveTransactionBlockData } from './json-rpc-resolver.js';
+import { createPure } from './pure.js';
+import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
 
@@ -100,9 +92,9 @@ export type TransactionObjectInput = string | CallArg | TransactionObjectArgumen
  * Transaction Builder
  */
 export class TransactionBlock {
-	#serializationSteps: TransactionBlockStep[] = [];
-	#buildSteps: TransactionBlockStep[] = [];
-	#intentResolvers = new Map<string, TransactionBlockStep>();
+	#serializationPlugins: TransactionBlockPlugin[] = [];
+	#buildPlugins: TransactionBlockPlugin[] = [];
+	#intentResolvers = new Map<string, TransactionBlockPlugin>();
 
 	/**
 	 * Converts from a serialize transaction kind (built with `build({ onlyTransactionKind: true })`) to a `Transaction` class.
@@ -139,15 +131,11 @@ export class TransactionBlock {
 		return tx;
 	}
 
-	addSerializationStep(step: TransactionBlockStep) {
-		this.#serializationSteps.push(step);
+	addSerializationPlugin(step: TransactionBlockPlugin) {
+		this.#serializationPlugins.push(step);
 	}
 
-	addBuildStep(step: TransactionBlockStep) {
-		this.#buildSteps.push(step);
-	}
-
-	addIntentResolver(intent: string, resolver: TransactionBlockStep) {
+	addIntentResolver(intent: string, resolver: TransactionBlockPlugin) {
 		if (this.#intentResolvers.has(intent) && this.#intentResolvers.get(intent) !== resolver) {
 			throw new Error(`Intent resolver for ${intent} already exists`);
 		}
@@ -268,7 +256,7 @@ export class TransactionBlock {
 					typeof value === 'string'
 						? {
 								$kind: 'UnresolvedObject',
-								UnresolvedObject: { value: normalizeSuiAddress(value), typeSignatures: [] },
+								UnresolvedObject: { id: normalizeSuiAddress(value) },
 						  }
 						: value,
 			  );
@@ -444,7 +432,7 @@ export class TransactionBlock {
 	}
 
 	async toJSON(options: SerializeTransactionBlockOptions = {}): Promise<string> {
-		await this.#prepareForSerialization(options, await this.getDataResolver(options));
+		await this.#prepareForSerialization(options);
 		return JSON.stringify(
 			this.#blockData.snapshot(),
 			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
@@ -461,13 +449,12 @@ export class TransactionBlock {
 
 	/** Build the transaction to BCS bytes. */
 	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
-		const dataResolver = await this.getDataResolver(options);
-
-		await this.#prepareForSerialization(options, dataResolver);
-		await this.#prepareBuild(options, dataResolver);
+		const buildOptions = await this.#addProtocolConfigToOptions(options);
+		await this.#prepareForSerialization(buildOptions);
+		await this.#prepareBuild(buildOptions);
 		return this.#blockData.build({
-			maxSizeBytes: dataResolver.getLimit('maxTxSizeBytes'),
-			onlyTransactionKind: options.onlyTransactionKind,
+			maxSizeBytes: getLimit(buildOptions, 'maxTxSizeBytes'),
+			onlyTransactionKind: buildOptions.onlyTransactionKind,
 		});
 	}
 
@@ -477,7 +464,7 @@ export class TransactionBlock {
 			client?: SuiClient;
 		} = {},
 	): Promise<string> {
-		await this.#prepareBuild(options, await this.getDataResolver(options));
+		await this.#prepareBuild(options);
 		return this.#blockData.getDigest();
 	}
 
@@ -485,31 +472,51 @@ export class TransactionBlock {
 	 * Prepare the transaction by validating the transaction data and resolving all inputs
 	 * so that it can be built into bytes.
 	 */
-	async #prepareBuild(
-		options: BuildTransactionBlockOptions,
-		dataResolver: TransactionBlockDataResolver,
-	) {
+	async #prepareBuild(options: BuildTransactionBlockOptions) {
 		if (!options.onlyTransactionKind && !this.#blockData.sender) {
 			throw new Error('Missing transaction sender');
 		}
 
-		const steps = [
-			...this.#buildSteps,
-			normalizeInputs,
-			resolveObjectReferences,
-			...(options.onlyTransactionKind ? [] : [setGasPrice, setGasBudget, setGasPayment]),
-			validate,
-		];
-
-		for (const step of steps) {
-			await step(this.#blockData, dataResolver);
-		}
+		await this.#runPlugins([...this.#buildPlugins, resolveTransactionBlockData], options);
 	}
 
-	async #prepareForSerialization(
-		options: SerializeTransactionBlockOptions,
-		dataResolver: TransactionBlockDataResolver,
-	) {
+	async #runPlugins(plugins: TransactionBlockPlugin[], options: SerializeTransactionBlockOptions) {
+		const createNext = (i: number) => {
+			if (i >= plugins.length) {
+				return () => {};
+			}
+			const plugin = plugins[i];
+
+			return async () => {
+				const next = createNext(i + 1);
+				let calledNext = false;
+				let nextResolved = false;
+
+				await plugin(this.#blockData, options, async () => {
+					if (calledNext) {
+						throw new Error(`next() was call multiple times in TransactionBlockPlugin ${i}`);
+					}
+					calledNext = true;
+
+					await next();
+
+					nextResolved = true;
+				});
+
+				if (!calledNext) {
+					throw new Error(`next() was not called in TransactionBlockPlugin ${i}`);
+				}
+
+				if (!nextResolved) {
+					throw new Error(`next() was not awaited in TransactionBlockPlugin ${i}`);
+				}
+			};
+		};
+
+		await createNext(0)();
+	}
+
+	async #prepareForSerialization(options: SerializeTransactionBlockOptions) {
 		const intents = new Set<string>();
 		for (const transaction of this.#blockData.transactions) {
 			if (transaction.TransactionIntent && options.supportedIntents) {
@@ -517,7 +524,7 @@ export class TransactionBlock {
 			}
 		}
 
-		const steps = [...this.#serializationSteps];
+		const steps = [...this.#serializationPlugins];
 
 		for (const intent of intents) {
 			if (options.supportedIntents?.includes(intent)) {
@@ -531,24 +538,18 @@ export class TransactionBlock {
 			steps.push(this.#intentResolvers.get(intent)!);
 		}
 
-		for (const step of steps) {
-			await step(this.#blockData, dataResolver);
-		}
+		await this.#runPlugins(steps, options);
 	}
 
-	async getDataResolver(options: SerializeTransactionBlockOptions = {}) {
+	async #addProtocolConfigToOptions(options: SerializeTransactionBlockOptions = {}) {
 		let protocolConfig = options.protocolConfig;
 		if (!options.protocolConfig && !options.limits && options.client) {
 			protocolConfig = await options.client.getProtocolConfig();
 		}
 
-		const dataResolver = new TransactionBlockDataResolver({
+		return {
 			...options,
 			protocolConfig,
-		});
-
-		await dataResolver.loadData(this.#blockData);
-
-		return dataResolver;
+		};
 	}
 }

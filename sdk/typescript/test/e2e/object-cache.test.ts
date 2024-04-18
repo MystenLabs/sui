@@ -28,6 +28,8 @@ describe('CachingTransactionBlockExecutor', async () => {
 		});
 		const txb = new TransactionBlock();
 		vi.spyOn(toolbox.client, 'getProtocolConfig');
+		vi.spyOn(toolbox.client, 'getNormalizedMoveFunction');
+		vi.spyOn(toolbox.client, 'multiGetObjects');
 		txb.moveCall({
 			target: `${packageId}::tto::start`,
 			typeArguments: [],
@@ -57,7 +59,6 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 	it('caches move function definitions', async () => {
 		const txb = new TransactionBlock();
-		const moveFunctionRequests: { package: string; module: string; function: string }[] = [];
 
 		txb.moveCall({
 			target: `${packageId}::tto::receiver`,
@@ -73,21 +74,14 @@ describe('CachingTransactionBlockExecutor', async () => {
 		const result = await executor.signAndExecuteTransactionBlock({
 			transactionBlock: txb,
 			signer: toolbox.keypair,
-			dataResolvers: [
-				{
-					getMoveFunctionDefinition(ref, next) {
-						moveFunctionRequests.push(ref);
-						return next(ref);
-					},
-				},
-			],
 			options: {
 				showEffects: true,
 			},
 		});
 
 		expect(result.effects?.status.status).toBe('success');
-		expect(moveFunctionRequests).toEqual([
+		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledOnce();
+		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledWith([
 			{
 				package: packageId,
 				module: 'tto',
@@ -95,12 +89,13 @@ describe('CachingTransactionBlockExecutor', async () => {
 			},
 		]);
 
-		const receiver = await executor.cache.getMoveFunctionDefinition(
-			{ package: packageId, module: 'tto', function: 'receiver' },
-			async () => {
-				expect.fail('should not be called');
-			},
-		);
+		const receiver = await executor.cache.getMoveFunctionDefinition({
+			package: packageId,
+			module: 'tto',
+			function: 'receiver',
+		});
+
+		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledOnce();
 
 		expect(receiver).toEqual({
 			module: 'tto',
@@ -143,14 +138,8 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 		await executor.buildTransactionBlock({
 			transactionBlock: txb,
-			dataResolvers: [
-				{
-					getMoveFunctionDefinition() {
-						expect.fail('should not be called');
-					},
-				},
-			],
 		});
+		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledOnce();
 	});
 
 	it('caches objects', async () => {
@@ -167,20 +156,17 @@ describe('CachingTransactionBlockExecutor', async () => {
 		txb.setSender(toolbox.address());
 		const loadedIds: string[] = [];
 
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+
 		const result = await executor.signAndExecuteTransactionBlock({
 			transactionBlock: txb,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,
 			},
-			dataResolvers: [
-				{
-					getObjects() {
-						expect.fail('should not be called');
-					},
-				},
-			],
 		});
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+
 		expect(result.effects?.status.status).toBe('success');
 		expect(loadedIds).toEqual([]);
 
@@ -188,20 +174,16 @@ describe('CachingTransactionBlockExecutor', async () => {
 		txb2.transferObjects([txb2.object(receiveObjectId.reference.objectId)], toolbox.address());
 		txb2.setSender(toolbox.address());
 
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+
 		const result2 = await executor.signAndExecuteTransactionBlock({
 			transactionBlock: txb2,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,
 			},
-			dataResolvers: [
-				{
-					getObjects() {
-						expect.fail('should not be called');
-					},
-				},
-			],
 		});
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
 		expect(result2.effects?.status.status).toBe('success');
 	});
 

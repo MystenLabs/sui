@@ -7,8 +7,8 @@ import type { ExecuteTransactionBlockParams, ProtocolConfig } from '../client/in
 import type { Signer } from '../cryptography/keypair.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature } from './blockData/v2.js';
+import type { TransactionBlockPlugin } from './json-rpc-resolver.js';
 import type { TransactionBlock } from './TransactionBlock.js';
-import type { TransactionBlockDataResolverPlugin } from './TransactionBlockDataResolver.js';
 
 export interface ObjectCacheEntry {
 	objectId: string;
@@ -136,7 +136,7 @@ interface ObjectCacheOptions {
 	address: string;
 }
 
-export class ObjectCache implements TransactionBlockDataResolverPlugin {
+export class ObjectCache {
 	#cache: AsyncCache;
 	#address: string;
 
@@ -145,48 +145,22 @@ export class ObjectCache implements TransactionBlockDataResolverPlugin {
 		this.#address = normalizeSuiAddress(address);
 	}
 
-	getObjects: NonNullable<TransactionBlockDataResolverPlugin['getObjects']> = async (ids, next) => {
-		const results = new Map<string, ObjectCacheEntry>();
-
-		const cached = await this.#cache.getObjects(ids);
-
-		cached.forEach((object) => {
-			if (object) {
-				results.set(object.objectId, object);
-			}
-		});
-
-		const missingIds = ids.filter((id) => !results.has(id));
-
-		if (missingIds.length > 0) {
-			const newObjects = await next(missingIds);
-
-			await Promise.all(
-				newObjects.map(async (newObject) => {
-					await this.#cache.addObject(newObject);
-					results.set(newObject.objectId, newObject);
-				}),
-			);
-		}
-
-		return ids.map((id) => results.get(id)!);
-	};
-
-	getMoveFunctionDefinition: NonNullable<
-		TransactionBlockDataResolverPlugin['getMoveFunctionDefinition']
-	> = async (ref, next) => {
-		const cached = await this.#cache.getMoveFunctionDefinition(ref);
-		if (cached) {
-			return cached;
-		}
-
-		const functionDefinition = await next(ref);
-
-		return await this.#cache.addMoveFunctionDefinition(functionDefinition);
-	};
+	asPlugin(): TransactionBlockPlugin {
+		return async (_blockData, _options, next) => {
+			await next();
+		};
+	}
 
 	async clear() {
 		await this.#cache.clear();
+	}
+
+	async getMoveFunctionDefinition(ref: { package: string; module: string; function: string }) {
+		return this.#cache.getMoveFunctionDefinition(ref);
+	}
+
+	async getObjects(ids: string[]) {
+		return this.#cache.getObjects(ids);
 	}
 
 	async clearOwnedObjects() {
@@ -257,34 +231,26 @@ export class CachingTransactionBlockExecutor {
 		return this.#protocolConfig;
 	}
 
-	async buildTransactionBlock({
-		transactionBlock,
-		dataResolvers,
-	}: {
-		transactionBlock: TransactionBlock;
-		dataResolvers?: TransactionBlockDataResolverPlugin[];
-	}) {
+	async buildTransactionBlock({ transactionBlock }: { transactionBlock: TransactionBlock }) {
 		return transactionBlock.build({
 			client: this.#client,
-			dataResolvers: [this.cache, ...(dataResolvers ?? [])],
+
 			protocolConfig: await this.#getProtocolConfig(),
 		});
 	}
 
 	async executeTransactionBlock({
 		transactionBlock,
-		dataResolvers,
 		options,
 		...input
 	}: {
 		transactionBlock: TransactionBlock;
-		dataResolvers?: TransactionBlockDataResolverPlugin[];
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
+		transactionBlock.addSerializationPlugin(this.cache.asPlugin());
 		const results = await this.#client.executeTransactionBlock({
 			...input,
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
-				dataResolvers: [this.cache, ...(dataResolvers ?? [])],
 				protocolConfig: await this.#getProtocolConfig(),
 			}),
 			options: {
@@ -304,18 +270,17 @@ export class CachingTransactionBlockExecutor {
 	async signAndExecuteTransactionBlock({
 		options,
 		transactionBlock,
-		dataResolvers,
 		...input
 	}: {
 		transactionBlock: TransactionBlock;
-		dataResolvers?: TransactionBlockDataResolverPlugin[];
+
 		signer: Signer;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
+		transactionBlock.addSerializationPlugin(this.cache.asPlugin());
 		const results = await this.#client.signAndExecuteTransactionBlock({
 			...input,
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
-				dataResolvers: [this.cache, ...(dataResolvers ?? [])],
 				protocolConfig: await this.#getProtocolConfig(),
 			}),
 			options: {

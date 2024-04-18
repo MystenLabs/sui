@@ -79,7 +79,7 @@ export function getIdFromCallArg(arg: string | CallArg) {
 	}
 
 	if (arg.UnresolvedObject) {
-		return normalizeSuiAddress(arg.UnresolvedObject.value);
+		return normalizeSuiAddress(arg.UnresolvedObject.id);
 	}
 
 	return undefined;
