@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tracing::warn;
 
@@ -77,6 +78,8 @@ impl BlockManager {
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
+        let _s = monitored_scope("BlockManager::try_accept_blocks");
+
         blocks.sort_by_key(|b| b.round());
 
         let mut accepted_blocks = vec![];
@@ -95,27 +98,27 @@ impl BlockManager {
                         let ancestors = self.dag_state.read().get_blocks(b.ancestors());
                         assert_eq!(b.ancestors().len(), ancestors.len());
                         let mut ancestor_blocks = vec![];
-                        'ancestor: for (included, found) in
+                        'ancestor: for (ancestor_ref, found) in
                             b.ancestors().iter().zip(ancestors.into_iter())
                         {
                             if let Some(found_block) = found {
                                 // This invariant should be guaranteed by DagState.
-                                assert_eq!(included, &found_block.reference());
+                                assert_eq!(ancestor_ref, &found_block.reference());
                                 ancestor_blocks.push(found_block);
                                 continue 'ancestor;
                             }
                             // blocks_to_accept have not been added to DagState yet, but they
                             // can appear in ancestors.
-                            if blocks_to_accept.contains_key(included) {
-                                ancestor_blocks.push(blocks_to_accept[included].clone());
+                            if blocks_to_accept.contains_key(ancestor_ref) {
+                                ancestor_blocks.push(blocks_to_accept[ancestor_ref].clone());
                                 continue 'ancestor;
                             }
                             // If an ancestor is already rejected, reject this block as well.
-                            if blocks_to_reject.contains_key(included) {
+                            if blocks_to_reject.contains_key(ancestor_ref) {
                                 blocks_to_reject.insert(b.reference(), b);
                                 continue 'block;
                             }
-                            panic!("Unsuspended block {:?} has a missing ancestor! Ancestor not found in DagState: {:?}", b, included);
+                            panic!("Unsuspended block {:?} has a missing ancestor! Ancestor not found in DagState: {:?}", b, ancestor_ref);
                         }
                         if let Err(e) = self.block_verifier.check_ancestors(&b, &ancestor_blocks) {
                             warn!("Block {:?} failed to verify ancestors: {}", b, e);
@@ -157,11 +160,19 @@ impl BlockManager {
             .cloned()
             .collect::<BTreeSet<_>>();
 
-        self.context
-            .metrics
-            .node_metrics
+        let metrics = &self.context.metrics.node_metrics;
+        metrics
             .missing_blocks_total
             .set(missing_blocks_after.len() as i64);
+        metrics
+            .block_manager_suspended_blocks
+            .set(self.suspended_blocks.len() as i64);
+        metrics
+            .block_manager_missing_ancestors
+            .set(self.missing_ancestors.len() as i64);
+        metrics
+            .block_manager_missing_blocks
+            .set(self.missing_blocks.len() as i64);
 
         // Figure out the new missing blocks
         (accepted_blocks, missing_blocks_after)
@@ -219,7 +230,7 @@ impl BlockManager {
             self.context
                 .metrics
                 .node_metrics
-                .suspended_blocks
+                .block_suspensions
                 .with_label_values(&[hostname])
                 .inc();
             self.suspended_blocks
@@ -266,7 +277,7 @@ impl BlockManager {
             self.context
                 .metrics
                 .node_metrics
-                .unsuspended_blocks
+                .block_unsuspensions
                 .with_label_values(&[hostname])
                 .inc();
         }
@@ -308,8 +319,16 @@ impl BlockManager {
 
     /// Returns all the suspended blocks whose causal history we miss hence we can't accept them yet.
     #[cfg(test)]
-    pub(crate) fn suspended_blocks(&self) -> Vec<BlockRef> {
+    fn suspended_blocks(&self) -> Vec<BlockRef> {
         self.suspended_blocks.keys().cloned().collect()
+    }
+
+    /// Checks if block manager is empty.
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.suspended_blocks.is_empty()
+            && self.missing_ancestors.is_empty()
+            && self.missing_blocks.is_empty()
     }
 }
 
@@ -440,6 +459,7 @@ mod tests {
                 .collect::<Vec<VerifiedBlock>>()
         );
         assert!(missing.is_empty());
+        assert!(block_manager.is_empty());
 
         // WHEN trying to accept same blocks again, then none will be returned as those have been already accepted
         let (accepted_blocks, _) = block_manager.try_accept_blocks(all_blocks);
@@ -483,8 +503,7 @@ mod tests {
                 "Failed acceptance sequence for seed {}",
                 seed
             );
-            assert!(block_manager.missing_blocks().is_empty());
-            assert!(block_manager.suspended_blocks().is_empty());
+            assert!(block_manager.is_empty());
         }
     }
 

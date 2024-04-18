@@ -34,8 +34,6 @@ const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
 
 const FETCH_FROM_PEERS_TIMEOUT: Duration = Duration::from_millis(4_000);
 
-const MAX_FETCH_BLOCKS_PER_REQUEST: usize = 200;
-
 enum Command {
     FetchBlocks {
         missing_block_refs: BTreeSet<BlockRef>,
@@ -401,7 +399,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         // Attempt to fetch only up to a max of blocks
         let missing_blocks = missing_blocks
             .into_iter()
-            .take(MAX_PEERS * MAX_FETCH_BLOCKS_PER_REQUEST)
+            .take(MAX_PEERS * context.parameters.max_blocks_per_fetch)
             .collect::<Vec<_>>();
 
         #[allow(unused_mut)]
@@ -424,7 +422,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let mut request_futures = FuturesUnordered::new();
 
         // Send the initial requests
-        for blocks in missing_blocks.chunks(MAX_FETCH_BLOCKS_PER_REQUEST) {
+        for blocks in missing_blocks.chunks(context.parameters.max_blocks_per_fetch) {
             let peer = peers
                 .next()
                 .expect("Possible misconfiguration as a peer should be found");
@@ -611,6 +609,16 @@ mod tests {
             }
 
             Ok(serialised)
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: AuthorityIndex,
+            _start: Round,
+            _end: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
         }
     }
 
