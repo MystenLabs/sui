@@ -16,7 +16,7 @@ use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
 use itertools::Itertools;
-use tap::Tap;
+use tap::TapFallible;
 use tracing::info;
 
 use sui_types::base_types::ObjectID;
@@ -70,6 +70,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
+const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -178,7 +179,7 @@ impl PgIndexerStore {
                     .context("Failed to write display updates to PostgresDB")?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )?;
 
         Ok(())
@@ -222,11 +223,14 @@ impl PgIndexerStore {
                     .context("Failed to write object mutation to PostgresDB")?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked objects", len,)
+            info!(elapsed, "Persisted {} chunked objects", len);
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist object mutations with error: {}", e);
         })
     }
 
@@ -258,11 +262,14 @@ impl PgIndexerStore {
 
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Deleted {} chunked objects", len,)
+            info!(elapsed, "Deleted {} chunked objects", len);
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist object deletions with error: {}", e);
         })
     }
 
@@ -327,15 +334,18 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
                 elapsed,
                 "Persisted {} chunked objects snapshot",
                 objects_snapshot.len(),
-            )
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist object snapshot with error: {}", e);
         })
     }
 
@@ -387,15 +397,18 @@ impl PgIndexerStore {
 
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
                 elapsed,
                 "Persisted {} chunked objects history",
                 mutated_objects.len() + deleted_object_ids.len(),
-            )
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist object history with error: {}", e);
         })
     }
 
@@ -410,7 +423,7 @@ impl PgIndexerStore {
                     conn,
                 )
             },
-            Duration::from_secs(10)
+            PG_DB_COMMIT_SLEEP_DURATION
         )?;
         Ok(())
     }
@@ -449,15 +462,18 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
                 elapsed,
                 "Persisted {} checkpoints",
                 stored_checkpoints.len()
             );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist checkpoints with error: {}", e);
         })
     }
 
@@ -492,15 +508,18 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
                 elapsed,
                 "Persisted {} chunked transactions",
                 transactions.len()
-            )
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist transactions with error: {}", e);
         })
     }
 
@@ -528,11 +547,14 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked events", len)
+            info!(elapsed, "Persisted {} chunked events", len);
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist events with error: {}", e);
         })
     }
 
@@ -566,11 +588,14 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} packages", packages.len())
+            info!(elapsed, "Persisted {} packages", packages.len());
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist packages with error: {}", e);
         })
     }
 
@@ -633,9 +658,9 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
-            .tap(|_| {
+            .tap_ok(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
                 info!(
                     elapsed,
@@ -644,7 +669,14 @@ impl PgIndexerStore {
                     recipients_len,
                 );
             })
+            .tap_err(|e| {
+                tracing::error!(
+                    "Failed to persist tx_senders and tx_recipients with error: {}",
+                    e
+                );
+            })
         }));
+
         futures.push(self.spawn_blocking_task(move |this| {
             let now = Instant::now();
             let input_objects_len = input_objects.len();
@@ -661,14 +693,17 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
-            .tap(|_| {
+            .tap_ok(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
                 info!(
                     elapsed,
                     "Persisted {} rows to tx_input_objects", input_objects_len,
                 );
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_input_objects with error: {}", e);
             })
         }));
 
@@ -688,14 +723,17 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
-            .tap(|_| {
+            .tap_ok(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
                 info!(
                     elapsed,
                     "Persisted {} rows to tx_changed_objects table", changed_objects_len,
                 );
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_changed_objects with error: {}", e);
             })
         }));
         futures.push(self.spawn_blocking_task(move |this| {
@@ -714,11 +752,14 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
-            .tap(|_| {
+            .tap_ok(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
                 info!(elapsed, "Persisted {} rows to tx_calls tables", calls_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_calls with error: {}", e);
             })
         }));
         futures::future::join_all(futures)
@@ -726,8 +767,14 @@ impl PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!("Failed to join tx indices futures in a chunk: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all tx_indices chunks: {:?}",
+                    "Failed to persist all tx indices in a chunk: {:?}",
                     e
                 ))
             })?;
@@ -785,11 +832,14 @@ impl PgIndexerStore {
                     .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
-        .tap(|_| {
+        .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(elapsed, epoch_id, "Persisted epoch beginning info");
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist epoch with error: {}", e);
         })
     }
 
@@ -948,8 +998,17 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_object_mutation_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all objects chunks: {:?}",
+                    "Failed to persist all object mutation chunks: {:?}",
                     e
                 ))
             })?;
@@ -962,8 +1021,17 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_object_deletion_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to delete all objects chunks: {:?}",
+                    "Failed to persist all object deletion chunks: {:?}",
                     e
                 ))
             })?;
@@ -1000,6 +1068,15 @@ impl IndexerStore for PgIndexerStore {
 
         futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join backfill_objects_snapshot_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1043,6 +1120,15 @@ impl IndexerStore for PgIndexerStore {
 
         futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_objects_history_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1116,6 +1202,12 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!("Failed to join persist_transactions_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
                     "Failed to persist all transactions chunks: {:?}",
                     e
@@ -1143,6 +1235,12 @@ impl IndexerStore for PgIndexerStore {
 
         futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failed to join persist_events_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1200,13 +1298,19 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!("Failed to join persist_tx_indices_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
                     "Failed to persist all tx_indices chunks: {:?}",
                     e
                 ))
             })?;
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} tx_indices", len);
+        info!(elapsed, "Persisted {} tx_indices chunks", len);
         Ok(())
     }
 
