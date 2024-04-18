@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 43;
+const MAX_PROTOCOL_VERSION: u64 = 44;
 
 // Record history of protocol version allocations here:
 //
@@ -119,6 +119,7 @@ const MAX_PROTOCOL_VERSION: u64 = 43;
 // Version 43: Introduce the upper bound delta config for a zklogin signature's max epoch.
 //             Introduce an explicit parameter for the tick limit per package (previously this was
 //             represented by the parameter for the tick limit per module).
+// Version 44: Enable consensus fork detection on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2089,6 +2090,10 @@ impl ProtocolConfig {
                 43 => {
                     cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
                     cfg.max_meter_ticks_per_package = Some(16_000_000);
+                }
+                44 => {
+                    // Enable consensus digest in consensus commit prologue on all networks..
+                    cfg.feature_flags.include_consensus_digest_in_prologue = true;
                 }
                 // Use this template when making changes:
                 //
