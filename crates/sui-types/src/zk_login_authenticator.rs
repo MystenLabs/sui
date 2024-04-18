@@ -35,10 +35,15 @@ pub struct ZkLoginAuthenticator {
 }
 
 impl ZkLoginAuthenticator {
+    /// The zklogin hash is caculated as bcs zklogin_inputs + max_epoch + ephemeral pubkey.
+    /// If this hash is found in the cache, do not verify the zk proof again, but only
+    /// perform the uncached checks e.g. checking ephemeral signature.
     pub fn hash_inputs(&self) -> ZKLoginInputsDigest {
         use fastcrypto::hash::HashFunction;
         let mut hasher = DefaultHash::default();
         hasher.update(bcs::to_bytes(&self.inputs).expect("serde should not fail"));
+        hasher.update(self.max_epoch.to_be_bytes());
+        hasher.update(self.user_signature.public_key_bytes());
         ZKLoginInputsDigest::new(hasher.finalize().into())
     }
 

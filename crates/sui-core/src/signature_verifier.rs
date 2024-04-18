@@ -17,6 +17,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
@@ -35,6 +36,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 use tracing::debug;
+
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
 
@@ -373,7 +375,23 @@ impl SignatureVerifier {
                     self.zk_login_params.accept_zklogin_in_multisig,
                     self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 );
-                signed_tx.verify_message_signature(&verify_params)
+
+                signed_tx
+                    .tx_signatures()
+                    .iter()
+                    .try_for_each(|sig| match sig {
+                        // If a zkLogin signature is found, check cache first. If it is in
+                        // the cache, just verifies for uncached checks, otherwise verifies
+                        // the entire zkLogin signature.
+                        GenericSignature::ZkLoginAuthenticator(z) => {
+                            self.zklogin_inputs_cache.is_verified(
+                                z.hash_inputs(),
+                                || signed_tx.verify_message_signature(&verify_params),
+                                || signed_tx.verify_uncached_checks(&verify_params),
+                            )
+                        }
+                        _ => signed_tx.verify_message_signature(&verify_params),
+                    })
             },
             || Ok(()),
         )

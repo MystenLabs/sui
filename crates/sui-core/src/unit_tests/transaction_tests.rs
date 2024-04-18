@@ -498,7 +498,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
         mut object_ids,
         gas_object_ids,
         authority_state,
-        _epoch_store,
+        epoch_store,
         transfer_transaction,
         metrics,
         _server,
@@ -511,7 +511,6 @@ async fn zklogin_test_cached_proof_wrong_key() {
         .await;
     assert!(res.is_ok());
 
-    /*
     assert_eq!(
         epoch_store
             .signature_verifier
@@ -520,7 +519,6 @@ async fn zklogin_test_cached_proof_wrong_key() {
             .get(),
         1
     );
-    */
 
     let (skp, _eph_pk, zklogin) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -563,17 +561,14 @@ async fn zklogin_test_cached_proof_wrong_key() {
         .await
         .is_err());
 
-    // TODO: re-enable when cache is re-enabled.
-    /*
     assert_eq!(
         epoch_store
             .signature_verifier
             .metrics
-            .zklogin_inputs_cache_hits
+            .zklogin_inputs_cache_misses
             .get(),
-        1
+        2
     );
-    */
 
     assert_eq!(metrics.signature_errors.get(), 1);
 
@@ -590,7 +585,7 @@ async fn do_zklogin_transaction_test(
         object_ids,
         _gas_object_id,
         authority_state,
-        _epoch_store,
+        epoch_store,
         mut transfer_transaction,
         metrics,
         _server,
@@ -604,8 +599,6 @@ async fn do_zklogin_transaction_test(
         .await
         .is_err());
 
-    // TODO: re-enable when cache is re-enabled.
-    /*
     assert_eq!(
         epoch_store
             .signature_verifier
@@ -614,7 +607,6 @@ async fn do_zklogin_transaction_test(
             .get(),
         1
     );
-    */
 
     assert_eq!(metrics.signature_errors.get(), expected_sig_errors);
 
