@@ -3,10 +3,9 @@
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::config::{BridgeNodeConfig, EthConfig, SuiConfig};
-use crate::e2e_test_utils::deploy_sol_contract;
-use crate::e2e_test_utils::get_eth_signer_client_e2e_test_only;
-use crate::e2e_test_utils::publish_coins_return_add_coins_on_sui_action;
+use crate::e2e_tests::test_utils::deploy_sol_contract;
+use crate::e2e_tests::test_utils::get_eth_signer_client_e2e_test_only;
+use crate::e2e_tests::test_utils::publish_coins_return_add_coins_on_sui_action;
 use crate::e2e_tests::test_utils::{get_signatures, initialize_bridge_environment, TEST_PK};
 use crate::events::SuiBridgeEvent;
 use crate::sui_client::SuiBridgeClient;

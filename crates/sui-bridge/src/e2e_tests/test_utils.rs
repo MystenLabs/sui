@@ -213,7 +213,7 @@ struct SolDeployConfig {
     token_prices: Vec<u64>,
 }
 
-pub async fn initialize_bridge_environment() -> (TestCluster, EthBridgeEnvironment) {
+pub(crate) async fn initialize_bridge_environment() -> (TestCluster, EthBridgeEnvironment) {
     let anvil_port = get_available_port("127.0.0.1");
     let anvil_url = format!("http://127.0.0.1:{anvil_port}");
     let mut eth_environment = EthBridgeEnvironment::new(&anvil_url, anvil_port)
@@ -274,7 +274,7 @@ pub async fn initialize_bridge_environment() -> (TestCluster, EthBridgeEnvironme
     (test_cluster, eth_environment)
 }
 
-async fn deploy_sol_contract(
+pub async fn deploy_sol_contract(
     anvil_url: &str,
     eth_signer: EthSigner,
     bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
@@ -492,7 +492,6 @@ async fn start_bridge_cluster(
         approved_governance_actions.len()
     );
 
-    let anvil_url = &eth_environment.rpc_url;
     let eth_bridge_contract_address = eth_environment
         .contracts
         .as_ref()

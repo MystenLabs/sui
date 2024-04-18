@@ -29,6 +29,9 @@ pub(crate) mod eth_mock_provider;
 #[cfg(test)]
 pub(crate) mod sui_mock_client;
 
+#[cfg(test)]
+pub mod test_utils;
+
 pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
 
 #[cfg(test)]
