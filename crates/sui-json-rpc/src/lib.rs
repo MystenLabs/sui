@@ -266,13 +266,14 @@ impl JsonRpcServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
         let addr = server.local_addr();
-        let server = server.with_graceful_shutdown(async {
+
+        let handle = tokio::spawn(async move {
+            server.await.unwrap();
             if let Some(cancel) = cancel {
+                // Signal that the server is shutting down, so other tasks can clean-up.
                 cancel.cancel();
             }
         });
-
-        let handle = tokio::spawn(async move { server.await.unwrap() });
 
         let handle = ServerHandle {
             handle: ServerHandleInner::Axum(handle),

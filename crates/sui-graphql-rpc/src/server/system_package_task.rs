@@ -38,6 +38,7 @@ impl SystemPackageTask {
                 }
 
                 _ = self.epoch_rx.changed() => {
+                    info!("Detected epoch boundary, evicting system packages from cache");
                     self.resolver
                         .package_store()
                         .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());

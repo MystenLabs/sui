@@ -61,6 +61,9 @@ impl SystemPackageTask {
 
                     if next_epoch > last_epoch {
                         last_epoch = next_epoch;
+                        tracing::info!(
+                            "Detected epoch boundary, evicting system packages from cache"
+                        );
                         self.reader
                             .package_resolver()
                             .package_store()
