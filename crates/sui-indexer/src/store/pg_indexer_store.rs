@@ -226,7 +226,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked objects", len,)
+            info!(elapsed, "Persisted {} chunked objects", len);
         })
     }
 
@@ -262,7 +262,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Deleted {} chunked objects", len,)
+            info!(elapsed, "Deleted {} chunked objects", len);
         })
     }
 
@@ -335,7 +335,7 @@ impl PgIndexerStore {
                 elapsed,
                 "Persisted {} chunked objects snapshot",
                 objects_snapshot.len(),
-            )
+            );
         })
     }
 
@@ -395,7 +395,7 @@ impl PgIndexerStore {
                 elapsed,
                 "Persisted {} chunked objects history",
                 mutated_objects.len() + deleted_object_ids.len(),
-            )
+            );
         })
     }
 
@@ -500,7 +500,7 @@ impl PgIndexerStore {
                 elapsed,
                 "Persisted {} chunked transactions",
                 transactions.len()
-            )
+            );
         })
     }
 
@@ -532,7 +532,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked events", len)
+            info!(elapsed, "Persisted {} chunked events", len);
         })
     }
 
@@ -570,7 +570,7 @@ impl PgIndexerStore {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} packages", packages.len())
+            info!(elapsed, "Persisted {} packages", packages.len());
         })
     }
 
@@ -645,6 +645,7 @@ impl PgIndexerStore {
                 );
             })
         }));
+
         futures.push(self.spawn_blocking_task(move |this| {
             let now = Instant::now();
             let input_objects_len = input_objects.len();
@@ -726,8 +727,14 @@ impl PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!("Failed to join tx indices futures in a chunk: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all tx_indices chunks: {:?}",
+                    "Failed to persist all tx indices in a chunk: {:?}",
                     e
                 ))
             })?;
@@ -948,8 +955,17 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_object_mutation_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all objects chunks: {:?}",
+                    "Failed to persist all object mutation chunks: {:?}",
                     e
                 ))
             })?;
@@ -962,8 +978,17 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_object_deletion_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to delete all objects chunks: {:?}",
+                    "Failed to persist all object deletion chunks: {:?}",
                     e
                 ))
             })?;
@@ -1000,6 +1025,15 @@ impl IndexerStore for PgIndexerStore {
 
         futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join backfill_objects_snapshot_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1043,6 +1077,15 @@ impl IndexerStore for PgIndexerStore {
 
         futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_objects_history_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1116,6 +1159,12 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!("Failed to join persist_transactions_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
                     "Failed to persist all transactions chunks: {:?}",
                     e
@@ -1143,6 +1192,12 @@ impl IndexerStore for PgIndexerStore {
 
         futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failed to join persist_events_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1200,13 +1255,19 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
+                tracing::error!("Failed to join persist_tx_indices_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
                     "Failed to persist all tx_indices chunks: {:?}",
                     e
                 ))
             })?;
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} tx_indices", len);
+        info!(elapsed, "Persisted {} tx_indices chunks", len);
         Ok(())
     }
 

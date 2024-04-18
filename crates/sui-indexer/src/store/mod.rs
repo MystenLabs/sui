@@ -38,7 +38,7 @@ pub(crate) mod diesel_macro {
                     .read_write()
                     .run($query)
                     .map_err(|e| {
-                        tracing::error!("Error with persisting data into DB: {:?}", e);
+                        tracing::error!("Error with persisting data into DB: {:?}, retrying...", e);
                         backoff::Error::Transient {
                             err: IndexerError::PostgresWriteError(e.to_string()),
                             retry_after: None,
