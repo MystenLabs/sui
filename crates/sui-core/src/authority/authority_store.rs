@@ -786,7 +786,7 @@ impl AuthorityStore {
     #[instrument(level = "trace", skip_all)]
     async fn acquire_read_locks_for_indirect_objects(
         &self,
-        written: &WrittenObjects,
+        written: &[Object],
     ) -> Vec<RwLockGuard> {
         // locking is required to avoid potential race conditions with the pruner
         // potential race:
@@ -797,7 +797,7 @@ impl AuthorityStore {
         // read locks are sufficient because ref count increments are safe,
         // concurrent transaction executions produce independent ref count increments and don't corrupt the state
         let digests = written
-            .values()
+            .iter()
             .filter_map(|object| {
                 let StoreObjectPair(_, indirect_object) =
                     get_store_object_pair(object.clone(), self.indirect_objects_threshold);
@@ -815,7 +815,35 @@ impl AuthorityStore {
     pub async fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
-        tx_outputs: Arc<TransactionOutputs>,
+        tx_outputs: &[Arc<TransactionOutputs>],
+    ) -> SuiResult {
+        let mut written = Vec::with_capacity(tx_outputs.len());
+        for outputs in tx_outputs {
+            written.extend(outputs.written.values().cloned());
+        }
+
+        let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
+
+        let mut write_batch = self.perpetual_tables.transactions.batch();
+        for outputs in tx_outputs {
+            self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
+        }
+        // test crashing before writing the batch
+        fail_point_async!("crash");
+
+        write_batch.write()?;
+
+        // test crashing before notifying
+        fail_point_async!("crash");
+
+        Ok(())
+    }
+
+    fn write_one_transaction_outputs(
+        &self,
+        write_batch: &mut DBBatch,
+        epoch_id: EpochId,
+        tx_outputs: &TransactionOutputs,
     ) -> SuiResult {
         let TransactionOutputs {
             transaction,
@@ -828,12 +856,7 @@ impl AuthorityStore {
             locks_to_delete,
             new_locks_to_init,
             ..
-        } = &*tx_outputs;
-
-        let _locks = self.acquire_read_locks_for_indirect_objects(written).await;
-
-        // Extract the new state from the execution
-        let mut write_batch = self.perpetual_tables.transactions.batch();
+        } = tx_outputs;
 
         // Store the certificate indexed by transaction digest
         let transaction_digest = transaction.digest();
@@ -913,11 +936,11 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
-        self.initialize_live_object_markers_impl(&mut write_batch, new_locks_to_init, false)?;
+        self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
-        self.delete_live_object_markers(&mut write_batch, locks_to_delete)?;
+        self.delete_live_object_markers(write_batch, locks_to_delete)?;
 
         write_batch
             .insert_batch(
@@ -928,15 +951,6 @@ impl AuthorityStore {
                 &self.perpetual_tables.executed_effects,
                 [(transaction_digest, effects_digest)],
             )?;
-
-        // test crashing before writing the batch
-        fail_point_async!("crash");
-
-        // Commit.
-        write_batch.write()?;
-
-        // test crashing before notifying
-        fail_point_async!("crash");
 
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 

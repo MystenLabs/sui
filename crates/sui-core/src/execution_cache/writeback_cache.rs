@@ -630,33 +630,48 @@ impl WritebackCache {
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
-        digest: TransactionDigest,
+        digests: &[TransactionDigest],
     ) -> SuiResult {
         fail_point_async!("writeback-cache-commit");
 
-        let DashMapEntry::Occupied(occupied) = self.dirty.pending_transaction_writes.entry(digest)
-        else {
-            panic!("Attempt to commit unknown transaction {:?}", digest);
-        };
-
-        let outputs = occupied.get().clone();
+        let mut all_outputs = Vec::with_capacity(digests.len());
+        for tx in digests {
+            let Some(outputs) = self
+                .dirty
+                .pending_transaction_writes
+                .get(tx)
+                .map(|o| o.clone())
+            else {
+                panic!("Attempt to commit unknown transaction {:?}", tx);
+            };
+            all_outputs.push(outputs);
+        }
 
         // Flush writes to disk before removing anything from dirty set. otherwise,
         // a cache eviction could cause a value to disappear briefly, even if we insert to the
         // cache before removing from the dirty set.
         self.store
-            .write_transaction_outputs(epoch, outputs.clone())
+            .write_transaction_outputs(epoch, &all_outputs)
             .await?;
 
-        // Cache transaction before removing entry from self.dirty to avoid
-        // unnecessary cache misses
-        self.cached
-            .transactions
-            .insert(digest, outputs.transaction.clone());
+        for (tx_digest, outputs) in digests.iter().zip(all_outputs.into_iter()) {
+            assert!(self
+                .dirty
+                .pending_transaction_writes
+                .remove(tx_digest)
+                .is_some());
+            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, &outputs);
+        }
 
-        // releases lock on pending_transaction_writes
-        occupied.remove();
+        Ok(())
+    }
 
+    fn flush_transactions_from_dirty_to_cached(
+        &self,
+        epoch: EpochId,
+        tx_digest: TransactionDigest,
+        outputs: &TransactionOutputs,
+    ) {
         // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
         let TransactionOutputs {
@@ -668,18 +683,22 @@ impl WritebackCache {
             wrapped,
             events,
             ..
-        } = &*outputs;
+        } = outputs;
 
-        let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
         let events_digest = events.digest();
 
+        // Update cache before removing from self.dirty to avoid
+        // unnecessary cache misses
+        self.cached
+            .transactions
+            .insert(tx_digest, transaction.clone());
         self.cached
             .transaction_effects
             .insert(effects_digest, effects.clone().into());
         self.cached
             .executed_effects_digests
-            .insert(digest, effects_digest);
+            .insert(tx_digest, effects_digest);
         self.cached
             .transaction_events
             .insert(events_digest, events.clone().into());
@@ -747,8 +766,6 @@ impl WritebackCache {
                 &ObjectEntry::Wrapped,
             );
         }
-
-        Ok(())
     }
 
     // Move the oldest/least entry from the dirty queue to the cache queue.
@@ -870,12 +887,12 @@ impl WritebackCache {
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
-    fn commit_transaction_outputs(
-        &self,
+    fn commit_transaction_outputs<'a>(
+        &'a self,
         epoch: EpochId,
-        digest: &TransactionDigest,
-    ) -> BoxFuture<'_, SuiResult> {
-        WritebackCache::commit_transaction_outputs(self, epoch, *digest).boxed()
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult> {
+        WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
     }
 }
 

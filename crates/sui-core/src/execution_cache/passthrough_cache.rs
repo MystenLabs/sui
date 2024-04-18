@@ -291,7 +291,7 @@ impl ExecutionCacheWrite for PassthroughCache {
                 .check_owned_objects_are_live(&tx_outputs.locks_to_delete)?;
 
             self.store
-                .write_transaction_outputs(epoch_id, tx_outputs)
+                .write_transaction_outputs(epoch_id, &[tx_outputs])
                 .await?;
 
             self.executed_effects_digests_notify_read
@@ -360,11 +360,11 @@ impl AccumulatorStore for PassthroughCache {
 }
 
 impl ExecutionCacheCommit for PassthroughCache {
-    fn commit_transaction_outputs(
-        &self,
+    fn commit_transaction_outputs<'a>(
+        &'a self,
         _epoch: EpochId,
-        _digest: &TransactionDigest,
-    ) -> BoxFuture<'_, SuiResult> {
+        _digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult> {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
         async { Ok(()) }.boxed()
     }
