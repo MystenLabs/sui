@@ -1312,33 +1312,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "invalid-mutations-v0"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "proptest",
-]
-
-[[package]]
-name = "invalid-mutations-v1"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "proptest",
-]
-
-[[package]]
-name = "invalid-mutations-v2"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "proptest",
-]
-
-[[package]]
 name = "io-lifetimes"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1660,7 +1633,6 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1684,7 +1656,6 @@ name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations-v0",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1699,7 +1670,6 @@ name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations-v1",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1714,7 +1684,6 @@ name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
