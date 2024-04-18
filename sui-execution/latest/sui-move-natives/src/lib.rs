@@ -859,8 +859,8 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
         ),
         (
             "random",
-            "generate_rand_seed",
-            make_native!(random::generate_rand_seed),
+            "generate_rand_seed_for_testing",
+            make_native!(random::generate_rand_seed_for_testing),
         ),
         (
             "zklogin_verified_id",

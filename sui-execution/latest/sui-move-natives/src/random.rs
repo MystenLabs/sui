@@ -11,7 +11,7 @@ use rand::Rng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub fn generate_rand_seed(
+pub fn generate_rand_seed_for_testing(
     _context: &mut NativeContext,
     _ty_args: Vec<Type>,
     _args: VecDeque<Value>,
