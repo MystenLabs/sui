@@ -2,29 +2,44 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::EthBridgeCommittee;
-use crate::config::{BridgeNodeConfig, EthConfig, SuiConfig};
-use crate::crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes};
-use crate::node::run_bridge_node;
-use crate::sui_client::SuiBridgeClient;
-use crate::types::BridgeAction;
+use crate::crypto::BridgeAuthorityKeyPair;
+use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::server::APPLICATION_JSON;
+use crate::types::{AddTokensOnSuiAction, BridgeAction};
+use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
-use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
-use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Read;
-use std::io::Write;
-use std::process::{Child, Command};
+use std::io::{Read, Write};
+use std::process::Command;
 use std::str::FromStr;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_sdk::wallet_context::WalletContext;
+use sui_types::bridge::{
+    BridgeChainId, BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME,
+};
+use sui_types::committee::TOTAL_VOTING_POWER;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{ObjectArg, TransactionData};
+use sui_types::BRIDGE_PACKAGE_ID;
+
+use tracing::error;
+use tracing::info;
+
+use crate::config::{BridgeNodeConfig, EthConfig, SuiConfig};
+use crate::node::run_bridge_node;
+use crate::sui_client::SuiBridgeClient;
+use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
+use ethers::prelude::*;
+use std::process::Child;
 use sui_config::local_ip_utils::get_available_port;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::{BridgeChainId, MoveTypeBridgeMessageKey, MoveTypeBridgeRecord};
+use sui_types::bridge::{MoveTypeBridgeMessageKey, MoveTypeBridgeRecord};
 use sui_types::collection_types::LinkedTableNode;
-use sui_types::committee::TOTAL_VOTING_POWER;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
 use sui_types::dynamic_field::{DynamicFieldName, Field};
@@ -33,21 +48,170 @@ use sui_types::TypeTag;
 use tempfile::tempdir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
-use tracing::{error, info};
 
-use crate::utils::get_eth_signer_client;
-
-pub const BRIDGE_COMMITTEE_NAME: &str = "BridgeCommittee";
-pub const SUI_BRIDGE_NAME: &str = "SuiBridge";
-pub const BRIDGE_CONFIG_NAME: &str = "BridgeConfig";
-pub const BRIDGE_LIMITER_NAME: &str = "BridgeLimiter";
-pub const BRIDGE_VAULT_NAME: &str = "BridgeVault";
-pub const BTC_NAME: &str = "BTC";
-pub const ETH_NAME: &str = "ETH";
-pub const USDC_NAME: &str = "USDC";
-pub const USDT_NAME: &str = "USDT";
+const BRIDGE_COMMITTEE_NAME: &str = "BridgeCommittee";
+const SUI_BRIDGE_NAME: &str = "SuiBridge";
+const BRIDGE_CONFIG_NAME: &str = "BridgeConfig";
+const BRIDGE_LIMITER_NAME: &str = "BridgeLimiter";
+const BRIDGE_VAULT_NAME: &str = "BridgeVault";
+const BTC_NAME: &str = "BTC";
+const ETH_NAME: &str = "ETH";
+const USDC_NAME: &str = "USDC";
+const USDT_NAME: &str = "USDT";
 
 pub const TEST_PK: &str = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356";
+
+pub async fn publish_coins_return_add_coins_on_sui_action(
+    wallet_context: &mut WalletContext,
+    bridge_arg: ObjectArg,
+    publish_coin_responses: Vec<SuiTransactionBlockResponse>,
+    token_ids: Vec<u8>,
+    token_prices: Vec<u64>,
+    nonce: u64,
+) -> BridgeAction {
+    assert!(token_ids.len() == publish_coin_responses.len());
+    assert!(token_prices.len() == publish_coin_responses.len());
+    let sender = wallet_context.active_address().unwrap();
+    let rgp = wallet_context.get_reference_gas_price().await.unwrap();
+    let mut token_type_names = vec![];
+    for response in publish_coin_responses {
+        let object_changes = response.object_changes.unwrap();
+        let mut tc = None;
+        let mut type_ = None;
+        let mut uc = None;
+        let mut metadata = None;
+        for object_change in &object_changes {
+            if let o @ sui_json_rpc_types::ObjectChange::Created { object_type, .. } = object_change
+            {
+                if object_type.name.as_str().starts_with("TreasuryCap") {
+                    assert!(tc.is_none() && type_.is_none());
+                    tc = Some(o.clone());
+                    type_ = Some(object_type.type_params.first().unwrap().clone());
+                } else if object_type.name.as_str().starts_with("UpgradeCap") {
+                    assert!(uc.is_none());
+                    uc = Some(o.clone());
+                } else if object_type.name.as_str().starts_with("CoinMetadata") {
+                    assert!(metadata.is_none());
+                    metadata = Some(o.clone());
+                }
+            }
+        }
+        let (tc, type_, uc, metadata) =
+            (tc.unwrap(), type_.unwrap(), uc.unwrap(), metadata.unwrap());
+
+        // register with the bridge
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let bridge_arg = builder.obj(bridge_arg).unwrap();
+        let uc_arg = builder
+            .obj(ObjectArg::ImmOrOwnedObject(uc.object_ref()))
+            .unwrap();
+        let tc_arg = builder
+            .obj(ObjectArg::ImmOrOwnedObject(tc.object_ref()))
+            .unwrap();
+        let metadata_arg = builder
+            .obj(ObjectArg::ImmOrOwnedObject(metadata.object_ref()))
+            .unwrap();
+        builder.programmable_move_call(
+            BRIDGE_PACKAGE_ID,
+            BRIDGE_MODULE_NAME.into(),
+            BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME.into(),
+            vec![type_.clone()],
+            vec![bridge_arg, tc_arg, uc_arg, metadata_arg],
+        );
+        let pt = builder.finish();
+        let gas = wallet_context
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
+        let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
+        let signed_tx = wallet_context.sign_transaction(&tx);
+        let _ = wallet_context
+            .execute_transaction_must_succeed(signed_tx)
+            .await;
+
+        token_type_names.push(type_);
+    }
+
+    BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+        nonce,
+        chain_id: BridgeChainId::SuiCustom,
+        native: false,
+        token_ids,
+        token_type_names,
+        token_prices,
+    })
+}
+
+pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> anyhow::Result<()> {
+    let now = std::time::Instant::now();
+    loop {
+        if let Ok(true) = reqwest::Client::new()
+            .get(server_url.clone())
+            .header(reqwest::header::ACCEPT, APPLICATION_JSON)
+            .send()
+            .await
+            .map(|res| res.status().is_success())
+        {
+            break;
+        }
+        if now.elapsed().as_secs() > timeout_sec {
+            anyhow::bail!("Server is not up and running after {} seconds", timeout_sec);
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+    Ok(())
+}
+
+pub async fn get_eth_signer_client_e2e_test_only(
+    eth_rpc_url: &str,
+) -> anyhow::Result<(EthSigner, String)> {
+    // This private key is derived from the default anvil setting.
+    // Mnemonic:          test test test test test test test test test test test junk
+    // Derivation path:   m/44'/60'/0'/0/
+    // DO NOT USE IT ANYWHERE ELSE EXCEPT FOR RUNNING AUTOMATIC INTEGRATION TESTING
+    let url = eth_rpc_url.to_string();
+    let private_key_0 = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356";
+    let signer_0 = get_eth_signer_client(&url, private_key_0).await?;
+    Ok((signer_0, private_key_0.to_string()))
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct DeployedSolContracts {
+    pub sui_bridge: EthAddress,
+    pub bridge_committee: EthAddress,
+    pub bridge_limiter: EthAddress,
+    pub bridge_vault: EthAddress,
+    pub bridge_config: EthAddress,
+    pub btc: EthAddress,
+    pub eth: EthAddress,
+    pub usdc: EthAddress,
+    pub usdt: EthAddress,
+}
+
+impl DeployedSolContracts {
+    pub fn eth_adress_to_hex(addr: EthAddress) -> String {
+        format!("{:x}", addr)
+    }
+
+    pub fn sui_bridge_addrress_hex(&self) -> String {
+        Self::eth_adress_to_hex(self.sui_bridge)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SolDeployConfig {
+    committee_member_stake: Vec<u64>,
+    committee_members: Vec<String>,
+    min_committee_stake_required: u64,
+    source_chain_id: u64,
+    supported_chain_ids: Vec<u64>,
+    supported_chain_limits_in_dollars: Vec<u64>,
+    supported_tokens: Vec<String>,
+    token_prices: Vec<u64>,
+}
 
 pub async fn initialize_bridge_environment() -> (TestCluster, EthBridgeEnvironment) {
     let anvil_port = get_available_port("127.0.0.1");
@@ -430,41 +594,4 @@ pub(crate) async fn get_signatures(
     sigs.into_iter()
         .map(|sig: Vec<u8>| Bytes::from(sig))
         .collect()
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub(crate) struct DeployedSolContracts {
-    pub sui_bridge: EthAddress,
-    pub bridge_committee: EthAddress,
-    pub bridge_limiter: EthAddress,
-    pub bridge_vault: EthAddress,
-    pub bridge_config: EthAddress,
-    pub btc: EthAddress,
-    pub eth: EthAddress,
-    pub usdc: EthAddress,
-    pub usdt: EthAddress,
-}
-
-impl DeployedSolContracts {
-    fn eth_adress_to_hex(addr: EthAddress) -> String {
-        format!("{:x}", addr)
-    }
-
-    pub fn sui_bridge_addrress_hex(&self) -> String {
-        Self::eth_adress_to_hex(self.sui_bridge)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SolDeployConfig {
-    committee_member_stake: Vec<u64>,
-    committee_members: Vec<String>,
-    min_committee_stake_required: u64,
-    source_chain_id: u64,
-    supported_chain_ids: Vec<u64>,
-    supported_chain_limits_in_dollars: Vec<u64>,
-    supported_tokens: Vec<String>,
-    token_prices: Vec<u64>,
 }
