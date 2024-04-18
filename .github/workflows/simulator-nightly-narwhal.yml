@@ -1,4 +1,4 @@
-name: Simulator Tests with Mysticeti Enabled
+name: Simulator Tests with Narwhal
 
 concurrency:
   group: ${{ github.workflow }}
@@ -20,8 +20,8 @@ on:
         default: "30"
 
 env:
-  # Swap between Narwhal and Mysticeti each epoch.
-  CONSENSUS: "swap_each_epoch"
+  # Test Narwhal consensus as long as Narwhal runs in mainnet.
+  CONSENSUS: "narwhal"
 
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
   TEST_NUM: "${{ github.event.inputs.test_num || '30' }}"

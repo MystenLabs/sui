@@ -1,4 +1,4 @@
-name: Mysticeti
+name: Narwhal
 
 on:
   push:
@@ -26,8 +26,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  # Swap between Narwhal and Mysticeti each epoch.
-  CONSENSUS: "swap_each_epoch"
+  # Test Narwhal consensus as long as Narwhal runs in mainnet.
+  CONSENSUS: "narwhal"
 
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
