@@ -11,12 +11,9 @@ edition = "2021"
 
 [dev-dependencies]
 petgraph.workspace = true
-proptest.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 hex.workspace = true
 
-# referred to via path for execution versioning
-invalid-mutations = { path = "../invalid-mutations" }
 move-binary-format = { workspace = true, features = ["fuzzing"] }
 move-bytecode-verifier.workspace = true
 move-bytecode-verifier-meter.workspace = true

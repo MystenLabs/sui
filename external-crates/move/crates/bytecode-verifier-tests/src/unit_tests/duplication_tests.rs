@@ -4,7 +4,6 @@
 
 use move_binary_format::file_format::*;
 use move_bytecode_verifier::DuplicationChecker;
-use proptest::prelude::*;
 
 #[test]
 fn duplicated_friend_decls() {
