@@ -210,7 +210,7 @@ mod test {
             for txn in transactions {
                 if txn.len() < 4 {
                     return Err(ValidationError::InvalidTransaction(format!(
-                        "Length {} too short!",
+                        "Length {} is too short!",
                         txn.len()
                     )));
                 }
