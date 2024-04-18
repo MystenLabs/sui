@@ -16,6 +16,7 @@ use std::{
     time::{self, Duration},
 };
 use sui_config::p2p::RandomnessConfig;
+use sui_macros::fail_point_if;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
@@ -633,6 +634,17 @@ impl RandomnessEventLoop {
         round: RandomnessRound,
         partial_sigs: Vec<RandomnessPartialSignature>,
     ) {
+        // For simtests, we may test not sending partial signatures.
+        #[allow(unused_mut)]
+        let mut fail_point_skip_sending = false;
+        fail_point_if!("rb-send-partial-signatures", || {
+            fail_point_skip_sending = true;
+        });
+        if fail_point_skip_sending {
+            warn!("skipping sending partial sigs due to simtest fail point");
+            return;
+        }
+
         let _metrics_guard = metrics
             .round_observation_latency_metric()
             .map(|metric| metric.start_timer());
