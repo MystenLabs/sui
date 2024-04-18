@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::BridgeNodeConfig;
+use crate::config::EthConfig;
+use crate::config::SuiConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use anyhow::anyhow;
@@ -17,6 +19,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::Config;
 use sui_types::base_types::SuiAddress;
+use sui_types::bridge::BridgeChainId;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::SuiKeyPair;
 
@@ -76,19 +79,25 @@ pub fn generate_bridge_node_config_and_write_to_file(
         server_listen_port: 9191,
         metrics_port: 9184,
         bridge_authority_key_path_base64_raw: PathBuf::from("/path/to/your/bridge_authority_key"),
-        sui_rpc_url: "your_sui_rpc_url".to_string(),
-        eth_rpc_url: "your_eth_rpc_url".to_string(),
-        eth_addresses: vec!["bridge_eth_proxy_address".into()],
+        sui: SuiConfig {
+            sui_rpc_url: "your_sui_rpc_url".to_string(),
+            sui_bridge_chain_id: BridgeChainId::SuiTestnet as u8,
+            bridge_client_key_path_base64_sui_key: None,
+            bridge_client_gas_object: None,
+            sui_bridge_module_last_processed_event_id_override: None,
+        },
+        eth: EthConfig {
+            eth_rpc_url: "your_eth_rpc_url".to_string(),
+            eth_bridge_proxy_address: "0x0000000000000000000000000000000000000000".to_string(),
+            eth_bridge_chain_id: BridgeChainId::EthSepolia as u8,
+            eth_contracts_start_block_override: None,
+        },
         approved_governance_actions: vec![],
         run_client,
-        bridge_client_key_path_base64_sui_key: None,
-        bridge_client_gas_object: None,
         db_path: None,
-        eth_bridge_contracts_start_block_override: None,
-        sui_bridge_module_last_processed_event_id_override: None,
     };
     if run_client {
-        config.bridge_client_key_path_base64_sui_key =
+        config.sui.bridge_client_key_path_base64_sui_key =
             Some(PathBuf::from("/path/to/your/bridge_client_key"));
         config.db_path = Some(PathBuf::from("/path/to/your/client_db"));
     }

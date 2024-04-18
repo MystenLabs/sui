@@ -459,6 +459,30 @@ pub struct EthLog {
     pub log: Log,
 }
 
+/// Check if the bridge route is valid
+/// Only mainnet can bridge to mainnet, other than that we do not care.
+pub fn is_route_valid(one: BridgeChainId, other: BridgeChainId) -> bool {
+    if one.is_sui_chain() && other.is_sui_chain() {
+        return false;
+    }
+    if !one.is_sui_chain() && !other.is_sui_chain() {
+        return false;
+    }
+    if one == BridgeChainId::EthMainnet {
+        return other == BridgeChainId::SuiMainnet;
+    }
+    if one == BridgeChainId::SuiMainnet {
+        return other == BridgeChainId::EthMainnet;
+    }
+    if other == BridgeChainId::EthMainnet {
+        return one == BridgeChainId::SuiMainnet;
+    }
+    if other == BridgeChainId::SuiMainnet {
+        return one == BridgeChainId::EthMainnet;
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_utils::get_test_authority_and_key;
