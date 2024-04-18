@@ -166,10 +166,10 @@ const guides = [
 					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
-						label: 'Trustless Token Swap',
+						label: 'Trustless Swap',
 						link: {
 							type: 'doc',
-							id: 'guides/developer/app-examples/trustless-token-swap',
+							id: 'guides/developer/app-examples/trustless-swap',
 						},
 						items: [
 							'guides/developer/app-examples/trustless-token-swap/backend',
