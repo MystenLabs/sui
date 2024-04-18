@@ -124,7 +124,7 @@ impl UnstartedRandomness {
 
                 epoch: 0,
                 authority_info: Arc::new(HashMap::new()),
-                peer_share_counts: None,
+                peer_share_ids: None,
                 dkg_output: None,
                 aggregation_threshold: 0,
                 pending_tasks: BTreeSet::new(),
