@@ -660,13 +660,13 @@ impl WritebackCache {
                 .pending_transaction_writes
                 .remove(tx_digest)
                 .is_some());
-            self.remove_transaction_from_dirty_set(epoch, *tx_digest, &outputs);
+            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, &outputs);
         }
 
         Ok(())
     }
 
-    fn remove_transaction_from_dirty_set(
+    fn flush_transactions_from_dirty_to_cached(
         &self,
         epoch: EpochId,
         tx_digest: TransactionDigest,
