@@ -13,7 +13,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
-    transaction_input_object_keys, transaction_receiving_object_keys, ObjectKey,
+    transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
 };
 use sui_types::transaction::{
     SenderSignedData, SharedInputObject, TransactionDataAPI, TransactionKey,
@@ -177,8 +177,8 @@ fn assign_versions_for_certificate(
     // Make an iterator to update the locks of the transaction's shared objects.
     let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
 
-    let mut input_object_keys =
-        transaction_input_object_keys(cert).expect("Transaction input should have been verified");
+    let mut input_object_keys = transaction_non_shared_input_object_keys(cert)
+        .expect("Transaction input should have been verified");
     let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
     let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
     // Record receiving object versions towards the shared version computation.
@@ -193,7 +193,6 @@ fn assign_versions_for_certificate(
                 SequenceNumber::CANCELLED_READ
             };
             assigned_versions.push((*id, assigned_version));
-            input_object_keys.push(ObjectKey(*id, SequenceNumber::MIN));
             is_mutable_input.push(false);
         }
     } else {

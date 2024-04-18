@@ -470,7 +470,9 @@ impl From<Object> for ObjectOrTombstone {
 
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
-pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
+pub fn transaction_non_shared_input_object_keys(
+    tx: &SenderSignedData,
+) -> SuiResult<Vec<ObjectKey>> {
     use crate::transaction::InputObjectKind as I;
     Ok(tx
         .intent_message()
