@@ -36,6 +36,8 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
 
         uint256 _committeeLength = committee.length;
 
+        require(_committeeLength < 256, "BridgeCommittee: Committee length must be less than 256");
+
         require(
             _committeeLength == stake.length,
             "BridgeCommittee: Committee and stake arrays must be of the same length"
