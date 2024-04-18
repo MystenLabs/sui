@@ -37,6 +37,18 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         assertEq(committee.nonces(4), 0);
     }
 
+    function testBridgeCommitteeInitializationLength() public {
+        BridgeCommittee _committee = new BridgeCommittee();
+        address[] memory _committeeMembers = new address[](256);
+
+        for (uint160 i = 0; i < 256; i++) {
+            _committeeMembers[i] = address(i);
+        }
+
+        vm.expectRevert(bytes("BridgeCommittee: Committee length must be less than 256"));
+        _committee.initialize(_committeeMembers, new uint16[](256), minStakeRequired);
+    }
+
     function testBridgeCommitteeInitializeConfig() public {
         vm.expectRevert(bytes("BridgeCommittee: Config already initialized"));
         // Initialize the committee with the config contract
