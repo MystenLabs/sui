@@ -48,6 +48,7 @@ pub struct SendSignaturesRequest {
     round: RandomnessRound,
     // BCS-serialized `RandomnessPartialSignature` values. We store raw bytes here to enable
     // defenses against too-large messages.
+    // The protocol requires the signatures to be ordered by share index (as provided by fastcrypto).
     partial_sigs: Vec<Vec<u8>>,
     // TODO: add support for receiving full signature from validators who have already
     // reconstructed it.
