@@ -82,25 +82,20 @@ async fn start_client_components(
     };
 
     let stored_eth_cursors = store
-        .get_eth_event_cursors(&client_config.eth_bridge_contracts)
+        .get_eth_event_cursors(&client_config.eth_contracts)
         .map_err(|e| anyhow::anyhow!("Unable to get eth event cursors from storage: {e:?}"))?;
     let mut eth_contracts_to_watch = HashMap::new();
-    for (contract, cursor) in client_config
-        .eth_bridge_contracts
-        .iter()
-        .zip(stored_eth_cursors)
-    {
-        if client_config
-            .eth_bridge_contracts_start_block_override
-            .contains_key(contract)
-        {
+    for (contract, cursor) in client_config.eth_contracts.iter().zip(stored_eth_cursors) {
+        if client_config.eth_contracts_start_block_override.is_some() {
             eth_contracts_to_watch.insert(
                 *contract,
-                client_config.eth_bridge_contracts_start_block_override[contract],
+                client_config.eth_contracts_start_block_override.unwrap(),
             );
             info!(
                 "Overriding cursor for eth bridge contract {} to {}. Stored cursor: {:?}",
-                contract, client_config.eth_bridge_contracts_start_block_override[contract], cursor
+                contract,
+                client_config.eth_contracts_start_block_override.unwrap(),
+                cursor
             );
         } else if let Some(cursor) = cursor {
             // +1: The stored value is the last block that was processed, so we start from the next block.
@@ -158,16 +153,21 @@ async fn start_client_components(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use ethers::types::Address as EthAddress;
     use std::process::Child;
 
     use super::*;
     use crate::config::BridgeNodeConfig;
+    use crate::config::EthConfig;
+    use crate::config::SuiConfig;
+    use crate::e2e_test_utils::deploy_sol_contract;
+    use crate::e2e_test_utils::get_eth_signer_client_e2e_test_only;
     use crate::e2e_test_utils::wait_for_server_to_be_up;
     use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
+    use sui_types::bridge::BridgeChainId;
     use sui_types::crypto::get_key_pair;
     use sui_types::crypto::EncodeDecodeBase64;
     use sui_types::crypto::KeypairTraits;
@@ -177,12 +177,10 @@ mod tests {
     use tempfile::tempdir;
     use test_cluster::TestClusterBuilder;
 
-    const DUMMY_ETH_ADDRESS: &str = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
-
     #[tokio::test]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, mut child) = setup().await;
+        let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
 
         // prepare node config (server only)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -196,16 +194,22 @@ mod tests {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
-            sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
-            eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
-            eth_addresses: vec![DUMMY_ETH_ADDRESS.into()],
+            sui: SuiConfig {
+                sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
+                sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
+                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_gas_object: None,
+                sui_bridge_module_last_processed_event_id_override: None,
+            },
+            eth: EthConfig {
+                eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
+                eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
+                eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+                eth_contracts_start_block_override: None,
+            },
             approved_governance_actions: vec![],
             run_client: false,
-            bridge_client_key_path_base64_sui_key: None,
-            bridge_client_gas_object: None,
             db_path: None,
-            eth_bridge_contracts_start_block_override: None,
-            sui_bridge_module_last_processed_event_id_override: None,
         };
         // Spawn bridge node in memory
         tokio::spawn(async move {
@@ -222,7 +226,7 @@ mod tests {
     #[tokio::test]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, mut child) = setup().await;
+        let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
 
         // prepare node config (server + client)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -244,22 +248,25 @@ mod tests {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
-            sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
-            eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
-            eth_addresses: vec![DUMMY_ETH_ADDRESS.into()],
+            sui: SuiConfig {
+                sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
+                sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
+                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_gas_object: None,
+                sui_bridge_module_last_processed_event_id_override: Some(EventID {
+                    tx_digest: TransactionDigest::random(),
+                    event_seq: 0,
+                }),
+            },
+            eth: EthConfig {
+                eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
+                eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
+                eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+                eth_contracts_start_block_override: Some(0),
+            },
             approved_governance_actions: vec![],
             run_client: true,
-            bridge_client_key_path_base64_sui_key: None,
-            bridge_client_gas_object: None,
             db_path: Some(db_path),
-            eth_bridge_contracts_start_block_override: Some(BTreeMap::from_iter(vec![(
-                DUMMY_ETH_ADDRESS.into(),
-                0,
-            )])),
-            sui_bridge_module_last_processed_event_id_override: Some(EventID {
-                tx_digest: TransactionDigest::random(),
-                event_seq: 0,
-            }),
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
@@ -279,7 +286,7 @@ mod tests {
     #[tokio::test]
     async fn test_starting_bridge_node_with_client_and_separate_client_key() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, mut child) = setup().await;
+        let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
 
         // prepare node config (server + client)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -311,22 +318,25 @@ mod tests {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
-            sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
-            eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
-            eth_addresses: vec![DUMMY_ETH_ADDRESS.into()],
+            sui: SuiConfig {
+                sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
+                sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
+                bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
+                bridge_client_gas_object: Some(gas_obj),
+                sui_bridge_module_last_processed_event_id_override: Some(EventID {
+                    tx_digest: TransactionDigest::random(),
+                    event_seq: 0,
+                }),
+            },
+            eth: EthConfig {
+                eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
+                eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
+                eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+                eth_contracts_start_block_override: Some(0),
+            },
             approved_governance_actions: vec![],
             run_client: true,
-            bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
-            bridge_client_gas_object: Some(gas_obj),
             db_path: Some(db_path),
-            eth_bridge_contracts_start_block_override: Some(BTreeMap::from_iter(vec![(
-                DUMMY_ETH_ADDRESS.into(),
-                0,
-            )])),
-            sui_bridge_module_last_processed_event_id_override: Some(EventID {
-                tx_digest: TransactionDigest::random(),
-                event_seq: 0,
-            }),
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
@@ -343,7 +353,15 @@ mod tests {
         res.unwrap();
     }
 
-    async fn setup() -> (test_cluster::TestCluster, u16, Child) {
+    async fn setup() -> (test_cluster::TestCluster, u16, Child, EthAddress) {
+        // Start eth node with anvil
+        let anvil_port = get_available_port("127.0.0.1");
+        let eth_node_process = std::process::Command::new("anvil")
+            .arg("--port")
+            .arg(anvil_port.to_string())
+            .spawn()
+            .expect("Failed to start anvil");
+
         let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .build_with_bridge(true)
@@ -353,14 +371,34 @@ mod tests {
             .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
             .await;
 
-        // Start eth node with anvil
-        let anvil_port = get_available_port("127.0.0.1");
-        let eth_node_process = std::process::Command::new("anvil")
-            .arg("--port")
-            .arg(anvil_port.to_string())
-            .spawn()
-            .expect("Failed to start anvil");
-
-        (test_cluster, anvil_port, eth_node_process)
+        let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+        let bridge_authority_keys = test_cluster
+            .bridge_authority_keys
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|k| k.copy())
+            .collect::<Vec<_>>();
+        let anvil_url = format!("http://127.0.0.1:{}", anvil_port);
+        let (eth_signer_0, eth_private_key_hex_0) = get_eth_signer_client_e2e_test_only(&anvil_url)
+            .await
+            .unwrap();
+        tokio::task::spawn(async move {
+            deploy_sol_contract(
+                &anvil_url,
+                eth_signer_0,
+                bridge_authority_keys,
+                tx_ack,
+                eth_private_key_hex_0,
+            )
+            .await
+        });
+        let address = rx_ack.await.unwrap();
+        (
+            test_cluster,
+            anvil_port,
+            eth_node_process,
+            address.sui_bridge,
+        )
     }
 }

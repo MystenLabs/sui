@@ -529,7 +529,11 @@ impl TestCluster {
             let server_url = format!("http://127.0.0.1:{}", port);
             tasks.push(wait_for_server_to_be_up(server_url, timeout_sec));
         }
-        join_all(tasks).await;
+        join_all(tasks)
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<Vec<_>>>()
+            .unwrap();
     }
 
     pub async fn get_mut_bridge_arg(&self) -> Option<ObjectArg> {

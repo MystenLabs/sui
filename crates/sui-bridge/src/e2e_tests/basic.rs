@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{eth_sui_bridge, EthBridgeCommittee, EthBridgeEvent, EthSuiBridge};
+use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::config::BridgeNodeConfig;
-use crate::crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes};
+use crate::config::{BridgeNodeConfig, EthConfig, SuiConfig};
+use crate::e2e_test_utils::deploy_sol_contract;
+use crate::e2e_test_utils::get_eth_signer_client_e2e_test_only;
 use crate::e2e_test_utils::publish_coins_return_add_coins_on_sui_action;
 use crate::events::SuiBridgeEvent;
 use crate::node::run_bridge_node;
@@ -17,14 +18,10 @@ use eth_sui_bridge::EthSuiBridgeEvents;
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use move_core_types::ident_str;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
-use std::fs::File;
-use std::io::Read;
-use std::io::Write;
+use std::collections::HashMap;
+
 use std::path::Path;
-use std::process::Command;
-use std::str::FromStr;
+
 use std::sync::Arc;
 use sui_config::local_ip_utils::get_available_port;
 use sui_json_rpc_types::{
@@ -34,7 +31,6 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::bridge::{BridgeChainId, BridgeTokenMetadata, BRIDGE_MODULE_NAME, TOKEN_ID_ETH};
-use sui_types::committee::TOTAL_VOTING_POWER;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -43,19 +39,7 @@ use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
 use tempfile::tempdir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
-use tracing::{error, info};
-
-use crate::utils::get_eth_signer_client;
-
-pub const BRIDGE_COMMITTEE_NAME: &str = "BridgeCommittee";
-pub const SUI_BRIDGE_NAME: &str = "SuiBridge";
-pub const BRIDGE_CONFIG_NAME: &str = "BridgeConfig";
-pub const BRIDGE_LIMITER_NAME: &str = "BridgeLimiter";
-pub const BRIDGE_VAULT_NAME: &str = "BridgeVault";
-pub const BTC_NAME: &str = "BTC";
-pub const ETH_NAME: &str = "ETH";
-pub const USDC_NAME: &str = "USDC";
-pub const USDT_NAME: &str = "USDT";
+use tracing::info;
 
 #[tokio::test]
 async fn test_bridge_from_eth_to_sui_to_eth() {
@@ -286,6 +270,30 @@ async fn test_add_new_coins_on_sui() {
         1, // seq num
     )
     .await;
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    let bridge_authority_keys = test_cluster
+        .bridge_authority_keys
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|k| k.copy())
+        .collect::<Vec<_>>();
+    let anvil_url = format!("http://127.0.0.1:{}", anvil_port);
+    let (eth_signer_0, eth_private_key_hex_0) = get_eth_signer_client_e2e_test_only(&anvil_url)
+        .await
+        .unwrap();
+    tokio::task::spawn(async move {
+        deploy_sol_contract(
+            &anvil_url,
+            eth_signer_0,
+            bridge_authority_keys,
+            tx_ack,
+            eth_private_key_hex_0,
+        )
+        .await
+    });
+    let deployed_contracts = rx_ack.await.unwrap();
+    info!("Deployed contracts: {:?}", deployed_contracts);
 
     // TODO: do not block on `build_with_bridge`, return with bridge keys immediately
     // to parallize the setup.
@@ -296,7 +304,7 @@ async fn test_add_new_coins_on_sui() {
     start_bridge_cluster(
         &test_cluster,
         anvil_port,
-        "0x0000000000000000000000000000000000000000".into(),
+        deployed_contracts.sui_bridge_addrress_hex(),
         vec![
             vec![action.clone()],
             vec![action.clone()],
@@ -305,7 +313,7 @@ async fn test_add_new_coins_on_sui() {
         ],
     )
     .await;
-    test_cluster.wait_for_bridge_cluster_to_be_up(5).await;
+    test_cluster.wait_for_bridge_cluster_to_be_up(10).await;
     info!("Bridge cluster is up");
     let bridge_committee = Arc::new(
         sui_bridge_client
@@ -366,172 +374,7 @@ async fn test_add_new_coins_on_sui() {
     eth_node_process.kill().unwrap();
 }
 
-async fn deploy_sol_contract(
-    anvil_url: &str,
-    eth_signer: EthSigner,
-    bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
-    tx: tokio::sync::oneshot::Sender<DeployedSolContracts>,
-    eth_private_key_hex: String,
-) {
-    let sol_path = format!("{}/../../bridge/evm", env!("CARGO_MANIFEST_DIR"));
-
-    // Write the deploy config to a temp file then provide it to the forge late
-    let deploy_config_path = tempfile::tempdir()
-        .unwrap()
-        .into_path()
-        .join("sol_deploy_config.json");
-    let node_len = bridge_authority_keys.len();
-    let stake = TOTAL_VOTING_POWER / (node_len as u64);
-    let committee_members = bridge_authority_keys
-        .iter()
-        .map(|k| {
-            format!(
-                "0x{:x}",
-                BridgeAuthorityPublicKeyBytes::from(&k.public).to_eth_address()
-            )
-        })
-        .collect::<Vec<_>>();
-    let committee_member_stake = vec![stake; node_len];
-    let deploy_config = SolDeployConfig {
-        committee_member_stake: committee_member_stake.clone(),
-        committee_members: committee_members.clone(),
-        min_committee_stake_required: 10000,
-        source_chain_id: 12,
-        supported_chain_ids: vec![1, 2, 3],
-        supported_chain_limits_in_dollars: vec![
-            1000000000000000,
-            1000000000000000,
-            1000000000000000,
-        ],
-        supported_tokens: vec![], // this is set up in the deploy script
-        token_prices: vec![12800, 432518900, 25969600, 10000, 10000],
-    };
-
-    let serialized_config = serde_json::to_string_pretty(&deploy_config).unwrap();
-    tracing::debug!(
-        "Serialized config written to {:?}: {:?}",
-        deploy_config_path,
-        serialized_config
-    );
-    let mut file = File::create(deploy_config_path.clone()).unwrap();
-    file.write_all(serialized_config.as_bytes()).unwrap();
-
-    // override for the deploy script
-    std::env::set_var("OVERRIDE_CONFIG_PATH", deploy_config_path.to_str().unwrap());
-    std::env::set_var("PRIVATE_KEY", eth_private_key_hex);
-    std::env::set_var("ETHERSCAN_API_KEY", "n/a");
-
-    info!("Deploying solidity contracts");
-    Command::new("forge")
-        .current_dir(sol_path.clone())
-        .arg("clean")
-        .status()
-        .expect("Failed to execute `forge clean`");
-
-    let mut child = Command::new("forge")
-        .current_dir(sol_path)
-        .arg("script")
-        .arg("script/deploy_bridge.s.sol")
-        .arg("--fork-url")
-        .arg(anvil_url)
-        .arg("--broadcast")
-        .arg("--ffi")
-        .arg("--chain")
-        .arg("31337")
-        .stdout(std::process::Stdio::piped()) // Capture stdout
-        .stderr(std::process::Stdio::piped()) // Capture stderr
-        .spawn()
-        .unwrap();
-
-    let mut stdout = child.stdout.take().expect("Failed to open stdout");
-    let mut stderr = child.stderr.take().expect("Failed to open stderr");
-
-    // Read stdout/stderr to String
-    let mut s = String::new();
-    stdout.read_to_string(&mut s).unwrap();
-    let mut e = String::new();
-    stderr.read_to_string(&mut e).unwrap();
-
-    // Wait for the child process to finish and collect its status
-    let status = child.wait().unwrap();
-    if status.success() {
-        info!("Solidity contract deployment finished successfully");
-    } else {
-        error!(
-            "Solidity contract deployment exited with code: {:?}",
-            status.code()
-        );
-    }
-    println!("Stdout: {}", s);
-    println!("Stdout: {}", e);
-
-    let mut deployed_contracts = BTreeMap::new();
-    // Process the stdout to parse contract addresses
-    for line in s.lines() {
-        if line.contains("[Deployed]") {
-            let replaced_line = line.replace("[Deployed]", "");
-            let trimmed_line = replaced_line.trim();
-            let parts: Vec<&str> = trimmed_line.split(':').collect();
-            if parts.len() == 2 {
-                let contract_name = parts[0].to_string().trim().to_string();
-                let contract_address = EthAddress::from_str(parts[1].to_string().trim()).unwrap();
-                deployed_contracts.insert(contract_name, contract_address);
-            }
-        }
-    }
-
-    let contracts = DeployedSolContracts {
-        sui_bridge: *deployed_contracts.get(SUI_BRIDGE_NAME).unwrap(),
-        bridge_committee: *deployed_contracts.get(BRIDGE_COMMITTEE_NAME).unwrap(),
-        bridge_config: *deployed_contracts.get(BRIDGE_CONFIG_NAME).unwrap(),
-        bridge_limiter: *deployed_contracts.get(BRIDGE_LIMITER_NAME).unwrap(),
-        bridge_vault: *deployed_contracts.get(BRIDGE_VAULT_NAME).unwrap(),
-        btc: *deployed_contracts.get(BTC_NAME).unwrap(),
-        eth: *deployed_contracts.get(ETH_NAME).unwrap(),
-        usdc: *deployed_contracts.get(USDC_NAME).unwrap(),
-        usdt: *deployed_contracts.get(USDT_NAME).unwrap(),
-    };
-    let eth_bridge_committee =
-        EthBridgeCommittee::new(contracts.bridge_committee, eth_signer.clone().into());
-    for (i, (m, s)) in committee_members
-        .iter()
-        .zip(committee_member_stake.iter())
-        .enumerate()
-    {
-        let eth_address = EthAddress::from_str(m).unwrap();
-        assert_eq!(
-            eth_bridge_committee
-                .committee_index(eth_address)
-                .await
-                .unwrap(),
-            i as u8
-        );
-        assert_eq!(
-            eth_bridge_committee
-                .committee_stake(eth_address)
-                .await
-                .unwrap(),
-            *s as u16
-        );
-        assert!(!eth_bridge_committee.blocklist(eth_address).await.unwrap());
-    }
-    tx.send(contracts).unwrap();
-}
-
-pub async fn get_eth_signer_client_e2e_test_only(
-    eth_rpc_url: &str,
-) -> anyhow::Result<(EthSigner, String)> {
-    // This private key is derived from the default anvil setting.
-    // Mnemonic:          test test test test test test test test test test test junk
-    // Derivation path:   m/44'/60'/0'/0/
-    // DO NOT USE IT ANYWHERE ELSE EXCEPT FOR RUNNING AUTOMATIC INTEGRATION TESTING
-    let url = eth_rpc_url.to_string();
-    let private_key_0 = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356";
-    let signer_0 = get_eth_signer_client(&url, private_key_0).await?;
-    Ok((signer_0, private_key_0.to_string()))
-}
-
-async fn deposit_native_eth_to_sol_contract(
+pub async fn deposit_native_eth_to_sol_contract(
     signer: &EthSigner,
     contract_address: EthAddress,
     sui_recipient_address: SuiAddress,
@@ -593,19 +436,22 @@ async fn start_bridge_cluster(
             server_listen_port: *server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: authority_key_path,
-            sui_rpc_url: test_cluster.fullnode_handle.rpc_url.clone(),
-            eth_rpc_url: eth_rpc_url.clone(),
-            eth_addresses: vec![eth_bridge_contract_address.clone()],
             approved_governance_actions,
             run_client: true,
-            bridge_client_key_path_base64_sui_key: None,
-            bridge_client_gas_object: None,
             db_path: Some(db_path),
-            eth_bridge_contracts_start_block_override: Some(BTreeMap::from_iter(vec![(
-                eth_bridge_contract_address.clone(),
-                0,
-            )])),
-            sui_bridge_module_last_processed_event_id_override: None,
+            eth: EthConfig {
+                eth_rpc_url: eth_rpc_url.clone(),
+                eth_bridge_proxy_address: eth_bridge_contract_address.clone(),
+                eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+                eth_contracts_start_block_override: Some(0),
+            },
+            sui: SuiConfig {
+                sui_rpc_url: test_cluster.fullnode_handle.rpc_url.clone(),
+                sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
+                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_gas_object: None,
+                sui_bridge_module_last_processed_event_id_override: None,
+            },
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
@@ -614,19 +460,6 @@ async fn start_bridge_cluster(
             run_bridge_node(config_clone).await.unwrap();
         });
     }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SolDeployConfig {
-    committee_member_stake: Vec<u64>,
-    committee_members: Vec<String>,
-    min_committee_stake_required: u64,
-    source_chain_id: u64,
-    supported_chain_ids: Vec<u64>,
-    supported_chain_limits_in_dollars: Vec<u64>,
-    supported_tokens: Vec<String>,
-    token_prices: Vec<u64>,
 }
 
 async fn deposit_eth_to_sui_package(
@@ -672,30 +505,6 @@ async fn deposit_eth_to_sui_package(
     );
     let tx = wallet_context.sign_transaction(&tx_data);
     wallet_context.execute_transaction_must_succeed(tx).await
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-struct DeployedSolContracts {
-    pub sui_bridge: EthAddress,
-    pub bridge_committee: EthAddress,
-    pub bridge_limiter: EthAddress,
-    pub bridge_vault: EthAddress,
-    pub bridge_config: EthAddress,
-    pub btc: EthAddress,
-    pub eth: EthAddress,
-    pub usdc: EthAddress,
-    pub usdt: EthAddress,
-}
-
-impl DeployedSolContracts {
-    fn eth_adress_to_hex(addr: EthAddress) -> String {
-        format!("{:x}", addr)
-    }
-
-    pub fn sui_bridge_addrress_hex(&self) -> String {
-        Self::eth_adress_to_hex(self.sui_bridge)
-    }
 }
 
 async fn init_eth_to_sui_bridge(
