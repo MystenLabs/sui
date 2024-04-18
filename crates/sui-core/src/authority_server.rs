@@ -554,6 +554,7 @@ impl ValidatorService {
             state,
             consensus_adapter,
             metrics,
+            traffic_controller: _,
         } = self;
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -777,22 +778,6 @@ impl ValidatorService {
             })
     }
 
-    async fn handle_soft_bundle_certificates_v2(
-        &self,
-        request: tonic::Request<SoftBundleCertifiedTransactions>,
-    ) -> Result<tonic::Response<HandleSoftBundleCertificatesResponseV2>, tonic::Status> {
-        let bundle = request.into_inner();
-        for cert in &bundle.certificates {
-            cert.verify_user_input()?;
-        }
-        let validator_service = self.clone();
-        let span = error_span!("handle_soft_bundle_certificates");
-        Self::handle_soft_bundle_certificates(validator_service, bundle.certificates)
-            .instrument(span)
-            .await
-            .map(|v| tonic::Response::new(v))
-    }
-
     async fn object_info_impl(
         &self,
         request: tonic::Request<ObjectInfoRequest>,
@@ -997,6 +982,22 @@ impl Validator for ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         handle_with_decoration!(self, handle_certificate_v2_impl, request)
+    }
+
+    async fn handle_soft_bundle_certificates_v2(
+        &self,
+        request: tonic::Request<SoftBundleCertifiedTransactions>,
+    ) -> Result<tonic::Response<HandleSoftBundleCertificatesResponseV2>, tonic::Status> {
+        let bundle = request.into_inner();
+        for cert in &bundle.certificates {
+            cert.verify_user_input()?;
+        }
+        let validator_service = self.clone();
+        let span = error_span!("handle_soft_bundle_certificates");
+        Self::handle_soft_bundle_certificates(validator_service, bundle.certificates)
+            .instrument(span)
+            .await
+            .map(|v| tonic::Response::new(v))
     }
 
     async fn object_info(

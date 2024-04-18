@@ -404,7 +404,7 @@ pub async fn send_batch_consensus(
             transactions,
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
-            &authority.metrics.skipped_consensus_txns,
+            &authority.metrics,
         )
         .await
         .unwrap();
