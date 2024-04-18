@@ -36,6 +36,7 @@ exclude = [
   "external-crates/move/crates/move-ir-to-bytecode-syntax",
   "external-crates/move/crates/move-ir-types",
   "external-crates/move/crates/move-model",
+  "external-crates/move/crates/move-model-2",
   "external-crates/move/crates/move-package",
   "external-crates/move/crates/move-proc-macros",
   "external-crates/move/crates/move-prover",
@@ -556,6 +557,7 @@ move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
+move-model-2 = { path = "external-crates/move/crates/move-model-2" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }

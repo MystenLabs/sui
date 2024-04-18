@@ -2031,6 +2031,14 @@ impl CompiledModule {
         result
     }
 
+    pub fn find_function_def_by_name(&self, name: impl AsRef<str>) -> Option<&FunctionDefinition> {
+        let name: &str = name.as_ref();
+        self.function_defs().iter().find(|def| {
+            let handle = self.function_handle_at(def.function);
+            name == self.identifier_at(handle.name).as_str()
+        })
+    }
+
     pub fn module_handles(&self) -> &[ModuleHandle] {
         &self.module_handles
     }
@@ -2111,10 +2119,11 @@ impl CompiledModule {
         self.struct_defs().iter().find(|d| d.struct_handle == idx)
     }
 
-    pub fn find_struct_def_by_name(&self, name: &IdentStr) -> Option<&StructDefinition> {
+    pub fn find_struct_def_by_name(&self, name: impl AsRef<str>) -> Option<&StructDefinition> {
+        let name: &str = name.as_ref();
         self.struct_defs().iter().find(|def| {
             let handle = self.struct_handle_at(def.struct_handle);
-            name == self.identifier_at(handle.name)
+            name == self.identifier_at(handle.name).as_str()
         })
     }
 

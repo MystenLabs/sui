@@ -201,7 +201,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             .expect("Failed to resolve module");
         let def = declaring_module
             .borrow()
-            .find_struct_def_by_name(name)
+            .find_struct_def_by_name(name.as_str())
             .unwrap_or_else(|| {
                 panic!(
                     "Could not find struct named {} in module {}",
@@ -483,7 +483,7 @@ impl StructLayoutBuilder {
         };
         let def = module
             .borrow()
-            .find_struct_def_by_name(name)
+            .find_struct_def_by_name(name.as_str())
             .ok_or_else(|| {
                 anyhow!(
                     "Could not find struct named {} in module {}",
