@@ -110,7 +110,7 @@ impl TransactionBuilder {
         let gas_payment = self
             .input_refs(gas_payment.unwrap_or_default().as_ref())
             .await
-            .unwrap_or_else(|_| vec![]);
+            .unwrap_or_default();
         let gas_sponsor = gas_sponsor.unwrap_or(sender);
         TransactionData::new_with_gas_coins_allow_sponsor(
             kind,
@@ -274,14 +274,7 @@ impl TransactionBuilder {
     pub async fn input_refs(
         &self,
         input_coins: &[ObjectID],
-    ) -> Result<
-        Vec<(
-            ObjectID,
-            sui_types::base_types::SequenceNumber,
-            sui_types::digests::ObjectDigest,
-        )>,
-        anyhow::Error,
-    > {
+    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         let handles: Vec<_> = input_coins
             .iter()
             .map(|id| self.get_object_ref(*id))
