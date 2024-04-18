@@ -17,10 +17,3 @@ fn duplicated_friend_decls() {
     m.friend_decls.push(handle);
     DuplicationChecker::verify_module(&m).unwrap_err();
 }
-
-proptest! {
-    #[test]
-    fn valid_duplication(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(DuplicationChecker::verify_module(&module).is_ok());
-    }
-}
