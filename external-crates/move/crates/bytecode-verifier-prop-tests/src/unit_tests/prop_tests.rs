@@ -1,9 +1,25 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::file_format::CompiledModule;
-use move_bytecode_verifier::ability_field_requirements;
-use proptest::prelude::*;
+use invalid_mutations::{
+    bounds::{
+        ApplyCodeUnitBoundsContext, ApplyOutOfBoundsContext, CodeUnitBoundsMutation,
+        OutOfBoundsMutation,
+    },
+    signature::{FieldRefMutation, SignatureRefMutation},
+};
+use move_binary_format::{
+    check_bounds::BoundsChecker, file_format::CompiledModule,
+    proptest_types::CompiledModuleStrategyGen,
+};
+use move_bytecode_verifier::{
+    ability_field_requirements, constants, instantiation_loops::InstantiationLoopChecker,
+    DuplicationChecker, InstructionConsistency, RecursiveStructDefChecker, SignatureChecker,
+};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
+};
+use proptest::{collection::vec, prelude::*, sample::Index as PropIndex};
 
 proptest! {
     // Generating arbitrary compiled modules is really slow, possibly because of
