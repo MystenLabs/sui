@@ -36,13 +36,6 @@ mod test_dag_builder;
 #[cfg(test)]
 mod test_dag_parser;
 
-#[cfg(test)]
-mod test_dag;
-#[cfg(test)]
-mod test_dag_builder;
-#[cfg(test)]
-mod test_dag_parser;
-
 pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, Round};
 pub use commit::{CommitConsumer, CommitIndex, CommittedSubDag};

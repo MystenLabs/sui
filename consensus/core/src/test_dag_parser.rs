@@ -21,7 +21,36 @@ use crate::{
 };
 
 /// DagParser
-// todo: Add usage doc comment
+///
+/// Usage:
+///
+/// ```
+/// let dag_str = "DAG {
+///     Round 0 : { 4 },
+///     Round 1 : { * },
+///     Round 2 : { * },
+///     Round 3 : { * },
+///     Round 4 : {
+///         A -> [-D3],
+///         B -> [*],
+///         C -> [*],
+///         D -> [*],
+///     },
+///     Round 5 : {
+///         A -> [*],
+///         B -> [*],
+///         C -> [A4],
+///         D -> [A4],
+///     },
+///     Round 6 : { * },
+///     Round 7 : { * },
+///     Round 8 : { * },
+///     }";
+///
+/// let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag"); // parse DAG DSL
+/// dag_builder.print(); // print the parsed DAG
+/// dag_builder.persist_all_blocks(dag_state.clone()); // persist all blocks to DagState
+/// ```
 
 pub(crate) fn parse_dag(dag_string: &str) -> IResult<&str, DagBuilder> {
     let (input, _) = tuple((tag("DAG"), multispace0, char('{')))(dag_string)?;
@@ -100,7 +129,7 @@ fn parse_specified_connections<'a>(
     // case 2: specific included authorities; [A0, B0, C0]
     // case 3: specific excluded authorities;  [-A0]
     // case 4: mixed all authorities + specific included/excluded authorities; [*, A0]
-    // todo: case 5: byzantine case of multiple blocks per slot; [*]; timestamp=1
+    // TODO: case 5: byzantine case of multiple blocks per slot; [*]; timestamp=1
     let (input, authors_and_connections) = many0(parse_author_and_connections)(input)?;
 
     let mut output = Vec::new();
@@ -397,7 +426,7 @@ mod tests {
         assert_eq!(actual_author, expected_authority);
         assert_eq!(actual_connections, ["*", "A0", "-B0"]);
 
-        // todo: case 5: byzantine case of multiple blocks per slot; [*]; timestamp=1
+        // TODO: case 5: byzantine case of multiple blocks per slot; [*]; timestamp=1
     }
 
     #[test]
