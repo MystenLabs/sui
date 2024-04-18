@@ -381,15 +381,22 @@ impl ConsensusAdapter {
     fn await_submit_delay(
         &self,
         committee: &Committee,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
     ) -> (impl Future<Output = ()>, usize, usize, usize) {
-        let (duration, position, positions_moved, preceding_disconnected) = match &transaction.kind
-        {
-            ConsensusTransactionKind::UserTransaction(certificate) => {
-                self.await_submit_delay_user_transaction(committee, certificate.digest())
-            }
-            _ => (Duration::ZERO, 0, 0, 0),
-        };
+        // Use the first tx's digest to compute submit delay, after sorting the transactions by digest.
+        let mut txs_sorted = transactions.clone();
+        txs_sorted.sort_by_key(|tx| match &tx.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => certificate.digest().clone(),
+            _ => TransactionDigest::default(),
+        });
+
+        let (duration, position, positions_moved, preceding_disconnected) =
+            match &txs_sorted[0].kind {
+                ConsensusTransactionKind::UserTransaction(certificate) => {
+                    self.await_submit_delay_user_transaction(committee, certificate.digest())
+                }
+                _ => (Duration::ZERO, 0, 0, 0),
+            };
         (
             tokio::time::sleep(duration),
             position,
@@ -679,7 +686,7 @@ impl ConsensusAdapter {
         pin_mut!(processed_waiter);
 
         let (await_submit, position, positions_moved, preceding_disconnected) =
-            self.await_submit_delay(epoch_store.committee(), &transaction);
+            self.await_submit_delay(epoch_store.committee(), &transactions);
         let mut guard = InflightDropGuard::acquire(&self, tx_type.to_string());
 
         let processed_waiter = tokio::select! {
