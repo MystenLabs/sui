@@ -1071,15 +1071,7 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .tx_data(
-                        sender,
-                        tx_kind,
-                        vec![],
-                        gas_budget,
-                        gas_price,
-                        gas.map(|x| vec![x]),
-                        None,
-                    )
+                    .tx_data(sender, tx_kind, vec![], gas_budget, gas_price, gas, None)
                     .await?;
                 let result = serialize_or_execute!(
                     data,
@@ -1172,15 +1164,7 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .tx_data(
-                        sender,
-                        tx_kind,
-                        vec![],
-                        gas_budget,
-                        gas_price,
-                        gas.map(|x| vec![x]),
-                        None,
-                    )
+                    .tx_data(sender, tx_kind, vec![], gas_budget, gas_price, gas, None)
                     .await?;
 
                 let result = serialize_or_execute!(
@@ -1391,7 +1375,7 @@ impl SuiClientCommands {
                         input_coins,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]),
+                        gas,
                         None,
                     )
                     .await?;
@@ -1435,15 +1419,7 @@ impl SuiClientCommands {
                 }
                 let data = client
                     .transaction_builder()
-                    .tx_data(
-                        from,
-                        tx_kind,
-                        vec![],
-                        gas_budget,
-                        gas_price,
-                        gas.map(|x| vec![x]),
-                        None,
-                    )
+                    .tx_data(from, tx_kind, vec![], gas_budget, gas_price, gas, None)
                     .await?;
                 serialize_or_execute!(
                     data,
@@ -1490,7 +1466,7 @@ impl SuiClientCommands {
                         vec![],
                         gas_budget,
                         gas_price,
-                        Some(vec![object_id]),
+                        Some(object_id),
                         Some(from),
                     )
                     .await?;
@@ -1548,7 +1524,6 @@ impl SuiClientCommands {
                     }
                 }
 
-                let gas_payment = gas.map(|x| vec![x]);
                 if dry_run {
                     return execute_dry_run(
                         context,
@@ -1556,7 +1531,7 @@ impl SuiClientCommands {
                         kind,
                         gas_budget,
                         gas_price,
-                        gas_payment,
+                        gas.map(|x| vec![x]),
                         None,
                     )
                     .await;
@@ -1564,15 +1539,7 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .tx_data(
-                        from,
-                        kind,
-                        input_coins,
-                        gas_budget,
-                        gas_price,
-                        gas_payment,
-                        None,
-                    )
+                    .tx_data(from, kind, input_coins, gas_budget, gas_price, gas, None)
                     .await?;
                 serialize_or_execute!(
                     data,
@@ -1642,7 +1609,7 @@ impl SuiClientCommands {
                         vec![],
                         gas_budget,
                         gas_price,
-                        Some(input_coins),
+                        input_coins.first().copied(),
                         Some(signer),
                     )
                     .await?;
@@ -1693,7 +1660,7 @@ impl SuiClientCommands {
                         vec![],
                         gas_budget,
                         gas_price,
-                        Some(input_coins),
+                        input_coins.first().copied(),
                         None,
                     )
                     .await?;
@@ -1847,7 +1814,7 @@ impl SuiClientCommands {
                         vec![coin_id],
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]),
+                        gas,
                         None,
                     )
                     .await?;
@@ -1895,7 +1862,7 @@ impl SuiClientCommands {
                         vec![primary_coin, coin_to_merge],
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]),
+                        gas,
                         None,
                     )
                     .await?;

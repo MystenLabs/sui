@@ -133,22 +133,11 @@ impl TransactionBuilder {
         input_coins: Vec<ObjectID>,
         gas_budget: u64,
         gas_price: u64,
-        gas_payment: Option<Vec<ObjectID>>,
+        gas_payment: Option<ObjectID>,
         gas_sponsor: Option<SuiAddress>,
     ) -> Result<TransactionData, anyhow::Error> {
-        let input_gas = if let Some(ref gas_payment) = gas_payment {
-            gas_payment.first()
-        } else {
-            None
-        };
         let gas_payment = self
-            .select_gas(
-                sender,
-                input_gas.copied(),
-                gas_budget,
-                input_coins,
-                gas_price,
-            )
+            .select_gas(sender, gas_payment, gas_budget, input_coins, gas_price)
             .await?;
         Ok(TransactionData::new_with_gas_coins_allow_sponsor(
             kind,
