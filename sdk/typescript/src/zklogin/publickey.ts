@@ -114,7 +114,7 @@ async function graphqlVerifyZkLoginSignature({
 	bytes,
 	signature,
 	client = new SuiGraphQLClient({
-		url: 'https://sui-testnet.mystenlabs.com/graphql',
+		url: 'https://sui-mainnet.mystenlabs.com/graphql',
 	}),
 }: {
 	address: string;
