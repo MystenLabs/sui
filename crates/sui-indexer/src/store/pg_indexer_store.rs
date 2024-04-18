@@ -70,6 +70,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
+const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -178,7 +179,7 @@ impl PgIndexerStore {
                     .context("Failed to write display updates to PostgresDB")?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )?;
 
         Ok(())
@@ -222,7 +223,7 @@ impl PgIndexerStore {
                     .context("Failed to write object mutation to PostgresDB")?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -258,7 +259,7 @@ impl PgIndexerStore {
 
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -327,7 +328,7 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -387,7 +388,7 @@ impl PgIndexerStore {
 
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -410,7 +411,7 @@ impl PgIndexerStore {
                     conn,
                 )
             },
-            Duration::from_secs(10)
+            PG_DB_COMMIT_SLEEP_DURATION
         )?;
         Ok(())
     }
@@ -449,7 +450,7 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -492,7 +493,7 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -528,7 +529,7 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -566,7 +567,7 @@ impl PgIndexerStore {
                 }
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -633,7 +634,7 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
             .tap(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
@@ -662,7 +663,7 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
             .tap(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
@@ -689,7 +690,7 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
             .tap(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
@@ -715,7 +716,7 @@ impl PgIndexerStore {
                     }
                     Ok::<(), IndexerError>(())
                 },
-                Duration::from_secs(60)
+                PG_DB_COMMIT_SLEEP_DURATION
             )
             .tap(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
@@ -792,7 +793,7 @@ impl PgIndexerStore {
                     .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            PG_DB_COMMIT_SLEEP_DURATION
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
