@@ -168,6 +168,7 @@ mod ingestion_tests {
     pub async fn test_event_type() -> Result<(), IndexerError> {
         let mut sim = Simulacrum::new();
         let data_ingestion_path = tempdir().unwrap().into_path();
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         // Advance the epoch to generate some events.
         sim.advance_epoch(false);
@@ -207,6 +208,7 @@ mod ingestion_tests {
     pub async fn test_object_type() -> Result<(), IndexerError> {
         let mut sim = Simulacrum::new();
         let data_ingestion_path = tempdir().unwrap().into_path();
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         // Execute a simple transaction.
         let transfer_recipient = SuiAddress::random_for_testing_only();
