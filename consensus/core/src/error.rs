@@ -62,6 +62,9 @@ pub enum ConsensusError {
     #[error("Synchronizer for fetching blocks directly from {0} is saturated")]
     SynchronizerSaturated(AuthorityIndex),
 
+    #[error("Block rejected: {reason}")]
+    BlockRejected { reason: String },
+
     #[error("Ancestor is in wrong position: block {block_authority}, ancestor {ancestor_authority}, position {position}")]
     InvalidAncestorPosition {
         block_authority: AuthorityIndex,

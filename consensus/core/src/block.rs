@@ -591,6 +591,11 @@ impl TestBlock {
         self
     }
 
+    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+        self.block.commit_votes = commit_votes;
+        self
+    }
+
     pub(crate) fn build(self) -> Block {
         Block::V1(self.block)
     }

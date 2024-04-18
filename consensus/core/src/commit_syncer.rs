@@ -19,7 +19,7 @@
 //! commits have a simple dependency graph (linear), so it is easy to fetch ranges of commits
 //! in parallel.
 //!
-//! Commit sychronization is an expensive operation, involving transfering large amount of data via
+//! Commit synchronization is an expensive operation, involving transferring large amount of data via
 //! the network. And it is not on the critical path of block processing. So the heuristics for
 //! synchronization, including triggers and retries, should be chosen to favor throughput and
 //! efficient resource usage, over faster reactions.
@@ -68,7 +68,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
-        highest_commit_monitor: Arc<HighestCommitMonitor>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         network_client: Arc<C>,
         block_verifier: Arc<dyn BlockVerifier>,
         dag_state: Arc<RwLock<DagState>>,
@@ -77,7 +77,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         let inner = Arc::new(Inner {
             context,
             core_thread_dispatcher,
-            highest_commit_monitor,
+            commit_vote_monitor,
             network_client,
             block_verifier,
             dag_state,
@@ -120,7 +120,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             tokio::select! {
                 // Periodially, schedule new fetches if the node is falling behind.
                 _ = interval.tick() => {
-                    let quorum_commit_index = inner.highest_commit_monitor.quorum_commit_index(&inner.context);
+                    let quorum_commit_index = inner.commit_vote_monitor.quorum_commit_index();
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
@@ -434,15 +434,20 @@ impl<C: NetworkClient> CommitSyncer<C> {
     }
 }
 
-pub(crate) struct HighestCommitMonitor {
+/// Monitors commit votes from received and verified blocks,
+/// and keeps track of the highest commit voted by each authority and certified by a quorum.
+pub(crate) struct CommitVoteMonitor {
+    context: Arc<Context>,
     // Highest commit index voted by each authority.
     highest_voted_commits: Mutex<Vec<CommitIndex>>,
 }
 
-impl HighestCommitMonitor {
-    pub(crate) fn new(context: &Context) -> Self {
+impl CommitVoteMonitor {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
+        let highest_voted_commits = Mutex::new(vec![0; context.committee.size()]);
         Self {
-            highest_voted_commits: Mutex::new(vec![0; context.committee.size()]),
+            context,
+            highest_voted_commits,
         }
     }
 
@@ -460,11 +465,11 @@ impl HighestCommitMonitor {
     // When an authority votes for commit index S, it is also voting for all commit indices 1 <= i < S.
     // So the quorum commit index is the smallest index S such that the sum of stakes of authorities
     // voting for commit indices >= S passes the quorum threshold.
-    fn quorum_commit_index(&self, context: &Context) -> CommitIndex {
+    pub(crate) fn quorum_commit_index(&self) -> CommitIndex {
         let highest_voted_commits = self.highest_voted_commits.lock();
         let mut highest_voted_commits = highest_voted_commits
             .iter()
-            .zip(context.committee.authorities())
+            .zip(self.context.committee.authorities())
             .map(|(commit_index, (_, a))| (*commit_index, a.stake))
             .collect::<Vec<_>>();
         // Sort by commit index then stake, in descending order.
@@ -472,7 +477,7 @@ impl HighestCommitMonitor {
         let mut total_stake = 0;
         for (commit_index, stake) in highest_voted_commits {
             total_stake += stake;
-            if total_stake >= context.committee.quorum_threshold() {
+            if total_stake >= self.context.committee.quorum_threshold() {
                 return commit_index;
             }
         }
@@ -483,7 +488,7 @@ impl HighestCommitMonitor {
 struct Inner<C: NetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
-    highest_commit_monitor: Arc<HighestCommitMonitor>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     network_client: Arc<C>,
     block_verifier: Arc<dyn BlockVerifier>,
     dag_state: Arc<RwLock<DagState>>,
@@ -603,4 +608,55 @@ impl FetchState {
     }
 }
 
-// TODO: add unit and integration tests.
+// TODO: add more unit and integration tests.
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use super::CommitVoteMonitor;
+    use crate::{
+        block::{TestBlock, VerifiedBlock},
+        commit::{CommitDigest, CommitRef},
+        context::Context,
+    };
+
+    #[test]
+    fn test_commit_vote_monitor() {
+        let context = Arc::new(Context::new_for_test(4).0);
+        let monitor = CommitVoteMonitor::new(context.clone());
+
+        // Observe commit votes for indices 5, 6, 7, 8 from blocks.
+        let blocks = (0..4)
+            .map(|i| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(10, i)
+                        .set_commit_votes(vec![CommitRef::new(5 + i, CommitDigest::MIN)])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for b in blocks {
+            monitor.observe(&b);
+        }
+
+        // CommitIndex 6 is the highest index supported by a quorum.
+        assert_eq!(monitor.quorum_commit_index(), 6);
+
+        // Observe new blocks with new votes from authority 0 and 1.
+        let blocks = (0..2)
+            .map(|i| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(11, i)
+                        .set_commit_votes(vec![CommitRef::new(6 + i, CommitDigest::MIN), CommitRef::new(7 + i, CommitDigest::MIN)])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for b in blocks {
+            monitor.observe(&b);
+        }
+
+        // Highest commit index per authority should be 7, 8, 7, 8 now.
+        assert_eq!(monitor.quorum_commit_index(), 7);
+    }
+}

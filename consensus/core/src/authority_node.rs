@@ -15,7 +15,7 @@ use crate::{
     block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
-    commit_syncer::{CommitSyncer, HighestCommitMonitor},
+    commit_syncer::{CommitSyncer, CommitVoteMonitor},
     context::Context,
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
@@ -236,11 +236,11 @@ where
             block_verifier.clone(),
         );
 
-        let highest_commit_monitor = Arc::new(HighestCommitMonitor::new(&context));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_syncer = CommitSyncer::new(
             context.clone(),
             core_dispatcher.clone(),
-            highest_commit_monitor.clone(),
+            commit_vote_monitor.clone(),
             network_client.clone(),
             block_verifier.clone(),
             dag_state.clone(),
@@ -249,7 +249,7 @@ where
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            highest_commit_monitor,
+            commit_vote_monitor,
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
@@ -499,7 +499,7 @@ mod tests {
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            Arc::new(HighestCommitMonitor::new(&context)),
+            Arc::new(CommitVoteMonitor::new(context.clone())),
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
