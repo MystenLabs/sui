@@ -768,7 +768,7 @@ impl WritebackCache {
         }
     }
 
-    async fn commit_transactions(&self, digests: &[TransactionDigest]) -> SuiResult {
+    async fn persist_transactions(&self, digests: &[TransactionDigest]) -> SuiResult {
         let mut txns = Vec::with_capacity(digests.len());
         for tx_digest in digests {
             let Some(tx) = self
@@ -922,11 +922,11 @@ impl ExecutionCacheCommit for WritebackCache {
         WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
     }
 
-    fn commit_transactions<'a>(
+    fn persist_transactions<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult> {
-        WritebackCache::commit_transactions(self, digests).boxed()
+        WritebackCache::persist_transactions(self, digests).boxed()
     }
 }
 

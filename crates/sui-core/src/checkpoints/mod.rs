@@ -1048,7 +1048,7 @@ impl CheckpointBuilder {
         // and pending_consensus_transactions, and this method can be removed.
         self.state
             .get_cache_commit()
-            .commit_transactions(&all_tx_digests)
+            .persist_transactions(&all_tx_digests)
             .await?;
 
         batch.write()?;

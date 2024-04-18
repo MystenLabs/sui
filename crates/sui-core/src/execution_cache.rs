@@ -83,7 +83,7 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// This is an intermediate solution until we delay commits to the epoch db. After
     /// we have done that, crash recovery will be done by re-processing consensus commits
     /// and pending_consensus_transactions, and this method can be removed.
-    fn commit_transactions<'a>(
+    fn persist_transactions<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult>;
