@@ -272,6 +272,10 @@ where
         BridgeCommittee::new(authorities)
     }
 
+    pub async fn get_chain_identifier(&self) -> BridgeResult<String> {
+        Ok(self.inner.get_chain_identifier().await?)
+    }
+
     pub async fn execute_transaction_block_with_effects(
         &self,
         tx: sui_types::transaction::Transaction,
