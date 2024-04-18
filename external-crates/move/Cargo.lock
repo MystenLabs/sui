@@ -349,14 +349,12 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
- "invalid-mutations-v0",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
  "petgraph",
- "proptest",
 ]
 
 [[package]]
@@ -365,14 +363,12 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
- "invalid-mutations-v1",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
  "petgraph",
- "proptest",
 ]
 
 [[package]]
@@ -381,14 +377,12 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
- "invalid-mutations-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
  "petgraph",
- "proptest",
 ]
 
 [[package]]

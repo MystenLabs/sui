@@ -2,18 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use invalid_mutations::bounds::{
-    ApplyCodeUnitBoundsContext, ApplyOutOfBoundsContext, CodeUnitBoundsMutation,
-    OutOfBoundsMutation,
-};
-use move_binary_format::{
-    check_bounds::BoundsChecker, file_format::*, file_format_common,
-    proptest_types::CompiledModuleStrategyGen,
-};
-use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
-};
-use proptest::{collection::vec, prelude::*};
+use move_binary_format::{check_bounds::BoundsChecker, file_format::*, file_format_common};
+use move_core_types::vm_status::StatusCode;
 
 #[test]
 fn empty_module_no_errors() {
