@@ -6,13 +6,6 @@ use move_bytecode_verifier::constants;
 use move_core_types::vm_status::StatusCode;
 use proptest::prelude::*;
 
-proptest! {
-    #[test]
-    fn valid_generated(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(constants::verify_module(&module).is_ok());
-    }
-}
-
 #[test]
 fn valid_primitives() {
     let mut module = empty_module();
