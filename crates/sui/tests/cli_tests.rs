@@ -3199,7 +3199,23 @@ async fn key_identity_test() {
     );
 }
 
-// Test dry run including if the gas object passed is the one used for paying gas
+fn assert_dry_run(dry_run: SuiClientCommandResult, object_id: ObjectID, command: &str) {
+    if let SuiClientCommandResult::DryRun(response) = dry_run {
+        assert_eq!(
+            *response.effects.status(),
+            SuiExecutionStatus::Success,
+            "{command} dry run test effects is not success"
+        );
+        assert_eq!(
+            response.effects.gas_object().object_id(),
+            object_id,
+            "{command} dry run test failed, gas object used is not the expected one"
+        );
+    } else {
+        panic!("{} dry run failed", command);
+    }
+}
+
 #[sim_test]
 async fn test_dry_run() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -3241,12 +3257,7 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::DryRun(response) = transfer_dry_run {
-        assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-        assert_eq!(response.effects.gas_object().object_id(), object_id);
-    } else {
-        panic!("Transfer dry run failed");
-    }
+    assert_dry_run(transfer_dry_run, object_id, "Transfer");
 
     // === TRANSFER SUI === //
     let transfer_sui_dry_run = SuiClientCommands::TransferSui {
@@ -3260,12 +3271,8 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    if let SuiClientCommandResult::DryRun(response) = transfer_sui_dry_run {
-        assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-        assert_eq!(response.effects.gas_object().object_id(), object_to_send);
-    } else {
-        panic!("TransferSui dry run failed");
-    }
+
+    assert_dry_run(transfer_sui_dry_run, object_to_send, "TransferSui");
 
     // === PAY === //
     let pay_dry_run = SuiClientCommands::Pay {
@@ -3303,12 +3310,8 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::DryRun(response) = pay_dry_run {
-        assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-        assert_eq!(response.effects.gas_object().object_id(), gas_coin_id);
-    } else {
-        panic!("Pay dry run failed");
-    }
+    assert_dry_run(pay_dry_run, gas_coin_id, "Pay");
+
     // === PAY SUI === //
     let pay_sui_dry_run = SuiClientCommands::PaySui {
         input_coins: vec![object_id],
@@ -3321,12 +3324,8 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    if let SuiClientCommandResult::DryRun(response) = pay_sui_dry_run {
-        assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-        assert_eq!(response.effects.gas_object().object_id(), object_id);
-    } else {
-        panic!("PaySui dry run failed");
-    }
+
+    assert_dry_run(pay_sui_dry_run, object_id, "PaySui");
 
     // === PAY ALL SUI === //
     let pay_all_sui_dry_run = SuiClientCommands::PayAllSui {
@@ -3339,12 +3338,510 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    if let SuiClientCommandResult::DryRun(response) = pay_all_sui_dry_run {
-        assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-        assert_eq!(response.effects.gas_object().object_id(), object_id);
+
+    assert_dry_run(pay_all_sui_dry_run, object_id, "PayAllSui");
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_pay() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    let object_id1 = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+    let address2 = SuiAddress::random_for_testing_only();
+    let address3 = SuiAddress::random_for_testing_only();
+    let recipient1 = KeyIdentity::Address(address2);
+    let recipient2 = KeyIdentity::Address(address3);
+    let pay = SuiClientCommands::Pay {
+        input_coins: vec![object_id1, object_id2],
+        recipients: vec![recipient1.clone(), recipient2.clone()],
+        gas: Some(object_id1),
+        amounts: vec![5000, 10000],
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await;
+
+    // we passed the gas object to be one of the input coins, which should fail
+    assert!(pay.is_err());
+
+    let amounts = [5000, 10000];
+    // we expect this to be the gas coin used
+    let object_id3 = object_refs.data.get(2).unwrap().object().unwrap().object_id;
+    let pay = SuiClientCommands::Pay {
+        input_coins: vec![object_id1, object_id2],
+        recipients: vec![recipient1, recipient2],
+        gas: None, // will select the first available gas coin
+        amounts: amounts.into(),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Pay command takes the input coins and transfers the given amounts from each input coin (in order)
+    // to the recipients
+    // this test checks if the recipients have received the objects, and if the gas object used is
+    // the right one (not one of the input coins, and in this setup it's the 3rd coin of sender)
+    // we also check if the balances are right!
+    if let SuiClientCommandResult::Pay(response) = pay {
+        // check tx status
+        assert!(response.status_ok().unwrap());
+        // check gas coin used
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id3
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address2, None)
+                .await?
+                .total_balance,
+            amounts[0] as u128
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address3,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(response.status_ok().unwrap());
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address3, None)
+                .await?
+                .total_balance,
+            amounts[1] as u128
+        );
     } else {
-        panic!("PayAllSui dry run failed");
+        panic!("Pay test failed");
     }
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_pay_sui() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    let object_id1 = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+    let address2 = SuiAddress::random_for_testing_only();
+    let address3 = SuiAddress::random_for_testing_only();
+    let recipient1 = KeyIdentity::Address(address2);
+    let recipient2 = KeyIdentity::Address(address3);
+    let amounts = [1000, 5000];
+    let pay_sui = SuiClientCommands::PaySui {
+        input_coins: vec![object_id1, object_id2],
+        recipients: vec![recipient1, recipient2],
+        amounts: amounts.into(),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // pay sui takes the input coins and transfers from each of them (in order) the amounts to the
+    // respective receipients.
+    // check if each recipient has one object, if the tx status is success,
+    // and if the gas object used was the first object in the input coins
+    // we also check if the balances of each recepient are right!
+    if let SuiClientCommandResult::PaySui(response) = pay_sui {
+        assert!(response.status_ok().unwrap());
+        // check gas coin used
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id1
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address2, None)
+                .await?
+                .total_balance,
+            amounts[0] as u128
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address3,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(response.status_ok().unwrap());
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            client
+                .coin_read_api()
+                .get_balance(address3, None)
+                .await?
+                .total_balance,
+            amounts[1] as u128
+        );
+    } else {
+        panic!("PaySui test failed");
+    }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    let object_id1 = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+    let address2 = SuiAddress::random_for_testing_only();
+    let recipient = KeyIdentity::Address(address2);
+    let pay_all_sui = SuiClientCommands::PayAllSui {
+        input_coins: vec![object_id1, object_id2],
+        recipient,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // pay all sui will take the input coins and smash them into one coin and transfer that coin to
+    // the recipient, so we check that the recipient has one object, if the tx status is success,
+    // and if the gas object used was the first object in the input coins
+    if let SuiClientCommandResult::PayAllSui(response) = pay_all_sui {
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert!(response.status_ok().unwrap());
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            response.effects.unwrap().gas_object().object_id(),
+            object_id1
+        );
+    } else {
+        panic!("PayAllSui test failed");
+    }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    let object_id1 = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+    let address2 = SuiAddress::random_for_testing_only();
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(address2),
+        object_id: object_id1,
+        gas: Some(object_id1),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await;
+
+    // passed the gas object to be the object to transfer, which should fail
+    assert!(transfer.is_err());
+
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(address2),
+        object_id: object_id1,
+        gas: None,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+    // transfer command will transfer the object_id1 to address2, and use object_id2 as gas
+    // we check if object1 is owned by address 2 and if the gas object used is object_id2
+    if let SuiClientCommandResult::Transfer(response) = transfer {
+        assert!(response.status_ok().unwrap());
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id2
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        assert_eq!(
+            objs_refs.data.first().unwrap().object().unwrap().object_id,
+            object_id1
+        );
+    } else {
+        panic!("Transfer test failed");
+    }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer_sui() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address1 = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    let object_id1 = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let address2 = SuiAddress::random_for_testing_only();
+    let amount = 1000;
+    let transfer_sui = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address2),
+        sui_coin_object_id: object_id1,
+        amount: Some(amount),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // transfer sui will transfer the amount from object_id1 to address2, and use the same object
+    // as gas, and we check if the recipient address received the object, and the expected balance
+    // is correct
+    if let SuiClientCommandResult::TransferSui(response) = transfer_sui {
+        assert!(response.status_ok().unwrap());
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id1
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(objs_refs.data.len(), 1);
+        let balance = client
+            .coin_read_api()
+            .get_balance(address2, None)
+            .await?
+            .total_balance;
+        assert_eq!(balance, amount as u128);
+    } else {
+        panic!("TransferSui test failed");
+    }
+    // transfer the whole object by not passing an amount
+    let transfer_sui = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address2),
+        sui_coin_object_id: object_id1,
+        amount: None,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        dry_run: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+    if let SuiClientCommandResult::TransferSui(response) = transfer_sui {
+        assert!(response.status_ok().unwrap());
+        assert_eq!(
+            response.effects.as_ref().unwrap().gas_object().object_id(),
+            object_id1
+        );
+        let objs_refs = client
+            .read_api()
+            .get_owned_objects(
+                address2,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+            )
+            .await?;
+        assert_eq!(objs_refs.has_next_page, false);
+        assert_eq!(
+            objs_refs.data.len(),
+            2,
+            "Expected to have two coins when calling transfer sui the 2nd time"
+        );
+        assert!(objs_refs
+            .data
+            .iter()
+            .find(|x| x.object().unwrap().object_id == object_id1)
+            .is_some());
+    } else {
+        panic!("TransferSui test failed");
+    }
     Ok(())
 }
