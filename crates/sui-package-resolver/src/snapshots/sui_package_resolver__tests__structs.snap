@@ -40,11 +40,11 @@ a0::m::T1: StructDef {
     defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
     abilities: [],
     type_params: [
-        StructTypeParameter {
+        DatatypeTyParameter {
             constraints: [],
             is_phantom: false,
         },
-        StructTypeParameter {
+        DatatypeTyParameter {
             constraints: [],
             is_phantom: false,
         },
