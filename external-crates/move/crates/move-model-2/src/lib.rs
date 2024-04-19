@@ -20,6 +20,7 @@ use move_compiler::{
 use move_symbol_pool::Symbol;
 use vfs::VfsPath;
 
+pub mod code_writer;
 mod model;
 
 pub use model::*;

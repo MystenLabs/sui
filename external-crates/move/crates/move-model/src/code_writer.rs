@@ -140,32 +140,6 @@ impl CodeWriter {
         }
     }
 
-    /// Given a byte index in the written output, return the best approximation of the source
-    /// which generated this output.
-    pub fn get_source_location(&self, output_index: ByteIndex) -> Option<Loc> {
-        let data = self.0.borrow();
-        if let Some(loc) = data
-            .output_location_map
-            .range((Bound::Unbounded, Bound::Included(&output_index)))
-            .next_back()
-            .map(|(_, v)| v)
-        {
-            return Some(loc.clone());
-        }
-        None
-    }
-
-    /// Given line/column location, determine ByteIndex of that location.
-    pub fn get_output_byte_index(&self, line: LineIndex, column: ColumnIndex) -> Option<ByteIndex> {
-        self.process_result(|s| {
-            let mut fmap = Files::new();
-            let id = fmap.add("dummy", s);
-            fmap.line_span(id, line).ok().map(|line_span| {
-                ByteIndex((line_span.start().to_usize() + column.to_usize()) as u32)
-            })
-        })
-    }
-
     /// Indents any subsequently written output. The current line of output and any subsequent ones
     /// will be indented. Note this works after the last output was `\n` but the line is still
     /// empty.
