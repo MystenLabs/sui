@@ -1457,7 +1457,7 @@ mod checked {
         }
 
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-            // we cannot panic here because during executon and publishing this is
+            // we cannot panic here because during execution and publishing this is
             // currently called from the publish flow in the Move runtime
             Ok(())
         }

@@ -404,7 +404,7 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "PerObjectCongestionControlMode::is_none")]
     per_object_congestion_control_mode: PerObjectCongestionControlMode,
 
-    // The policy to pick consensus algorithm.
+    // The consensus protocol to be used for the epoch.
     #[serde(skip_serializing_if = "ConsensusChoice::is_narwhal")]
     consensus_choice: ConsensusChoice,
 
@@ -2094,6 +2094,10 @@ impl ProtocolConfig {
                 44 => {
                     // Enable consensus digest in consensus commit prologue on all networks..
                     cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    // Switch between Narwhal and Mysticeti per epoch in tests and devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_choice = ConsensusChoice::SwapEachEpoch;
+                    }
                 }
                 // Use this template when making changes:
                 //

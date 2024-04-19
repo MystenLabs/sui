@@ -605,9 +605,11 @@ mod tests {
 
     use fastcrypto::error::FastCryptoError;
 
-    use crate::block::{SignedBlock, TestBlock};
-    use crate::context::Context;
-    use crate::error::ConsensusError;
+    use crate::{
+        block::{SignedBlock, TestBlock},
+        context::Context,
+        error::ConsensusError,
+    };
 
     #[test]
     fn test_sign_and_verify() {

@@ -13,6 +13,7 @@ use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
 
+use crate::config::get_rpc_url;
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -25,6 +26,7 @@ use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_protocol_config::Chain;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
+
 pub mod config;
 mod data_fetcher;
 mod displays;
@@ -162,6 +164,7 @@ pub async fn execute_replay_command(
     safety_checks: bool,
     use_authority: bool,
     cfg_path: Option<PathBuf>,
+    chain: Option<String>,
     cmd: ReplayToolCommand,
 ) -> anyhow::Result<Option<(u64, u64)>> {
     let safety = if safety_checks {
@@ -191,8 +194,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
-                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                get_rpc_url(rpc_url, cfg_path, chain)?,
                 tx_digest,
                 safety,
                 use_authority,
@@ -226,7 +228,7 @@ pub async fn execute_replay_command(
                 fail_over_on_err: false,
                 expensive_safety_check_config: Default::default(),
             };
-            let fuzzer = ReplayFuzzer::new(rpc_url.expect("Url must be provided"), config)
+            let fuzzer = ReplayFuzzer::new(get_rpc_url(rpc_url, cfg_path, chain)?, config)
                 .await
                 .unwrap();
             fuzzer.run(num_base_transactions).await.unwrap();
@@ -263,6 +265,7 @@ pub async fn execute_replay_command(
                 safety: ExpensiveSafetyCheckConfig,
                 use_authority: bool,
                 cfg_path: Option<PathBuf>,
+                chain: Option<String>,
                 tx_digests: &[TransactionDigest],
             ) -> anyhow::Result<()> {
                 let mut handles = vec![];
@@ -271,11 +274,11 @@ pub async fn execute_replay_command(
                     let rpc_url = rpc_url.clone();
                     let cfg_path = cfg_path.clone();
                     let safety = safety.clone();
+                    let chain = chain.clone();
                     handles.push(tokio::spawn(async move {
                         info!("Executing tx: {}", tx_digest);
                         let sandbox_state = LocalExec::replay_with_network_config(
-                            rpc_url,
-                            cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                            get_rpc_url(rpc_url, cfg_path, chain)?,
                             tx_digest,
                             safety,
                             use_authority,
@@ -323,6 +326,7 @@ pub async fn execute_replay_command(
                         safety.clone(),
                         use_authority,
                         cfg_path.clone(),
+                        chain.clone(),
                         &chunk,
                     )
                     .await
@@ -347,6 +351,7 @@ pub async fn execute_replay_command(
                     safety,
                     use_authority,
                     cfg_path.clone(),
+                    chain.clone(),
                     &chunk,
                 )
                 .await
@@ -376,8 +381,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let _sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
-                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                get_rpc_url(rpc_url, cfg_path, chain)?,
                 tx_digest,
                 safety,
                 use_authority,
@@ -401,8 +405,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
-                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                get_rpc_url(rpc_url, cfg_path, chain)?,
                 tx_digest,
                 safety,
                 use_authority,
@@ -517,10 +520,10 @@ pub async fn execute_replay_command(
                 .await
                 .into_iter()
                 .for_each(|x| match x {
-                    Ok((suceeded, total, time)) => {
+                    Ok((succeeded, total, time)) => {
                         total_tx += total;
                         total_time_ms += time.as_millis() as u64;
-                        total_succeeded += suceeded;
+                        total_succeeded += succeeded;
                     }
                     Err(e) => {
                         error!("Task failed: {:?}", e);
@@ -555,6 +558,7 @@ pub async fn execute_replay_command(
                 safety_checks,
                 use_authority,
                 cfg_path,
+                chain,
                 ReplayToolCommand::ReplayCheckpoints {
                     start,
                     end,

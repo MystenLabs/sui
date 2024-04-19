@@ -1,11 +1,11 @@
-name: Simulator Tests with Mysticeti
+name: Simulator Tests with Narwhal
 
 concurrency:
   group: ${{ github.workflow }}
 
 on:
   schedule:
-    - cron: '0 17 * * *' # UTC timing is every day at 9am PST
+    - cron: '0 13 * * *' # UTC timing is every day at 5am PST
   workflow_dispatch:
     inputs:
       sui_ref:
@@ -20,8 +20,8 @@ on:
         default: "30"
 
 env:
-  # Test Mysticeti consensus before it becomes the default.
-  CONSENSUS: "mysticeti"
+  # Test Narwhal consensus as long as Narwhal runs in mainnet.
+  CONSENSUS: "narwhal"
 
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
   TEST_NUM: "${{ github.event.inputs.test_num || '30' }}"
