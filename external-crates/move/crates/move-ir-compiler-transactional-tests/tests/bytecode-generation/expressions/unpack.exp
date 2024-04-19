@@ -7,11 +7,14 @@ struct T {
 	b: bool
 }
 
+
+
 new(): T {
 B0:
 	0: LdTrue
 	1: Pack[0](T)
 	2: Ret
+
 }
 f() {
 L0:	loc0: T
@@ -23,6 +26,7 @@ B0:
 	3: Unpack[0](T)
 	4: StLoc[1](loc1: bool)
 	5: Ret
+
 }
 }
 

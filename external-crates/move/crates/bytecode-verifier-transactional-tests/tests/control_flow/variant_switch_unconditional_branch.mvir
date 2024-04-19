@@ -1,0 +1,29 @@
+//# publish
+module 0x42.m { 
+    enum X { V1 { x: u64 }, V2 { } }
+
+    entry foo(x: Self.X) {
+        let y: u64;
+    label bv:
+        variant_switch X (&x) {
+            V1 : b0,
+            V2 : b4,
+        };
+    // This block is unreachable since `variant_switch` is an unconditional jump.
+    // If `variant_switch` is a conditional jump, then this block is reachable, and would
+    // raise an unused value without drop error. But, since we guarantee exhaustiveness, we
+    // are guaranteed that we cannot fall through here and so this block is unreachable.
+    label fallthrough:
+        return;
+    label b0:
+        X.V1 { x: y } = move(x);
+        jump_if (move(y) > 42) b3;
+    label b1:
+        return;
+    label b3:
+        return;
+    label b4: 
+        X.V2 {} = move(x);
+        abort 0;
+    } 
+}

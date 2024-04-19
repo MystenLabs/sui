@@ -18,9 +18,19 @@ fn duplicated_friend_decls() {
     DuplicationChecker::verify_module(&m).unwrap_err();
 }
 
+#[test]
+fn duplicated_variant_handles() {
+    let mut m = basic_test_module_with_enum();
+    m.variant_handles.push(m.variant_handles[0].clone());
+    DuplicationChecker::verify_module(&m).unwrap_err();
+}
+
 proptest! {
     #[test]
     fn valid_duplication(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(DuplicationChecker::verify_module(&module).is_ok());
+        // println!("{:#?}", module);
+        let x = DuplicationChecker::verify_module(&module);
+        println!("{:#?}", x);
+        prop_assert!(x.is_ok());
     }
 }

@@ -5,10 +5,13 @@ task 0 'print-bytecode'. lines 1-9:
 module 1.m {
 
 
+
+
 entry foo() {
 L0:	loc0: u64
 B0:
 	0: Ret
+
 }
 }
 

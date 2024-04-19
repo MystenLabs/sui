@@ -9,3 +9,15 @@ module 0x1.M {
         return move(f);
     }
 }
+
+//# publish
+module 0x2.M {
+    enum Foo<T1, T2> { V { x: T1, y: T2 } }
+
+    foo<T>(x: T): Self.Foo<u64, T> {
+        let f: Self.Foo<u64, T>;
+    label b0:
+        f = Foo.V<u64, T> { x: 42, y: move(x) };
+        return move(f);
+    }
+}

@@ -1,10 +1,19 @@
-processed 1 task
+processed 2 tasks
 
 task 0 'publish'. lines 1-11:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Token'. Got VMError: {
     major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
     sub_status: None,
     location: 0x1::Token,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 1 'publish'. lines 13-23:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::Token'. Got VMError: {
+    major_status: EQUALITY_OP_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::Token,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
 }

@@ -17,3 +17,22 @@ module 0x1.Test {
     }
 
 }
+
+//# publish
+module 0x2.Test {
+    enum X { V { b: bool } }
+    enum T { V { b: bool } }
+
+    public new_t(): Self.T {
+    label b0:
+        return T.V { b: true };
+    }
+
+    public destroy_t(t: Self.T) {
+        let b: bool;
+    label b0:
+        // wrong struct in unpack
+        X.V { b } = move(t);
+        return;
+    }
+}

@@ -1,0 +1,28 @@
+processed 3 tasks
+
+task 0 'publish'. lines 1-13:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x42::Test,
+    indices: [(EnumDefinition, 0), (VariantTag, 1), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 1 'publish'. lines 15-27:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x42::Test,
+    indices: [(EnumDefinition, 0), (VariantTag, 1), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 2 'publish'. lines 29-39:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x42::Test,
+    indices: [(StructDefinition, 0)],
+    offsets: [],
+}

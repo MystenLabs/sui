@@ -5,6 +5,8 @@ task 0 'print-bytecode'. lines 1-13:
 module 1.m {
 
 
+
+
 entry foo() {
 L0:	loc0: u64
 L1:	loc1: u64
@@ -23,5 +25,6 @@ B0:
 	10: Sub
 	11: StLoc[2](loc2: u64)
 	12: Ret
+
 }
 }
