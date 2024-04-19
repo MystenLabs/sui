@@ -1027,7 +1027,7 @@ mod checked {
         }
 
         if type_params.is_empty() {
-            Ok(Type::Struct(idx))
+            Ok(Type::Datatype(idx))
         } else {
             let loaded_type_params = type_params
                 .iter()
@@ -1042,7 +1042,7 @@ mod checked {
                 }
             }
 
-            Ok(Type::StructInstantiation(Box::new((
+            Ok(Type::DatatypeInstantiation(Box::new((
                 idx,
                 loaded_type_params,
             ))))
