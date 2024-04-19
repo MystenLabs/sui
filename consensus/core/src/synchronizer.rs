@@ -184,6 +184,23 @@ impl SynchronizerHandle {
     }
 }
 
+/// `Synchronizer` oversees live block synchronization, crucial for node progress. Live synchronization
+/// refers to the process of retrieving missing blocks, particularly those essential for advancing a node
+/// when data from only a few rounds is absent. If a node significantly lags behind the network,
+/// `commit_syncer` handles fetching missing blocks via a more efficient approach. `Synchronizer`
+/// aims for swift catch-up employing two mechanisms:
+///
+/// 1. Explicitly requesting missing blocks from designated authorities via the "block send" path.
+///    This includes attempting to fetch any missing ancestors necessary for processing a received block.
+///    Such requests prioritize the block author, maximizing the chance of prompt retrieval.
+///    A locking mechanism allows concurrent requests for missing blocks from up to two authorities
+///    simultaneously, enhancing the chances of timely retrieval. Notably, if additional missing blocks
+///    arise during block processing, requests to the same authority are deferred to the scheduler.
+///
+/// 2. Periodically requesting missing blocks via a scheduler. This primarily serves to retrieve
+///    missing blocks that were not ancestors of a received block via the "block send" path.
+///    The scheduler operates on either a fixed periodic basis or is triggered immediately
+///    after explicit fetches described in (1), ensuring continued block retrieval if gaps persist.
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
@@ -419,47 +436,40 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         // are potentially missing ancestors.
         const MAX_ADDITIONAL_BLOCKS: usize = 10;
 
-        // Split the number of blocks to the requested and additional ones
-        let at = serialized_blocks
-            .iter()
-            .position(|b| b.is_empty())
-            .unwrap_or(serialized_blocks.len());
-        let (serialized_blocks, mut ancestor_serialized_blocks) = serialized_blocks.split_at(at);
-
-        // remove the separator (empty bytes element) from the `ancestor_serialized_blocks` if not empty
-        if !ancestor_serialized_blocks.is_empty() {
-            ancestor_serialized_blocks = &ancestor_serialized_blocks[1..];
-        }
-
-        if serialized_blocks.len() > requested_blocks_guard.block_refs.len()
-            || ancestor_serialized_blocks.len() > MAX_ADDITIONAL_BLOCKS
+        // Ensure that all the returned blocks do not go over the total max allowed returned blocks
+        if serialized_blocks.len() > requested_blocks_guard.block_refs.len() + MAX_ADDITIONAL_BLOCKS
         {
             return Err(ConsensusError::TooManyFetchedBlocksReturned(peer_index));
         }
 
-        // Verify the requested blocks
-        let mut blocks = Self::verify_blocks(
-            serialized_blocks.to_vec(),
-            requested_blocks_guard.block_refs.clone(),
+        // Verify all the fetched blocks
+        let blocks = Self::verify_blocks(
+            serialized_blocks,
             block_verifier.clone(),
-            context.clone(),
+            &context,
             peer_index,
         )?;
 
-        // Now verify any additional ancestor blocks. We need to verify that the ancestor blocks are indeed ancestors of the requested blocks
+        // Get all the ancestors of the requested blocks only
         let ancestors = blocks
             .iter()
+            .filter(|b| requested_blocks_guard.block_refs.contains(&b.reference()))
             .flat_map(|b| b.ancestors().to_vec())
             .collect::<BTreeSet<BlockRef>>();
-        let ancestor_blocks = Self::verify_blocks(
-            ancestor_serialized_blocks.to_vec(),
-            ancestors,
-            block_verifier.clone(),
-            context.clone(),
-            peer_index,
-        )?;
 
-        blocks.extend(ancestor_blocks);
+        // Now confirm that the blocks are either between the ones requested, or they are parents of the requested blocks
+        for block in &blocks {
+            if !requested_blocks_guard
+                .block_refs
+                .contains(&block.reference())
+                && !ancestors.contains(&block.reference())
+            {
+                return Err(ConsensusError::UnexpectedFetchedBlock {
+                    index: peer_index,
+                    block_ref: block.reference(),
+                });
+            }
+        }
 
         debug!(
             "Synced missing ancestor blocks {} from peer {peer_index}",
@@ -515,9 +525,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
     fn verify_blocks(
         serialized_blocks: Vec<Bytes>,
-        valid_block_refs: BTreeSet<BlockRef>,
         block_verifier: Arc<V>,
-        context: Arc<Context>,
+        context: &Context,
         peer_index: AuthorityIndex,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
         let mut verified_blocks = Vec::new();
@@ -540,13 +549,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 return Err(e);
             }
             let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
-
-            if !valid_block_refs.contains(&verified_block.reference()) {
-                return Err(ConsensusError::UnexpectedFetchedBlock {
-                    index: peer_index,
-                    block_ref: verified_block.reference(),
-                });
-            }
 
             // Dropping is ok because the block will be refetched.
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.

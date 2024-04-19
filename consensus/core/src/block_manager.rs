@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::time::Instant;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -13,7 +13,6 @@ use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tracing::{debug, warn};
 
-use crate::block::{timestamp_utc_ms, BlockTimestampMs};
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
     block_verifier::BlockVerifier,
@@ -24,7 +23,7 @@ use crate::{
 struct SuspendedBlock {
     block: VerifiedBlock,
     missing_ancestors: BTreeSet<BlockRef>,
-    timestamp: BlockTimestampMs,
+    timestamp: Instant,
 }
 
 impl SuspendedBlock {
@@ -32,7 +31,7 @@ impl SuspendedBlock {
         Self {
             block,
             missing_ancestors,
-            timestamp: timestamp_utc_ms(),
+            timestamp: Instant::now(),
         }
     }
 }
@@ -276,7 +275,7 @@ impl BlockManager {
             }
         }
 
-        let now = timestamp_utc_ms();
+        let now = Instant::now();
 
         // Report the unsuspended blocks
         for block in &unsuspended_blocks {
@@ -297,7 +296,7 @@ impl BlockManager {
                 .node_metrics
                 .suspended_block_time
                 .with_label_values(&[hostname])
-                .observe(Duration::from_millis(now.saturating_sub(block.timestamp)).as_secs_f64());
+                .observe(now.saturating_duration_since(block.timestamp).as_secs_f64());
         }
 
         unsuspended_blocks
