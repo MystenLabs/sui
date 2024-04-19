@@ -187,8 +187,7 @@ pub enum SuiClientCommands {
         /// ObjectIDs, Addresses must be hex strings
         #[clap(long, num_args(1..))]
         args: Vec<SuiJsonValue>,
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        #[clap(long)]
+        /// ID of the gas object for gas payment.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
@@ -363,7 +362,7 @@ pub enum SuiClientCommands {
         #[clap(long, num_args(1..))]
         input_coins: Vec<ObjectID>,
 
-        /// The recipient addresses, must be of same length as amounts
+        /// The recipient addresses, must be of same length as amounts.
         /// Aliases of addresses are also accepted as input.
         #[clap(long, num_args(1..))]
         recipients: Vec<KeyIdentity>,
@@ -372,7 +371,7 @@ pub enum SuiClientCommands {
         #[clap(long, num_args(1..))]
         amounts: Vec<u64>,
 
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// ID of the gas object for gas payment.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
@@ -471,7 +470,7 @@ pub enum SuiClientCommands {
         serialize_signed_transaction: bool,
     },
 
-    /// Run a PTB either from file or from the provided args
+    /// Run a PTB from the provided args
     #[clap(name = "ptb")]
     PTB(PTB),
 
@@ -486,7 +485,7 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// ID of the gas object for gas payment.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
@@ -525,7 +524,7 @@ pub enum SuiClientCommands {
     /// Split a coin object into multiple coins.
     #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
-        /// Coin to Split, in 20 bytes Hex string
+        /// ID of the coin object to split
         #[clap(long)]
         coin_id: ObjectID,
         /// Specific amounts to split out from the coin
@@ -534,7 +533,7 @@ pub enum SuiClientCommands {
         /// Count of equal-size coins to split into
         #[clap(long)]
         count: Option<u64>,
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// ID of the gas object for gas payment.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
@@ -588,11 +587,11 @@ pub enum SuiClientCommands {
         #[clap(long)]
         to: KeyIdentity,
 
-        /// Object to transfer, in 20 bytes Hex string
+        /// ID of the object to transfer
         #[clap(long)]
         object_id: ObjectID,
 
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// ID of the gas object for gas payment.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
@@ -628,7 +627,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         to: KeyIdentity,
 
-        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
+        /// ID of the coin to transfer. This is also the gas object.
         #[clap(long)]
         sui_coin_object_id: ObjectID,
 
@@ -673,7 +672,7 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// ID of the gas object for gas payment.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
