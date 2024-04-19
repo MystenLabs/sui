@@ -3,12 +3,8 @@
 
 #[allow(unused_use)]
 module bridge::committee {
-    use std::option;
-    use std::vector;
-
     use sui::ecdsa_k1;
     use sui::event::emit;
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
     use sui_system::sui_system;
