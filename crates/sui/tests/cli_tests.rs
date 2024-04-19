@@ -11,6 +11,7 @@ use expect_test::expect;
 use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
 use serde_json::json;
 use sui::key_identity::{get_identity_address, KeyIdentity};
+use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
@@ -48,7 +49,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
@@ -3344,13 +3345,23 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sim_test]
-async fn test_pay() -> Result<(), anyhow::Error> {
+async fn test_cluster_helper() -> (
+    TestCluster,
+    SuiClient,
+    u64,
+    ObjectID,
+    ObjectID,
+    ObjectID,
+    KeyIdentity,
+    KeyIdentity,
+    SuiAddress,
+    SuiAddress,
+) {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address1 = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
+    let client = context.get_client().await.unwrap();
     let object_refs = client
         .read_api()
         .get_owned_objects(
@@ -3361,7 +3372,8 @@ async fn test_pay() -> Result<(), anyhow::Error> {
             None,
             None,
         )
-        .await?;
+        .await
+        .unwrap();
 
     let object_id1 = object_refs
         .data
@@ -3371,10 +3383,41 @@ async fn test_pay() -> Result<(), anyhow::Error> {
         .unwrap()
         .object_id;
     let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
+    let object_id3 = object_refs.data.get(2).unwrap().object().unwrap().object_id;
     let address2 = SuiAddress::random_for_testing_only();
     let address3 = SuiAddress::random_for_testing_only();
     let recipient1 = KeyIdentity::Address(address2);
     let recipient2 = KeyIdentity::Address(address3);
+
+    (
+        test_cluster,
+        client,
+        rgp,
+        object_id1,
+        object_id2,
+        object_id3,
+        recipient1,
+        recipient2,
+        address2,
+        address3,
+    )
+}
+
+#[sim_test]
+async fn test_pay() -> Result<(), anyhow::Error> {
+    let (
+        mut test_cluster,
+        client,
+        rgp,
+        object_id1,
+        object_id2,
+        object_id3,
+        recipient1,
+        recipient2,
+        address2,
+        address3,
+    ) = test_cluster_helper().await;
+    let context = &mut test_cluster.wallet;
     let pay = SuiClientCommands::Pay {
         input_coins: vec![object_id1, object_id2],
         recipients: vec![recipient1.clone(), recipient2.clone()],
@@ -3393,7 +3436,6 @@ async fn test_pay() -> Result<(), anyhow::Error> {
 
     let amounts = [5000, 10000];
     // we expect this to be the gas coin used
-    let object_id3 = object_refs.data.get(2).unwrap().object().unwrap().object_id;
     let pay = SuiClientCommands::Pay {
         input_coins: vec![object_id1, object_id2],
         recipients: vec![recipient1, recipient2],
@@ -3472,35 +3514,19 @@ async fn test_pay() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_pay_sui() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address1 = test_cluster.get_address_0();
+    let (
+        mut test_cluster,
+        client,
+        rgp,
+        object_id1,
+        object_id2,
+        _object_id3,
+        recipient1,
+        recipient2,
+        address2,
+        address3,
+    ) = test_cluster_helper().await;
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(
-            address1,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::full_content(),
-            )),
-            None,
-            None,
-        )
-        .await?;
-
-    let object_id1 = object_refs
-        .data
-        .first()
-        .unwrap()
-        .object()
-        .unwrap()
-        .object_id;
-    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
-    let address2 = SuiAddress::random_for_testing_only();
-    let address3 = SuiAddress::random_for_testing_only();
-    let recipient1 = KeyIdentity::Address(address2);
-    let recipient2 = KeyIdentity::Address(address3);
     let amounts = [1000, 5000];
     let pay_sui = SuiClientCommands::PaySui {
         input_coins: vec![object_id1, object_id2],
@@ -3577,36 +3603,22 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address1 = test_cluster.get_address_0();
+    let (
+        mut test_cluster,
+        client,
+        rgp,
+        object_id1,
+        object_id2,
+        _object_id3,
+        recipient1,
+        _recipient2,
+        address2,
+        _address3,
+    ) = test_cluster_helper().await;
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(
-            address1,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::full_content(),
-            )),
-            None,
-            None,
-        )
-        .await?;
-
-    let object_id1 = object_refs
-        .data
-        .first()
-        .unwrap()
-        .object()
-        .unwrap()
-        .object_id;
-    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
-    let address2 = SuiAddress::random_for_testing_only();
-    let recipient = KeyIdentity::Address(address2);
     let pay_all_sui = SuiClientCommands::PayAllSui {
         input_coins: vec![object_id1, object_id2],
-        recipient,
+        recipient: recipient1,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         dry_run: false,
         serialize_unsigned_transaction: false,
@@ -3646,32 +3658,19 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_transfer() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address1 = test_cluster.get_address_0();
+    let (
+        mut test_cluster,
+        client,
+        rgp,
+        object_id1,
+        object_id2,
+        _object_id3,
+        recipient1,
+        _recipient2,
+        address2,
+        _address3,
+    ) = test_cluster_helper().await;
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(
-            address1,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::full_content(),
-            )),
-            None,
-            None,
-        )
-        .await?;
-
-    let object_id1 = object_refs
-        .data
-        .first()
-        .unwrap()
-        .object()
-        .unwrap()
-        .object_id;
-    let object_id2 = object_refs.data.get(1).unwrap().object().unwrap().object_id;
-    let address2 = SuiAddress::random_for_testing_only();
     let transfer = SuiClientCommands::Transfer {
         to: KeyIdentity::Address(address2),
         object_id: object_id1,
@@ -3688,7 +3687,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     assert!(transfer.is_err());
 
     let transfer = SuiClientCommands::Transfer {
-        to: KeyIdentity::Address(address2),
+        to: recipient1,
         object_id: object_id1,
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -3731,31 +3730,19 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_transfer_sui() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address1 = test_cluster.get_address_0();
+    let (
+        mut test_cluster,
+        client,
+        rgp,
+        object_id1,
+        _object_id2,
+        _object_id3,
+        recipient1,
+        _recipient2,
+        address2,
+        _address3,
+    ) = test_cluster_helper().await;
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(
-            address1,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::full_content(),
-            )),
-            None,
-            None,
-        )
-        .await?;
-
-    let object_id1 = object_refs
-        .data
-        .first()
-        .unwrap()
-        .object()
-        .unwrap()
-        .object_id;
-    let address2 = SuiAddress::random_for_testing_only();
     let amount = 1000;
     let transfer_sui = SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address2),
@@ -3802,7 +3789,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     }
     // transfer the whole object by not passing an amount
     let transfer_sui = SuiClientCommands::TransferSui {
-        to: KeyIdentity::Address(address2),
+        to: recipient1,
         sui_coin_object_id: object_id1,
         amount: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
