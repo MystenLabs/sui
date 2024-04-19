@@ -2031,12 +2031,10 @@ name = "move-model-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "codespan",
  "codespan-reporting",
  "datatest-stable",
- "internment",
- "itertools",
- "log",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -2046,8 +2044,6 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "num",
- "once_cell",
- "regex",
  "serde",
  "vfs",
 ]
