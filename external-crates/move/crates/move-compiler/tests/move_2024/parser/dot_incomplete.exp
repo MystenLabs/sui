@@ -5,7 +5,7 @@ error[E01002]: unexpected token
    │                       ^
    │                       │
    │                       Unexpected ';'
-   │                       Expected an identifier
+   │                       Expected an identifier or a decimal number
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/dot_incomplete.move:13:37
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
    │                                     ^
    │                                     │
    │                                     Unexpected ';'
-   │                                     Expected an identifier
+   │                                     Expected an identifier or a decimal number
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/dot_incomplete.move:15:9
@@ -23,7 +23,7 @@ error[E01002]: unexpected token
    │         ^^^
    │         │
    │         Unexpected 'let'
-   │         Expected an identifier
+   │         Expected an identifier or a decimal number
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/dot_incomplete.move:17:5
@@ -32,5 +32,5 @@ error[E01002]: unexpected token
    │     ^
    │     │
    │     Unexpected '}'
-   │     Expected an identifier
+   │     Expected an identifier or a decimal number
 

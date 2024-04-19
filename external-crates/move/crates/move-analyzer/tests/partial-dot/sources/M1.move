@@ -12,6 +12,7 @@ module PartialDot::M1 {
         let _tmp2 = s.another_field.;
         let _tmp3 = s.another_field.
         let _tmp4 = s; // statement skipped due to unexpected `let`
-        let _tmp5 = s.
+        let _tmp5 = s.another_field.(7, 42);
+        let _tmp6 = s.
     }
 }

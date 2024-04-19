@@ -6874,13 +6874,28 @@ fn partial_dot_test() {
         "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
         Some((1, 18, "M1.move")),
     );
+    // struct-typed second part of incomplete dot chain `s.another_field.` (followed by a list of
+    // parameters and a semi-colon: `s.another_field.(7, 42);`)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        14,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
     // struct-typed first part of incomplete dot chain `s.` (no `;` but followed by `}` on the next
     // line)
     assert_use_def(
         mod_symbols,
         &symbols,
         1,
-        14,
+        15,
         20,
         "M1.move",
         9,

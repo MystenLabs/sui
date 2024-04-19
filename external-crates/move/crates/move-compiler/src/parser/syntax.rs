@@ -543,6 +543,9 @@ fn report_name_migration(context: &mut Context, name: &str, loc: Loc) {
 
 // Parse an identifier:
 //      Identifier = <IdentifierValue>
+//
+// Expects the current token to be Tok::Identifier or Tok::RestrictedIdentifier and returns
+// `Syntax::UnexpectedToken` for the current token if it is not.
 fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     let id: Symbol = match context.tokens.peek() {
         Tok::Identifier => context.tokens.content().into(),
@@ -568,7 +571,7 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
         }
     };
     let start_loc = context.tokens.start_loc();
-    context.tokens.advance()?;
+    context.advance();
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, id))
 }
@@ -2589,8 +2592,15 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         }
                     }
                     _ => match parse_identifier(context) {
-                        Err(diag) => {
-                            context.add_diag(*diag);
+                        Err(_) => {
+                            // if it's neither a number (checked above) nor identifier, it conveys
+                            // more information to the developer to signal that both are a
+                            // possibility here (rather than just identifier which would be signaled
+                            // if we kept the returned diagnostic)
+                            context.add_diag(*unexpected_token_error(
+                                context.tokens,
+                                "an identifier or a decimal number",
+                            ));
                             Exp_::DotUnresolved(first_token_loc, Box::new(lhs))
                         }
                         Ok(n) => {
