@@ -296,9 +296,15 @@ fn serialize_modules_to_file<'a>(
     for module in modules {
         let module_name = module.self_id().short_str_lossless();
         for def in module.struct_defs() {
-            let sh = module.struct_handle_at(def.struct_handle);
+            let sh = module.datatype_handle_at(def.struct_handle);
             let sn = module.identifier_at(sh.name);
             members.push(format!("{sn}\n\tpublic struct\n\t{module_name}"));
+        }
+
+        for def in module.enum_defs() {
+            let eh = module.datatype_handle_at(def.enum_handle);
+            let en = module.identifier_at(eh.name);
+            members.push(format!("{en}\n\tpublic enum\n\t{module_name}"));
         }
 
         for def in module.function_defs() {

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use diesel::prelude::*;
 
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::annotated_value::{MoveDatatypeLayout, MoveTypeLayout};
 use move_core_types::language_storage::TypeTag;
 use sui_json_rpc_types::{
     BalanceChange, ObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
@@ -554,26 +554,27 @@ pub async fn tx_events_to_sui_tx_events(
                 "Failed to convert to sui event with Error: {e}",
             ))
         })?;
-    let event_move_struct_layouts = event_move_type_layouts
+    let event_move_datatype_layouts = event_move_type_layouts
         .into_iter()
         .filter_map(|move_type_layout| match move_type_layout {
-            MoveTypeLayout::Struct(s) => Some(s),
+            MoveTypeLayout::Struct(s) => Some(MoveDatatypeLayout::Struct(s)),
+            MoveTypeLayout::Enum(e) => Some(MoveDatatypeLayout::Enum(e)),
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert!(tx_events_data_len == event_move_struct_layouts.len());
+    assert!(tx_events_data_len == event_move_datatype_layouts.len());
     let sui_events = tx_events
         .data
         .into_iter()
         .enumerate()
-        .zip(event_move_struct_layouts)
-        .map(|((seq, tx_event), move_struct_layout)| {
+        .zip(event_move_datatype_layouts)
+        .map(|((seq, tx_event), move_datatype_layout)| {
             SuiEvent::try_from(
                 tx_event,
                 tx_digest,
                 seq as u64,
                 Some(timestamp),
-                move_struct_layout,
+                move_datatype_layout,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
