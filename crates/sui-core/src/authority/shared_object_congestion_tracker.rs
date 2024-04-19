@@ -56,6 +56,12 @@ impl SharedObjectCongestionTracker {
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
+        println!(
+            "ZZZZZZ start_cost: {}, budget: {}, bar: {}",
+            start_cost,
+            cert.gas_budget(),
+            max_accumulated_txn_cost_per_object_in_checkpoint
+        );
         if start_cost + cert.gas_budget() <= max_accumulated_txn_cost_per_object_in_checkpoint {
             return None;
         }
