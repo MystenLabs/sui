@@ -61,6 +61,7 @@ use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
+use crate::transaction_input_loader::TransactionInputLoader;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
@@ -4556,6 +4557,7 @@ pub async fn call_dev_inspect(
 async fn make_test_transaction(
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
+    owned_objects: &[Object],
     shared_objects: &[(ObjectID, SequenceNumber, bool)],
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
@@ -4589,6 +4591,11 @@ async fn make_test_transaction(
                     mutable: *mutable,
                 })
             })
+            .chain(owned_objects.iter().map(|object| {
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                    object.compute_object_reference(),
+                ))
+            }))
             .chain(vec![CallArg::Pure(arg_value.to_le_bytes().to_vec())])
             .collect(),
         gas_budget.unwrap_or(TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp),
@@ -4647,6 +4654,7 @@ async fn prepare_authority_and_shared_object_cert(
     let certificate = make_test_transaction(
         &sender,
         &keypair,
+        &[],
         &[(shared_object_id, initial_shared_version, true)],
         &gas_object_ref,
         &[&authority],
@@ -4761,6 +4769,7 @@ async fn test_consensus_message_processed() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
+            &[],
             &[(shared_object_id, initial_shared_version, true)],
             &gas_object_ref,
             &[&authority1, &authority2],
@@ -5684,6 +5693,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
+            &[],
             &[(
                 if index < 5 {
                     shared_objects[0].id()
@@ -5766,6 +5776,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
+            &[],
             &[(shared_objects[1].id(), OBJECT_START_VERSION, true)],
             &gas_object.compute_object_reference(),
             &[&authority],
@@ -5836,6 +5847,10 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let shared_objects = create_shared_objects(2);
     let gas_objects = create_gas_objects(3, sender);
     let gas_objects_cancelled_txn = create_gas_objects(1, sender);
+    let owned_objects_cancelled_txn = vec![
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 3.into(), sender),
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 7.into(), sender),
+    ];
 
     // Create the cluster with controlled per object congestion control and cancellation.
     let mut protocol_config =
@@ -5852,6 +5867,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let mut genesis_objects = gas_objects.clone();
     genesis_objects.extend(gas_objects_cancelled_txn.clone());
     genesis_objects.extend(shared_objects.clone());
+    genesis_objects.extend(owned_objects_cancelled_txn.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
 
     let mut certificates: Vec<VerifiedCertificate> = vec![];
@@ -5859,6 +5875,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
+            &[],
             &[(shared_objects[0].id(), OBJECT_START_VERSION, true)],
             &gas_object.compute_object_reference(),
             &[&authority],
@@ -5873,6 +5890,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let cancelled_txn = make_test_transaction(
         &sender,
         &keypair,
+        &owned_objects_cancelled_txn,
         &[
             (shared_objects[0].id(), OBJECT_START_VERSION, true),
             (shared_objects[1].id(), OBJECT_START_VERSION, true),
@@ -5927,4 +5945,20 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .collect::<HashMap<_, _>>(),
         shared_object_version
     );
+
+    let input_loader = TransactionInputLoader::new(authority.get_cache_reader().clone());
+    let input_objects = input_loader
+        .read_objects_for_execution(
+            authority.epoch_store_for_testing().as_ref(),
+            &cancelled_txn.key(),
+            &cancelled_txn
+                .data()
+                .transaction_data()
+                .input_objects()
+                .unwrap(),
+            authority.epoch_store_for_testing().epoch(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(input_objects.lamport_timestamp(&[]), 8.into());
 }
