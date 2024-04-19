@@ -63,12 +63,12 @@ impl TransactionBuilder {
         &self,
         signer: SuiAddress,
         input_gas: Option<ObjectID>,
-        budget: u64,
+        gas_budget: u64,
         input_objects: Vec<ObjectID>,
         gas_price: u64,
     ) -> Result<ObjectRef, anyhow::Error> {
-        if budget < gas_price {
-            bail!("Gas budget {budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}.")
+        if gas_budget < gas_price {
+            bail!("Gas budget {gas_budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}.")
         }
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
@@ -89,11 +89,11 @@ impl TransactionBuilder {
                         .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
                         .bcs_bytes,
                 )?;
-                if !input_objects.contains(&obj.object_id) && gas.value() >= budget {
+                if !input_objects.contains(&obj.object_id) && gas.value() >= gas_budget {
                     return Ok(obj.object_ref());
                 }
             }
-            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{budget}]."))
+            Err(anyhow!("Cannot find gas coin for signer address {signer} with amount sufficient for the required gas budget {gas_budget}. If you are using the pay or transfer commands, you can use pay-sui or transfer-sui commands instead, which will use the only object as gas payment."))
         }
     }
 
@@ -122,27 +122,38 @@ impl TransactionBuilder {
         )
     }
 
-    /// Construct the transaction data from a transaction kind, and other parameters
-    /// The original `pay_sui` function requires to pass in the `input_coins` received from the CLI
-    /// thus this argument is provided.
+    /// Construct the transaction data from a transaction kind, and other parameters.
+    /// If the gas_payment list is empty, it will pick the first gas coin that has at least
+    /// the required gas budget that is not in the input coins.
     pub async fn tx_data(
         &self,
         sender: SuiAddress,
         kind: TransactionKind,
-        // this can be empty, use it for pay or pass vec![] for pay_sui
-        input_coins: Vec<ObjectID>,
         gas_budget: u64,
         gas_price: u64,
-        gas_payment: Option<ObjectID>,
+        gas_payment: Vec<ObjectID>,
         gas_sponsor: Option<SuiAddress>,
     ) -> Result<TransactionData, anyhow::Error> {
-        let gas_payment = self
-            .select_gas(sender, gas_payment, gas_budget, input_coins, gas_price)
-            .await?;
+        let gas_payment = if gas_payment.is_empty() {
+            let input_objs = kind
+                .input_objects()?
+                .iter()
+                .flat_map(|obj| match obj {
+                    InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
+                    _ => None,
+                })
+                .collect();
+            vec![
+                self.select_gas(sender, None, gas_budget, input_objs, gas_price)
+                    .await?,
+            ]
+        } else {
+            self.input_refs(&gas_payment).await?
+        };
         Ok(TransactionData::new_with_gas_coins_allow_sponsor(
             kind,
             sender,
-            vec![gas_payment],
+            gas_payment,
             gas_budget,
             gas_price,
             gas_sponsor.unwrap_or(sender),
@@ -260,14 +271,8 @@ impl TransactionBuilder {
     }
 
     /// Get the object references for a list of object IDs
-    pub async fn input_refs(
-        &self,
-        input_coins: &[ObjectID],
-    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
-        let handles: Vec<_> = input_coins
-            .iter()
-            .map(|id| self.get_object_ref(*id))
-            .collect();
+    pub async fn input_refs(&self, obj_ids: &[ObjectID]) -> Result<Vec<ObjectRef>, anyhow::Error> {
+        let handles: Vec<_> = obj_ids.iter().map(|id| self.get_object_ref(*id)).collect();
         let obj_refs = join_all(handles)
             .await
             .into_iter()

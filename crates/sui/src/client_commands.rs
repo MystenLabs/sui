@@ -69,8 +69,7 @@ use sui_types::{
     parse_sui_type_tag,
     signature::GenericSignature,
     transaction::{
-        InputObjectKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
-        TransactionKind,
+        SenderSignedData, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
 
@@ -1068,10 +1067,16 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
-
                 let data = client
                     .transaction_builder()
-                    .tx_data(sender, tx_kind, vec![], gas_budget, gas_price, gas, None)
+                    .tx_data(
+                        sender,
+                        tx_kind,
+                        gas_budget,
+                        gas_price,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        None,
+                    )
                     .await?;
                 let result = serialize_or_execute!(
                     data,
@@ -1164,7 +1169,14 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .tx_data(sender, tx_kind, vec![], gas_budget, gas_price, gas, None)
+                    .tx_data(
+                        sender,
+                        tx_kind,
+                        gas_budget,
+                        gas_price,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        None,
+                    )
                     .await?;
 
                 let result = serialize_or_execute!(
@@ -1357,25 +1369,14 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
-                // This was how it was used in the original move_call code in the tx builder,
-                // and it was passed to the select_gas function.
-                let input_coins = tx_kind
-                    .input_objects()?
-                    .iter()
-                    .flat_map(|obj| match obj {
-                        InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
-                        _ => None,
-                    })
-                    .collect();
                 let data = client
                     .transaction_builder()
                     .tx_data(
                         signer,
                         tx_kind,
-                        input_coins,
                         gas_budget,
                         gas_price,
-                        gas,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
                         None,
                     )
                     .await?;
@@ -1419,7 +1420,14 @@ impl SuiClientCommands {
                 }
                 let data = client
                     .transaction_builder()
-                    .tx_data(from, tx_kind, vec![], gas_budget, gas_price, gas, None)
+                    .tx_data(
+                        from,
+                        tx_kind,
+                        gas_budget,
+                        gas_price,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        None,
+                    )
                     .await?;
                 serialize_or_execute!(
                     data,
@@ -1463,10 +1471,9 @@ impl SuiClientCommands {
                     .tx_data(
                         from,
                         tx_kind,
-                        vec![],
                         gas_budget,
                         gas_price,
-                        Some(object_id),
+                        vec![object_id],
                         Some(from),
                     )
                     .await?;
@@ -1539,7 +1546,14 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .tx_data(from, kind, input_coins, gas_budget, gas_price, gas, None)
+                    .tx_data(
+                        from,
+                        kind,
+                        gas_budget,
+                        gas_price,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        None,
+                    )
                     .await?;
                 serialize_or_execute!(
                     data,
@@ -1606,10 +1620,9 @@ impl SuiClientCommands {
                     .tx_data(
                         signer,
                         kind,
-                        vec![],
                         gas_budget,
                         gas_price,
-                        input_coins.first().copied(),
+                        input_coins,
                         Some(signer),
                     )
                     .await?;
@@ -1654,15 +1667,7 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .tx_data(
-                        signer,
-                        tx_kind,
-                        vec![],
-                        gas_budget,
-                        gas_price,
-                        input_coins.first().copied(),
-                        None,
-                    )
+                    .tx_data(signer, tx_kind, gas_budget, gas_price, input_coins, None)
                     .await?;
 
                 serialize_or_execute!(
@@ -1811,10 +1816,9 @@ impl SuiClientCommands {
                     .tx_data(
                         signer,
                         tx_kind,
-                        vec![coin_id],
                         gas_budget,
                         gas_price,
-                        gas,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
                         None,
                     )
                     .await?;
@@ -1859,10 +1863,9 @@ impl SuiClientCommands {
                     .tx_data(
                         signer,
                         tx_kind,
-                        vec![primary_coin, coin_to_merge],
                         gas_budget,
                         gas_price,
-                        gas,
+                        gas.map(|x| vec![x]).unwrap_or_default(),
                         None,
                     )
                     .await?;
