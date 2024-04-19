@@ -65,6 +65,8 @@ ignore = [
     "RUSTSEC-2023-0052",
     # we don't do RSA signing on Sui (only verifying for zklogin)
     "RUSTSEC-2023-0071",
+    # Unblock until rustls is upgraded.
+    "RUSTSEC-2024-0336",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
