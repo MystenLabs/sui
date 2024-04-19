@@ -11,7 +11,6 @@ use sui_package_resolver::Resolver;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
-use sui_types::base_types::SequenceNumber;
 use sui_types::object::Object;
 
 use crate::error::Error;
@@ -21,7 +20,7 @@ use super::{Db, DbConnection, QueryExecutor};
 const STORE: &str = "PostgresDB";
 
 pub(crate) type PackageCache = PackageStoreWithLruCache<DbPackageStore>;
-pub(crate) type PackageResolver = Resolver<PackageCache>;
+pub(crate) type PackageResolver = Arc<Resolver<PackageCache>>;
 
 /// Store which fetches package for the given address from the backend db on every call
 /// to `fetch`
@@ -35,26 +34,6 @@ impl DbPackageStore {
 
 #[async_trait]
 impl PackageStore for DbPackageStore {
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        let Self(db) = self;
-        let version: Option<i64> = db
-            .execute(move |conn| {
-                conn.result(move || {
-                    objects::dsl::objects
-                        .select(objects::dsl::object_version)
-                        .filter(objects::dsl::object_id.eq(id.to_vec()))
-                })
-                .optional()
-            })
-            .await?;
-
-        if let Some(version) = version {
-            Ok(SequenceNumber::from_u64(version as u64))
-        } else {
-            Err(PackageResolverError::PackageNotFound(id))
-        }
-    }
-
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         let Self(db) = self;
         let bcs: Option<Vec<u8>> = db

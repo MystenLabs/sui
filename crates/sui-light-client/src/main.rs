@@ -8,7 +8,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 
 use sui_rest_api::{CheckpointData, Client};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::ObjectID,
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
     digests::TransactionDigest,
@@ -42,22 +42,17 @@ struct Args {
 }
 
 struct RemotePackageStore {
-    client: Client,
     config: Config,
 }
 
 impl RemotePackageStore {
-    pub fn new(client: Client, config: Config) -> Self {
-        Self { client, config }
+    pub fn new(config: Config) -> Self {
+        Self { config }
     }
 }
 
 #[async_trait]
 impl PackageStore for RemotePackageStore {
-    /// Latest version of the object at `id`.
-    async fn version(&self, id: AccountAddress) -> ResolverResult<SequenceNumber> {
-        Ok(self.client.get_object(id.into()).await.unwrap().version())
-    }
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> ResolverResult<Arc<Package>> {
@@ -466,8 +461,7 @@ pub async fn main() {
         config.checkpoint_summary_dir.display()
     );
 
-    let client: Client = Client::new(config.rest_url());
-    let remote_package_store = RemotePackageStore::new(client, config.clone());
+    let remote_package_store = RemotePackageStore::new(config.clone());
     let resolver = Resolver::new(remote_package_store);
 
     match args.command {

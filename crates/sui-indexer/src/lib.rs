@@ -3,14 +3,18 @@
 #![recursion_limit = "256"]
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
+use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::path::PathBuf;
+use system_package_task::SystemPackageTask;
 use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use url::Url;
 
@@ -36,6 +40,7 @@ pub mod metrics;
 pub mod models;
 pub mod schema;
 pub mod store;
+pub mod system_package_task;
 pub mod test_utils;
 pub mod types;
 
@@ -156,8 +161,21 @@ pub async fn build_json_rpc_server(
         config.rpc_server_url.as_str().parse().unwrap(),
         config.rpc_server_port,
     );
+
+    let cancel = CancellationToken::new();
+    let system_package_task =
+        SystemPackageTask::new(reader.clone(), cancel.clone(), Duration::from_secs(10));
+
+    tracing::info!("Starting system package task");
+    spawn_monitored_task!(async move { system_package_task.run().await });
+
     Ok(builder
-        .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
+        .start(
+            default_socket_addr,
+            custom_runtime,
+            Some(ServerType::Http),
+            Some(cancel),
+        )
         .await?)
 }
 

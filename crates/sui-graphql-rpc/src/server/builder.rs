@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::data::package_resolver::DbPackageStore;
+use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
@@ -47,6 +48,7 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
+use std::sync::Arc;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -62,13 +64,14 @@ use uuid::Uuid;
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     watermark_task: WatermarkTask,
+    system_package_task: SystemPackageTask,
     state: AppState,
 }
 
 impl Server {
     /// Start the GraphQL service and any background tasks it is dependent on. When a cancellation
     /// signal is received, the method waits for all tasks to complete before returning.
-    pub async fn run(self) -> Result<(), Error> {
+    pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
@@ -77,6 +80,14 @@ impl Server {
             info!("Starting watermark update task");
             spawn_monitored_task!(async move {
                 self.watermark_task.run().await;
+            })
+        };
+
+        // A handle that spawns a background task to evict system packages on epoch changes.
+        let system_package_task = {
+            info!("Starting system package task");
+            spawn_monitored_task!(async move {
+                self.system_package_task.run().await;
             })
         };
 
@@ -96,7 +107,7 @@ impl Server {
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, server_task);
+        let _ = join!(watermark_task, system_package_task, server_task);
 
         Ok(())
     }
@@ -107,6 +118,7 @@ pub(crate) struct ServerBuilder {
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
     db_reader: Option<Db>,
+    resolver: Option<PackageResolver>,
 }
 
 #[derive(Clone)]
@@ -155,6 +167,7 @@ impl ServerBuilder {
             schema: schema_builder(),
             router: None,
             db_reader: None,
+            resolver: None,
         }
     }
 
@@ -187,19 +200,22 @@ impl ServerBuilder {
         String,
         Schema<Query, Mutation, EmptySubscription>,
         Db,
+        PackageResolver,
         Router,
     ) {
         let address = self.address();
         let ServerBuilder {
+            state: _,
             schema,
             db_reader,
+            resolver,
             router,
-            ..
         } = self;
         (
             address,
             schema.finish(),
             db_reader.expect("DB reader not initialized"),
+            resolver.expect("Package resolver not initialized"),
             router.expect("Router not initialized"),
         )
     }
@@ -279,13 +295,19 @@ impl ServerBuilder {
     /// Consumes the `ServerBuilder` to create a `Server` that can be run.
     pub fn build(self) -> Result<Server, Error> {
         let state = self.state.clone();
-        let (address, schema, db_reader, router) = self.build_components();
+        let (address, schema, db_reader, resolver, router) = self.build_components();
 
         // Initialize the watermark background task struct.
         let watermark_task = WatermarkTask::new(
             db_reader.clone(),
             state.metrics.clone(),
             std::time::Duration::from_millis(state.service.background_tasks.watermark_update_ms),
+            state.cancellation_token.clone(),
+        );
+
+        let system_package_task = SystemPackageTask::new(
+            resolver,
+            watermark_task.epoch_receiver(),
             state.cancellation_token.clone(),
         );
 
@@ -302,6 +324,7 @@ impl ServerBuilder {
             )
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
             watermark_task,
+            system_package_task,
             state,
         })
     }
@@ -364,8 +387,13 @@ impl ServerBuilder {
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore::new(db.clone());
-        let package_cache = PackageStoreWithLruCache::new(package_store);
+        let resolver = Arc::new(Resolver::new_with_limits(
+            PackageStoreWithLruCache::new(package_store),
+            config.service.limits.package_resolver_limits(),
+        ));
+
         builder.db_reader = Some(db.clone());
+        builder.resolver = Some(resolver.clone());
 
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: fail fast if no url, once we enable mutations fully
@@ -388,10 +416,7 @@ impl ServerBuilder {
             .context_data(DataLoader::new(db.clone(), tokio::spawn))
             .context_data(db)
             .context_data(pg_conn_pool)
-            .context_data(Resolver::new_with_limits(
-                package_cache,
-                config.service.limits.package_resolver_limits(),
-            ))
+            .context_data(resolver)
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
             .context_data(zklogin_config)
