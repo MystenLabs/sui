@@ -29,15 +29,13 @@ pub(crate) mod eth_mock_provider;
 #[cfg(test)]
 pub(crate) mod sui_mock_client;
 
-pub mod e2e_test_utils;
-
 #[cfg(test)]
 pub mod test_utils;
 
 pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
 
 #[cfg(test)]
-mod e2e_tests;
+pub mod e2e_tests;
 
 // TODO: can we log the error very time it gets retried?
 #[macro_export]

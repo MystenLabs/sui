@@ -160,9 +160,9 @@ mod tests {
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
-    use crate::e2e_test_utils::deploy_sol_contract;
-    use crate::e2e_test_utils::get_eth_signer_client_e2e_test_only;
-    use crate::e2e_test_utils::wait_for_server_to_be_up;
+    use crate::e2e_tests::test_utils::deploy_sol_contract;
+    use crate::e2e_tests::test_utils::get_eth_signer_client_e2e_test_only;
+    use crate::e2e_tests::test_utils::wait_for_server_to_be_up;
     use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
@@ -241,7 +241,7 @@ mod tests {
         let client_sui_address = SuiAddress::from(kp.public());
         // send some gas to this address
         test_cluster
-            .transfer_sui_must_exceeed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
@@ -311,7 +311,7 @@ mod tests {
 
         // send some gas to this address
         let gas_obj = test_cluster
-            .transfer_sui_must_exceeed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
