@@ -97,7 +97,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "send_block"])
+                .with_label_values(&[peer_hostname])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -129,7 +129,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname])
+                .with_label_values(&[peer_hostname, &"handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
             sleep(forward_time_drift).await;
         }

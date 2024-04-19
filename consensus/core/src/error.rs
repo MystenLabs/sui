@@ -38,6 +38,15 @@ pub enum ConsensusError {
     #[error("Genesis blocks should not be queried!")]
     UnexpectedGenesisBlockRequested,
 
+    #[error(
+        "Expected {requested} but received {received} blocks returned from authority {authority}"
+    )]
+    UnexpectedNumberOfBlocksFetched {
+        authority: AuthorityIndex,
+        requested: usize,
+        received: usize,
+    },
+
     #[error("Unexpected block returned while fetching missing blocks")]
     UnexpectedFetchedBlock {
         index: AuthorityIndex,

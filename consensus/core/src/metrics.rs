@@ -144,7 +144,7 @@ impl NodeMetrics {
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
                 "block_timestamp_drift_wait_ms",
                 "Total time in ms spent waiting, when a received block has timestamp in future.",
-                &["authority"],
+                &["authority", "source"],
                 registry,
             ).unwrap(),
             blocks_per_commit_count: register_histogram_with_registry!(

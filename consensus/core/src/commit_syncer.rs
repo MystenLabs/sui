@@ -44,7 +44,7 @@ use tokio::{
 use tracing::{info, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         Commit, CommitAPI as _, CommitDigest, CommitRef, TrustedCommit, GENESIS_COMMIT_INDEX,
@@ -389,6 +389,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             FETCH_BLOCKS_TIMEOUT,
                         )
                         .await?;
+                    // 5. Verify the same number of blocks are returned as requested.
+                    if request_block_refs.len() != serialized_blocks.len() {
+                        return Err(ConsensusError::UnexpectedNumberOfBlocksFetched {
+                            authority: target_authority,
+                            requested: request_block_refs.len(),
+                            received: serialized_blocks.len(),
+                        });
+                    }
+                    // 6. Verify returned blocks have valid formats.
                     let signed_blocks = serialized_blocks
                         .iter()
                         .map(|serialized| {
@@ -397,7 +406,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             Ok(block)
                         })
                         .collect::<ConsensusResult<Vec<_>>>()?;
-                    // 6. Verify the returned blocks match the requested block refs.
+                    // 7. Verify the returned blocks match the requested block refs.
                     // If they do match, the returned blocks can be considered verified as well.
                     let mut blocks = Vec::new();
                     for ((requested_block_ref, signed_block), serialized) in request_block_refs
@@ -428,6 +437,24 @@ impl<C: NetworkClient> CommitSyncer<C> {
         let mut fetched_blocks = Vec::new();
         while let Some(result) = requests.next().await {
             fetched_blocks.extend(result?);
+        }
+
+        // 8. Make sure fetched block timestamps are lower than current time.
+        for block in &fetched_blocks {
+            let now_ms = timestamp_utc_ms();
+            let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
+            if forward_drift == 0 {
+                continue;
+            };
+            let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
+            inner
+                .context
+                .metrics
+                .node_metrics
+                .block_timestamp_drift_wait_ms
+                .with_label_values(&[peer_hostname, &"commit_syncer"])
+                .inc_by(forward_drift);
+            sleep(Duration::from_millis(forward_drift)).await;
         }
 
         Ok((commits, fetched_blocks))
@@ -647,7 +674,10 @@ mod test {
             .map(|i| {
                 VerifiedBlock::new_for_test(
                     TestBlock::new(11, i)
-                        .set_commit_votes(vec![CommitRef::new(6 + i, CommitDigest::MIN), CommitRef::new(7 + i, CommitDigest::MIN)])
+                        .set_commit_votes(vec![
+                            CommitRef::new(6 + i, CommitDigest::MIN),
+                            CommitRef::new(7 + i, CommitDigest::MIN),
+                        ])
                         .build(),
                 )
             })
