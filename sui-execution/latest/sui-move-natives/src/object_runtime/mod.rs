@@ -647,6 +647,7 @@ pub fn get_all_uids(
     impl<'i> AV::Traversal for UIDTraversalV2<'i> {
         type Error = AV::Error;
 
+        // TODO(Enums): Update to handle variants
         fn traverse_struct(&mut self, driver: &mut AV::StructDriver) -> Result<(), Self::Error> {
             if driver.struct_layout().type_ == UID::type_() {
                 while driver.next_field(&mut UIDCollectorV2(self.0))?.is_some() {}
