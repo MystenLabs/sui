@@ -48,6 +48,7 @@ use sui_types::TypeTag;
 use tempfile::tempdir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
+use tokio::task::JoinHandle;
 
 const BRIDGE_COMMITTEE_NAME: &str = "BridgeCommittee";
 const SUI_BRIDGE_NAME: &str = "SuiBridge";
@@ -214,8 +215,7 @@ struct SolDeployConfig {
 }
 
 pub(crate) async fn initialize_bridge_environment(
-    should_start_bridge_cluster: bool,
-) -> (TestCluster, EthBridgeEnvironment) {
+) -> (TestCluster, BridgeCluster, EthBridgeEnvironment) {
     let anvil_port = get_available_port("127.0.0.1");
     let anvil_url = format!("http://127.0.0.1:{anvil_port}");
     let mut eth_environment = EthBridgeEnvironment::new(&anvil_url, anvil_port)
@@ -266,17 +266,15 @@ pub(crate) async fn initialize_bridge_environment(
     eth_environment.contracts = Some(deployed_contracts);
 
     // if start bridge cluster is enabled, start the bridge cluster
-    if should_start_bridge_cluster {
-        start_bridge_cluster(
-            &test_cluster,
-            &eth_environment,
-            vec![vec![], vec![], vec![], vec![]],
-        )
-        .await;
-        info!("Started bridge cluster");
-    }
+    let bridge_cluster = start_bridge_cluster(
+        &test_cluster,
+        &eth_environment,
+        vec![vec![], vec![], vec![], vec![]],
+    )
+    .await;
+    info!("Started bridge cluster");
 
-    (test_cluster, eth_environment)
+    (test_cluster, bridge_cluster, eth_environment)
 }
 
 pub(crate) async fn deploy_sol_contract(
@@ -477,11 +475,24 @@ impl Drop for EthBridgeEnvironment {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct BridgeCluster {
+    cluster: Vec<JoinHandle<()>>,
+}
+
+impl Drop for BridgeCluster {
+    fn drop(&mut self) {
+        while let Some(handle) = self.cluster.pop() {
+            drop(handle);
+        }
+    }
+}
+
 pub(crate) async fn start_bridge_cluster(
     test_cluster: &TestCluster,
     eth_environment: &EthBridgeEnvironment,
     approved_governance_actions: Vec<Vec<BridgeAction>>,
-) {
+) -> BridgeCluster {
     // TODO: move this to TestCluster
     let bridge_authority_keys = test_cluster
         .bridge_authority_keys
@@ -502,6 +513,8 @@ pub(crate) async fn start_bridge_cluster(
         .as_ref()
         .unwrap()
         .sui_bridge_addrress_hex();
+
+    let mut bridge_cluster = BridgeCluster { cluster: vec![] };
 
     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys
         .iter()
@@ -547,11 +560,13 @@ pub(crate) async fn start_bridge_cluster(
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
-        tokio::spawn(async move {
+        bridge_cluster.cluster.push(tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             run_bridge_node(config_clone).await.unwrap();
-        });
+        }));
     }
+
+    bridge_cluster
 }
 
 pub(crate) async fn get_signatures(

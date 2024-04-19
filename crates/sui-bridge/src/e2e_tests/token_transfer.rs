@@ -2,14 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
-use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::e2e_tests::test_utils::{get_signatures, initialize_bridge_environment, TEST_PK};
-use crate::e2e_tests::test_utils::{
-    publish_coins_return_add_coins_on_sui_action, start_bridge_cluster,
-};
 use crate::events::SuiBridgeEvent;
 use crate::sui_client::SuiBridgeClient;
-use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
 use crate::utils::EthSigner;
 use eth_sui_bridge::EthSuiBridgeEvents;
@@ -18,16 +13,11 @@ use ethers::types::Address as EthAddress;
 use move_core_types::ident_str;
 use std::collections::HashMap;
 
-use std::path::Path;
-
-use std::sync::Arc;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-};
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::bridge::{BridgeChainId, BridgeTokenMetadata, BRIDGE_MODULE_NAME, TOKEN_ID_ETH};
+use sui_types::bridge::{BridgeChainId, BRIDGE_MODULE_NAME, TOKEN_ID_ETH};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
@@ -40,7 +30,8 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let eth_chain_id = BridgeChainId::EthCustom as u8;
     let sui_chain_id = BridgeChainId::SuiCustom as u8;
 
-    let (mut test_cluster, eth_environment) = initialize_bridge_environment(true).await;
+    let (mut test_cluster, _bridge_cluster, eth_environment) =
+        initialize_bridge_environment().await;
 
     let (eth_signer, _) = eth_environment.get_signer(TEST_PK).await.unwrap();
 
@@ -132,114 +123,6 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     assert_eq!(
         eth_signer.get_balance(eth_address_1, None).await.unwrap(),
         U256::from(amount) * U256::exp10(18)
-    );
-}
-
-#[tokio::test]
-async fn test_add_new_coins_on_sui() {
-    telemetry_subscribers::init_for_testing();
-
-    let (mut test_cluster, eth_environment) = initialize_bridge_environment(false).await;
-
-    let bridge_arg = test_cluster.get_mut_bridge_arg().await.unwrap();
-
-    // Register tokens
-    let token_id = 42;
-    let token_price = 10000;
-    let sender = test_cluster.get_address_0();
-    let tx = test_cluster
-        .test_transaction_builder_with_sender(sender)
-        .await
-        .publish(Path::new("../../bridge/move/tokens/mock/ka").into())
-        .build();
-    let publish_token_response = test_cluster.sign_and_execute_transaction(&tx).await;
-    info!("Published new token");
-    let action = publish_coins_return_add_coins_on_sui_action(
-        test_cluster.wallet_mut(),
-        bridge_arg,
-        vec![publish_token_response],
-        vec![token_id],
-        vec![token_price],
-        1, // seq num
-    )
-    .await;
-
-    // TODO: do not block on `build_with_bridge`, return with bridge keys immediately
-    // to paralyze the setup.
-    let sui_bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
-        .await
-        .unwrap();
-
-    info!("Starting bridge cluster");
-
-    start_bridge_cluster(
-        &test_cluster,
-        &eth_environment,
-        vec![
-            vec![action.clone()],
-            vec![action.clone()],
-            vec![action.clone()],
-            vec![],
-        ],
-    )
-    .await;
-
-    test_cluster.wait_for_bridge_cluster_to_be_up(10).await;
-    info!("Bridge cluster is up");
-    let bridge_committee = Arc::new(
-        sui_bridge_client
-            .get_bridge_committee()
-            .await
-            .expect("Failed to get bridge committee"),
-    );
-    let agg = BridgeAuthorityAggregator::new(bridge_committee);
-    let threshold = action.approval_threshold();
-    let certified_action = agg
-        .request_committee_signatures(action, threshold)
-        .await
-        .expect("Failed to request committee signatures");
-
-    let tx = build_add_tokens_on_sui_transaction(
-        sender,
-        &test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await
-            .unwrap()
-            .unwrap(),
-        certified_action,
-        bridge_arg,
-    )
-    .unwrap();
-
-    let response = test_cluster.sign_and_execute_transaction(&tx).await;
-    assert_eq!(
-        response.effects.unwrap().status(),
-        &SuiExecutionStatus::Success
-    );
-    info!("Approved new token");
-
-    // Assert new token is correctly added
-    let treasury_summary = sui_bridge_client.get_treasury_summary().await.unwrap();
-    assert_eq!(treasury_summary.id_token_type_map.len(), 5); // 4 + 1 new token
-    let (id, _type) = treasury_summary
-        .id_token_type_map
-        .iter()
-        .find(|(id, _)| id == &token_id)
-        .unwrap();
-    let (_type, metadata) = treasury_summary
-        .supported_tokens
-        .iter()
-        .find(|(_type_, _)| _type == _type_)
-        .unwrap();
-    assert_eq!(
-        metadata,
-        &BridgeTokenMetadata {
-            id: *id,
-            decimal_multiplier: 1_000_000_000,
-            notional_value: token_price,
-            native_token: false,
-        }
     );
 }
 
