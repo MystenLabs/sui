@@ -29,6 +29,7 @@ proptest.workspace = true
 proptest-derive.workspace = true
 move-core-types = { workspace = true, features = ["fuzzing" ] }
 serde_json.workspace = true
+itertools.workspace = true
 
 [features]
 default = []

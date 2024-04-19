@@ -4,7 +4,10 @@
 
 use crate::{
     binary_config::BinaryConfig,
-    file_format::{basic_test_module, CompiledModule},
+    file_format::{
+        basic_test_module, basic_test_module_with_enum, Bytecode, CodeUnit, CompiledModule,
+        SignatureIndex, VariantJumpTableIndex,
+    },
     file_format_common::*,
 };
 use move_core_types::{metadata::Metadata, vm_status::StatusCode};
@@ -330,4 +333,60 @@ fn no_metadata() {
         v
     };
     test(&test2);
+}
+
+#[test]
+fn enum_version_lie() {
+    let test = |bytes, expected_status| {
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            &BinaryConfig::with_extraneous_bytes_check(true),
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, expected_status);
+    };
+
+    // With enums and an invalid version bytecode version
+    let module = basic_test_module_with_enum();
+    let mut test_mut = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+
+    // Manually manipulate the version in the binary to the wrong version
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        test_mut[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&test_mut, StatusCode::MALFORMED);
+
+    let mut module = basic_test_module();
+    module.function_defs[0].code = Some(CodeUnit {
+        locals: SignatureIndex::new(0),
+        code: vec![
+            Bytecode::VariantSwitch(VariantJumpTableIndex::new(0)),
+            Bytecode::Ret,
+        ],
+        jump_tables: vec![],
+    });
+    let mut m_bytes = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        m_bytes[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&m_bytes, StatusCode::MALFORMED);
+}
+
+#[test]
+fn deserialize_empty_enum_fails() {
+    let mut module = basic_test_module_with_enum();
+    module.enum_defs[0].variants = vec![];
+    let mut bin = vec![];
+    module.serialize(&mut bin).unwrap();
+    CompiledModule::deserialize_with_config(&bin, &BinaryConfig::with_extraneous_bytes_check(true))
+        .unwrap_err();
 }
