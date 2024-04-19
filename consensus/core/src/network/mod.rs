@@ -25,9 +25,10 @@ use futures::Stream;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
+    commit::TrustedCommit,
     context::Context,
     error::ConsensusResult,
-    Round,
+    CommitIndex, Round,
 };
 
 // Anemo generated stubs for RPCs.
@@ -84,6 +85,17 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         block_refs: Vec<BlockRef>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Fetches serialized commits from a peer, with index in [start, end].
+    /// Returns a tuple of both the serialized commits, and serialized blocks that contain
+    /// votes certifiying the last commit.
+    async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
 
 /// Network service for handling requests from peers.
@@ -112,6 +124,14 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>>;
+
+    // Handles the request to fetch commits by index range from the peer.
+    async fn handle_fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

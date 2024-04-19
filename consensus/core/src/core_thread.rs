@@ -17,7 +17,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
 };
 
-const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
+const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted

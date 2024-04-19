@@ -56,6 +56,9 @@ pub(crate) trait Store: Send + Sync {
     /// Reads all commits from start (inclusive) until end (exclusive).
     fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>>;
 
+    /// Reads all blocks voting on a particular commit.
+    fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>>;
+
     /// Reads the last commit info, including last committed round per authority.
     fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>>;
 }

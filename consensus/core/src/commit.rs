@@ -23,6 +23,8 @@ use crate::{
 /// Index of a commit among all consensus commits.
 pub type CommitIndex = u32;
 
+pub(crate) const GENESIS_COMMIT_INDEX: CommitIndex = 0;
+
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
 /// the common case.
@@ -174,7 +176,7 @@ impl TrustedCommit {
         &self.serialized
     }
 
-    fn compute_digest(serialized: &[u8]) -> CommitDigest {
+    pub(crate) fn compute_digest(serialized: &[u8]) -> CommitDigest {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(serialized);
         CommitDigest(hasher.finalize().into())
@@ -237,9 +239,18 @@ impl fmt::Debug for CommitDigest {
 /// Uniquely identifies a commit with its index and digest.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitRef {
-    pub index: CommitIndex,
-    pub digest: CommitDigest,
+    pub(crate) index: CommitIndex,
+    pub(crate) digest: CommitDigest,
 }
+
+impl CommitRef {
+    pub(crate) fn new(index: CommitIndex, digest: CommitDigest) -> Self {
+        Self { index, digest }
+    }
+}
+
+// Represents a vote on a Commit.
+pub type CommitVote = CommitRef;
 
 /// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
 /// can arbitrarily sort the blocks within each sub-dag (but using a deterministic algorithm).

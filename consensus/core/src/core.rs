@@ -206,6 +206,7 @@ impl Core {
         &mut self,
         round: Round,
     ) -> ConsensusResult<Option<VerifiedBlock>> {
+        let _scope = monitored_scope("Core::force_new_block");
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
             return self.try_propose(true);
@@ -229,7 +230,6 @@ impl Core {
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
     fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
-        let _scope = monitored_scope("Core::try_new_block");
         let _s = self
             .context
             .metrics
@@ -368,6 +368,7 @@ impl Core {
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
+        let _scope = monitored_scope("Core::get_missing_blocks");
         self.block_manager.missing_blocks()
     }
 
@@ -502,12 +503,13 @@ pub(crate) struct CoreSignals {
 }
 
 impl CoreSignals {
-    // TODO: move to Parameters.
-    const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
-
     pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
-        let (tx_block_broadcast, rx_block_broadcast) =
-            broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
+        // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state,
+        // since the underlying blocks are ref counted so a lower buffer here will not reduce memory
+        // usage significantly.
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<VerifiedBlock>(
+            context.parameters.dag_state_cached_rounds as usize,
+        );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {

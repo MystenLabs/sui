@@ -63,10 +63,10 @@ impl Store for MemStore {
                 block_ref.round,
                 block_ref.digest,
             ));
-            for commit in block.commit_votes() {
+            for vote in block.commit_votes() {
                 inner
                     .commit_votes
-                    .insert((commit.index, commit.digest, block_ref));
+                    .insert((vote.index, vote.digest, block_ref));
             }
         }
         if let Some(last_commit) = write_batch.commits.last().cloned() {
@@ -190,6 +190,19 @@ impl Store for MemStore {
             commits.push(commit.clone());
         }
         Ok(commits)
+    }
+
+    fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>> {
+        let inner = self.inner.read();
+        let votes = inner
+            .commit_votes
+            .range((
+                Included((commit_index, CommitDigest::MIN, BlockRef::MIN)),
+                Included((commit_index, CommitDigest::MAX, BlockRef::MAX)),
+            ))
+            .map(|(_, _, block_ref)| *block_ref)
+            .collect();
+        Ok(votes)
     }
 
     fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {

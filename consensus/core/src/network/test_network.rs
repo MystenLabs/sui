@@ -8,16 +8,18 @@ use futures::stream;
 use parking_lot::Mutex;
 
 use crate::{
-    block::BlockRef,
+    block::{BlockRef, VerifiedBlock},
+    commit::TrustedCommit,
     error::ConsensusResult,
     network::{BlockStream, NetworkService},
-    Round,
+    CommitIndex, Round,
 };
 
 pub(crate) struct TestService {
     pub(crate) handle_send_block: Vec<(AuthorityIndex, Bytes)>,
     pub(crate) handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
+    pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitIndex, CommitIndex)>,
     pub(crate) own_blocks: Vec<Bytes>,
 }
 
@@ -27,6 +29,7 @@ impl TestService {
             handle_send_block: Vec::new(),
             handle_fetch_blocks: Vec::new(),
             handle_subscribe_blocks: Vec::new(),
+            handle_fetch_commits: Vec::new(),
             own_blocks: Vec::new(),
         }
     }
@@ -68,5 +71,15 @@ impl NetworkService for Mutex<TestService> {
     ) -> ConsensusResult<Vec<Bytes>> {
         self.lock().handle_fetch_blocks.push((peer, block_refs));
         Ok(vec![])
+    }
+
+    async fn handle_fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        self.lock().handle_fetch_commits.push((peer, start, end));
+        Ok((vec![], vec![]))
     }
 }

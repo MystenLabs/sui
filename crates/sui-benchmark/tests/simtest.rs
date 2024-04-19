@@ -477,6 +477,64 @@ mod test {
         assert!(finished.load(Ordering::SeqCst));
     }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_partial_sig_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as f+1 nodes (in this case 3/6) are sending partial signatures.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(3)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-send-partial-signatures", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_dkg_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as nodes are participating in DKG representing
+        // stake equal to 2f+1 PLUS proprotion of stake represented by the
+        // `random_beacon_reduction_allowed_delta` ProtocolConfig option.
+        // In this case we make sure it still works with 5/6 validators.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(1)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-dkg", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await
+    }
+
+    fn handle_bool_failpoint(
+        eligible_nodes: &HashSet<sui_simulator::task::NodeId>, // only given eligible nodes may fail
+        probability: f64,
+    ) -> bool {
+        if !eligible_nodes.contains(&sui_simulator::current_simnode_id()) {
+            return false; // don't fail ineligible nodes
+        }
+        let mut rng = thread_rng();
+        if rng.gen_range(0.0..1.0) < probability {
+            true
+        } else {
+            false
+        }
+    }
+
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,

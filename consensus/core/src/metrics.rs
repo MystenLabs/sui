@@ -83,6 +83,8 @@ pub(crate) struct NodeMetrics {
     pub core_lock_enqueued: IntCounter,
     pub highest_accepted_round: IntGauge,
     pub accepted_blocks: IntCounter,
+    pub dag_state_recent_blocks: IntGauge,
+    pub dag_state_recent_refs: IntGauge,
     pub dag_state_store_read_count: IntCounterVec,
     pub dag_state_store_write_count: IntCounter,
     pub fetch_blocks_scheduler_inflight: IntGauge,
@@ -99,11 +101,22 @@ pub(crate) struct NodeMetrics {
     pub quorum_receive_latency: Histogram,
     pub scope_processing_time: HistogramVec,
     pub sub_dags_per_commit_count: Histogram,
-    pub suspended_blocks: IntCounterVec,
+    pub block_suspensions: IntCounterVec,
+    pub block_unsuspensions: IntCounterVec,
+    pub block_manager_suspended_blocks: IntGauge,
+    pub block_manager_missing_ancestors: IntGauge,
+    pub block_manager_missing_blocks: IntGauge,
     pub threshold_clock_round: IntGauge,
-    pub unsuspended_blocks: IntCounterVec,
     pub subscriber_connection_attempts: IntCounterVec,
     pub subscriber_connections: IntGaugeVec,
+    pub commit_sync_inflight_fetches: IntGauge,
+    pub commit_sync_pending_fetches: IntGauge,
+    pub commit_sync_fetched_commits: IntCounter,
+    pub commit_sync_fetched_blocks: IntCounter,
+    pub commit_sync_total_fetched_blocks_size: IntCounter,
+    pub commit_sync_local_index: IntGauge,
+    pub commit_sync_fetch_loop_latency: Histogram,
+    pub commit_sync_fetch_once_latency: Histogram,
     pub uptime: Histogram,
 }
 
@@ -162,6 +175,16 @@ impl NodeMetrics {
             accepted_blocks: register_int_counter_with_registry!(
                 "accepted_blocks",
                 "Number of accepted blocks",
+                registry,
+            ).unwrap(),
+            dag_state_recent_blocks: register_int_gauge_with_registry!(
+                "dag_state_recent_blocks",
+                "Number of recent blocks cached in the DagState",
+                registry,
+            ).unwrap(),
+            dag_state_recent_refs: register_int_gauge_with_registry!(
+                "dag_state_recent_refs",
+                "Number of recent refs cached in the DagState",
                 registry,
             ).unwrap(),
             dag_state_store_read_count: register_int_counter_vec_with_registry!(
@@ -254,21 +277,36 @@ impl NodeMetrics {
                 "The number of subdags per commit.",
                 registry,
             ).unwrap(),
-            suspended_blocks: register_int_counter_vec_with_registry!(
-                "suspended_blocks",
-                "The number of suspended blocks. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
+            block_suspensions: register_int_counter_vec_with_registry!(
+                "block_suspensions",
+                "The number block suspensions. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            block_unsuspensions: register_int_counter_vec_with_registry!(
+                "block_unsuspensions",
+                "The number of block unsuspensions.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_manager_suspended_blocks: register_int_gauge_with_registry!(
+                "block_manager_suspended_blocks",
+                "The number of blocks currently suspended in the block manager",
+                registry,
+            ).unwrap(),
+            block_manager_missing_ancestors: register_int_gauge_with_registry!(
+                "block_manager_missing_ancestors",
+                "The number of missing ancestors tracked in the block manager",
+                registry,
+            ).unwrap(),
+            block_manager_missing_blocks: register_int_gauge_with_registry!(
+                "block_manager_missing_blocks",
+                "The number of blocks missing content tracked in the block manager",
                 registry,
             ).unwrap(),
             threshold_clock_round: register_int_gauge_with_registry!(
                 "threshold_clock_round",
                 "The current threshold clock round. We only advance to a new round when a quorum of parents have been synced.",
-                registry,
-            ).unwrap(),
-            unsuspended_blocks: register_int_counter_vec_with_registry!(
-                "unsuspended_blocks",
-                "The number of unsuspended blocks",
-                &["authority"],
                 registry,
             ).unwrap(),
             subscriber_connection_attempts: register_int_counter_vec_with_registry!(
@@ -281,6 +319,48 @@ impl NodeMetrics {
                 "subscriber_connections",
                 "The number of block stream connections breaking down by peer",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            commit_sync_inflight_fetches: register_int_gauge_with_registry!(
+                "commit_sync_inflight_fetches",
+                "The number of inflight fetches in commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_pending_fetches: register_int_gauge_with_registry!(
+                "commit_sync_pending_fetches",
+                "The number of pending fetches in commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_commits: register_int_counter_with_registry!(
+                "commit_sync_fetched_commits",
+                "The number of commits fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_blocks: register_int_counter_with_registry!(
+                "commit_sync_fetched_blocks",
+                "The number of blocks fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_total_fetched_blocks_size: register_int_counter_with_registry!(
+                "commit_sync_total_fetched_blocks_size",
+                "The total size in bytes of blocks fetched via commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_local_index: register_int_gauge_with_registry!(
+                "commit_sync_local_index",
+                "The max commit index among local and fetched commits",
+                registry,
+            ).unwrap(),
+            commit_sync_fetch_loop_latency: register_histogram_with_registry!(
+                "commit_sync_fetch_loop_latency",
+                "The time taken to finish fetching commits and blocks from a given range",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            commit_sync_fetch_once_latency: register_histogram_with_registry!(
+                "commit_sync_fetch_once_latency",
+                "The time taken to fetch commits and blocks once",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             uptime: register_histogram_with_registry!(
