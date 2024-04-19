@@ -2026,6 +2026,8 @@ impl ProtocolConfig {
                     cfg.consensus_max_transaction_size_bytes = Some(256 * 1024); // 256KB
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
                     // 6 MB
+
+                    cfg.move_binary_format_version = Some(7);
                 }
                 37 => {
                     cfg.feature_flags.reject_mutable_random_on_entry_functions = true;
