@@ -1,7 +1,7 @@
 error[E13003]: feature is under active development
-  ┌─ tests/development/enums/matching/const_opt_result.move:8:17
+  ┌─ tests/development/enums/matching/const_opt_result.move:7:17
   │
-8 │     public enum Option<T> {
+7 │     public enum Option<T> {
   │                 ^^^^^^ Enums are not supported in bytecode.
   │
   = This feature is currently in development.

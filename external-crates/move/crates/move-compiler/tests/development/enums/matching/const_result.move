@@ -1,6 +1,5 @@
 module 0x42::m {
 
-
     const EInvalidName: u64 = 10;
     const EInvalidInfo: u64 = 20;
     const EInvalidCoin: u64 = 10;
