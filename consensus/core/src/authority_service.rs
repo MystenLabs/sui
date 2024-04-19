@@ -228,6 +228,15 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
         }
 
+        if !highest_accepted_rounds.is_empty()
+            && highest_accepted_rounds.len() != self.context.committee.size()
+        {
+            return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
+                highest_accepted_rounds.len(),
+                self.context.committee.size(),
+            ));
+        }
+
         // Some quick validation of the requested block refs
         for block in &block_refs {
             if !self.context.committee.is_valid_index(block.author) {
@@ -245,36 +254,29 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let blocks = self.dag_state.read().get_blocks(&block_refs);
 
         // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
-        // that ancestor blocks up to 10
-        let all_ancestors = blocks
-            .iter()
-            .flatten()
-            .flat_map(|block| block.ancestors().to_vec())
-            .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
-            .take(MAX_ADDITIONAL_BLOCKS)
-            .collect::<Vec<_>>();
-
+        // that ancestor blocks up to `MAX_ADDITIONAL_BLOCKS`.
         let mut ancestor_blocks = vec![];
-        if !all_ancestors.is_empty() {
-            ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+        if !highest_accepted_rounds.is_empty() {
+            let all_ancestors = blocks
+                .iter()
+                .flatten()
+                .flat_map(|block| block.ancestors().to_vec())
+                .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+                .take(MAX_ADDITIONAL_BLOCKS)
+                .collect::<Vec<_>>();
+
+            if !all_ancestors.is_empty() {
+                ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+            }
         }
 
         // Return the serialised blocks & the ancestor blocks
-        let mut result = blocks
+        let result = blocks
             .into_iter()
+            .chain(ancestor_blocks)
             .flatten()
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();
-
-        let result_ancestors = ancestor_blocks
-            .into_iter()
-            .flatten()
-            .map(|block| block.serialized().clone())
-            .collect::<Vec<_>>();
-
-        // Use as a separator empty Bytes. Any blocks after the empty Bytes should be the result ancestors
-        result.push(Bytes::new());
-        result.extend(result_ancestors);
 
         Ok(result)
     }

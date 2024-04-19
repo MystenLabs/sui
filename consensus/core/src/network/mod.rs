@@ -79,7 +79,9 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
 
     // TODO: add a parameter for maximum total size of blocks returned.
     /// Fetches serialized `SignedBlock`s from a peer. It also might return additional ancestor blocks
-    /// of the requested blocks according to the provided `highest_accepted_rounds`.
+    /// of the requested blocks according to the provided `highest_accepted_rounds`. The `highest_accepted_rounds`
+    /// length should be equal to the committee size. If `highest_accepted_rounds` is empty then it will
+    /// be simply ignored.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
