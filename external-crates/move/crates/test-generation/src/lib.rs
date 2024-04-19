@@ -21,7 +21,7 @@ use module_generation::generate_module;
 use move_binary_format::{
     errors::VMError,
     file_format::{
-        AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken, StructHandleIndex,
+        AbilitySet, CompiledModule, DatatypeHandleIndex, FunctionDefinitionIndex, SignatureToken,
     },
 };
 use move_bytecode_verifier::verify_module_unmetered;
@@ -97,8 +97,8 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
             | SignatureToken::U8
             | SignatureToken::U128
             | SignatureToken::Signer
-            | SignatureToken::Struct(_)
-            | SignatureToken::StructInstantiation(_)
+            | SignatureToken::Datatype(_)
+            | SignatureToken::DatatypeInstantiation(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
             | SignatureToken::TypeParameter(_)
@@ -396,10 +396,10 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
         Address => Address,
         Signer => Signer,
         Vector(ty) => Vector(Box::new(substitute(ty, tys))),
-        Struct(idx) => Struct(*idx),
-        StructInstantiation(struct_inst) => {
-            let (idx, type_params) = &**struct_inst;
-            StructInstantiation(Box::new((
+        Datatype(idx) => Datatype(*idx),
+        DatatypeInstantiation(inst) => {
+            let (idx, type_params) = &**inst;
+            DatatypeInstantiation(Box::new((
                 *idx,
                 type_params.iter().map(|ty| substitute(ty, tys)).collect(),
             )))
@@ -434,13 +434,13 @@ pub fn abilities(
             vec![abilities(module, ty, constraints)],
         )
         .unwrap(),
-        Struct(idx) => {
-            let sh = module.struct_handle_at(*idx);
+        Datatype(idx) => {
+            let sh = module.datatype_handle_at(*idx);
             sh.abilities
         }
-        StructInstantiation(struct_inst) => {
-            let (idx, type_args) = &**struct_inst;
-            let sh = module.struct_handle_at(*idx);
+        DatatypeInstantiation(inst) => {
+            let (idx, type_args) = &**inst;
+            let sh = module.datatype_handle_at(*idx);
             let declared_abilities = sh.abilities;
             let declared_phantom_parameters =
                 sh.type_parameters.iter().map(|param| param.is_phantom);
@@ -459,22 +459,22 @@ pub fn abilities(
 
 pub(crate) fn get_struct_handle_from_reference(
     reference_signature: &SignatureToken,
-) -> Option<StructHandleIndex> {
+) -> Option<DatatypeHandleIndex> {
     match reference_signature {
         SignatureToken::Reference(signature) => match &**signature {
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (idx, _) = &**struct_inst;
+            SignatureToken::Datatype(idx) => Some(*idx),
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (idx, _) = &**inst;
                 Some(*idx)
             }
-            SignatureToken::Struct(idx) => Some(*idx),
             _ => None,
         },
         SignatureToken::MutableReference(signature) => match &**signature {
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (idx, _) = &**struct_inst;
+            SignatureToken::Datatype(idx) => Some(*idx),
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (idx, _) = &**inst;
                 Some(*idx)
             }
-            SignatureToken::Struct(idx) => Some(*idx),
             _ => None,
         },
         _ => None,
@@ -488,11 +488,11 @@ pub(crate) fn get_type_actuals_from_reference(
 
     match token {
         Reference(box_) | MutableReference(box_) => match &**box_ {
-            StructInstantiation(struct_inst) => {
-                let (_, tys) = &**struct_inst;
+            DatatypeInstantiation(inst) => {
+                let (_, tys) = &**inst;
                 Some(tys.clone())
             }
-            Struct(_) => Some(vec![]),
+            Datatype(_) => Some(vec![]),
             _ => None,
         },
         Bool
@@ -502,8 +502,8 @@ pub(crate) fn get_type_actuals_from_reference(
         | Address
         | Signer
         | Vector(_)
-        | Struct(_)
-        | StructInstantiation(_)
+        | Datatype(_)
+        | DatatypeInstantiation(_)
         | TypeParameter(_)
         | U16
         | U32

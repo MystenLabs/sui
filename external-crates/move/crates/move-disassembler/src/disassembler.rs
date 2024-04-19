@@ -10,10 +10,11 @@ use colored::*;
 use move_binary_format::{
     control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
-        Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,
-        FunctionDefinitionIndex, FunctionHandle, ModuleHandle, Signature, SignatureIndex,
-        SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
-        StructTypeParameter, TableIndex, TypeSignature, Visibility,
+        Ability, AbilitySet, Bytecode, CodeUnit, Constant, DatatypeTyParameter, EnumDefinition,
+        EnumDefinitionIndex, FieldHandleIndex, FunctionDefinition, FunctionDefinitionIndex,
+        FunctionHandle, JumpTableInner, ModuleHandle, Signature, SignatureIndex, SignatureToken,
+        StructDefinition, StructDefinitionIndex, StructFieldInformation, TableIndex, TypeSignature,
+        Visibility,
     },
     CompiledModule,
 };
@@ -203,6 +204,16 @@ impl<'a> Disassembler<'a> {
             .struct_def_at(struct_definition_index))
     }
 
+    fn get_enum_def(&self, enum_definition_index: EnumDefinitionIndex) -> Result<&EnumDefinition> {
+        if enum_definition_index.0 as usize >= self.source_mapper.bytecode.enum_defs().len() {
+            bail!("Invalid enum definition index supplied when marking enum")
+        }
+        Ok(self
+            .source_mapper
+            .bytecode
+            .enum_def_at(enum_definition_index))
+    }
+
     //***************************************************************************
     // Code Coverage Helpers
     //***************************************************************************
@@ -277,7 +288,7 @@ impl<'a> Disassembler<'a> {
         let struct_handle = self
             .source_mapper
             .bytecode
-            .struct_handle_at(struct_def.struct_handle);
+            .datatype_handle_at(struct_def.struct_handle);
         let struct_name = self
             .source_mapper
             .bytecode
@@ -325,7 +336,7 @@ impl<'a> Disassembler<'a> {
         let struct_handle = self
             .source_mapper
             .bytecode
-            .struct_handle_at(struct_definition.struct_handle);
+            .datatype_handle_at(struct_definition.struct_handle);
         let name = self
             .source_mapper
             .bytecode
@@ -406,7 +417,11 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    fn format_function_body(locals: Vec<String>, bytecode: Vec<String>) -> String {
+    fn format_function_body(
+        locals: Vec<String>,
+        bytecode: Vec<String>,
+        jump_tables: Vec<String>,
+    ) -> String {
         if locals.is_empty() && bytecode.is_empty() {
             "".to_string()
         } else {
@@ -415,6 +430,7 @@ impl<'a> Disassembler<'a> {
                 .enumerate()
                 .map(|(local_idx, local)| format!("L{}:\t{}", local_idx, local))
                 .chain(bytecode)
+                .chain(jump_tables)
                 .collect();
             format!(" {{\n{}\n}}", body_iter.join("\n"))
         }
@@ -449,17 +465,17 @@ impl<'a> Disassembler<'a> {
             SignatureToken::U256 => "u256".to_string(),
             SignatureToken::Address => "address".to_string(),
             SignatureToken::Signer => "signer".to_string(),
-            SignatureToken::Struct(struct_handle_idx) => self
+            SignatureToken::Datatype(struct_handle_idx) => self
                 .source_mapper
                 .bytecode
                 .identifier_at(
                     self.source_mapper
                         .bytecode
-                        .struct_handle_at(struct_handle_idx)
+                        .datatype_handle_at(struct_handle_idx)
                         .name,
                 )
                 .to_string(),
-            SignatureToken::StructInstantiation(struct_inst) => {
+            SignatureToken::DatatypeInstantiation(struct_inst) => {
                 let (struct_handle_idx, instantiation) = *struct_inst;
                 let instantiation = instantiation
                     .into_iter()
@@ -472,7 +488,7 @@ impl<'a> Disassembler<'a> {
                     .identifier_at(
                         self.source_mapper
                             .bytecode
-                            .struct_handle_at(struct_handle_idx)
+                            .datatype_handle_at(struct_handle_idx)
                             .name,
                     )
                     .to_string();
@@ -898,6 +914,45 @@ impl<'a> Disassembler<'a> {
         }
     }
 
+    fn disassemble_jump_tables(&self, code: &CodeUnit) -> Result<Vec<String>> {
+        if !self.options.print_code || code.jump_tables.is_empty() {
+            return Ok(vec!["".to_string()]);
+        }
+
+        let mut jump_tables = vec!["Jump tables:".to_string()];
+
+        for (i, jt) in code.jump_tables.iter().enumerate() {
+            let enum_def = self.get_enum_def(jt.head_enum)?;
+            let enum_handle = self
+                .source_mapper
+                .bytecode
+                .datatype_handle_at(enum_def.enum_handle);
+            let enum_source_map = self
+                .source_mapper
+                .source_map
+                .get_enum_source_map(jt.head_enum)?;
+            let enum_name = self.source_mapper.bytecode.identifier_at(enum_handle.name);
+            let JumpTableInner::Full(jt) = &jt.jump_table;
+            let jt: Vec<_> = jt
+                .iter()
+                .enumerate()
+                .map(|(tag, jump_loc)| {
+                    let enum_name = enum_source_map
+                        .get_variant_location(tag as u16)
+                        .map(|((name, _), _)| name)
+                        .unwrap_or(format!("Variant{}", tag));
+                    format!("{} => jump {}", enum_name, jump_loc)
+                })
+                .collect();
+            jump_tables.push(format!(
+                "[{i}]:\tvariant_switch {} {{\n\t\t{}\n\t}}",
+                enum_name,
+                jt.join("\n\t\t")
+            ))
+        }
+        Ok(jump_tables)
+    }
+
     fn disassemble_bytecode(
         &self,
         function_source_map: &FunctionSourceMap,
@@ -942,7 +997,7 @@ impl<'a> Disassembler<'a> {
             .collect();
 
         if self.options.print_basic_blocks {
-            let cfg = VMControlFlowGraph::new(&code.code);
+            let cfg = VMControlFlowGraph::new(&code.code, &code.jump_tables);
             for (block_number, block_id) in cfg.blocks().iter().enumerate() {
                 instrs.insert(
                     *block_id as usize + block_number,
@@ -954,9 +1009,9 @@ impl<'a> Disassembler<'a> {
         Ok(instrs)
     }
 
-    fn disassemble_struct_type_formals(
+    fn disassemble_datatype_type_formals(
         source_map_ty_params: &[SourceName],
-        type_parameters: &[StructTypeParameter],
+        type_parameters: &[DatatypeTyParameter],
     ) -> String {
         let ty_params: Vec<String> = source_map_ty_params
             .iter()
@@ -1118,7 +1173,8 @@ impl<'a> Disassembler<'a> {
                     self.disassemble_locals(function_source_map, code.locals, params.len())?;
                 let bytecode =
                     self.disassemble_bytecode(function_source_map, name, parameters, code)?;
-                Self::format_function_body(locals, bytecode)
+                let jump_tables = self.disassemble_jump_tables(code)?;
+                Self::format_function_body(locals, bytecode, jump_tables)
             }
             None => "".to_string(),
         };
@@ -1139,7 +1195,7 @@ impl<'a> Disassembler<'a> {
         let struct_handle = self
             .source_mapper
             .bytecode
-            .struct_handle_at(struct_definition.struct_handle);
+            .datatype_handle_at(struct_definition.struct_handle);
         let struct_source_map = self
             .source_mapper
             .source_map
@@ -1182,7 +1238,7 @@ impl<'a> Disassembler<'a> {
             .identifier_at(struct_handle.name)
             .to_string();
 
-        let ty_params = Self::disassemble_struct_type_formals(
+        let ty_params = Self::disassemble_datatype_type_formals(
             &struct_source_map.type_parameters,
             &struct_handle.type_parameters,
         );
@@ -1213,6 +1269,80 @@ impl<'a> Disassembler<'a> {
             ty_params = ty_params,
             abilities = abilities,
             fields = &fields.join(",\n\t"),
+        ))
+    }
+
+    pub fn disassemble_enum_def(&self, enum_def_idx: EnumDefinitionIndex) -> Result<String> {
+        let enum_definition = self.get_enum_def(enum_def_idx)?;
+        let enum_handle = self
+            .source_mapper
+            .bytecode
+            .datatype_handle_at(enum_definition.enum_handle);
+        let enum_source_map = self
+            .source_mapper
+            .source_map
+            .get_enum_source_map(enum_def_idx)?;
+
+        let mut variants_formatted = vec![];
+        for variant in &enum_definition.variants {
+            let variant_name = self
+                .source_mapper
+                .bytecode
+                .identifier_at(variant.variant_name);
+            let mut variant_fields = vec![];
+            for field_definition in &variant.fields {
+                let type_sig = &field_definition.signature;
+                let field_name = self
+                    .source_mapper
+                    .bytecode
+                    .identifier_at(field_definition.name);
+                let ty_str =
+                    self.disassemble_sig_tok(type_sig.0.clone(), &enum_source_map.type_parameters)?;
+                variant_fields.push(format!("{}: {}", field_name, ty_str))
+            }
+            variants_formatted.push(format!(
+                "{} {{ {} }}",
+                variant_name,
+                variant_fields.join(", ")
+            ));
+        }
+
+        let abilities = if enum_handle.abilities == AbilitySet::EMPTY {
+            String::new()
+        } else {
+            let ability_vec: Vec<_> = enum_handle
+                .abilities
+                .into_iter()
+                .map(Self::format_ability)
+                .collect();
+            format!(" has {}", ability_vec.join(", "))
+        };
+
+        let name = self
+            .source_mapper
+            .bytecode
+            .identifier_at(enum_handle.name)
+            .to_string();
+
+        let ty_params = Self::disassemble_datatype_type_formals(
+            &enum_source_map.type_parameters,
+            &enum_handle.type_parameters,
+        );
+
+        if let Some(first_elem) = variants_formatted.first_mut() {
+            first_elem.insert_str(0, "{\n\t");
+        }
+
+        if let Some(last_elem) = variants_formatted.last_mut() {
+            last_elem.push_str("\n}");
+        }
+
+        Ok(format!(
+            "enum {name}{ty_params}{abilities} {variants}",
+            name = name,
+            ty_params = ty_params,
+            abilities = abilities,
+            variants = &variants_formatted.join(",\n\t"),
         ))
     }
 
@@ -1252,6 +1382,10 @@ impl<'a> Disassembler<'a> {
             .collect::<Vec<String>>();
         let struct_defs: Vec<String> = (0..self.source_mapper.bytecode.struct_defs().len())
             .map(|i| self.disassemble_struct_def(StructDefinitionIndex(i as TableIndex)))
+            .collect::<Result<Vec<String>>>()?;
+
+        let enum_defs: Vec<String> = (0..self.source_mapper.bytecode.enum_defs().len())
+            .map(|i| self.disassemble_enum_def(EnumDefinitionIndex(i as TableIndex)))
             .collect::<Result<Vec<String>>>()?;
 
         let constants: Vec<String> = self
@@ -1299,11 +1433,12 @@ impl<'a> Disassembler<'a> {
             )
         };
         Ok(format!(
-            "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{function_defs}\n{constant_pool_string}}}",
+            "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{enum_defs}\n\n{function_defs}\n{constant_pool_string}}}",
             version = version,
             header = header,
             imports = &imports_str,
             struct_defs = &struct_defs.join("\n"),
+            enum_defs = &enum_defs.join("\n"),
             function_defs = &function_defs.join("\n"),
         ))
     }

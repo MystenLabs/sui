@@ -22,7 +22,7 @@ use move_core_types::{
     runtime_value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_model::{
-    model::{GlobalEnv, ModuleId, StructId},
+    model::{DatatypeId, GlobalEnv, ModuleId},
     ty as MT,
 };
 use move_stackless_bytecode::stackless_bytecode::Constant;
@@ -793,7 +793,7 @@ pub fn convert_model_local_type(env: &GlobalEnv, ty: &MT::Type, subst: &[BaseTyp
     match ty {
         MT::Type::Primitive(..)
         | MT::Type::Vector(..)
-        | MT::Type::Struct(..)
+        | MT::Type::Datatype(..)
         | MT::Type::TypeParameter(..) => Type::Base(convert_model_base_type(env, ty, subst)),
         MT::Type::Reference(is_mut, base_ty) => {
             convert_model_base_type(env, base_ty, subst).into_ref_type(*is_mut)
@@ -812,7 +812,7 @@ pub fn convert_model_base_type(env: &GlobalEnv, ty: &MT::Type, subst: &[BaseType
         MT::Type::Primitive(MT::PrimitiveType::Address) => BaseType::mk_address(),
         MT::Type::Primitive(MT::PrimitiveType::Signer) => BaseType::mk_signer(),
         MT::Type::Vector(elem) => BaseType::mk_vector(convert_model_base_type(env, elem, subst)),
-        MT::Type::Struct(module_id, struct_id, ty_insts) => BaseType::mk_struct(
+        MT::Type::Datatype(module_id, struct_id, ty_insts) => BaseType::mk_struct(
             convert_model_struct_type(env, *module_id, *struct_id, ty_insts, subst),
         ),
         MT::Type::TypeParameter(index) => subst.get(*index as usize).unwrap().clone(),
@@ -823,7 +823,7 @@ pub fn convert_model_base_type(env: &GlobalEnv, ty: &MT::Type, subst: &[BaseType
 pub fn convert_model_struct_type(
     env: &GlobalEnv,
     module_id: ModuleId,
-    struct_id: StructId,
+    struct_id: DatatypeId,
     ty_args: &[MT::Type],
     subst: &[BaseType],
 ) -> StructInstantiation {
@@ -876,7 +876,7 @@ pub fn convert_model_partial_base_type(env: &GlobalEnv, ty: &MT::Type) -> Partia
         MT::Type::Vector(elem) => {
             PartialBaseType::mk_vector(convert_model_partial_base_type(env, elem))
         }
-        MT::Type::Struct(module_id, struct_id, ty_insts) => PartialBaseType::mk_struct(
+        MT::Type::Datatype(module_id, struct_id, ty_insts) => PartialBaseType::mk_struct(
             convert_model_partial_struct_type(env, *module_id, *struct_id, ty_insts),
         ),
         MT::Type::TypeParameter(index) => PartialBaseType::mk_parameter(*index),
@@ -887,7 +887,7 @@ pub fn convert_model_partial_base_type(env: &GlobalEnv, ty: &MT::Type) -> Partia
 pub fn convert_model_partial_struct_type(
     env: &GlobalEnv,
     module_id: ModuleId,
-    struct_id: StructId,
+    struct_id: DatatypeId,
     ty_args: &[MT::Type],
 ) -> PartialStructInstantiation {
     // derive struct identity

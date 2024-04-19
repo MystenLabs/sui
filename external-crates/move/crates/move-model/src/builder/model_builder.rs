@@ -13,7 +13,7 @@ use move_compiler::{expansion::ast as EA, shared::NumericalAddress};
 
 use crate::{
     ast::{Attribute, QualifiedSymbol, Value},
-    model::{GlobalEnv, Loc, ModuleId, StructId},
+    model::{DatatypeId, GlobalEnv, Loc, ModuleId},
     project_2nd,
     symbol::Symbol,
     ty::Type,
@@ -31,7 +31,7 @@ pub(crate) struct ModelBuilder<'env> {
     pub struct_table: BTreeMap<QualifiedSymbol, StructEntry>,
     /// A reverse mapping from ModuleId/StructId pairs to QualifiedSymbol. This
     /// is used for visualization of types in error messages.
-    pub reverse_struct_table: BTreeMap<(ModuleId, StructId), QualifiedSymbol>,
+    pub reverse_struct_table: BTreeMap<(ModuleId, DatatypeId), QualifiedSymbol>,
     /// A symbol table for functions.
     pub fun_table: BTreeMap<QualifiedSymbol, FunEntry>,
     /// A symbol table for constants.
@@ -43,7 +43,7 @@ pub(crate) struct ModelBuilder<'env> {
 pub(crate) struct StructEntry {
     pub loc: Loc,
     pub module_id: ModuleId,
-    pub struct_id: StructId,
+    pub struct_id: DatatypeId,
     pub type_params: Vec<(Symbol, Type)>,
     pub fields: Option<BTreeMap<Symbol, (usize, Type)>>,
     pub attributes: Vec<Attribute>,
@@ -94,7 +94,7 @@ impl<'env> ModelBuilder<'env> {
         attributes: Vec<Attribute>,
         name: QualifiedSymbol,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         type_params: Vec<(Symbol, Type)>,
         fields: Option<BTreeMap<Symbol, (usize, Type)>>,
     ) {
@@ -152,7 +152,7 @@ impl<'env> ModelBuilder<'env> {
         self.struct_table
             .get(name)
             .cloned()
-            .map(|e| Type::Struct(e.module_id, e.struct_id, project_2nd(&e.type_params)))
+            .map(|e| Type::Datatype(e.module_id, e.struct_id, project_2nd(&e.type_params)))
             .unwrap_or_else(|| {
                 self.error(
                     loc,

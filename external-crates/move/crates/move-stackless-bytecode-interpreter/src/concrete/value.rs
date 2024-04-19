@@ -409,6 +409,12 @@ impl TypedValue {
         }
         self.val.into_u8()
     }
+    pub fn into_u16(self) -> u16 {
+        if cfg!(debug_assertions) {
+            assert!(self.ty.is_u16());
+        }
+        self.val.into_u16()
+    }
     pub fn into_u64(self) -> u64 {
         if cfg!(debug_assertions) {
             assert!(self.ty.is_u64());

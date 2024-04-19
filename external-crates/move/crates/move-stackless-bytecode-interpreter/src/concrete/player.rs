@@ -20,7 +20,7 @@ use move_core_types::{
 };
 use move_model::{
     ast::TempIndex,
-    model::{FunId, FunctionEnv, ModuleId, StructId},
+    model::{DatatypeId, FunId, FunctionEnv, ModuleId},
     ty as MT,
 };
 use move_stackless_bytecode::{
@@ -362,6 +362,9 @@ impl<'env> FunctionContext<'env> {
             }
             Bytecode::Abort(_, index) => self.handle_abort(*index, local_state),
             Bytecode::Ret(_, rets) => self.handle_return(rets, local_state),
+            Bytecode::VariantSwitch(_, cond, labels) => {
+                self.handle_variant_switch(*cond, labels, local_state)
+            }
             Bytecode::Nop(_) => (),
         }
         local_state.ready_pc_for_next_instruction();
@@ -880,6 +883,8 @@ impl<'env> FunctionContext<'env> {
             | Operation::TraceAbort => {
                 unreachable!();
             }
+            Operation::PackVariant(_, _, _, _) => unimplemented!(),
+            Operation::UnpackVariant(_, _, _, _, _) => unimplemented!(),
         };
 
         // handle result
@@ -1008,7 +1013,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_pack(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_fields: Vec<TypedValue>,
     ) -> TypedValue {
@@ -1023,7 +1028,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_unpack(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_struct: TypedValue,
     ) -> Vec<TypedValue> {
@@ -1038,7 +1043,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_get_field(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         field_num: usize,
         op_struct: TypedValue,
@@ -1061,7 +1066,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_borrow_field(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         field_num: usize,
         is_mut: bool,
@@ -1079,7 +1084,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_move_to(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_signer: TypedValue,
         op_struct: TypedValue,
@@ -1098,7 +1103,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_move_from(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_addr: TypedValue,
         global_state: &mut GlobalState,
@@ -1115,7 +1120,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_get_global(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_addr: TypedValue,
         global_state: &mut GlobalState,
@@ -1132,7 +1137,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_borrow_global(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         is_mut: bool,
         op_addr: TypedValue,
@@ -1150,7 +1155,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_exists_global(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_addr: TypedValue,
         global_state: &GlobalState,
@@ -1223,7 +1228,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_write_back_global_struct(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         op_struct: TypedValue,
         global_state: &mut GlobalState,
@@ -1307,7 +1312,7 @@ impl<'env> FunctionContext<'env> {
     fn handle_write_back_ref_field(
         &self,
         module_id: ModuleId,
-        struct_id: StructId,
+        struct_id: DatatypeId,
         ty_args: &[MT::Type],
         local_ref: TempIndex,
         field_num: usize,
@@ -1936,6 +1941,20 @@ impl<'env> FunctionContext<'env> {
         } else {
             else_label
         };
+        local_state.set_pc(self.code_offset_by_label(label));
+    }
+
+    fn handle_variant_switch(
+        &self,
+        cond: TempIndex,
+        labels: &[Label],
+        local_state: &mut LocalState,
+    ) {
+        let cond_val = local_state.get_value(cond);
+        if cfg!(debug_assertions) {
+            assert!(cond_val.get_ty().is_u16());
+        }
+        let label = labels[cond_val.into_u16() as usize];
         local_state.set_pc(self.code_offset_by_label(label));
     }
 

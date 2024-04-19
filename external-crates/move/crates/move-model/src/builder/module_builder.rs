@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 
 use move_binary_format::{
-    file_format::{Constant, FunctionDefinitionIndex, StructDefinitionIndex},
+    file_format::{Constant, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
@@ -25,8 +25,8 @@ use crate::{
         model_builder::{ConstEntry, ModelBuilder},
     },
     model::{
-        FunId, FunctionData, Loc, ModuleId, NamedConstantData, NamedConstantId, StructData,
-        StructId, SCRIPT_BYTECODE_FUN_NAME,
+        DatatypeId, EnumData, FunId, FunctionData, Loc, ModuleId, NamedConstantData,
+        NamedConstantId, StructData, SCRIPT_BYTECODE_FUN_NAME,
     },
     project_1st,
     symbol::{Symbol, SymbolPool},
@@ -293,7 +293,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 
     fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
-        let struct_id = StructId::new(qsym.symbol);
+        let struct_id = DatatypeId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
         let mut et = ExpTranslator::new(self);
         let type_params =
@@ -439,11 +439,11 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         module: CompiledModule,
         source_map: SourceMap,
     ) {
-        let struct_data: BTreeMap<StructId, StructData> = (0..module.struct_defs().len())
+        let struct_data: BTreeMap<DatatypeId, StructData> = (0..module.struct_defs().len())
             .filter_map(|idx| {
                 let def_idx = StructDefinitionIndex(idx as u16);
                 let handle_idx = module.struct_def_at(def_idx).struct_handle;
-                let handle = module.struct_handle_at(handle_idx);
+                let handle = module.datatype_handle_at(handle_idx);
                 let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
@@ -451,8 +451,37 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                     .get(&self.qualified_by_module(name))
                 {
                     Some((
-                        StructId::new(name),
+                        DatatypeId::new(name),
                         self.parent.env.create_move_struct_data(
+                            &module,
+                            def_idx,
+                            name,
+                            entry.loc.clone(),
+                            entry.attributes.clone(),
+                        ),
+                    ))
+                } else {
+                    self.parent.error(
+                        &self.parent.env.internal_loc(),
+                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST", name.display(self.symbol_pool())));
+                    None
+                }
+            })
+            .collect();
+        let enum_data: BTreeMap<DatatypeId, EnumData> = (0..module.enum_defs().len())
+            .filter_map(|idx| {
+                let def_idx = EnumDefinitionIndex(idx as u16);
+                let handle_idx = module.enum_def_at(def_idx).enum_handle;
+                let handle = module.datatype_handle_at(handle_idx);
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
+                if let Some(entry) = self
+                    .parent
+                    .struct_table
+                    .get(&self.qualified_by_module(name))
+                {
+                    Some((
+                        DatatypeId::new(name),
+                        self.parent.env.create_move_enum_data(
                             &module,
                             def_idx,
                             name,
@@ -529,6 +558,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             source_map,
             named_constants,
             struct_data,
+            enum_data,
             function_data,
         );
     }

@@ -232,7 +232,7 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
                     }
                 }
             }
-            Abort(..) | Branch(..) | Jump(..) | Label(..) | Nop(..) => {
+            Abort(..) | Branch(..) | Jump(..) | Label(..) | Nop(..) | VariantSwitch(..) => {
                 // these operations do not assign any locals
             }
         }

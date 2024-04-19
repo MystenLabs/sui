@@ -8,7 +8,7 @@ use crate::{
 use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{self},
+    identifier,
     runtime_value::{MoveStruct, MoveValue},
 };
 use std::fmt::{self, Display};

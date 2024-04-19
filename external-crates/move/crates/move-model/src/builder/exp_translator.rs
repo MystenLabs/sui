@@ -296,12 +296,12 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                 let sym = self.parent.module_access_to_qualified(access);
                 let rty = self.parent.parent.lookup_type(&loc, &sym);
                 // Replace type instantiation.
-                if let Type::Struct(mid, sid, params) = &rty {
+                if let Type::Datatype(mid, sid, params) = &rty {
                     if params.len() != args.len() {
                         self.error(&loc, "type argument count mismatch");
                         Type::Error
                     } else {
-                        Type::Struct(*mid, *sid, self.translate_types(args))
+                        Type::Datatype(*mid, *sid, self.translate_types(args))
                     }
                 } else if !args.is_empty() {
                     self.error(&loc, "type cannot have type arguments");
@@ -424,8 +424,8 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             | (Type::Tuple(_), MoveValue::Vector(_))
             | (Type::Tuple(_), MoveValue::Struct(_))
             | (Type::Vector(_), MoveValue::Struct(_))
-            | (Type::Struct(_, _, _), MoveValue::Vector(_))
-            | (Type::Struct(_, _, _), MoveValue::Struct(_))
+            | (Type::Datatype(_, _, _), MoveValue::Vector(_))
+            | (Type::Datatype(_, _, _), MoveValue::Struct(_))
             | (Type::TypeParameter(_), MoveValue::Vector(_))
             | (Type::TypeParameter(_), MoveValue::Struct(_))
             | (Type::Reference(_, _), MoveValue::Vector(_))
@@ -439,7 +439,18 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             | (Type::Error, MoveValue::Vector(_))
             | (Type::Error, MoveValue::Struct(_))
             | (Type::Var(_), MoveValue::Vector(_))
-            | (Type::Var(_), MoveValue::Struct(_)) => {
+            | (Type::Var(_), MoveValue::Struct(_))
+            | (Type::Primitive(_), MoveValue::Variant(_))
+            | (Type::Tuple(_), MoveValue::Variant(_))
+            | (Type::Vector(_), MoveValue::Variant(_))
+            | (Type::Datatype(_, _, _), MoveValue::Variant(_))
+            | (Type::TypeParameter(_), MoveValue::Variant(_))
+            | (Type::Reference(_, _), MoveValue::Variant(_))
+            | (Type::Fun(_, _), MoveValue::Variant(_))
+            | (Type::TypeDomain(_), MoveValue::Variant(_))
+            | (Type::ResourceDomain(_, _, _), MoveValue::Variant(_))
+            | (Type::Error, MoveValue::Variant(_))
+            | (Type::Var(_), MoveValue::Variant(_)) => {
                 self.error(
                     loc,
                     &format!("Not yet supported constant value: {:?}", value),
