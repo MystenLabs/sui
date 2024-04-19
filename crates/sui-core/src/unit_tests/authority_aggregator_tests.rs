@@ -722,16 +722,7 @@ fn sign_tx_effects(
 
 #[tokio::test]
 async fn test_handle_transaction_fork() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -803,16 +794,7 @@ async fn test_handle_transaction_fork() {
 #[tokio::test]
 async fn test_handle_certificate_response() {
     telemetry_subscribers::init_for_testing();
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -874,16 +856,7 @@ async fn test_handle_certificate_response() {
 #[tokio::test]
 async fn test_handle_transaction_response() {
     telemetry_subscribers::init_for_testing();
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -1444,16 +1417,7 @@ async fn test_handle_transaction_response() {
 
 #[tokio::test]
 async fn test_handle_conflicting_transaction_response() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let conflicting_object = random_object_ref();
@@ -1883,16 +1847,7 @@ async fn test_handle_conflicting_transaction_response() {
 
 #[tokio::test]
 async fn test_handle_overload_response() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -1969,16 +1924,7 @@ async fn test_handle_overload_response() {
 // AggregatorProcessTransactionError::SystemOverloadRetryAfter.
 #[tokio::test]
 async fn test_handle_overload_retry_response() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -2049,16 +1995,7 @@ async fn test_handle_overload_retry_response() {
 
 #[tokio::test]
 async fn test_early_exit_with_too_many_conflicts() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let txn = make_transfer_sui_transaction(
@@ -2173,6 +2110,93 @@ async fn test_fork_panic_process_cert_4_auths() {
         err,
         AggregatorProcessTransactionError::FatalTransaction { .. }
     ));
+}
+
+#[sim_test]
+async fn test_process_transaction_again() {
+    // This test exercises the newly_formed field in the ProcessTransactionResult.
+    // Specifically, when some validator already has a certificate for a given transaction,
+    // we should see this field set to true in the result.
+
+    telemetry_subscribers::init_for_testing();
+    let (authorities, clients, authority_keys) = make_fake_authorities();
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let tx = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    );
+
+    let mut clients1 = clients.clone();
+    set_tx_info_response_with_signed_tx(
+        &mut clients1,
+        &authority_keys,
+        &VerifiedTransaction::new_unchecked(tx.clone()),
+        0,
+    );
+    let agg = get_genesis_agg(authorities.clone(), clients1);
+    let client_ip = Some(make_socket_addr());
+    let cert = agg
+        .process_transaction(tx.clone(), client_ip)
+        .await
+        .unwrap();
+    let certificate = match cert {
+        ProcessTransactionResult::Certified {
+            certificate,
+            newly_formed,
+        } => {
+            assert!(newly_formed);
+            certificate
+        }
+        _ => {
+            panic!("Expected Certified result");
+        }
+    };
+
+    let mut clients2 = clients.clone();
+    set_tx_info_response_with_cert_and_effects(
+        &mut clients2,
+        authority_keys.iter(),
+        Some(&certificate),
+        TestEffectsBuilder::new(certificate.data()).build(),
+        0,
+    );
+    let agg = get_genesis_agg(authorities, clients2);
+    let cert = agg
+        .process_transaction(tx.clone(), client_ip)
+        .await
+        .unwrap();
+    match cert {
+        ProcessTransactionResult::Certified { newly_formed, .. } => {
+            assert!(!newly_formed);
+        }
+        _ => {
+            panic!("Expected Certified result");
+        }
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn make_fake_authorities() -> (
+    BTreeMap<AuthorityName, StakeUnit>,
+    BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    Vec<(AuthorityName, AuthorityKeyPair)>,
+) {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+    (authorities, clients, authority_keys)
 }
 
 // Aggregator aggregate signatures from authorities and process the transaction as signed.
