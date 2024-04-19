@@ -5,9 +5,8 @@ use async_graphql::connection::CursorType;
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
 
-use crate::data::Conn;
 use crate::raw_query::RawQuery;
-use crate::types::checkpoint::Checkpoint;
+use crate::types::available_range::AvailableRange;
 use crate::types::cursor::{JsonCursor, Page};
 use crate::types::object::Cursor;
 use crate::{filter, query};
@@ -61,10 +60,10 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 }
 
 /// Constructs a `RawQuery` against the `objects_snapshot` and `objects_history` table to fetch
-/// objects that satisfy some filtering criteria `filter_fn` within the provided checkpoint range
-/// `lhs` and `rhs`. The `objects_snapshot` table contains the latest versions of objects up to a
-/// checkpoint sequence number, and `objects_history` captures changes after that, so a query to
-/// both tables is necessary to handle these object states:
+/// objects that satisfy some filtering criteria `filter_fn` within the provided checkpoint `range`.
+/// The `objects_snapshot` table contains the latest versions of objects up to a checkpoint sequence
+/// number, and `objects_history` captures changes after that, so a query to both tables is
+/// necessary to handle these object states:
 /// 1) In snapshot, not in history - occurs when an object gets snapshotted and then has not been
 ///    modified since
 /// 2) In history, not in snapshot - occurs when a new object is created
@@ -96,8 +95,7 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 /// creation.
 pub(crate) fn build_objects_query(
     view: View,
-    lhs: i64,
-    rhs: i64,
+    range: AvailableRange,
     page: &Page<Cursor>,
     filter_fn: impl Fn(RawQuery) -> RawQuery,
     newer_criteria: impl Fn(RawQuery) -> RawQuery,
@@ -105,7 +103,10 @@ pub(crate) fn build_objects_query(
     // Subquery to be used in `LEFT JOIN` against the inner queries for more recent object versions
     let newer = newer_criteria(filter!(
         query!("SELECT object_id, object_version FROM objects_history"),
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+        format!(
+            r#"checkpoint_sequence_number BETWEEN {} AND {}"#,
+            range.first, range.last
+        )
     ));
 
     let mut snapshot_objs_inner = query!("SELECT * FROM objects_snapshot");
@@ -147,7 +148,10 @@ pub(crate) fn build_objects_query(
             // Additionally bound the inner `objects_history` query by the checkpoint range
             history_objs_inner = filter!(
                 history_objs_inner,
-                format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+                format!(
+                    r#"checkpoint_sequence_number BETWEEN {} AND {}"#,
+                    range.first, range.last
+                )
             );
 
             let mut history_objs = query!(
@@ -186,25 +190,4 @@ pub(crate) fn build_objects_query(
     .order_by("object_version DESC");
 
     query!("SELECT * FROM ({}) candidates", query)
-}
-
-/// Given a `checkpoint_viewed_at` representing the checkpoint sequence number when the query was
-/// made, check whether the value falls under the current available range of the database. Returns
-/// `None` if the `checkpoint_viewed_at` lies outside the range, otherwise return a tuple consisting
-/// of the available range's lower bound and the `checkpoint_viewed_at`, or the upper bound of the
-/// database if `checkpoint_viewed_at` is `None`.
-pub(crate) fn consistent_range(
-    conn: &mut Conn,
-    checkpoint_viewed_at: Option<u64>,
-) -> Result<Option<(u64, u64)>, diesel::result::Error> {
-    let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-    if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-        if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-            return Ok(None);
-        }
-        rhs = checkpoint_viewed_at;
-    }
-
-    Ok(Some((lhs, rhs)))
 }
