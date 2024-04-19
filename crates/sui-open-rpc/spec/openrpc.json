@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "47",
+              "maxSupportedProtocolVersion": "48",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1428,6 +1428,8 @@
                 },
                 "binary_address_identifiers": null,
                 "binary_constant_pool": null,
+                "binary_enum_def_instantiations": null,
+                "binary_enum_defs": null,
                 "binary_field_handles": null,
                 "binary_field_instantiations": null,
                 "binary_friend_decls": null,
@@ -1440,6 +1442,8 @@
                 "binary_struct_def_instantiations": null,
                 "binary_struct_defs": null,
                 "binary_struct_handles": null,
+                "binary_variant_handles": null,
+                "binary_variant_instantiation_handles": null,
                 "bls12381_bls12381_min_pk_verify_cost_base": {
                   "u64": "52"
                 },
@@ -1771,6 +1775,7 @@
                 "max_modules_in_publish": {
                   "u32": "128"
                 },
+                "max_move_enum_variants": null,
                 "max_move_identifier_len": null,
                 "max_move_object_size": {
                   "u64": "256000"
@@ -6751,8 +6756,33 @@
                 "type": "null"
               }
             ]
+          },
+          {
+            "$ref": "#/components/schemas/MoveVariant"
           }
         ]
+      },
+      "MoveVariant": {
+        "type": "object",
+        "required": [
+          "fields",
+          "type",
+          "variant"
+        ],
+        "properties": {
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoveValue"
+            }
+          },
+          "type": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          }
+        }
       },
       "MultiSig": {
         "description": "The struct that contains signatures and public keys necessary for authenticating a MultiSig.",
@@ -10850,19 +10880,19 @@
         "description": "Identifies a struct and the module it was defined in",
         "type": "object",
         "required": [
+          "datatype_name",
           "module_name",
-          "package",
-          "struct_name"
+          "package"
         ],
         "properties": {
+          "datatype_name": {
+            "type": "string"
+          },
           "module_name": {
             "type": "string"
           },
           "package": {
             "$ref": "#/components/schemas/ObjectID"
-          },
-          "struct_name": {
-            "type": "string"
           }
         }
       },
