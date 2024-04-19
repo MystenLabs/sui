@@ -12,12 +12,13 @@ use std::{
 use consensus_config::AuthorityIndex;
 use tracing::error;
 
-use crate::block::GENESIS_ROUND;
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
 use crate::{
-    block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    block::{
+        genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock, GENESIS_ROUND,
+    },
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
     context::Context,
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
 };
 
@@ -685,14 +686,15 @@ impl DagState {
 
 #[cfg(test)]
 mod test {
-    use parking_lot::RwLock;
     use std::vec;
 
+    use parking_lot::RwLock;
+
     use super::*;
-    use crate::test_dag::build_dag;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
+        test_dag::build_dag,
     };
 
     #[test]

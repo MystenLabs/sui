@@ -1,22 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::VecDeque;
-use std::ops::Range;
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::Bound::{Excluded, Included},
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    ops::{
+        Bound::{Excluded, Included},
+        Range,
+    },
 };
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use super::{CommitInfo, Store, WriteBatch};
-use crate::block::Slot;
-use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, VerifiedBlock},
-    commit::{CommitDigest, CommitIndex},
+    block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, TrustedCommit},
     error::ConsensusResult,
 };
 

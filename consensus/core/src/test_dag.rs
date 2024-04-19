@@ -13,6 +13,8 @@ use crate::{
     leader_schedule::LeaderSchedule,
 };
 
+// todo: remove this once tests have been refactored to use DagBuilder/DagParser
+
 /// Build a fully interconnected dag up to the specified round. This function
 /// starts building the dag from the specified [`start`] parameter or from
 /// genesis if none are specified up to and including the specified round [`stop`]
@@ -48,7 +50,7 @@ pub(crate) fn build_dag(
                 let base_ts = round as BlockTimestampMs * 1000;
                 let block = VerifiedBlock::new_for_test(
                     TestBlock::new(round, author_idx)
-                        .set_timestamp_ms(base_ts + (author_idx + round) as u64)
+                        .set_timestamp_ms(base_ts + author_idx as u64)
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );
@@ -85,8 +87,11 @@ pub(crate) fn build_dag_layer(
     references
 }
 
-// TODO: confirm pipelined & multi-leader cases work properly
-pub(crate) fn get_all_leader_blocks(
+// Leader blocks start from round 1 as we do not consider any blocks from genesis
+// round as a leader block.
+// TODO: confirm pipelined & multi-leader cases work properly and interaction with
+// DagState flush
+pub(crate) fn get_all_uncommitted_leader_blocks(
     dag_state: Arc<RwLock<DagState>>,
     leader_schedule: LeaderSchedule,
     num_rounds: u32,

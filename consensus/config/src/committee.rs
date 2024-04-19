@@ -217,7 +217,8 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{local_committee_and_keys, Stake};
+    use super::*;
+    use crate::local_committee_and_keys;
 
     #[test]
     fn committee_basic() {
