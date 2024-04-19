@@ -33,7 +33,7 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::{MoveObject, Owner};
+use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
@@ -47,7 +47,7 @@ use sui_types::transaction::{
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
-use sui_types::type_resolver::LayoutResolver;
+use sui_types::type_resolver::{get_layout_from_struct_tag, LayoutResolver};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::balance_changes::BalanceChange;
@@ -1087,8 +1087,7 @@ impl SuiTransactionBlockEvents {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, event)| {
-                    let layout =
-                        MoveObject::get_layout_from_struct_tag(event.type_.clone(), resolver)?;
+                    let layout = get_layout_from_struct_tag(event.type_.clone(), resolver)?;
                     SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
                 })
                 .collect::<Result<_, _>>()?,
