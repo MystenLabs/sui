@@ -14,7 +14,6 @@ module bridge::treasury {
     use sui::event::emit;
     use sui::hex;
     use sui::math;
-    use sui::object;
     use sui::object_bag::{Self, ObjectBag};
     use sui::package;
     use sui::package::UpgradeCap;
@@ -189,9 +188,19 @@ module bridge::treasury {
     public struct USDC {}
 
     #[test_only]
-    public fun mock_for_test(ctx: &mut TxContext): BridgeTreasury {
-        let mut treasury = create(ctx);
+    public fun new_for_testing(ctx: &mut TxContext): BridgeTreasury {
+        create(ctx)
+    }
 
+    #[test_only]
+    public fun mock_for_test(ctx: &mut TxContext): BridgeTreasury {
+        let mut treasury = new_for_testing(ctx);
+        treasury.setup_for_testing();
+        treasury
+    }
+
+    #[test_only]
+    public fun setup_for_testing(treasury: &mut BridgeTreasury) {
         treasury.supported_tokens.insert(type_name::get<BTC>(), BridgeTokenMetadata{
             id: 1,
             decimal_multiplier: 100_000_000,
@@ -221,6 +230,5 @@ module bridge::treasury {
         treasury.id_token_type_map.insert(2, type_name::get<ETH>());
         treasury.id_token_type_map.insert(3, type_name::get<USDC>());
         treasury.id_token_type_map.insert(4, type_name::get<USDT>());
-        treasury
     }
 }
