@@ -1,11 +1,3 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/parser/mut_match.move:2:17
-  │
-2 │     public enum Option<T> {
-  │                 ^^^^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-
 warning[W09012]: unused 'mut' modifiers
    ┌─ tests/development/enums/parser/mut_match.move:11:30
    │

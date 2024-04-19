@@ -1,0 +1,20 @@
+warning[W09012]: unused 'mut' modifiers
+   ┌─ tests/move_2024/parser/mut_match.move:11:30
+   │
+11 │          Option::Other { mut x } => x,
+   │                          --- ^ The variable 'x' is never used mutably
+   │                          │    
+   │                          Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+   ┌─ tests/move_2024/parser/mut_match.move:12:33
+   │
+12 │          Option::Other { x: mut y } => y,
+   │                             --- ^ The variable 'y' is never used mutably
+   │                             │    
+   │                             Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

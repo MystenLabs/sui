@@ -1,11 +1,3 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/hlir/dead_code_guard.move:3:17
-  │
-3 │     public enum Option<T> has drop {
-  │                 ^^^^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-
 warning[W09005]: dead or unreachable code
    ┌─ tests/development/enums/hlir/dead_code_guard.move:14:30
    │
