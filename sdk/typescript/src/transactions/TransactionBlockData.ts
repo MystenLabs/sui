@@ -34,7 +34,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 
 		return TransactionBlockDataBuilder.restore({
 			version: 2,
-			features: [],
 			sender: null,
 			expiration: null,
 			gasData: {
@@ -59,7 +58,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 
 		return TransactionBlockDataBuilder.restore({
 			version: 2,
-			features: [],
 			sender: data.sender,
 			expiration: data.expiration,
 			gasData: data.gasData,
@@ -100,7 +98,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		this.gasData = value;
 	}
 
-	features: string[];
 	version = 2 as const;
 	sender: string | null;
 	expiration: TransactionExpiration | null;
@@ -109,7 +106,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 	transactions: Transaction[];
 
 	constructor(clone?: TransactionBlockState) {
-		this.features = clone?.features ?? [];
 		this.sender = clone?.sender ?? null;
 		this.expiration = clone?.expiration ?? null;
 		this.inputs = clone?.inputs ?? [];

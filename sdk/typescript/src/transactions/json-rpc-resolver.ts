@@ -380,7 +380,7 @@ async function normalizeInputs(
 
 					inputs[arg.Input] = unresolvedObject;
 
-					if (param.ref === '&mut' || !param.ref) {
+					if (param.ref === '&mut') {
 						unresolvedObject.UnresolvedObject.mutable = true;
 					}
 

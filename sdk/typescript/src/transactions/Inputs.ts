@@ -3,7 +3,7 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 
-import type { SharedObjectRef } from '../bcs/index.js';
+import type { SharedObjectRef } from '../bcs/types.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { CallArg, ObjectRef } from './blockData/v2.js';
 

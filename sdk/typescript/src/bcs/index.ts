@@ -38,7 +38,6 @@ import { TransactionEffects } from './effects.js';
 
 export { TypeTagSerializer } from './type-tag-serializer.js';
 export { BcsType, type BcsTypeOptions } from '@mysten/bcs';
-export * from './types.js';
 
 const suiBcs = {
 	...bcs,

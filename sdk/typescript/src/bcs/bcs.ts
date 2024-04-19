@@ -59,7 +59,6 @@ export const ObjectArg = bcs.enum('ObjectArg', {
 export const CallArg = bcs.enum('CallArg', {
 	Pure: bcs.vector(bcs.u8()),
 	Object: ObjectArg,
-	// ObjVec: bcs.vector(ObjectArg),
 });
 
 export const TypeTag: BcsType<TypeTagType> = bcs.enum('TypeTag', {

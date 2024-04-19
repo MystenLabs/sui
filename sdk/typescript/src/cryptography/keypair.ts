@@ -5,7 +5,8 @@ import { bcs, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bech32 } from 'bech32';
 
-import { IntentScope, messageWithIntent } from './intent.js';
+import type { IntentScope } from './intent.js';
+import { messageWithIntent } from './intent.js';
 import type { PublicKey } from './publickey.js';
 import { SIGNATURE_FLAG_TO_SCHEME, SIGNATURE_SCHEME_TO_FLAG } from './signature-scheme.js';
 import type { SignatureScheme } from './signature-scheme.js';
@@ -53,16 +54,13 @@ export abstract class Signer {
 	 * Signs provided transaction block by calling `signWithIntent()` with a `TransactionData` provided as intent scope
 	 */
 	async signTransactionBlock(bytes: Uint8Array) {
-		return this.signWithIntent(bytes, IntentScope.TransactionData);
+		return this.signWithIntent(bytes, 'TransactionData');
 	}
 	/**
 	 * Signs provided personal message by calling `signWithIntent()` with a `PersonalMessage` provided as intent scope
 	 */
 	async signPersonalMessage(bytes: Uint8Array) {
-		return this.signWithIntent(
-			bcs.vector(bcs.u8()).serialize(bytes).toBytes(),
-			IntentScope.PersonalMessage,
-		);
+		return this.signWithIntent(bcs.vector(bcs.u8()).serialize(bytes).toBytes(), 'PersonalMessage');
 	}
 
 	toSuiAddress(): string {

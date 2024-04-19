@@ -22,7 +22,7 @@ import {
 } from 'valibot';
 
 import { TypeTagSerializer } from '../../bcs/index.js';
-import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/index.js';
+import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/types.js';
 import type { Argument } from './v2.js';
 import { NormalizedCallArg, TransactionBlockState } from './v2.js';
 

@@ -23,7 +23,7 @@ import {
 	unknown,
 } from 'valibot';
 
-import type { TypeTag as TypeTagType } from '../../bcs/index.js';
+import type { TypeTag as TypeTagType } from '../../bcs/types.js';
 import { isValidSuiAddress, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
@@ -303,7 +303,7 @@ export type TransactionExpiration = Output<typeof TransactionExpiration>;
 
 export const TransactionBlockState = object({
 	version: literal(2),
-	features: array(string()),
+
 	sender: nullish(SuiAddress),
 	expiration: nullish(TransactionExpiration),
 	gasData: GasData,
