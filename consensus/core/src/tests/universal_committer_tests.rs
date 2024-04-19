@@ -21,19 +21,20 @@ use crate::{
 /// Commit one leader.
 #[test]
 fn direct_commit() {
-    let (mut dag_builder, dag_state, committer) = basic_dag_builder_test_setup();
+    let mut test_setup = basic_dag_builder_test_setup();
 
     // Build fully connected dag with empty blocks adding up to voting round of
     // wave 2 to the dag so that we have 2 completed waves and one incomplete wave.
     // note: waves & rounds are zero-indexed.
-    let leader_round_wave_1 = committer.committers[0].leader_round(1);
-    let voting_round_wave_2 = committer.committers[0].leader_round(2) + 1;
-    dag_builder
+    let leader_round_wave_1 = test_setup.committer.committers[0].leader_round(1);
+    let voting_round_wave_2 = test_setup.committer.committers[0].leader_round(2) + 1;
+    test_setup
+        .dag_builder
         .layers(1..voting_round_wave_2)
         .build()
-        .persist_layers(dag_state);
+        .persist_layers(test_setup.dag_state);
 
-    dag_builder.print();
+    test_setup.dag_builder.print();
 
     // Genesis cert will not be included in commit sequence, marking it as last decided
     let last_decided = Slot::new_for_test(0, 0);
@@ -41,14 +42,14 @@ fn direct_commit() {
     // The universal committer should mark the potential leaders in leader round 6 as
     // undecided because there is no way to get enough certificates for leaders of
     // leader round 6 without completing wave 2.
-    let sequence = committer.try_commit(last_decided);
+    let sequence = test_setup.committer.try_commit(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
     if let LeaderStatus::Commit(ref block) = sequence[0] {
         assert_eq!(
             block.author(),
-            committer.get_leaders(leader_round_wave_1)[0]
+            test_setup.committer.get_leaders(leader_round_wave_1)[0]
         )
     } else {
         panic!("Expected a committed leader")
@@ -224,37 +225,40 @@ fn no_genesis_commit() {
 /// We directly skip the leader if there are enough non-votes (blames).
 #[test]
 fn direct_skip_no_leader_votes() {
-    let (mut dag_builder, dag_state, committer) = basic_dag_builder_test_setup();
+    let mut test_setup = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the leader round of wave 1.
     // note: waves & rounds are zero-indexed.
-    let leader_round_wave_1 = committer.committers[0].leader_round(1);
-    dag_builder
+    let leader_round_wave_1 = test_setup.committer.committers[0].leader_round(1);
+    test_setup
+        .dag_builder
         .layers(1..leader_round_wave_1)
         .build()
-        .persist_layers(dag_state.clone());
+        .persist_layers(test_setup.dag_state.clone());
 
     // Add enough blocks to reach the decision round of the first leader but without
     // votes for the leader of wave 1.
-    let leader_wave_1 = committer.get_leaders(leader_round_wave_1)[0];
+    let leader_wave_1 = test_setup.committer.get_leaders(leader_round_wave_1)[0];
     let voting_round_wave_1 = leader_round_wave_1 + 1;
-    dag_builder
+    test_setup
+        .dag_builder
         .layer(voting_round_wave_1)
         .no_leader_link(leader_round_wave_1, vec![])
-        .persist_layers(dag_state.clone());
+        .persist_layers(test_setup.dag_state.clone());
 
-    let decision_round_wave_1 = committer.committers[0].decision_round(1);
-    dag_builder
+    let decision_round_wave_1 = test_setup.committer.committers[0].decision_round(1);
+    test_setup
+        .dag_builder
         .layer(decision_round_wave_1)
         .build()
-        .persist_layers(dag_state);
+        .persist_layers(test_setup.dag_state);
 
-    dag_builder.print();
+    test_setup.dag_builder.print();
 
     // Ensure no blocks are committed because there are 2f+1 blame (non-votes) for
     // the leader of wave 1.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = test_setup.committer.try_commit(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
@@ -269,40 +273,47 @@ fn direct_skip_no_leader_votes() {
 /// We directly skip the leader if it is missing.
 #[test]
 fn direct_skip_missing_leader_block() {
-    let (mut dag_builder, dag_state, committer) = basic_dag_builder_test_setup();
+    let mut test_setup = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the decision round of wave 0
     // note: waves & rounds are zero-indexed.
-    let decision_round_wave_0 = committer.committers[0].decision_round(0);
-    dag_builder.layers(1..decision_round_wave_0).build();
+    let decision_round_wave_0 = test_setup.committer.committers[0].decision_round(0);
+    test_setup
+        .dag_builder
+        .layers(1..decision_round_wave_0)
+        .build();
 
     // Create a leader round in the dag without the leader block.
-    let leader_round_wave_1 = committer.committers[0].leader_round(1);
-    dag_builder
+    let leader_round_wave_1 = test_setup.committer.committers[0].leader_round(1);
+    test_setup
+        .dag_builder
         .layer(leader_round_wave_1)
         .no_leader_block(vec![])
         .build();
 
     // Add enough blocks to reach the decision round of wave 1.
     let voting_round_wave_1 = leader_round_wave_1 + 1;
-    let decision_round_wave_1 = committer.committers[0].decision_round(1);
-    dag_builder
+    let decision_round_wave_1 = test_setup.committer.committers[0].decision_round(1);
+    test_setup
+        .dag_builder
         .layers(voting_round_wave_1..decision_round_wave_1)
         .build();
 
-    dag_builder.print();
-    dag_builder.persist_all_blocks(dag_state.clone());
+    test_setup.dag_builder.print();
+    test_setup
+        .dag_builder
+        .persist_all_blocks(test_setup.dag_state.clone());
 
     // Ensure the leader is skipped because the leader is missing.
     let last_committed = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_committed);
+    let sequence = test_setup.committer.try_commit(last_committed);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
     if let LeaderStatus::Skip(leader) = sequence[0] {
         assert_eq!(
             leader.authority,
-            committer.get_leaders(leader_round_wave_1)[0]
+            test_setup.committer.get_leaders(leader_round_wave_1)[0]
         );
         assert_eq!(leader.round, leader_round_wave_1);
     } else {
@@ -710,9 +721,14 @@ fn basic_test_setup() -> (
     (context, dag_state, committer)
 }
 
+struct TestSetup {
+    dag_builder: DagBuilder,
+    dag_state: Arc<RwLock<DagState>>,
+    committer: super::UniversalCommitter,
+}
+
 // TODO: Make this the basic_test_setup()
-fn basic_dag_builder_test_setup() -> (DagBuilder, Arc<RwLock<DagState>>, super::UniversalCommitter)
-{
+fn basic_dag_builder_test_setup() -> TestSetup {
     telemetry_subscribers::init_for_testing();
     let context = Arc::new(Context::new_for_test(4).0);
     let dag_builder = DagBuilder::new(context);
@@ -728,5 +744,9 @@ fn basic_dag_builder_test_setup() -> (DagBuilder, Arc<RwLock<DagState>>, super::
     // note: without pipelining or multi-leader enabled there should only be one committer.
     assert!(committer.committers.len() == 1);
 
-    (dag_builder, dag_state, committer)
+    TestSetup {
+        dag_builder,
+        dag_state,
+        committer,
+    }
 }

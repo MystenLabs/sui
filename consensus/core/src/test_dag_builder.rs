@@ -70,21 +70,19 @@ use crate::{
 /// ```
 #[allow(unused)]
 pub(crate) struct DagBuilder {
-    pub context: Arc<Context>,
-    pub leader_schedule: LeaderSchedule,
+    pub(crate) context: Arc<Context>,
+    pub(crate) leader_schedule: LeaderSchedule,
+    // The genesis blocks
+    pub(crate) genesis: BTreeMap<BlockRef, VerifiedBlock>,
+    // The current set of ancestors that any new layer will attempt to connect to.
+    pub(crate) last_ancestors: Vec<BlockRef>,
+    // All blocks created by dag builder. Will be used to pretty print or to be
+    // retrieved for testing/persiting to dag state.
+    pub(crate) blocks: BTreeMap<BlockRef, VerifiedBlock>,
+
     wave_length: Round,
     number_of_leaders: u32,
     pipeline: bool,
-
-    // The genesis blocks
-    pub genesis: BTreeMap<BlockRef, VerifiedBlock>,
-
-    // The current set of ancestors that any new layer will attempt to connect to.
-    pub last_ancestors: Vec<BlockRef>,
-
-    // All blocks created by dag builder. Will be used to pretty print or to be
-    // retrieved for testing/persiting to dag state.
-    pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
 }
 
 #[allow(unused)]
@@ -206,9 +204,10 @@ pub struct LayerBuilder<'a> {
     end_round: Option<Round>,
 
     // Configuration options applied to specified authorities
+    // TODO: convert configuration options into an enum
     specified_authorities: Option<Vec<AuthorityIndex>>,
     // Number of equivocating blocks per specified authority
-    equivocations: Option<usize>,
+    equivocations: usize,
     // Skip block proposal for specified authorities
     skip_block: bool,
     // Skip specified ancestor links for specified authorities
@@ -250,7 +249,7 @@ impl<'a> LayerBuilder<'a> {
             start_round,
             end_round: None,
             specified_authorities: None,
-            equivocations: None,
+            equivocations: 0,
             skip_block: false,
             skip_ancestor_links: None,
             no_leader_link: false,
@@ -336,7 +335,7 @@ impl<'a> LayerBuilder<'a> {
     pub fn equivocate(mut self, equivocations: usize) -> Self {
         // authorities must be specified for this to apply
         assert!(self.specified_authorities.is_some());
-        self.equivocations = Some(equivocations);
+        self.equivocations = equivocations;
         self
     }
 
@@ -513,14 +512,15 @@ impl<'a> LayerBuilder<'a> {
     }
 
     fn num_blocks_to_create(&self, authority: AuthorityIndex) -> u32 {
-        if self.equivocations.is_some()
+        if self.specified_authorities.is_some()
             && self
                 .specified_authorities
                 .clone()
                 .unwrap()
                 .contains(&authority)
         {
-            self.equivocations.unwrap() as u32
+            // Always create 1 block and then the equivocating blocks on top of that.
+            1 + self.equivocations as u32
         } else {
             1
         }

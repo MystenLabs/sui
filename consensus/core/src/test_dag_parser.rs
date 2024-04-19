@@ -280,6 +280,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::block::BlockAPI;
 
     #[test]
     fn test_dag_parsing() {
@@ -318,6 +319,59 @@ mod tests {
         let (_, dag_builder) = result.unwrap();
         assert_eq!(dag_builder.genesis.len(), 4);
         assert_eq!(dag_builder.blocks.len(), 23);
+
+        // Check the blocks were correctly parsed in Round 6
+        let blocks_a6 = dag_builder
+            .get_uncommitted_blocks_at_slot(Slot::new(6, AuthorityIndex::new_for_test(0)));
+        assert_eq!(blocks_a6.len(), 1);
+        let block_a6 = blocks_a6.first().unwrap();
+        assert_eq!(block_a6.round(), 6);
+        assert_eq!(block_a6.author(), AuthorityIndex::new_for_test(0));
+        assert_eq!(block_a6.ancestors().len(), 5);
+        let expected_block_a6_ancestor_slots = [
+            Slot::new(3, AuthorityIndex::new_for_test(0)),
+            Slot::new(3, AuthorityIndex::new_for_test(1)),
+            Slot::new(3, AuthorityIndex::new_for_test(2)),
+            Slot::new(1, AuthorityIndex::new_for_test(0)),
+            Slot::new(1, AuthorityIndex::new_for_test(1)),
+        ];
+        for ancestor in block_a6.ancestors() {
+            assert!(expected_block_a6_ancestor_slots.contains(&Slot::from(*ancestor)));
+        }
+
+        let blocks_b6 = dag_builder
+            .get_uncommitted_blocks_at_slot(Slot::new(6, AuthorityIndex::new_for_test(1)));
+        assert_eq!(blocks_b6.len(), 1);
+        let block_b6 = blocks_b6.first().unwrap();
+        assert_eq!(block_b6.round(), 6);
+        assert_eq!(block_b6.author(), AuthorityIndex::new_for_test(1));
+        assert_eq!(block_b6.ancestors().len(), 5);
+        let expected_block_b6_ancestor_slots = [
+            Slot::new(5, AuthorityIndex::new_for_test(0)),
+            Slot::new(5, AuthorityIndex::new_for_test(1)),
+            Slot::new(5, AuthorityIndex::new_for_test(2)),
+            Slot::new(5, AuthorityIndex::new_for_test(3)),
+            Slot::new(0, AuthorityIndex::new_for_test(0)),
+        ];
+        for ancestor in block_b6.ancestors() {
+            assert!(expected_block_b6_ancestor_slots.contains(&Slot::from(*ancestor)));
+        }
+
+        let blocks_c6 = dag_builder
+            .get_uncommitted_blocks_at_slot(Slot::new(6, AuthorityIndex::new_for_test(2)));
+        assert_eq!(blocks_c6.len(), 1);
+        let block_c6 = blocks_c6.first().unwrap();
+        assert_eq!(block_c6.round(), 6);
+        assert_eq!(block_c6.author(), AuthorityIndex::new_for_test(2));
+        assert_eq!(block_c6.ancestors().len(), 3);
+        let expected_block_c6_ancestor_slots = [
+            Slot::new(5, AuthorityIndex::new_for_test(1)),
+            Slot::new(5, AuthorityIndex::new_for_test(2)),
+            Slot::new(5, AuthorityIndex::new_for_test(3)),
+        ];
+        for ancestor in block_c6.ancestors() {
+            assert!(expected_block_c6_ancestor_slots.contains(&Slot::from(*ancestor)));
+        }
     }
 
     #[test]
