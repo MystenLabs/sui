@@ -196,7 +196,7 @@ impl<'a> FunctionContext<'a> {
             return_: module.signature_at(function_handle.return_),
             locals: module.signature_at(code.locals),
             type_parameters: &function_handle.type_parameters,
-            cfg: VMControlFlowGraph::new(&code.code),
+            cfg: VMControlFlowGraph::new(&code.code, &code.jump_tables),
         }
     }
 
