@@ -1499,6 +1499,7 @@ dependencies = [
 name = "move-abstract-interpreter"
 version = "0.1.0"
 dependencies = [
+ "itertools",
  "move-binary-format",
  "move-bytecode-verifier-meter",
 ]

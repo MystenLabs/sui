@@ -5,8 +5,10 @@ use std::io::Read;
 
 use crate::{
     account_address::AccountAddress,
-    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    annotated_value::{MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    identifier::IdentStr,
     u256::U256,
+    VARIANT_COUNT_MAX,
 };
 
 /// Visitors can be used for building values out of a serialized Move struct or value.
@@ -45,6 +47,11 @@ pub trait Visitor {
     fn visit_struct(
         &mut self,
         driver: &mut StructDriver<'_, '_, '_>,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_variant(
+        &mut self,
+        driver: &mut VariantDriver<'_, '_, '_>,
     ) -> Result<Self::Value, Self::Error>;
 }
 
@@ -112,6 +119,14 @@ pub trait Traversal {
         while driver.next_field(self)?.is_some() {}
         Ok(())
     }
+
+    fn traverse_variant(
+        &mut self,
+        driver: &mut VariantDriver<'_, '_, '_>,
+    ) -> Result<(), Self::Error> {
+        while driver.next_field(self)?.is_some() {}
+        Ok(())
+    }
 }
 
 /// Default implementation converting any traversal into a visitor.
@@ -168,6 +183,13 @@ impl<T: Traversal + ?Sized> Visitor for T {
     ) -> Result<Self::Value, Self::Error> {
         self.traverse_struct(driver)
     }
+
+    fn visit_variant(
+        &mut self,
+        driver: &mut VariantDriver<'_, '_, '_>,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_variant(driver)
+    }
 }
 
 /// Exposes information about a vector being visited (the element layout) to a visitor
@@ -189,6 +211,18 @@ pub struct StructDriver<'r, 'b, 'l> {
     off: usize,
 }
 
+/// Exposes information about a variant being visited (its layout, details about the next field to
+/// be visited, the variant's tag, and name) to a visitor implementation, and allows that visitor
+/// to progress the traversal (by visiting or skipping fields).
+pub struct VariantDriver<'r, 'b, 'l> {
+    bytes: &'r mut &'b [u8],
+    layout: &'l MoveEnumLayout,
+    tag: u16,
+    variant_name: &'l IdentStr,
+    variant_layout: &'l [MoveFieldLayout],
+    off: usize,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("unexpected end of input")]
@@ -199,6 +233,9 @@ pub enum Error {
 
     #[error("trailing {0} byte(s) at the end of input")]
     TrailingBytes(usize),
+
+    #[error("invalid variant tag: {0}")]
+    UnexpectedVariantTag(usize),
 }
 
 /// The null traversal implements `Traversal` and `Visitor` but without doing anything (does not
@@ -311,6 +348,78 @@ impl<'r, 'b, 'l> StructDriver<'r, 'b, 'l> {
     }
 }
 
+impl<'r, 'b, 'l> VariantDriver<'r, 'b, 'l> {
+    fn new(
+        bytes: &'r mut &'b [u8],
+        layout: &'l MoveEnumLayout,
+        variant_layout: &'l [MoveFieldLayout],
+        variant_name: &'l IdentStr,
+        tag: u16,
+    ) -> Self {
+        Self {
+            bytes,
+            layout,
+            tag,
+            variant_name,
+            variant_layout,
+            off: 0,
+        }
+    }
+
+    /// The layout of the enum being visited.
+    pub fn enum_layout(&self) -> &'l MoveEnumLayout {
+        self.layout
+    }
+
+    /// The layout of the variant being visited.
+    pub fn variant_layout(&self) -> &'l [MoveFieldLayout] {
+        self.variant_layout
+    }
+
+    /// The tag of the variant being visited.
+    pub fn tag(&self) -> u16 {
+        self.tag
+    }
+
+    /// The name of the enum variant being visited.
+    pub fn variant_name(&self) -> &'l IdentStr {
+        self.variant_name
+    }
+
+    /// The layout of the next field to be visited (if there is one), or `None` otherwise.
+    pub fn peek_field(&self) -> Option<&'l MoveFieldLayout> {
+        self.variant_layout.get(self.off)
+    }
+
+    /// Visit the next field in the variant. The driver accepts a visitor to use for this field,
+    /// allowing the visitor to be changed on recursive calls or even between fields in the same
+    /// variant.
+    ///
+    /// Returns `Ok(None)` if there are no more fields in the variant, `Ok((f, v))` if there was an
+    /// field and it was successfully visited (where `v` is the value returned by the visitor, and
+    /// `f` is the layout of the field that was visited) or an error if there was an underlying
+    /// deserialization error, or an error during visitation.
+    pub fn next_field<V: Visitor + ?Sized>(
+        &mut self,
+        visitor: &mut V,
+    ) -> Result<Option<(&'l MoveFieldLayout, V::Value)>, V::Error> {
+        let Some(field) = self.peek_field() else {
+            return Ok(None);
+        };
+
+        let res = visit_value(self.bytes, &field.layout, visitor)?;
+        self.off += 1;
+        Ok(Some((field, res)))
+    }
+
+    /// Skip the next field. Returns the layout of the field that was visited if there was one, or
+    /// `None` if there was none. Can return an error if there was a deserialization error.
+    pub fn skip_field(&mut self) -> Result<Option<&'l MoveFieldLayout>, Error> {
+        self.next_field(&mut NullTraversal)
+            .map(|res| res.map(|(f, _)| f))
+    }
+}
+
 /// Visit a serialized Move value with the provided `layout`, held in `bytes`, using the provided
 /// visitor to build a value out of it. See `annoted_value::MoveValue::visit_deserialize` for
 /// details.
@@ -344,7 +453,7 @@ pub(crate) fn visit_value<V: Visitor + ?Sized>(
             while driver.skip_element()? {}
             Ok(res)
         }
-
+        L::Enum(e) => visit_variant(bytes, e, visitor),
         L::Struct(l) => visit_struct(bytes, l, visitor),
     }
 }
@@ -358,6 +467,38 @@ pub(crate) fn visit_struct<V: Visitor + ?Sized>(
 ) -> Result<V::Value, V::Error> {
     let mut driver = StructDriver::new(bytes, layout);
     let res = visitor.visit_struct(&mut driver)?;
+    while driver.skip_field()?.is_some() {}
+    Ok(res)
+}
+
+/// Like `visit_struct` but specialized to visiting a variant (where the `bytes` is known to be a
+/// serialized move variant), and the layout is an enum layout.
+pub(crate) fn visit_variant<V: Visitor + ?Sized>(
+    bytes: &mut &[u8],
+    layout: &MoveEnumLayout,
+    visitor: &mut V,
+) -> Result<V::Value, V::Error> {
+    // Since variants are bounded at 127, we can read the tag as a single byte.
+    // When we add true ULEB encoding for enum variants switch to this:
+    // let tag = leb128::read::unsigned(bytes).map_err(|_| Error::UnexpectedEof)?;
+    let [tag] = read_exact::<1>(bytes)?;
+    if tag >= VARIANT_COUNT_MAX as u8 {
+        return Err(Error::UnexpectedVariantTag(tag as usize).into());
+    }
+    let variant_layout = layout
+        .variants
+        .iter()
+        .find(|((_, vtag), _)| *vtag == tag as u16)
+        .ok_or(Error::UnexpectedVariantTag(tag as usize))?;
+
+    let mut driver = VariantDriver::new(
+        bytes,
+        layout,
+        variant_layout.1,
+        &variant_layout.0 .0,
+        tag as u16,
+    );
+    let res = visitor.visit_variant(&mut driver)?;
     while driver.skip_field()?.is_some() {}
     Ok(res)
 }
