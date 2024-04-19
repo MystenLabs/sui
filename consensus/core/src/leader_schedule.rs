@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::{Debug, Formatter},
     sync::Arc,
 };
@@ -11,7 +11,7 @@ use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 
-use crate::{context::Context, leader_scoring::ReputationScores, Round};
+use crate::{commit::CommitRange, context::Context, leader_scoring::ReputationScores, Round};
 
 /// The `LeaderSchedule` is responsible for producing the leader schedule across
 /// an epoch. The leader schedule is subject to change periodically based on
@@ -39,23 +39,23 @@ impl LeaderSchedule {
         }
     }
 
-    pub fn elect_leader(&self, round: u32, leader_offset: u32) -> AuthorityIndex {
+    pub(crate) fn elect_leader(&self, round: u32, leader_offset: u32) -> AuthorityIndex {
         cfg_if::cfg_if! {
             // TODO: we need to differentiate the leader strategy in tests, so for
             // some type of testing (ex sim tests) we can use the staked approach.
             if #[cfg(test)] {
                 let leader = AuthorityIndex::new_for_test((round + leader_offset) % self.context.committee.size() as u32);
                 let table = self.leader_swap_table.read();
-                table.swap(&leader, round, leader_offset).unwrap_or(leader)
+                table.swap(leader, round, leader_offset).unwrap_or(leader)
             } else {
                 let leader = self.elect_leader_stake_based(round, leader_offset);
                 let table = self.leader_swap_table.read();
-                table.swap(&leader, round, leader_offset).unwrap_or(leader)
+                table.swap(leader, round, leader_offset).unwrap_or(leader)
             }
         }
     }
 
-    pub fn elect_leader_stake_based(&self, round: u32, offset: u32) -> AuthorityIndex {
+    pub(crate) fn elect_leader_stake_based(&self, round: u32, offset: u32) -> AuthorityIndex {
         assert!((offset as usize) < self.context.committee.size());
 
         // To ensure that we elect different leaders for the same round (using
@@ -88,7 +88,23 @@ impl LeaderSchedule {
     /// leader queried from now on will get calculated according to this swap
     /// table until a new one is provided again.
     fn update_leader_swap_table(&self, table: LeaderSwapTable) {
-        tracing::trace!("Updating {:?}", table);
+        let read = self.leader_swap_table.read();
+        let old_commit_range = &read.reputation_scores.commit_range;
+        let new_commit_range = &table.reputation_scores.commit_range;
+
+        // Unless LeaderSchedule is brand new and using the default commit range
+        // of CommitRange(0..0) all future LeaderSwapTables should be calculated
+        // from a CommitRange of equal length and immediately following the
+        // preceding commit range of the old swap table.
+        if *old_commit_range != CommitRange::new(0..0) {
+            assert!(
+                old_commit_range.is_next_range(new_commit_range),
+                "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable {old_commit_range:?} vs new LeaderSwapTable {new_commit_range:?}",
+            );
+        }
+        drop(read);
+
+        tracing::trace!("Updating {table:?}");
 
         let mut write = self.leader_swap_table.write();
         *write = table;
@@ -97,39 +113,39 @@ impl LeaderSchedule {
 
 #[derive(Default, Clone)]
 pub(crate) struct LeaderSwapTable {
-    /// The list of `f` (by stake) authorities with best scores as those defined
-    /// by the provided `ReputationScores`. Those authorities will be used in the
-    /// position of the `bad_nodes` on the final leader schedule.
+    /// The list of `f` (by configurable stake) authorities with best scores as
+    /// those defined by the provided `ReputationScores`. Those authorities will
+    /// be used in the position of the `bad_nodes` on the final leader schedule.
     /// Storing the hostname & stake along side the authority index for debugging.
-    pub good_nodes: Vec<(AuthorityIndex, String, Stake)>,
+    pub(crate) good_nodes: Vec<(AuthorityIndex, String, Stake)>,
 
-    /// The set of `f` (by stake) authorities with the worst scores as those defined
-    /// by the provided `ReputationScores`. Every time where such authority is elected
-    /// as leader on the schedule, it will swapped by one of the authorities of the
-    /// `good_nodes`.
+    /// The set of `f` (by configurable stake) authorities with the worst scores
+    /// as those defined by the provided `ReputationScores`. Every time where such
+    /// authority is elected as leader on the schedule, it will swapped by one of
+    /// the authorities of the `good_nodes`.
     /// Storing the hostname & stake along side the authority index for debugging.
-    pub bad_nodes: HashMap<AuthorityIndex, (String, Stake)>,
+    pub(crate) bad_nodes: BTreeMap<AuthorityIndex, (String, Stake)>,
 
     // The scores for which the leader swap table was built from. This struct is
     // used for debugging purposes. Once `good_nodes` & `bad_nodes` are identified
     // the `reputation_scores` are no longer needed functionally for the swap table.
-    pub reputation_scores: ReputationScores,
+    pub(crate) reputation_scores: ReputationScores,
 }
 
 #[allow(unused)]
 impl LeaderSwapTable {
     // Constructs a new table based on the provided reputation scores. The
-    // `bad_nodes_stake_threshold` designates the total (by stake) nodes that
-    // will be considered as "bad" based on their scores and will be replaced by
-    // good nodes. The `bad_nodes_stake_threshold` should be in the range of [0 - 33].
-    pub fn new(
+    // `swap_stake_threshold` designates the total (by stake) nodes that will be
+    // considered as "bad" based on their scores and will be replaced by good nodes.
+    // The `swap_stake_threshold` should be in the range of [0 - 33].
+    pub(crate) fn new(
         context: Arc<Context>,
         reputation_scores: ReputationScores,
-        bad_nodes_stake_threshold: u64,
+        swap_stake_threshold: u64,
     ) -> Self {
         assert!(
-            (0..=33).contains(&bad_nodes_stake_threshold),
-            "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected"
+            (0..=33).contains(&swap_stake_threshold),
+            "The swap_stake_threshold ({swap_stake_threshold}) should be in range [0 - 33], out of bounds parameter detected"
         );
 
         // Calculating the good nodes
@@ -138,7 +154,7 @@ impl LeaderSwapTable {
             reputation_scores
                 .authorities_by_score_desc(context.clone())
                 .into_iter(),
-            bad_nodes_stake_threshold,
+            swap_stake_threshold,
         )
         .into_iter()
         .collect::<Vec<(AuthorityIndex, String, Stake)>>();
@@ -152,11 +168,11 @@ impl LeaderSwapTable {
                 .authorities_by_score_desc(context.clone())
                 .into_iter()
                 .rev(),
-            bad_nodes_stake_threshold,
+            swap_stake_threshold,
         )
         .into_iter()
         .map(|(idx, hostname, stake)| (idx, (hostname, stake)))
-        .collect::<HashMap<AuthorityIndex, (String, Stake)>>();
+        .collect::<BTreeMap<AuthorityIndex, (String, Stake)>>();
 
         good_nodes.iter().for_each(|(idx, hostname, stake)| {
             tracing::debug!(
@@ -193,13 +209,18 @@ impl LeaderSwapTable {
     /// we want to give to all the good nodes equal opportunity to get swapped
     /// with bad nodes and nothave one node with enough stake end up swapping
     /// bad nodes more frequently than the others on the final schedule.
-    pub fn swap(
+    pub(crate) fn swap(
         &self,
-        leader: &AuthorityIndex,
+        leader: AuthorityIndex,
         leader_round: Round,
         leader_offset: u32,
     ) -> Option<AuthorityIndex> {
-        if self.bad_nodes.contains_key(leader) {
+        if self.bad_nodes.contains_key(&leader) {
+            // TODO: Re-work swap for the multileader case
+            assert!(
+                leader_offset == 0,
+                "Swap for multi-leader case not implemented yet."
+            );
             let mut seed_bytes = [0u8; 32];
             seed_bytes[24..28].copy_from_slice(&leader_round.to_le_bytes());
             seed_bytes[28..32].copy_from_slice(&leader_offset.to_le_bytes());
@@ -246,8 +267,8 @@ impl LeaderSwapTable {
                 break;
             }
 
-            let authority = context.committee.authority(authority_idx).to_owned();
-            filtered_authorities.push((authority_idx, authority.hostname, authority.stake));
+            let authority = context.committee.authority(authority_idx);
+            filtered_authorities.push((authority_idx, authority.hostname.clone(), authority.stake));
         }
 
         filtered_authorities
@@ -334,13 +355,13 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
-        let bad_nodes_stake_threshold = 33;
+        let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
             CommitRange::new(0..10),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
-            LeaderSwapTable::new(context, reputation_scores, bad_nodes_stake_threshold);
+            LeaderSwapTable::new(context, reputation_scores, swap_stake_threshold);
 
         assert_eq!(leader_swap_table.good_nodes.len(), 1);
         assert_eq!(
@@ -358,29 +379,26 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
-        let bad_nodes_stake_threshold = 33;
+        let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
             CommitRange::new(0..10),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
-        let leader_swap_table = LeaderSwapTable::new(
-            context.clone(),
-            reputation_scores,
-            bad_nodes_stake_threshold,
-        );
+        let leader_swap_table =
+            LeaderSwapTable::new(context.clone(), reputation_scores, swap_stake_threshold);
 
         // Test swapping a bad leader
         let leader = AuthorityIndex::new_for_test(0);
-        let leader_round = 0;
+        let leader_round = 1;
         let leader_offset = 0;
-        let swapped_leader = leader_swap_table.swap(&leader, leader_round, leader_offset);
+        let swapped_leader = leader_swap_table.swap(leader, leader_round, leader_offset);
         assert_eq!(swapped_leader, Some(AuthorityIndex::new_for_test(3)));
 
         // Test not swapping a good leader
         let leader = AuthorityIndex::new_for_test(1);
-        let leader_round = 0;
+        let leader_round = 1;
         let leader_offset = 0;
-        let swapped_leader = leader_swap_table.swap(&leader, leader_round, leader_offset);
+        let swapped_leader = leader_swap_table.swap(leader, leader_round, leader_offset);
         assert_eq!(swapped_leader, None);
     }
 
@@ -403,6 +421,8 @@ mod tests {
             stake_threshold,
         );
 
+        // Test setup includes 4 validators with even stake. Therefore with a
+        // stake_threshold of 50% we should see 2 validators filtered.
         assert_eq!(filtered_authorities.len(), 2);
         let authority_0_idx = AuthorityIndex::new_for_test(0);
         let authority_0 = context.committee.authority(authority_0_idx);
@@ -422,17 +442,88 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected"
+        expected = "The swap_stake_threshold (34) should be in range [0 - 33], out of bounds parameter detected"
     )]
-    fn test_leader_swap_table_bad_nodes_stake_threshold_out_of_bounds() {
+    fn test_leader_swap_table_swap_stake_threshold_out_of_bounds() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
-        let bad_nodes_stake_threshold = 34;
+        let swap_stake_threshold = 34;
         let reputation_scores = ReputationScores::new(
             CommitRange::new(0..10),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
-        LeaderSwapTable::new(context, reputation_scores, bad_nodes_stake_threshold);
+        LeaderSwapTable::new(context, reputation_scores, swap_stake_threshold);
+    }
+
+    #[test]
+    fn test_update_leader_swap_table() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        let swap_stake_threshold = 33;
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(1..10),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
+        let leader_swap_table =
+            LeaderSwapTable::new(context.clone(), reputation_scores, swap_stake_threshold);
+
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
+
+        // Update leader from brand new schedule to first real schedule
+        leader_schedule.update_leader_swap_table(leader_swap_table.clone());
+
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(11..20),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
+        let leader_swap_table =
+            LeaderSwapTable::new(context.clone(), reputation_scores, swap_stake_threshold);
+
+        // Update leader from old swap table to new valid swap table
+        leader_schedule.update_leader_swap_table(leader_swap_table.clone());
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..20) vs new LeaderSwapTable CommitRange(21..25)"
+    )]
+    fn test_update_bad_leader_swap_table() {
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        let swap_stake_threshold = 33;
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(1..10),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
+        let leader_swap_table =
+            LeaderSwapTable::new(context.clone(), reputation_scores, swap_stake_threshold);
+
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
+
+        // Update leader from brand new schedule to first real schedule
+        leader_schedule.update_leader_swap_table(leader_swap_table.clone());
+
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(11..20),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
+        let leader_swap_table =
+            LeaderSwapTable::new(context.clone(), reputation_scores, swap_stake_threshold);
+
+        // Update leader from old swap table to new valid swap table
+        leader_schedule.update_leader_swap_table(leader_swap_table.clone());
+
+        let reputation_scores = ReputationScores::new(
+            CommitRange::new(21..25),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
+        let leader_swap_table =
+            LeaderSwapTable::new(context.clone(), reputation_scores, swap_stake_threshold);
+
+        // Update leader from old swap table to new invalid swap table
+        leader_schedule.update_leader_swap_table(leader_swap_table.clone());
     }
 }

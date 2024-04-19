@@ -10,9 +10,9 @@ use crate::{commit::CommitRange, context::Context};
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub(crate) struct ReputationScores {
     /// Score per authority. Vec index is the `AuthorityIndex`.
-    pub scores_per_authority: Vec<u64>,
+    pub(crate) scores_per_authority: Vec<u64>,
     // The range of commits these scores were calculated from.
-    pub commit_range: CommitRange,
+    pub(crate) commit_range: CommitRange,
 }
 
 #[allow(unused)]
@@ -56,8 +56,11 @@ impl ReputationScores {
     }
 
     pub(crate) fn update_metrics(&self, context: Arc<Context>) {
-        let authorities = self.authorities_by_score_desc(context.clone());
-        for (authority_index, score) in authorities {
+        for (index, score) in self.scores_per_authority.iter().enumerate() {
+            let authority_index = context
+                .committee
+                .to_authority_index(index)
+                .expect("Should be a valid AuthorityIndex");
             let authority = context.committee.authority(authority_index);
             if !authority.hostname.is_empty() {
                 context
@@ -65,7 +68,7 @@ impl ReputationScores {
                     .node_metrics
                     .reputation_scores
                     .with_label_values(&[&authority.hostname])
-                    .set(score as i64);
+                    .set(*score as i64);
             }
         }
     }
