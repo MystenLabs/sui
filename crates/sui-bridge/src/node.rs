@@ -11,13 +11,14 @@ use crate::{
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
+use ethers::types::Address as EthAddress;
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
-use sui_types::bridge::BRIDGE_MODULE_NAME;
+use sui_types::{bridge::BRIDGE_MODULE_NAME, event::EventID, Identifier};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -56,58 +57,16 @@ async fn start_client_components(
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
     let store: std::sync::Arc<BridgeOrchestratorTables> =
         BridgeOrchestratorTables::new(&client_config.db_path.join("client"));
-    let module_identifier = BRIDGE_MODULE_NAME.to_owned();
-    let sui_bridge_modules = vec![module_identifier.clone()];
-    let sui_bridge_module_stored_cursor = store
-        .get_sui_event_cursors(&sui_bridge_modules)
-        .map_err(|e| anyhow::anyhow!("Unable to get sui event cursors from storage: {e:?}"))?[0];
-    let mut sui_modules_to_watch = HashMap::new();
-    match client_config.sui_bridge_module_last_processed_event_id_override {
-        Some(cursor) => {
-            info!(
-                "Overriding cursor for sui bridge module {} to {:?}. Stored cursor: {:?}",
-                module_identifier, cursor, sui_bridge_module_stored_cursor,
-            );
-            sui_modules_to_watch.insert(module_identifier, Some(cursor));
-        }
-        None => {
-            if sui_bridge_module_stored_cursor.is_none() {
-                info!(
-                    "No cursor found for sui bridge module {} in storage or config override",
-                    module_identifier
-                );
-            }
-            sui_modules_to_watch.insert(module_identifier, sui_bridge_module_stored_cursor);
-        }
-    };
-
-    let stored_eth_cursors = store
-        .get_eth_event_cursors(&client_config.eth_contracts)
-        .map_err(|e| anyhow::anyhow!("Unable to get eth event cursors from storage: {e:?}"))?;
-    let mut eth_contracts_to_watch = HashMap::new();
-    for (contract, cursor) in client_config.eth_contracts.iter().zip(stored_eth_cursors) {
-        if client_config.eth_contracts_start_block_override.is_some() {
-            eth_contracts_to_watch.insert(
-                *contract,
-                client_config.eth_contracts_start_block_override.unwrap(),
-            );
-            info!(
-                "Overriding cursor for eth bridge contract {} to {}. Stored cursor: {:?}",
-                contract,
-                client_config.eth_contracts_start_block_override.unwrap(),
-                cursor
-            );
-        } else if let Some(cursor) = cursor {
-            // +1: The stored value is the last block that was processed, so we start from the next block.
-            eth_contracts_to_watch.insert(*contract, cursor + 1);
-        } else {
-            // TODO: can we not rely on this when node starts for the first time?
-            return Err(anyhow::anyhow!(
-                "No cursor found for eth contract {} in storage or config override",
-                contract
-            ));
-        }
-    }
+    let sui_modules_to_watch = get_sui_modules_to_watch(
+        &store,
+        client_config.sui_bridge_module_last_processed_event_id_override,
+    );
+    let eth_contracts_to_watch = get_eth_contracts_to_watch(
+        &store,
+        &client_config.eth_contracts,
+        client_config.eth_contracts_start_block_fallback,
+        client_config.eth_contracts_start_block_override,
+    );
 
     let sui_client = client_config.sui_client.clone();
 
@@ -151,6 +110,71 @@ async fn start_client_components(
     Ok(all_handles)
 }
 
+fn get_sui_modules_to_watch(
+    store: &std::sync::Arc<BridgeOrchestratorTables>,
+    sui_bridge_module_last_processed_event_id_override: Option<EventID>,
+) -> HashMap<Identifier, Option<EventID>> {
+    let module_identifier = BRIDGE_MODULE_NAME.to_owned();
+    let sui_bridge_modules = vec![module_identifier.clone()];
+    let sui_bridge_module_stored_cursor = store
+        .get_sui_event_cursors(&sui_bridge_modules)
+        .expect("Failed to get eth sui event cursors from storage")[0];
+    let mut sui_modules_to_watch = HashMap::new();
+    match sui_bridge_module_last_processed_event_id_override {
+        Some(cursor) => {
+            info!(
+                "Overriding cursor for sui bridge module {} to {:?}. Stored cursor: {:?}",
+                module_identifier, cursor, sui_bridge_module_stored_cursor,
+            );
+            sui_modules_to_watch.insert(module_identifier, Some(cursor));
+        }
+        None => {
+            if sui_bridge_module_stored_cursor.is_none() {
+                info!(
+                    "No cursor found for sui bridge module {} in storage or config override",
+                    module_identifier
+                );
+            }
+            sui_modules_to_watch.insert(module_identifier, sui_bridge_module_stored_cursor);
+        }
+    };
+    sui_modules_to_watch
+}
+
+fn get_eth_contracts_to_watch(
+    store: &std::sync::Arc<BridgeOrchestratorTables>,
+    eth_contracts: &[EthAddress],
+    eth_contracts_start_block_fallback: u64,
+    eth_contracts_start_block_override: Option<u64>,
+) -> HashMap<EthAddress, u64> {
+    let stored_eth_cursors = store
+        .get_eth_event_cursors(eth_contracts)
+        .expect("Failed to get eth event cursors from storage");
+    let mut eth_contracts_to_watch = HashMap::new();
+    for (contract, stored_cursor) in eth_contracts.iter().zip(stored_eth_cursors) {
+        // start block precedence:
+        // eth_contracts_start_block_override > stored cursor > eth_contracts_start_block_fallback
+        match (eth_contracts_start_block_override, stored_cursor) {
+            (Some(override_), _) => {
+                eth_contracts_to_watch.insert(*contract, override_);
+                info!(
+                    "Overriding cursor for eth bridge contract {} to {}. Stored cursor: {:?}",
+                    contract, override_, stored_cursor
+                );
+            }
+            (None, Some(stored_cursor)) => {
+                // +1: The stored value is the last block that was processed, so we start from the next block.
+                eth_contracts_to_watch.insert(*contract, stored_cursor + 1);
+            }
+            (None, None) => {
+                // If no cursor is found, start from the fallback block.
+                eth_contracts_to_watch.insert(*contract, eth_contracts_start_block_fallback);
+            }
+        }
+    }
+    eth_contracts_to_watch
+}
+
 #[cfg(test)]
 mod tests {
     use ethers::types::Address as EthAddress;
@@ -176,6 +200,115 @@ mod tests {
     use sui_types::event::EventID;
     use tempfile::tempdir;
     use test_cluster::TestClusterBuilder;
+
+    #[tokio::test]
+    async fn test_get_eth_contracts_to_watch() {
+        telemetry_subscribers::init_for_testing();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let eth_contracts = vec![
+            EthAddress::from_low_u64_be(1),
+            EthAddress::from_low_u64_be(2),
+        ];
+        let store = BridgeOrchestratorTables::new(temp_dir.path());
+
+        // No override, no watermark found in DB, use fallback
+        let contracts = get_eth_contracts_to_watch(&store, &eth_contracts, 10, None);
+        assert_eq!(
+            contracts,
+            vec![(eth_contracts[0], 10), (eth_contracts[1], 10)]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+
+        // no watermark found in DB, use override
+        let contracts = get_eth_contracts_to_watch(&store, &eth_contracts, 10, Some(420));
+        assert_eq!(
+            contracts,
+            vec![(eth_contracts[0], 420), (eth_contracts[1], 420)]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+
+        store
+            .update_eth_event_cursor(eth_contracts[0], 100)
+            .unwrap();
+        store
+            .update_eth_event_cursor(eth_contracts[1], 102)
+            .unwrap();
+
+        // No override, found watermarks in DB, use +1
+        let contracts = get_eth_contracts_to_watch(&store, &eth_contracts, 10, None);
+        assert_eq!(
+            contracts,
+            vec![(eth_contracts[0], 101), (eth_contracts[1], 103)]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+
+        // use override
+        let contracts = get_eth_contracts_to_watch(&store, &eth_contracts, 10, Some(200));
+        assert_eq!(
+            contracts,
+            vec![(eth_contracts[0], 200), (eth_contracts[1], 200)]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_sui_modules_to_watch() {
+        telemetry_subscribers::init_for_testing();
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let store = BridgeOrchestratorTables::new(temp_dir.path());
+        let module = BRIDGE_MODULE_NAME.to_owned();
+        // No override, no stored watermark, use None
+        let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
+        assert_eq!(
+            sui_modules_to_watch,
+            vec![(module.clone(), None)]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+
+        // no stored watermark, use override
+        let override_cursor = EventID {
+            tx_digest: TransactionDigest::random(),
+            event_seq: 42,
+        };
+        let sui_modules_to_watch = get_sui_modules_to_watch(&store, Some(override_cursor));
+        assert_eq!(
+            sui_modules_to_watch,
+            vec![(module.clone(), Some(override_cursor))]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+
+        // No override, found stored watermark, use stored watermark
+        let stored_cursor = EventID {
+            tx_digest: TransactionDigest::random(),
+            event_seq: 100,
+        };
+        store
+            .update_sui_event_cursor(module.clone(), stored_cursor)
+            .unwrap();
+        let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
+        assert_eq!(
+            sui_modules_to_watch,
+            vec![(module.clone(), Some(stored_cursor))]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+
+        // found stored watermark, use override
+        let sui_modules_to_watch = get_sui_modules_to_watch(&store, Some(override_cursor));
+        assert_eq!(
+            sui_modules_to_watch,
+            vec![(module.clone(), Some(override_cursor))]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+    }
 
     #[tokio::test]
     async fn test_starting_bridge_node() {
@@ -205,6 +338,7 @@ mod tests {
                 eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
                 eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+                eth_contracts_start_block_fallback: None,
                 eth_contracts_start_block_override: None,
             },
             approved_governance_actions: vec![],
@@ -262,7 +396,8 @@ mod tests {
                 eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
                 eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
-                eth_contracts_start_block_override: Some(0),
+                eth_contracts_start_block_fallback: Some(0),
+                eth_contracts_start_block_override: None,
             },
             approved_governance_actions: vec![],
             run_client: true,
@@ -332,6 +467,7 @@ mod tests {
                 eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
                 eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+                eth_contracts_start_block_fallback: Some(0),
                 eth_contracts_start_block_override: Some(0),
             },
             approved_governance_actions: vec![],
