@@ -44,6 +44,7 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::type_resolver::into_struct_layout;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
@@ -2286,7 +2287,9 @@ impl AuthorityState {
             return Ok(None);
         }
 
-        let layout = resolver.get_annotated_layout(&move_object.type_().clone().into())?;
+        let layout = into_struct_layout(
+            resolver.get_annotated_layout(&move_object.type_().clone().into())?,
+        )?;
         let move_struct = move_object.to_move_struct(&layout)?;
 
         let (name_value, type_, object_id) =
@@ -2501,12 +2504,12 @@ impl AuthorityState {
         let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
             (request.generate_layout, object.data.try_as_move())
         {
-            Some(
+            Some(into_struct_layout(
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
-            )
+            )?)
         } else {
             None
         };
@@ -3299,11 +3302,13 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
-                self.load_epoch_store_one_call_per_task()
-                    .executor()
-                    // TODO(cache) - must read through cache
-                    .type_layout_resolver(Box::new(self.execution_cache.as_ref()))
-                    .get_annotated_layout(&object.type_().clone().into())
+                into_struct_layout(
+                    self.load_epoch_store_one_call_per_task()
+                        .executor()
+                        // TODO(cache) - must read through cache
+                        .type_layout_resolver(Box::new(self.execution_cache.as_ref()))
+                        .get_annotated_layout(&object.type_().clone().into())?,
+                )
             })
             .transpose()?;
         Ok(layout)

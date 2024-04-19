@@ -302,7 +302,10 @@ fn resolve_to_layout(
         }
         TypeTag::Struct(inner) => {
             let mut layout_resolver = executor.type_layout_resolver(Box::new(store_factory));
-            MoveTypeLayout::Struct(layout_resolver.get_annotated_layout(inner).unwrap())
+            layout_resolver
+                .get_annotated_layout(inner)
+                .unwrap()
+                .into_layout()
         }
         TypeTag::Bool => MoveTypeLayout::Bool,
         TypeTag::U8 => MoveTypeLayout::U8,

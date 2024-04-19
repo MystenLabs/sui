@@ -14,7 +14,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
 use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
+    type_and_fields_from_move_event_data, EventPage, SuiEvent, SuiExecutionStatus,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
@@ -37,7 +37,7 @@ use sui_types::error::{SuiError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
-use sui_types::object::{MoveObject, Object, ObjectRead, Owner, PastObjectRead};
+use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -48,6 +48,7 @@ use sui_types::transaction::{
     CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use sui_types::type_resolver::get_layout_from_struct_tag;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
@@ -693,14 +694,14 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         other => panic!("Failed to get SuiEvent, but {:?}", other),
     };
     let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let layout = MoveObject::get_layout_from_struct_tag(
+    let layout = get_layout_from_struct_tag(
         struct_tag.clone(),
         &**node.state().epoch_store_for_testing().module_cache(),
     )?;
 
-    let expected_parsed_event = Event::move_event_to_move_struct(&bcs, layout).unwrap();
-    let (_, expected_parsed_event) =
-        type_and_fields_from_move_struct(&struct_tag, expected_parsed_event);
+    let expected_parsed_event = Event::move_event_to_move_value(&bcs, layout).unwrap();
+    let (_, expected_parsed_events) =
+        type_and_fields_from_move_event_data(expected_parsed_event).unwrap();
     let expected_event = SuiEvent {
         id: EventID {
             tx_digest: digest,
@@ -710,7 +711,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         transaction_module: ident_str!("devnet_nft").into(),
         sender,
         type_: struct_tag,
-        parsed_json: expected_parsed_event.to_json_value(),
+        parsed_json: expected_parsed_events,
         bcs,
         timestamp_ms: None,
     };

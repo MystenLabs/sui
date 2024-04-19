@@ -257,6 +257,16 @@ fn parse_struct_field(
                 parse_struct(path, move_struct, all_structs)
             }
         }
+        MoveValue::Variant(v) => {
+            for (k, field) in v.fields.iter() {
+                parse_struct_field(
+                    &format!("{}.{}", path, k),
+                    field.clone(),
+                    curr_struct,
+                    all_structs,
+                );
+            }
+        }
         MoveValue::Vector(fields) => {
             for (index, field) in fields.iter().enumerate() {
                 parse_struct_field(
@@ -275,7 +285,7 @@ fn parse_struct_field(
 mod tests {
     use crate::handlers::parse_struct;
     use move_core_types::account_address::AccountAddress;
-    use move_core_types::annotated_value::{MoveStruct, MoveValue};
+    use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
     use std::collections::BTreeMap;
@@ -316,6 +326,60 @@ mod tests {
         );
         assert_eq!(
             all_structs.get("$.principal").unwrap().struct_tag,
+            Some(StructTag::from_str("0x2::balance::Balance")?)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_wrapped_object_parsing_within_enum() -> anyhow::Result<()> {
+        let uid_field = MoveValue::Struct(MoveStruct {
+            type_: StructTag::from_str("0x2::object::UID")?,
+            fields: vec![(
+                Identifier::from_str("id")?,
+                MoveValue::Struct(MoveStruct {
+                    type_: StructTag::from_str("0x2::object::ID")?,
+                    fields: vec![(
+                        Identifier::from_str("bytes")?,
+                        MoveValue::Signer(AccountAddress::from_hex_literal("0x300")?),
+                    )],
+                }),
+            )],
+        });
+        let balance_field = MoveValue::Struct(MoveStruct {
+            type_: StructTag::from_str("0x2::balance::Balance")?,
+            fields: vec![(Identifier::from_str("value")?, MoveValue::U32(10))],
+        });
+        let move_enum = MoveVariant {
+            type_: StructTag::from_str("0x2::test::TestEnum")?,
+            variant_name: Identifier::from_str("TestVariant")?,
+            tag: 0,
+            fields: vec![
+                (Identifier::from_str("field0")?, MoveValue::U64(10)),
+                (Identifier::from_str("principal")?, balance_field),
+            ],
+        };
+        let move_struct = MoveStruct {
+            type_: StructTag::from_str("0x2::test::Test")?,
+            fields: vec![
+                (Identifier::from_str("id")?, uid_field),
+                (
+                    Identifier::from_str("enum_field")?,
+                    MoveValue::Variant(move_enum),
+                ),
+            ],
+        };
+        let mut all_structs = BTreeMap::new();
+        parse_struct("$", move_struct, &mut all_structs);
+        assert_eq!(
+            all_structs.get("$").unwrap().object_id,
+            Some(ObjectID::from_hex_literal("0x300")?)
+        );
+        assert_eq!(
+            all_structs
+                .get("$.enum_field.principal")
+                .unwrap()
+                .struct_tag,
             Some(StructTag::from_str("0x2::balance::Balance")?)
         );
         Ok(())

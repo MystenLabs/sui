@@ -9,10 +9,11 @@ use once_cell::sync::Lazy;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::type_resolver::get_layout_from_struct_tag;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use sui_types::object::MoveObject;
 
 use self::models::*;
 use std::env;
@@ -23,7 +24,6 @@ use sui_indexer::store::package_resolver::IndexerStorePackageResolver;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
 use std::collections::HashMap;
-use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::parse_sui_struct_tag;
 
 use tracing::debug;
@@ -214,16 +214,18 @@ fn main() {
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type).expect("cannot load StructTag");
 
-                let layout = MoveObject::get_layout_from_struct_tag(type_.clone(), &module_cache);
+                let layout = get_layout_from_struct_tag(type_.clone(), &module_cache);
 
                 match layout {
                     Ok(l) => {
-                        let move_object = BoundedVisitor::deserialize_struct(&event.event_bcs, &l)
-                            .map_err(|e| IndexerError::SerdeError(e.to_string()));
+                        let move_object =
+                            BoundedVisitor::deserialize_value(&event.event_bcs, &l.into_layout())
+                                .map_err(|e| IndexerError::SerdeError(e.to_string()));
 
                         match move_object {
                             Ok(m) => {
-                                let parsed_json = SuiMoveStruct::from(m).to_json_value();
+                                let (parsed_json, _) =
+                                    type_and_fields_from_move_event_data(m).unwrap();
                                 let final_result =
                                     serde_json::to_string_pretty(&parsed_json).unwrap();
                                 println!("event json = {}", final_result);

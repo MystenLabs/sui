@@ -58,30 +58,43 @@ fn check_all_compatibilities(
         Compatibility::full_check(),
         // Full compat but allow private entry functions to change
         Compatibility {
-            check_struct_and_pub_function_linking: true,
-            check_struct_layout: true,
+            check_datatype_and_pub_function_linking: true,
+            check_datatype_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_struct_type_params: true,
+            disallow_change_datatype_type_params: true,
+            disallow_new_variants: true,
         },
         // Full compat but allow private entry functions and friends to change
         Compatibility {
-            check_struct_and_pub_function_linking: true,
-            check_struct_layout: true,
+            check_datatype_and_pub_function_linking: true,
+            check_datatype_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_struct_type_params: true,
+            disallow_change_datatype_type_params: true,
+            disallow_new_variants: true,
         },
         // Full compat but allow friends to change
         Compatibility {
-            check_struct_and_pub_function_linking: true,
-            check_struct_layout: true,
+            check_datatype_and_pub_function_linking: true,
+            check_datatype_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: true,
             disallowed_new_abilities: AbilitySet::ALL,
-            disallow_change_struct_type_params: true,
+            disallow_change_datatype_type_params: true,
+            disallow_new_variants: true,
+        },
+        // Full compat but allow new enum variants to be added
+        Compatibility {
+            check_datatype_and_pub_function_linking: true,
+            check_datatype_layout: true,
+            check_friend_linking: true,
+            check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::ALL,
+            disallow_change_datatype_type_params: true,
+            disallow_new_variants: true,
         },
         Compatibility::no_check(),
     ];

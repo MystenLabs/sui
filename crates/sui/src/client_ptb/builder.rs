@@ -453,7 +453,7 @@ impl<'a> PTBBuilder<'a> {
         // and also determine if it's a receiving argument or not.
         for tok in param.preorder_traversal() {
             match tok {
-                SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
+                SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
                     is_receiving |= is_receiving_argument(view, tok);
                 }
                 SignatureToken::TypeParameter(idx) => {
