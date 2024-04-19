@@ -15,13 +15,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_bridge::crypto::{BridgeAuthorityKeyPair, BridgeAuthoritySignInfo};
-use sui_bridge::e2e_test_utils::publish_coins_return_add_coins_on_sui_action;
-use sui_bridge::e2e_test_utils::wait_for_server_to_be_up;
 use sui_bridge::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_bridge::types::BridgeCommitteeValiditySignInfo;
 use sui_bridge::types::CertifiedBridgeAction;
 use sui_bridge::types::VerifiedCertifiedBridgeAction;
+use sui_bridge::utils::publish_coins_return_add_coins_on_sui_action;
+use sui_bridge::utils::wait_for_server_to_be_up;
 use sui_config::local_ip_utils::get_available_port;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
@@ -766,7 +766,7 @@ impl TestCluster {
             .unwrap()
     }
 
-    pub async fn transfer_sui_must_exceeed(&self, receiver: SuiAddress, amount: u64) -> ObjectID {
+    pub async fn transfer_sui_must_exceed(&self, receiver: SuiAddress, amount: u64) -> ObjectID {
         let sender = self.get_address_0();
         let tx = self
             .test_transaction_builder_with_sender(sender)
@@ -1167,7 +1167,7 @@ impl TestClusterBuilder {
             let validator_address = node.config.sui_address();
             // 1, send some gas to validator
             test_cluster
-                .transfer_sui_must_exceeed(validator_address, 1000000000)
+                .transfer_sui_must_exceed(validator_address, 1000000000)
                 .await;
             // 2, create committee registration tx
             let coins = test_cluster
