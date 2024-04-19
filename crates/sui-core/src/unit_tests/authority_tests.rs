@@ -38,6 +38,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
+use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Data;
@@ -5850,6 +5851,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let owned_objects_cancelled_txn = vec![
         Object::with_id_owner_version_for_testing(ObjectID::random(), 3.into(), sender),
         Object::with_id_owner_version_for_testing(ObjectID::random(), 7.into(), sender),
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 13.into(), sender),
     ];
 
     // Create the cluster with controlled per object congestion control and cancellation.
@@ -5960,5 +5962,16 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         )
         .await
         .unwrap();
-    assert_eq!(input_objects.lamport_timestamp(&[]), 8.into());
+    assert_eq!(input_objects.lamport_timestamp(&[]), 14.into());
+    let shared_inputs = input_objects.filter_shared_objects();
+    assert_eq!(
+        shared_inputs,
+        vec![
+            SharedInput::Cancelled((shared_objects[0].id(), SequenceNumber::CONGESTED)),
+            SharedInput::Cancelled((shared_objects[1].id(), SequenceNumber::CANCELLED_READ))
+        ]
+    );
+
+    let congested_objects = input_objects.get_congested_objects().unwrap();
+    assert_eq!(congested_objects, vec![shared_objects[0].id()]);
 }

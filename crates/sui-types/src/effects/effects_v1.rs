@@ -277,7 +277,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
                     .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
             }
             InputSharedObject::Cancelled(..) => {
-                panic!("Transaction cancellation is not supported in efect v1");
+                panic!("Transaction cancellation is not supported in effect v1");
             }
         }
     }
