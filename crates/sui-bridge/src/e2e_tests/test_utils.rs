@@ -213,7 +213,9 @@ struct SolDeployConfig {
     token_prices: Vec<u64>,
 }
 
-pub(crate) async fn initialize_bridge_environment() -> (TestCluster, EthBridgeEnvironment) {
+pub(crate) async fn initialize_bridge_environment(
+    should_start_bridge_cluster: bool,
+) -> (TestCluster, EthBridgeEnvironment) {
     let anvil_port = get_available_port("127.0.0.1");
     let anvil_url = format!("http://127.0.0.1:{anvil_port}");
     let mut eth_environment = EthBridgeEnvironment::new(&anvil_url, anvil_port)
@@ -263,18 +265,21 @@ pub(crate) async fn initialize_bridge_environment() -> (TestCluster, EthBridgeEn
     info!("Deployed contracts: {:?}", deployed_contracts);
     eth_environment.contracts = Some(deployed_contracts);
 
-    start_bridge_cluster(
-        &test_cluster,
-        &eth_environment,
-        vec![vec![], vec![], vec![], vec![]],
-    )
-    .await;
-    info!("Started bridge cluster");
+    // if start bridge cluster is enabled, start the bridge cluster
+    if should_start_bridge_cluster {
+        start_bridge_cluster(
+            &test_cluster,
+            &eth_environment,
+            vec![vec![], vec![], vec![], vec![]],
+        )
+        .await;
+        info!("Started bridge cluster");
+    }
 
     (test_cluster, eth_environment)
 }
 
-pub async fn deploy_sol_contract(
+pub(crate) async fn deploy_sol_contract(
     anvil_url: &str,
     eth_signer: EthSigner,
     bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
@@ -428,7 +433,7 @@ pub async fn deploy_sol_contract(
 
 #[derive(Debug)]
 pub(crate) struct EthBridgeEnvironment {
-    rpc_url: String,
+    pub rpc_url: String,
     process: Child,
     contracts: Option<DeployedSolContracts>,
 }
@@ -472,7 +477,7 @@ impl Drop for EthBridgeEnvironment {
     }
 }
 
-async fn start_bridge_cluster(
+pub(crate) async fn start_bridge_cluster(
     test_cluster: &TestCluster,
     eth_environment: &EthBridgeEnvironment,
     approved_governance_actions: Vec<Vec<BridgeAction>>,

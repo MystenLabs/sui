@@ -3,16 +3,15 @@
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::e2e_tests::test_utils::deploy_sol_contract;
-use crate::e2e_tests::test_utils::get_eth_signer_client_e2e_test_only;
-use crate::e2e_tests::test_utils::publish_coins_return_add_coins_on_sui_action;
 use crate::e2e_tests::test_utils::{get_signatures, initialize_bridge_environment, TEST_PK};
+use crate::e2e_tests::test_utils::{
+    publish_coins_return_add_coins_on_sui_action, start_bridge_cluster,
+};
 use crate::events::SuiBridgeEvent;
 use crate::sui_client::SuiBridgeClient;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
 use crate::utils::EthSigner;
-use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use eth_sui_bridge::EthSuiBridgeEvents;
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
@@ -22,7 +21,6 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use std::sync::Arc;
-use sui_config::local_ip_utils::get_available_port;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
@@ -30,11 +28,9 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::bridge::{BridgeChainId, BridgeTokenMetadata, BRIDGE_MODULE_NAME, TOKEN_ID_ETH};
-use sui_types::crypto::KeypairTraits;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
-use test_cluster::TestClusterBuilder;
 use tracing::info;
 
 #[tokio::test]
@@ -44,7 +40,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let eth_chain_id = BridgeChainId::EthCustom as u8;
     let sui_chain_id = BridgeChainId::SuiCustom as u8;
 
-    let (mut test_cluster, eth_environment) = initialize_bridge_environment().await;
+    let (mut test_cluster, eth_environment) = initialize_bridge_environment(true).await;
 
     let (eth_signer, _) = eth_environment.get_signer(TEST_PK).await.unwrap();
 
@@ -61,7 +57,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     // ETH coin has 8 decimals on Sui
     let sui_amount = amount * 100_000_000;
 
-    bridge_eth_to_sui(
+    initiate_bridge_eth_to_sui(
         &sui_bridge_client,
         &eth_signer,
         eth_environment.contracts().sui_bridge,
@@ -98,7 +94,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
 
     let sui_token_type_tags = sui_bridge_client.get_token_id_map().await.unwrap();
 
-    let sui_to_eth_bridge_action = bridge_sui_to_eth(
+    let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth(
         &sui_bridge_client,
         &sui_client,
         sui_address,
@@ -143,34 +139,10 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
 async fn test_add_new_coins_on_sui() {
     telemetry_subscribers::init_for_testing();
 
-    // Start eth node with anvil
-    let anvil_port = get_available_port("127.0.0.1");
-    let mut eth_node_process = std::process::Command::new("anvil")
-        .arg("--port")
-        .arg(anvil_port.to_string())
-        .arg("--block-time")
-        .arg("1") // 1 second block time
-        .arg("--slots-in-an-epoch")
-        .arg("3") // 3 slots in an epoch
-        .spawn()
-        .expect("Failed to start anvil");
-    let anvil_url = format!("http://127.0.0.1:{}", anvil_port);
-    info!("Anvil URL: {}", anvil_url);
-
-    let mut server_ports = vec![];
-    for _ in 0..3 {
-        server_ports.push(get_available_port("127.0.0.1"));
-    }
-    let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .build_with_bridge(true)
-        .await;
-    info!("Test cluster built");
-    test_cluster
-        .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
-        .await;
+    let (mut test_cluster, eth_environment) = initialize_bridge_environment(false).await;
 
     let bridge_arg = test_cluster.get_mut_bridge_arg().await.unwrap();
+
     // Register tokens
     let token_id = 42;
     let token_price = 10000;
@@ -191,49 +163,27 @@ async fn test_add_new_coins_on_sui() {
         1, // seq num
     )
     .await;
-    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
-    let bridge_authority_keys = test_cluster
-        .bridge_authority_keys
-        .as_ref()
-        .unwrap()
-        .iter()
-        .map(|k| k.copy())
-        .collect::<Vec<_>>();
-    let anvil_url = format!("http://127.0.0.1:{}", anvil_port);
-    let (eth_signer_0, eth_private_key_hex_0) = get_eth_signer_client_e2e_test_only(&anvil_url)
-        .await
-        .unwrap();
-    tokio::task::spawn(async move {
-        deploy_sol_contract(
-            &anvil_url,
-            eth_signer_0,
-            bridge_authority_keys,
-            tx_ack,
-            eth_private_key_hex_0,
-        )
-        .await
-    });
-    let deployed_contracts = rx_ack.await.unwrap();
-    info!("Deployed contracts: {:?}", deployed_contracts);
 
     // TODO: do not block on `build_with_bridge`, return with bridge keys immediately
-    // to parallize the setup.
+    // to paralyze the setup.
     let sui_bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
         .await
         .unwrap();
+
     info!("Starting bridge cluster");
-    // start_bridge_cluster(
-    //     &test_cluster,
-    //     anvil_port,
-    //     deployed_contracts.sui_bridge_addrress_hex(),
-    //     vec![
-    //         vec![action.clone()],
-    //         vec![action.clone()],
-    //         vec![action.clone()],
-    //         vec![],
-    //     ],
-    // )
-    // .await;
+
+    start_bridge_cluster(
+        &test_cluster,
+        &eth_environment,
+        vec![
+            vec![action.clone()],
+            vec![action.clone()],
+            vec![action.clone()],
+            vec![],
+        ],
+    )
+    .await;
+
     test_cluster.wait_for_bridge_cluster_to_be_up(10).await;
     info!("Bridge cluster is up");
     let bridge_committee = Arc::new(
@@ -291,8 +241,6 @@ async fn test_add_new_coins_on_sui() {
             native_token: false,
         }
     );
-
-    eth_node_process.kill().unwrap();
 }
 
 pub(crate) async fn deposit_native_eth_to_sol_contract(
@@ -355,7 +303,7 @@ async fn deposit_eth_to_sui_package(
     wallet_context.execute_transaction_must_succeed(tx).await
 }
 
-async fn bridge_eth_to_sui(
+async fn initiate_bridge_eth_to_sui(
     sui_bridge_client: &SuiBridgeClient,
     eth_signer: &EthSigner,
     sui_bridge_contract_address: EthAddress,
@@ -408,7 +356,7 @@ async fn bridge_eth_to_sui(
     info!("Eth to Sui bridge transfer claimed");
 }
 
-async fn bridge_sui_to_eth(
+async fn initiate_bridge_sui_to_eth(
     sui_bridge_client: &SuiBridgeClient,
     sui_client: &SuiClient,
     sui_address: SuiAddress,
