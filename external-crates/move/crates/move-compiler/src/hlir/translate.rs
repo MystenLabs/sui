@@ -321,12 +321,12 @@ impl<'env> Context<'env> {
             );
         }
         let debug = HLIRDebugFlags {
-            match_translation: true,
-            match_variant_translation: true,
-            match_specialization: true,
+            match_translation: false,
+            match_variant_translation: false,
+            match_specialization: false,
             match_counterexample: false,
             match_work_queue: false,
-            match_constant_conversion: true,
+            match_constant_conversion: false,
         };
         Context {
             env,
