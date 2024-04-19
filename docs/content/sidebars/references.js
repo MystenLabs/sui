@@ -123,6 +123,7 @@ const references = [
 			id: 'references/contribute/contribution-process',
 		},
 		items: [
+			'references/contribute/sui-environment',
 			'references/contribute/contribution-process',
 			'references/contribute/contribute-to-sui-repos',
 			{
