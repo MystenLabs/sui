@@ -440,7 +440,7 @@ impl AbstractState {
 
         if is_mut_borrow_with_full_borrows() || is_imm_borrow_with_mut_borrows() {
             // TODO improve error for mutable case
-            return Err(self.error(StatusCode::BORROWFIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
+            return Err(self.error(StatusCode::FIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
 
         let field_borrow_id = self.new_ref(mut_);

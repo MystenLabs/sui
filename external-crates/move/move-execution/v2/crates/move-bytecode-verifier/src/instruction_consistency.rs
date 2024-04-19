@@ -135,6 +135,21 @@ impl<'a> InstructionConsistency<'a> {
                 | Or | And | Not | Eq | Neq | Lt | Gt | Le | Ge | CopyLoc(_) | MoveLoc(_)
                 | StLoc(_) | MutBorrowLoc(_) | ImmBorrowLoc(_) | VecLen(_) | VecImmBorrow(_)
                 | VecMutBorrow(_) | VecPushBack(_) | VecPopBack(_) | VecSwap(_) | Abort | Nop => (),
+                PackVariant(_)
+                | PackVariantGeneric(_)
+                | UnpackVariant(_)
+                | UnpackVariantGeneric(_)
+                | UnpackVariantImmRef(_)
+                | UnpackVariantGenericImmRef(_)
+                | UnpackVariantMutRef(_)
+                | UnpackVariantGenericMutRef(_)
+                | VariantSwitch(_) => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .at_code_offset(self.current_function(), offset as CodeOffset)
+                            .with_message("Unexpected variant opcode in version 2".to_string()),
+                    );
+                }
             }
         }
         Ok(())
@@ -167,7 +182,7 @@ impl<'a> InstructionConsistency<'a> {
         generic: bool,
     ) -> PartialVMResult<()> {
         let struct_def = self.resolver.struct_def_at(struct_def_index);
-        let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = self.resolver.datatype_handle_at(struct_def.struct_handle);
         if struct_handle.type_parameters.is_empty() == generic {
             return Err(
                 PartialVMError::new(StatusCode::GENERIC_MEMBER_OPCODE_MISMATCH)
