@@ -533,6 +533,18 @@ macro_rules! ok_with_loc {
     }};
 }
 
+macro_rules! sp_with_loc {
+    ($context:expr, $body:expr) => {{
+        let start_loc = $context.tokens.start_loc();
+        let result = $body;
+        let end_loc = $context.tokens.previous_end_loc();
+        sp(
+            make_loc($context.tokens.file_hash(), start_loc, end_loc),
+            result,
+        )
+    }};
+}
+
 //**************************************************************************************************
 // Identifiers, Addresses, and Names
 //**************************************************************************************************
@@ -1750,6 +1762,7 @@ fn is_control_exp(context: &mut Context, tok: Tok) -> bool {
             | Tok::Continue
             | Tok::If
             | Tok::While
+            | Tok::For
             | Tok::Loop
             | Tok::Return
             | Tok::Abort
@@ -1929,6 +1942,33 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             let arms = parse_match_arms(context)?;
             let result = Exp_::Match(subject_exp, arms);
             (result, true)
+        }
+        Tok::For => {
+            context.tokens.advance()?;
+
+            let args = sp_with_loc!(
+                context,
+                parse_comma_list(
+                    context,
+                    Tok::LParen,
+                    Tok::As,
+                    &PARAM_START_SET,
+                    |context| {
+                        let b = parse_bind_list(context)?;
+                        let ty_opt = if match_token(context.tokens, Tok::Colon)? {
+                            Some(parse_type(context)?)
+                        } else {
+                            None
+                        };
+                        Ok((b, ty_opt))
+                    },
+                    "a binding",
+                )
+            );
+            let subject = parse_exp(context)?;
+            consume_token(context.tokens, Tok::RParen)?;
+            let (loop_body, ends_in_block) = parse_exp_or_sequence(context)?;
+            (Exp_::For(Box::new(subject), args, Box::new(loop_body)), ends_in_block)
         }
         _ => unreachable!(),
     };
