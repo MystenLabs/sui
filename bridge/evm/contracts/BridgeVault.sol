@@ -59,7 +59,7 @@ contract BridgeVault is Ownable, IBridgeVault {
         recipientAddress.transfer(amount);
     }
 
-    /// @notice Wraps ass eth sent to this contract.
+    /// @notice Wraps as eth sent to this contract.
     /// @dev skip if sender is wETH contract to avoid infinite loop.
     receive() external payable {
         if (msg.sender != address(wETH)) {
