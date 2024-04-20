@@ -109,21 +109,25 @@ impl<C: NetworkClient> CommitSyncer<C> {
         let mut inflight_fetches = JoinSet::new();
         // Additional ranges (inclusive start and end) of commits to fetch.
         let mut pending_fetches = BTreeSet::<(CommitIndex, CommitIndex)>::new();
-        // Highest end index among inflight and pending fetches.
-        let mut highest_scheduled_index = Option::<CommitIndex>::None;
         // Fetched commits and blocks by commit indices.
         let mut fetched_blocks = BTreeMap::<(CommitIndex, CommitIndex), Vec<VerifiedBlock>>::new();
+        // Highest end index among inflight and pending fetches.
+        // Used to determine if and which new ranges to fetch.
+        let mut highest_scheduled_index = Option::<CommitIndex>::None;
         // The commit index that is the max of local last commit index and highest commit index of blocks sent to Core.
+        // Used to determine if fetched blocks can be sent to Core without gaps.
         let mut synced_commit_index = inner.dag_state.read().last_commit_index();
 
         loop {
             tokio::select! {
-                // Periodially, schedule new fetches if the node is falling behind.
+                // Periodically, schedule new fetches if the node is falling behind.
                 _ = interval.tick() => {
                     let quorum_commit_index = inner.commit_vote_monitor.quorum_commit_index();
+                    let local_commit_index = inner.dag_state.read().last_commit_index();
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
-                    synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
+                    synced_commit_index = synced_commit_index.max(local_commit_index);
+                    // TODO: pause commit sync when execution of commits is lagging behind.
                     // TODO: cleanup inflight fetches that are no longer needed.
                     let fetch_after_index = synced_commit_index.max(highest_scheduled_index.unwrap_or(0));
                     info!(
@@ -173,13 +177,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     }
                     // Make sure synced_commit_index is up to date.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
-                    // Only add new blocks if at least some of them are not already committed.
+                    // Only add new blocks if at least some of them are not already synced.
                     if synced_commit_index < commit_end {
                         fetched_blocks.insert((commit_start, commit_end), blocks);
                     }
-                    // Try to process as many blocks as possible, as long as there is no gap between
+                    // Try to process as many fetched blocks as possible.
                     'fetched: while let Some(((fetched_start, _end), _blocks)) = fetched_blocks.first_key_value() {
-                        // Only pop fetched_blocks if there is no gap with blocks already sent to Core.
+                        // Only pop fetched_blocks if there is no gap with blocks already synced.
                         // Note: start, end and synced_commit_index are all inclusive.
                         let ((_start, fetched_end), blocks) = if *fetched_start <= synced_commit_index + 1 {
                             fetched_blocks.pop_first().unwrap()
@@ -188,7 +192,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             // so not sending additional blocks to Core.
                             break 'fetched;
                         };
-                        // Avoid sending to Core a complete batch of duplicated blocks.
+                        // Avoid sending to Core a whole batch of already synced blocks.
                         if fetched_end <= synced_commit_index {
                             continue 'fetched;
                         }
@@ -207,7 +211,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                                 return;
                             }
                         };
-                        // Once commits and blocks are sent to Core, rachet up synced_commit_index
+                        // Once commits and blocks are sent to Core, ratchet up synced_commit_index
                         synced_commit_index = synced_commit_index.max(fetched_end);
                     }
                 }
@@ -454,7 +458,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .block_timestamp_drift_wait_ms
                 .with_label_values(&[peer_hostname, &"commit_syncer"])
                 .inc_by(forward_drift);
-            sleep(Duration::from_millis(forward_drift)).await;
+            let forward_drift = Duration::from_millis(forward_drift);
+            if forward_drift >= inner.context.parameters.max_forward_time_drift {
+                warn!(
+                    "Local clock is behind a quorum of peers: local ts {}, certified block ts {}",
+                    now_ms,
+                    block.timestamp_ms()
+                );
+            }
+            sleep(forward_drift).await;
         }
 
         Ok((commits, fetched_blocks))

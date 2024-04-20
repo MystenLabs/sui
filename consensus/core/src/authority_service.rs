@@ -135,11 +135,15 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // Observe the block for the commit votes. When local commit is lagging too much,
-        // commit sync will be triggered.
+        // commit sync loop will trigger fetching.
         self.commit_vote_monitor.observe(&verified_block);
 
         // Reject blocks when local commit index is lagging too far from quorum commit index.
-        // Since the main issue of too many suspended blocks is memory usage not CPU,
+        //
+        // IMPORTANT: this must be done after observing votes from the block, otherwise
+        // observed quorum commit will no longer progress.
+        //
+        // Since the main issue with too many suspended blocks is memory usage not CPU,
         // it is ok to reject after block verifications instead of before.
         let last_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
