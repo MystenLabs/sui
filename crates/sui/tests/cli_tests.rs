@@ -3544,7 +3544,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     // respective receipients.
     // check if each recipient has one object, if the tx status is success,
     // and if the gas object used was the first object in the input coins
-    // we also check if the balances of each recepient are right!
+    // we also check if the balances of each recipient are right!
     if let SuiClientCommandResult::PaySui(response) = pay_sui {
         assert!(response.status_ok().unwrap());
         // check gas coin used
