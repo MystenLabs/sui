@@ -404,7 +404,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             let msg = format!(
                 "Invalid parameter '{}' of type {}. \
                 Expected a one-time witness type, {}::{otw_name}, \
-                like this: ({}: {otw_name}, other parameter...)",
+                like this: ({}: {otw_name}, ...other parameters)",
                 first_var.value.name,
                 error_format(first_ty, &Subst::empty()),
                 context.current_module(),
