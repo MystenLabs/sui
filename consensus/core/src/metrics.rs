@@ -91,6 +91,7 @@ pub(crate) struct NodeMetrics {
     pub fetch_blocks_scheduler_inflight: IntGauge,
     pub fetched_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub rejected_blocks: IntCounterVec,
     pub rejected_future_blocks: IntCounterVec,
     pub verified_blocks: IntCounterVec,
     pub committed_leaders_total: IntCounterVec,
@@ -145,7 +146,7 @@ impl NodeMetrics {
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
                 "block_timestamp_drift_wait_ms",
                 "Total time in ms spent waiting, when a received block has timestamp in future.",
-                &["authority"],
+                &["authority", "source"],
                 registry,
             ).unwrap(),
             blocks_per_commit_count: register_histogram_with_registry!(
@@ -216,6 +217,12 @@ impl NodeMetrics {
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
                 &["authority", "source"],
+                registry,
+            ).unwrap(),
+            rejected_blocks: register_int_counter_vec_with_registry!(
+                "rejected_blocks",
+                "Number of blocks rejected before verifications",
+                &["reason"],
                 registry,
             ).unwrap(),
             rejected_future_blocks: register_int_counter_vec_with_registry!(

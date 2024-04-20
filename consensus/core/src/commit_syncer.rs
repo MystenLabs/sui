@@ -19,7 +19,7 @@
 //! commits have a simple dependency graph (linear), so it is easy to fetch ranges of commits
 //! in parallel.
 //!
-//! Commit sychronization is an expensive operation, involving transfering large amount of data via
+//! Commit synchronization is an expensive operation, involving transferring large amount of data via
 //! the network. And it is not on the critical path of block processing. So the heuristics for
 //! synchronization, including triggers and retries, should be chosen to favor throughput and
 //! efficient resource usage, over faster reactions.
@@ -44,7 +44,7 @@ use tokio::{
 use tracing::{info, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         Commit, CommitAPI as _, CommitDigest, CommitRef, TrustedCommit, GENESIS_COMMIT_INDEX,
@@ -68,7 +68,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
-        highest_commit_monitor: Arc<HighestCommitMonitor>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         network_client: Arc<C>,
         block_verifier: Arc<dyn BlockVerifier>,
         dag_state: Arc<RwLock<DagState>>,
@@ -77,7 +77,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         let inner = Arc::new(Inner {
             context,
             core_thread_dispatcher,
-            highest_commit_monitor,
+            commit_vote_monitor,
             network_client,
             block_verifier,
             dag_state,
@@ -109,21 +109,25 @@ impl<C: NetworkClient> CommitSyncer<C> {
         let mut inflight_fetches = JoinSet::new();
         // Additional ranges (inclusive start and end) of commits to fetch.
         let mut pending_fetches = BTreeSet::<(CommitIndex, CommitIndex)>::new();
-        // Highest end index among inflight and pending fetches.
-        let mut highest_scheduled_index = Option::<CommitIndex>::None;
         // Fetched commits and blocks by commit indices.
         let mut fetched_blocks = BTreeMap::<(CommitIndex, CommitIndex), Vec<VerifiedBlock>>::new();
+        // Highest end index among inflight and pending fetches.
+        // Used to determine if and which new ranges to fetch.
+        let mut highest_scheduled_index = Option::<CommitIndex>::None;
         // The commit index that is the max of local last commit index and highest commit index of blocks sent to Core.
+        // Used to determine if fetched blocks can be sent to Core without gaps.
         let mut synced_commit_index = inner.dag_state.read().last_commit_index();
 
         loop {
             tokio::select! {
-                // Periodially, schedule new fetches if the node is falling behind.
+                // Periodically, schedule new fetches if the node is falling behind.
                 _ = interval.tick() => {
-                    let quorum_commit_index = inner.highest_commit_monitor.quorum_commit_index(&inner.context);
+                    let quorum_commit_index = inner.commit_vote_monitor.quorum_commit_index();
+                    let local_commit_index = inner.dag_state.read().last_commit_index();
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
-                    synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
+                    synced_commit_index = synced_commit_index.max(local_commit_index);
+                    // TODO: pause commit sync when execution of commits is lagging behind.
                     // TODO: cleanup inflight fetches that are no longer needed.
                     let fetch_after_index = synced_commit_index.max(highest_scheduled_index.unwrap_or(0));
                     info!(
@@ -173,13 +177,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     }
                     // Make sure synced_commit_index is up to date.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
-                    // Only add new blocks if at least some of them are not already committed.
+                    // Only add new blocks if at least some of them are not already synced.
                     if synced_commit_index < commit_end {
                         fetched_blocks.insert((commit_start, commit_end), blocks);
                     }
-                    // Try to process as many blocks as possible, as long as there is no gap between
+                    // Try to process as many fetched blocks as possible.
                     'fetched: while let Some(((fetched_start, _end), _blocks)) = fetched_blocks.first_key_value() {
-                        // Only pop fetched_blocks if there is no gap with blocks already sent to Core.
+                        // Only pop fetched_blocks if there is no gap with blocks already synced.
                         // Note: start, end and synced_commit_index are all inclusive.
                         let ((_start, fetched_end), blocks) = if *fetched_start <= synced_commit_index + 1 {
                             fetched_blocks.pop_first().unwrap()
@@ -188,7 +192,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             // so not sending additional blocks to Core.
                             break 'fetched;
                         };
-                        // Avoid sending to Core a complete batch of duplicated blocks.
+                        // Avoid sending to Core a whole batch of already synced blocks.
                         if fetched_end <= synced_commit_index {
                             continue 'fetched;
                         }
@@ -207,7 +211,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                                 return;
                             }
                         };
-                        // Once commits and blocks are sent to Core, rachet up synced_commit_index
+                        // Once commits and blocks are sent to Core, ratchet up synced_commit_index
                         synced_commit_index = synced_commit_index.max(fetched_end);
                     }
                 }
@@ -389,6 +393,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             FETCH_BLOCKS_TIMEOUT,
                         )
                         .await?;
+                    // 5. Verify the same number of blocks are returned as requested.
+                    if request_block_refs.len() != serialized_blocks.len() {
+                        return Err(ConsensusError::UnexpectedNumberOfBlocksFetched {
+                            authority: target_authority,
+                            requested: request_block_refs.len(),
+                            received: serialized_blocks.len(),
+                        });
+                    }
+                    // 6. Verify returned blocks have valid formats.
                     let signed_blocks = serialized_blocks
                         .iter()
                         .map(|serialized| {
@@ -397,7 +410,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             Ok(block)
                         })
                         .collect::<ConsensusResult<Vec<_>>>()?;
-                    // 6. Verify the returned blocks match the requested block refs.
+                    // 7. Verify the returned blocks match the requested block refs.
                     // If they do match, the returned blocks can be considered verified as well.
                     let mut blocks = Vec::new();
                     for ((requested_block_ref, signed_block), serialized) in request_block_refs
@@ -430,19 +443,50 @@ impl<C: NetworkClient> CommitSyncer<C> {
             fetched_blocks.extend(result?);
         }
 
+        // 8. Make sure fetched block timestamps are lower than current time.
+        for block in &fetched_blocks {
+            let now_ms = timestamp_utc_ms();
+            let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
+            if forward_drift == 0 {
+                continue;
+            };
+            let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
+            inner
+                .context
+                .metrics
+                .node_metrics
+                .block_timestamp_drift_wait_ms
+                .with_label_values(&[peer_hostname, &"commit_syncer"])
+                .inc_by(forward_drift);
+            let forward_drift = Duration::from_millis(forward_drift);
+            if forward_drift >= inner.context.parameters.max_forward_time_drift {
+                warn!(
+                    "Local clock is behind a quorum of peers: local ts {}, certified block ts {}",
+                    now_ms,
+                    block.timestamp_ms()
+                );
+            }
+            sleep(forward_drift).await;
+        }
+
         Ok((commits, fetched_blocks))
     }
 }
 
-pub(crate) struct HighestCommitMonitor {
+/// Monitors commit votes from received and verified blocks,
+/// and keeps track of the highest commit voted by each authority and certified by a quorum.
+pub(crate) struct CommitVoteMonitor {
+    context: Arc<Context>,
     // Highest commit index voted by each authority.
     highest_voted_commits: Mutex<Vec<CommitIndex>>,
 }
 
-impl HighestCommitMonitor {
-    pub(crate) fn new(context: &Context) -> Self {
+impl CommitVoteMonitor {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
+        let highest_voted_commits = Mutex::new(vec![0; context.committee.size()]);
         Self {
-            highest_voted_commits: Mutex::new(vec![0; context.committee.size()]),
+            context,
+            highest_voted_commits,
         }
     }
 
@@ -460,11 +504,11 @@ impl HighestCommitMonitor {
     // When an authority votes for commit index S, it is also voting for all commit indices 1 <= i < S.
     // So the quorum commit index is the smallest index S such that the sum of stakes of authorities
     // voting for commit indices >= S passes the quorum threshold.
-    fn quorum_commit_index(&self, context: &Context) -> CommitIndex {
+    pub(crate) fn quorum_commit_index(&self) -> CommitIndex {
         let highest_voted_commits = self.highest_voted_commits.lock();
         let mut highest_voted_commits = highest_voted_commits
             .iter()
-            .zip(context.committee.authorities())
+            .zip(self.context.committee.authorities())
             .map(|(commit_index, (_, a))| (*commit_index, a.stake))
             .collect::<Vec<_>>();
         // Sort by commit index then stake, in descending order.
@@ -472,7 +516,7 @@ impl HighestCommitMonitor {
         let mut total_stake = 0;
         for (commit_index, stake) in highest_voted_commits {
             total_stake += stake;
-            if total_stake >= context.committee.quorum_threshold() {
+            if total_stake >= self.context.committee.quorum_threshold() {
                 return commit_index;
             }
         }
@@ -483,7 +527,7 @@ impl HighestCommitMonitor {
 struct Inner<C: NetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
-    highest_commit_monitor: Arc<HighestCommitMonitor>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     network_client: Arc<C>,
     block_verifier: Arc<dyn BlockVerifier>,
     dag_state: Arc<RwLock<DagState>>,
@@ -603,4 +647,58 @@ impl FetchState {
     }
 }
 
-// TODO: add unit and integration tests.
+// TODO: add more unit and integration tests.
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use super::CommitVoteMonitor;
+    use crate::{
+        block::{TestBlock, VerifiedBlock},
+        commit::{CommitDigest, CommitRef},
+        context::Context,
+    };
+
+    #[test]
+    fn test_commit_vote_monitor() {
+        let context = Arc::new(Context::new_for_test(4).0);
+        let monitor = CommitVoteMonitor::new(context.clone());
+
+        // Observe commit votes for indices 5, 6, 7, 8 from blocks.
+        let blocks = (0..4)
+            .map(|i| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(10, i)
+                        .set_commit_votes(vec![CommitRef::new(5 + i, CommitDigest::MIN)])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for b in blocks {
+            monitor.observe(&b);
+        }
+
+        // CommitIndex 6 is the highest index supported by a quorum.
+        assert_eq!(monitor.quorum_commit_index(), 6);
+
+        // Observe new blocks with new votes from authority 0 and 1.
+        let blocks = (0..2)
+            .map(|i| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(11, i)
+                        .set_commit_votes(vec![
+                            CommitRef::new(6 + i, CommitDigest::MIN),
+                            CommitRef::new(7 + i, CommitDigest::MIN),
+                        ])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for b in blocks {
+            monitor.observe(&b);
+        }
+
+        // Highest commit index per authority should be 7, 8, 7, 8 now.
+        assert_eq!(monitor.quorum_commit_index(), 7);
+    }
+}

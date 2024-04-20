@@ -16,7 +16,7 @@ use crate::{
     block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, TrustedCommit},
-    commit_syncer::HighestCommitMonitor,
+    commit_syncer::CommitVoteMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -31,7 +31,7 @@ use crate::{
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
-    highest_commit_monitor: Arc<HighestCommitMonitor>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
@@ -44,7 +44,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
-        highest_commit_monitor: Arc<HighestCommitMonitor>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
@@ -54,7 +54,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         Self {
             context,
             block_verifier,
-            highest_commit_monitor,
+            commit_vote_monitor,
             synchronizer,
             core_dispatcher,
             rx_block_broadcaster,
@@ -97,7 +97,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "send_block"])
+                .with_label_values(&[peer_hostname])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -129,14 +129,44 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname])
+                .with_label_values(&[peer_hostname, &"handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
             sleep(forward_time_drift).await;
         }
 
-        // Observe the block for the highest commit. When local commit is lagging too much,
-        // commit sync will be triggered.
-        self.highest_commit_monitor.observe(&verified_block);
+        // Observe the block for the commit votes. When local commit is lagging too much,
+        // commit sync loop will trigger fetching.
+        self.commit_vote_monitor.observe(&verified_block);
+
+        // Reject blocks when local commit index is lagging too far from quorum commit index.
+        //
+        // IMPORTANT: this must be done after observing votes from the block, otherwise
+        // observed quorum commit will no longer progress.
+        //
+        // Since the main issue with too many suspended blocks is memory usage not CPU,
+        // it is ok to reject after block verifications instead of before.
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        // The threshold to ignore block should be larger than commit_sync_batch_size,
+        // to avoid excessive block rejections and synchronizations.
+        const COMMIT_LAG_MULTIPLIER: u32 = 5;
+        if last_commit_index
+            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+            < quorum_commit_index
+        {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_blocks
+                .with_label_values(&[&"commit_lagging"])
+                .inc();
+            return Err(ConsensusError::BlockRejected {
+                reason: format!(
+                    "Local commit index {} is too far behind the quorum commit index {}",
+                    last_commit_index, quorum_commit_index,
+                ),
+            });
+        }
 
         self.context
             .metrics
