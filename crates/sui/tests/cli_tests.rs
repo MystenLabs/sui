@@ -3473,7 +3473,7 @@ async fn test_pay() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
             client
@@ -3495,7 +3495,7 @@ async fn test_pay() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(response.status_ok().unwrap());
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
             client
@@ -3563,7 +3563,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
             client
@@ -3585,7 +3585,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(response.status_ok().unwrap());
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
             client
@@ -3643,7 +3643,7 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(response.status_ok().unwrap());
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
             response.effects.unwrap().gas_object().object_id(),
@@ -3716,7 +3716,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
             objs_refs.data.first().unwrap().object().unwrap().object_id,
@@ -3776,7 +3776,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         let balance = client
             .coin_read_api()
@@ -3816,7 +3816,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert_eq!(objs_refs.has_next_page, false);
+        assert!(!objs_refs.has_next_page);
         assert_eq!(
             objs_refs.data.len(),
             2,
@@ -3825,8 +3825,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
         assert!(objs_refs
             .data
             .iter()
-            .find(|x| x.object().unwrap().object_id == object_id1)
-            .is_some());
+            .any(|x| x.object().unwrap().object_id == object_id1));
     } else {
         panic!("TransferSui test failed");
     }
