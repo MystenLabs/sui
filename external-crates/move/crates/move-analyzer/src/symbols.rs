@@ -2691,7 +2691,9 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
             }
-
+            E::InvalidAccess(e) => {
+                self.exp_symbols(e, scope);
+            }
             _ => (),
         }
     }
@@ -6789,5 +6791,117 @@ fn partial_function_test() {
         "M1.move",
         "fun PartialFunction::M1::just_name()",
         None,
+    );
+}
+
+#[test]
+/// Tests if partial dot chains are symbolicated correctly.
+fn partial_dot_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/partial-dot");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // struct-typed first part of incomplete dot chain `s.;`
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        10,
+        20,
+        "M1.move",
+        9,
+        12,
+        "M1.move",
+        "s: PartialDot::M1::AnotherStruct",
+        Some((5, 18, "M1.move")),
+    );
+    // struct-typed first part of incomplete dot chain `s.another_field.;`
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        11,
+        20,
+        "M1.move",
+        9,
+        12,
+        "M1.move",
+        "s: PartialDot::M1::AnotherStruct",
+        Some((5, 18, "M1.move")),
+    );
+    // struct-typed second part of incomplete dot chain `s.another_field.;`
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        11,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
+    // struct-typed second part of incomplete dot chain `s.another_field.` (no `;` but followed by
+    // `let` on the next line)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        12,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
+    // struct-typed second part of incomplete dot chain `s.another_field.` (followed by a list of
+    // parameters and a semi-colon: `s.another_field.(7, 42);`)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        14,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
+    // struct-typed first part of incomplete dot chain `s.` (no `;` but followed by `}` on the next
+    // line)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        15,
+        20,
+        "M1.move",
+        9,
+        12,
+        "M1.move",
+        "s: PartialDot::M1::AnotherStruct",
+        Some((5, 18, "M1.move")),
     );
 }

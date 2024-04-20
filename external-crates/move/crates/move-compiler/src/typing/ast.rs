@@ -233,6 +233,9 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, Box<Type>),
     Annotate(Box<Exp>, Box<Type>),
 
+    // unfinished dot access (e.g. `some_field.`)
+    InvalidAccess(Box<Exp>),
+
     ErrorConstant(Option<ConstantName>),
     UnresolvedError,
 }
@@ -818,6 +821,10 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
+            }
+            E::InvalidAccess(e) => {
+                e.ast_debug(w);
+                w.write(".");
             }
             E::UnresolvedError => w.write("_|_"),
             E::ErrorConstant(constant) => {
