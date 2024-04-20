@@ -16,7 +16,7 @@ use crate::{
     commit::DEFAULT_WAVE_LENGTH,
     context::Context,
     dag_state::DagState,
-    leader_schedule::LeaderSchedule,
+    leader_schedule::{LeaderSchedule, LeaderSwapTable},
 };
 
 /// DagBuilder API
@@ -88,7 +88,7 @@ pub(crate) struct DagBuilder {
 #[allow(unused)]
 impl DagBuilder {
     pub(crate) fn new(context: Arc<Context>) -> Self {
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let genesis_blocks = genesis_blocks(context.clone());
         let genesis: BTreeMap<BlockRef, VerifiedBlock> = genesis_blocks
             .into_iter()

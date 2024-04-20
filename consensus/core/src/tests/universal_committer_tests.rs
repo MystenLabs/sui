@@ -360,13 +360,21 @@ fn indirect_commit() {
         dag_builder.context.clone(),
         Arc::new(MemStore::new()),
     )));
+    let leader_schedule = Arc::new(LeaderSchedule::new(
+        dag_builder.context.clone(),
+        LeaderSwapTable::default(),
+    ));
 
     dag_builder.print();
     dag_builder.persist_all_blocks(dag_state.clone());
 
     // Create committer without pipelining and only 1 leader per leader round
-    let committer =
-        UniversalCommitterBuilder::new(dag_builder.context.clone(), dag_state.clone()).build();
+    let committer = UniversalCommitterBuilder::new(
+        dag_builder.context.clone(),
+        leader_schedule,
+        dag_state.clone(),
+    )
+    .build();
     // note: without pipelining or multi-leader enabled there should only be one committer.
     assert!(committer.committers.len() == 1);
 
@@ -743,10 +751,18 @@ fn basic_dag_builder_test_setup() -> TestSetup {
         dag_builder.context.clone(),
         Arc::new(MemStore::new()),
     )));
+    let leader_schedule = Arc::new(LeaderSchedule::new(
+        dag_builder.context.clone(),
+        LeaderSwapTable::default(),
+    ));
 
     // Create committer without pipelining and only 1 leader per leader round
-    let committer =
-        UniversalCommitterBuilder::new(dag_builder.context.clone(), dag_state.clone()).build();
+    let committer = UniversalCommitterBuilder::new(
+        dag_builder.context.clone(),
+        leader_schedule,
+        dag_state.clone(),
+    )
+    .build();
     // note: without pipelining or multi-leader enabled there should only be one committer.
     assert!(committer.committers.len() == 1);
 
