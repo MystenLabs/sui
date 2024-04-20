@@ -13,8 +13,6 @@ use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
-use crate::transaction::TransactionGuard;
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
@@ -25,8 +23,10 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    leader_schedule::LeaderSchedule,
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
-    transaction::TransactionConsumer,
+    transaction::{TransactionConsumer, TransactionGuard},
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
@@ -62,6 +62,10 @@ pub(crate) struct Core {
     /// to go through CommitObserver and persist the commit in store. On recovery/restart
     /// the last_decided_leader will be set to the last_commit leader in dag state.
     last_decided_leader: Slot,
+    /// The consensus leader schedule to be used to resolve the leader for a
+    /// given round.
+    #[allow(unused)]
+    leader_schedule: Arc<LeaderSchedule>,
     /// The commit observer is responsible for observing the commits and collecting
     /// + sending subdags over the consensus output channel.
     commit_observer: CommitObserver,
@@ -76,6 +80,7 @@ pub(crate) struct Core {
 impl Core {
     pub(crate) fn new(
         context: Arc<Context>,
+        leader_schedule: Arc<LeaderSchedule>,
         transaction_consumer: TransactionConsumer,
         block_manager: BlockManager,
         commit_observer: CommitObserver,
@@ -85,10 +90,14 @@ impl Core {
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
 
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
-            .with_pipeline(true)
-            .build();
+        let committer = UniversalCommitterBuilder::new(
+            context.clone(),
+            leader_schedule.clone(),
+            dag_state.clone(),
+        )
+        .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
+        .with_pipeline(true)
+        .build();
 
         // Recover the last proposed block
         let last_proposed_block = dag_state
@@ -117,6 +126,7 @@ impl Core {
             block_manager,
             committer,
             last_decided_leader,
+            leader_schedule,
             commit_observer,
             signals,
             block_signer,
@@ -579,10 +589,10 @@ mod test {
 
     use super::*;
     use crate::{
-        block::genesis_blocks,
-        block::TestBlock,
+        block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI as _,
+        leader_schedule::LeaderSwapTable,
         storage::{mem_store::MemStore, Store, WriteBatch},
         transaction::TransactionClient,
         CommitConsumer, CommitIndex,
@@ -627,6 +637,10 @@ mod test {
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
         );
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -647,6 +661,7 @@ mod test {
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
             context.clone(),
+            leader_schedule,
             transaction_consumer,
             block_manager,
             commit_observer,
@@ -737,6 +752,10 @@ mod test {
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
         );
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -757,6 +776,7 @@ mod test {
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
             context.clone(),
+            leader_schedule,
             transaction_consumer,
             block_manager,
             commit_observer,
@@ -826,6 +846,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -837,6 +861,7 @@ mod test {
 
         let mut core = Core::new(
             context.clone(),
+            leader_schedule,
             transaction_consumer,
             block_manager,
             commit_observer,
@@ -922,6 +947,11 @@ mod test {
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
         );
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
@@ -938,6 +968,7 @@ mod test {
 
         let mut core = Core::new(
             context.clone(),
+            leader_schedule,
             transaction_consumer,
             block_manager,
             commit_observer,
@@ -1227,6 +1258,11 @@ mod test {
                 dag_state.clone(),
                 Arc::new(NoopBlockVerifier),
             );
+            let leader_schedule = Arc::new(LeaderSchedule::new(
+                context.clone(),
+                LeaderSwapTable::default(),
+            ));
+
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new(context.clone());
@@ -1245,6 +1281,7 @@ mod test {
 
             let core = Core::new(
                 context,
+                leader_schedule,
                 transaction_consumer,
                 block_manager,
                 commit_observer,
