@@ -435,7 +435,7 @@ rusoto_kms = { version = "0.48.0", default_features = false, features = [
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
-rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
+rustls = { version = "0.21.11", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
