@@ -2933,7 +2933,7 @@ fn find_for_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<SyntaxMet
                 for_opt.map(|entry| (None, entry))
             }
             sp!(_, T::Ref(mut_, inner)) => {
-                find_recur(context, loc, ty_str, &*inner).map(|(_, methods)| (Some(*mut_), methods))
+                find_recur(context, loc, ty_str, inner).map(|(_, methods)| (Some(*mut_), methods))
             }
             sp!(_, T::Unit | T::Param(_) | T::Fun(_, _)) => {
                 let smsg = format!(

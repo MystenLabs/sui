@@ -544,13 +544,16 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                 recolor_exp(ctx, rhs);
             }
         }
-        N::Exp_::For(subject, N::Lambda {
-            parameters: sp!(_, parameters),
-            return_type: _,
-            return_label,
-            use_fun_color,
-            body,
-        }) => {
+        N::Exp_::For(
+            subject,
+            N::Lambda {
+                parameters: sp!(_, parameters),
+                return_type: _,
+                return_label,
+                use_fun_color,
+                body,
+            },
+        ) => {
             recolor_exp(ctx, subject);
             ctx.add_block_label(*return_label);
             for (lvs, _) in &*parameters {
@@ -862,10 +865,11 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         N::Exp_::For(
             subject,
             N::Lambda {
-            parameters: sp!(_, parameters),
-            body: e,
-            ..
-        }) => {
+                parameters: sp!(_, parameters),
+                body: e,
+                ..
+            },
+        ) => {
             exp(context, subject);
             for (lvs, ty_opt) in parameters {
                 lvalues(context, lvs);
