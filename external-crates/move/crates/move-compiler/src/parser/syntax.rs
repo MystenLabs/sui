@@ -1968,7 +1968,10 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             let subject = parse_exp(context)?;
             consume_token(context.tokens, Tok::RParen)?;
             let (loop_body, ends_in_block) = parse_exp_or_sequence(context)?;
-            (Exp_::For(Box::new(subject), args, Box::new(loop_body)), ends_in_block)
+            (
+                Exp_::For(Box::new(subject), args, Box::new(loop_body)),
+                ends_in_block,
+            )
         }
         _ => unreachable!(),
     };

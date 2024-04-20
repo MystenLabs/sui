@@ -550,12 +550,16 @@ pub enum Exp_ {
     IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
     // match subject arms
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
+    // for (lv1, ..., lvn as e) eloop
+    For(
+        /* subject */ Box<Exp>,
+        /* args */ LambdaBindings,
+        /* body */ Box<Exp>,
+    ),
     // while (eb) eloop
     While(Box<Exp>, Box<Exp>),
     // loop eloop
     Loop(Box<Exp>),
-    // for (lv1, ..., lvn as e) eloop
-    For(/* subject */ Box<Exp>, /* args */ LambdaBindings, /* body */ Box<Exp>),
 
     // 'label: e
     Labeled(BlockLabel, Box<Exp>),
@@ -1972,6 +1976,14 @@ impl AstDebug for Exp_ {
                     })
                 });
             }
+            E::For(subject, sp!(_, bs), body) => {
+                w.write("for (");
+                bs.ast_debug(w);
+                w.write(" in ");
+                subject.ast_debug(w);
+                w.write(")");
+                body.ast_debug(w);
+            }
             E::While(b, e) => {
                 w.write("while (");
                 b.ast_debug(w);
@@ -1981,14 +1993,6 @@ impl AstDebug for Exp_ {
             E::Loop(e) => {
                 w.write("loop ");
                 e.ast_debug(w);
-            }
-            E::For(subject, sp!(_, bs), body) => {
-                w.write("for (");
-                bs.ast_debug(w);
-                w.write(" in ");
-                subject.ast_debug(w);
-                w.write(")");
-                body.ast_debug(w);
             }
             E::Labeled(name, e) => {
                 w.write(format!("'{name}: "));

@@ -388,6 +388,11 @@ pub enum Exp_ {
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
+    For(
+        /* subject */ Box<Exp>,
+        /* args */ LambdaLValues,
+        /* body */ Box<Exp>,
+    ),
     While(Option<BlockLabel>, Box<Exp>, Box<Exp>),
     Loop(Option<BlockLabel>, Box<Exp>),
     Block(Option<BlockLabel>, Sequence),
@@ -1589,6 +1594,14 @@ impl AstDebug for Exp_ {
                         true
                     })
                 });
+            }
+            E::For(subject, args, body) => {
+                w.write("for (");
+                args.ast_debug(w);
+                w.write(" in ");
+                subject.ast_debug(w);
+                w.write(")");
+                body.ast_debug(w);
             }
             E::While(name, b, e) => {
                 name.map(|name| w.write(format!("'{}: ", name)));

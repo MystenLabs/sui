@@ -93,6 +93,10 @@ pub(super) fn resolve_syntax_attributes(
     let method_entry = syntax_methods.entry(type_name.clone()).or_default();
 
     for prekind in syntax_method_prekinds {
+        if !validate_macro_usage(context, function_name.0.loc, &prekind, function.macro_) {
+            assert!(context.env.has_errors());
+            continue;
+        }
         let Some(kind) = determine_valid_kind(context, prekind, &param_ty) else {
             assert!(context.env.has_errors());
             continue;
@@ -133,6 +137,9 @@ fn prev_syntax_defn_error(
     let kind_string = match method_kind {
         SyntaxMethodKind_::Index => format!("'{}'", SyntaxAttribute::INDEX),
         SyntaxMethodKind_::IndexMut => format!("mutable '{}'", SyntaxAttribute::INDEX),
+        SyntaxMethodKind_::ForMut => format!("mutable ref '{}'", SyntaxAttribute::FOR),
+        SyntaxMethodKind_::ForImm => format!("immutable ref '{}'", SyntaxAttribute::FOR),
+        SyntaxMethodKind_::ForVal => format!("'{}'", SyntaxAttribute::FOR),
     };
     let msg = format!(
         "Redefined {} 'syntax' method for '{}'",
@@ -217,6 +224,45 @@ fn resolve_syntax_method_prekind(
     }
 }
 
+fn validate_macro_usage(
+    context: &mut Context,
+    fun_loc: Loc,
+    prekind: &SyntaxMethodPrekind,
+    macro_: Option<Loc>,
+) -> bool {
+    match (prekind, macro_) {
+        (sp!(_, SyntaxMethodPrekind_::Index), None) => true,
+        (sp!(attr_loc, SyntaxMethodPrekind_::Index), Some(macro_loc)) => {
+            let msg = format!(
+                "'{}' syntax attributes may not appear on macro definitions",
+                SyntaxAttribute::INDEX
+            );
+            let fn_msg = "This function is a macro";
+            context.env.add_diag(diag!(
+                Declarations::InvalidSyntaxMethod,
+                (*attr_loc, msg),
+                (macro_loc, fn_msg)
+            ));
+            false
+        }
+        (sp!(_, SyntaxMethodPrekind_::For), Some(_)) => true,
+        (sp!(attr_loc, SyntaxMethodPrekind_::For), None) => {
+            let msg = format!(
+                "'{}' syntax attributes may not appear on non-macro definitions",
+                SyntaxAttribute::FOR
+            );
+            let fn_msg = "This function is not a macro";
+            context.env.add_diag(diag!(
+                Declarations::InvalidSyntaxMethod,
+                (*attr_loc, msg),
+                (fun_loc, fn_msg)
+            ));
+            false
+        }
+        (sp!(_, SyntaxMethodPrekind_::Assign), _) => true,
+    }
+}
+
 fn determine_valid_kind(
     context: &mut Context,
     sp!(sloc, kind): SyntaxMethodPrekind,
@@ -244,17 +290,14 @@ fn determine_valid_kind(
             }
         }
         SyntaxMethodPrekind_::For => {
-            let msg = "'for' syntax attributes are not currently supported";
-            context
-                .env
-                .add_diag(diag!(Declarations::InvalidAttribute, (sloc, msg),));
-            return None;
+            if valid_imm_ref(subject_type) {
+                SK::ForImm
+            } else if valid_mut_ref(subject_type) {
+                SK::ForMut
+            } else {
+                SK::ForVal
+            }
         }
-        // SyntaxMethodPrekind_::For => match mut_opt {
-        //     Some((loc, true)) => SK::ForMut,
-        //     Some((loc, false)) => SK::ForImm,
-        //     None => SK::ForVal,
-        // },
         SyntaxMethodPrekind_::Assign => {
             let msg = "'assign' syntax attributes are not currently supported";
             context
@@ -406,6 +449,25 @@ fn valid_return_type(
                     SyntaxAttribute::SYNTAX
                 );
                 let tmsg = "This is not a mutable reference";
+                context.env.add_diag(diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (*loc, msg),
+                    (ty.loc, tmsg),
+                    (subject_loc, "Mutable subject type defined here")
+                ));
+                false
+            }
+        }
+
+        SyntaxMethodKind_::ForMut | SyntaxMethodKind_::ForImm | SyntaxMethodKind_::ForVal => {
+            if matches!(ty.value, N::Type_::Unit) {
+                true
+            } else {
+                let msg = format!(
+                    "Invalid {} annotation. This syntax method must return a unit type",
+                    SyntaxAttribute::SYNTAX
+                );
+                let tmsg = "This is not a unit type";
                 context.env.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),

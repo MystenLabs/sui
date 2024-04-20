@@ -349,6 +349,19 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 exp(context, &mut arm.value.rhs);
             }
         }
+        N::Exp_::For(
+            subject,
+            N::Lambda {
+                parameters: _,
+                return_type: _,
+                return_label: _,
+                use_fun_color: _,
+                body,
+            },
+        ) => {
+            exp(context, subject);
+            exp(context, body);
+        }
         N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)

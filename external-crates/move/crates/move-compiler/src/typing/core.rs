@@ -13,8 +13,8 @@ use crate::{
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
-        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type,
-        TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
+        ForSyntaxMethods, IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID,
+        TVar, Type, TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
     },
     parser::ast::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
@@ -1065,6 +1065,18 @@ pub fn find_index_funs(context: &mut Context, type_name: &TypeName) -> Option<In
     let module_defn = context.module_info(module_ident);
     let entry = module_defn.syntax_methods.get(type_name)?;
     let index = entry.index.clone()?;
+    Some(*index)
+}
+
+pub fn find_for_funs(context: &mut Context, type_name: &TypeName) -> Option<ForSyntaxMethods> {
+    let module_ident = match &type_name.value {
+        TypeName_::Multiple(_) => return None,
+        TypeName_::Builtin(builtin_name) => context.env.primitive_definer(builtin_name.value)?,
+        TypeName_::ModuleType(m, _) => m,
+    };
+    let module_defn = context.module_info(module_ident);
+    let entry = module_defn.syntax_methods.get(type_name)?;
+    let index = entry.for_.clone()?;
     Some(*index)
 }
 

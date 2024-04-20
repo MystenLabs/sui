@@ -230,6 +230,7 @@ enum NominalBlockType {
     Block,
     LambdaReturn,
     LambdaLoopCapture,
+    ForLoopCapture,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -863,7 +864,9 @@ impl<'env> Context<'env> {
             self.nominal_blocks.iter().rev().find(|(_, _, name_type)| {
                 matches!(
                     name_type,
-                    NominalBlockType::Loop(_) | NominalBlockType::LambdaLoopCapture
+                    NominalBlockType::Loop(_)
+                        | NominalBlockType::LambdaLoopCapture
+                        | NominalBlockType::ForLoopCapture
                 )
             })
         else {
@@ -875,43 +878,87 @@ impl<'env> Context<'env> {
                 .add_diag(diag!(TypeSafety::InvalidLoopControl, (loc, msg)));
             return None;
         };
-        if *name_type == NominalBlockType::LambdaLoopCapture {
-            // lambdas capture break/continue even though it is not yet supported
-            let msg =
-                format!("Invalid '{usage}'. This usage is not yet supported for lambdas or macros");
-            let mut diag = diag!(
-                TypeSafety::InvalidLoopControl,
-                (loc, msg),
-                (label.label.loc, "Inside this lambda")
-            );
-            // suggest adding a label to the loop
-            let most_recent_loop_opt =
-                self.nominal_blocks
-                    .iter()
-                    .rev()
-                    .find_map(|(name, label, name_type)| {
-                        if let NominalBlockType::Loop(loop_type) = name_type {
-                            Some((name, label, *loop_type))
-                        } else {
-                            None
-                        }
-                    });
-            if let Some((name, loop_label, loop_type)) = most_recent_loop_opt {
-                let msg = if let Some(loop_label) = name {
-                    format!(
-                        "To '{usage}' to this loop, specify the label, \
+        match name_type {
+            NominalBlockType::Loop(_) => (),
+            NominalBlockType::Block => unreachable!(),
+            NominalBlockType::LambdaReturn => unreachable!(),
+            NominalBlockType::LambdaLoopCapture => {
+                // lambdas capture break/continue even though it is not yet supported
+                let msg = format!(
+                    "Invalid '{usage}'. This usage is not yet supported for lambdas or macros"
+                );
+                let mut diag = diag!(
+                    TypeSafety::InvalidLoopControl,
+                    (loc, msg),
+                    (label.label.loc, "Inside this lambda")
+                );
+                // suggest adding a label to the loop
+                let most_recent_loop_opt =
+                    self.nominal_blocks
+                        .iter()
+                        .rev()
+                        .find_map(|(name, label, name_type)| {
+                            if let NominalBlockType::Loop(loop_type) = name_type {
+                                Some((name, label, *loop_type))
+                            } else {
+                                None
+                            }
+                        });
+                if let Some((name, loop_label, loop_type)) = most_recent_loop_opt {
+                    let msg = if let Some(loop_label) = name {
+                        format!(
+                            "To '{usage}' to this loop, specify the label, \
                         e.g. `{usage} '{loop_label}`",
-                    )
-                } else {
-                    format!(
-                        "To '{usage}' to this loop, add a label, \
+                        )
+                    } else {
+                        format!(
+                            "To '{usage}' to this loop, add a label, \
                         e.g. `'label: {loop_type}` and `{usage} 'label`",
-                    )
-                };
-                diag.add_secondary_label((loop_label.label.loc, msg));
+                        )
+                    };
+                    diag.add_secondary_label((loop_label.label.loc, msg));
+                }
+                self.env.add_diag(diag);
+                return None;
             }
-            self.env.add_diag(diag);
-            return None;
+            NominalBlockType::ForLoopCapture => {
+                // lambdas capture break/continue even though it is not yet supported
+                let msg =
+                    format!("Invalid '{usage}'. This usage is not yet supported for 'for' loops");
+                let mut diag = diag!(
+                    TypeSafety::InvalidLoopControl,
+                    (loc, msg),
+                    (label.label.loc, "Inside this for loop")
+                );
+                // suggest adding a label to the loop
+                let most_recent_loop_opt =
+                    self.nominal_blocks
+                        .iter()
+                        .rev()
+                        .find_map(|(name, label, name_type)| {
+                            if let NominalBlockType::Loop(loop_type) = name_type {
+                                Some((name, label, *loop_type))
+                            } else {
+                                None
+                            }
+                        });
+                if let Some((name, loop_label, loop_type)) = most_recent_loop_opt {
+                    let msg = if let Some(loop_label) = name {
+                        format!(
+                            "To '{usage}' to this loop, specify the label, \
+                        e.g. `{usage} '{loop_label}`",
+                        )
+                    } else {
+                        format!(
+                            "To '{usage}' to this loop, add a label, \
+                        e.g. `'label: {loop_type}` and `{usage} 'label`",
+                        )
+                    };
+                    diag.add_secondary_label((loop_label.label.loc, msg));
+                }
+                self.env.add_diag(diag);
+                return None;
+            }
         }
         Some(*label)
     }
@@ -965,6 +1012,11 @@ impl<'env> Context<'env> {
                         "Lambda block labels may only be used with 'return' or 'break', \
                         not 'continue'."
                     }
+                    NominalBlockType::ForLoopCapture => {
+                        self.env
+                            .add_diag(ice!((loc, "Used this label as a for block label")));
+                        return None;
+                    }
                 });
                 self.env.add_diag(diag);
                 None
@@ -1008,7 +1060,8 @@ impl NominalBlockType {
             | (NominalBlockType::Block, NominalBlockUsage::Continue)
             | (NominalBlockType::LambdaReturn, NominalBlockUsage::Break)
             | (NominalBlockType::LambdaReturn, NominalBlockUsage::Continue)
-            | (NominalBlockType::LambdaLoopCapture, NominalBlockUsage::Return) => false,
+            | (NominalBlockType::LambdaLoopCapture, NominalBlockUsage::Return)
+            | (NominalBlockType::ForLoopCapture, _) => false,
         }
     }
 }
@@ -1031,6 +1084,7 @@ impl std::fmt::Display for NominalBlockType {
                 NominalBlockType::Loop(_) => "loop",
                 NominalBlockType::Block => "named",
                 NominalBlockType::LambdaReturn | NominalBlockType::LambdaLoopCapture => "lambda",
+                NominalBlockType::ForLoopCapture => "for",
             }
         )
     }
@@ -2045,6 +2099,29 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                     .collect(),
             ),
         ),
+        EE::For(esubject, eargs, ebody) => {
+            let subject = exp(context, esubject);
+            context.new_local_scope();
+            let args_opt = lambda_bind_list(context, eargs);
+            context.enter_nominal_block(eloc, None, NominalBlockType::ForLoopCapture);
+            let body = exp(context, ebody);
+            context.close_local_scope();
+            let (block_label, name_type) = context.exit_nominal_block();
+            assert_eq!(name_type, NominalBlockType::ForLoopCapture);
+            if let Some(parameters) = args_opt {
+                let for_lambda = N::Lambda {
+                    parameters,
+                    return_type: None,
+                    return_label: block_label, // This label was never used
+                    use_fun_color: 0,          // used in macro expansion
+                    body,
+                };
+                NE::For(subject, for_lambda)
+            } else {
+                assert!(context.env.has_errors());
+                NE::UnresolvedError
+            }
+        }
         EE::While(name_opt, eb, el) => {
             let cond = exp(context, eb);
             context.enter_nominal_block(eloc, name_opt, NominalBlockType::Loop(LoopType::While));
@@ -2091,7 +2168,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             match nlambda_binds_opt {
                 None => {
                     assert!(context.env.has_errors());
-                    N::Exp_::UnresolvedError
+                    NE::UnresolvedError
                 }
                 Some(parameters) => NE::Lambda(N::Lambda {
                     parameters,
@@ -3587,6 +3664,22 @@ fn remove_unused_bindings_exp(
                 }
                 remove_unused_bindings_exp(context, used, &mut arm.value.rhs);
             }
+        }
+        N::Exp_::For(
+            subject,
+            N::Lambda {
+                parameters: sp!(_, parameters),
+                use_fun_color: _,
+                return_type: _,
+                return_label: _,
+                body,
+            },
+        ) => {
+            remove_unused_bindings_exp(context, used, subject);
+            for (lvs, _) in parameters {
+                remove_unused_bindings_lvalues(context, used, lvs)
+            }
+            remove_unused_bindings_exp(context, used, body)
         }
         N::Exp_::While(_, econd, ebody) => {
             remove_unused_bindings_exp(context, used, econd);

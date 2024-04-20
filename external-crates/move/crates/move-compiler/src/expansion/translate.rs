@@ -2549,6 +2549,19 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         }
         PE::While(pb, ploop) => EE::While(None, exp(context, pb), exp(context, ploop)),
         PE::Loop(ploop) => EE::Loop(None, exp(context, ploop)),
+        PE::For(psubject, pargs, pbody) => {
+            // We can't turn this into a lambda just yet because we need to process return, break,
+            // and continue in these bodies differently.
+            let subject = exp(context, psubject);
+            let args_opt = lambda_bind_list(context, pargs);
+            let body = exp(context, pbody);
+            if let Some(args) = args_opt {
+                EE::For(subject, args, body)
+            } else {
+                assert!(context.env().has_errors());
+                EE::UnresolvedError
+            }
+        }
         PE::Block(seq) => EE::Block(None, sequence(context, loc, seq)),
         PE::Lambda(plambda, pty_opt, pe) => {
             let elambda_opt = lambda_bind_list(context, plambda);
@@ -2722,6 +2735,7 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
             | PE::UnresolvedError => false,
 
             PE::IfElse(_, _, _)
+            | PE::For(_, _, _)
             | PE::While(_, _)
             | PE::Loop(_)
             | PE::Labeled(_, _)
@@ -2770,8 +2784,18 @@ fn maybe_labeled_exp(
     label: BlockLabel,
     e: Box<E::Exp>,
 ) -> Box<E::Exp> {
-    let sp!(_eloc, e_) = *e;
+    const ERROR_MSG: &str =
+        "Invalid label. Labels can only be used on 'while', 'loop', or block '{{}}' expressions";
+    let sp!(eloc, e_) = *e;
     let e_ = match e_ {
+        E::Exp_::For(_subject, _args, _body) => {
+            let mut diag = diag!(Syntax::InvalidLabel, (loc, ERROR_MSG));
+            diag.add_secondary_label((eloc, "'for' loops do not currently support labels"));
+            context
+                .env()
+                .add_diag(diag!(Syntax::InvalidLabel, (loc, ERROR_MSG)));
+            E::Exp_::UnresolvedError
+        }
         E::Exp_::While(label_opt, cond, body) => {
             ensure_unique_label(context, loc, &label, label_opt);
             E::Exp_::While(Some(label), cond, body)
@@ -2785,11 +2809,9 @@ fn maybe_labeled_exp(
             E::Exp_::Block(Some(label), seq)
         }
         _ => {
-            let msg = "Invalid label. Labels can only be used on 'while', 'loop', or block '{{}}' \
-                 expressions";
             context
                 .env()
-                .add_diag(diag!(Syntax::InvalidLabel, (loc, msg)));
+                .add_diag(diag!(Syntax::InvalidLabel, (loc, ERROR_MSG)));
             E::Exp_::UnresolvedError
         }
     };

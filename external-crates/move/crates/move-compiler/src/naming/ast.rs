@@ -98,9 +98,9 @@ pub struct UseFuns {
 pub enum SyntaxMethodKind_ {
     Index,
     IndexMut,
-    // ForMut,
-    // ForImm,
-    // ForVal,
+    ForMut,
+    ForImm,
+    ForVal,
     // Assign,
 }
 
@@ -122,9 +122,17 @@ pub struct IndexSyntaxMethods {
     pub index: Option<Box<SyntaxMethod>>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ForSyntaxMethods {
+    pub for_imm: Option<Box<SyntaxMethod>>,
+    pub for_mut: Option<Box<SyntaxMethod>>,
+    pub for_val: Option<Box<SyntaxMethod>>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct SyntaxMethodEntry {
     pub index: Option<Box<IndexSyntaxMethods>>,
+    pub for_: Option<Box<ForSyntaxMethods>>,
 }
 
 // Mapping from type to their possible "syntax methods"
@@ -424,6 +432,7 @@ pub enum Exp_ {
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
+    For(/* subject */ Box<Exp>, /* for-lambda */ Lambda),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
@@ -572,6 +581,9 @@ impl SyntaxMethodEntry {
         match kind {
             SyntaxMethodKind_::Index => &mut self.index_entry().index,
             SyntaxMethodKind_::IndexMut => &mut self.index_entry().index_mut,
+            SyntaxMethodKind_::ForMut => &mut self.for_entry().for_mut,
+            SyntaxMethodKind_::ForImm => &mut self.for_entry().for_imm,
+            SyntaxMethodKind_::ForVal => &mut self.for_entry().for_val,
         }
     }
 
@@ -584,6 +596,18 @@ impl SyntaxMethodEntry {
             self.index = Some(Box::new(new_index_syntax_method));
         }
         self.index.as_mut().unwrap()
+    }
+
+    fn for_entry(&mut self) -> &mut ForSyntaxMethods {
+        if self.for_.is_none() {
+            let new_for_syntax_method = ForSyntaxMethods {
+                for_val: None,
+                for_imm: None,
+                for_mut: None,
+            };
+            self.for_ = Some(Box::new(new_for_syntax_method));
+        }
+        self.for_.as_mut().unwrap()
     }
 }
 
@@ -1043,6 +1067,9 @@ impl fmt::Display for SyntaxMethodKind_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         let msg = match self {
             SyntaxMethodKind_::IndexMut | SyntaxMethodKind_::Index => SyntaxAttribute::INDEX,
+            SyntaxMethodKind_::ForMut | SyntaxMethodKind_::ForImm | SyntaxMethodKind_::ForVal => {
+                SyntaxAttribute::FOR
+            }
         };
         write!(f, "{}", msg)
     }
@@ -1164,7 +1191,7 @@ impl AstDebug for SyntaxMethod {
 impl AstDebug for (&TypeName, &SyntaxMethodEntry) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (_tn, methods) = *self;
-        let SyntaxMethodEntry { index } = methods;
+        let SyntaxMethodEntry { index, for_ } = methods;
         if let Some(index) = &index {
             let IndexSyntaxMethods { index_mut, index } = &**index;
             if let Some(index) = index.as_ref() {
@@ -1172,6 +1199,22 @@ impl AstDebug for (&TypeName, &SyntaxMethodEntry) {
             }
             if let Some(index_mut) = index_mut.as_ref() {
                 index_mut.ast_debug(w)
+            }
+        }
+        if let Some(for_) = &for_ {
+            let ForSyntaxMethods {
+                for_imm,
+                for_mut,
+                for_val,
+            } = &**for_;
+            if let Some(for_imm) = for_imm.as_ref() {
+                for_imm.ast_debug(w)
+            }
+            if let Some(for_mut) = for_mut.as_ref() {
+                for_mut.ast_debug(w)
+            }
+            if let Some(for_val) = for_val.as_ref() {
+                for_val.ast_debug(w)
             }
         }
     }
@@ -1708,6 +1751,12 @@ impl AstDebug for Exp_ {
                         true
                     })
                 });
+            }
+            E::For(subject, lambda) => {
+                w.write("for (");
+                subject.ast_debug(w);
+                w.write(") => ");
+                lambda.ast_debug(w);
             }
             E::While(name, b, e) => {
                 name.ast_debug(w);

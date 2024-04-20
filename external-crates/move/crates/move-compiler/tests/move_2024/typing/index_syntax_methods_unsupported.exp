@@ -1,8 +1,30 @@
-error[E02015]: invalid attribute
-   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:29:14
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:29:7
    │
 29 │     #[syntax(for)]
-   │              ^^^ 'for' syntax attributes are not currently supported
+   │       ^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
+30 │     public macro fun for_s(s: &S, i: u64): &u64 {
+   │            ----- This function is a macro
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:30:28
+   │
+30 │     public macro fun for_s(s: &S, i: u64): &u64 {
+   │            -----           ^ Invalid parameter name 's'. 'macro' parameter names must start with '$' (or must be '_')
+   │            │                
+   │            Declared 'macro' here
+   │
+   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:30:35
+   │
+30 │     public macro fun for_s(s: &S, i: u64): &u64 {
+   │            -----                  ^ Invalid parameter name 'i'. 'macro' parameter names must start with '$' (or must be '_')
+   │            │                       
+   │            Declared 'macro' here
+   │
+   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
 error[E02015]: invalid attribute
    ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:34:14

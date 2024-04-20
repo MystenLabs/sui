@@ -12,8 +12,8 @@ use crate::{
     },
     ice,
     naming::ast::{
-        self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, TParam, TParamID, Type,
-        TypeName_, Type_,
+        self as N, BlockLabel, DatatypeTypeParameter, ForSyntaxMethods, IndexSyntaxMethods,
+        SyntaxMethod, TParam, TParamID, Type, TypeName_, Type_,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, UnaryOp_,
@@ -1566,6 +1566,24 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let earms = match_arms(context, &subject_type, &result_type, narms_, &ref_mut);
             (result_type, TE::Match(esubject, sp(aloc, earms)))
         }
+        NE::For(nsubject, for_lambda) => {
+            let subject = exp(context, nsubject);
+            context.add_single_type_constraint(
+                subject.exp.loc,
+                "Invalid 'for' subject",
+                subject.ty.clone(),
+            );
+            let readied = core::ready_tvars(&context.subst, subject.ty.clone());
+            if let Some(for_fun) = find_for_funs(context, eloc, &readied) {
+                let (m, f) = for_fun.target_function;
+                let param_loc = for_lambda.parameters.loc;
+                let nargs_ = vec![sp(eloc, N::Exp_::Lambda(for_lambda))];
+                macro_module_call(context, eloc, m, f, eloc, None, param_loc, nargs_)
+            } else {
+                assert!(context.env.has_errors());
+                (context.error_type(eloc), TE::UnresolvedError)
+            }
+        }
         NE::While(name, nb, nloop) => {
             let eb = exp(context, nb);
             let bloc = eb.exp.loc;
@@ -2863,6 +2881,109 @@ fn add_variant_field_types<T>(
 }
 
 //--------------------------------------------------------------------------------------------------
+// For Loop Syntax Resolution
+//--------------------------------------------------------------------------------------------------
+
+// Assumes tvars have already been readied
+fn find_for_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<SyntaxMethod> {
+    let ty_str = core::error_format(ty, &context.subst);
+
+    fn find_recur(
+        context: &mut Context,
+        loc: Loc,
+        ty_str: &str,
+        ty: &Type,
+    ) -> Option<(Option<bool>, ForSyntaxMethods)> {
+        use Type_ as T;
+        const UNINFERRED_MSG: &str =
+            "Could not infer the 'for' loop subject type. Try adding an annotating";
+        let msg = || {
+            format!(
+                "No valid '{}({})' method found for {}",
+                SyntaxAttribute::SYNTAX,
+                SyntaxAttribute::FOR,
+                ty_str
+            )
+        };
+        match ty {
+            sp!(_, T::UnresolvedError) => None,
+            sp!(tloc, T::Anything) => {
+                context.env.add_diag(diag!(
+                    TypeSafety::UninferredType,
+                    (loc, msg()),
+                    (*tloc, UNINFERRED_MSG),
+                ));
+                None
+            }
+            sp!(tloc, T::Var(_)) => {
+                context.env.add_diag(diag!(
+                    TypeSafety::UninferredType,
+                    (loc, msg()),
+                    (*tloc, UNINFERRED_MSG),
+                ));
+                None
+            }
+            sp!(_, T::Apply(_, type_name, _)) => {
+                let for_opt = core::find_for_funs(context, type_name);
+                if for_opt.is_none() {
+                    context
+                        .env
+                        .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
+                }
+                for_opt.map(|entry| (None, entry))
+            }
+            sp!(_, T::Ref(mut_, inner)) => {
+                find_recur(context, loc, ty_str, &*inner).map(|(_, methods)| (Some(*mut_), methods))
+            }
+            sp!(_, T::Unit | T::Param(_) | T::Fun(_, _)) => {
+                let smsg = format!(
+                    "Expected a datatype or builtin type but got: {}",
+                    core::error_format(ty, &context.subst)
+                );
+                context.env.add_diag(diag!(
+                    TypeSafety::ExpectedSpecificType,
+                    (loc, msg()),
+                    (ty.loc, smsg),
+                ));
+                None
+            }
+        }
+    }
+
+    if let Some((ref_opt, funs)) = find_recur(context, loc, &ty_str, ty) {
+        let msg = |kind| {
+            format!(
+                "Could not find {} '{}({})' method for {}",
+                kind,
+                SyntaxAttribute::SYNTAX,
+                SyntaxAttribute::FOR,
+                ty_str
+            )
+        };
+        macro_rules! find_or_error {
+            (.$field:ident, $kind:expr) => {
+                if let Some(fun) = funs.$field {
+                    Some(*fun)
+                } else {
+                    context
+                        .env
+                        .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg($kind))));
+                    None
+                }
+            };
+        }
+        match ref_opt {
+            Some(true) => find_or_error!(.for_mut, "a mutable"),
+            Some(false) => find_or_error!(.for_imm, "an immutable"),
+            None => find_or_error!(.for_val, "a value"),
+        }
+    } else {
+        assert!(context.env.has_errors());
+        None
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 // Index Type Resolution
 //--------------------------------------------------------------------------------------------------
 
@@ -2870,7 +2991,7 @@ fn add_variant_field_types<T>(
 fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSyntaxMethods> {
     use Type_ as T;
     const UNINFERRED_MSG: &str =
-        "Could not infer the type before index access. Try annotating here";
+        "Could not infer the type before index access. Try adding an annotating";
     let ty_str = core::error_format(ty, &context.subst);
     let msg = || {
         format!(
@@ -2910,7 +3031,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
         }
         sp!(_, T::Unit | T::Ref(_, _) | T::Param(_) | T::Fun(_, _)) => {
             let smsg = format!(
-                "Expected a struct or builtin type but got: {}",
+                "Expected a datatype or builtin type but got: {}",
                 core::error_format(ty, &context.subst)
             );
             context.env.add_diag(diag!(
@@ -3363,24 +3484,34 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                     exp = make_error_exp(context, loc);
                     break;
                 };
+                let ty_str = core::error_format(&index_base_type, &context.subst);
+                let msg = |kind| {
+                    format!(
+                        "Could not find {} '{}({})' method for {}",
+                        kind,
+                        SyntaxAttribute::SYNTAX,
+                        SyntaxAttribute::INDEX,
+                        ty_str,
+                    )
+                };
                 let (m, f) = if mut_ {
                     if let Some(index_mut) = index_methods.index_mut {
                         index_mut.target_function
                     } else {
-                        let msg = "Could not find a mutable index 'syntax' method";
+                        let msg = msg("a mutable");
                         context
                             .env
-                            .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg),));
+                            .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg)));
                         exp = make_error_exp(context, index_loc);
                         break;
                     }
                 } else if let Some(index) = index_methods.index {
                     index.target_function
                 } else {
-                    let msg = "Could not find an immutable index 'syntax' method";
+                    let msg = msg("an immutable");
                     context
                         .env
-                        .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg),));
+                        .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg)));
                     exp = make_error_exp(context, index_loc);
                     break;
                 };

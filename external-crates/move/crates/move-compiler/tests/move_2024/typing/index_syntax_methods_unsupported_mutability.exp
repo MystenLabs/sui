@@ -2,11 +2,11 @@ error[E02020]: no valid 'syntax' declaration found
    ┌─ tests/move_2024/typing/index_syntax_methods_unsupported_mutability.move:42:9
    │
 42 │         s[i].mut_deref();
-   │         ^^^^ Could not find a mutable index 'syntax' method
+   │         ^^^^ Could not find a mutable 'syntax(index)' method for 'u64'
 
 error[E02020]: no valid 'syntax' declaration found
    ┌─ tests/move_2024/typing/index_syntax_methods_unsupported_mutability.move:43:9
    │
 43 │         t[i].deref();
-   │         ^^^^ Could not find an immutable index 'syntax' method
+   │         ^^^^ Could not find an immutable 'syntax(index)' method for 'u64'
 

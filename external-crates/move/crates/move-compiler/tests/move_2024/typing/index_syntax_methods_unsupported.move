@@ -27,7 +27,7 @@ module a::s {
     }
 
     #[syntax(for)]
-    public fun for_s(s: &S, i: u64): &u64 {
+    public macro fun for_s(s: &S, i: u64): &u64 {
         &s.t[i]
     }
 
