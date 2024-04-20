@@ -77,6 +77,7 @@ pub(crate) struct NodeMetrics {
     pub block_commit_latency: Histogram,
     pub block_proposed: IntCounterVec,
     pub block_size: Histogram,
+    pub block_ancestors_count: IntCounter,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
@@ -141,6 +142,11 @@ impl NodeMetrics {
                 "block_size",
                 "The size (in bytes) of proposed blocks",
                 SIZE_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            block_ancestors_count: register_int_counter_with_registry!(
+                "block_ancestors_count",
+                "Total number of ancestors in proposed blocks",
                 registry
             ).unwrap(),
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(

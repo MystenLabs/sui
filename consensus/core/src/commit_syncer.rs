@@ -127,13 +127,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
                     synced_commit_index = synced_commit_index.max(local_commit_index);
-                    // TODO: pause commit sync when execution of commits is lagging behind.
+                    info!(
+                        "Checking to schedule fetches: synced_commit_index={}, highest_scheduled_index={}, quorum_commit_index={}",
+                        synced_commit_index, highest_scheduled_index.unwrap_or(0), quorum_commit_index,
+                    );
+                    // TODO: pause commit sync when execution of commits is lagging behind, maybe through Core.
                     // TODO: cleanup inflight fetches that are no longer needed.
                     let fetch_after_index = synced_commit_index.max(highest_scheduled_index.unwrap_or(0));
-                    info!(
-                        "Checking to schedule fetches: synced_commit_index={}, fetch_after_index={}, quorum_commit_index={}",
-                        synced_commit_index, fetch_after_index, quorum_commit_index
-                    );
                     // When the node is falling behind, schedule pending fetches which will be executed on later.
                     'pending: for prev_end in (fetch_after_index..=quorum_commit_index).step_by(inner.context.parameters.commit_sync_batch_size as usize) {
                         // Create range with inclusive start and end.

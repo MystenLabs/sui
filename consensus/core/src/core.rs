@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeSet, iter, sync::Arc, time::Duration};
 
 use consensus_config::ProtocolKeyPair;
 use mysten_metrics::monitored_scope;
@@ -253,16 +249,15 @@ impl Core {
             return None;
         }
 
-        let now = timestamp_utc_ms();
-
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
         if !force {
             if !self.last_quorum_leaders_exist() {
                 return None;
             }
-            if Duration::from_millis(now.saturating_sub(self.last_proposed_timestamp_ms()))
-                < self.context.parameters.min_round_delay
+            if Duration::from_millis(
+                timestamp_utc_ms().saturating_sub(self.last_proposed_timestamp_ms()),
+            ) < self.context.parameters.min_round_delay
             {
                 return None;
             }
@@ -274,8 +269,24 @@ impl Core {
         // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
         // Probably proposing for all the intermediate rounds might not make much sense.
 
-        // Consume the ancestors to be included in proposal
-        let ancestors = self.ancestors_to_propose(clock_round, now);
+        // Determine the ancestors to be included in proposal
+        let ancestors = self.ancestors_to_propose(clock_round);
+        self.context
+            .metrics
+            .node_metrics
+            .block_ancestors_count
+            .inc_by(ancestors.len() as u64);
+
+        // Ensure ancestor timestamps are not more advanced than the current time.
+        // Also catch the issue if system's clock go backwards.
+        let now = timestamp_utc_ms();
+        ancestors.iter().for_each(|block| {
+            assert!(
+                block.timestamp_ms() <= now,
+                "Violation: ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.",
+                block, block.timestamp_ms(), clock_round
+            );
+        });
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
@@ -297,7 +308,7 @@ impl Core {
             clock_round,
             self.context.own_index,
             now,
-            ancestors,
+            ancestors.iter().map(|b| b.reference()).collect(),
             transactions,
             commit_votes,
         ));
@@ -335,7 +346,7 @@ impl Core {
             .into_iter()
             .for_each(TransactionGuard::acknowledge);
 
-        info!("Created block {}", verified_block);
+        info!("Created block {:?}", verified_block);
 
         self.context
             .metrics
@@ -382,13 +393,8 @@ impl Core {
         self.block_manager.missing_blocks()
     }
 
-    /// Retrieves the next ancestors to propose to form a block at `clock_round` round. Also, the `block_timestamp` is provided
-    /// to sanity check that everything that goes into the proposal is ensured to have a timestamp < block_timestamp
-    fn ancestors_to_propose(
-        &mut self,
-        clock_round: Round,
-        block_timestamp: BlockTimestampMs,
-    ) -> Vec<BlockRef> {
+    /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
+    fn ancestors_to_propose(&mut self, clock_round: Round) -> Vec<VerifiedBlock> {
         // Now take the ancestors before the clock_round (excluded) for each authority.
         let ancestors = self
             .dag_state
@@ -400,15 +406,20 @@ impl Core {
             "Fatal error, number of returned ancestors don't match committee size."
         );
 
-        // Propose only ancestors of higher rounds than what has already been proposed
-        let ancestors = ancestors
-            .into_iter()
-            .flat_map(|block| {
-                if let Some(last_block_ref) = self.last_included_ancestors[block.author()] {
-                    return (last_block_ref.round < block.round()).then_some(block);
-                }
-                Some(block)
-            })
+        // Propose only ancestors of higher rounds than what has already been proposed.
+        // And always include own last proposed block first among ancestors.
+        let ancestors = iter::once(self.last_proposed_block.clone())
+            .chain(
+                ancestors
+                    .into_iter()
+                    .filter(|block| block.author() != self.context.own_index)
+                    .flat_map(|block| {
+                        if let Some(last_block_ref) = self.last_included_ancestors[block.author()] {
+                            return (last_block_ref.round < block.round()).then_some(block);
+                        }
+                        Some(block)
+                    }),
+            )
             .collect::<Vec<_>>();
 
         // Update the last included ancestor block refs
@@ -424,43 +435,9 @@ impl Core {
         {
             quorum.add(ancestor.author(), &self.context.committee);
         }
-
         assert!(quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {}. Possible mismatch between DagState and Core.", clock_round);
 
-        // Ensure that timestamps are correct
-        ancestors.iter().for_each(|block|{
-            // We assume that our system's clock can't go backwards when we perform the check here (ex due to ntp corrections)
-            assert!(block.timestamp_ms() <= block_timestamp, "Violation, ancestor block timestamp {} greater than our timestamp {block_timestamp}", block.timestamp_ms());
-        });
-
-        // Compress the references in the block. We don't want to include an ancestors that already referenced by other blocks
-        // we are about to include.
-        let all_ancestors_parents: HashSet<&BlockRef> = ancestors
-            .iter()
-            .flat_map(|block| block.ancestors())
-            .collect();
-
-        // Keep block refs to propose in a map, so even if somehow a byzantine node managed to provide blocks that don't
-        // form a valid chain we can still pick one block per author.
-        let mut to_propose = BTreeMap::new();
-        for block in &ancestors {
-            if !all_ancestors_parents.contains(&block.reference()) {
-                to_propose.insert(block.author(), block.reference());
-            }
-        }
-
-        assert!(!to_propose.is_empty());
-
-        // always include our last proposed block in front of the vector and make sure that we do not
-        // double insert.
-        let mut result = vec![self.last_proposed_block.reference()];
-        for (authority_index, block_ref) in to_propose {
-            if authority_index != self.context.own_index {
-                result.push(block_ref);
-            }
-        }
-
-        result
+        ancestors
     }
 
     /// Checks whether all the leaders of the previous quorum exist.
