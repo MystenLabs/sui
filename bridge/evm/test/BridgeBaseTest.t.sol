@@ -134,7 +134,7 @@ contract BridgeBaseTest is Test {
         // deploy bridge =====================================================================
 
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
     }

@@ -15,7 +15,6 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
     function testSuiBridgeInitialization() public {
         assertEq(address(bridge.committee()), address(committee));
         assertEq(address(bridge.vault()), address(vault));
-        assertEq(address(bridge.wETH()), wETH);
     }
 
     function testTransferBridgedTokensWithSignaturesTokenDailyLimitExceeded() public {
@@ -583,7 +582,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
@@ -666,7 +665,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
 
         bytes memory payload = hex"00";
         // Create emergency op message
@@ -718,7 +717,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), supportedChains, totalLimits);
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
 
         assertFalse(bridge.paused());
 
@@ -835,7 +834,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 

@@ -143,9 +143,7 @@ contract DeployBridge is Script {
 
         address suiBridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
-            abi.encodeCall(
-                SuiBridge.initialize, (bridgeCommittee, address(vault), limiter, deployConfig.WETH)
-            )
+            abi.encodeCall(SuiBridge.initialize, (bridgeCommittee, address(vault), limiter))
         );
 
         // transfer vault ownership to bridge
