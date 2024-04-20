@@ -51,6 +51,18 @@ pub struct Module<'a> {
     constants: BTreeMap<Symbol, Constant<'a>>,
 }
 
+pub enum Member<'a> {
+    Struct(&'a Struct<'a>),
+    Enum(&'a Enum<'a>),
+    Function(&'a Function<'a>),
+    Constant(&'a Constant<'a>),
+}
+
+pub enum Datatype<'a> {
+    Struct(&'a Struct<'a>),
+    Enum(&'a Enum<'a>),
+}
+
 pub struct Struct<'a> {
     module: &'a CompiledModule,
     info: &'a N::StructDefinition,
@@ -103,6 +115,24 @@ impl<'a> Module<'a> {
 
     pub fn constant(&self, name: impl Into<Symbol>) -> Option<&Constant> {
         self.constants.get(&name.into())
+    }
+
+    pub fn member(&self, name: impl Into<Symbol>) -> Option<Member<'_>> {
+        let name = name.into();
+        self.structs
+            .get(&name)
+            .map(Member::Struct)
+            .or_else(|| self.enums.get(&name).map(Member::Enum))
+            .or_else(|| self.functions.get(&name).map(Member::Function))
+            .or_else(|| self.constants.get(&name).map(Member::Constant))
+    }
+
+    pub fn datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'_>> {
+        let name = name.into();
+        self.structs
+            .get(&name)
+            .map(Datatype::Struct)
+            .or_else(|| self.enums.get(&name).map(Datatype::Enum))
     }
 
     pub fn info(&self) -> &ModuleInfo {
@@ -252,12 +282,23 @@ impl TModuleId for (AccountAddress, Symbol) {
     }
 }
 
+impl TModuleId for (&AccountAddress, &Symbol) {
+    fn module_id(&self) -> (AccountAddress, Symbol) {
+        (*self.0, *self.1)
+    }
+}
+
 impl TModuleId for (NumericalAddress, Symbol) {
     fn module_id(&self) -> (AccountAddress, Symbol) {
         (self.0.into_inner(), self.1)
     }
 }
 
+impl TModuleId for (&NumericalAddress, &Symbol) {
+    fn module_id(&self) -> (AccountAddress, Symbol) {
+        (self.0.clone().into_inner(), *self.1)
+    }
+}
 impl TModuleId for ModuleIdent_ {
     fn module_id(&self) -> (AccountAddress, Symbol) {
         let address = self.address.into_addr_bytes().into_inner();
