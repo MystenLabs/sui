@@ -100,7 +100,7 @@ impl AnemoClient {
                         if let Some(peer) = network.peer(peer_id) {
                             return Ok(ConsensusRpcClient::new(peer));
                         }
-                        error!("Peer {} should be connected.", peer_id)
+                        warn!("Peer {} should be connected.", peer_id)
                     }
                     Err(RecvError::Closed) => return Err(ConsensusError::Shutdown),
                     Err(RecvError::Lagged(_)) => {

@@ -175,6 +175,14 @@ impl Core {
         let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
+            debug!(
+                "Accepted blocks: {:?}",
+                accepted_blocks
+                    .iter()
+                    .map(|b| b.reference())
+                    .collect::<Vec<_>>()
+            );
+
             // Now add accepted blocks to the threshold clock and pending ancestors list.
             self.add_accepted_blocks(accepted_blocks);
 
@@ -182,6 +190,10 @@ impl Core {
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
+        }
+
+        if !missing_blocks.is_empty() {
+            debug!("Missing blocks: {:?}", missing_blocks);
         }
 
         Ok(missing_blocks)
@@ -384,6 +396,7 @@ impl Core {
             .into_iter()
             .filter_map(|leader| leader.into_committed_block())
             .collect::<Vec<_>>();
+        debug!("Committing leaders: {:?}", committed_leaders);
 
         self.commit_observer.handle_commit(committed_leaders)
     }
