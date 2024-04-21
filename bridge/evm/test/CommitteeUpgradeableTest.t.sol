@@ -56,7 +56,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         // deploy sui bridge
         address _bridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
-            abi.encodeCall(SuiBridge.initialize, (_committee, address(0), address(0), address(0)))
+            abi.encodeCall(SuiBridge.initialize, (_committee, address(0), address(0)))
         );
 
         bridge = SuiBridge(_bridge);

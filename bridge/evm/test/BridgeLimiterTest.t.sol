@@ -256,7 +256,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
@@ -323,7 +323,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         limiter = new BridgeLimiter();
         limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
         bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
+        bridge.initialize(address(committee), address(vault), address(limiter));
 
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));

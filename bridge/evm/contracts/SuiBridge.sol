@@ -25,7 +25,6 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     mapping(uint64 nonce => bool isProcessed) public isTransferProcessed;
     IBridgeVault public vault;
     IBridgeLimiter public limiter;
-    IWETH9 public wETH;
 
     /* ========== INITIALIZER ========== */
 
@@ -34,8 +33,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// @param _committee The address of the committee contract.
     /// @param _vault The address of the bridge vault contract.
     /// @param _limiter The address of the bridge limiter contract.
-    /// @param _wETH The address of the WETH9 contract.
-    function initialize(address _committee, address _vault, address _limiter, address _wETH)
+    function initialize(address _committee, address _vault, address _limiter)
         external
         initializer
     {
@@ -43,7 +41,6 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         __Pausable_init();
         vault = IBridgeVault(_vault);
         limiter = IBridgeLimiter(_limiter);
-        wETH = IWETH9(_wETH);
     }
 
     /* ========== EXTERNAL FUNCTIONS ========== */
@@ -186,11 +183,9 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     {
         uint256 amount = msg.value;
 
-        // Wrap ETH
-        wETH.deposit{value: amount}();
-
-        // Transfer the wrapped ETH back to caller
-        SafeERC20.safeTransfer(IERC20(address(wETH)), address(vault), amount);
+        // Transfer the unwrapped ETH to the target address
+        (bool success,) = payable(address(vault)).call{value: amount}("");
+        require(success, "SuiBridge: Failed to transfer ETH to vault");
 
         // Adjust the amount to emit.
         IBridgeConfig config = committee.config();

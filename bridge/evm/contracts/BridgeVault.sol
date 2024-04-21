@@ -59,7 +59,11 @@ contract BridgeVault is Ownable, IBridgeVault {
         recipientAddress.transfer(amount);
     }
 
-    /// @notice Enables the contract to receive ETH.
-    /// @dev This function is required to receive ETH when unwrapping WETH.
-    receive() external payable {}
+    /// @notice Wraps as eth sent to this contract.
+    /// @dev skip if sender is wETH contract to avoid infinite loop.
+    receive() external payable {
+        if (msg.sender != address(wETH)) {
+            wETH.deposit{value: msg.value}();
+        }
+    }
 }
