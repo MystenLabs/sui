@@ -21,6 +21,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
@@ -2764,6 +2765,14 @@ impl AuthorityPerEpochStore {
             Default::default();
         let mut shared_object_using_randomness_congestion_tracker: SharedObjectCongestionTracker =
             Default::default();
+
+        fail_point_arg!(
+            "initial_congestion_tracker",
+            |tracker: SharedObjectCongestionTracker| {
+                info!("Initialize shared_object_congestion_tracker {:?}", tracker);
+                shared_object_congestion_tracker = tracker;
+            }
+        );
 
         let mut randomness_state_updated = false;
         for tx in transactions {

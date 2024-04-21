@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::SharedInputObject;
+use tracing::info;
 
 // SharedObjectCongestionTracker stores the accumulated cost of executing transactions on an object, for
 // all transactions in a consensus commit.
@@ -56,8 +57,8 @@ impl SharedObjectCongestionTracker {
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
-        println!(
-            "ZZZZZZ start_cost: {}, budget: {}, bar: {}",
+        info!(
+            "Check txn deferral, start_cost: {}, budget: {}, bar: {}",
             start_cost,
             cert.gas_budget(),
             max_accumulated_txn_cost_per_object_in_checkpoint

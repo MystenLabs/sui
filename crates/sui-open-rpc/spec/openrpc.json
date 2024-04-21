@@ -1723,6 +1723,7 @@
                 "max_checkpoint_size_bytes": {
                   "u64": "31457280"
                 },
+                "max_deferral_rounds_for_congestion_control": null,
                 "max_dependency_depth": {
                   "u64": "100"
                 },

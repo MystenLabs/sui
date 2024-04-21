@@ -193,8 +193,8 @@ async fn transaction_manager_object_dependency() {
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect();
-    let shared_object = Object::shared_for_testing();
-    let shared_object_2 = Object::shared_for_testing();
+    let shared_object = Object::with_id_shared_for_testing(ObjectID::random());
+    let shared_object_2 = Object::with_id_shared_for_testing(ObjectID::random());
 
     let state = init_state_with_objects(
         [

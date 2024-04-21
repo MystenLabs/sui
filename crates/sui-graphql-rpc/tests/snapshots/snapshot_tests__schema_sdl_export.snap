@@ -3109,6 +3109,11 @@ type SharedInput {
 	mutable: Boolean!
 }
 
+type SharedObjectCancelled {
+	address: SuiAddress!
+	version: Int!
+}
+
 """
 The transaction accepted a shared object as input, but it was deleted before the transaction
 executed.
@@ -3877,7 +3882,7 @@ This information is considered part of the effects, because although the transac
 the shared object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
 
 type UnchangedSharedObjectConnection {
 	"""

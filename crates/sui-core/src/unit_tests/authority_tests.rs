@@ -4359,7 +4359,6 @@ async fn execute_programmable_transaction_(
     gas_unit: u64,
 ) -> SuiResult<TransactionEffects> {
     let rgp = authority.reference_gas_price_for_testing().unwrap();
-    println!("ZZZZZ rgp: {:?}", rgp);
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let data =
