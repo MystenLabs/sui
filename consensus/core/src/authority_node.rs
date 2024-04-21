@@ -346,7 +346,7 @@ mod tests {
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
     use tokio::{
-        sync::{broadcast, mpsc::unbounded_channel},
+        sync::{broadcast, mpsc},
         time::sleep,
     };
 
@@ -463,7 +463,7 @@ mod tests {
         let protocol_keypair = keypairs[own_index].1.clone();
         let network_keypair = keypairs[own_index].0.clone();
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = mpsc::channel(100);
         let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
@@ -570,7 +570,7 @@ mod tests {
             let protocol_keypair = keypairs[index].1.clone();
             let network_keypair = keypairs[index].0.clone();
 
-            let (sender, receiver) = unbounded_channel();
+            let (sender, receiver) = mpsc::channel(100);
             let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
             async move {

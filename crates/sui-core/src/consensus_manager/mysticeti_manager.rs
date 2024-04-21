@@ -14,7 +14,7 @@ use sui_config::NodeConfig;
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
-use tokio::sync::{mpsc::unbounded_channel, Mutex};
+use tokio::sync::{mpsc, Mutex};
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
@@ -125,10 +125,14 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
-        // is the one we want to go with.
-        #[allow(clippy::disallowed_methods)]
-        let (commit_sender, commit_receiver) = unbounded_channel();
+        // Allow the channel to hold enough commits for commit sync output, until consensus handler
+        // cannot handle the throughput.
+        // TODO: this should be replaced by a metered channel.
+        let (commit_sender, commit_receiver) = mpsc::channel(
+            parameters.commit_sync_parallel_fetches
+                * parameters.commit_sync_batch_size as usize
+                * 2,
+        );
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let consumer = CommitConsumer::new(

@@ -582,10 +582,7 @@ mod test {
 
     use consensus_config::{local_committee_and_keys, AuthorityIndex, Parameters, Stake};
     use sui_protocol_config::ProtocolConfig;
-    use tokio::{
-        sync::mpsc::{unbounded_channel, UnboundedReceiver},
-        time::sleep,
-    };
+    use tokio::{sync::mpsc, time::sleep};
 
     use super::*;
     use crate::{
@@ -642,7 +639,7 @@ mod test {
             LeaderSwapTable::default(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = mpsc::channel(100);
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -757,7 +754,7 @@ mod test {
             LeaderSwapTable::default(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = mpsc::channel(100);
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -851,7 +848,7 @@ mod test {
             LeaderSwapTable::default(),
         ));
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = mpsc::channel(100);
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -958,7 +955,7 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = mpsc::channel(100);
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
@@ -1237,7 +1234,7 @@ mod test {
         Core,
         CoreSignalsReceivers,
         broadcast::Receiver<VerifiedBlock>,
-        UnboundedReceiver<CommittedSubDag>,
+        mpsc::Receiver<CommittedSubDag>,
         Arc<impl Store>,
     )> {
         let mut cores = Vec::new();
@@ -1269,7 +1266,7 @@ mod test {
             // Need at least one subscriber to the block broadcast channel.
             let block_receiver = signal_receivers.block_broadcast_receiver();
 
-            let (commit_sender, commit_receiver) = unbounded_channel();
+            let (commit_sender, commit_receiver) = mpsc::channel(100);
             let commit_observer = CommitObserver::new(
                 context.clone(),
                 CommitConsumer::new(commit_sender.clone(), 0, 0),

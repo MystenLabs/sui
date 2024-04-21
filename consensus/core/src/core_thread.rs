@@ -176,7 +176,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 #[cfg(test)]
 mod test {
     use parking_lot::RwLock;
-    use tokio::sync::mpsc::unbounded_channel;
+    use tokio::sync::mpsc;
 
     use super::*;
     use crate::{
@@ -208,7 +208,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let (sender, _receiver) = unbounded_channel();
+        let (sender, _receiver) = mpsc::channel(100);
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),

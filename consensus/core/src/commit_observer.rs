@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc;
 
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
@@ -21,9 +21,9 @@ use crate::{
 /// - Called by core when try_commit() returns newly committed leaders.
 /// - The newly committed leaders are sent to commit observer and then commit observer
 /// gets subdags for each leader via the commit interpreter (linearizer)
-/// - The committed subdags are sent as consensus output via an unbounded tokio channel.
-/// No back pressure mechanism is needed as backpressure is handled as input into
-/// consenus.
+/// - The committed subdags are sent as consensus output via a bounded tokio channel,
+/// as back pressure into consensus when execution cannot keep up, for example when
+/// consensus is catching up.
 /// - Commit metadata including index is persisted in store, before the CommittedSubDag
 /// is sent to the consumer.
 /// - When CommitObserver is initialized a last processed commit index can be used
@@ -32,8 +32,8 @@ pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
-    /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
-    sender: UnboundedSender<CommittedSubDag>,
+    /// An bounded channel to send committed sub-dags to the consumer of consensus output.
+    sender: mpsc::Sender<CommittedSubDag>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
 }
@@ -42,9 +42,6 @@ impl CommitObserver {
     pub(crate) fn new(
         context: Arc<Context>,
         commit_consumer: CommitConsumer,
-        // sender: UnboundedSender<CommittedSubDag>,
-        // last_processed_commit_round: Round,
-        // last_processed_commit_index: CommitIndex,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
@@ -67,8 +64,9 @@ impl CommitObserver {
         let mut sent_sub_dags = vec![];
 
         for committed_sub_dag in committed_sub_dags.into_iter() {
-            // Failures in sender.send() are assumed to be permanent
-            if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
+            // Failures in sender.blocking_send() are assumed to mean receiver shutting down permanently.
+            // Ok to use blocking send because receiver runs in another tokio task.
+            if let Err(err) = self.sender.blocking_send(committed_sub_dag.clone()) {
                 tracing::error!(
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
@@ -117,12 +115,14 @@ impl CommitObserver {
             assert_eq!(commit.index(), last_sent_commit_index + 1);
 
             let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
-            self.sender.send(committed_subdag).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to send commit during recovery, probably due to shutdown: {:?}",
-                    e
-                )
-            });
+            self.sender
+                .blocking_send(committed_subdag)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to send commit during recovery, probably due to shutdown: {:?}",
+                        e
+                    )
+                });
 
             last_sent_commit_index += 1;
         }
@@ -166,7 +166,7 @@ impl CommitObserver {
 #[cfg(test)]
 mod tests {
     use parking_lot::RwLock;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+    use tokio::sync::mpsc;
 
     use super::*;
     use crate::{
@@ -192,7 +192,7 @@ mod tests {
         let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = mpsc::channel(100);
 
         let mut observer = CommitObserver::new(
             context.clone(),
@@ -282,7 +282,7 @@ mod tests {
         let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = mpsc::channel(100);
 
         let mut observer = CommitObserver::new(
             context.clone(),
@@ -419,7 +419,7 @@ mod tests {
         let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
-        let (sender, mut receiver) = unbounded_channel();
+        let (sender, mut receiver) = mpsc::channel(100);
 
         let mut observer = CommitObserver::new(
             context.clone(),
@@ -491,7 +491,7 @@ mod tests {
     }
 
     /// After receiving all expected subdags, ensure channel is empty
-    fn verify_channel_empty(receiver: &mut UnboundedReceiver<CommittedSubDag>) {
+    fn verify_channel_empty(receiver: &mut mpsc::Receiver<CommittedSubDag>) {
         match receiver.try_recv() {
             Ok(_) => {
                 panic!("Expected the consensus output channel to be empty, but found more subdags.")

@@ -14,7 +14,7 @@ use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::Sender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
@@ -352,7 +352,7 @@ pub fn load_committed_subdag_from_store(
 
 pub struct CommitConsumer {
     // A channel to send the committed sub dags through
-    pub sender: UnboundedSender<CommittedSubDag>,
+    pub sender: Sender<CommittedSubDag>,
     // Leader round of the last commit that the consumer has processed.
     pub last_processed_commit_round: Round,
     // Index of the last commit that the consumer has processed. This is useful for
@@ -364,7 +364,7 @@ pub struct CommitConsumer {
 
 impl CommitConsumer {
     pub fn new(
-        sender: UnboundedSender<CommittedSubDag>,
+        sender: Sender<CommittedSubDag>,
         last_processed_commit_round: Round,
         last_processed_commit_index: CommitIndex,
     ) -> Self {
