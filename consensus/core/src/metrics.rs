@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use prometheus::{
-    register_histogram_vec_with_registry, register_histogram_with_registry,
+    exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
@@ -77,7 +77,7 @@ pub(crate) struct NodeMetrics {
     pub block_commit_latency: Histogram,
     pub block_proposed: IntCounterVec,
     pub block_size: Histogram,
-    pub block_ancestors_count: IntCounter,
+    pub block_ancestors: Histogram,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
@@ -144,10 +144,11 @@ impl NodeMetrics {
                 SIZE_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            block_ancestors_count: register_int_counter_with_registry!(
-                "block_ancestors_count",
-                "Total number of ancestors in proposed blocks",
-                registry
+            block_ancestors: register_histogram_with_registry!(
+                "block_ancestors",
+                "Number of ancestors in proposed blocks",
+                exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
             ).unwrap(),
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
                 "block_timestamp_drift_wait_ms",

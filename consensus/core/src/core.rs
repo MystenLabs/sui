@@ -274,8 +274,8 @@ impl Core {
         self.context
             .metrics
             .node_metrics
-            .block_ancestors_count
-            .inc_by(ancestors.len() as u64);
+            .block_ancestors
+            .observe(ancestors.len() as f64);
 
         // Ensure ancestor timestamps are not more advanced than the current time.
         // Also catch the issue if system's clock go backwards.
