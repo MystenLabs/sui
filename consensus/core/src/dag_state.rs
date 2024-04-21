@@ -10,7 +10,7 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     block::{
@@ -171,6 +171,10 @@ impl DagState {
 
     /// Accepts a blocks into DagState and keeps it in memory.
     pub(crate) fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) {
+        debug!(
+            "Accepting blocks: {:?}",
+            blocks.iter().map(|b| b.reference()).collect::<Vec<_>>()
+        );
         for block in blocks {
             self.accept_block(block);
         }
@@ -599,6 +603,13 @@ impl DagState {
         if blocks.is_empty() && commits.is_empty() {
             return;
         }
+        debug!(
+            "Flushing {} blocks ({:?}) and {} commits ({:?}) to storage.",
+            blocks.len(),
+            blocks.iter().map(|b| b.reference()).collect::<Vec<_>>(),
+            commits.len(),
+            commits.iter().map(|c| c.reference()).collect::<Vec<_>>(),
+        );
         self.store
             .write(WriteBatch::new(
                 blocks,
