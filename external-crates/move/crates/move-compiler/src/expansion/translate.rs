@@ -11,7 +11,7 @@ use crate::{
             AliasEntry, AliasMapBuilder, ParserExplicitUseFun, UnnecessaryAlias, UseFunsBuilder,
         },
         aliases::AliasSet,
-        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
+        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, TargetKind},
         byte_string, hex_string,
         path_expander::{
             access_result, Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander,
@@ -895,12 +895,19 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
+    let target_kind = if !context.is_source_definition {
+        TargetKind::DependencyBeingLinked
+    } else if context.env().package_config(package_name).is_dependency {
+        TargetKind::DependencyBeingCompiled
+    } else {
+        TargetKind::Source
+    };
     let def = E::ModuleDefinition {
         package_name,
         attributes,
         loc,
         use_funs,
-        is_source_module: context.is_source_definition,
+        target_kind,
         friends,
         structs,
         enums,

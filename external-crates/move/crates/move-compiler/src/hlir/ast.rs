@@ -6,6 +6,7 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
+        TargetKind,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
@@ -39,7 +40,7 @@ pub struct ModuleDefinition {
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     /// `dependency_order` is the topological order/rank in the dependency graph.
     pub dependency_order: usize,
     pub friends: UniqueMap<ModuleIdent, Friend>,
@@ -900,7 +901,7 @@ impl AstDebug for ModuleDefinition {
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             friends,
             structs,
@@ -913,11 +914,11 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        if *is_source_module {
-            w.writeln("library module")
-        } else {
-            w.writeln("source module")
-        }
+        w.writeln(match target_kind {
+            TargetKind::Source => "source module",
+            TargetKind::DependencyBeingCompiled => "dependency module",
+            TargetKind::DependencyBeingLinked => "linked module",
+        });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));

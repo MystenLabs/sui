@@ -7,7 +7,7 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use crate::{
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, TargetKind, Visibility},
     naming::ast::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
         StructDefinition, SyntaxMethods, Type,
@@ -38,6 +38,7 @@ pub struct ConstantInfo {
 
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
+    pub target_kind: TargetKind,
     pub attributes: Attributes,
     pub package: Option<Symbol>,
     pub use_funs: ResolvedUseFuns,
@@ -86,6 +87,7 @@ macro_rules! program_info {
                 .map(|module_use_funs| module_use_funs.remove(&mident).unwrap())
                 .unwrap_or_default();
             let minfo = ModuleInfo {
+                target_kind: mdef.target_kind,
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
                 use_funs,

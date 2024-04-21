@@ -6,7 +6,7 @@ use crate::{
     debug_display,
     diagnostics::WarningFilters,
     expansion::ast::{
-        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
     },
     ice,
     naming::ast::{
@@ -54,7 +54,7 @@ pub struct ModuleDefinition {
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     /// `dependency_order` is the topological order/rank in the dependency graph.
     /// `dependency_order` is initialized at `0` and set in the uses pass
     pub dependency_order: usize,
@@ -418,7 +418,7 @@ impl AstDebug for ModuleDefinition {
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             immediate_neighbors,
             used_addresses,
@@ -435,11 +435,11 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        if *is_source_module {
-            w.writeln("library module")
-        } else {
-            w.writeln("source module")
-        }
+        w.writeln(match target_kind {
+            TargetKind::Source => "source module",
+            TargetKind::DependencyBeingCompiled => "dependency module",
+            TargetKind::DependencyBeingLinked => "linked module",
+        });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
             w.write(&format!("{mident} is"));

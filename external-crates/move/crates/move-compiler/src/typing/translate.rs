@@ -8,7 +8,7 @@ use crate::{
     editions::{FeatureGate, Flavor},
     expansion::ast::{
         AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
+        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, TargetKind, Value_, Visibility,
     },
     ice,
     naming::ast::{
@@ -190,7 +190,7 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         syntax_methods,
         use_funs,
         friends,
@@ -219,7 +219,7 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         dependency_order: 0,
         immediate_neighbors: UniqueMap::new(),
         used_addresses: BTreeSet::new(),
@@ -4334,7 +4334,7 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.
 fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
-    if !mdef.is_source_module {
+    if !matches!(mdef.target_kind, TargetKind::Source) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass
