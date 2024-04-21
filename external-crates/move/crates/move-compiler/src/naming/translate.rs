@@ -1409,7 +1409,7 @@ fn function(
         warning_filter,
         index,
         attributes,
-        loc: _,
+        loc: full_loc,
         visibility,
         macro_,
         entry,
@@ -1447,6 +1447,7 @@ fn function(
     }
 
     let mut f = N::Function {
+        loc: full_loc,
         warning_filter,
         index,
         attributes,

@@ -199,7 +199,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             .get_module_by_id(module_id)
             .map_err(|e| anyhow::format_err!("{:?}", e))?
             .expect("Failed to resolve module");
-        let def = declaring_module
+        let (_, def) = declaring_module
             .borrow()
             .find_struct_def_by_name(name.as_str())
             .unwrap_or_else(|| {
@@ -481,7 +481,7 @@ impl StructLayoutBuilder {
             Err(_) | Ok(None) => bail!("Could not find module"),
             Ok(Some(m)) => m,
         };
-        let def = module
+        let (_, def) = module
             .borrow()
             .find_struct_def_by_name(name.as_str())
             .ok_or_else(|| {

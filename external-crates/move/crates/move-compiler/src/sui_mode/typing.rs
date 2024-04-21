@@ -266,6 +266,7 @@ fn enum_def(context: &mut Context, name: DatatypeName, edef: &N::EnumDefinition)
 
 fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
+        loc: _,
         compiled_visibility: _,
         visibility,
         signature,

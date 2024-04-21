@@ -84,6 +84,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function {
+    pub loc: Loc,
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -480,6 +481,7 @@ impl AstDebug for (FunctionName, &Function) {
         let (
             name,
             Function {
+                loc: _,
                 warning_filter,
                 index,
                 attributes,

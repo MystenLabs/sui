@@ -132,14 +132,14 @@ pub struct LineColLocation {
 
 /// A file, and the line:column start, and line:column end that corresponds to a `Loc`
 pub struct FileByteSpan {
-    file_id: FileId,
-    byte_span: ByteSpan,
+    pub file_id: FileId,
+    pub byte_span: ByteSpan,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ByteSpan {
-    start: usize,
-    end: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 impl MappedFiles {
@@ -170,6 +170,16 @@ impl MappedFiles {
     pub fn add(&mut self, fhash: FileHash, fname: FileName, source: Arc<str>) {
         let id = self.files.add(fname, source);
         self.file_mapping.insert(fhash, id);
+    }
+
+    pub fn name(&self, fhash: &FileHash) -> Option<Symbol> {
+        let id = self.file_mapping.get(fhash)?;
+        self.files.get(*id).ok().map(|f| f.name()).copied()
+    }
+
+    pub fn source(&self, fhash: &FileHash) -> Option<Arc<str>> {
+        let id = self.file_mapping.get(fhash)?;
+        self.files.get(*id).ok().map(|f| f.source()).cloned()
     }
 
     #[allow(dead_code)]

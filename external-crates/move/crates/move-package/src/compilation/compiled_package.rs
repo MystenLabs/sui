@@ -29,18 +29,21 @@ use move_compiler::{
     diagnostics::FilesSourceText,
     editions::Flavor,
     linters,
-    shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
-    sui_mode::{self},
-    Compiler,
+    shared::{
+        program_info::TypingProgramInfo, NamedAddressMap, NumericalAddress, PackageConfig,
+        PackagePaths,
+    },
+    sui_mode, Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
-use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
+use move_model_2::model::*;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use vfs::VfsPath;
 
@@ -539,6 +542,8 @@ impl CompiledPackage {
         resolution_graph: &ResolvedGraph,
         compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
+        let saved_program_info: Rc<RefCell<Arc<TypingProgramInfo>>> =
+            Rc::new(RefCell::new(Option::none()));
         let BuildResult {
             root_package_name,
             sources_package_paths,
@@ -551,9 +556,13 @@ impl CompiledPackage {
             resolved_package.clone(),
             transitive_dependencies,
             resolution_graph,
-            compiler_driver,
+            |compiler| {
+                let compiler = compiler.add_program_info_save(saved_program_info.clone());
+                compiler_driver(compiler)
+            },
         )?;
-        let (file_map, all_compiled_units) = result;
+        let program_info = saved_program_info.borrow().take().unwrap();
+        let (file_map, program_info, all_compiled_units) = result;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
@@ -572,12 +581,7 @@ impl CompiledPackage {
 
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
-            let model = run_model_builder_with_options(
-                vec![sources_package_paths],
-                deps_package_paths.into_iter().map(|(p, _)| p).collect_vec(),
-                ModelBuilderOptions::default(),
-                None,
-            )?;
+            let model = Model::new(file_map, program_info, all_compiled_units)?;
 
             if resolution_graph.build_options.generate_docs {
                 compiled_docs = Some(Self::build_docs(
@@ -711,7 +715,7 @@ impl CompiledPackage {
 
     fn build_docs(
         package_name: PackageName,
-        model: &GlobalEnv,
+        model: &Model,
         package_root: &Path,
         deps: &[PackageName],
         install_dir: &Option<PathBuf>,
@@ -758,8 +762,8 @@ impl CompiledPackage {
             references_file,
             ..DocgenOptions::default()
         };
-        let docgen = Docgen::new(model, &doc_options);
-        docgen.gen()
+        let docgen = Docgen::new(model, package_name, &doc_options);
+        docgen.gen(model)
     }
 }
 

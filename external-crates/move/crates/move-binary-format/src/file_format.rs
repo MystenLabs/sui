@@ -2031,12 +2031,22 @@ impl CompiledModule {
         result
     }
 
-    pub fn find_function_def_by_name(&self, name: impl AsRef<str>) -> Option<&FunctionDefinition> {
+    pub fn find_function_def_by_name(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Option<(FunctionDefinitionIndex, &FunctionDefinition)> {
         let name: &str = name.as_ref();
-        self.function_defs().iter().find(|def| {
-            let handle = self.function_handle_at(def.function);
-            name == self.identifier_at(handle.name).as_str()
-        })
+        self.function_defs()
+            .iter()
+            .enumerate()
+            .find_map(|(idx, def)| {
+                let handle = self.function_handle_at(def.function);
+                if name == self.identifier_at(handle.name).as_str() {
+                    Some((FunctionDefinitionIndex::new(idx as TableIndex), def))
+                } else {
+                    None
+                }
+            })
     }
 
     pub fn module_handles(&self) -> &[ModuleHandle] {
@@ -2119,12 +2129,22 @@ impl CompiledModule {
         self.struct_defs().iter().find(|d| d.struct_handle == idx)
     }
 
-    pub fn find_struct_def_by_name(&self, name: impl AsRef<str>) -> Option<&StructDefinition> {
+    pub fn find_struct_def_by_name(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Option<(StructDefinitionIndex, &StructDefinition)> {
         let name: &str = name.as_ref();
-        self.struct_defs().iter().find(|def| {
-            let handle = self.struct_handle_at(def.struct_handle);
-            name == self.identifier_at(handle.name).as_str()
-        })
+        self.struct_defs()
+            .iter()
+            .enumerate()
+            .find_map(|(idx, def)| {
+                let handle = self.struct_handle_at(def.struct_handle);
+                if name == self.identifier_at(handle.name).as_str() {
+                    Some((StructDefinitionIndex::new(idx as TableIndex), def))
+                } else {
+                    None
+                }
+            })
     }
 
     // Return the `AbilitySet` of a `SignatureToken` given a context.

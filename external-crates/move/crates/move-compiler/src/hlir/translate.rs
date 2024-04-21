@@ -642,6 +642,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     assert!(context.has_empty_locals());
     assert!(context.tmp_counter == 0);
     let T::Function {
+        loc: _,
         warning_filter,
         index,
         attributes,

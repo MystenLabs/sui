@@ -35,6 +35,7 @@ move-symbol-pool.workspace = true
 move-command-line-common.workspace = true
 move-model.workspace = true
 move-bytecode-utils.workspace = true
+move-model-2.workspace = true
 
 whoami.workspace = true
 

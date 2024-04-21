@@ -242,6 +242,7 @@ fn module(
 
 fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
+        loc: full_loc,
         warning_filter,
         index,
         attributes,
@@ -273,6 +274,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     context.in_macro_function = false;
     context.env.pop_warning_filter_scope();
     T::Function {
+        loc: full_loc,
         warning_filter,
         index,
         attributes,

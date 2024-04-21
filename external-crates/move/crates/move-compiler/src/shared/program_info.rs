@@ -23,6 +23,7 @@ use crate::{
 pub struct FunctionInfo {
     pub attributes: Attributes,
     pub defined_loc: Loc,
+    pub full_loc: Loc,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub macro_: Option<Loc>,
@@ -38,6 +39,7 @@ pub struct ConstantInfo {
 
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
+    pub defined_loc: Loc,
     pub target_kind: TargetKind,
     pub attributes: Attributes,
     pub package: Option<Symbol>,
@@ -72,6 +74,7 @@ macro_rules! program_info {
             let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
                 attributes: fdef.attributes.clone(),
                 defined_loc: fname.loc(),
+                full_loc: fdef.loc,
                 visibility: fdef.visibility.clone(),
                 entry: fdef.entry,
                 macro_: fdef.macro_,
@@ -87,6 +90,7 @@ macro_rules! program_info {
                 .map(|module_use_funs| module_use_funs.remove(&mident).unwrap())
                 .unwrap_or_default();
             let minfo = ModuleInfo {
+                defined_loc: mdef.loc,
                 target_kind: mdef.target_kind,
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
