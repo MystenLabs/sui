@@ -284,7 +284,7 @@ pub struct EvmContractUpgradeAction {
     pub chain_id: BridgeChainId,
     pub proxy_address: EthAddress,
     pub new_impl_address: EthAddress,
-    pub call_data: Vec<u8>,
+    pub call_data: Vec<u8>, // TODO: update this to string for human readability and convert to call_data Vec<u8> when executing
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]

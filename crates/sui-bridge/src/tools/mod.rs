@@ -4,7 +4,7 @@ use crate::config::read_bridge_client_key;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
-    EmergencyActionType, LimitUpdateAction,
+    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
 };
 use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
@@ -98,6 +98,17 @@ pub enum GovernanceClientCommands {
         #[clap(name = "new-usd-price", long)]
         new_usd_price: u64,
     },
+    #[clap(name = "upgrade-evm-contract")]
+    UpgradeEVMContract {
+        #[clap(name = "nonce", long)]
+        nonce: u64,
+        #[clap(name = "proxy-address", long)]
+        proxy_address: EthAddress,
+        #[clap(name = "implementation-address", long)]
+        implementation_address: EthAddress,
+        #[clap(name = "call-data", long)]
+        call_data: String,
+    },
 }
 
 pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> BridgeAction {
@@ -143,6 +154,18 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             token_id: *token_id,
             new_usd_price: *new_usd_price,
         }),
+        GovernanceClientCommands::UpgradeEVMContract {
+            nonce,
+            proxy_address,
+            implementation_address,
+            call_data,
+        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: *nonce,
+            chain_id,
+            proxy_address: *proxy_address,
+            new_impl_address: *implementation_address,
+            call_data: call_data.clone().into(),
+        }),
     }
 }
 
@@ -158,10 +181,12 @@ pub fn select_contract_address(
         GovernanceClientCommands::UpdateLimit { .. } => config.eth_bridge_limiter_proxy_address,
         GovernanceClientCommands::UpdateAssetPrice { .. } => {
             config.eth_bridge_limiter_proxy_address
-        } // TODO: evm upgrade
+        }
+        GovernanceClientCommands::UpgradeEVMContract { proxy_address, .. } => *proxy_address,
     }
 }
 
+// TODO: eth_bridge_committee and eth_bridge_limiter can be referenced from the sui_bridge contract
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
