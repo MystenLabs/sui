@@ -99,6 +99,18 @@ pub type Attributes = UniqueMap<Spanned<KnownAttribute>, Attribute>;
 // Modules
 //**************************************************************************************************
 
+#[derive(Debug, Clone, Copy)]
+/// Specifies a source target or dependency
+pub enum TargetKind {
+    /// A source module
+    Source,
+    /// A dependency where bytecode is being generated
+    DependencyBeingCompiled,
+    /// A dependency only used for linking.
+    /// No bytecode or CompiledModules are generated
+    DependencyBeingLinked,
+}
+
 #[derive(Clone, Copy)]
 pub enum Address {
     Numerical {
@@ -123,7 +135,7 @@ pub struct ModuleDefinition {
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     pub use_funs: UseFuns,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<DatatypeName, StructDefinition>,
@@ -1106,7 +1118,7 @@ impl AstDebug for ModuleDefinition {
             package_name,
             attributes,
             loc: _loc,
-            is_source_module,
+            target_kind,
             use_funs,
             friends,
             structs,
@@ -1120,10 +1132,10 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(if *is_source_module {
-            "source module"
-        } else {
-            "library module"
+        w.writeln(match target_kind {
+            TargetKind::Source => "source module",
+            TargetKind::DependencyBeingCompiled => "dependency module",
+            TargetKind::DependencyBeingLinked => "linked module",
         });
         use_funs.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
