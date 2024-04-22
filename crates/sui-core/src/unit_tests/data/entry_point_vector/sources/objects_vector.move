@@ -7,27 +7,27 @@ module entry_point_vector::entry_point_vector {
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID,
         value: u64
     }
 
-    struct AnotherObj has key {
+    public struct AnotherObj has key {
         id: UID,
         value: u64
     }
 
-    struct ObjAny<phantom Any> has key, store {
+    public struct ObjAny<phantom Any> has key, store {
         id: UID,
         value: u64
     }
 
-    struct AnotherObjAny<phantom Any> has key {
+    public struct AnotherObjAny<phantom Any> has key {
         id: UID,
         value: u64
     }
 
-    struct Any {}
+    public struct Any {}
 
     public entry fun mint(v: u64, ctx: &mut TxContext) {
         transfer::public_transfer(
@@ -77,7 +77,7 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun obj_vec_destroy(v: vector<Obj>, _: &mut TxContext) {
+    public entry fun obj_vec_destroy(mut v: vector<Obj>, _: &mut TxContext) {
         assert!(vector::length(&v) == 1, 0);
         let Obj {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -85,7 +85,7 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun two_obj_vec_destroy(v: vector<Obj>, _: &mut TxContext) {
+    public entry fun two_obj_vec_destroy(mut v: vector<Obj>, _: &mut TxContext) {
         assert!(vector::length(&v) == 2, 0);
         let Obj {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -96,7 +96,7 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects(o: Obj, v: vector<Obj>, _: &mut TxContext) {
+    public entry fun same_objects(o: Obj, mut v: vector<Obj>, _: &mut TxContext) {
         let Obj {id, value} = o;
         assert!(value == 42, 0);
         object::delete(id);
@@ -106,14 +106,14 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_ref(o: &Obj, v: vector<Obj>, _: &mut TxContext) {
+    public entry fun same_objects_ref(o: &Obj, mut v: vector<Obj>, _: &mut TxContext) {
         assert!(o.value == 42, 0);
         let Obj {id, value: _} = vector::pop_back(&mut v);
         object::delete(id);
         vector::destroy_empty(v);
     }
 
-    public entry fun child_access(child: Obj, v: vector<Obj>, _: &mut TxContext) {
+    public entry fun child_access(child: Obj, mut v: vector<Obj>, _: &mut TxContext) {
         let Obj {id, value} = child;
         assert!(value == 42, 0);
         object::delete(id);
@@ -163,7 +163,7 @@ module entry_point_vector::entry_point_vector {
         )
     }
 
-    public entry fun obj_vec_destroy_any<Any>(v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun obj_vec_destroy_any<Any>(mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(vector::length(&v) == 1, 0);
         let ObjAny<Any> {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -171,7 +171,7 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun two_obj_vec_destroy_any<Any>(v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun two_obj_vec_destroy_any<Any>(mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(vector::length(&v) == 2, 0);
         let ObjAny<Any> {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -182,7 +182,7 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_any<Any>(o: ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun same_objects_any<Any>(o: ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         let ObjAny<Any> {id, value} = o;
         assert!(value == 42, 0);
         object::delete(id);
@@ -192,14 +192,14 @@ module entry_point_vector::entry_point_vector {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_ref_any<Any>(o: &ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun same_objects_ref_any<Any>(o: &ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(o.value == 42, 0);
         let ObjAny<Any> {id, value: _} = vector::pop_back(&mut v);
         object::delete(id);
         vector::destroy_empty(v);
     }
 
-    public entry fun child_access_any<Any>(child: ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun child_access_any<Any>(child: ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         let ObjAny<Any> {id, value} = child;
         assert!(value == 42, 0);
         object::delete(id);

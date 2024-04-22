@@ -19,7 +19,6 @@ use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use getrandom::getrandom;
 use module_generation::generate_module;
 use move_binary_format::{
-    access::ModuleAccess,
     errors::VMError,
     file_format::{
         AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken, StructHandleIndex,
@@ -54,6 +53,7 @@ fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
 static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
     let mut storage = InMemoryStorage::new();
     let (_, compiled_units) = Compiler::from_files(
+        None,
         move_stdlib::move_stdlib_files(),
         vec![],
         move_stdlib::move_stdlib_named_addresses(),
@@ -132,9 +132,9 @@ fn execute_function_in_module(
         module.identifier_at(entry_name_idx)
     };
     {
-        let vm = MoveVM::new(move_stdlib::natives::all_natives(
+        let vm = MoveVM::new(move_stdlib_natives::all_natives(
             AccountAddress::from_hex_literal("0x1").unwrap(),
-            move_stdlib::natives::GasParameters::zeros(),
+            move_stdlib_natives::GasParameters::zeros(),
         ))
         .unwrap();
 
@@ -403,7 +403,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
                 *idx,
                 type_params.iter().map(|ty| substitute(ty, tys)).collect(),
             )))
-        },
+        }
         Reference(ty) => Reference(Box::new(substitute(ty, tys))),
         MutableReference(ty) => MutableReference(Box::new(substitute(ty, tys))),
         TypeParameter(idx) => {
@@ -416,7 +416,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
 }
 
 pub fn abilities(
-    module: &impl ModuleAccess,
+    module: &CompiledModule,
     ty: &SignatureToken,
     constraints: &[AbilitySet],
 ) -> AbilitySet {
@@ -491,7 +491,7 @@ pub(crate) fn get_type_actuals_from_reference(
             StructInstantiation(struct_inst) => {
                 let (_, tys) = &**struct_inst;
                 Some(tys.clone())
-            },
+            }
             Struct(_) => Some(vec![]),
             _ => None,
         },

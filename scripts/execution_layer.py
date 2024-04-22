@@ -151,7 +151,6 @@ def do_cut(args):
         print("Cut failed", file=stderr)
         exit(result.returncode)
 
-    clean_up_cut(args.feature)
     update_toml(args.feature, Path() / "sui-execution" / "Cargo.toml")
     generate_impls(args.feature, impl_module)
 
@@ -239,7 +238,6 @@ def do_rebase(args):
     if result.returncode != 0:
         print("Re-generation failed.", file=stderr)
         exit(result.returncode)
-    clean_up_cut(args.feature)
 
     print("Re-applying changes...", file=stderr)
     subprocess.run(
@@ -361,8 +359,9 @@ def cut_command(f):
         *["-p", "sui-move-natives-latest"],
         *["-p", "sui-verifier-latest"],
         *["-p", "move-bytecode-verifier"],
-        *["-p", "move-stdlib"],
+        *["-p", "move-stdlib-natives"],
         *["-p", "move-vm-runtime"],
+        *["-p", "bytecode-verifier-tests"],
     ]
 
 
@@ -381,16 +380,18 @@ def cut_directories(f):
         crates.extend(
             [
                 external / "move" / "crates" / "move-bytecode-verifier",
-                external / "move" / "crates" / "move-stdlib",
+                external / "move" / "crates" / "move-stdlib-natives",
                 external / "move" / "crates" / "move-vm-runtime",
+                external / "move" / "crates" / "bytecode-verifier-tests",
             ]
         )
     else:
         crates.extend(
             [
                 external / "move" / "move-execution" / f / "crates" / "move-bytecode-verifier",
-                external / "move" / "move-execution" / f / "crates" / "move-stdlib",
+                external / "move" / "move-execution" / f / "crates" / "move-stdlib-natives",
                 external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",
+                external / "move" / "move-execution" / f / "crates" / "bytecode-verifier-tests",
             ]
         )
 
@@ -400,13 +401,6 @@ def cut_directories(f):
 def impl(feature):
     """Path to the impl module for this feature"""
     return Path() / "sui-execution" / "src" / (feature.replace("-", "_") + ".rs")
-
-
-def clean_up_cut(feature):
-    """Remove some special-case files/directories from a given cut"""
-    move_exec = Path() / "external-crates" / "move" / "move-execution" / feature / "crates"
-    remove(move_exec / "move-stdlib" / "src" / "main.rs")
-    rmtree(move_exec / "move-stdlib" / "tests")
 
 
 def delete_cut_crates(feature):
@@ -495,7 +489,7 @@ def generate_lib(output_file: TextIO):
                 for (version, feature, cut) in cuts
             )
         elif var == "VERIFIER_CUTS":
-            call = "Verifier::new(protocol_config, is_metered, metrics)"
+            call = "Verifier::new(config, metrics)"
             return "\n".join(
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
                 for (version, feature, cut) in cuts

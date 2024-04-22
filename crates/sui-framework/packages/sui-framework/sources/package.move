@@ -9,6 +9,51 @@ module sui::package {
     use std::type_name;
     use sui::types;
 
+    /// Allows calling `.burn` to destroy a `Publisher`.
+    public use fun burn_publisher as Publisher.burn;
+
+    /// Allows calling `.module_` to access the name of the module a
+    /// `Publisher` was derived from.
+    public use fun published_module as Publisher.module_;
+
+    /// Allows calling `.package` to access the address of the package
+    /// a `Publisher` was derived from.
+    public use fun published_package as Publisher.package;
+
+    /// Allows calling `.package` to access the package this cap
+    /// authorizes upgrades for.
+    public use fun upgrade_package as UpgradeCap.package;
+
+    /// Allows calling `.policy` to access the most permissive kind of
+    /// upgrade this cap will authorize.
+    public use fun upgrade_policy as UpgradeCap.policy;
+
+    /// Allows calling `.authorize` to initiate an upgrade.
+    public use fun authorize_upgrade as UpgradeCap.authorize;
+
+    /// Allows calling `.commit` to finalize an upgrade.
+    public use fun commit_upgrade as UpgradeCap.commit;
+
+    /// Allows calling `.package` to access the package this ticket
+    /// authorizes an upgrade for.
+    public use fun ticket_package as UpgradeTicket.package;
+
+    /// Allows calling `.policy` to access the kind of upgrade this
+    /// ticket authorizes.
+    public use fun ticket_policy as UpgradeTicket.policy;
+
+    /// Allows calling `.digest` to access the digest of the bytecode
+    /// used for this upgrade.
+    public use fun ticket_digest as UpgradeTicket.digest;
+
+    /// Allows calling `.cap` to fetch the ID of the cap this receipt
+    /// should be applied to.
+    public use fun receipt_cap as UpgradeReceipt.cap;
+
+    /// Allows calling `.package` to fetch the ID of the package after
+    /// upgrade.
+    public use fun receipt_package as UpgradeReceipt.package;
+
     /// Tried to create a `Publisher` using a type that isn't a
     /// one-time witness.
     const ENotOneTimeWitness: u64 = 0;

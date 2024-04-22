@@ -117,11 +117,11 @@ impl Store for RocksDBStore {
                     [((block_ref.author, block_ref.round, block_ref.digest), ())],
                 )
                 .map_err(ConsensusError::RocksDBFailure)?;
-            for commit in block.commit_votes() {
+            for vote in block.commit_votes() {
                 batch
                     .insert_batch(
                         &self.commit_votes,
-                        [((commit.index, commit.digest, block_ref), ())],
+                        [((vote.index, vote.digest, block_ref), ())],
                     )
                     .map_err(ConsensusError::RocksDBFailure)?;
             }
@@ -278,6 +278,18 @@ impl Store for RocksDBStore {
             commits.push(commit);
         }
         Ok(commits)
+    }
+
+    fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>> {
+        let mut votes = Vec::new();
+        for vote in self.commit_votes.safe_range_iter((
+            Included((commit_index, CommitDigest::MIN, BlockRef::MIN)),
+            Included((commit_index, CommitDigest::MAX, BlockRef::MAX)),
+        )) {
+            let ((_, _, block_ref), _) = vote?;
+            votes.push(block_ref);
+        }
+        Ok(votes)
     }
 
     fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {

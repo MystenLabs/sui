@@ -7,7 +7,6 @@ pub use checked::*;
 mod checked {
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
-        access::ModuleAccess,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
@@ -59,7 +58,6 @@ mod checked {
         execution_status::{CommandArgumentError, PackageUpgradeError},
     };
     use sui_verifier::{
-        default_verifier_config,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
@@ -837,7 +835,9 @@ mod checked {
             sui_verifier::verifier::sui_verify_module_unmetered(
                 module,
                 &BTreeMap::new(),
-                &default_verifier_config(context.protocol_config, false),
+                &context
+                    .protocol_config
+                    .verifier_config(/* for_signing */ false),
             )?;
         }
 

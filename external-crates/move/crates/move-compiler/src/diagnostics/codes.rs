@@ -186,6 +186,7 @@ codes!(
         AmbiguousCast: { msg: "ambiguous 'as'", severity: NonblockingError },
         InvalidName: { msg: "invalid name", severity: BlockingError },
         InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
+        InvalidMatch: { msg: "invalid 'match'", severity: BlockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -215,6 +216,7 @@ codes!(
         InvalidSyntaxMethod: { msg: "invalid 'syntax' method type", severity: NonblockingError },
         MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
         DuplicateAlias: { msg: "duplicate alias", severity: Warning },
+        InvalidEnum: { msg: "invalid 'enum' declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
@@ -236,6 +238,9 @@ codes!(
         InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
         InvalidMacroParameter: { msg: "invalid macro parameter", severity: NonblockingError },
         InvalidTypeParameter: { msg: "invalid type parameter", severity: NonblockingError },
+        InvalidPattern: { msg: "invalid pattern", severity: BlockingError },
+        UnboundVariant: { msg: "unbound variant", severity: BlockingError },
+        InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -281,6 +286,7 @@ codes!(
         InvariantError: { msg: "types are not equal", severity: BlockingError },
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
+        IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -353,6 +359,10 @@ codes!(
             msg: "feature is deprecated in specified edition",
             severity: NonblockingError,
         },
+        FeatureInDevelopment: {
+            msg: "feature is under active development",
+            severity: BlockingError,
+        }
     ],
     Migration: [
         NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },

@@ -10,7 +10,16 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0
 task 2 'view-object'. lines 11-11:
 Owner: Account Address ( A )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,2)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999998012000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,2),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299999998012000u64,
+    },
+}
 
 task 3 'transfer-object'. lines 13-13:
 mutated: object(0,0), object(0,2)
@@ -19,4 +28,13 @@ gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 
 task 4 'view-object'. lines 15-15:
 Owner: Account Address ( B )
 Version: 3
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,2)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999998012000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,2),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299999998012000u64,
+    },
+}

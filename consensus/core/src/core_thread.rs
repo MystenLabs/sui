@@ -17,7 +17,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
 };
 
-const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
+const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
@@ -186,6 +186,7 @@ mod test {
         context::Context,
         core::CoreSignals,
         dag_state::DagState,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         CommitConsumer,
@@ -214,8 +215,13 @@ mod test {
             dag_state.clone(),
             store,
         );
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
         let core = Core::new(
             context.clone(),
+            leader_schedule,
             transaction_consumer,
             block_manager,
             commit_observer,

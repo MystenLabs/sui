@@ -3,7 +3,7 @@
 
 #[allow(unused_field)]
 module s::m {
-    struct T0 {
+    public struct T0 {
         x: u64
     }
 }

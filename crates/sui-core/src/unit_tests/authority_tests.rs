@@ -5,7 +5,6 @@
 use bcs;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -1218,7 +1217,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         ];
 
     assert!(client
-        .handle_transaction(bad_signature_transfer_transaction)
+        .handle_transaction(bad_signature_transfer_transaction, None)
         .await
         .is_err());
 

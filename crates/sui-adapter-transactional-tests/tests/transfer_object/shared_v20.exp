@@ -16,7 +16,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 task 3 'view-object'. lines 22-22:
 Owner: Shared
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'transfer-object'. lines 24-24:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
@@ -25,4 +31,10 @@ Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } 
 task 5 'view-object'. lines 26-26:
 Owner: Shared
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}

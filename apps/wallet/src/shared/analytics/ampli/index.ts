@@ -742,7 +742,7 @@ export class Ampli {
     this.disabled = options.disabled ?? false;
 
     if (this.amplitude) {
-      console.warn('WARNING: Ampli is already intialized. Ampli.load() should be called once at application startup.');
+      console.warn('WARNING: Ampli is already initialized. Ampli.load() should be called once at application startup.');
       return getVoidPromiseResult();
     }
 

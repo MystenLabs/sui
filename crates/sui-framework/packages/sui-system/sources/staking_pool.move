@@ -10,9 +10,6 @@ module sui_system::staking_pool {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::validator; */
-    /* friend sui_system::validator_set; */
-
     /// StakedSui objects cannot be split to below this amount.
     const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
 

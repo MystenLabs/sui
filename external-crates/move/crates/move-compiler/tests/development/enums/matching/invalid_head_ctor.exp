@@ -1,0 +1,12 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/development/enums/matching/invalid_head_ctor.move:8:16
+  │
+8 │         match (opt) {
+  │                ^^^ Pattern '_' not covered
+
+error[E01002]: unexpected token
+  ┌─ tests/development/enums/matching/invalid_head_ctor.move:9:13
+  │
+9 │             Some(_) => (),
+  │             ^^^^ Unexpected name access. Expected a valid 'enum' variant or 'struct' name.
+

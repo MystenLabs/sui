@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
+use move_binary_format::file_format::CompiledModule;
 use petgraph::graphmap::DiGraphMap;
 
 use anyhow::{bail, Result};

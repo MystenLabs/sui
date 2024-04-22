@@ -215,6 +215,7 @@ impl CheckpointExecutor {
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
                 fail_point_async!("crash");
+                debug!(epoch = epoch_store.epoch(), "finished epoch");
                 return StopReason::EpochComplete;
             }
 
@@ -355,12 +356,10 @@ impl CheckpointExecutor {
         // Commit all transaction effects to disk
         let cache_commit = self.state.get_cache_commit();
         debug!(seq = ?checkpoint.sequence_number, "committing checkpoint transactions to disk");
-        for digest in all_tx_digests {
-            cache_commit
-                .commit_transaction_outputs(epoch_store.epoch(), digest)
-                .await
-                .expect("commit_transaction_outputs cannot fail");
-        }
+        cache_commit
+            .commit_transaction_outputs(epoch_store.epoch(), all_tx_digests)
+            .await
+            .expect("commit_transaction_outputs cannot fail");
 
         if !checkpoint.is_last_checkpoint_of_epoch() {
             self.bump_highest_executed_checkpoint(checkpoint);
@@ -562,7 +561,7 @@ impl CheckpointExecutor {
 
                     let cache_commit = self.state.get_cache_commit();
                     cache_commit
-                        .commit_transaction_outputs(cur_epoch, &change_epoch_tx_digest)
+                        .commit_transaction_outputs(cur_epoch, &[change_epoch_tx_digest])
                         .await
                         .expect("commit_transaction_outputs cannot fail");
 
@@ -1179,7 +1178,7 @@ async fn execute_transactions(
     Ok(())
 }
 
-#[instrument(level = "debug", skip_all)]
+#[instrument(level = "info", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 async fn finalize_checkpoint(
     state: &AuthorityState,
     cache_reader: &dyn ExecutionCacheRead,
@@ -1191,6 +1190,7 @@ async fn finalize_checkpoint(
     effects: Vec<TransactionEffects>,
     data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
+    debug!("finalizing checkpoint");
     if epoch_store.per_epoch_finalized_txns_enabled() {
         epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
     }

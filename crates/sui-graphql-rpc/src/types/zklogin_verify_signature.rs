@@ -3,6 +3,7 @@
 
 use crate::config::ZkLoginConfig;
 use crate::error::Error;
+use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64;
 use crate::types::dynamic_field::{DynamicField, DynamicFieldName};
 use crate::types::epoch::Epoch;
@@ -50,8 +51,10 @@ pub(crate) async fn verify_zklogin_signature(
     intent_scope: ZkLoginIntentScope,
     author: SuiAddress,
 ) -> Result<ZkLoginVerifyResult, Error> {
+    let Watermark { checkpoint, .. } = *ctx.data_unchecked();
+
     // get current epoch from db.
-    let Some(curr_epoch) = Epoch::query(ctx, None, None).await? else {
+    let Some(curr_epoch) = Epoch::query(ctx, None, checkpoint).await? else {
         return Err(Error::Internal(
             "Cannot get current epoch from db".to_string(),
         ));
@@ -82,7 +85,7 @@ pub(crate) async fn verify_zklogin_signature(
             bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
         },
         DynamicFieldType::DynamicField,
-        None,
+        checkpoint,
     )
     .await
     .map_err(|e| as_jwks_read_error(e.to_string()))?;

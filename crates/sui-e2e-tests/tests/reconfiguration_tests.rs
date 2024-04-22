@@ -154,7 +154,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let cert = net
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), None)
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -180,7 +180,10 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client.handle_certificate_v2(cert.clone()).await.unwrap();
+    client
+        .handle_certificate_v2(cert.clone(), None)
+        .await
+        .unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {
@@ -345,23 +348,29 @@ async fn do_test_lock_table_upgrade() {
     };
 
     let t1 = transfer_sui(1);
-    test_cluster.create_certificate(t1.clone()).await.unwrap();
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap();
 
     // attempt to equivocate
     let t2 = transfer_sui(2);
     test_cluster
-        .create_certificate(t2.clone())
+        .create_certificate(t2.clone(), None)
         .await
         .unwrap_err();
 
     test_cluster.wait_for_epoch_all_nodes(1).await;
 
     // old locks can be overridden in new epoch
-    test_cluster.create_certificate(t2.clone()).await.unwrap();
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap();
 
     // attempt to equivocate
     test_cluster
-        .create_certificate(t1.clone())
+        .create_certificate(t1.clone(), None)
         .await
         .unwrap_err();
 }
@@ -488,7 +497,7 @@ async fn test_validator_resign_effects() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let effects1 = net
-        .process_transaction(tx)
+        .process_transaction(tx, None)
         .await
         .unwrap()
         .into_effects_for_testing();

@@ -1,0 +1,17 @@
+warning[W09003]: unused assignment
+   ┌─ tests/development/enums/matching/multi_or_not_exhaustive.move:11:13
+   │
+11 │         let subject = ABC::A(0);
+   │             ^^^^^^^ Unused assignment for variable 'subject'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_subject')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/development/enums/matching/multi_or_not_exhaustive.move:12:16
+   │
+12 │         match (subject) {
+   │                ^^^^^^^ Pattern 'ABC::B(_1, _0)' not covered
+   │
+   = When '_1' is not 5
+   = When '_0' is not 5
+

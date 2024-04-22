@@ -5,8 +5,8 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     ops::Deref,
-    sync::Arc,
-    time::SystemTime,
+    sync::{Arc, OnceLock},
+    time::{Instant, SystemTime},
 };
 
 use bytes::Bytes;
@@ -19,24 +19,35 @@ use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
-use crate::error::ConsensusResult;
-use crate::{commit::CommitRef, context::Context};
-use crate::{ensure, error::ConsensusError};
-
-pub(crate) const GENESIS_ROUND: Round = 0;
+use crate::{
+    commit::CommitVote, context::Context, ensure, error::ConsensusError, error::ConsensusResult,
+};
 
 /// Round number of a block.
 pub type Round = u32;
+
+pub(crate) const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
 
 // Returns the current time expressed as UNIX timestamp in milliseconds.
-pub fn timestamp_utc_ms() -> BlockTimestampMs {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_millis() as BlockTimestampMs,
-        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-    }
+// Calculated with Rust Instant to ensure monotonicity.
+pub(crate) fn timestamp_utc_ms() -> BlockTimestampMs {
+    static UNIX_EPOCH: OnceLock<Instant> = OnceLock::new();
+    let unix_epoch_instant = UNIX_EPOCH.get_or_init(|| {
+        let now = Instant::now();
+        let duration_since_unix_epoch =
+            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(d) => d,
+                Err(e) => panic!("SystemTime before UNIX EPOCH! {e}"),
+            };
+        now.checked_sub(duration_since_unix_epoch).unwrap()
+    });
+    Instant::now()
+        .checked_duration_since(*unix_epoch_instant)
+        .unwrap()
+        .as_millis() as BlockTimestampMs
 }
 
 /// Sui transaction in serialised bytes
@@ -77,7 +88,7 @@ pub trait BlockAPI {
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
-    fn commit_votes(&self) -> &[CommitRef];
+    fn commit_votes(&self) -> &[CommitVote];
     fn slot(&self) -> Slot;
 }
 
@@ -90,7 +101,7 @@ pub struct BlockV1 {
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
-    commit_votes: Vec<CommitRef>,
+    commit_votes: Vec<CommitVote>,
 }
 
 impl BlockV1 {
@@ -101,7 +112,7 @@ impl BlockV1 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
-        commit_votes: Vec<CommitRef>,
+        commit_votes: Vec<CommitVote>,
     ) -> BlockV1 {
         Self {
             epoch,
@@ -152,7 +163,7 @@ impl BlockAPI for BlockV1 {
         &self.transactions
     }
 
-    fn commit_votes(&self) -> &[CommitRef] {
+    fn commit_votes(&self) -> &[CommitVote] {
         &self.commit_votes
     }
 
@@ -171,6 +182,18 @@ pub struct BlockRef {
 }
 
 impl BlockRef {
+    pub const MIN: Self = Self {
+        round: 0,
+        author: AuthorityIndex::MIN,
+        digest: BlockDigest::MIN,
+    };
+
+    pub const MAX: Self = Self {
+        round: u32::MAX,
+        author: AuthorityIndex::MAX,
+        digest: BlockDigest::MAX,
+    };
+
     pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
         Self {
             round,
@@ -183,13 +206,13 @@ impl BlockRef {
 // TODO: re-evaluate formats for production debugging.
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{})", self.round, self.author, self.digest)
     }
 }
 
 impl fmt::Debug for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({:?})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{:?})", self.round, self.author, self.digest)
     }
 }
 
@@ -468,7 +491,7 @@ impl VerifiedBlock {
     }
 
     /// Computes digest from the serialized block with signature.
-    fn compute_digest(serialized: &[u8]) -> BlockDigest {
+    pub(crate) fn compute_digest(serialized: &[u8]) -> BlockDigest {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(serialized);
         BlockDigest(hasher.finalize().into())
@@ -501,11 +524,12 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({}ms;{:?};{};v)",
+            "{:?}({}ms;{:?};{}t;{}c)",
             self.reference(),
             self.timestamp_ms(),
             self.ancestors(),
-            self.transactions().len()
+            self.transactions().len(),
+            self.commit_votes().len(),
         )
     }
 }
@@ -579,6 +603,11 @@ impl TestBlock {
         self
     }
 
+    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+        self.block.commit_votes = commit_votes;
+        self
+    }
+
     pub(crate) fn build(self) -> Block {
         Block::V1(self.block)
     }
@@ -593,9 +622,11 @@ mod tests {
 
     use fastcrypto::error::FastCryptoError;
 
-    use crate::block::{SignedBlock, TestBlock};
-    use crate::context::Context;
-    use crate::error::ConsensusError;
+    use crate::{
+        block::{SignedBlock, TestBlock},
+        context::Context,
+        error::ConsensusError,
+    };
 
     #[test]
     fn test_sign_and_verify() {

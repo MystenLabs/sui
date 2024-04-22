@@ -13,12 +13,24 @@ gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 
 task 3 'view-object'. lines 34-34:
 Owner: Account Address ( _ )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'view-object'. lines 36-38:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 5 'run'. lines 39-39:
 mutated: object(0,0), object(2,0)
@@ -28,7 +40,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 
 task 6 'view-object'. lines 41-41:
 Owner: Account Address ( _ )
 Version: 4
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 7 'view-object'. lines 43-45:
 No object at id 2,1

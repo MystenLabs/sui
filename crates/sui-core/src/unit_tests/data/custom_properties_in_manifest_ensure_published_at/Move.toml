@@ -1,6 +1,7 @@
 [package]
 name = "CustomPropertiesInManifestEnsurePublishedAt"
 version = "0.0.0"
+edition = "2024.beta"
 
 [dependencies]
 CustomPropertiesInManifestDependencyMissingPublishedAt = { local = "../custom_properties_in_manifest_dependency_missing_published_at" }

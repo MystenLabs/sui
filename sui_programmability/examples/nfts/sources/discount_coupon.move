@@ -3,10 +3,7 @@
 
 module nfts::discount_coupon {
     use sui::coin;
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Sending to wrong recipient.
     const EWrongRecipient: u64 = 0;
@@ -15,7 +12,7 @@ module nfts::discount_coupon {
     const EOutOfRangeDiscount: u64 = 1;
 
     /// Discount coupon NFT.
-    struct DiscountCoupon has key {
+    public struct DiscountCoupon has key {
         id: UID,
         // coupon issuer
         issuer: address,

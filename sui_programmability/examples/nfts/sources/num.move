@@ -2,17 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::num {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     /// Very silly NFT: a natural number!
-    struct Num has key, store {
+    public struct Num has key, store {
         id: UID,
         n: u64
     }
 
-    struct NumIssuerCap has key {
+    public struct NumIssuerCap has key {
         id: UID,
         /// Number of NFT<Num>'s in circulation. Fluctuates with minting and burning.
         /// A maximum of `MAX_SUPPLY` NFT<Num>'s can exist at a given time.

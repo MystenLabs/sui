@@ -16,6 +16,9 @@ outputs:
   isReleaseNotesEligible:
     description: True when changes happened in Release Notes eligible paths
     value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"
+  isMoveAutoFormatter:
+    description: True when changes happened in MoveAutoFormatter code
+    value: "${{ steps.diff.outputs.isMoveAutoFormatter }}"
 
 runs:
   using: composite
@@ -35,6 +38,11 @@ runs:
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
+          - 'Cargo.lock'
+          - 'Cargo.toml'
+          - 'deny.toml'
+          - 'rust-toolchain.toml'
+          - 'rustfmt.toml'
         isDoc:
           - 'docs/content/**'
           - '*.mdx'
@@ -61,3 +69,5 @@ runs:
           - 'narwhal/**'
           - 'nre/**'
           - 'sui-execution/**'
+        isMoveAutoFormatter:
+          - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'

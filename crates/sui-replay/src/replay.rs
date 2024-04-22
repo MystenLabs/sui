@@ -3,7 +3,6 @@
 
 use crate::chain_from_chain_id;
 use crate::{
-    config::ReplayableNetworkConfigSet,
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
     },
@@ -321,8 +320,7 @@ impl LocalExec {
     }
 
     pub async fn replay_with_network_config(
-        rpc_url: Option<String>,
-        path: Option<String>,
+        rpc_url: String,
         tx_digest: TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
@@ -330,79 +328,20 @@ impl LocalExec {
         protocol_version: Option<i64>,
         enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        async fn inner_exec(
-            rpc_url: String,
-            tx_digest: TransactionDigest,
-            expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-            use_authority: bool,
-            executor_version: Option<i64>,
-            protocol_version: Option<i64>,
-            enable_profiler: Option<PathBuf>,
-        ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-            LocalExec::new_from_fn_url(&rpc_url)
-                .await?
-                .init_for_execution()
-                .await?
-                .execute_transaction(
-                    &tx_digest,
-                    expensive_safety_check_config,
-                    use_authority,
-                    executor_version,
-                    protocol_version,
-                    enable_profiler,
-                )
-                .await
-        }
-
-        if let Some(url) = rpc_url.clone() {
-            info!("Using RPC URL: {}", url);
-            return match inner_exec(
-                url,
-                tx_digest,
-                expensive_safety_check_config.clone(),
+        info!("Using RPC URL: {}", rpc_url);
+        LocalExec::new_from_fn_url(&rpc_url)
+            .await?
+            .init_for_execution()
+            .await?
+            .execute_transaction(
+                &tx_digest,
+                expensive_safety_check_config,
                 use_authority,
                 executor_version,
                 protocol_version,
                 enable_profiler,
             )
             .await
-            {
-                Ok(exec_state) => Ok(exec_state),
-                Err(e) => Err(ReplayEngineError::SuiRpcError {
-                    err: format!(
-                        "Failed to execute transaction with provided RPC URL: Error {}",
-                        e
-                    ),
-                }),
-            };
-        }
-
-        let cfg = ReplayableNetworkConfigSet::load_config(path)?;
-        for cfg in &cfg.base_network_configs {
-            info!(
-                "Attempting to replay with network rpc: {}",
-                cfg.public_full_node.clone()
-            );
-            match inner_exec(
-                cfg.public_full_node.clone(),
-                tx_digest,
-                expensive_safety_check_config.clone(),
-                use_authority,
-                executor_version,
-                protocol_version,
-                enable_profiler.clone(),
-            )
-            .await
-            {
-                Ok(exec_state) => return Ok(exec_state),
-                Err(e) => {
-                    warn!("Failed to execute transaction with network config: {}. Attempting next network config...", e);
-                    continue;
-                }
-            };
-        }
-        error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
-        Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
     /// This captures the state of the network at a given point in time and populates
@@ -728,10 +667,6 @@ impl LocalExec {
         assert_eq!(
             &input_objects.filter_shared_objects().len(),
             &tx_info.shared_object_refs.len()
-        );
-        assert_eq!(
-            input_objects.transaction_dependencies(),
-            tx_info.dependencies.clone().into_iter().collect(),
         );
         // At this point we have all the objects needed for replay
 
@@ -2129,6 +2064,7 @@ async fn prep_network(
         protocol_config.version.as_u64(),
     )
     .await;
+    *authority_state.execution_lock_for_reconfiguration().await = executed_epoch;
 
     (authority_state, epoch_store)
 }

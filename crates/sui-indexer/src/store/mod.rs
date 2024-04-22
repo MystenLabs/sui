@@ -5,10 +5,9 @@ pub(crate) use indexer_store::*;
 pub use pg_indexer_store::PgIndexerStore;
 
 pub mod indexer_store;
-pub mod module_resolver;
+pub mod package_resolver;
 mod pg_indexer_store;
 mod pg_partition_manager;
-mod query;
 
 pub(crate) mod diesel_macro {
     macro_rules! read_only_blocking {
@@ -39,7 +38,7 @@ pub(crate) mod diesel_macro {
                     .read_write()
                     .run($query)
                     .map_err(|e| {
-                        tracing::error!("Error with persisting data into DB: {:?}", e);
+                        tracing::error!("Error with persisting data into DB: {:?}, retrying...", e);
                         backoff::Error::Transient {
                             err: IndexerError::PostgresWriteError(e.to_string()),
                             retry_after: None,

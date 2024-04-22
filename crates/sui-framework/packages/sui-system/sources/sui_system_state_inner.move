@@ -19,12 +19,6 @@ module sui_system::sui_system_state_inner {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system; */
-
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
-
     // same as in validator_set
     const ACTIVE_VALIDATOR_ONLY: u8 = 1;
     const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
@@ -346,7 +340,7 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    // ==== public(friend) functions ====
+    // ==== public(package) functions ====
 
     /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
     /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they

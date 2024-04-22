@@ -13,12 +13,24 @@ gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 
 task 3 'view-object'. lines 33-33:
 Owner: Account Address ( _ )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'view-object'. lines 35-37:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 5 'programmable'. lines 38-39:
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
@@ -27,9 +39,21 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 6 'view-object'. lines 41-41:
 Owner: Account Address ( _ )
 Version: 4
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 7 'view-object'. lines 43-43:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}

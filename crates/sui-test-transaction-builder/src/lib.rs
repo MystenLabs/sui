@@ -434,7 +434,8 @@ pub async fn batch_make_transfer_transactions(
     max_txn_num: usize,
 ) -> Vec<Transaction> {
     let recipient = get_key_pair::<AccountKeyPair>().0;
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let result = context.get_all_accounts_and_gas_objects().await;
+    let accounts_and_objs = result.unwrap();
     let mut res = Vec::with_capacity(max_txn_num);
 
     let gas_price = context.get_reference_gas_price().await.unwrap();

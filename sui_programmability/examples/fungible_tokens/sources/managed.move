@@ -5,14 +5,11 @@
 /// By convention, modules defining custom coin types use upper case names, in contrast to
 /// ordinary modules, which use camel case.
 module fungible_tokens::managed {
-    use std::option;
     use sui::coin::{Self, Coin, TreasuryCap};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.
-    struct MANAGED has drop {}
+    public struct MANAGED has drop {}
 
     #[allow(unused_function)]
     /// Register the managed currency to acquire its `TreasuryCap`. Because

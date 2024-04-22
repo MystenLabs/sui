@@ -12,9 +12,7 @@ use crate::{
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_config::BinaryConfig;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
 use move_core_types::language_storage::ModuleId;
@@ -586,12 +584,12 @@ where
                 error: error.to_string(),
             }
         })?;
-        let view = BinaryIndexedView::Module(&module);
-        let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
-            SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            }
-        })?;
+        let d =
+            Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
+                SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                }
+            })?;
         let bytecode_str = d
             .disassemble()
             .map_err(|e| SuiError::ObjectSerializationError {

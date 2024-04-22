@@ -13,12 +13,24 @@ gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 
 task 3 'view-object'. lines 35-35:
 Owner: Shared
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'view-object'. lines 37-37:
 Owner: Account Address ( fake(2,0) )
 Version: 3
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 5 'run'. lines 39-39:
 mutated: object(0,0), object(2,0), object(2,1)
@@ -27,12 +39,24 @@ gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 
 task 6 'view-object'. lines 41-41:
 Owner: Shared
 Version: 4
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 7 'view-object'. lines 43-43:
 Owner: Account Address ( _ )
 Version: 4
-Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
 task 8 'run'. lines 45-45:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3

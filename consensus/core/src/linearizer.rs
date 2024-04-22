@@ -142,9 +142,9 @@ mod tests {
     use crate::{
         commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
         context::Context,
-        leader_schedule::LeaderSchedule,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
-        test_dag::{build_dag, get_all_leader_blocks},
+        test_dag::{build_dag, get_all_uncommitted_leader_blocks},
     };
 
     #[test]
@@ -157,12 +157,12 @@ mod tests {
             Arc::new(MemStore::new()),
         )));
         let mut linearizer = Linearizer::new(dag_state.clone());
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
         build_dag(context.clone(), dag_state.clone(), None, num_rounds);
-        let leaders = get_all_leader_blocks(
+        let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule,
             num_rounds,
@@ -207,7 +207,7 @@ mod tests {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let mut linearizer = Linearizer::new(dag_state.clone());
         let wave_length = DEFAULT_WAVE_LENGTH;
 
@@ -230,7 +230,7 @@ mod tests {
             leader_round_wave_1,
         ));
 
-        let leaders = get_all_leader_blocks(
+        let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule.clone(),
             leader_round_wave_1,
@@ -287,7 +287,7 @@ mod tests {
             leader_round_wave_2,
         );
 
-        let leaders = get_all_leader_blocks(
+        let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule,
             leader_round_wave_2,

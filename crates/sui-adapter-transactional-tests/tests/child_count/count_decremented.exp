@@ -16,7 +16,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 task 3 'view-object'. lines 55-55:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'run'. lines 57-57:
 created: object(4,0), object(4,1)
@@ -31,7 +37,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 task 6 'view-object'. lines 61-65:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 7 'run'. lines 67-67:
 created: object(7,0)
@@ -41,7 +53,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 task 8 'view-object'. lines 69-69:
 Owner: Account Address ( A )
 Version: 5
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
 
 task 9 'run'. lines 71-71:
 created: object(9,0), object(9,1)
@@ -55,7 +73,13 @@ gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 
 task 11 'view-object'. lines 75-79:
 Owner: Account Address ( A )
 Version: 7
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+}
 
 task 12 'run'. lines 81-81:
 created: object(12,0)
@@ -65,7 +89,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 task 13 'view-object'. lines 83-83:
 Owner: Account Address ( A )
 Version: 8
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}
 
 task 14 'run'. lines 85-85:
 created: object(14,0), object(14,1)
@@ -81,4 +111,10 @@ gas summary: computation_cost: 1000000, storage_cost: 6102800,  storage_rebate: 
 task 16 'view-object'. lines 89-89:
 Owner: Account Address ( A )
 Version: 10
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(12,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}

@@ -3,13 +3,18 @@
 #![recursion_limit = "256"]
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
+use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
+use std::path::PathBuf;
+use system_package_task::SystemPackageTask;
 use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use url::Url;
 
@@ -35,6 +40,7 @@ pub mod metrics;
 pub mod models;
 pub mod schema;
 pub mod store;
+pub mod system_package_task;
 pub mod test_utils;
 pub mod types;
 
@@ -59,6 +65,8 @@ pub struct IndexerConfig {
     pub db_name: Option<String>,
     #[clap(long, default_value = "http://0.0.0.0:9000", global = true)]
     pub rpc_client_url: String,
+    #[clap(long, default_value = Some("https://checkpoints.mainnet.sui.io"), global = true)]
+    pub remote_store_url: Option<String>,
     #[clap(long, default_value = "0.0.0.0", global = true)]
     pub client_metric_host: String,
     #[clap(long, default_value = "9184", global = true)]
@@ -73,6 +81,8 @@ pub struct IndexerConfig {
     pub fullnode_sync_worker: bool,
     #[clap(long)]
     pub rpc_server_worker: bool,
+    #[clap(long)]
+    pub data_ingestion_path: Option<PathBuf>,
 }
 
 impl IndexerConfig {
@@ -114,6 +124,7 @@ impl Default for IndexerConfig {
             db_port: None,
             db_name: None,
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
+            remote_store_url: Some("https://checkpoints.mainnet.sui.io".to_string()),
             client_metric_host: "0.0.0.0".to_string(),
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
@@ -121,6 +132,7 @@ impl Default for IndexerConfig {
             reset_db: false,
             fullnode_sync_worker: true,
             rpc_server_worker: true,
+            data_ingestion_path: None,
         }
     }
 }
@@ -131,7 +143,8 @@ pub async fn build_json_rpc_server(
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+    let mut builder =
+        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry, None, None);
     let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
 
     builder.register_module(WriteApi::new(http_client.clone()))?;
@@ -148,8 +161,21 @@ pub async fn build_json_rpc_server(
         config.rpc_server_url.as_str().parse().unwrap(),
         config.rpc_server_port,
     );
+
+    let cancel = CancellationToken::new();
+    let system_package_task =
+        SystemPackageTask::new(reader.clone(), cancel.clone(), Duration::from_secs(10));
+
+    tracing::info!("Starting system package task");
+    spawn_monitored_task!(async move { system_package_task.run().await });
+
     Ok(builder
-        .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
+        .start(
+            default_socket_addr,
+            custom_runtime,
+            Some(ServerType::Http),
+            Some(cancel),
+        )
         .await?)
 }
 

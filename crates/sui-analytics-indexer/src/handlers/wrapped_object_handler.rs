@@ -4,6 +4,7 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::path::Path;
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use sui_indexer::framework::Handler;
 use sui_package_resolver::Resolver;
@@ -44,6 +45,11 @@ impl Handler for WrappedObjectHandler {
                 checkpoint_transaction,
             )
             .await?;
+            if checkpoint_summary.end_of_epoch_data.is_some() {
+                self.resolver
+                    .package_store()
+                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+            }
         }
         Ok(())
     }

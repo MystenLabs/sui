@@ -13,7 +13,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 
 task 3 'view-object'. lines 32-32:
 Owner: Shared
 Version: 3
-Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
 task 4 'run'. lines 34-34:
 Error: Transaction Effects Status: The shared object operation is not allowed.

@@ -857,10 +857,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn,
-            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
+            },
+            None,
+        )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
@@ -885,10 +888,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn,
-            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+            },
+            None,
+        )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
@@ -930,7 +936,6 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
         assert!(node
             .subscribe_to_transaction_orchestrator_effects()
             .is_err());
-        assert!(node.get_google_jwk_bytes().is_ok());
     });
 }
 
@@ -1286,10 +1291,13 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
 
     let digest = *tx.digest();
     let _res = transaction_orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: tx,
-            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: tx,
+                request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
+            },
+            None,
+        )
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
     println!("res: {:?}", _res);
@@ -1332,30 +1340,36 @@ async fn test_access_old_object_pruned() {
             .build(),
     );
     for validator in test_cluster.swarm.active_validators() {
-        let state = validator.get_node_handle().unwrap().state();
-        state.prune_objects_and_compact_for_testing().await;
-        // Make sure the old version of the object is already pruned.
-        assert!(state
-            .get_object_store()
-            .get_object_by_key(&gas_object.0, gas_object.1)
+        validator
+            .get_node_handle()
             .unwrap()
-            .is_none());
-        let epoch_store = state.epoch_store_for_testing();
-        assert_eq!(
-            state
-                .handle_transaction(
-                    &epoch_store,
-                    epoch_store.verify_transaction(tx.clone()).unwrap()
-                )
-                .await
-                .unwrap_err(),
-            SuiError::UserInputError {
-                error: UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: gas_object,
-                    current_version: new_gas_version,
-                }
-            }
-        );
+            .with_async(|node| async {
+                let state = node.state();
+                state.prune_objects_and_compact_for_testing().await;
+                // Make sure the old version of the object is already pruned.
+                assert!(state
+                    .database_for_testing()
+                    .get_object_by_key(&gas_object.0, gas_object.1)
+                    .unwrap()
+                    .is_none());
+                let epoch_store = state.epoch_store_for_testing();
+                assert_eq!(
+                    state
+                        .handle_transaction(
+                            &epoch_store,
+                            epoch_store.verify_transaction(tx.clone()).unwrap()
+                        )
+                        .await
+                        .unwrap_err(),
+                    SuiError::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: gas_object,
+                            current_version: new_gas_version,
+                        }
+                    }
+                );
+            })
+            .await;
     }
 
     // Check that fullnode would return the same error.
