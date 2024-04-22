@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use consensus_config::{AuthorityIndex, Epoch, Stake};
 use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
 use crate::{
-    block::{BlockRef, BlockTimestampMs, Round},
+    block::{BlockRef, Round},
     commit::Commit,
     CommitIndex,
 };
@@ -71,8 +69,8 @@ pub enum ConsensusError {
     #[error("Synchronizer for fetching blocks directly from {0} is saturated")]
     SynchronizerSaturated(AuthorityIndex),
 
-    #[error("Block rejected: {reason}")]
-    BlockRejected { reason: String },
+    #[error("Block {block_ref:?} rejected: {reason}")]
+    BlockRejected { block_ref: BlockRef, reason: String },
 
     #[error("Ancestor is in wrong position: block {block_authority}, ancestor {ancestor_authority}, position {position}")]
     InvalidAncestorPosition {
@@ -103,12 +101,6 @@ pub enum ConsensusError {
     InvalidBlockTimestamp {
         max_timestamp_ms: u64,
         block_timestamp_ms: u64,
-    },
-
-    #[error("Block at {block_timestamp}ms is too far in the future: {forward_time_drift:?}")]
-    BlockTooFarInFuture {
-        block_timestamp: BlockTimestampMs,
-        forward_time_drift: Duration,
     },
 
     #[error("No available authority to fetch commits")]

@@ -7,9 +7,10 @@ use std::{
     sync::Arc,
 };
 
+use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock},
@@ -81,6 +82,10 @@ impl BlockManager {
         let _s = monitored_scope("BlockManager::try_accept_blocks");
 
         blocks.sort_by_key(|b| b.round());
+        debug!(
+            "Trying to accept blocks: {}",
+            blocks.iter().map(|b| b.reference().to_string()).join(",")
+        );
 
         let mut accepted_blocks = vec![];
         let missing_blocks_before = self.missing_blocks.clone();

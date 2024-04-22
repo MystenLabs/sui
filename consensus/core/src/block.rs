@@ -5,8 +5,8 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     ops::Deref,
-    sync::Arc,
-    time::SystemTime,
+    sync::{Arc, OnceLock},
+    time::{Instant, SystemTime},
 };
 
 use bytes::Bytes;
@@ -32,11 +32,22 @@ pub(crate) const GENESIS_ROUND: Round = 0;
 pub type BlockTimestampMs = u64;
 
 // Returns the current time expressed as UNIX timestamp in milliseconds.
-pub fn timestamp_utc_ms() -> BlockTimestampMs {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_millis() as BlockTimestampMs,
-        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-    }
+// Calculated with Rust Instant to ensure monotonicity.
+pub(crate) fn timestamp_utc_ms() -> BlockTimestampMs {
+    static UNIX_EPOCH: OnceLock<Instant> = OnceLock::new();
+    let unix_epoch_instant = UNIX_EPOCH.get_or_init(|| {
+        let now = Instant::now();
+        let duration_since_unix_epoch =
+            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(d) => d,
+                Err(e) => panic!("SystemTime before UNIX EPOCH! {e}"),
+            };
+        now.checked_sub(duration_since_unix_epoch).unwrap()
+    });
+    Instant::now()
+        .checked_duration_since(*unix_epoch_instant)
+        .unwrap()
+        .as_millis() as BlockTimestampMs
 }
 
 /// Sui transaction in serialised bytes
@@ -195,13 +206,13 @@ impl BlockRef {
 // TODO: re-evaluate formats for production debugging.
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{})", self.round, self.author, self.digest)
     }
 }
 
 impl fmt::Debug for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({:?})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{:?})", self.round, self.author, self.digest)
     }
 }
 
@@ -513,11 +524,12 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({}ms;{:?};{};v)",
+            "{:?}({}ms;{:?};{}t;{}c)",
             self.reference(),
             self.timestamp_ms(),
             self.ancestors(),
-            self.transactions().len()
+            self.transactions().len(),
+            self.commit_votes().len(),
         )
     }
 }

@@ -10,7 +10,7 @@ use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
@@ -83,7 +83,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
@@ -97,7 +97,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname])
+                .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -105,11 +105,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
         // Reject block with timestamp too far in the future.
-        let forward_time_drift = Duration::from_millis(
-            verified_block
-                .timestamp_ms()
-                .saturating_sub(timestamp_utc_ms()),
-        );
+        let now = timestamp_utc_ms();
+        let forward_time_drift =
+            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
         if forward_time_drift > self.context.parameters.max_forward_time_drift {
             self.context
                 .metrics
@@ -117,9 +115,19 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .rejected_future_blocks
                 .with_label_values(&[&peer_hostname])
                 .inc();
-            return Err(ConsensusError::BlockTooFarInFuture {
-                block_timestamp: verified_block.timestamp_ms(),
-                forward_time_drift,
+            debug!(
+                "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
+                verified_block.reference(),
+                verified_block.timestamp_ms(),
+                now,
+            );
+            return Err(ConsensusError::BlockRejected {
+                block_ref: verified_block.reference(),
+                reason: format!(
+                    "Block timestamp is too far in the future: {} > {}",
+                    verified_block.timestamp_ms(),
+                    now
+                ),
             });
         }
 
@@ -131,6 +139,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .block_timestamp_drift_wait_ms
                 .with_label_values(&[peer_hostname, &"handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
+            debug!(
+                "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
+                verified_block.reference(),
+                verified_block.timestamp_ms(),
+                now,
+                forward_time_drift.as_millis(),
+            );
             sleep(forward_time_drift).await;
         }
 
@@ -160,9 +175,16 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .rejected_blocks
                 .with_label_values(&[&"commit_lagging"])
                 .inc();
+            debug!(
+                "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
+                verified_block.reference(),
+                last_commit_index,
+                quorum_commit_index,
+            );
             return Err(ConsensusError::BlockRejected {
+                block_ref: verified_block.reference(),
                 reason: format!(
-                    "Local commit index {} is too far behind the quorum commit index {}",
+                    "Last commit index is lagging quorum commit index too much ({} < {})",
                     last_commit_index, quorum_commit_index,
                 ),
             });

@@ -250,6 +250,18 @@ impl CommitRef {
     }
 }
 
+impl fmt::Display for CommitRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "C{}({})", self.index, self.digest)
+    }
+}
+
+impl fmt::Debug for CommitRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "C{}({:?})", self.index, self.digest)
+    }
+}
+
 // Represents a vote on a Commit.
 pub type CommitVote = CommitRef;
 

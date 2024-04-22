@@ -32,7 +32,8 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use futures::{stream::FuturesOrdered, StreamExt};
+use futures::{stream::FuturesOrdered, StreamExt as _};
+use itertools::Itertools as _;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use rand::prelude::SliceRandom as _;
@@ -41,7 +42,7 @@ use tokio::{
     task::{JoinHandle, JoinSet},
     time::{sleep, Instant, MissedTickBehavior},
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
@@ -127,13 +128,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
                     synced_commit_index = synced_commit_index.max(local_commit_index);
-                    // TODO: pause commit sync when execution of commits is lagging behind.
+                    info!(
+                        "Checking to schedule fetches: synced_commit_index={}, highest_scheduled_index={}, quorum_commit_index={}",
+                        synced_commit_index, highest_scheduled_index.unwrap_or(0), quorum_commit_index,
+                    );
+                    // TODO: pause commit sync when execution of commits is lagging behind, maybe through Core.
                     // TODO: cleanup inflight fetches that are no longer needed.
                     let fetch_after_index = synced_commit_index.max(highest_scheduled_index.unwrap_or(0));
-                    info!(
-                        "Checking to schedule fetches: synced_commit_index={}, fetch_after_index={}, quorum_commit_index={}",
-                        synced_commit_index, fetch_after_index, quorum_commit_index
-                    );
                     // When the node is falling behind, schedule pending fetches which will be executed on later.
                     'pending: for prev_end in (fetch_after_index..=quorum_commit_index).step_by(inner.context.parameters.commit_sync_batch_size as usize) {
                         // Create range with inclusive start and end.
@@ -196,6 +197,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         if fetched_end <= synced_commit_index {
                             continue 'fetched;
                         }
+                        debug!(
+                            "Fetched certified blocks: {}",
+                            blocks
+                                .iter()
+                                .map(|b| b.reference().to_string())
+                                .join(","),
+                        );
                         // If core thread cannot handle the incoming blocks, it is ok to block here.
                         // Also it is possible to have missing ancestors because an equivocating validator
                         // may produce blocks that are not included in commits but are ancestors to other blocks.
