@@ -41,10 +41,19 @@ pub struct EthConfig {
     pub eth_bridge_proxy_address: String,
     /// The expected BridgeChainId on Eth side.
     pub eth_bridge_chain_id: u8,
-    // TODO: we need to hardcode the starting blocks for eth networks for cold start.
-    /// Override the start block number for each eth address. Key must be in `eth_addresses`.
-    /// When set, EthSyncer will start from this block number (inclusively) instead of the one in storage.
-    /// Note: This field should be rarely used. Only use it when you understand how to follow up.
+    /// The starting block for EthSyncer to monitor eth contracts.
+    /// It is required when `run_client` is true. Usually this is
+    /// the block number when the bridge contracts are deployed.
+    /// When BridgeNode starts, it reads the contract watermark from storage.
+    /// If the watermark is not found, it will start from this fallback block number.
+    /// If the watermark is found, it will start from the watermark.
+    /// this v.s.`eth_contracts_start_block_override`:
+    pub eth_contracts_start_block_fallback: Option<u64>,
+    /// The starting block for EthSyncer to monitor eth contracts. It overrides
+    /// the watermark in storage. This is useful when we want to reprocess the events
+    /// from a specific block number.
+    /// Note: this field has to be reset after starting the BridgeNode, otherwise it will
+    /// reprocess the events from this block number every time it starts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_contracts_start_block_override: Option<u64>,
 }
@@ -189,6 +198,11 @@ impl BridgeNodeConfig {
             eth_client: eth_client.clone(),
             db_path,
             eth_contracts,
+            // in `prepare_for_eth` we check if this is None when `run_client` is true. Safe to unwrap here.
+            eth_contracts_start_block_fallback: self
+                .eth
+                .eth_contracts_start_block_fallback
+                .unwrap(),
             eth_contracts_start_block_override: self.eth.eth_contracts_start_block_override,
             sui_bridge_module_last_processed_event_id_override: self
                 .sui
@@ -215,6 +229,12 @@ impl BridgeNodeConfig {
         let committee = EthBridgeCommittee::new(committee_address, provider.clone());
         let config_address: EthAddress = committee.config().call().await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
+
+        if self.run_client && self.eth.eth_contracts_start_block_fallback.is_none() {
+            return Err(anyhow!(
+                "eth_contracts_start_block_fallback is required when run_client is true"
+            ));
+        }
 
         // If bridge chain id is Eth Mainent or Sepolia, we expect to see chain
         // identifier to match accordingly.
@@ -361,6 +381,8 @@ pub struct BridgeClientConfig {
     pub eth_client: Arc<EthClient<ethers::providers::Http>>,
     pub db_path: PathBuf,
     pub eth_contracts: Vec<EthAddress>,
+    // See `BridgeNodeConfig` for the explanation of following two fields.
+    pub eth_contracts_start_block_fallback: u64,
     pub eth_contracts_start_block_override: Option<u64>,
     pub sui_bridge_module_last_processed_event_id_override: Option<EventID>,
 }
