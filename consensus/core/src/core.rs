@@ -4,6 +4,7 @@
 use std::{collections::BTreeSet, iter, sync::Arc, time::Duration};
 
 use consensus_config::ProtocolKeyPair;
+use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
@@ -176,11 +177,11 @@ impl Core {
 
         if !accepted_blocks.is_empty() {
             debug!(
-                "Accepted blocks: {:?}",
+                "Accepted blocks: {}",
                 accepted_blocks
                     .iter()
-                    .map(|b| b.reference())
-                    .collect::<Vec<_>>()
+                    .map(|b| b.reference().to_string())
+                    .join(",")
             );
 
             // Now add accepted blocks to the threshold clock and pending ancestors list.
@@ -396,7 +397,15 @@ impl Core {
             .into_iter()
             .filter_map(|leader| leader.into_committed_block())
             .collect::<Vec<_>>();
-        debug!("Committing leaders: {:?}", committed_leaders);
+        if !committed_leaders.is_empty() {
+            debug!(
+                "Committing leaders: {}",
+                committed_leaders
+                    .iter()
+                    .map(|b| b.reference().to_string())
+                    .join(",")
+            );
+        }
 
         self.commit_observer.handle_commit(committed_leaders)
     }

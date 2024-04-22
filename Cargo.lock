@@ -2622,6 +2622,7 @@ dependencies = [
  "enum_dispatch",
  "fastcrypto",
  "futures",
+ "itertools 0.10.5",
  "mockall",
  "mysten-metrics",
  "mysten-network",

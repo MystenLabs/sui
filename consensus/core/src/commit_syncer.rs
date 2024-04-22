@@ -32,7 +32,8 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use futures::{stream::FuturesOrdered, StreamExt};
+use futures::{stream::FuturesOrdered, StreamExt as _};
+use itertools::Itertools as _;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use rand::prelude::SliceRandom as _;
@@ -197,11 +198,11 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             continue 'fetched;
                         }
                         debug!(
-                            "Fetched certified blocks {:?}",
+                            "Fetched certified blocks: {}",
                             blocks
                                 .iter()
-                                .map(|b| b.reference())
-                                .collect::<Vec<_>>()
+                                .map(|b| b.reference().to_string())
+                                .join(","),
                         );
                         // If core thread cannot handle the incoming blocks, it is ok to block here.
                         // Also it is possible to have missing ancestors because an equivocating validator
