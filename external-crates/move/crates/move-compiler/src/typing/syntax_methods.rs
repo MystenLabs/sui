@@ -17,9 +17,9 @@ use crate::{
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet};
 
-//-------------------------------------------------------------------------------------------------
-// Validation
-//-------------------------------------------------------------------------------------------------
+//*************************************************************************************************
+// Entry Function
+//*************************************************************************************************
 
 pub fn validate_syntax_methods(
     context: &mut Context,
@@ -28,6 +28,7 @@ pub fn validate_syntax_methods(
 ) {
     let methods = &mut module.syntax_methods;
     for (_, entry) in methods.iter_mut() {
+        // Index Validation
         if let Some(index) = &mut entry.index {
             let IndexSyntaxMethods { index, index_mut } = &mut **index;
             if let (Some(index_defn), Some(index_mut_defn)) = (index.as_ref(), index_mut.as_ref()) {
@@ -39,8 +40,131 @@ pub fn validate_syntax_methods(
                 }
             }
         }
+        // For Validation
+        let for_entry = std::mem::take(&mut entry.for_);
+        let out_entry = for_entry.and_then(|mut for_| {
+            for_methods::validate_for_syntax_methods(context, &mut for_);
+            if for_.for_val.is_none() && for_.for_imm.is_none() && for_.for_mut.is_none() {
+                None
+            } else {
+                Some(for_)
+            }
+        });
+        entry.for_ = out_entry;
     }
 }
+
+//*************************************************************************************************
+// For Loop Validation
+//*************************************************************************************************
+
+mod for_methods {
+
+    use crate::{
+        diag, ice,
+        naming::ast::{self as N, ForSyntaxMethods, SyntaxMethod},
+        shared::known_attributes::SyntaxAttribute,
+        typing::core::Context,
+    };
+    use move_ir_types::location::*;
+
+    use super::ty_str;
+
+    pub fn validate_for_syntax_methods(context: &mut Context, for_def: &mut Box<ForSyntaxMethods>) {
+        let ForSyntaxMethods {
+            for_imm,
+            for_mut,
+            for_val,
+        } = &mut **for_def;
+
+        lookup_and_validate_for_method(context, for_val);
+        lookup_and_validate_for_method(context, for_imm);
+        lookup_and_validate_for_method(context, for_mut);
+    }
+
+    fn lookup_and_validate_for_method(
+        context: &mut Context,
+        method_opt: &mut Option<Box<SyntaxMethod>>,
+    ) {
+        let Some(method) = method_opt else {
+            return;
+        };
+        let (module, fun) = method.target_function;
+        let fun_info = context.function_info(&module, &fun).clone();
+        let param_len = fun_info.signature.parameters.len();
+        if param_len != 2 {
+            let msg = format!(
+                "'{}' syntax method should have 2 parameters, not {}",
+                SyntaxAttribute::FOR,
+                param_len
+            );
+            let mut diag = diag!(Declarations::InvalidSyntaxMethod, (method.loc, msg));
+            diag.add_note(format!(
+                "'{}' syntax method take their subject and a lambda representing the loop body",
+                SyntaxAttribute::FOR
+            ));
+            context.env.add_diag(diag);
+            *method_opt = None;
+        } else {
+            let (_, _, lambda_ty) = fun_info.signature.parameters[1].clone();
+            if !lambda_args(context, method.loc, lambda_ty).is_some() {
+                assert!(context.env.has_errors());
+                *method_opt = None;
+                return;
+            }
+            // let (_, _, subject_ty) = fun_info.signature.parameters[0].clone();
+            // let type_args = fun_info.signature.type_parameters.clone();
+        }
+    }
+
+    fn lambda_args(context: &mut Context, method_loc: Loc, ty: N::Type) -> Option<Vec<N::Type>> {
+        match ty.value {
+            N::Type_::Fun(args, result) if matches!(result.value, N::Type_::Unit) => Some(args),
+            N::Type_::Fun(_args, result) => {
+                assert!(!matches!(result.value, N::Type_::Unit));
+                let msg = format!("Expected this 'for' method lambda to return a unit type");
+                let lam_msg = format!("Invalid type signature for 'for' syntax method argument");
+                let diag = diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (result.loc, msg),
+                    (ty.loc, lam_msg)
+                );
+                context.env.add_diag(diag);
+                None
+            }
+            N::Type_::Var(_) | N::Type_::Anything => {
+                let msg = format!("Found '{}' type when validating `for`", ty_str(&ty));
+                context.env.add_diag(ice!((ty.loc, msg)));
+                None
+            }
+            N::Type_::UnresolvedError => {
+                assert!(context.env.has_errors());
+                None
+            }
+            N::Type_::Unit
+            | N::Type_::Ref(_, _)
+            | N::Type_::Param(_)
+            | N::Type_::Apply(_, _, _) => {
+                let name_msg = format!(
+                    "Expected this 'for' method to take a lambda function as its second argument"
+                );
+                let msg = format!("This is not a 'lambda' function type");
+                let mut diag = diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (ty.loc, msg),
+                    (method_loc, name_msg)
+                );
+                diag.add_note("The second argument to a 'for' method must be a 'lambda' that acts as the loop body");
+                context.env.add_diag(diag);
+                None
+            }
+        }
+    }
+}
+
+//*************************************************************************************************
+// Index Validation
+//*************************************************************************************************
 
 fn validate_index_syntax_methods(
     context: &mut Context,

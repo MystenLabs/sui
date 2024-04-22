@@ -24,6 +24,7 @@ use crate::{
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
         unique_map::UniqueMap,
+        string_utils::debug_print,
         *,
     },
     sui_mode,
@@ -1573,6 +1574,8 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 "Invalid 'for' subject",
                 subject.ty.clone(),
             );
+            debug_print!(context.debug.for_syntax_lowering,
+                         ("subject" => subject; verbose));
             let readied = core::ready_tvars(&context.subst, subject.ty.clone());
             if let Some(for_fun) = find_for_funs(context, eloc, &readied) {
                 let (m, f) = for_fun.target_function;

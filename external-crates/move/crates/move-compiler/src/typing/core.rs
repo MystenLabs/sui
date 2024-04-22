@@ -71,10 +71,15 @@ pub enum MacroExpansion {
     Argument { scope_color: Color },
 }
 
+pub struct TypingDebugFlags {
+    pub for_syntax_lowering: bool,
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
+    pub debug: TypingDebugFlags,
 
     use_funs: Vec<UseFunsScope>,
     pub current_package: Option<Symbol>,
@@ -158,6 +163,9 @@ impl<'env> Context<'env> {
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
+        let debug = TypingDebugFlags {
+            for_syntax_lowering: true,
+        };
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
@@ -173,6 +181,7 @@ impl<'env> Context<'env> {
             macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
+            debug,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             macro_expansion: vec![],
