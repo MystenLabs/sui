@@ -1850,7 +1850,7 @@ fn value(
             context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
             error_exp(eloc)
         }
-        E::UnresolvedError => {
+        E::UnresolvedError | E::InvalidAccess(_) => {
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
         }
@@ -2203,6 +2203,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
+        | E::InvalidAccess(_)
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),

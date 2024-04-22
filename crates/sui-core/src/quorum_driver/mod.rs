@@ -747,14 +747,17 @@ where
         let is_single_writer_tx = !transaction.contains_shared_object();
 
         let timer = Instant::now();
-        let tx_cert = match tx_cert {
+        let (tx_cert, newly_formed) = match tx_cert {
             None => match quorum_driver
                 .process_transaction(transaction.clone(), client_addr)
                 .await
             {
-                Ok(ProcessTransactionResult::Certified(tx_cert)) => {
+                Ok(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed,
+                }) => {
                     debug!(?tx_digest, "Transaction processing succeeded");
-                    tx_cert
+                    (certificate, newly_formed)
                 }
                 Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
                     debug!(
@@ -781,7 +784,7 @@ where
                     return;
                 }
             },
-            Some(tx_cert) => tx_cert,
+            Some(tx_cert) => (tx_cert, false),
         };
 
         let response = match quorum_driver
@@ -807,25 +810,27 @@ where
                 return;
             }
         };
-        let settlement_finality_latency = timer.elapsed().as_secs_f64();
-        quorum_driver
-            .metrics
-            .settlement_finality_latency
-            .with_label_values(&[if is_single_writer_tx {
-                TX_TYPE_SINGLE_WRITER_TX
-            } else {
-                TX_TYPE_SHARED_OBJ_TX
-            }])
-            .observe(settlement_finality_latency);
-        let is_out_of_expected_range =
-            settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
-        debug!(
-            ?tx_digest,
-            ?is_single_writer_tx,
-            ?is_out_of_expected_range,
-            "QuorumDriver settlement finality latency: {:.3} seconds",
-            settlement_finality_latency
-        );
+        if newly_formed {
+            let settlement_finality_latency = timer.elapsed().as_secs_f64();
+            quorum_driver
+                .metrics
+                .settlement_finality_latency
+                .with_label_values(&[if is_single_writer_tx {
+                    TX_TYPE_SINGLE_WRITER_TX
+                } else {
+                    TX_TYPE_SHARED_OBJ_TX
+                }])
+                .observe(settlement_finality_latency);
+            let is_out_of_expected_range =
+                settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
+            debug!(
+                ?tx_digest,
+                ?is_single_writer_tx,
+                ?is_out_of_expected_range,
+                "QuorumDriver settlement finality latency: {:.3} seconds",
+                settlement_finality_latency
+            );
+        }
 
         quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
     }

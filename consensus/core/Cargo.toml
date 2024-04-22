@@ -21,6 +21,7 @@ dashmap.workspace = true
 enum_dispatch.workspace = true
 fastcrypto.workspace = true
 futures.workspace = true
+itertools.workspace = true
 quinn-proto.workspace = true
 mockall.workspace = true
 mysten-metrics.workspace = true

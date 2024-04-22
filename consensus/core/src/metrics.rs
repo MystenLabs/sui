@@ -3,19 +3,25 @@
 
 use std::sync::Arc;
 
-use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 use prometheus::{
-    register_histogram_vec_with_registry, register_histogram_with_registry,
+    exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
+
+use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25,
     0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5,
     4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
+];
+
+const COMMITTED_BLOCKS_BUCKETS: &[f64] = &[
+    1.0, 2.0, 4.0, 8.0, 10.0, 20.0, 40.0, 80.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1000.0, 2000.0,
+    3000.0,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -76,6 +82,7 @@ pub(crate) struct NodeMetrics {
     pub block_commit_latency: Histogram,
     pub block_proposed: IntCounterVec,
     pub block_size: Histogram,
+    pub block_ancestors: Histogram,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
@@ -90,6 +97,7 @@ pub(crate) struct NodeMetrics {
     pub fetch_blocks_scheduler_inflight: IntGauge,
     pub fetched_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub rejected_blocks: IntCounterVec,
     pub rejected_future_blocks: IntCounterVec,
     pub verified_blocks: IntCounterVec,
     pub committed_leaders_total: IntCounterVec,
@@ -97,12 +105,15 @@ pub(crate) struct NodeMetrics {
     pub commit_round_advancement_interval: Histogram,
     pub last_decided_leader_round: IntGauge,
     pub leader_timeout_total: IntCounter,
-    pub missing_blocks_total: IntGauge,
+    pub missing_blocks_total: IntCounter,
+    pub missing_blocks_after_fetch_total: IntCounter,
     pub quorum_receive_latency: Histogram,
+    pub reputation_scores: IntGaugeVec,
     pub scope_processing_time: HistogramVec,
     pub sub_dags_per_commit_count: Histogram,
     pub block_suspensions: IntCounterVec,
     pub block_unsuspensions: IntCounterVec,
+    pub suspended_block_time: HistogramVec,
     pub block_manager_suspended_blocks: IntGauge,
     pub block_manager_missing_ancestors: IntGauge,
     pub block_manager_missing_blocks: IntGauge,
@@ -126,6 +137,7 @@ impl NodeMetrics {
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposed: register_int_counter_vec_with_registry!(
@@ -140,15 +152,22 @@ impl NodeMetrics {
                 SIZE_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
+            block_ancestors: register_histogram_with_registry!(
+                "block_ancestors",
+                "Number of ancestors in proposed blocks",
+                exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
                 "block_timestamp_drift_wait_ms",
                 "Total time in ms spent waiting, when a received block has timestamp in future.",
-                &["authority"],
+                &["authority", "source"],
                 registry,
             ).unwrap(),
             blocks_per_commit_count: register_histogram_with_registry!(
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
+                COMMITTED_BLOCKS_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
@@ -216,6 +235,12 @@ impl NodeMetrics {
                 &["authority", "source"],
                 registry,
             ).unwrap(),
+            rejected_blocks: register_int_counter_vec_with_registry!(
+                "rejected_blocks",
+                "Number of blocks rejected before verifications",
+                &["reason"],
+                registry,
+            ).unwrap(),
             rejected_future_blocks: register_int_counter_vec_with_registry!(
                 "rejected_future_blocks",
                 "Number of blocks rejected because their timestamp is too far in the future",
@@ -255,15 +280,26 @@ impl NodeMetrics {
                 "Total number of leader timeouts",
                 registry,
             ).unwrap(),
-            missing_blocks_total: register_int_gauge_with_registry!(
+            missing_blocks_total: register_int_counter_with_registry!(
                 "missing_blocks_total",
-                "Total number of missing blocks",
+                "Total cumulative number of missing blocks",
+                registry,
+            ).unwrap(),
+            missing_blocks_after_fetch_total: register_int_counter_with_registry!(
+                "missing_blocks_after_fetch_total",
+                "Total number of missing blocks after fetching blocks from peer",
                 registry,
             ).unwrap(),
             quorum_receive_latency: register_histogram_with_registry!(
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            reputation_scores: register_int_gauge_vec_with_registry!(
+                "reputation_scores",
+                "Reputation scores for each authority",
+                &["authority"],
+                registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(
                 "scope_processing_time",
@@ -286,6 +322,12 @@ impl NodeMetrics {
             block_unsuspensions: register_int_counter_vec_with_registry!(
                 "block_unsuspensions",
                 "The number of block unsuspensions.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            suspended_block_time: register_histogram_vec_with_registry!(
+                "suspended_block_time",
+                "The time for which a block remains suspended",
                 &["authority"],
                 registry,
             ).unwrap(),

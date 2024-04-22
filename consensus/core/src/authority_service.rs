@@ -10,13 +10,13 @@ use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, TrustedCommit},
-    commit_syncer::HighestCommitMonitor,
+    commit_syncer::CommitVoteMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -31,7 +31,7 @@ use crate::{
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
-    highest_commit_monitor: Arc<HighestCommitMonitor>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
@@ -44,7 +44,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
-        highest_commit_monitor: Arc<HighestCommitMonitor>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcaster: broadcast::Receiver<VerifiedBlock>,
@@ -54,7 +54,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         Self {
             context,
             block_verifier,
-            highest_commit_monitor,
+            commit_vote_monitor,
             synchronizer,
             core_dispatcher,
             rx_block_broadcaster,
@@ -83,7 +83,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
@@ -97,7 +97,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -105,11 +105,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
         // Reject block with timestamp too far in the future.
-        let forward_time_drift = Duration::from_millis(
-            verified_block
-                .timestamp_ms()
-                .saturating_sub(timestamp_utc_ms()),
-        );
+        let now = timestamp_utc_ms();
+        let forward_time_drift =
+            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
         if forward_time_drift > self.context.parameters.max_forward_time_drift {
             self.context
                 .metrics
@@ -117,9 +115,19 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .rejected_future_blocks
                 .with_label_values(&[&peer_hostname])
                 .inc();
-            return Err(ConsensusError::BlockTooFarInFuture {
-                block_timestamp: verified_block.timestamp_ms(),
-                forward_time_drift,
+            debug!(
+                "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
+                verified_block.reference(),
+                verified_block.timestamp_ms(),
+                now,
+            );
+            return Err(ConsensusError::BlockRejected {
+                block_ref: verified_block.reference(),
+                reason: format!(
+                    "Block timestamp is too far in the future: {} > {}",
+                    verified_block.timestamp_ms(),
+                    now
+                ),
             });
         }
 
@@ -129,14 +137,58 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname])
+                .with_label_values(&[peer_hostname, &"handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
+            debug!(
+                "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
+                verified_block.reference(),
+                verified_block.timestamp_ms(),
+                now,
+                forward_time_drift.as_millis(),
+            );
             sleep(forward_time_drift).await;
         }
 
-        // Observe the block for the highest commit. When local commit is lagging too much,
-        // commit sync will be triggered.
-        self.highest_commit_monitor.observe(&verified_block);
+        // Observe the block for the commit votes. When local commit is lagging too much,
+        // commit sync loop will trigger fetching.
+        self.commit_vote_monitor.observe(&verified_block);
+
+        // Reject blocks when local commit index is lagging too far from quorum commit index.
+        //
+        // IMPORTANT: this must be done after observing votes from the block, otherwise
+        // observed quorum commit will no longer progress.
+        //
+        // Since the main issue with too many suspended blocks is memory usage not CPU,
+        // it is ok to reject after block verifications instead of before.
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        // The threshold to ignore block should be larger than commit_sync_batch_size,
+        // to avoid excessive block rejections and synchronizations.
+        const COMMIT_LAG_MULTIPLIER: u32 = 5;
+        if last_commit_index
+            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+            < quorum_commit_index
+        {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_blocks
+                .with_label_values(&[&"commit_lagging"])
+                .inc();
+            debug!(
+                "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
+                verified_block.reference(),
+                last_commit_index,
+                quorum_commit_index,
+            );
+            return Err(ConsensusError::BlockRejected {
+                block_ref: verified_block.reference(),
+                reason: format!(
+                    "Last commit index is lagging quorum commit index too much ({} < {})",
+                    last_commit_index, quorum_commit_index,
+                ),
+            });
+        }
 
         self.context
             .metrics
@@ -191,9 +243,20 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
+        const MAX_ADDITIONAL_BLOCKS: usize = 10;
         if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
+        }
+
+        if !highest_accepted_rounds.is_empty()
+            && highest_accepted_rounds.len() != self.context.committee.size()
+        {
+            return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
+                highest_accepted_rounds.len(),
+                self.context.committee.size(),
+            ));
         }
 
         // Some quick validation of the requested block refs
@@ -212,9 +275,27 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // For now ask dag state directly
         let blocks = self.dag_state.read().get_blocks(&block_refs);
 
-        // Return the serialised blocks
+        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
+        // that ancestor blocks up to `MAX_ADDITIONAL_BLOCKS`.
+        let mut ancestor_blocks = vec![];
+        if !highest_accepted_rounds.is_empty() {
+            let all_ancestors = blocks
+                .iter()
+                .flatten()
+                .flat_map(|block| block.ancestors().to_vec())
+                .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+                .take(MAX_ADDITIONAL_BLOCKS)
+                .collect::<Vec<_>>();
+
+            if !all_ancestors.is_empty() {
+                ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+            }
+        }
+
+        // Return the serialised blocks & the ancestor blocks
         let result = blocks
             .into_iter()
+            .chain(ancestor_blocks)
             .flatten()
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();

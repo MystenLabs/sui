@@ -2445,6 +2445,9 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             }
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::DotUnresolved(loc, d) => {
+            N::ExpDotted_::DotUnresolved(loc, Box::new(dotted(context, *d)?))
+        }
         E::ExpDotted_::Index(inner, args) => {
             let args = call_args(context, args);
             let inner = Box::new(dotted(context, *inner)?);
@@ -3652,7 +3655,9 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) => remove_unused_bindings_exp_dotted(context, used, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+            remove_unused_bindings_exp_dotted(context, used, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             for e in es {
                 remove_unused_bindings_exp(context, used, e);

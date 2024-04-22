@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use consensus_config::{AuthorityIndex, Epoch, Stake};
 use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
 use crate::{
-    block::{BlockRef, BlockTimestampMs, Round},
+    block::{BlockRef, Round},
     commit::Commit,
     CommitIndex,
 };
@@ -38,6 +36,15 @@ pub enum ConsensusError {
     #[error("Genesis blocks should not be queried!")]
     UnexpectedGenesisBlockRequested,
 
+    #[error(
+        "Expected {requested} but received {received} blocks returned from authority {authority}"
+    )]
+    UnexpectedNumberOfBlocksFetched {
+        authority: AuthorityIndex,
+        requested: usize,
+        received: usize,
+    },
+
     #[error("Unexpected block returned while fetching missing blocks")]
     UnexpectedFetchedBlock {
         index: AuthorityIndex,
@@ -50,6 +57,9 @@ pub enum ConsensusError {
     #[error("Too many blocks have been requested from authority {0}")]
     TooManyFetchBlocksRequested(AuthorityIndex),
 
+    #[error("Provided size of highest accepted rounds parameter, {0}, is different than committee size, {1}")]
+    InvalidSizeOfHighestAcceptedRounds(usize, usize),
+
     #[error("Invalid authority index: {index} > {max}")]
     InvalidAuthorityIndex { index: AuthorityIndex, max: usize },
 
@@ -61,6 +71,9 @@ pub enum ConsensusError {
 
     #[error("Synchronizer for fetching blocks directly from {0} is saturated")]
     SynchronizerSaturated(AuthorityIndex),
+
+    #[error("Block {block_ref:?} rejected: {reason}")]
+    BlockRejected { block_ref: BlockRef, reason: String },
 
     #[error("Ancestor is in wrong position: block {block_authority}, ancestor {ancestor_authority}, position {position}")]
     InvalidAncestorPosition {
@@ -91,12 +104,6 @@ pub enum ConsensusError {
     InvalidBlockTimestamp {
         max_timestamp_ms: u64,
         block_timestamp_ms: u64,
-    },
-
-    #[error("Block at {block_timestamp}ms is too far in the future: {forward_time_drift:?}")]
-    BlockTooFarInFuture {
-        block_timestamp: BlockTimestampMs,
-        forward_time_drift: Duration,
     },
 
     #[error("No available authority to fetch commits")]
@@ -148,6 +155,9 @@ pub enum ConsensusError {
 
     #[error("Network error: {0:?}")]
     NetworkError(String),
+
+    #[error("Request timeout: {0:?}")]
+    NetworkRequestTimeout(String),
 
     #[error("Consensus has shut down!")]
     Shutdown,

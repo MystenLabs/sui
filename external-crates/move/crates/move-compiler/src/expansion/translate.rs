@@ -2632,13 +2632,15 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
-            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
-            None => {
-                assert!(context.env().has_errors());
-                EE::UnresolvedError
+        pdotted_ @ (PE::Dot(_, _) | PE::DotUnresolved(_, _)) => {
+            match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+                Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
             }
-        },
+        }
 
         pdotted_ @ PE::Index(_, _) => {
             let cur_pkg = context.current_package();
@@ -2738,6 +2740,7 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
 
             PE::DotCall(lhs, _, _, _, _)
             | PE::Dot(lhs, _)
+            | PE::DotUnresolved(_, lhs)
             | PE::Index(lhs, _)
             | PE::Borrow(_, lhs)
             | PE::Dereference(lhs) => ambiguous_cast(lhs),
@@ -2854,7 +2857,9 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
                 return None;
             }
         }
-        E::ExpDotted_::Dot(_, _) | E::ExpDotted_::Index(_, _) => {
+        E::ExpDotted_::Dot(_, _)
+        | E::ExpDotted_::DotUnresolved(_, _)
+        | E::ExpDotted_::Index(_, _) => {
             let current_package = context.current_package();
             context
                 .env()
@@ -2891,6 +2896,10 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
                 .map(|arg| *exp(context, Box::new(arg)))
                 .collect::<Vec<_>>();
             EE::Index(lhs, sp(argloc, args))
+        }
+        PE::DotUnresolved(loc, plhs) => {
+            let lhs = exp_dotted(context, plhs)?;
+            EE::DotUnresolved(loc, lhs)
         }
         pe_ => EE::Exp(exp(context, Box::new(sp(loc, pe_)))),
     };

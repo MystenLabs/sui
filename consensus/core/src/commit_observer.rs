@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
@@ -142,7 +143,7 @@ impl CommitObserver {
                 .metrics
                 .node_metrics
                 .block_commit_latency
-                .observe(latency_ms as f64);
+                .observe(Duration::from_millis(latency_ms).as_secs_f64());
             self.context
                 .metrics
                 .node_metrics
@@ -174,7 +175,7 @@ mod tests {
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         dag_state::DagState,
-        leader_schedule::LeaderSchedule,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         test_dag::{build_dag, get_all_uncommitted_leader_blocks},
     };
@@ -189,7 +190,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -279,7 +280,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -416,7 +417,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone());
+        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();

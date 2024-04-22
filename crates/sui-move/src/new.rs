@@ -72,7 +72,7 @@ module {name}::{name}_tests {{
         // pass
     }}
 
-    #[test, expected_failure(abort_code = {name}::{name}_tests::ENotImplemented)]
+    #[test, expected_failure(abort_code = ::{name}::{name}_tests::ENotImplemented)]
     fun test_{name}_fail() {{
         abort ENotImplemented
     }}

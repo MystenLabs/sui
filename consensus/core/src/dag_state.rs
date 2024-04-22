@@ -10,11 +10,13 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use tracing::error;
+use itertools::Itertools as _;
+use tracing::{debug, error};
 
 use crate::{
     block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock, GENESIS_ROUND,
+        genesis_blocks, timestamp_utc_ms, BlockAPI, BlockDigest, BlockRef, Round, Slot,
+        VerifiedBlock, GENESIS_ROUND,
     },
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
     context::Context,
@@ -141,6 +143,14 @@ impl DagState {
             return;
         }
 
+        let now = timestamp_utc_ms();
+        if block.timestamp_ms() > now {
+            panic!(
+                "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
+                block, block.timestamp_ms(), now,
+            );
+        }
+
         // TODO: Move this check to core
         // Ensure we don't write multiple blocks per slot for our own index
         if block_ref.author == self.context.own_index {
@@ -171,6 +181,10 @@ impl DagState {
 
     /// Accepts a blocks into DagState and keeps it in memory.
     pub(crate) fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) {
+        debug!(
+            "Accepting blocks: {}",
+            blocks.iter().map(|b| b.reference().to_string()).join(",")
+        );
         for block in blocks {
             self.accept_block(block);
         }
@@ -599,6 +613,13 @@ impl DagState {
         if blocks.is_empty() && commits.is_empty() {
             return;
         }
+        debug!(
+            "Flushing {} blocks ({}) and {} commits ({}) to storage.",
+            blocks.len(),
+            blocks.iter().map(|b| b.reference().to_string()).join(","),
+            commits.len(),
+            commits.iter().map(|c| c.reference().to_string()).join(","),
+        );
         self.store
             .write(WriteBatch::new(
                 blocks,

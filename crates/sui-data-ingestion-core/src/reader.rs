@@ -58,6 +58,11 @@ impl Default for ReaderOptions {
     }
 }
 
+enum RemoteStore {
+    ObjectStore(Box<dyn ObjectStore>),
+    Rest(sui_rest_api::Client),
+}
+
 impl CheckpointReader {
     /// Represents a single iteration of the reader.
     /// Reads files in a local directory, validates them, and forwards `CheckpointData` to the executor.
@@ -87,17 +92,22 @@ impl CheckpointReader {
     }
 
     async fn remote_fetch_checkpoint_internal(
-        store: &dyn ObjectStore,
+        store: &RemoteStore,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
-        let path = Path::from(format!("{}.chk", checkpoint_number));
-        let response = store.get(&path).await?;
-        let bytes = response.bytes().await?;
-        Blob::from_bytes::<CheckpointData>(&bytes)
+        match store {
+            RemoteStore::ObjectStore(store) => {
+                let path = Path::from(format!("{}.chk", checkpoint_number));
+                let response = store.get(&path).await?;
+                let bytes = response.bytes().await?;
+                Blob::from_bytes::<CheckpointData>(&bytes)
+            }
+            RemoteStore::Rest(client) => client.get_full_checkpoint(checkpoint_number).await,
+        }
     }
 
     async fn remote_fetch_checkpoint(
-        store: &dyn ObjectStore,
+        store: &RemoteStore,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
         let mut backoff = backoff::ExponentialBackoff::default();
@@ -125,12 +135,17 @@ impl CheckpointReader {
             .remote_store_url
             .clone()
             .expect("remote store url must be set");
-        let store = create_remote_store_client(
-            url,
-            self.remote_store_options.clone(),
-            self.options.timeout_secs,
-        )
-        .expect("failed to create remote store client");
+        let store = if url.ends_with("/rest") {
+            RemoteStore::Rest(sui_rest_api::Client::new(url))
+        } else {
+            let object_store = create_remote_store_client(
+                url,
+                self.remote_store_options.clone(),
+                self.options.timeout_secs,
+            )
+            .expect("failed to create remote store client");
+            RemoteStore::ObjectStore(object_store)
+        };
 
         spawn_monitored_task!(async move {
             let mut checkpoint_stream = (start_checkpoint..u64::MAX)

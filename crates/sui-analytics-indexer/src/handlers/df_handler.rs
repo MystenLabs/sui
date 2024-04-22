@@ -6,6 +6,7 @@ use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
 use std::path::Path;
 use sui_indexer::errors::IndexerError;
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tap::tap::TapFallible;
 use tracing::warn;
 
@@ -51,6 +52,11 @@ impl Handler for DynamicFieldHandler {
                 checkpoint_transaction,
             )
             .await?;
+            if checkpoint_summary.end_of_epoch_data.is_some() {
+                self.resolver
+                    .package_store()
+                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+            }
         }
         Ok(())
     }

@@ -66,8 +66,10 @@ pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 #[derive(Clone)]
 pub struct IndexerReader {
     pool: PgConnectionPool,
-    package_resolver: Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>,
+    package_resolver: PackageResolver,
 }
+
+pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>;
 
 // Impl for common initialization and utilities
 impl IndexerReader {
@@ -1616,7 +1618,7 @@ impl IndexerReader {
         ))
     }
 
-    pub fn package_resolver(&self) -> Arc<Resolver<impl PackageStore>> {
+    pub fn package_resolver(&self) -> PackageResolver {
         self.package_resolver.clone()
     }
 }

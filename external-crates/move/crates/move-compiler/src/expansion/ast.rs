@@ -327,6 +327,7 @@ pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Name),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
+    DotUnresolved(Loc, Box<ExpDotted>), // dot where Name could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -1733,6 +1734,10 @@ impl AstDebug for ExpDotted_ {
                 w.write("[");
                 w.comma(&rhs.value, |w, e| e.ast_debug(w));
                 w.write("]");
+            }
+            D::DotUnresolved(_, e) => {
+                e.ast_debug(w);
+                w.write(".")
             }
         }
     }

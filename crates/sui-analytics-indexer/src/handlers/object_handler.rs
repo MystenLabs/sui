@@ -4,6 +4,7 @@
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::path::Path;
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use sui_indexer::framework::Handler;
 use sui_json_rpc_types::SuiMoveStruct;
@@ -50,6 +51,11 @@ impl Handler for ObjectHandler {
                 &checkpoint_transaction.effects,
             )
             .await?;
+            if checkpoint_summary.end_of_epoch_data.is_some() {
+                self.resolver
+                    .package_store()
+                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+            }
         }
         Ok(())
     }

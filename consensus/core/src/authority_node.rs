@@ -15,11 +15,12 @@ use crate::{
     block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
-    commit_syncer::{CommitSyncer, HighestCommitMonitor},
+    commit_syncer::{CommitSyncer, CommitVoteMonitor},
     context::Context,
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
+    leader_schedule::{LeaderSchedule, LeaderSwapTable},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
     network::{
@@ -213,8 +214,14 @@ where
             store.clone(),
         );
 
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+
         let core = Core::new(
             context.clone(),
+            leader_schedule,
             tx_consumer,
             block_manager,
             commit_observer,
@@ -234,13 +241,14 @@ where
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            dag_state.clone(),
         );
 
-        let highest_commit_monitor = Arc::new(HighestCommitMonitor::new(&context));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_syncer = CommitSyncer::new(
             context.clone(),
             core_dispatcher.clone(),
-            highest_commit_monitor.clone(),
+            commit_vote_monitor.clone(),
             network_client.clone(),
             block_verifier.clone(),
             dag_state.clone(),
@@ -249,7 +257,7 @@ where
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            highest_commit_monitor,
+            commit_vote_monitor,
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
@@ -421,6 +429,7 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -495,11 +504,12 @@ mod tests {
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            dag_state.clone(),
         );
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            Arc::new(HighestCommitMonitor::new(&context)),
+            Arc::new(CommitVoteMonitor::new(context.clone())),
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
