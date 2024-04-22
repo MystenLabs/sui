@@ -3,9 +3,10 @@
 
 use self::effects_v2::TransactionEffectsV2;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
-use crate::committee::EpochId;
+use crate::committee::{Committee, EpochId};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
+    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
+    EmptySignInfo,
 };
 use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
@@ -24,7 +25,7 @@ pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
 pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::IntentScope;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
 pub use test_effects_builder::TestEffectsBuilder;
@@ -445,3 +446,18 @@ pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEff
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::TransactionEffects),
+            committee,
+        )
+    }
+
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertifiedTransactionEffects> {
+        self.verify_authority_signatures(committee)?;
+        Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
+    }
+}

@@ -8,7 +8,7 @@ use crate::base_types::{
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthorityStrongQuorumSignInfo,
+    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
 };
 use crate::digests::Digest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
@@ -28,7 +28,7 @@ use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use shared_crypto::intent::IntentScope;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -297,6 +297,20 @@ pub type VerifiedCheckpoint = VerifiedEnvelope<CheckpointSummary, AuthorityStron
 pub type TrustedCheckpoint = TrustedEnvelope<CheckpointSummary, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
+        self.data().verify_epoch(self.auth_sig().epoch)?;
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::CheckpointSummary),
+            committee,
+        )
+    }
+
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCheckpoint> {
+        self.verify_authority_signatures(committee)?;
+        Ok(VerifiedCheckpoint::new_from_verified(self))
+    }
+
     pub fn verify_with_contents(
         &self,
         committee: &Committee,
@@ -322,6 +336,25 @@ impl CertifiedCheckpointSummary {
 
     pub fn get_validator_signature(self) -> AggregateAuthoritySignature {
         self.auth_sig().signature.clone()
+    }
+}
+
+impl SignedCheckpointSummary {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
+        self.data().verify_epoch(self.auth_sig().epoch)?;
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::CheckpointSummary),
+            committee,
+        )
+    }
+
+    pub fn verify(
+        self,
+        committee: &Committee,
+    ) -> SuiResult<VerifiedEnvelope<CheckpointSummary, AuthoritySignInfo>> {
+        self.verify_authority_signatures(committee)?;
+        Ok(VerifiedEnvelope::<CheckpointSummary, AuthoritySignInfo>::new_from_verified(self))
     }
 }
 

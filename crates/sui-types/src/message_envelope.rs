@@ -7,19 +7,10 @@ use crate::crypto::{
     AuthorityKeyPair, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
-use crate::effects::{CertifiedTransactionEffects, VerifiedCertifiedTransactionEffects};
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
-use crate::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointSequenceNumber, CheckpointSummary,
-    SignedCheckpointSummary, VerifiedCheckpoint,
-};
-use crate::signature::VerifyParams;
-use crate::signature_verification::verify_sender_signed_data_message_signatures;
-use crate::transaction::{
-    CertifiedTransaction, SenderSignedData, SignedTransaction, Transaction, VerifiedCertificate,
-    VerifiedSignedTransaction, VerifiedTransaction, VersionedProtocolMessage,
-};
+use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::transaction::{SenderSignedData, VersionedProtocolMessage};
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -122,25 +113,6 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     }
 }
 
-impl Transaction {
-    pub fn verify_signature(
-        &self,
-        current_epoch: EpochId,
-        verify_params: &VerifyParams,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(&self.data, current_epoch, verify_params)
-    }
-
-    pub fn verify(
-        self,
-        current_epoch: EpochId,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedTransaction> {
-        self.verify_signature(current_epoch, verify_params)?;
-        Ok(VerifiedTransaction::new_from_verified(self))
-    }
-}
-
 impl<T> Envelope<T, AuthoritySignInfo>
 where
     T: Message + Serialize,
@@ -180,50 +152,6 @@ impl Envelope<SenderSignedData, AuthoritySignInfo> {
             Intent::sui_app(IntentScope::SenderSignedTransaction),
             committee,
         )
-    }
-}
-
-impl SignedTransaction {
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(&self.data, committee.epoch(), verify_params)?;
-
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-
-    pub fn verify_authenticated(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedSignedTransaction> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
-        Ok(VerifiedSignedTransaction::new_from_verified(self))
-    }
-}
-
-impl SignedCheckpointSummary {
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::CheckpointSummary),
-            committee,
-        )
-    }
-
-    pub fn verify(
-        self,
-        committee: &Committee,
-    ) -> SuiResult<VerifiedEnvelope<CheckpointSummary, AuthoritySignInfo>> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedEnvelope::<CheckpointSummary, AuthoritySignInfo>::new_from_verified(self))
     }
 }
 
@@ -269,71 +197,6 @@ where
 
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
-    }
-}
-
-impl CertifiedTransaction {
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(&self.data, committee.epoch(), verify_params)?;
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-
-    pub fn verify_authenticated(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
-        Ok(VerifiedCertificate::new_from_verified(self))
-    }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-}
-
-impl CertifiedTransactionEffects {
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::TransactionEffects),
-            committee,
-        )
-    }
-
-    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertifiedTransactionEffects> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
-    }
-}
-
-impl CertifiedCheckpointSummary {
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::CheckpointSummary),
-            committee,
-        )
-    }
-
-    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCheckpoint> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedCheckpoint::new_from_verified(self))
     }
 }
 

@@ -4,11 +4,11 @@
 
 use super::{base_types::*, error::*};
 use crate::authenticator_state::ActiveJwk;
-use crate::committee::{EpochId, ProtocolVersion};
+use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
-    SuiSignatureInner, ToFromBytes,
+    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
+    AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
+    RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
@@ -18,8 +18,8 @@ use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use crate::signature::GenericSignature;
-use crate::signature_verification::verify_sender_signed_data_user_input;
+use crate::signature::{GenericSignature, VerifyParams};
+use crate::signature_verification::verify_sender_signed_data_message_signatures;
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
@@ -2225,8 +2225,7 @@ impl SenderSignedData {
         })
     }
 
-    /// Perform cheap validity checks on the sender signed transaction, including its size,
-    /// input count, command count, etc.
+    /// Validate untrusted user transaction, including its size, input count, command count, etc.
     pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
         // Enforce overall transaction size limit.
         let tx_size = self.serialized_size()?;
@@ -2244,9 +2243,27 @@ impl SenderSignedData {
             }
         );
 
-        verify_sender_signed_data_user_input(self)?;
+        // SenderSignedData must contain exactly one transaction.
+        fp_ensure!(
+            self.inner_transactions().len() == 1,
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must contain exactly one transaction".to_string()
+                )
+            }
+        );
 
-        let tx_data = self.transaction_data();
+        // Users cannot send system transactions.
+        let tx_data = &self.intent_message().value;
+        fp_ensure!(
+            !tx_data.is_system_tx(),
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must not contain system transaction".to_string()
+                )
+            }
+        );
+
         tx_data
             .check_version_supported(config)
             .map_err(Into::<SuiError>::into)?;
@@ -2552,6 +2569,54 @@ pub type TrustedTransaction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
 pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
+impl Transaction {
+    pub fn verify_signature(
+        &self,
+        current_epoch: EpochId,
+        verify_params: &VerifyParams,
+    ) -> SuiResult {
+        verify_sender_signed_data_message_signatures(self.data(), current_epoch, verify_params)
+    }
+
+    pub fn verify(
+        self,
+        current_epoch: EpochId,
+        verify_params: &VerifyParams,
+    ) -> SuiResult<VerifiedTransaction> {
+        self.verify_signature(current_epoch, verify_params)?;
+        Ok(VerifiedTransaction::new_from_verified(self))
+    }
+}
+
+impl SignedTransaction {
+    pub fn verify_signatures_authenticated(
+        &self,
+        committee: &Committee,
+        verify_params: &VerifyParams,
+    ) -> SuiResult {
+        verify_sender_signed_data_message_signatures(
+            self.data(),
+            committee.epoch(),
+            verify_params,
+        )?;
+
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
+            committee,
+        )
+    }
+
+    pub fn verify_authenticated(
+        self,
+        committee: &Committee,
+        verify_params: &VerifyParams,
+    ) -> SuiResult<VerifiedSignedTransaction> {
+        self.verify_signatures_authenticated(committee, verify_params)?;
+        Ok(VerifiedSignedTransaction::new_from_verified(self))
+    }
+}
+
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransaction {
@@ -2564,6 +2629,42 @@ impl CertifiedTransaction {
 
     pub fn gas_price(&self) -> u64 {
         self.data().transaction_data().gas_price()
+    }
+
+    // TODO: Eventually we should remove all calls to verify_signature
+    // and make sure they all call verify to avoid repeated verifications.
+    pub fn verify_signatures_authenticated(
+        &self,
+        committee: &Committee,
+        verify_params: &VerifyParams,
+    ) -> SuiResult {
+        verify_sender_signed_data_message_signatures(
+            self.data(),
+            committee.epoch(),
+            verify_params,
+        )?;
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
+            committee,
+        )
+    }
+
+    pub fn verify_authenticated(
+        self,
+        committee: &Committee,
+        verify_params: &VerifyParams,
+    ) -> SuiResult<VerifiedCertificate> {
+        self.verify_signatures_authenticated(committee, verify_params)?;
+        Ok(VerifiedCertificate::new_from_verified(self))
+    }
+
+    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
+            committee,
+        )
     }
 }
 
