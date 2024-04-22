@@ -587,7 +587,7 @@ async fn prompt_if_no_config(
                         String::new()
                     } else {
                         print!(
-                            "Sui Full node server URL (Defaults to Sui Tevnet if not specified) : "
+                            "Sui Full node server URL (Defaults to Sui Testnet if not specified) : "
                         );
                         read_line()?
                     };
