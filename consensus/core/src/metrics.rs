@@ -80,7 +80,7 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 
 pub(crate) struct NodeMetrics {
     pub block_commit_latency: Histogram,
-    pub block_proposed: IntCounterVec,
+    pub proposed_blocks: IntCounterVec,
     pub block_size: Histogram,
     pub block_ancestors: Histogram,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
@@ -140,9 +140,9 @@ impl NodeMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
-            block_proposed: register_int_counter_vec_with_registry!(
-                "block_proposed",
-                "Total number of block proposals. If force is true then this block has been created forcefully via a leader timeout event.",
+            proposed_blocks: register_int_counter_vec_with_registry!(
+                "proposed_blocks",
+                "Total number of proposed blocks. If force is true then this block has been created forcefully via a leader timeout event.",
                 &["force"],
                 registry,
             ).unwrap(),
@@ -359,7 +359,7 @@ impl NodeMetrics {
             ).unwrap(),
             subscriber_connections: register_int_gauge_vec_with_registry!(
                 "subscriber_connections",
-                "The number of block stream connections breaking down by peer",
+                "The number of block stream connections broken down by peer",
                 &["authority"],
                 registry,
             ).unwrap(),
