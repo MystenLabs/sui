@@ -17,7 +17,13 @@ Sui supports the following operating systems:
 
 {@include: ../../../snippets/quick-install.mdx}
 
-## Install from binaries {#install-binaries}
+:::info
+
+If you use this method to install Sui, you are all set. The quick install is suitable for most use cases. The remaining installation methods are for those wanting more control over the installation process.
+
+:::
+
+## Install using Sui binaries {#install-binaries}
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
 
@@ -97,6 +103,32 @@ Running binaries other than `sui` might require installing prerequisites itemize
 #### Confirm the installation {#confirm-the-installation}
 
 To confirm that Sui installed correctly, type `sui --version` in your console or terminal and press Enter. The response should provide the Sui version installed. If the console or terminal responds with a command not found error, make sure the full path to your Sui binaries is included in your `PATH` variable.
+
+### Install Sui binaries from source {#install-sui-binaries-from-source}
+
+Run the following command to install Sui binaries from the `testnet` branch:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+```
+
+The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
+
+To update to the latest stable version of Rust:
+
+```shell
+rustup update stable
+```
+
+The command installs Sui components in the `~/.cargo/bin` folder.
+
+### Upgrade Sui binaries
+
+If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch):
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+```
 
 ## Install from source
 
@@ -370,31 +402,9 @@ Sui requires the following additional tools on computers running Windows.
 
 </Tabs>
 
-## Install Sui binaries from source {#install-sui-binaries-from-source}
+## Using Sui from command line
 
-Run the following command to install Sui binaries from the `testnet` branch:
-
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
-```
-
-The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
-
-To update to the latest stable version of Rust:
-
-```shell
-rustup update stable
-```
-
-The command installs Sui components in the `~/.cargo/bin` folder.
-
-## Upgrade Sui binaries
-
-If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them:
-
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
-```
+With Sui installed, you can interact with Sui networks using the Sui CLI. For more details, see the [Sui CLI](/references/cli.mdx) reference.
 
 ## Next steps {#next-steps}
 
