@@ -140,6 +140,22 @@ impl Core {
             .scope_processing_time
             .with_label_values(&["Core::recover"])
             .start_timer();
+        // Ensure local time is after max ancestor timestamp.
+        let ancestor_blocks = self
+            .dag_state
+            .read()
+            .get_last_cached_block_per_authority(Round::MAX);
+        let max_ancestor_timestamp = ancestor_blocks
+            .iter()
+            .fold(0, |ts, b| ts.max(b.timestamp_ms()));
+        let wait_ms = max_ancestor_timestamp.saturating_sub(timestamp_utc_ms());
+        if wait_ms > 0 {
+            warn!(
+                "Waiting for {} ms while recovering ancestors from storage",
+                wait_ms
+            );
+            std::thread::sleep(Duration::from_millis(wait_ms as u64));
+        }
         // Recover the last available quorum to correctly advance the threshold clock.
         let last_quorum = self.dag_state.read().last_quorum();
         self.add_accepted_blocks(last_quorum);
