@@ -9,10 +9,15 @@ use crate::types::{AddTokensOnSuiAction, BridgeAction};
 use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
+use std::fs::{self, DirBuilder};
 use std::io::{Read, Write};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
@@ -334,6 +339,18 @@ pub(crate) async fn deploy_sol_contract(
     std::env::set_var("PRIVATE_KEY", eth_private_key_hex);
     std::env::set_var("ETHERSCAN_API_KEY", "n/a");
 
+    // We provide a unique out path for each run to avoid conflicts
+    let mut rng = SmallRng::from_entropy();
+    let random_number = rng.gen::<u32>();
+    let forge_out_path = PathBuf::from(format!("out-{random_number}"));
+    let _dir = TempDir::new(
+        PathBuf::from(sol_path.clone())
+            .join(forge_out_path.clone())
+            .as_path(),
+    )
+    .unwrap();
+    std::env::set_var("FOUNDRY_OUT", forge_out_path.to_str().unwrap());
+
     info!("Deploying solidity contracts");
     Command::new("forge")
         .current_dir(sol_path.clone())
@@ -598,4 +615,25 @@ pub(crate) async fn get_signatures(
     sigs.into_iter()
         .map(|sig: Vec<u8>| Bytes::from(sig))
         .collect()
+}
+
+/// A simple struct to create a temporary directory that
+/// will be removed when it goes out of scope.
+struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    fn new(dir_path: &Path) -> std::io::Result<TempDir> {
+        DirBuilder::new().recursive(true).create(dir_path)?;
+        Ok(TempDir {
+            path: dir_path.to_path_buf(),
+        })
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.path).unwrap();
+    }
 }
