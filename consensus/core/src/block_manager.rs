@@ -358,7 +358,8 @@ enum TryAcceptResult {
     Accepted(VerifiedBlock),
     // The block is suspended. Wraps ancestors to be fetched.
     Suspended(BTreeSet<BlockRef>),
-    // The block has been processed and exists in BlockManager or DagState.
+    // The block has been processed before and already exists in BlockManager (and is suspended) or
+    // in DagState (so has been already accepted). No further processing has been done at this point.
     Processed,
 }
 
