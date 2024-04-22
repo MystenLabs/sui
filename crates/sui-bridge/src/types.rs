@@ -34,7 +34,7 @@ pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 pub const USD_MULTIPLIER: u64 = 10000; // decimal places = 4
 
 pub type BridgeInnerDynamicField = Field<u64, MoveTypeBridgeInner>;
-pub type BridgeRecordDyanmicField = Field<
+pub type BridgeRecordDynamicField = Field<
     MoveTypeBridgeMessageKey,
     LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
 >;
@@ -334,7 +334,7 @@ impl BlocklistCommitteeAction {
         bytes.push(u8::try_from(self.blocklisted_members.len()).unwrap());
 
         // Add list of updated members
-        // Members are represented as pubkey dervied evm addresses (20 bytes)
+        // Members are represented as pubkey derived evm addresses (20 bytes)
         let members_bytes = self
             .blocklisted_members
             .iter()
@@ -619,10 +619,6 @@ impl Message for BridgeAction {
         unreachable!("BridgeEventDigest is not used today")
     }
 
-    fn verify_user_input(&self) -> SuiResult {
-        Ok(())
-    }
-
     fn verify_epoch(&self, _epoch: EpochId) -> SuiResult {
         Ok(())
     }
@@ -880,7 +876,7 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        // its evem address: 0xacaef39832cb995c4e049437a3e2ec6a7bad1ab5
+        // its evm address: 0xacaef39832cb995c4e049437a3e2ec6a7bad1ab5
         let blocklist_action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 68,
             chain_id: BridgeChainId::SuiDevnet,
@@ -1281,7 +1277,7 @@ mod tests {
 
     #[test]
     fn test_bridge_committee_filter_blocklisted_authorities() -> anyhow::Result<()> {
-        // Note: today BridgeCommitte does not shuffle authorities
+        // Note: today BridgeCommittee does not shuffle authorities
         let (authority1, _, _) = get_test_authority_and_key(5000, 9999);
         let (mut authority2, _, _) = get_test_authority_and_key(3000, 9999);
         authority2.is_blocklisted = true;
