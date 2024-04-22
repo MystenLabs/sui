@@ -3,10 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module congestion_control::congestion_control {
-    // use sui::object::{Self, UID};
-    // use sui::transfer;
-    // use sui::tx_context::{Self, TxContext};
-
     public struct Object has key, store {
         id: UID,
         value: u64,

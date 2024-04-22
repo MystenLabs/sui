@@ -40,9 +40,13 @@ pub(crate) struct SharedObjectDelete {
     mutable: bool,
 }
 
+/// The transaction accpeted a shared object as input, but it's execution was cancelled.
 #[derive(SimpleObject)]
 pub(crate) struct SharedObjectCancelled {
+    /// ID of the shared object.
     address: SuiAddress,
+
+    /// The assigned shared object version. It is a special version indicating transaction cancellation reason.
     version: u64,
 }
 
