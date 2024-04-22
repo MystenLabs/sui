@@ -552,7 +552,8 @@ pub(crate) async fn start_bridge_cluster(
                 eth_rpc_url: eth_environment.rpc_url.clone(),
                 eth_bridge_proxy_address: eth_bridge_contract_address.clone(),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
-                eth_contracts_start_block_override: Some(0),
+                eth_contracts_start_block_fallback: Some(0),
+                eth_contracts_start_block_override: None,
             },
             sui: SuiConfig {
                 sui_rpc_url: test_cluster.fullnode_handle.rpc_url.clone(),

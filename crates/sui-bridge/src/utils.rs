@@ -100,6 +100,7 @@ pub fn generate_bridge_node_config_and_write_to_file(
             eth_rpc_url: "your_eth_rpc_url".to_string(),
             eth_bridge_proxy_address: "0x0000000000000000000000000000000000000000".to_string(),
             eth_bridge_chain_id: BridgeChainId::EthSepolia as u8,
+            eth_contracts_start_block_fallback: Some(0),
             eth_contracts_start_block_override: None,
         },
         approved_governance_actions: vec![],
