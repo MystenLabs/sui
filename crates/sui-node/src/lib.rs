@@ -36,7 +36,6 @@ use sui_network::randomness;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
-use sui_types::message_envelope::get_google_jwk_bytes;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -1408,13 +1407,6 @@ impl SuiNode {
         &self,
     ) -> Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>> {
         self.transaction_orchestrator.clone()
-    }
-
-    pub fn get_google_jwk_bytes(&self) -> Result<Vec<u8>, SuiError> {
-        Ok(get_google_jwk_bytes()
-            .read()
-            .map_err(|_| SuiError::JWKRetrievalError)?
-            .to_vec())
     }
 
     pub fn subscribe_to_transaction_orchestrator_effects(

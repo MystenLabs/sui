@@ -936,7 +936,6 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
         assert!(node
             .subscribe_to_transaction_orchestrator_effects()
             .is_err());
-        assert!(node.get_google_jwk_bytes().is_ok());
     });
 }
 
