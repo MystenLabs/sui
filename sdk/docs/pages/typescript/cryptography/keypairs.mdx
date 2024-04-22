@@ -72,13 +72,13 @@ if the address associated with the public key matches the address that the key p
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { verifyPersonalMessage } from '@mysten/sui.js/verify';
+import { verifyPersonalMessageSignature } from '@mysten/sui.js/verify';
 
 const keypair = new Ed25519Keypair();
 const message = new TextEncoder().encode('hello world');
 const { signature } = await keypair.signPersonalMessage(message);
 
-const publicKey = await verifyPersonalMessage(message, signature);
+const publicKey = await verifyPersonalMessageSignature(message, signature);
 
 if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 	throw new Error('Signature was valid, but was signed by a different key pair');
@@ -88,13 +88,13 @@ if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 ## Verifying transaction blocks
 
 Verifying transaction blocks is similar to signature verification, except you use
-`verifyTransactionBlock`:
+`verifyTransactionBlockSignature`:
 
 ```typescript
 // import SuiClient to create a network client and the getFullnodeUrl helper function
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { verifyTransactionBlock } from '@mysten/sui.js/verify';
+import { verifyTransactionBlockSignature } from '@mysten/sui.js/verify';
 
 // see Network Interactions with SuiClient for more info on creating clients
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
@@ -108,7 +108,7 @@ const { signature } = await keypair.signTransactionBlock(bytes);
 // if you have a public key, you can verify it
 //   const isValid = await publicKey.verifyTransactionBlock(bytes, signature);
 // or get the public key from the transaction block
-const publicKey = await verifyTransactionBlock(bytes, signature);
+const publicKey = await verifyTransactionBlockSignature(bytes, signature);
 
 if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 	throw new Error('Signature was valid, but was signed by a different keyPair');
