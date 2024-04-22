@@ -15,7 +15,8 @@ use tracing::{debug, error};
 
 use crate::{
     block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock, GENESIS_ROUND,
+        genesis_blocks, timestamp_utc_ms, BlockAPI, BlockDigest, BlockRef, Round, Slot,
+        VerifiedBlock, GENESIS_ROUND,
     },
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
     context::Context,
@@ -140,6 +141,14 @@ impl DagState {
         let block_ref = block.reference();
         if self.contains_block(&block_ref) {
             return;
+        }
+
+        let now = timestamp_utc_ms();
+        if block.timestamp_ms() > now {
+            panic!(
+                "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
+                block, block.timestamp_ms(), now,
+            );
         }
 
         // TODO: Move this check to core
