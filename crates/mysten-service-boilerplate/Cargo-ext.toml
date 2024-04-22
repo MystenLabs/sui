@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 anyhow = "1.0.79"
 axum = { version = "0.6.6", features = ["macros"] }
-mysten-service = { path = "../mysten-service" }
+mysten-service = { git = "https://github.com/mystenlabs/sui.git", branch = "main", package = "mysten-service" }
 prometheus = "0.13.3"
 tracing = "0.1.40"
 serde = { version = "1.0.188", features = ["derive"] }
