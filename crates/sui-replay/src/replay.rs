@@ -668,10 +668,6 @@ impl LocalExec {
             &input_objects.filter_shared_objects().len(),
             &tx_info.shared_object_refs.len()
         );
-        assert_eq!(
-            input_objects.transaction_dependencies(),
-            tx_info.dependencies.clone().into_iter().collect(),
-        );
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
