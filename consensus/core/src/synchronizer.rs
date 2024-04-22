@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt as _;
+use itertools::Itertools as _;
 use mysten_metrics::{monitored_future, monitored_scope};
 use parking_lot::{Mutex, RwLock};
 #[cfg(not(test))]
@@ -473,10 +473,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         debug!(
             "Synced missing ancestor blocks {} from peer {peer_index}",
-            blocks
-                .iter()
-                .map(|b| b.reference().to_string())
-                .join(","),
+            blocks.iter().map(|b| b.reference().to_string()).join(","),
         );
 
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
