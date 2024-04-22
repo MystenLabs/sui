@@ -22,7 +22,9 @@ const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
-    /// Called when a leader timeout occurs and a block should be produced
+    /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
+    /// When the command is called with `force = true`, then the block will be created for `round` skipping
+    /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
     NewBlock(Round, oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),

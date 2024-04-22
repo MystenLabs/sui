@@ -278,7 +278,7 @@ impl NodeMetrics {
             leader_timeout_total: register_int_counter_vec_with_registry!(
                 "leader_timeout_total",
                 "Total number of leader timeouts, either when the min round time has passed, or max leader timeout",
-                &["force"],
+                &["timeout_type"],
                 registry,
             ).unwrap(),
             missing_blocks_total: register_int_counter_with_registry!(
