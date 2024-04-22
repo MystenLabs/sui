@@ -41,7 +41,7 @@ use tokio::{
     task::{JoinHandle, JoinSet},
     time::{sleep, Instant, MissedTickBehavior},
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
@@ -196,6 +196,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         if fetched_end <= synced_commit_index {
                             continue 'fetched;
                         }
+                        debug!(
+                            "Fetched certified blocks {:?}",
+                            blocks
+                                .iter()
+                                .map(|b| b.reference())
+                                .collect::<Vec<_>>()
+                        );
                         // If core thread cannot handle the incoming blocks, it is ok to block here.
                         // Also it is possible to have missing ancestors because an equivocating validator
                         // may produce blocks that are not included in commits but are ancestors to other blocks.

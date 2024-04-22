@@ -303,6 +303,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
             verified_blocks.push(verified_block);
         }
+        debug!(
+            "Synced missing ancestor blocks {:?} from peer {peer_index}",
+            verified_blocks
+                .iter()
+                .map(|b| b.reference())
+                .collect::<Vec<_>>()
+        );
 
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
