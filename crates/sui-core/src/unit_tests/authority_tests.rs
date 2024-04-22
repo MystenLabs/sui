@@ -5671,7 +5671,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     protocol_config
         .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
     protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
-    protocol_config.set_max_deferral_rounds_for_congestion_control(10);
+    protocol_config.set_max_deferral_rounds_for_congestion_control(1000); // Set to a large number so that we don't hit this limit.
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -5841,17 +5841,21 @@ async fn test_consensus_handler_per_object_congestion_control() {
         .is_empty());
 }
 
+// Tests congestion control triggered transaction cancellation in consensus handler:
+//   1. Consensus handler cancels transactions that are deferred for too many rounds.
+//   2. Shared locks for cancelled transaction are set correctly.
+//   3. Input objects can be read correctly.
 #[sim_test]
 async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
+    // Test setup. We will create some shared object transactions with one that will be cancelled at round 3.
     let shared_objects = create_shared_objects(2);
     let gas_objects = create_gas_objects(3, sender);
     let gas_objects_cancelled_txn = create_gas_objects(1, sender);
     let owned_objects_cancelled_txn = vec![
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 3.into(), sender),
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 7.into(), sender),
-        Object::with_id_owner_version_for_testing(ObjectID::random(), 13.into(), sender),
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 1.into(), sender),
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 2.into(), sender),
     ];
 
     // Create the cluster with controlled per object congestion control and cancellation.
@@ -5873,6 +5877,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     authority.insert_genesis_objects(&genesis_objects).await;
 
     let mut certificates: Vec<VerifiedCertificate> = vec![];
+
+    // Create 3 transactions that operate on shared_objects[0]. These transactions will go through eventually.
     for gas_object in gas_objects.iter() {
         let certificate = make_test_transaction(
             &sender,
@@ -5889,6 +5895,9 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         certificates.push(certificate);
     }
 
+    // Create another transaction that operates on shared_objects[0] and shared_objects[1].
+    // Due to its lower gas price, it'll be deferred for 3 rounds and then cancelled.
+    // shared_objects[0] will be considered as congested object.
     let cancelled_txn = make_test_transaction(
         &sender,
         &keypair,
@@ -5909,22 +5918,19 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
     certificates.shuffle(&mut rand::thread_rng());
 
-    // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
-    // should go through, and all transactions oeprate on the cheaper object should go through.
-    // We also check that the scheduled transactions on the expensive object have the highest gas price.
+    // Sends all transactions to consensus. Expect first 2 rounds with 1 transaction per round going through.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
     assert_eq!(scheduled_txns.len(), 1);
     for cert in scheduled_txns.iter() {
         assert!(cert.data().transaction_data().gas_price() == 2000);
     }
-
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
     assert_eq!(scheduled_txns.len(), 1);
     for cert in scheduled_txns.iter() {
         assert!(cert.data().transaction_data().gas_price() == 2000);
     }
 
-    // Sends the last batch with no new transaction. The last deferred transactions should go through.
+    // Run consensus round 3. 2 transactions will come out with 1 transaction being cancelled.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
     assert_eq!(scheduled_txns.len(), 2);
     assert!(authority
@@ -5932,6 +5938,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .get_all_deferred_transactions_for_test()
         .unwrap()
         .is_empty());
+
+    // Check cancelled transaction shared locks.
     let shared_object_version = authority
         .epoch_store_for_testing()
         .get_shared_locks(&cancelled_txn.key())
@@ -5948,6 +5956,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         shared_object_version
     );
 
+    // Load shared objects.
     let input_loader = TransactionInputLoader::new(authority.get_cache_reader().clone());
     let input_objects = input_loader
         .read_objects_for_execution(
@@ -5962,7 +5971,11 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         )
         .await
         .unwrap();
-    assert_eq!(input_objects.lamport_timestamp(&[]), 14.into());
+
+    // The lamport version should be the lamport version of the owned objects.
+    assert_eq!(input_objects.lamport_timestamp(&[]), 3.into());
+
+    // Check SharedInput data.
     let shared_inputs = input_objects.filter_shared_objects();
     assert_eq!(
         shared_inputs,
@@ -5972,6 +5985,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         ]
     );
 
+    // Test get_congested_objects.
     let congested_objects = input_objects.get_congested_objects().unwrap();
     assert_eq!(congested_objects, vec![shared_objects[0].id()]);
 }

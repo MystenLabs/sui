@@ -273,13 +273,6 @@ async fn transaction_manager_object_dependency() {
             CallArg::Object(shared_object_arg_read_2),
         ],
     );
-    println!(
-        "Assign version {:?} {:?} {:?} {:?}",
-        shared_object.id(),
-        shared_version,
-        shared_object_2.id(),
-        shared_version_2
-    );
     state
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
@@ -723,28 +716,22 @@ async fn transaction_manager_receiving_object_ready_if_current_version_greater()
     assert!(rx_ready_certificates.try_recv().is_err());
 }
 
-// Tests when objects become available, correct set of transactions can be sent to execute.
-// Specifically, we have following setup,
-//         shared_object     shared_object_2
-//       /    |    \     \    /
-//    tx_0  tx_1  tx_2    tx_3
-//     r      r     w      r
-// And when shared_object is available, tx_0, tx_1, and tx_2 can be executed. And when
-// shared_object_2 becomes available, tx_3 can be executed.
+// Tests transaction cancellation logic in transaction manager. Mainly tests that for cancelled transaction,
+// transaction manager only waits for all non-shared objects to be available before outputting the transaction.
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn transaction_manager_with_cancelled_transactions() {
-    // Initialize an authority state, with gas objects and a shared object.
+    // Initialize an authority state, with gas objects and 3 shared objects.
     let (owner, _keypair) = deterministic_random_account_key();
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
-    let shared_object_0 = Object::with_id_shared_for_testing(ObjectID::random());
     let shared_object_1 = Object::with_id_shared_for_testing(ObjectID::random());
     let shared_object_2 = Object::with_id_shared_for_testing(ObjectID::random());
+    let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
 
     let state = init_state_with_objects(vec![
         gas_object.clone(),
-        shared_object_0.clone(),
         shared_object_1.clone(),
         shared_object_2.clone(),
+        owned_object.clone(),
     ])
     .await;
 
@@ -754,12 +741,7 @@ async fn transaction_manager_with_cancelled_transactions() {
     // TM should output no transaction.
     assert!(rx_ready_certificates.try_recv().is_err());
 
-    // Enqueue one transaction with the same shared object in mutable mode.
-    let shared_object_arg_0 = ObjectArg::SharedObject {
-        id: shared_object_0.id(),
-        initial_shared_version: 0.into(),
-        mutable: true,
-    };
+    // Enqueue one transaction with 2 shared object inputs and 1 owned input.
     let shared_object_arg_1 = ObjectArg::SharedObject {
         id: shared_object_1.id(),
         initial_shared_version: 0.into(),
@@ -771,14 +753,18 @@ async fn transaction_manager_with_cancelled_transactions() {
         mutable: true,
     };
 
-    // Enqueue one transaction with two readonly shared object inputs, `shared_object` and `shared_object_2`.
-    let shared_version = 2000.into();
+    // Changes the desired owned object version to a higher version. We will make it available later.
+    let owned_version = 2000.into();
+    let mut owned_ref = owned_object.compute_object_reference();
+    owned_ref.1 = owned_version;
+    let owned_object_arg = ObjectArg::ImmOrOwnedObject(owned_ref);
+
     let cancelled_transaction = make_transaction(
         gas_object.clone(),
         vec![
-            CallArg::Object(shared_object_arg_0),
             CallArg::Object(shared_object_arg_1),
             CallArg::Object(shared_object_arg_2),
+            CallArg::Object(owned_object_arg),
         ],
     );
     state
@@ -786,7 +772,6 @@ async fn transaction_manager_with_cancelled_transactions() {
         .set_shared_object_versions_for_testing(
             cancelled_transaction.digest(),
             &vec![
-                (shared_object_0.id(), shared_version),
                 (shared_object_1.id(), SequenceNumber::CANCELLED_READ),
                 (shared_object_2.id(), SequenceNumber::CONGESTED),
             ],
@@ -804,16 +789,16 @@ async fn transaction_manager_with_cancelled_transactions() {
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
-    // Notify TM about availability of the first shared object.
+    // Notify TM about availability of the owned object.
     transaction_manager.objects_available(
         vec![InputKey::VersionedObject {
-            id: shared_object_0.id(),
-            version: shared_version,
+            id: owned_object.id(),
+            version: owned_version,
         }],
         &state.epoch_store_for_testing(),
     );
 
-    // TM should output the 3 transactions that are only waiting for this object.
+    // TM should output the transaction as soon as the owned object is available.
     let available_txn = rx_ready_certificates.recv().await.unwrap().certificate;
     assert_eq!(available_txn.digest(), cancelled_transaction.digest());
 

@@ -5125,7 +5125,7 @@ impl NodeStateDump {
                 }
                 InputSharedObject::ReadDeleted(..)
                 | InputSharedObject::MutateDeleted(..)
-                | InputSharedObject::Cancelled(..) => (),
+                | InputSharedObject::Cancelled(..) => (), // TODO: consider record congested objects.
             }
         }
 

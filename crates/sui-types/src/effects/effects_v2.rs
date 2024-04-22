@@ -585,5 +585,6 @@ pub enum UnchangedSharedKind {
     MutateDeleted(SequenceNumber),
     /// Deleted shared objects that appear as read-only in the input.
     ReadDeleted(SequenceNumber),
+    /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
     Cancelled(SequenceNumber),
 }

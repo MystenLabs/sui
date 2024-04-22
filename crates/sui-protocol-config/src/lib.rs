@@ -1039,10 +1039,12 @@ pub struct ProtocolConfig {
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
 
-    // The max accumulated txn execution cost per object in a checkpoint. Transactions
-    // in a checkpoint will be deferred once their touch shared objects hit this limit.
+    /// The max accumulated txn execution cost per object in a checkpoint. Transactions
+    /// in a checkpoint will be deferred once their touch shared objects hit this limit.
     max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
 
+    /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
+    /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 }
 

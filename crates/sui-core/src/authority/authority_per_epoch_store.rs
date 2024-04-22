@@ -147,7 +147,9 @@ pub enum ConsensusCertificateResult {
     ConsensusMessage,
     /// A system message in consensus was ignored (e.g. because of end of epoch).
     IgnoredSystem,
-
+    /// A will-be-cancelled tranasction. It'll still go through execution engine (but not be executed),
+    /// unlock any owned objects, and return corresponding cancellation error according to
+    /// `CancelConsensusCertificateReason`.
     Cancelled(
         (
             VerifiedExecutableTransaction,
@@ -2631,6 +2633,9 @@ impl AuthorityPerEpochStore {
         Ok(transactions_to_schedule)
     }
 
+    // Assigns shared object versions to transactions and updates the shared object version state.
+    // Shared object versions in cancelled transactions are assigned to special versions that will
+    // cause the transactions to be cancelled in execution engine.
     async fn process_consensus_transaction_shared_object_versions(
         &self,
         cache_reader: &dyn ExecutionCacheRead,
@@ -2769,7 +2774,10 @@ impl AuthorityPerEpochStore {
         fail_point_arg!(
             "initial_congestion_tracker",
             |tracker: SharedObjectCongestionTracker| {
-                info!("Initialize shared_object_congestion_tracker {:?}", tracker);
+                info!(
+                    "Initialize shared_object_congestion_tracker to  {:?}",
+                    tracker
+                );
                 shared_object_congestion_tracker = tracker;
             }
         );
@@ -2824,10 +2832,9 @@ impl AuthorityPerEpochStore {
                     }
                 }
                 ConsensusCertificateResult::Cancelled((cert, reason)) => {
-                    let tx_digest = *cert.digest();
-                    verified_certificates.push(cert);
-                    assert!(cancelled_txns.insert(tx_digest, reason).is_none());
                     notifications.push(key.clone());
+                    assert!(cancelled_txns.insert(*cert.digest(), reason).is_none());
+                    verified_certificates.push(cert);
                 }
                 ConsensusCertificateResult::RandomnessConsensusMessage => {
                     randomness_state_updated = true;
@@ -3066,27 +3073,34 @@ impl AuthorityPerEpochStore {
                         self.protocol_config()
                             .max_deferral_rounds_for_congestion_control(),
                     ) {
-                        debug!("Deferring consensus certificate for transaction {:?} until {deferral_key:?}", certificate.digest());
+                        debug!(
+                            "Deferring consensus certificate for transaction {:?} until {:?}",
+                            certificate.digest(),
+                            deferral_key
+                        );
                         if let DeferralReason::SharedObjectCongestion(_) = deferral_reason {
                             authority_metrics
                                 .consensus_handler_congested_transactions
                                 .inc();
                         }
                         return Ok(ConsensusCertificateResult::Deferred(deferral_key));
+                    } else if let DeferralReason::SharedObjectCongestion(congested_objects) =
+                        deferral_reason
+                    {
+                        debug!(
+                                "Cancelling consensus certificate for transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
+                                certificate.digest(),
+                                deferral_key,
+                                congested_objects
+                            );
+                        return Ok(ConsensusCertificateResult::Cancelled((
+                            certificate,
+                            CancelConsensusCertificateReason::CongestionOnObjects(
+                                congested_objects,
+                            ),
+                        )));
                     } else {
-                        // Cancel transaction
-                        if let DeferralReason::SharedObjectCongestion(congested_objects) =
-                            deferral_reason
-                        {
-                            return Ok(ConsensusCertificateResult::Cancelled((
-                                certificate,
-                                CancelConsensusCertificateReason::CongestionOnObjects(
-                                    congested_objects,
-                                ),
-                            )));
-                        } else {
-                            panic!("Impossible");
-                        }
+                        panic!("Only shared object congestion can cause transaction cancellation in consensus handler. Deferral reason: {:?}", deferral_reason);
                     }
                 }
 

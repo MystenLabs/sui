@@ -73,6 +73,7 @@ impl DeferralKey {
     }
 }
 
+#[derive(Debug)]
 pub enum DeferralReason {
     RandomnessNotReady,
 
@@ -91,6 +92,9 @@ pub fn transaction_deferral_within_limit(
     {
         return (future_round - deferred_from_round) <= max_deferral_rounds_for_congestion_control;
     }
+
+    // TODO: drop transactions at the end of the queue if the queue is too long.
+
     true
 }
 

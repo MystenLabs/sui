@@ -2810,6 +2810,7 @@ pub enum ObjectReadResultKind {
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
+    // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
     CancelledTransactionSharedObject(SequenceNumber),
 }
 
@@ -3028,6 +3029,7 @@ impl InputObjects {
                 }
             }
         }
+
         if !congested_objects.is_empty() {
             Some(congested_objects)
         } else {

@@ -462,7 +462,8 @@ impl TransactionManager {
                         .version()
                         .is_some_and(|version| version > SequenceNumber::MAX)
                     {
-                        // Cancenlled txn objects should always be available.
+                        // Cancenlled txn objects should always be available immediately.
+                        // Don't need to wait on these objects for execution.
                         object_availability.insert(*key, Some(true));
                     } else {
                         object_availability.insert(*key, None);
