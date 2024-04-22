@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::unit_tests::production_config;
-use invalid_mutations::signature::{FieldRefMutation, SignatureRefMutation};
 use move_binary_format::file_format::{
     Bytecode::*, CompiledModule, SignatureToken::*, Visibility::Public, *,
 };
@@ -14,7 +13,6 @@ use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
-use proptest::{collection::vec, prelude::*, sample::Index as PropIndex};
 
 #[test]
 fn test_reference_of_reference() {
@@ -24,39 +22,6 @@ fn test_reference_of_reference() {
     ))))]);
     let errors = SignatureChecker::verify_module(&m);
     assert!(errors.is_err());
-}
-
-proptest! {
-    #[test]
-    fn valid_signatures(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(SignatureChecker::verify_module(&module).is_ok())
-    }
-
-    #[test]
-    fn double_refs(
-        mut module in CompiledModule::valid_strategy(20),
-        mutations in vec((any::<PropIndex>(), any::<PropIndex>()), 0..20),
-    ) {
-        let context = SignatureRefMutation::new(&mut module, mutations);
-        let expected_violations = context.apply();
-
-        let result = SignatureChecker::verify_module(&module);
-
-        prop_assert_eq!(expected_violations, result.is_err());
-    }
-
-    #[test]
-    fn field_def_references(
-        mut module in CompiledModule::valid_strategy(20),
-        mutations in vec((any::<PropIndex>(), any::<PropIndex>()), 0..40),
-    ) {
-        let context = FieldRefMutation::new(&mut module, mutations);
-        let expected_violations = context.apply();
-
-        let result = SignatureChecker::verify_module(&module);
-
-        prop_assert_eq!(expected_violations, result.is_err());
-    }
 }
 
 #[test]

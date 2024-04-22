@@ -362,7 +362,6 @@ def cut_command(f):
         *["-p", "move-stdlib-natives"],
         *["-p", "move-vm-runtime"],
         *["-p", "bytecode-verifier-tests"],
-        *["-p", "invalid-mutations"],
     ]
 
 
@@ -384,7 +383,6 @@ def cut_directories(f):
                 external / "move" / "crates" / "move-stdlib-natives",
                 external / "move" / "crates" / "move-vm-runtime",
                 external / "move" / "crates" / "bytecode-verifier-tests",
-                external / "move" / "crates" / "invalid-mutations",
             ]
         )
     else:
@@ -394,7 +392,6 @@ def cut_directories(f):
                 external / "move" / "move-execution" / f / "crates" / "move-stdlib-natives",
                 external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",
                 external / "move" / "move-execution" / f / "crates" / "bytecode-verifier-tests",
-                external / "move" / "move-execution" / f / "crates" / "invalid-mutations",
             ]
         )
 

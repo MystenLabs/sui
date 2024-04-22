@@ -21,8 +21,6 @@ move-abstract-stack.workspace = true
 
 [dev-dependencies]
 hex-literal.workspace = true
-# referred to via path for execution versioning
-invalid-mutations = { path = "../invalid-mutations" }
 
 [features]
 default = []

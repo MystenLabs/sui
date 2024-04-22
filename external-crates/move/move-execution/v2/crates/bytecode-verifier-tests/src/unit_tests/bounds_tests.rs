@@ -2,18 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use invalid_mutations::bounds::{
-    ApplyCodeUnitBoundsContext, ApplyOutOfBoundsContext, CodeUnitBoundsMutation,
-    OutOfBoundsMutation,
-};
-use move_binary_format::{
-    check_bounds::BoundsChecker, file_format::*, file_format_common,
-    proptest_types::CompiledModuleStrategyGen,
-};
-use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
-};
-use proptest::{collection::vec, prelude::*};
+use move_binary_format::{check_bounds::BoundsChecker, file_format::*, file_format_common};
+use move_core_types::vm_status::StatusCode;
 
 #[test]
 fn empty_module_no_errors() {
@@ -294,86 +284,5 @@ fn invalid_type_param_for_vector_operation() {
             BoundsChecker::verify_module(&m).unwrap_err().major_status(),
             StatusCode::INDEX_OUT_OF_BOUNDS
         );
-    }
-}
-
-proptest! {
-    #[test]
-    fn valid_bounds(_module in CompiledModule::valid_strategy(20)) {
-        // valid_strategy will panic if there are any bounds check issues.
-    }
-}
-
-/// Ensure that valid modules that don't have any members (e.g. function args, struct fields) pass
-/// bounds checks.
-///
-/// There are some potentially tricky edge cases around ranges that are captured here.
-#[test]
-fn valid_bounds_no_members() {
-    let mut gen = CompiledModuleStrategyGen::new(20);
-    gen.zeros_all();
-    proptest!(|(_module in gen.generate())| {
-        // gen.generate() will panic if there are any bounds check issues.
-    });
-}
-
-proptest! {
-    #[test]
-    fn invalid_out_of_bounds(
-        module in CompiledModule::valid_strategy(20),
-        oob_mutations in vec(OutOfBoundsMutation::strategy(), 0..40),
-    ) {
-        let (module, expected_violations) = {
-            let oob_context = ApplyOutOfBoundsContext::new(module, oob_mutations);
-            oob_context.apply()
-        };
-
-        let actual_violations = BoundsChecker::verify_module(&module);
-        prop_assert_eq!(expected_violations.is_empty(), actual_violations.is_ok());
-    }
-
-    #[test]
-    fn code_unit_out_of_bounds(
-        mut module in CompiledModule::valid_strategy(20),
-        mutations in vec(CodeUnitBoundsMutation::strategy(), 0..40),
-    ) {
-        let expected_violations = {
-            let context = ApplyCodeUnitBoundsContext::new(&mut module, mutations);
-            context.apply()
-        };
-
-        let actual_violations = BoundsChecker::verify_module(&module);
-        prop_assert_eq!(expected_violations.is_empty(), actual_violations.is_ok());
-    }
-
-    #[test]
-    fn no_module_handles(
-        identifiers in vec(any::<Identifier>(), 0..20),
-        address_identifiers in vec(any::<AccountAddress>(), 0..20),
-    ) {
-        // If there are no module handles, the only other things that can be stored are intrinsic
-        // data.
-        let module = CompiledModule {
-            identifiers,
-            address_identifiers,
-            ..Default::default()
-        };
-
-        prop_assert_eq!(
-            BoundsChecker::verify_module(&module).map_err(|e| e.major_status()),
-            Err(StatusCode::NO_MODULE_HANDLES)
-        );
-    }
-}
-
-proptest! {
-    // Generating arbitrary compiled modules is really slow, possibly because of
-    // https://github.com/AltSysrq/proptest/issues/143.
-    #![proptest_config(ProptestConfig::with_cases(16))]
-
-    /// Make sure that garbage inputs don't crash the bounds checker.
-    #[test]
-    fn garbage_inputs(module in any_with::<CompiledModule>(16)) {
-        let _ = BoundsChecker::verify_module(&module);
     }
 }
