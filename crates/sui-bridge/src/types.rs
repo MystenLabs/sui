@@ -619,10 +619,6 @@ impl Message for BridgeAction {
         unreachable!("BridgeEventDigest is not used today")
     }
 
-    fn verify_user_input(&self) -> SuiResult {
-        Ok(())
-    }
-
     fn verify_epoch(&self, _epoch: EpochId) -> SuiResult {
         Ok(())
     }
