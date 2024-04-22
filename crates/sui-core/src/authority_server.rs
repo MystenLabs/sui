@@ -11,7 +11,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
 };
-use std::{io, net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{collections::HashSet, io, net::SocketAddr, sync::Arc, time::SystemTime};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
@@ -19,6 +19,7 @@ use sui_network::{
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
@@ -33,6 +34,7 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
 };
+use sui_types::{messages_consensus::ConsensusTransaction, storage::ObjectKey};
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, error_span, info, Instrument};
@@ -424,10 +426,12 @@ impl ValidatorService {
     // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
     async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        request: HandleCertificateRequestV3,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<Option<HandleCertificateResponseV2>, tonic::Status> {
+    ) -> Result<Option<HandleCertificateResponseV3>, tonic::Status> {
+        let certificate = request.certificate;
+
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
         fp_ensure!(
@@ -459,16 +463,22 @@ impl ValidatorService {
             .state
             .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
         {
-            let events = if let Some(digest) = signed_effects.events_digest() {
-                self.state.get_transaction_events(digest)?
+            let events = if request.include_events {
+                if let Some(digest) = signed_effects.events_digest() {
+                    Some(self.state.get_transaction_events(digest)?)
+                } else {
+                    None
+                }
             } else {
-                TransactionEvents::default()
+                None
             };
 
-            return Ok(Some(HandleCertificateResponseV2 {
-                signed_effects: signed_effects.into_inner(),
+            return Ok(Some(HandleCertificateResponseV3 {
+                effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects: vec![], // unused field
+                input_objects: None,
+                output_objects: None,
+                auxiliary_data: None,
             }));
         }
 
@@ -545,15 +555,100 @@ impl ValidatorService {
             .state
             .execute_certificate(&certificate, epoch_store)
             .await?;
-        let events = if let Some(event_digest) = effects.events_digest() {
-            self.state.get_transaction_events(event_digest)?
+        let events = if request.include_events {
+            if let Some(digest) = effects.events_digest() {
+                Some(self.state.get_transaction_events(digest)?)
+            } else {
+                None
+            }
         } else {
-            TransactionEvents::default()
+            None
         };
-        Ok(Some(HandleCertificateResponseV2 {
-            signed_effects: effects.into_inner(),
+
+        let input_objects = request
+            .include_input_objects
+            .then(|| {
+                // Note unwrapped_then_deleted contains **updated** versions.
+                let unwrapped_then_deleted_obj_ids = effects
+                    .unwrapped_then_deleted()
+                    .into_iter()
+                    .map(|k| k.0)
+                    .collect::<HashSet<_>>();
+
+                let input_object_keys = effects
+                    .input_shared_objects()
+                    .into_iter()
+                    .map(|kind| {
+                        let (id, version) = kind.id_and_version();
+                        ObjectKey(id, version)
+                    })
+                    .chain(
+                        effects
+                            .modified_at_versions()
+                            .into_iter()
+                            .map(|(object_id, version)| ObjectKey(object_id, version)),
+                    )
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
+                    .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+                    .collect::<Vec<_>>();
+
+                let input_objects = self
+                    .state
+                    .get_object_store()
+                    .multi_get_objects_by_key(&input_object_keys)?
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, maybe_object)| {
+                        maybe_object.ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "missing input object key {:?} from tx {}",
+                                input_object_keys[idx],
+                                effects.transaction_digest()
+                            )
+                        })
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(input_objects)
+            })
+            .and_then(|maybe: anyhow::Result<_>| maybe.ok());
+
+        let output_objects = request
+            .include_output_objects
+            .then(|| {
+                let output_object_keys = effects
+                    .all_changed_objects()
+                    .into_iter()
+                    .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+                    .collect::<Vec<_>>();
+
+                let output_objects = self
+                    .state
+                    .get_object_store()
+                    .multi_get_objects_by_key(&output_object_keys)?
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, maybe_object)| {
+                        maybe_object.ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "missing output object key {:?} from tx {}",
+                                output_object_keys[idx],
+                                effects.transaction_digest()
+                            )
+                        })
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(output_objects)
+            })
+            .and_then(|maybe: anyhow::Result<_>| maybe.ok());
+
+        Ok(Some(HandleCertificateResponseV3 {
+            effects: effects.into_inner(),
             events,
-            fastpath_input_objects: vec![], // unused field
+            input_objects,
+            output_objects,
+            auxiliary_data: None, // We don't have any aux data generated presently
         }))
     }
 }
@@ -576,10 +671,21 @@ impl ValidatorService {
         certificate.validity_check(epoch_store.protocol_config())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
-        self.handle_certificate(certificate, &epoch_store, false)
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        self.handle_certificate(request, &epoch_store, false)
             .instrument(span)
             .await
-            .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
+            .map(|executed| {
+                tonic::Response::new(SubmitCertificateResponse {
+                    executed: executed.map(Into::into),
+                })
+            })
     }
 
     async fn handle_certificate_v2_impl(
@@ -592,14 +698,22 @@ impl ValidatorService {
         certificate.validity_check(epoch_store.protocol_config())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
-        self.handle_certificate(certificate, &epoch_store, true)
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        self.handle_certificate(request, &epoch_store, true)
             .instrument(span)
             .await
             .map(|v| {
                 tonic::Response::new(
                     v.expect(
                         "handle_certificate should not return none with wait_for_effects=true",
-                    ),
+                    )
+                    .into(),
                 )
             })
     }
