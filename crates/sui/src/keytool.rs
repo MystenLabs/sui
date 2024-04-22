@@ -42,6 +42,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
     get_authority_key_pair, EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair,
+    ZkLoginPublicIdentifier,
 };
 use sui_types::crypto::{DefaultHash, PublicKey};
 use sui_types::error::SuiResult;
@@ -279,7 +280,7 @@ pub enum KeyToolCommand {
     },
 
     /// TESTING ONLY: Generate a fixed ephemeral key and its JWT token with test issuer. Produce a zklogin signature for the given data and max epoch.
-    /// e.g. sui keytool zk-login-insecure-sign-personal-message --data "hello" --max-epoch 1000000
+    /// e.g. sui keytool zk-login-insecure-sign-personal-message --data "hello" --max-epoch 5
     ZkLoginInsecureSignPersonalMessage {
         /// The base64 encoded string of the message to sign, without the intent message wrapping.
         #[clap(long)]
@@ -442,6 +443,7 @@ pub struct ZkLoginSigVerifyResponse {
 pub struct ZkLoginInsecureSignPersonalMessage {
     sig: String,
     bytes: String,
+    address: String,
 }
 
 #[derive(Serialize)]
@@ -944,7 +946,14 @@ impl KeyToolCommand {
                 let address_seed = gen_address_seed(user_salt, "sub", sub, &aud).unwrap();
                 let zk_login_inputs =
                     ZkLoginInputs::from_reader(reader, &address_seed.to_string()).unwrap();
-
+                let pk = PublicKey::ZkLogin(
+                    ZkLoginPublicIdentifier::new(
+                        zk_login_inputs.get_iss(),
+                        zk_login_inputs.get_address_seed(),
+                    )
+                    .unwrap(),
+                );
+                let address = SuiAddress::from(&pk);
                 // sign with ephemeral key and combine with zklogin inputs to generic signature
                 let s = Signature::new_secure(&intent_msg, &skp);
                 let sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
@@ -955,7 +964,8 @@ impl KeyToolCommand {
                 CommandOutput::ZkLoginInsecureSignPersonalMessage(
                     ZkLoginInsecureSignPersonalMessage {
                         sig: Base64::encode(sig.as_bytes()),
-                        bytes: Base64::encode(bcs::to_bytes(&msg).unwrap()),
+                        bytes: Base64::encode(data.as_bytes()),
+                        address: address.to_string(),
                     },
                 )
             }
@@ -1155,11 +1165,11 @@ impl KeyToolCommand {
                                 (serde_json::to_string(&tx_data)?, res)
                             }
                             IntentScope::PersonalMessage => {
-                                let data: PersonalMessage = bcs::from_bytes(
-                                    &Base64::decode(&bytes.unwrap()).map_err(|e| {
+                                let data = PersonalMessage {
+                                    message: Base64::decode(&bytes.unwrap()).map_err(|e| {
                                         anyhow!("Invalid base64 personal message data: {:?}", e)
                                     })?,
-                                )?;
+                                };
 
                                 let sig = GenericSignature::ZkLoginAuthenticator(zk.clone());
                                 let res = sig.verify_authenticator(

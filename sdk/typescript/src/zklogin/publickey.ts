@@ -62,9 +62,18 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, signature: Uint8Array | SerializedSignature): Promise<boolean> {
-		const parsedSignature = parseSerializedZkLoginSignature(signature);
+	async verify(_message: Uint8Array, _signature: Uint8Array | string): Promise<boolean> {
+		throw Error('does not support');
+	}
 
+	/**
+	 * Verifies that the signature is valid for for the provided PersonalMessage
+	 */
+	verifyPersonalMessage(
+		message: Uint8Array,
+		signature: Uint8Array | SerializedSignature,
+	): Promise<boolean> {
+		const parsedSignature = parseSerializedZkLoginSignature(signature);
 		return graphqlVerifyZkLoginSignature({
 			address: parsedSignature.zkLogin!.address,
 			bytes: toB64(message),
@@ -131,7 +140,9 @@ async function graphqlVerifyZkLoginSignature({
 			author: address,
 		},
 	});
+	console.log('scce', resp.data?.verifyZkloginSignature.success);
 
+	console.log('resp', resp.data?.verifyZkloginSignature.errors);
 	return (
 		resp.data?.verifyZkloginSignature.success === true &&
 		resp.data?.verifyZkloginSignature.errors.length === 0
