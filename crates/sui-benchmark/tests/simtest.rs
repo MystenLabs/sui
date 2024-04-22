@@ -286,6 +286,8 @@ mod test {
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
 
+        let dead_validator = dead_validator_orig.clone();
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
         register_fail_point_async("consensus-rpc-response", move || {
             let dead_validator = dead_validator.clone();
             let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
