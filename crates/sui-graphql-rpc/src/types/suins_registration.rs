@@ -390,7 +390,7 @@ impl SuinsRegistration {
         address: SuiAddress,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<NativeDomain>, Error> {
-        let config = ctx.data_unchecked::<NameServiceConfig>();
+        let config: &NameServiceConfig = ctx.data_unchecked();
 
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
@@ -430,8 +430,8 @@ impl SuinsRegistration {
         domain: &Domain,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<DomainExpiration>, Error> {
-        let config = ctx.data_unchecked::<NameServiceConfig>();
-        let db: &crate::data::pg::PgExecutor = ctx.data_unchecked::<Db>();
+        let config: &NameServiceConfig = ctx.data_unchecked();
+        let db: &Db = ctx.data_unchecked();
         // Construct the list of `object_id`s to look up. The first element is the domain's
         // `NameRecord`. If the domain is a subdomain, there will be a second element for the
         // parent's `NameRecord`.
