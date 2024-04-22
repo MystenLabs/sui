@@ -297,19 +297,13 @@ impl Epoch {
         let stored: Option<QueryableEpochInfo> = db
             .execute(move |conn| {
                 conn.first(move || {
-                    let mut query = dsl::epochs
-                        .select(QueryableEpochInfo::as_select())
-                        .order_by(dsl::epoch.desc())
-                        .into_boxed();
-
                     // Bound the query on `checkpoint_viewed_at` by filtering for the epoch
                     // whose `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch
                     // with the largest `first_checkpoint_id` among the filtered set.
-                    query = query
+                    dsl::epochs
+                        .select(QueryableEpochInfo::as_select())
                         .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
-                        .order_by(dsl::first_checkpoint_id.desc());
-
-                    query
+                        .order_by(dsl::first_checkpoint_id.desc())
                 })
                 .optional()
             })

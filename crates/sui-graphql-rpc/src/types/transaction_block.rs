@@ -240,8 +240,8 @@ impl TransactionBlock {
     }
 
     /// Look up a `TransactionBlock` in the database, by its transaction digest. Treats it as if it
-    /// is beingg viewed at the `checkpoint_viewed_at` (e.g. the state of all relevant addresses
-    /// will be at that checkpoint).
+    /// is being viewed at the `checkpoint_viewed_at` (e.g. the state of all relevant addresses will
+    /// be at that checkpoint).
     pub(crate) async fn query(
         db: &Db,
         digest: Digest,
